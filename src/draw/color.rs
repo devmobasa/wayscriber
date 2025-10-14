@@ -11,7 +11,7 @@
 /// let red = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
 /// let semi_transparent_blue = Color { r: 0.0, g: 0.0, b: 1.0, a: 0.5 };
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Color {
     /// Red component (0.0 = no red, 1.0 = full red)
     pub r: f64,

@@ -22,3 +22,4 @@ run.sh
 
 !/packaging/hyprmarker.service
 packaging/
+docs/board

@@ -23,14 +23,16 @@ pub struct Daemon {
     overlay_state: OverlayState,
     should_quit: Arc<AtomicBool>,
     toggle_requested: Arc<AtomicBool>,
+    initial_mode: Option<String>,
 }
 
 impl Daemon {
-    pub fn new() -> Self {
+    pub fn new(initial_mode: Option<String>) -> Self {
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
+            initial_mode,
         }
     }
 
@@ -62,8 +64,10 @@ impl Daemon {
                         toggle_flag.store(true, Ordering::Release);
                     }
                     SIGTERM | SIGINT => {
-                        info!("Received {} - initiating graceful shutdown",
-                              if sig == SIGTERM { "SIGTERM" } else { "SIGINT" });
+                        info!(
+                            "Received {} - initiating graceful shutdown",
+                            if sig == SIGTERM { "SIGTERM" } else { "SIGINT" }
+                        );
                         // Use Release ordering to ensure all prior memory operations
                         // are visible to the thread that reads this flag
                         quit_flag.store(true, Ordering::Release);
@@ -138,7 +142,7 @@ impl Daemon {
         info!("Overlay state set to Visible");
 
         // Run the Wayland backend (this will block until overlay is closed)
-        let result = backend::run_wayland();
+        let result = backend::run_wayland(self.initial_mode.clone());
 
         // When run_wayland returns, the overlay was closed
         self.overlay_state = OverlayState::Hidden;

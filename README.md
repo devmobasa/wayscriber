@@ -43,12 +43,13 @@ hyprmarker replicates all the drawing features of Microsoft's ZoomIt for Linux w
 - **Ellipses/Circles**: Hold `Tab` while dragging
 - **Arrows**: Hold `Ctrl+Shift` while dragging
 - **Text Annotations**: Press `T` to enter text mode, with multi-line support (`Shift+Enter`) and custom fonts
+- **Board Modes**: Toggle whiteboard/blackboard (`Ctrl+W`/`Ctrl+B`) with isolated frames and auto-color adjustment
 - **Color Selection**: Press color keys (R, G, B, Y, O, P, W, K)
 - **Adjustable Line Thickness**: Use `+`/`-` keys or scroll wheel
 - **Undo**: `Ctrl+Z` to undo last shape
 - **Clear All**: Press `E` to clear all annotations
 - **Help Overlay**: Press `F10` to show/hide keybinding help
-- **Status Bar**: Shows current tool, color, and thickness
+- **Status Bar**: Shows current tool, color, thickness, and board mode
 - **Customizable**: TOML-based configuration file
 - **Exit**: Press `Escape` to exit drawing mode
 
@@ -143,11 +144,18 @@ For quick one-time annotations:
 
 ```bash
 hyprmarker --active
+
+# Or start in whiteboard mode
+hyprmarker --active --mode whiteboard
+
+# Or start in blackboard mode
+hyprmarker --active --mode blackboard
 ```
 
 Or bind to a key:
 ```conf
 bind = $mainMod, D, exec, hyprmarker --active
+bind = $mainMod SHIFT, D, exec, hyprmarker --active --mode whiteboard
 ```
 
 ### Controls Reference
@@ -161,6 +169,10 @@ bind = $mainMod, D, exec, hyprmarker --active
 | Ellipse/Circle | Hold `Tab` + drag |
 | Arrow | Hold `Ctrl+Shift` + drag |
 | Text mode | Press `T`, click to position, type, `Shift+Enter` for new line, `Enter` to finish |
+| **Board Modes** |
+| Toggle Whiteboard | `Ctrl+W` (press again to exit) |
+| Toggle Blackboard | `Ctrl+B` (press again to exit) |
+| Return to Transparent | `Ctrl+Shift+T` |
 | **Colors** |
 | Red | `R` |
 | Green | `G` |
@@ -173,6 +185,9 @@ bind = $mainMod, D, exec, hyprmarker --active
 | **Line Thickness** |
 | Increase | `+` or `=` or scroll down |
 | Decrease | `-` or `_` or scroll up |
+| **Font Size** |
+| Increase | `Ctrl+Shift++` or `Shift+Scroll Down` |
+| Decrease | `Ctrl+Shift+-` or `Shift+Scroll Up` |
 | **Editing** |
 | Undo last shape | `Ctrl+Z` |
 | Clear all | `E` |
@@ -228,6 +243,13 @@ enable_vsync = true  # Prevent tearing
 [ui]
 show_status_bar = true
 status_bar_position = "bottom-left"  # top-left, top-right, bottom-left, bottom-right
+
+[board]
+# Board mode configuration (whiteboard/blackboard)
+default_mode = "transparent"  # "transparent", "whiteboard", or "blackboard"
+whiteboard_color = [0.992, 0.992, 0.992]  # Off-white background (RGB 0.0-1.0)
+blackboard_color = [0.067, 0.067, 0.067]  # Near-black background
+auto_adjust_pen = true  # Auto-switch pen color for contrast
 ```
 
 See **[docs/CONFIG.md](docs/CONFIG.md)** for detailed configuration documentation.
@@ -323,6 +345,8 @@ Configure buffer count and VSync in `config.toml` for your setup.
 | Ellipses | ✅ | ✅ |
 | Arrows | ✅ | ✅ |
 | Text annotations | ✅ | ✅ |
+| **Whiteboard mode** | ✅ (W key) | ✅ (Ctrl+W) |
+| **Blackboard mode** | ✅ (K key) | ✅ (Ctrl+B) |
 | Multi-line text | ❌ | ✅ (Shift+Enter) |
 | Custom fonts | ❌ | ✅ (Pango) |
 | Color selection | ✅ | ✅ (8 colors) |
@@ -442,6 +466,9 @@ Created as a native Wayland implementation of ZoomIt annotation features for Lin
 - [x] Autostart with systemd user service
 - [x] Multi-line text support (Shift+Enter)
 - [x] Custom fonts with Pango rendering
+- [x] Whiteboard/Blackboard modes with isolated frames
+- [x] Board mode configuration (colors, auto-adjust)
+- [x] CLI --mode flag for initial board selection
 - [ ] Multi-monitor support with per-monitor surfaces
 - [ ] Additional shapes (filled shapes, highlighter)
 - [ ] Save annotations to image file

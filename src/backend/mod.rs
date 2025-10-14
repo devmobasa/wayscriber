@@ -6,8 +6,11 @@ pub mod wayland;
 // Removed: BackendChoice enum - Wayland is the only backend
 
 /// Run Wayland backend with full event loop
-pub fn run_wayland() -> Result<()> {
-    let mut backend = wayland::WaylandBackend::new()?;
+///
+/// # Arguments
+/// * `initial_mode` - Optional board mode to start in (overrides config default)
+pub fn run_wayland(initial_mode: Option<String>) -> Result<()> {
+    let mut backend = wayland::WaylandBackend::new(initial_mode)?;
     backend.init()?;
     backend.show()?; // show() calls run() internally
     backend.hide()?;

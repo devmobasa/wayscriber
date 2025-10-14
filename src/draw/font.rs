@@ -85,7 +85,6 @@ mod tests {
     fn test_pango_string_italic() {
         let font = FontDescriptor::new(
             "Monospace".to_string(),
-            None,
             "normal".to_string(),
             "italic".to_string(),
         );
@@ -96,7 +95,6 @@ mod tests {
     fn test_pango_string_custom() {
         let font = FontDescriptor::new(
             "JetBrains Mono".to_string(),
-            None,
             "light".to_string(),
             "normal".to_string(),
         );

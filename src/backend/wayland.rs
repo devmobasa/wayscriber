@@ -35,6 +35,7 @@ use crate::input::{InputState, Key, MouseButton};
 /// Wayland backend state
 pub struct WaylandBackend {
     // Removed: inner Arc<Mutex> was unused - WaylandState is created and used directly in run()
+    initial_mode: Option<String>,
 }
 
 /// Internal Wayland state
@@ -67,8 +68,8 @@ struct WaylandState {
 }
 
 impl WaylandBackend {
-    pub fn new() -> Result<Self> {
-        Ok(Self {})
+    pub fn new(initial_mode: Option<String>) -> Result<Self> {
+        Ok(Self { initial_mode })
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -136,7 +137,7 @@ impl WaylandBackend {
         );
 
         // Initialize input state with config defaults
-        let input_state = InputState::with_defaults(
+        let mut input_state = InputState::with_defaults(
             config.drawing.default_color.to_color(),
             config.drawing.default_thickness,
             config.drawing.default_font_size,
@@ -144,7 +145,36 @@ impl WaylandBackend {
             config.drawing.text_background_enabled,
             config.arrow.length,
             config.arrow.angle_degrees,
+            config.board.clone(),
         );
+
+        // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
+        if config.board.enabled {
+            let initial_mode_str = self
+                .initial_mode
+                .clone()
+                .unwrap_or_else(|| config.board.default_mode.clone());
+
+            if let Some(mode) = crate::input::BoardMode::from_str(&initial_mode_str) {
+                if mode != crate::input::BoardMode::Transparent {
+                    info!("Starting in {} mode", initial_mode_str);
+                    input_state.canvas_set.switch_mode(mode);
+                    // Apply auto-color adjustment if enabled
+                    if config.board.auto_adjust_pen {
+                        if let Some(default_color) = mode.default_pen_color(&config.board) {
+                            input_state.current_color = default_color;
+                        }
+                    }
+                }
+            } else if !initial_mode_str.is_empty() {
+                warn!(
+                    "Invalid board mode '{}', using transparent",
+                    initial_mode_str
+                );
+            }
+        } else if self.initial_mode.is_some() {
+            warn!("Board modes disabled in config, ignoring --mode flag");
+        }
 
         // Create application state
         let mut state = WaylandState {
@@ -355,12 +385,19 @@ impl WaylandState {
         ctx.paint().context("Failed to clear background")?;
         ctx.set_operator(cairo::Operator::Over);
 
-        // Render all completed shapes
+        // Render board background if in board mode (whiteboard/blackboard)
+        crate::draw::render_board_background(
+            &ctx,
+            self.input_state.board_mode(),
+            &self.input_state.board_config,
+        );
+
+        // Render all completed shapes from active frame
         debug!(
             "Rendering {} completed shapes",
-            self.input_state.frame.shapes.len()
+            self.input_state.canvas_set.active_frame().shapes.len()
         );
-        crate::draw::render_shapes(&ctx, &self.input_state.frame.shapes);
+        crate::draw::render_shapes(&ctx, &self.input_state.canvas_set.active_frame().shapes);
 
         // Render provisional shape if actively drawing
         // Use optimized method that avoids cloning for freehand
@@ -827,7 +864,6 @@ impl PointerHandler for WaylandState {
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Axis { vertical, .. } => {
-                    // Use scroll wheel for pen width adjustment
                     // Use discrete steps if available, otherwise fall back to absolute with threshold
                     let scroll_direction = if vertical.discrete != 0 {
                         vertical.discrete
@@ -838,24 +874,44 @@ impl PointerHandler for WaylandState {
                         0
                     };
 
-                    if scroll_direction > 0 {
-                        // Scroll up = decrease thickness
-                        self.input_state.current_thickness =
-                            (self.input_state.current_thickness - 1.0).max(1.0);
-                        debug!(
-                            "Thickness decreased: {:.0}px",
-                            self.input_state.current_thickness
-                        );
-                        self.input_state.needs_redraw = true;
-                    } else if scroll_direction < 0 {
-                        // Scroll down = increase thickness
-                        self.input_state.current_thickness =
-                            (self.input_state.current_thickness + 1.0).min(20.0);
-                        debug!(
-                            "Thickness increased: {:.0}px",
-                            self.input_state.current_thickness
-                        );
-                        self.input_state.needs_redraw = true;
+                    if self.input_state.modifiers.shift {
+                        // Shift+Scroll: adjust font size
+                        if scroll_direction > 0 {
+                            // Scroll up = decrease font size
+                            self.input_state.adjust_font_size(-2.0);
+                            debug!(
+                                "Font size decreased: {:.1}px",
+                                self.input_state.current_font_size
+                            );
+                        } else if scroll_direction < 0 {
+                            // Scroll down = increase font size
+                            self.input_state.adjust_font_size(2.0);
+                            debug!(
+                                "Font size increased: {:.1}px",
+                                self.input_state.current_font_size
+                            );
+                        }
+                    } else {
+                        // Normal scroll: adjust pen thickness
+                        if scroll_direction > 0 {
+                            // Scroll up = decrease thickness
+                            self.input_state.current_thickness =
+                                (self.input_state.current_thickness - 1.0).max(1.0);
+                            debug!(
+                                "Thickness decreased: {:.0}px",
+                                self.input_state.current_thickness
+                            );
+                            self.input_state.needs_redraw = true;
+                        } else if scroll_direction < 0 {
+                            // Scroll down = increase thickness
+                            self.input_state.current_thickness =
+                                (self.input_state.current_thickness + 1.0).min(20.0);
+                            debug!(
+                                "Thickness increased: {:.0}px",
+                                self.input_state.current_thickness
+                            );
+                            self.input_state.needs_redraw = true;
+                        }
                     }
                 }
             }

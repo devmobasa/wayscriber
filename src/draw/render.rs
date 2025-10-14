@@ -2,7 +2,29 @@
 
 use super::color::Color;
 use super::shape::Shape;
+use crate::config::BoardConfig;
+use crate::input::BoardMode;
 use crate::util;
+
+/// Renders board background for whiteboard/blackboard modes.
+///
+/// This function fills the entire canvas with a solid color when in
+/// whiteboard or blackboard mode. For transparent mode, it does nothing
+/// (background remains transparent).
+///
+/// Should be called after clearing the canvas but before rendering shapes.
+///
+/// # Arguments
+/// * `ctx` - Cairo drawing context to render to
+/// * `mode` - Current board mode
+/// * `config` - Board configuration with color settings
+pub fn render_board_background(ctx: &cairo::Context, mode: BoardMode, config: &BoardConfig) {
+    if let Some(bg_color) = mode.background_color(config) {
+        ctx.set_source_rgba(bg_color.r, bg_color.g, bg_color.b, bg_color.a);
+        let _ = ctx.paint(); // Ignore errors - if paint fails, we'll just have transparent bg
+    }
+    // If None (Transparent mode), do nothing - background stays transparent
+}
 
 /// Renders all shapes in a collection to a Cairo context.
 ///

@@ -19,6 +19,10 @@ struct Cli {
     /// Start active (show overlay immediately, one-shot mode)
     #[arg(long, short = 'a', action = ArgAction::SetTrue)]
     active: bool,
+
+    /// Initial board mode (transparent, whiteboard, or blackboard)
+    #[arg(long, short = 'm', value_name = "MODE")]
+    mode: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -36,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     if cli.daemon {
         // Daemon mode: background service with toggle activation
         log::info!("Starting in daemon mode");
-        let mut daemon = daemon::Daemon::new();
+        let mut daemon = daemon::Daemon::new(cli.mode);
         daemon.run()?;
     } else if cli.active {
         // One-shot mode: show overlay immediately and exit when done
@@ -61,7 +65,7 @@ fn main() -> anyhow::Result<()> {
         log::info!("");
 
         // Run Wayland backend
-        backend::run_wayland()?;
+        backend::run_wayland(cli.mode)?;
 
         log::info!("Annotation overlay closed.");
     } else {

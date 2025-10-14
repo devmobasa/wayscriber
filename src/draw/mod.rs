@@ -6,6 +6,7 @@
 //! - [`Frame`]: Container for all shapes in the current drawing
 //! - Rendering functions for Cairo-based output
 
+pub mod canvas_set;
 pub mod color;
 pub mod font;
 pub mod frame;
@@ -13,10 +14,13 @@ pub mod render;
 pub mod shape;
 
 // Re-export commonly used types at module level
+pub use canvas_set::CanvasSet;
 pub use color::Color;
 pub use font::FontDescriptor;
 pub use frame::Frame;
-pub use render::{render_freehand_borrowed, render_shape, render_shapes, render_text};
+pub use render::{
+    render_board_background, render_freehand_borrowed, render_shape, render_shapes, render_text,
+};
 pub use shape::Shape;
 
 // Re-export color constants for public API (unused internally but part of public interface)

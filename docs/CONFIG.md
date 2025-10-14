@@ -36,12 +36,17 @@ default_color = "red"
 default_thickness = 3.0
 
 # Default font size for text mode (8.0 - 72.0)
+# Can be adjusted at runtime with Ctrl+Shift+/- or Shift+Scroll
 default_font_size = 32.0
 ```
 
 **Color Options:**
 - **Named colors**: `"red"`, `"green"`, `"blue"`, `"yellow"`, `"orange"`, `"pink"`, `"white"`, `"black"`
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
+
+**Runtime Adjustments:**
+- **Pen thickness**: Use `+`/`-` keys or scroll wheel (range: 1-20px)
+- **Font size**: Use `Ctrl+Shift+`/`-` or `Shift+Scroll` (range: 8-72px)
 
 **Defaults:**
 - Color: Red
@@ -151,6 +156,93 @@ text_color = [1.0, 1.0, 1.0, 1.0]    # White
 - Help overlay font: 16px
 - Semi-transparent dark backgrounds
 - Light blue help overlay border
+
+### `[board]` - Board Modes (Whiteboard/Blackboard)
+
+Controls whiteboard and blackboard mode settings.
+
+```toml
+[board]
+# Enable board mode features
+enabled = true
+
+# Default mode on startup
+# Options: "transparent" (default overlay), "whiteboard" (light), "blackboard" (dark)
+default_mode = "transparent"
+
+# Whiteboard background color [R, G, B] (0.0-1.0 range)
+# Default: off-white (253, 253, 253) for softer appearance
+whiteboard_color = [0.992, 0.992, 0.992]
+
+# Blackboard background color [R, G, B] (0.0-1.0 range)
+# Default: near-black (17, 17, 17) for softer appearance
+blackboard_color = [0.067, 0.067, 0.067]
+
+# Default pen color for whiteboard mode [R, G, B] (0.0-1.0 range)
+# Default: black for contrast on light background
+whiteboard_pen_color = [0.0, 0.0, 0.0]
+
+# Default pen color for blackboard mode [R, G, B] (0.0-1.0 range)
+# Default: white for contrast on dark background
+blackboard_pen_color = [1.0, 1.0, 1.0]
+
+# Automatically adjust pen color when entering board modes
+# Set to false if you want to keep your current color when switching modes
+auto_adjust_pen = true
+```
+
+**Board Modes:**
+- **Transparent**: Default overlay mode showing the screen underneath
+- **Whiteboard**: Light background for drawing (like a physical whiteboard)
+- **Blackboard**: Dark background for drawing (like a chalkboard)
+
+**Keybindings:**
+- `Ctrl+W`: Toggle whiteboard mode (press again to exit)
+- `Ctrl+B`: Toggle blackboard mode (press again to exit)
+- `Ctrl+Shift+T`: Return to transparent mode
+
+**Frame Isolation:**
+- Each mode maintains independent drawings
+- Switching modes preserves all work
+- Undo/clear operations affect only the current mode
+
+**Color Themes:**
+
+High Contrast (pure white/black):
+```toml
+[board]
+whiteboard_color = [1.0, 1.0, 1.0]
+blackboard_color = [0.0, 0.0, 0.0]
+```
+
+Chalkboard Theme (green board):
+```toml
+[board]
+blackboard_color = [0.11, 0.18, 0.13]
+blackboard_pen_color = [0.95, 0.95, 0.8]
+```
+
+Sepia Theme (vintage):
+```toml
+[board]
+whiteboard_color = [0.96, 0.93, 0.86]
+whiteboard_pen_color = [0.29, 0.23, 0.18]
+```
+
+**CLI Override:**
+You can override the default mode from the command line:
+```bash
+hyprmarker --active --mode whiteboard
+hyprmarker --active --mode blackboard
+hyprmarker --daemon --mode whiteboard
+```
+
+**Defaults:**
+- Enabled: true
+- Default mode: transparent
+- Whiteboard: off-white background, black pen
+- Blackboard: near-black background, white pen
+- Auto-adjust pen: true
 
 ## Creating Your Configuration
 
@@ -264,6 +356,20 @@ enable_vsync = true
 
 [ui]
 show_status_bar = false
+```
+
+**Teaching/presentation mode (start in whiteboard):**
+```toml
+[board]
+default_mode = "whiteboard"
+auto_adjust_pen = true
+
+[drawing]
+default_thickness = 4.0
+default_font_size = 42.0
+
+[ui]
+status_bar_position = "top-right"
 ```
 
 **High-refresh display optimization:**

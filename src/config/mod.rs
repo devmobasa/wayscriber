@@ -12,7 +12,8 @@ pub mod types;
 // Re-export commonly used types at module level
 pub use enums::StatusPosition;
 pub use types::{
-    ArrowConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig, StatusBarStyle, UiConfig,
+    ArrowConfig, BoardConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig, StatusBarStyle,
+    UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)
@@ -66,6 +67,10 @@ pub struct Config {
     /// UI display preferences
     #[serde(default)]
     pub ui: UiConfig,
+
+    /// Board mode settings (whiteboard/blackboard)
+    #[serde(default)]
+    pub board: BoardConfig,
 }
 
 impl Config {
@@ -155,6 +160,56 @@ impl Config {
                 self.drawing.font_style
             );
             self.drawing.font_style = "normal".to_string();
+        }
+
+        // Validate board mode default
+        if !matches!(
+            self.board.default_mode.to_lowercase().as_str(),
+            "transparent" | "whiteboard" | "blackboard"
+        ) {
+            log::warn!(
+                "Invalid board default_mode '{}', falling back to 'transparent'",
+                self.board.default_mode
+            );
+            self.board.default_mode = "transparent".to_string();
+        }
+
+        // Validate board color RGB values (0.0-1.0)
+        for i in 0..3 {
+            if !(0.0..=1.0).contains(&self.board.whiteboard_color[i]) {
+                log::warn!(
+                    "Invalid whiteboard_color[{}] = {:.3}, clamping to 0.0-1.0",
+                    i,
+                    self.board.whiteboard_color[i]
+                );
+                self.board.whiteboard_color[i] = self.board.whiteboard_color[i].clamp(0.0, 1.0);
+            }
+            if !(0.0..=1.0).contains(&self.board.blackboard_color[i]) {
+                log::warn!(
+                    "Invalid blackboard_color[{}] = {:.3}, clamping to 0.0-1.0",
+                    i,
+                    self.board.blackboard_color[i]
+                );
+                self.board.blackboard_color[i] = self.board.blackboard_color[i].clamp(0.0, 1.0);
+            }
+            if !(0.0..=1.0).contains(&self.board.whiteboard_pen_color[i]) {
+                log::warn!(
+                    "Invalid whiteboard_pen_color[{}] = {:.3}, clamping to 0.0-1.0",
+                    i,
+                    self.board.whiteboard_pen_color[i]
+                );
+                self.board.whiteboard_pen_color[i] =
+                    self.board.whiteboard_pen_color[i].clamp(0.0, 1.0);
+            }
+            if !(0.0..=1.0).contains(&self.board.blackboard_pen_color[i]) {
+                log::warn!(
+                    "Invalid blackboard_pen_color[{}] = {:.3}, clamping to 0.0-1.0",
+                    i,
+                    self.board.blackboard_pen_color[i]
+                );
+                self.board.blackboard_pen_color[i] =
+                    self.board.blackboard_pen_color[i].clamp(0.0, 1.0);
+            }
         }
     }
 

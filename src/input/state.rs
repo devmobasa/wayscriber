@@ -1,9 +1,11 @@
 //! Drawing state machine and input state management.
 
+use super::board_mode::BoardMode;
 use super::events::{Key, MouseButton};
 use super::modifiers::Modifiers;
 use super::tool::Tool;
-use crate::draw::{Color, FontDescriptor, Frame, Shape};
+use crate::config::BoardConfig;
+use crate::draw::{CanvasSet, Color, FontDescriptor, Shape};
 use crate::util;
 
 /// Current drawing mode state machine.
@@ -42,8 +44,8 @@ pub enum DrawingState {
 /// modifier keys, drawing mode, and UI flags. It processes all keyboard and
 /// mouse events to update the drawing state and determine when redraws are needed.
 pub struct InputState {
-    /// Container for all shapes drawn in this session
-    pub frame: Frame,
+    /// Multi-frame canvas management (transparent, whiteboard, blackboard)
+    pub canvas_set: CanvasSet,
     /// Current drawing color (changed with color keys: R, G, B, etc.)
     pub current_color: Color,
     /// Current pen/line thickness in pixels (changed with +/- keys)
@@ -72,6 +74,10 @@ pub struct InputState {
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
     pub screen_height: u32,
+    /// Previous color before entering board mode (for restoration)
+    pub board_previous_color: Option<Color>,
+    /// Board mode configuration
+    pub board_config: BoardConfig,
 }
 
 impl InputState {
@@ -88,6 +94,7 @@ impl InputState {
     /// * `text_background_enabled` - Whether to draw background behind text
     /// * `arrow_length` - Arrowhead length in pixels
     /// * `arrow_angle` - Arrowhead angle in degrees
+    /// * `board_config` - Board mode configuration
     pub fn with_defaults(
         color: Color,
         thickness: f64,
@@ -96,9 +103,10 @@ impl InputState {
         text_background_enabled: bool,
         arrow_length: f64,
         arrow_angle: f64,
+        board_config: BoardConfig,
     ) -> Self {
         Self {
-            frame: Frame::new(),
+            canvas_set: CanvasSet::new(),
             current_color: color,
             current_thickness: thickness,
             current_font_size: font_size,
@@ -113,6 +121,8 @@ impl InputState {
             show_help: false,
             screen_width: 0,
             screen_height: 0,
+            board_previous_color: None,
+            board_config,
         }
     }
 
@@ -127,6 +137,91 @@ impl InputState {
     pub fn update_screen_dimensions(&mut self, width: u32, height: u32) {
         self.screen_width = width;
         self.screen_height = height;
+    }
+
+    /// Returns the current board mode.
+    pub fn board_mode(&self) -> BoardMode {
+        self.canvas_set.active_mode()
+    }
+
+    /// Adjusts the current font size by a delta, clamping to valid range.
+    ///
+    /// Font size is clamped to 8.0-72.0px range (same as config validation).
+    /// Triggers a redraw to update the status bar display.
+    ///
+    /// # Arguments
+    /// * `delta` - Amount to adjust font size (positive to increase, negative to decrease)
+    pub fn adjust_font_size(&mut self, delta: f64) {
+        self.current_font_size = (self.current_font_size + delta).clamp(8.0, 72.0);
+        self.needs_redraw = true;
+        log::debug!("Font size adjusted to {:.1}px", self.current_font_size);
+    }
+
+    /// Switches to a different board mode with color auto-adjustment.
+    ///
+    /// Handles mode transitions with automatic color adjustment for contrast:
+    /// - Entering board mode: saves current color, applies mode default
+    /// - Exiting board mode: restores previous color
+    /// - Switching between boards: applies new mode default
+    ///
+    /// Also resets drawing state to prevent partial shapes crossing modes.
+    pub fn switch_board_mode(&mut self, new_mode: BoardMode) {
+        let current_mode = self.canvas_set.active_mode();
+
+        // Toggle behavior: if already in target mode, return to transparent
+        let target_mode = if current_mode == new_mode && new_mode != BoardMode::Transparent {
+            BoardMode::Transparent
+        } else {
+            new_mode
+        };
+
+        // No-op if we're already in the target mode
+        if current_mode == target_mode {
+            return;
+        }
+
+        // Handle color auto-adjustment based on transition type (if enabled)
+        if self.board_config.auto_adjust_pen {
+            match (current_mode, target_mode) {
+                // Entering board mode from transparent
+                (BoardMode::Transparent, BoardMode::Whiteboard | BoardMode::Blackboard) => {
+                    // Save current color and apply board default
+                    self.board_previous_color = Some(self.current_color);
+                    if let Some(default_color) = target_mode.default_pen_color(&self.board_config) {
+                        self.current_color = default_color;
+                    }
+                }
+                // Exiting board mode to transparent
+                (BoardMode::Whiteboard | BoardMode::Blackboard, BoardMode::Transparent) => {
+                    // Restore previous color if we saved one
+                    if let Some(prev_color) = self.board_previous_color {
+                        self.current_color = prev_color;
+                        self.board_previous_color = None;
+                    }
+                }
+                // Switching between board modes
+                (BoardMode::Whiteboard, BoardMode::Blackboard)
+                | (BoardMode::Blackboard, BoardMode::Whiteboard) => {
+                    // Apply new board's default color
+                    if let Some(default_color) = target_mode.default_pen_color(&self.board_config) {
+                        self.current_color = default_color;
+                    }
+                }
+                // All other transitions (shouldn't happen, but handle gracefully)
+                _ => {}
+            }
+        }
+
+        // Switch the active frame
+        self.canvas_set.switch_mode(target_mode);
+
+        // Reset drawing state to prevent partial shapes crossing modes
+        self.state = DrawingState::Idle;
+
+        // Trigger redraw
+        self.needs_redraw = true;
+
+        log::info!("Switched from {:?} to {:?} mode", current_mode, target_mode);
     }
 
     /// Processes a key press event.
@@ -169,8 +264,26 @@ impl InputState {
                 } else {
                     // Not in text mode, handle special keys
                     match c {
-                        't' | 'T' => {
-                            // Enter text mode
+                        // Board mode toggles (Ctrl+W, Ctrl+B) - only if enabled
+                        'w' | 'W' if self.modifiers.ctrl && self.board_config.enabled => {
+                            log::info!("Ctrl+W pressed - toggling whiteboard mode");
+                            self.switch_board_mode(BoardMode::Whiteboard);
+                        }
+                        'b' | 'B' if self.modifiers.ctrl && self.board_config.enabled => {
+                            log::info!("Ctrl+B pressed - toggling blackboard mode");
+                            self.switch_board_mode(BoardMode::Blackboard);
+                        }
+                        't' | 'T'
+                            if self.modifiers.ctrl
+                                && self.modifiers.shift
+                                && self.board_config.enabled =>
+                        {
+                            // Ctrl+Shift+T: explicit return to transparent (only if board modes enabled)
+                            log::info!("Ctrl+Shift+T pressed - returning to transparent mode");
+                            self.switch_board_mode(BoardMode::Transparent);
+                        }
+                        't' | 'T' if !self.modifiers.ctrl => {
+                            // Regular T: Enter text mode (only if not holding Ctrl)
                             if matches!(self.state, DrawingState::Idle) {
                                 self.state = DrawingState::TextInput {
                                     x: (self.screen_width / 2) as i32,
@@ -181,13 +294,13 @@ impl InputState {
                             }
                         }
                         'e' | 'E' => {
-                            // Clear all annotations
-                            self.frame.clear();
+                            // Clear all annotations in active frame
+                            self.canvas_set.clear_active();
                             self.needs_redraw = true;
                         }
                         'z' | 'Z' if self.modifiers.ctrl => {
-                            // Undo last shape
-                            if self.frame.undo() {
+                            // Undo last shape in active frame
+                            if self.canvas_set.active_frame_mut().undo() {
                                 self.needs_redraw = true;
                             }
                         }
@@ -199,10 +312,12 @@ impl InputState {
                             self.needs_redraw = true;
                         }
                         _ => {
-                            // Check if it's a color key
-                            if let Some(color) = util::key_to_color(c) {
-                                self.current_color = color;
-                                self.needs_redraw = true;
+                            // Check if it's a color key (only if not holding Ctrl)
+                            if !self.modifiers.ctrl {
+                                if let Some(color) = util::key_to_color(c) {
+                                    self.current_color = color;
+                                    self.needs_redraw = true;
+                                }
                             }
                         }
                     }
@@ -224,7 +339,7 @@ impl InputState {
                     } else {
                         // Plain Enter: finalize text input
                         if !buffer.is_empty() {
-                            self.frame.add_shape(Shape::Text {
+                            self.canvas_set.active_frame_mut().add_shape(Shape::Text {
                                 x: *x,
                                 y: *y,
                                 text: buffer.clone(),
@@ -250,14 +365,24 @@ impl InputState {
             Key::Alt => self.modifiers.alt = true,
             Key::Tab => self.modifiers.tab = true,
             Key::Plus | Key::Equals => {
-                // Increase thickness
-                self.current_thickness = (self.current_thickness + 1.0).min(20.0);
-                self.needs_redraw = true;
+                if self.modifiers.ctrl && self.modifiers.shift {
+                    // Ctrl+Shift+Plus: Increase font size
+                    self.adjust_font_size(2.0);
+                } else {
+                    // Plain Plus: Increase thickness
+                    self.current_thickness = (self.current_thickness + 1.0).min(20.0);
+                    self.needs_redraw = true;
+                }
             }
             Key::Minus | Key::Underscore => {
-                // Decrease thickness
-                self.current_thickness = (self.current_thickness - 1.0).max(1.0);
-                self.needs_redraw = true;
+                if self.modifiers.ctrl && self.modifiers.shift {
+                    // Ctrl+Shift+Minus: Decrease font size
+                    self.adjust_font_size(-2.0);
+                } else {
+                    // Plain Minus: Decrease thickness
+                    self.current_thickness = (self.current_thickness - 1.0).max(1.0);
+                    self.needs_redraw = true;
+                }
             }
             Key::F10 => {
                 // Toggle help overlay
@@ -425,7 +550,7 @@ impl InputState {
                 },
             };
 
-            self.frame.add_shape(shape);
+            self.canvas_set.active_frame_mut().add_shape(shape);
             self.state = DrawingState::Idle;
             self.needs_redraw = true;
         }
@@ -569,5 +694,106 @@ impl InputState {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::BoardConfig;
+    use crate::draw::{Color, FontDescriptor};
+
+    fn create_test_input_state() -> InputState {
+        InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            }, // Red
+            3.0,     // thickness
+            32.0,    // font_size
+            FontDescriptor {
+                family: "Sans".to_string(),
+                weight: "bold".to_string(),
+                style: "normal".to_string(),
+            },
+            false,          // text_background_enabled
+            20.0,           // arrow_length
+            30.0,           // arrow_angle
+            BoardConfig::default(),
+        )
+    }
+
+    #[test]
+    fn test_adjust_font_size_increase() {
+        let mut state = create_test_input_state();
+        assert_eq!(state.current_font_size, 32.0);
+
+        state.adjust_font_size(2.0);
+        assert_eq!(state.current_font_size, 34.0);
+        assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn test_adjust_font_size_decrease() {
+        let mut state = create_test_input_state();
+        assert_eq!(state.current_font_size, 32.0);
+
+        state.adjust_font_size(-2.0);
+        assert_eq!(state.current_font_size, 30.0);
+        assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn test_adjust_font_size_clamp_min() {
+        let mut state = create_test_input_state();
+        state.current_font_size = 10.0;
+
+        // Try to go below minimum (8.0)
+        state.adjust_font_size(-5.0);
+        assert_eq!(state.current_font_size, 8.0);
+    }
+
+    #[test]
+    fn test_adjust_font_size_clamp_max() {
+        let mut state = create_test_input_state();
+        state.current_font_size = 70.0;
+
+        // Try to go above maximum (72.0)
+        state.adjust_font_size(5.0);
+        assert_eq!(state.current_font_size, 72.0);
+    }
+
+    #[test]
+    fn test_adjust_font_size_at_boundaries() {
+        let mut state = create_test_input_state();
+
+        // Test at minimum boundary
+        state.current_font_size = 8.0;
+        state.adjust_font_size(0.0);
+        assert_eq!(state.current_font_size, 8.0);
+
+        // Test at maximum boundary
+        state.current_font_size = 72.0;
+        state.adjust_font_size(0.0);
+        assert_eq!(state.current_font_size, 72.0);
+    }
+
+    #[test]
+    fn test_adjust_font_size_multiple_adjustments() {
+        let mut state = create_test_input_state();
+        assert_eq!(state.current_font_size, 32.0);
+
+        // Simulate multiple Ctrl+Shift++ presses
+        state.adjust_font_size(2.0);
+        state.adjust_font_size(2.0);
+        state.adjust_font_size(2.0);
+        assert_eq!(state.current_font_size, 38.0);
+
+        // Then decrease
+        state.adjust_font_size(-2.0);
+        state.adjust_font_size(-2.0);
+        assert_eq!(state.current_font_size, 34.0);
     }
 }
