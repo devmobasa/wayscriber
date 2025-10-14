@@ -224,6 +224,7 @@ fn render_ellipse(
 }
 
 /// Render an arrow (line with arrowhead pointing towards start)
+#[allow(clippy::too_many_arguments)]
 fn render_arrow(
     ctx: &cairo::Context,
     x1: i32,
@@ -276,6 +277,7 @@ fn render_arrow(
 /// * `size` - Font size in points
 /// * `font_descriptor` - Font configuration (family, weight, style)
 /// * `background_enabled` - Whether to draw background box behind text
+#[allow(clippy::too_many_arguments)]
 pub fn render_text(
     ctx: &cairo::Context,
     x: i32,

@@ -29,13 +29,16 @@ use wayland_client::{
 };
 // Removed: Arc, Mutex - not needed after removing WaylandBackend.inner
 
-use crate::config::Config;
+use crate::capture::CaptureManager;
+use crate::config::{Action, Config};
 use crate::input::{InputState, Key, MouseButton};
 
 /// Wayland backend state
 pub struct WaylandBackend {
     // Removed: inner Arc<Mutex> was unused - WaylandState is created and used directly in run()
     initial_mode: Option<String>,
+    /// Tokio runtime for async capture operations
+    tokio_runtime: tokio::runtime::Runtime,
 }
 
 /// Internal Wayland state
@@ -65,11 +68,19 @@ struct WaylandState {
     input_state: InputState,
     current_mouse_x: i32,
     current_mouse_y: i32,
+
+    // Capture manager
+    capture_manager: CaptureManager,
 }
 
 impl WaylandBackend {
     pub fn new(initial_mode: Option<String>) -> Result<Self> {
-        Ok(Self { initial_mode })
+        let tokio_runtime = tokio::runtime::Runtime::new()
+            .context("Failed to create Tokio runtime for capture operations")?;
+        Ok(Self {
+            initial_mode,
+            tokio_runtime,
+        })
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -167,10 +178,10 @@ impl WaylandBackend {
                     info!("Starting in {} mode", initial_mode_str);
                     input_state.canvas_set.switch_mode(mode);
                     // Apply auto-color adjustment if enabled
-                    if config.board.auto_adjust_pen {
-                        if let Some(default_color) = mode.default_pen_color(&config.board) {
-                            input_state.current_color = default_color;
-                        }
+                    if config.board.auto_adjust_pen
+                        && let Some(default_color) = mode.default_pen_color(&config.board)
+                    {
+                        input_state.current_color = default_color;
                     }
                 }
             } else if !initial_mode_str.is_empty() {
@@ -182,6 +193,10 @@ impl WaylandBackend {
         } else if self.initial_mode.is_some() {
             warn!("Board modes disabled in config, ignoring --mode flag");
         }
+
+        // Create capture manager with runtime handle
+        let capture_manager = CaptureManager::new(self.tokio_runtime.handle());
+        info!("Capture manager initialized");
 
         // Create application state
         let mut state = WaylandState {
@@ -201,6 +216,7 @@ impl WaylandBackend {
             input_state,
             current_mouse_x: 0,
             current_mouse_y: 0,
+            capture_manager,
         };
 
         // Create layer shell surface
@@ -483,6 +499,51 @@ impl WaylandState {
 
         Ok(())
     }
+
+    /// Handles capture actions by delegating to the CaptureManager.
+    fn handle_capture_action(&mut self, action: Action) {
+        use crate::capture::file::{FileSaveConfig, expand_tilde};
+        use crate::capture::types::CaptureType;
+
+        if !self.config.capture.enabled {
+            log::warn!("Capture action triggered but capture is disabled in config");
+            return;
+        }
+
+        let capture_type = match action {
+            Action::CaptureFullScreen => CaptureType::FullScreen,
+            Action::CaptureActiveWindow => CaptureType::ActiveWindow,
+            Action::CaptureSelection => {
+                // TODO: Implement selection UI
+                log::warn!("Selection capture not yet implemented, falling back to full screen");
+                CaptureType::FullScreen
+            }
+            _ => {
+                log::error!(
+                    "Non-capture action passed to handle_capture_action: {:?}",
+                    action
+                );
+                return;
+            }
+        };
+
+        // Build file save config from user config
+        let save_config = FileSaveConfig {
+            save_directory: expand_tilde(&self.config.capture.save_directory),
+            filename_template: self.config.capture.filename_template.clone(),
+            format: self.config.capture.format.clone(),
+        };
+
+        // Request capture
+        log::info!("Requesting {:?} capture", capture_type);
+        if let Err(e) = self.capture_manager.request_capture(
+            capture_type,
+            save_config,
+            self.config.capture.copy_to_clipboard,
+        ) {
+            log::error!("Failed to request capture: {}", e);
+        }
+    }
 }
 
 impl WaylandBackend {
@@ -754,6 +815,11 @@ impl KeyboardHandler for WaylandState {
         debug!("Key pressed: {:?}", key);
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
+
+        // Check for pending capture actions
+        if let Some(action) = self.input_state.take_pending_capture_action() {
+            self.handle_capture_action(action);
+        }
     }
 
     fn release_key(

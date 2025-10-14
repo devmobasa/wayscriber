@@ -1,6 +1,7 @@
 use clap::{ArgAction, Parser};
 
 mod backend;
+mod capture;
 mod config;
 mod daemon;
 mod draw;

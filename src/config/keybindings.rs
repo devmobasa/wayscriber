@@ -41,6 +41,11 @@ pub enum Action {
     SetColorPink,
     SetColorWhite,
     SetColorBlack,
+
+    // Screenshot capture actions
+    CaptureFullScreen,
+    CaptureActiveWindow,
+    CaptureSelection,
 }
 
 /// A single keybinding: a key character with optional modifiers.
@@ -197,6 +202,15 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_set_color_black")]
     pub set_color_black: Vec<String>,
+
+    #[serde(default = "default_capture_full_screen")]
+    pub capture_full_screen: Vec<String>,
+
+    #[serde(default = "default_capture_active_window")]
+    pub capture_active_window: Vec<String>,
+
+    #[serde(default = "default_capture_selection")]
+    pub capture_selection: Vec<String>,
 }
 
 impl Default for KeybindingsConfig {
@@ -222,6 +236,9 @@ impl Default for KeybindingsConfig {
             set_color_pink: default_set_color_pink(),
             set_color_white: default_set_color_white(),
             set_color_black: default_set_color_black(),
+            capture_full_screen: default_capture_full_screen(),
+            capture_active_window: default_capture_active_window(),
+            capture_selection: default_capture_selection(),
         }
     }
 }
@@ -324,6 +341,18 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::SetColorBlack)?;
         }
 
+        for binding_str in &self.capture_full_screen {
+            insert_binding(binding_str, Action::CaptureFullScreen)?;
+        }
+
+        for binding_str in &self.capture_active_window {
+            insert_binding(binding_str, Action::CaptureActiveWindow)?;
+        }
+
+        for binding_str in &self.capture_selection {
+            insert_binding(binding_str, Action::CaptureSelection)?;
+        }
+
         Ok(map)
     }
 }
@@ -410,6 +439,18 @@ fn default_set_color_white() -> Vec<String> {
 
 fn default_set_color_black() -> Vec<String> {
     vec!["K".to_string()]
+}
+
+fn default_capture_full_screen() -> Vec<String> {
+    vec!["F9".to_string()]
+}
+
+fn default_capture_active_window() -> Vec<String> {
+    vec!["Ctrl+F9".to_string()]
+}
+
+fn default_capture_selection() -> Vec<String> {
+    vec!["Ctrl+Shift+S".to_string()]
 }
 
 #[cfg(test)]
@@ -521,9 +562,11 @@ mod tests {
     #[test]
     fn test_duplicate_keybinding_detection() {
         // Create a config with duplicate keybindings
-        let mut config = KeybindingsConfig::default();
-        config.exit = vec!["Ctrl+Z".to_string()];
-        config.undo = vec!["Ctrl+Z".to_string()];
+        let config = KeybindingsConfig {
+            exit: vec!["Ctrl+Z".to_string()],
+            undo: vec!["Ctrl+Z".to_string()],
+            ..Default::default()
+        };
 
         // This should fail with a duplicate error
         let result = config.build_action_map();
@@ -536,9 +579,11 @@ mod tests {
     #[test]
     fn test_duplicate_with_different_modifier_order() {
         // Even with different modifier orders, these are the same keybinding
-        let mut config = KeybindingsConfig::default();
-        config.exit = vec!["Ctrl+Shift+W".to_string()];
-        config.toggle_whiteboard = vec!["Shift+Ctrl+W".to_string()];
+        let config = KeybindingsConfig {
+            exit: vec!["Ctrl+Shift+W".to_string()],
+            toggle_whiteboard: vec!["Shift+Ctrl+W".to_string()],
+            ..Default::default()
+        };
 
         // This should fail because they normalize to the same binding
         let result = config.build_action_map();
