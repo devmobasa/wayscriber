@@ -71,6 +71,10 @@ struct WaylandState {
 
     // Capture manager
     capture_manager: CaptureManager,
+
+    // Capture state tracking
+    capture_in_progress: bool,
+    overlay_hidden_for_capture: bool,
 }
 
 impl WaylandBackend {
@@ -217,6 +221,8 @@ impl WaylandBackend {
             current_mouse_x: 0,
             current_mouse_y: 0,
             capture_manager,
+            capture_in_progress: false,
+            overlay_hidden_for_capture: false,
         };
 
         // Create layer shell surface
@@ -271,6 +277,31 @@ impl WaylandBackend {
                     warn!("Event queue error: {}", e);
                     loop_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
                     break;
+                }
+            }
+
+            // Check for completed capture operations
+            if state.capture_in_progress {
+                if let Some(result) = state.capture_manager.try_take_result() {
+                    log::info!("Capture completed");
+
+                    // Restore overlay
+                    state.show_overlay();
+                    state.capture_in_progress = false;
+
+                    // Log capture result
+                    match result.saved_path {
+                        Some(ref path) => {
+                            log::info!("Screenshot saved to: {}", path.display());
+                        }
+                        None => {
+                            log::info!("Screenshot captured (not saved to file)");
+                        }
+                    }
+
+                    if result.copied_to_clipboard {
+                        log::info!("Screenshot copied to clipboard");
+                    }
                 }
             }
 
@@ -500,6 +531,57 @@ impl WaylandState {
         Ok(())
     }
 
+    /// Temporarily hide the overlay for screenshot capture.
+    ///
+    /// This unmaps the layer surface so the compositor doesn't render it.
+    /// The overlay state (drawings, mode, etc.) is preserved.
+    fn hide_overlay(&mut self) {
+        if self.overlay_hidden_for_capture {
+            log::warn!("Overlay already hidden for capture");
+            return;
+        }
+
+        log::info!("Hiding overlay for screenshot capture");
+
+        if let Some(layer_surface) = &self.layer_surface {
+            // Unmap the surface by setting size to 0
+            layer_surface.set_size(0, 0);
+
+            let wl_surface = layer_surface.wl_surface();
+            wl_surface.commit();
+        }
+
+        self.overlay_hidden_for_capture = true;
+
+        // Give compositor time to process the unmap
+        // (the async capture will start shortly after)
+    }
+
+    /// Restore the overlay after screenshot capture completes.
+    ///
+    /// Re-maps the layer surface to its original size and forces a redraw.
+    fn show_overlay(&mut self) {
+        if !self.overlay_hidden_for_capture {
+            log::warn!("Overlay was not hidden, nothing to restore");
+            return;
+        }
+
+        log::info!("Restoring overlay after screenshot capture");
+
+        if let Some(layer_surface) = &self.layer_surface {
+            // Restore original size
+            layer_surface.set_size(self.width, self.height);
+
+            let wl_surface = layer_surface.wl_surface();
+            wl_surface.commit();
+        }
+
+        self.overlay_hidden_for_capture = false;
+
+        // Force a redraw to show the overlay again
+        self.input_state.needs_redraw = true;
+    }
+
     /// Handles capture actions by delegating to the CaptureManager.
     fn handle_capture_action(&mut self, action: Action) {
         use crate::capture::file::{FileSaveConfig, expand_tilde};
@@ -534,6 +616,10 @@ impl WaylandState {
             format: self.config.capture.format.clone(),
         };
 
+        // Hide overlay before capture to prevent capturing the overlay itself
+        self.hide_overlay();
+        self.capture_in_progress = true;
+
         // Request capture
         log::info!("Requesting {:?} capture", capture_type);
         if let Err(e) = self.capture_manager.request_capture(
@@ -542,6 +628,10 @@ impl WaylandState {
             self.config.capture.copy_to_clipboard,
         ) {
             log::error!("Failed to request capture: {}", e);
+
+            // Restore overlay on error
+            self.show_overlay();
+            self.capture_in_progress = false;
         }
     }
 }

@@ -442,15 +442,15 @@ fn default_set_color_black() -> Vec<String> {
 }
 
 fn default_capture_full_screen() -> Vec<String> {
-    vec!["F9".to_string()]
+    vec!["Ctrl+Shift+P".to_string()]
 }
 
 fn default_capture_active_window() -> Vec<String> {
-    vec!["Ctrl+F9".to_string()]
+    vec!["Ctrl+Shift+O".to_string()]
 }
 
 fn default_capture_selection() -> Vec<String> {
-    vec!["Ctrl+Shift+S".to_string()]
+    vec!["Ctrl+Shift+I".to_string()]
 }
 
 #[cfg(test)]

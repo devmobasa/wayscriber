@@ -535,6 +535,12 @@ impl InputState {
                 // Store the action for later retrieval
                 log::debug!("Capture action {:?} pending for backend", action);
                 self.pending_capture_action = Some(action);
+
+                // Clear modifiers to prevent them from being "stuck" after capture
+                // (portal dialog causes key releases to be missed)
+                self.modifiers.ctrl = false;
+                self.modifiers.shift = false;
+                self.modifiers.alt = false;
             }
         }
     }
