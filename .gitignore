@@ -20,6 +20,8 @@
 test_run.sh
 run.sh
 
-!/packaging/hyprmarker.service
+# Packaging (but keep the service file)
 packaging/
+!packaging/hyprmarker.service
+
 docs/board
