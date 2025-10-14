@@ -278,35 +278,46 @@ impl InputState {
             _ => {}
         }
 
-        // In text input mode, check if the key triggers an action before consuming it
+        // In text input mode, only check actions if modifiers are pressed or it's a special key
+        // This allows plain letters to be typed without triggering color/tool actions
         if matches!(&self.state, DrawingState::TextInput { .. }) {
-            // Convert key to string for action lookup
-            let key_str = match key {
-                Key::Char(c) => c.to_string(),
-                Key::Escape => "Escape".to_string(),
-                Key::Return => "Return".to_string(),
-                Key::Backspace => "Backspace".to_string(),
-                Key::Space => "Space".to_string(),
-                Key::Plus => "+".to_string(),
-                Key::Minus => "-".to_string(),
-                Key::Equals => "=".to_string(),
-                Key::Underscore => "_".to_string(),
-                Key::F10 => "F10".to_string(),
-                _ => String::new(),
+            // Only check for actions if:
+            // 1. Modifiers are held (Ctrl, Alt, Shift for special commands)
+            // 2. OR it's a special non-character key (Escape, F10, etc.)
+            let should_check_actions = match key {
+                // Special keys always check for actions
+                Key::Escape | Key::F10 | Key::Return => true,
+                // Character keys only check if modifiers are held
+                Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
+                // Other keys can check as well
+                _ => self.modifiers.ctrl || self.modifiers.alt,
             };
 
-            // Check if this key combination triggers an action
-            if !key_str.is_empty() {
-                if let Some(action) = self.find_action(&key_str) {
-                    // Special handling: Exit action should cancel text input
-                    if matches!(action, Action::Exit) {
-                        self.state = DrawingState::Idle;
-                        self.needs_redraw = true;
+            if should_check_actions {
+                // Convert key to string for action lookup
+                let key_str = match key {
+                    Key::Char(c) => c.to_string(),
+                    Key::Escape => "Escape".to_string(),
+                    Key::Return => "Return".to_string(),
+                    Key::Backspace => "Backspace".to_string(),
+                    Key::Space => "Space".to_string(),
+                    Key::Plus => "+".to_string(),
+                    Key::Minus => "-".to_string(),
+                    Key::Equals => "=".to_string(),
+                    Key::Underscore => "_".to_string(),
+                    Key::F10 => "F10".to_string(),
+                    _ => String::new(),
+                };
+
+                // Check if this key combination triggers an action
+                if !key_str.is_empty() {
+                    if let Some(action) = self.find_action(&key_str) {
+                        // Actions work in text mode
+                        // Note: Exit action has special logic in handle_action - it cancels
+                        // text mode if in TextInput state, or exits app if in Idle state
+                        self.handle_action(action);
                         return;
                     }
-                    // Other actions also work in text mode (e.g., Ctrl+Q to exit)
-                    self.handle_action(action);
-                    return;
                 }
             }
 
@@ -914,5 +925,138 @@ mod tests {
         state.adjust_font_size(-2.0);
         state.adjust_font_size(-2.0);
         assert_eq!(state.current_font_size, 34.0);
+    }
+
+    #[test]
+    fn test_text_mode_plain_letters_not_triggering_actions() {
+        let mut state = create_test_input_state();
+
+        // Enter text mode
+        state.state = DrawingState::TextInput {
+            x: 100,
+            y: 100,
+            buffer: String::new(),
+        };
+
+        // Type 'r' - should add to buffer, not change color
+        let original_color = state.current_color;
+        state.on_key_press(Key::Char('r'));
+
+        // Check that 'r' was added to buffer
+        if let DrawingState::TextInput { buffer, .. } = &state.state {
+            assert_eq!(buffer, "r");
+        } else {
+            panic!("Should still be in text input mode");
+        }
+
+        // Color should NOT have changed
+        assert_eq!(state.current_color, original_color);
+
+        // Type more color keys
+        state.on_key_press(Key::Char('g'));
+        state.on_key_press(Key::Char('b'));
+        state.on_key_press(Key::Char('t'));
+
+        if let DrawingState::TextInput { buffer, .. } = &state.state {
+            assert_eq!(buffer, "rgbt");
+        } else {
+            panic!("Should still be in text input mode");
+        }
+
+        // Color should still not have changed
+        assert_eq!(state.current_color, original_color);
+    }
+
+    #[test]
+    fn test_text_mode_ctrl_keys_trigger_actions() {
+        let mut state = create_test_input_state();
+
+        // Enter text mode
+        state.state = DrawingState::TextInput {
+            x: 100,
+            y: 100,
+            buffer: String::from("test"),
+        };
+
+        // Press Ctrl (modifier)
+        state.on_key_press(Key::Ctrl);
+
+        // Verify Ctrl is held
+        assert!(state.modifiers.ctrl);
+
+        // Press 'Z' while Ctrl is held (Ctrl+Z should undo - a non-Exit action)
+        state.on_key_press(Key::Char('Z'));
+
+        // Should still be in text mode (undo works but doesn't exit text mode)
+        assert!(matches!(state.state, DrawingState::TextInput { .. }));
+
+        // Now test Ctrl+Q for exit
+        state.on_key_press(Key::Char('Q'));
+
+        // Exit action from text mode goes to Idle (cancels text mode)
+        assert!(matches!(state.state, DrawingState::Idle));
+
+        // Now that we're in Idle, pressing Ctrl+Q again should exit the app
+        state.on_key_press(Key::Char('Q'));
+        assert!(state.should_exit);
+    }
+
+    #[test]
+    fn test_text_mode_escape_exits() {
+        let mut state = create_test_input_state();
+
+        // Enter text mode
+        state.state = DrawingState::TextInput {
+            x: 100,
+            y: 100,
+            buffer: String::from("test"),
+        };
+
+        // Press Escape (should cancel text input)
+        state.on_key_press(Key::Escape);
+
+        // Should have exited text mode without adding text
+        assert!(matches!(state.state, DrawingState::Idle));
+        assert!(!state.should_exit); // Just cancel, don't exit app
+    }
+
+    #[test]
+    fn test_text_mode_f10_shows_help() {
+        let mut state = create_test_input_state();
+
+        // Enter text mode
+        state.state = DrawingState::TextInput {
+            x: 100,
+            y: 100,
+            buffer: String::new(),
+        };
+
+        assert!(!state.show_help);
+
+        // Press F10 (should toggle help even in text mode)
+        state.on_key_press(Key::F10);
+
+        // Help should be visible
+        assert!(state.show_help);
+
+        // Should still be in text mode
+        assert!(matches!(state.state, DrawingState::TextInput { .. }));
+    }
+
+    #[test]
+    fn test_idle_mode_plain_letters_trigger_color_actions() {
+        let mut state = create_test_input_state();
+
+        // Should be in Idle mode
+        assert!(matches!(state.state, DrawingState::Idle));
+
+        let original_color = state.current_color;
+
+        // Press 'g' for green
+        state.on_key_press(Key::Char('g'));
+
+        // Color should have changed
+        assert_ne!(state.current_color, original_color);
+        assert_eq!(state.current_color, util::key_to_color('g').unwrap());
     }
 }
