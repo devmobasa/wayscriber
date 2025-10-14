@@ -4,9 +4,10 @@ use super::board_mode::BoardMode;
 use super::events::{Key, MouseButton};
 use super::modifiers::Modifiers;
 use super::tool::Tool;
-use crate::config::BoardConfig;
+use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::{CanvasSet, Color, FontDescriptor, Shape};
 use crate::util;
+use std::collections::HashMap;
 
 /// Current drawing mode state machine.
 ///
@@ -78,6 +79,8 @@ pub struct InputState {
     pub board_previous_color: Option<Color>,
     /// Board mode configuration
     pub board_config: BoardConfig,
+    /// Keybinding action map for efficient lookup
+    action_map: HashMap<KeyBinding, Action>,
 }
 
 impl InputState {
@@ -95,6 +98,7 @@ impl InputState {
     /// * `arrow_length` - Arrowhead length in pixels
     /// * `arrow_angle` - Arrowhead angle in degrees
     /// * `board_config` - Board mode configuration
+    /// * `action_map` - Keybinding action map
     pub fn with_defaults(
         color: Color,
         thickness: f64,
@@ -104,6 +108,7 @@ impl InputState {
         arrow_length: f64,
         arrow_angle: f64,
         board_config: BoardConfig,
+        action_map: HashMap<KeyBinding, Action>,
     ) -> Self {
         Self {
             canvas_set: CanvasSet::new(),
@@ -123,6 +128,7 @@ impl InputState {
             screen_height: 0,
             board_previous_color: None,
             board_config,
+            action_map,
         }
     }
 
@@ -142,6 +148,22 @@ impl InputState {
     /// Returns the current board mode.
     pub fn board_mode(&self) -> BoardMode {
         self.canvas_set.active_mode()
+    }
+
+    /// Look up an action for the given key and modifiers.
+    fn find_action(&self, key_str: &str) -> Option<Action> {
+        // Try to find a matching keybinding
+        for (binding, action) in &self.action_map {
+            if binding.matches(
+                key_str,
+                self.modifiers.ctrl,
+                self.modifiers.shift,
+                self.modifiers.alt,
+            ) {
+                return Some(*action);
+            }
+        }
+        None
     }
 
     /// Adjusts the current font size by a delta, clamping to valid range.
@@ -227,25 +249,137 @@ impl InputState {
     /// Processes a key press event.
     ///
     /// Handles all keyboard input including:
-    /// - Drawing color selection (R, G, B, Y, O, P, W, K)
-    /// - Tool actions (T for text mode, E for clear, Ctrl+Z for undo)
+    /// - Drawing color selection (configurable keybindings)
+    /// - Tool actions (text mode, clear, undo - configurable)
     /// - Text input (when in TextInput state)
-    /// - Exit commands (Escape, Ctrl+Q)
-    /// - Thickness adjustment (+/-, mouse scroll handled separately)
-    /// - Help toggle (F10)
+    /// - Exit commands (configurable)
+    /// - Thickness adjustment (configurable)
+    /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
+        // Handle modifier keys first
         match key {
-            Key::Escape => {
+            Key::Shift => {
+                self.modifiers.shift = true;
+                return;
+            }
+            Key::Ctrl => {
+                self.modifiers.ctrl = true;
+                return;
+            }
+            Key::Alt => {
+                self.modifiers.alt = true;
+                return;
+            }
+            Key::Tab => {
+                self.modifiers.tab = true;
+                return;
+            }
+            _ => {}
+        }
+
+        // Handle Escape key - special handling for canceling actions
+        if matches!(key, Key::Escape) {
+            if let DrawingState::TextInput { .. } = &self.state {
+                if let Some(Action::Exit) = self.find_action("Escape") {
+                    self.state = DrawingState::Idle;
+                    self.needs_redraw = true;
+                    return;
+                }
+            } else if let DrawingState::Drawing { .. } = &self.state {
+                if let Some(Action::Exit) = self.find_action("Escape") {
+                    self.state = DrawingState::Idle;
+                    self.needs_redraw = true;
+                    return;
+                }
+            }
+        }
+
+        // Handle Return key for finalizing text input
+        if matches!(key, Key::Return) && !self.modifiers.shift {
+            if let DrawingState::TextInput { x, y, buffer } = &self.state {
+                if !buffer.is_empty() {
+                    let x = *x;
+                    let y = *y;
+                    let text = buffer.clone();
+
+                    self.canvas_set.active_frame_mut().add_shape(Shape::Text {
+                        x,
+                        y,
+                        text,
+                        color: self.current_color,
+                        size: self.current_font_size,
+                        font_descriptor: self.font_descriptor.clone(),
+                        background_enabled: self.text_background_enabled,
+                    });
+                    self.needs_redraw = true;
+                }
+                self.state = DrawingState::Idle;
+                return;
+            }
+        }
+
+        // Handle text input mode - most keys go to the buffer
+        if let DrawingState::TextInput { buffer, .. } = &mut self.state {
+            match key {
+                Key::Char(c) => {
+                    buffer.push(c);
+                    self.needs_redraw = true;
+                    return;
+                }
+                Key::Backspace => {
+                    buffer.pop();
+                    self.needs_redraw = true;
+                    return;
+                }
+                Key::Space => {
+                    buffer.push(' ');
+                    self.needs_redraw = true;
+                    return;
+                }
+                Key::Return if self.modifiers.shift => {
+                    // Shift+Enter: insert newline
+                    buffer.push('\n');
+                    self.needs_redraw = true;
+                    return;
+                }
+                Key::Return | Key::Escape => {
+                    // Already handled above
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        // Convert key to string for action lookup
+        let key_str = match key {
+            Key::Char(c) => c.to_string(),
+            Key::Escape => "Escape".to_string(),
+            Key::Return => "Return".to_string(),
+            Key::Backspace => "Backspace".to_string(),
+            Key::Space => "Space".to_string(),
+            Key::Plus => "+".to_string(),
+            Key::Minus => "-".to_string(),
+            Key::Equals => "=".to_string(),
+            Key::Underscore => "_".to_string(),
+            Key::F10 => "F10".to_string(),
+            _ => return,
+        };
+
+        // Look up action based on keybinding
+        if let Some(action) = self.find_action(&key_str) {
+            self.handle_action(action);
+        }
+    }
+
+    /// Handle an action triggered by a keybinding.
+    fn handle_action(&mut self, action: Action) {
+        match action {
+            Action::Exit => {
                 // Exit drawing mode or cancel current action
                 match &self.state {
-                    DrawingState::TextInput { .. } => {
-                        // Cancel text input
-                        self.state = DrawingState::Idle;
-                        self.needs_redraw = true;
-                    }
-                    DrawingState::Drawing { .. } => {
-                        // Cancel current drawing
+                    DrawingState::TextInput { .. } | DrawingState::Drawing { .. } => {
+                        // Cancel current action
                         self.state = DrawingState::Idle;
                         self.needs_redraw = true;
                     }
@@ -255,141 +389,93 @@ impl InputState {
                     }
                 }
             }
-            Key::Char(c) => {
-                // Handle character input - check if we're in text mode first
-                if let DrawingState::TextInput { buffer, .. } = &mut self.state {
-                    // In text mode, ALL characters go to the buffer
-                    buffer.push(c);
-                    self.needs_redraw = true;
-                } else {
-                    // Not in text mode, handle special keys
-                    match c {
-                        // Board mode toggles (Ctrl+W, Ctrl+B) - only if enabled
-                        'w' | 'W' if self.modifiers.ctrl && self.board_config.enabled => {
-                            log::info!("Ctrl+W pressed - toggling whiteboard mode");
-                            self.switch_board_mode(BoardMode::Whiteboard);
-                        }
-                        'b' | 'B' if self.modifiers.ctrl && self.board_config.enabled => {
-                            log::info!("Ctrl+B pressed - toggling blackboard mode");
-                            self.switch_board_mode(BoardMode::Blackboard);
-                        }
-                        't' | 'T'
-                            if self.modifiers.ctrl
-                                && self.modifiers.shift
-                                && self.board_config.enabled =>
-                        {
-                            // Ctrl+Shift+T: explicit return to transparent (only if board modes enabled)
-                            log::info!("Ctrl+Shift+T pressed - returning to transparent mode");
-                            self.switch_board_mode(BoardMode::Transparent);
-                        }
-                        't' | 'T' if !self.modifiers.ctrl => {
-                            // Regular T: Enter text mode (only if not holding Ctrl)
-                            if matches!(self.state, DrawingState::Idle) {
-                                self.state = DrawingState::TextInput {
-                                    x: (self.screen_width / 2) as i32,
-                                    y: (self.screen_height / 2) as i32,
-                                    buffer: String::new(),
-                                };
-                                self.needs_redraw = true;
-                            }
-                        }
-                        'e' | 'E' => {
-                            // Clear all annotations in active frame
-                            self.canvas_set.clear_active();
-                            self.needs_redraw = true;
-                        }
-                        'z' | 'Z' if self.modifiers.ctrl => {
-                            // Undo last shape in active frame
-                            if self.canvas_set.active_frame_mut().undo() {
-                                self.needs_redraw = true;
-                            }
-                        }
-                        'q' | 'Q' if self.modifiers.ctrl => {
-                            // Exit overlay (return to daemon mode)
-                            log::info!("Ctrl+Q pressed - setting should_exit=true");
-                            self.should_exit = true;
-                            // Trigger redraw to force event loop to check should_exit
-                            self.needs_redraw = true;
-                        }
-                        _ => {
-                            // Check if it's a color key (only if not holding Ctrl)
-                            if !self.modifiers.ctrl {
-                                if let Some(color) = util::key_to_color(c) {
-                                    self.current_color = color;
-                                    self.needs_redraw = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Key::Backspace => {
-                if let DrawingState::TextInput { buffer, .. } = &mut self.state {
-                    buffer.pop();
+            Action::EnterTextMode => {
+                if matches!(self.state, DrawingState::Idle) {
+                    self.state = DrawingState::TextInput {
+                        x: (self.screen_width / 2) as i32,
+                        y: (self.screen_height / 2) as i32,
+                        buffer: String::new(),
+                    };
                     self.needs_redraw = true;
                 }
             }
-            Key::Return => {
-                // Finalize text input or insert newline if Shift is held
-                if let DrawingState::TextInput { x, y, buffer } = &mut self.state {
-                    if self.modifiers.shift {
-                        // Shift+Enter: insert newline
-                        buffer.push('\n');
-                        self.needs_redraw = true;
-                    } else {
-                        // Plain Enter: finalize text input
-                        if !buffer.is_empty() {
-                            self.canvas_set.active_frame_mut().add_shape(Shape::Text {
-                                x: *x,
-                                y: *y,
-                                text: buffer.clone(),
-                                color: self.current_color,
-                                size: self.current_font_size,
-                                font_descriptor: self.font_descriptor.clone(),
-                                background_enabled: self.text_background_enabled,
-                            });
-                            self.needs_redraw = true;
-                        }
-                        self.state = DrawingState::Idle;
-                    }
-                }
+            Action::ClearCanvas => {
+                self.canvas_set.clear_active();
+                self.needs_redraw = true;
             }
-            Key::Space => {
-                if let DrawingState::TextInput { buffer, .. } = &mut self.state {
-                    buffer.push(' ');
+            Action::Undo => {
+                if self.canvas_set.active_frame_mut().undo() {
                     self.needs_redraw = true;
                 }
             }
-            Key::Shift => self.modifiers.shift = true,
-            Key::Ctrl => self.modifiers.ctrl = true,
-            Key::Alt => self.modifiers.alt = true,
-            Key::Tab => self.modifiers.tab = true,
-            Key::Plus | Key::Equals => {
-                if self.modifiers.ctrl && self.modifiers.shift {
-                    // Ctrl+Shift+Plus: Increase font size
-                    self.adjust_font_size(2.0);
-                } else {
-                    // Plain Plus: Increase thickness
-                    self.current_thickness = (self.current_thickness + 1.0).min(20.0);
-                    self.needs_redraw = true;
+            Action::IncreaseThickness => {
+                self.current_thickness = (self.current_thickness + 1.0).min(20.0);
+                self.needs_redraw = true;
+            }
+            Action::DecreaseThickness => {
+                self.current_thickness = (self.current_thickness - 1.0).max(1.0);
+                self.needs_redraw = true;
+            }
+            Action::IncreaseFontSize => {
+                self.adjust_font_size(2.0);
+            }
+            Action::DecreaseFontSize => {
+                self.adjust_font_size(-2.0);
+            }
+            Action::ToggleWhiteboard => {
+                if self.board_config.enabled {
+                    log::info!("Toggling whiteboard mode");
+                    self.switch_board_mode(BoardMode::Whiteboard);
                 }
             }
-            Key::Minus | Key::Underscore => {
-                if self.modifiers.ctrl && self.modifiers.shift {
-                    // Ctrl+Shift+Minus: Decrease font size
-                    self.adjust_font_size(-2.0);
-                } else {
-                    // Plain Minus: Decrease thickness
-                    self.current_thickness = (self.current_thickness - 1.0).max(1.0);
-                    self.needs_redraw = true;
+            Action::ToggleBlackboard => {
+                if self.board_config.enabled {
+                    log::info!("Toggling blackboard mode");
+                    self.switch_board_mode(BoardMode::Blackboard);
                 }
             }
-            Key::F10 => {
-                // Toggle help overlay
+            Action::ReturnToTransparent => {
+                if self.board_config.enabled {
+                    log::info!("Returning to transparent mode");
+                    self.switch_board_mode(BoardMode::Transparent);
+                }
+            }
+            Action::ToggleHelp => {
                 self.show_help = !self.show_help;
                 self.needs_redraw = true;
             }
-            _ => {}
+            Action::SetColorRed => {
+                self.current_color = util::key_to_color('r').unwrap();
+                self.needs_redraw = true;
+            }
+            Action::SetColorGreen => {
+                self.current_color = util::key_to_color('g').unwrap();
+                self.needs_redraw = true;
+            }
+            Action::SetColorBlue => {
+                self.current_color = util::key_to_color('b').unwrap();
+                self.needs_redraw = true;
+            }
+            Action::SetColorYellow => {
+                self.current_color = util::key_to_color('y').unwrap();
+                self.needs_redraw = true;
+            }
+            Action::SetColorOrange => {
+                self.current_color = util::key_to_color('o').unwrap();
+                self.needs_redraw = true;
+            }
+            Action::SetColorPink => {
+                self.current_color = util::key_to_color('p').unwrap();
+                self.needs_redraw = true;
+            }
+            Action::SetColorWhite => {
+                self.current_color = util::key_to_color('w').unwrap();
+                self.needs_redraw = true;
+            }
+            Action::SetColorBlack => {
+                self.current_color = util::key_to_color('k').unwrap();
+                self.needs_redraw = true;
+            }
         }
     }
 
@@ -704,6 +790,11 @@ mod tests {
     use crate::draw::{Color, FontDescriptor};
 
     fn create_test_input_state() -> InputState {
+        use crate::config::KeybindingsConfig;
+
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings.build_action_map().unwrap();
+
         InputState::with_defaults(
             Color {
                 r: 1.0,
@@ -718,10 +809,11 @@ mod tests {
                 weight: "bold".to_string(),
                 style: "normal".to_string(),
             },
-            false,          // text_background_enabled
-            20.0,           // arrow_length
-            30.0,           // arrow_angle
-            BoardConfig::default(),
+            false,                  // text_background_enabled
+            20.0,                   // arrow_length
+            30.0,                   // arrow_angle
+            BoardConfig::default(), // board_config
+            action_map,             // action_map
         )
     }
 

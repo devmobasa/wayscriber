@@ -7,10 +7,12 @@
 //! If no config file exists, sensible defaults are used automatically.
 
 pub mod enums;
+pub mod keybindings;
 pub mod types;
 
 // Re-export commonly used types at module level
 pub use enums::StatusPosition;
+pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
 pub use types::{
     ArrowConfig, BoardConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig, StatusBarStyle,
     UiConfig,
@@ -49,6 +51,10 @@ use std::path::PathBuf;
 /// [ui]
 /// show_status_bar = true
 /// status_bar_position = "bottom-left"
+///
+/// [keybindings]
+/// exit = ["Escape", "Ctrl+Q"]
+/// undo = ["Ctrl+Z"]
 /// ```
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -71,6 +77,10 @@ pub struct Config {
     /// Board mode settings (whiteboard/blackboard)
     #[serde(default)]
     pub board: BoardConfig,
+
+    /// Keybinding customization
+    #[serde(default)]
+    pub keybindings: KeybindingsConfig,
 }
 
 impl Config {
@@ -210,6 +220,12 @@ impl Config {
                 self.board.blackboard_pen_color[i] =
                     self.board.blackboard_pen_color[i].clamp(0.0, 1.0);
             }
+        }
+
+        // Validate keybindings (try to build action map to catch parse errors)
+        if let Err(e) = self.keybindings.build_action_map() {
+            log::warn!("Invalid keybinding configuration: {}. Using defaults.", e);
+            self.keybindings = KeybindingsConfig::default();
         }
     }
 
