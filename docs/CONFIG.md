@@ -244,6 +244,112 @@ hyprmarker --daemon --mode whiteboard
 - Blackboard: near-black background, white pen
 - Auto-adjust pen: true
 
+### `[keybindings]` - Custom Keybindings
+
+Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
+
+```toml
+[keybindings]
+# Exit overlay (or cancel current action)
+exit = ["Escape", "Ctrl+Q"]
+
+# Enter text mode
+enter_text_mode = ["T"]
+
+# Clear all annotations on current canvas
+clear_canvas = ["E"]
+
+# Undo last annotation
+undo = ["Ctrl+Z"]
+
+# Adjust pen thickness
+increase_thickness = ["+", "="]
+decrease_thickness = ["-", "_"]
+
+# Adjust font size
+increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
+decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
+
+# Board mode toggles
+toggle_whiteboard = ["Ctrl+W"]
+toggle_blackboard = ["Ctrl+B"]
+return_to_transparent = ["Ctrl+Shift+T"]
+
+# Toggle help overlay
+toggle_help = ["F10"]
+
+# Color selection shortcuts
+set_color_red = ["R"]
+set_color_green = ["G"]
+set_color_blue = ["B"]
+set_color_yellow = ["Y"]
+set_color_orange = ["O"]
+set_color_pink = ["P"]
+set_color_white = ["W"]
+set_color_black = ["K"]
+```
+
+**Keybinding Format:**
+
+Keybindings are specified as strings with modifiers and keys separated by `+`:
+- Simple keys: `"E"`, `"T"`, `"Escape"`, `"F10"`
+- With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`
+- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"+", `-`, `=`, `_`
+
+**Supported Modifiers:**
+- `Ctrl` (or `Control`)
+- `Shift`
+- `Alt`
+
+**Modifier Order:**
+Modifiers can appear in any order - `"Ctrl+Shift+W"`, `"Shift+Ctrl+W"`, and `"Shift+W+Ctrl"` are all equivalent.
+
+**Multiple Bindings:**
+Each action supports multiple keybindings (e.g., both `+` and `=` for increase thickness).
+
+**Duplicate Detection:**
+The system will detect and report duplicate keybindings at startup. If two actions share the same key combination, the application will log an error and use default keybindings.
+
+**Case Insensitive:**
+Key names are case-insensitive in the config file, but will match the actual key case at runtime.
+
+**Examples:**
+
+Vim-style navigation keys:
+```toml
+[keybindings]
+exit = ["Escape", "Q"]
+clear_canvas = ["D"]
+undo = ["U"]
+```
+
+Emacs-style modifiers:
+```toml
+[keybindings]
+exit = ["Ctrl+G"]
+undo = ["Ctrl+/"]
+clear_canvas = ["Ctrl+K"]
+```
+
+Gaming-friendly (WASD area):
+```toml
+[keybindings]
+exit = ["Q"]
+toggle_help = ["H"]
+undo = ["Z"]
+clear_canvas = ["X"]
+```
+
+**Notes:**
+- Modifiers (`Shift`, `Ctrl`, `Alt`, `Tab`) are always captured for drawing tools
+- In text input mode, configured keybindings (like `Ctrl+Q` for exit) work before keys are consumed as text
+- Color keys only work when not holding `Ctrl` (to avoid conflicts with other actions)
+- Invalid keybinding strings will be logged and fall back to defaults
+- Duplicate keybindings across actions will be detected and reported at startup
+
+**Defaults:**
+All defaults match the original hardcoded keybindings to maintain compatibility.
+
 ## Creating Your Configuration
 
 1. Create the directory:

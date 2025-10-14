@@ -136,6 +136,12 @@ impl WaylandBackend {
             config.drawing.font_style.clone(),
         );
 
+        // Build keybinding action map
+        let action_map = config
+            .keybindings
+            .build_action_map()
+            .expect("Failed to build keybinding action map");
+
         // Initialize input state with config defaults
         let mut input_state = InputState::with_defaults(
             config.drawing.default_color.to_color(),
@@ -146,6 +152,7 @@ impl WaylandBackend {
             config.arrow.length,
             config.arrow.angle_degrees,
             config.board.clone(),
+            action_map,
         );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)

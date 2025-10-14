@@ -197,3 +197,71 @@ auto_adjust_pen = true
 # Sepia Theme (vintage):
 #   whiteboard_color = [0.96, 0.93, 0.86]
 #   whiteboard_pen_color = [0.29, 0.23, 0.18]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KEYBINDING SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[keybindings]
+# Customize keyboard shortcuts for all actions
+# Format: key names with modifiers separated by +
+# Examples: "Escape", "Ctrl+Z", "Ctrl+Shift+T", "F10"
+# Each action can have multiple keybindings (e.g., ["+", "="])
+
+# Exit overlay (or cancel current action)
+exit = ["Escape", "Ctrl+Q"]
+
+# Enter text mode
+enter_text_mode = ["T"]
+
+# Clear all annotations on current canvas
+clear_canvas = ["E"]
+
+# Undo last annotation
+undo = ["Ctrl+Z"]
+
+# Adjust pen thickness
+increase_thickness = ["+", "="]
+decrease_thickness = ["-", "_"]
+
+# Adjust font size
+increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
+decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
+
+# Board mode toggles (only if board.enabled = true)
+toggle_whiteboard = ["Ctrl+W"]
+toggle_blackboard = ["Ctrl+B"]
+return_to_transparent = ["Ctrl+Shift+T"]
+
+# Toggle help overlay
+toggle_help = ["F10"]
+
+# Color selection shortcuts
+set_color_red = ["R"]
+set_color_green = ["G"]
+set_color_blue = ["B"]
+set_color_yellow = ["Y"]
+set_color_orange = ["O"]
+set_color_pink = ["P"]
+set_color_white = ["W"]
+set_color_black = ["K"]
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Keybinding Examples
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Vim-style keybindings:
+#   exit = ["Escape", "Q"]
+#   clear_canvas = ["D"]
+#   undo = ["U"]
+
+# Emacs-style keybindings:
+#   exit = ["Ctrl+G"]
+#   undo = ["Ctrl+/"]
+#   clear_canvas = ["Ctrl+K"]
+
+# Gaming-friendly (WASD area):
+#   exit = ["Q"]
+#   toggle_help = ["H"]
+#   undo = ["Z"]
+#   clear_canvas = ["X"]
