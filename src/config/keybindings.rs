@@ -54,7 +54,7 @@ pub struct KeyBinding {
 
 impl KeyBinding {
     /// Parse a keybinding string like "Ctrl+Shift+W" or "Escape".
-    /// Special handling for keys that contain '+' or '-' as the actual key.
+    /// Modifiers can appear in any order: "Shift+Ctrl+W", "Alt+Shift+Ctrl+W", etc.
     /// Supports spaces around '+' (e.g., "Ctrl + Shift + W")
     pub fn parse(s: &str) -> Result<Self, String> {
         let s = s.trim();
@@ -64,45 +64,58 @@ impl KeyBinding {
 
         // Normalize by removing spaces around '+'
         let s_normalized = s.replace(" + ", "+").replace("+ ", "+").replace(" +", "+");
-        let s_lower = s_normalized.to_lowercase();
+
+        // Split on '+' to get all parts
+        let parts: Vec<&str> = s_normalized.split('+').collect();
+
+        if parts.is_empty() {
+            return Err("Empty keybinding string".to_string());
+        }
 
         let mut ctrl = false;
         let mut shift = false;
         let mut alt = false;
+        let mut key_parts = Vec::new();
 
-        // Check for modifiers at the start
-        let mut remaining: &str = &s_normalized;
-
-        // Try to extract modifiers from the beginning
-        if s_lower.starts_with("ctrl+") || s_lower.starts_with("control+") {
-            ctrl = true;
-            let prefix_len = if s_lower.starts_with("ctrl+") { 5 } else { 8 };
-            remaining = &remaining[prefix_len..];
+        // Process each part, checking if it's a modifier or the actual key
+        for part in parts {
+            match part.to_lowercase().as_str() {
+                "ctrl" | "control" => ctrl = true,
+                "shift" => shift = true,
+                "alt" => alt = true,
+                _ => {
+                    // Not a modifier, so it's part of the key
+                    key_parts.push(part);
+                }
+            }
         }
 
-        let remaining_lower = remaining.to_lowercase();
-        if remaining_lower.starts_with("shift+") {
-            shift = true;
-            remaining = &remaining[6..];
-        }
-
-        let remaining_lower = remaining.to_lowercase();
-        if remaining_lower.starts_with("alt+") {
-            alt = true;
-            remaining = &remaining[4..];
-        }
-
-        // Whatever remains is the key
-        if remaining.is_empty() {
+        // Reconstruct the key from remaining parts (handles cases like "+" being the key)
+        if key_parts.is_empty() {
             return Err(format!("No key specified in: {}", s));
         }
 
-        Ok(Self {
-            key: remaining.to_string(),
-            ctrl,
-            shift,
-            alt,
-        })
+        // Join with '+' to handle the case where the key itself is '+'
+        // (e.g., "Ctrl+Shift++" becomes ["Ctrl", "Shift", "", ""] with last two being the '+' key)
+        let key = key_parts.join("+");
+
+        if key.is_empty() {
+            // This happens for "Ctrl+Shift++" where we have empty strings after the modifiers
+            // The key is actually '+'
+            Ok(Self {
+                key: "+".to_string(),
+                ctrl,
+                shift,
+                alt,
+            })
+        } else {
+            Ok(Self {
+                key,
+                ctrl,
+                shift,
+                alt,
+            })
+        }
     }
 
     /// Check if this keybinding matches the current input state.
@@ -215,108 +228,100 @@ impl Default for KeybindingsConfig {
 
 impl KeybindingsConfig {
     /// Build a lookup map from keybindings to actions for efficient matching.
-    /// Returns an error if any keybinding string is invalid.
+    /// Returns an error if any keybinding string is invalid or if duplicates are detected.
     pub fn build_action_map(&self) -> Result<HashMap<KeyBinding, Action>, String> {
         let mut map = HashMap::new();
 
-        for binding_str in &self.exit {
+        // Helper closure to insert and check for duplicates
+        let mut insert_binding = |binding_str: &str, action: Action| -> Result<(), String> {
             let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::Exit);
+            if let Some(existing_action) = map.insert(binding.clone(), action) {
+                return Err(format!(
+                    "Duplicate keybinding '{}' assigned to both {:?} and {:?}",
+                    binding_str, existing_action, action
+                ));
+            }
+            Ok(())
+        };
+
+        for binding_str in &self.exit {
+            insert_binding(binding_str, Action::Exit)?;
         }
 
         for binding_str in &self.enter_text_mode {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::EnterTextMode);
+            insert_binding(binding_str, Action::EnterTextMode)?;
         }
 
         for binding_str in &self.clear_canvas {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::ClearCanvas);
+            insert_binding(binding_str, Action::ClearCanvas)?;
         }
 
         for binding_str in &self.undo {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::Undo);
+            insert_binding(binding_str, Action::Undo)?;
         }
 
         for binding_str in &self.increase_thickness {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::IncreaseThickness);
+            insert_binding(binding_str, Action::IncreaseThickness)?;
         }
 
         for binding_str in &self.decrease_thickness {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::DecreaseThickness);
+            insert_binding(binding_str, Action::DecreaseThickness)?;
         }
 
         for binding_str in &self.increase_font_size {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::IncreaseFontSize);
+            insert_binding(binding_str, Action::IncreaseFontSize)?;
         }
 
         for binding_str in &self.decrease_font_size {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::DecreaseFontSize);
+            insert_binding(binding_str, Action::DecreaseFontSize)?;
         }
 
         for binding_str in &self.toggle_whiteboard {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::ToggleWhiteboard);
+            insert_binding(binding_str, Action::ToggleWhiteboard)?;
         }
 
         for binding_str in &self.toggle_blackboard {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::ToggleBlackboard);
+            insert_binding(binding_str, Action::ToggleBlackboard)?;
         }
 
         for binding_str in &self.return_to_transparent {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::ReturnToTransparent);
+            insert_binding(binding_str, Action::ReturnToTransparent)?;
         }
 
         for binding_str in &self.toggle_help {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::ToggleHelp);
+            insert_binding(binding_str, Action::ToggleHelp)?;
         }
 
         for binding_str in &self.set_color_red {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorRed);
+            insert_binding(binding_str, Action::SetColorRed)?;
         }
 
         for binding_str in &self.set_color_green {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorGreen);
+            insert_binding(binding_str, Action::SetColorGreen)?;
         }
 
         for binding_str in &self.set_color_blue {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorBlue);
+            insert_binding(binding_str, Action::SetColorBlue)?;
         }
 
         for binding_str in &self.set_color_yellow {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorYellow);
+            insert_binding(binding_str, Action::SetColorYellow)?;
         }
 
         for binding_str in &self.set_color_orange {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorOrange);
+            insert_binding(binding_str, Action::SetColorOrange)?;
         }
 
         for binding_str in &self.set_color_pink {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorPink);
+            insert_binding(binding_str, Action::SetColorPink)?;
         }
 
         for binding_str in &self.set_color_white {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorWhite);
+            insert_binding(binding_str, Action::SetColorWhite)?;
         }
 
         for binding_str in &self.set_color_black {
-            let binding = KeyBinding::parse(binding_str)?;
-            map.insert(binding, Action::SetColorBlack);
+            insert_binding(binding_str, Action::SetColorBlack)?;
         }
 
         Ok(map)
@@ -474,6 +479,33 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_modifier_order_independence() {
+        // Test that modifiers can appear in any order
+        let binding1 = KeyBinding::parse("Ctrl+Shift+W").unwrap();
+        let binding2 = KeyBinding::parse("Shift+Ctrl+W").unwrap();
+
+        assert_eq!(binding1.key, "W");
+        assert_eq!(binding2.key, "W");
+        assert_eq!(binding1.ctrl, binding2.ctrl);
+        assert_eq!(binding1.shift, binding2.shift);
+        assert_eq!(binding1.alt, binding2.alt);
+        assert!(binding1.ctrl);
+        assert!(binding1.shift);
+
+        // Test three modifiers in different orders
+        let binding3 = KeyBinding::parse("Ctrl+Alt+Shift+W").unwrap();
+        let binding4 = KeyBinding::parse("Shift+Alt+Ctrl+W").unwrap();
+        let binding5 = KeyBinding::parse("Alt+Shift+Ctrl+W").unwrap();
+
+        assert_eq!(binding3.key, "W");
+        assert_eq!(binding4.key, "W");
+        assert_eq!(binding5.key, "W");
+        assert!(binding3.ctrl && binding3.shift && binding3.alt);
+        assert!(binding4.ctrl && binding4.shift && binding4.alt);
+        assert!(binding5.ctrl && binding5.shift && binding5.alt);
+    }
+
+    #[test]
     fn test_build_action_map() {
         let config = KeybindingsConfig::default();
         let map = config.build_action_map().unwrap();
@@ -484,5 +516,34 @@ mod tests {
 
         let ctrl_z = KeyBinding::parse("Ctrl+Z").unwrap();
         assert_eq!(map.get(&ctrl_z), Some(&Action::Undo));
+    }
+
+    #[test]
+    fn test_duplicate_keybinding_detection() {
+        // Create a config with duplicate keybindings
+        let mut config = KeybindingsConfig::default();
+        config.exit = vec!["Ctrl+Z".to_string()];
+        config.undo = vec!["Ctrl+Z".to_string()];
+
+        // This should fail with a duplicate error
+        let result = config.build_action_map();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("Duplicate keybinding"));
+        assert!(err_msg.contains("Ctrl+Z"));
+    }
+
+    #[test]
+    fn test_duplicate_with_different_modifier_order() {
+        // Even with different modifier orders, these are the same keybinding
+        let mut config = KeybindingsConfig::default();
+        config.exit = vec!["Ctrl+Shift+W".to_string()];
+        config.toggle_whiteboard = vec!["Shift+Ctrl+W".to_string()];
+
+        // This should fail because they normalize to the same binding
+        let result = config.build_action_map();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("Duplicate keybinding"));
     }
 }

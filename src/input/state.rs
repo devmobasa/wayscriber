@@ -278,76 +278,103 @@ impl InputState {
             _ => {}
         }
 
-        // Handle Escape key - special handling for canceling actions
+        // In text input mode, check if the key triggers an action before consuming it
+        if matches!(&self.state, DrawingState::TextInput { .. }) {
+            // Convert key to string for action lookup
+            let key_str = match key {
+                Key::Char(c) => c.to_string(),
+                Key::Escape => "Escape".to_string(),
+                Key::Return => "Return".to_string(),
+                Key::Backspace => "Backspace".to_string(),
+                Key::Space => "Space".to_string(),
+                Key::Plus => "+".to_string(),
+                Key::Minus => "-".to_string(),
+                Key::Equals => "=".to_string(),
+                Key::Underscore => "_".to_string(),
+                Key::F10 => "F10".to_string(),
+                _ => String::new(),
+            };
+
+            // Check if this key combination triggers an action
+            if !key_str.is_empty() {
+                if let Some(action) = self.find_action(&key_str) {
+                    // Special handling: Exit action should cancel text input
+                    if matches!(action, Action::Exit) {
+                        self.state = DrawingState::Idle;
+                        self.needs_redraw = true;
+                        return;
+                    }
+                    // Other actions also work in text mode (e.g., Ctrl+Q to exit)
+                    self.handle_action(action);
+                    return;
+                }
+            }
+
+            // No action triggered, handle as text input
+            // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
+            if matches!(key, Key::Return) && !self.modifiers.shift {
+                if let DrawingState::TextInput { x, y, buffer } = &self.state {
+                    if !buffer.is_empty() {
+                        let x = *x;
+                        let y = *y;
+                        let text = buffer.clone();
+
+                        self.canvas_set.active_frame_mut().add_shape(Shape::Text {
+                            x,
+                            y,
+                            text,
+                            color: self.current_color,
+                            size: self.current_font_size,
+                            font_descriptor: self.font_descriptor.clone(),
+                            background_enabled: self.text_background_enabled,
+                        });
+                        self.needs_redraw = true;
+                    }
+                    self.state = DrawingState::Idle;
+                    return;
+                }
+            }
+
+            // Regular text input - add character to buffer
+            if let DrawingState::TextInput { buffer, .. } = &mut self.state {
+                match key {
+                    Key::Char(c) => {
+                        buffer.push(c);
+                        self.needs_redraw = true;
+                        return;
+                    }
+                    Key::Backspace => {
+                        buffer.pop();
+                        self.needs_redraw = true;
+                        return;
+                    }
+                    Key::Space => {
+                        buffer.push(' ');
+                        self.needs_redraw = true;
+                        return;
+                    }
+                    Key::Return if self.modifiers.shift => {
+                        // Shift+Enter: insert newline
+                        buffer.push('\n');
+                        self.needs_redraw = true;
+                        return;
+                    }
+                    _ => {
+                        // Ignore other keys in text mode
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Handle Escape in Drawing state for canceling
         if matches!(key, Key::Escape) {
-            if let DrawingState::TextInput { .. } = &self.state {
+            if let DrawingState::Drawing { .. } = &self.state {
                 if let Some(Action::Exit) = self.find_action("Escape") {
                     self.state = DrawingState::Idle;
                     self.needs_redraw = true;
                     return;
                 }
-            } else if let DrawingState::Drawing { .. } = &self.state {
-                if let Some(Action::Exit) = self.find_action("Escape") {
-                    self.state = DrawingState::Idle;
-                    self.needs_redraw = true;
-                    return;
-                }
-            }
-        }
-
-        // Handle Return key for finalizing text input
-        if matches!(key, Key::Return) && !self.modifiers.shift {
-            if let DrawingState::TextInput { x, y, buffer } = &self.state {
-                if !buffer.is_empty() {
-                    let x = *x;
-                    let y = *y;
-                    let text = buffer.clone();
-
-                    self.canvas_set.active_frame_mut().add_shape(Shape::Text {
-                        x,
-                        y,
-                        text,
-                        color: self.current_color,
-                        size: self.current_font_size,
-                        font_descriptor: self.font_descriptor.clone(),
-                        background_enabled: self.text_background_enabled,
-                    });
-                    self.needs_redraw = true;
-                }
-                self.state = DrawingState::Idle;
-                return;
-            }
-        }
-
-        // Handle text input mode - most keys go to the buffer
-        if let DrawingState::TextInput { buffer, .. } = &mut self.state {
-            match key {
-                Key::Char(c) => {
-                    buffer.push(c);
-                    self.needs_redraw = true;
-                    return;
-                }
-                Key::Backspace => {
-                    buffer.pop();
-                    self.needs_redraw = true;
-                    return;
-                }
-                Key::Space => {
-                    buffer.push(' ');
-                    self.needs_redraw = true;
-                    return;
-                }
-                Key::Return if self.modifiers.shift => {
-                    // Shift+Enter: insert newline
-                    buffer.push('\n');
-                    self.needs_redraw = true;
-                    return;
-                }
-                Key::Return | Key::Escape => {
-                    // Already handled above
-                    return;
-                }
-                _ => {}
             }
         }
 

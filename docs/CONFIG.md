@@ -301,8 +301,14 @@ Keybindings are specified as strings with modifiers and keys separated by `+`:
 - `Shift`
 - `Alt`
 
+**Modifier Order:**
+Modifiers can appear in any order - `"Ctrl+Shift+W"`, `"Shift+Ctrl+W"`, and `"Shift+W+Ctrl"` are all equivalent.
+
 **Multiple Bindings:**
 Each action supports multiple keybindings (e.g., both `+` and `=` for increase thickness).
+
+**Duplicate Detection:**
+The system will detect and report duplicate keybindings at startup. If two actions share the same key combination, the application will log an error and use default keybindings.
 
 **Case Insensitive:**
 Key names are case-insensitive in the config file, but will match the actual key case at runtime.
@@ -336,9 +342,10 @@ clear_canvas = ["X"]
 
 **Notes:**
 - Modifiers (`Shift`, `Ctrl`, `Alt`, `Tab`) are always captured for drawing tools
-- Color keys only work when not holding `Ctrl` (to avoid conflicts)
-- Text mode captures most keys for input; only `Escape` and `Return` trigger actions
+- In text input mode, configured keybindings (like `Ctrl+Q` for exit) work before keys are consumed as text
+- Color keys only work when not holding `Ctrl` (to avoid conflicts with other actions)
 - Invalid keybinding strings will be logged and fall back to defaults
+- Duplicate keybindings across actions will be detected and reported at startup
 
 **Defaults:**
 All defaults match the original hardcoded keybindings to maintain compatibility.
