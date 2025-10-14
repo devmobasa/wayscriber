@@ -1,76 +1,84 @@
 # hyprmarker
 
-A ZoomIt-like screen annotation tool for Wayland compositors, written in Rust. Draw freehand, create shapes, add text, and annotate your screen during presentations or screen recordings.
-
-## Demo
+> TL;DR: hyprmarker is a ZoomIt-like screen annotation tool for Wayland compositors, written in Rust.
+> Works on compositors with the wlr-layer-shell protocol (Hyprland, Sway, river, …); building from source requires Rust 1.70+.
+> Quick start: [set it up in four steps](#quick-start).
 
 ![Demo](demo.gif)
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)
 
-## Quick Install (Arch Linux)
+- [Quick Start](#quick-start)
+- [Features at a Glance](#features-at-a-glance)
+- [Demo](#demo)
+- [Installation](#installation)
+- [Running hyprmarker](#running-hyprmarker)
+- [Controls Reference](#controls-reference)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Additional Information](#additional-information)
+- [Contributing & Credits](#contributing--credits)
 
-**Install from AUR:**
+## Quick Start
+
+1. Install hyprmarker.  
+   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR).  
+   - Other distros: see [Installation](#installation) for dependencies and source builds.
+2. Start the background service so the overlay is available instantly:
+   ```bash
+   systemctl --user enable --now hyprmarker.service
+   ```
+3. Add a keybinding to toggle the overlay in `~/.config/hypr/hyprland.conf`:
+   ```conf
+   bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+   ```
+4. Reload Hyprland (`hyprctl reload`), then press `Super+D` to draw. `F10` shows the help overlay; `Escape` hides it.
+
+Need an alternative launch method? Jump to [Hyprland exec-once](#hyprland-exec-once) or the rest of [Running hyprmarker](#running-hyprmarker).
+
+## Features at a Glance
+
+- Freehand drawing plus straight lines, rectangles, ellipses, and arrows.
+- Text annotations with multi-line support, custom fonts, and adjustable size.
+- Whiteboard/blackboard modes with auto pen contrast and isolated frames.
+- Quick color palette and line thickness adjustments via hotkeys or scroll wheel.
+- Status bar with live tool feedback and an in-app help overlay (`F10`).
+- Background daemon with tray icon and customizable TOML configuration.
+
+## Demo
+
+![Demo](demo.gif)
+
+## Installation
+
+See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
+
+### Arch Linux (AUR)
+
 ```bash
 # Using yay
 yay -S hyprmarker
 
-# Using paru
+# Or using paru
 paru -S hyprmarker
 ```
 
-**Setup daemon mode:**
+The package installs the user service at `/usr/lib/systemd/user/hyprmarker.service`.
+
+### Other Distros
+
+**Install dependencies:**
+
 ```bash
-# Enable systemd service (starts on login)
-systemctl --user enable --now hyprmarker.service
-
-# Add keybind to ~/.config/hypr/hyprland.conf
-bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
-```
-
-**Done!** Press `Super+D` to toggle overlay, draw with your mouse, press `Escape` to exit.
-
----
-
-## Features
-
-hyprmarker replicates all the drawing features of Microsoft's ZoomIt for Linux with native Wayland support:
-
-- **Freehand Drawing**: Draw freely with your cursor (default mode)
-- **Straight Lines**: Hold `Shift` while dragging
-- **Rectangles**: Hold `Ctrl` while dragging
-- **Ellipses/Circles**: Hold `Tab` while dragging
-- **Arrows**: Hold `Ctrl+Shift` while dragging
-- **Text Annotations**: Press `T` to enter text mode, with multi-line support (`Shift+Enter`) and custom fonts
-- **Board Modes**: Toggle whiteboard/blackboard (`Ctrl+W`/`Ctrl+B`) with isolated frames and auto-color adjustment
-- **Color Selection**: Press color keys (R, G, B, Y, O, P, W, K)
-- **Adjustable Line Thickness**: Use `+`/`-` keys or scroll wheel
-- **Undo**: `Ctrl+Z` to undo last shape
-- **Clear All**: Press `E` to clear all annotations
-- **Help Overlay**: Press `F10` to show/hide keybinding help
-- **Status Bar**: Shows current tool, color, thickness, and board mode
-- **Customizable**: TOML-based configuration file
-- **Exit**: Press `Escape` to exit drawing mode
-
-## Installation (Other Distros)
-
-### Prerequisites
-
-**System Dependencies:**
-```bash
-# Ubuntu/Debian
+# Ubuntu / Debian
 sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev
 
 # Fedora
 sudo dnf install cairo-devel wayland-devel pango-devel
 ```
 
-**Requirements:**
-- Wayland compositor with wlr-layer-shell protocol support (Hyprland, Sway, etc.)
-- Rust 1.70+ for building from source
-
-### Build from Source
+**Build from source:**
 
 ```bash
 git clone https://github.com/devmobasa/hyprmarker.git
@@ -78,92 +86,83 @@ cd hyprmarker
 cargo build --release
 ```
 
-The binary will be at `target/release/hyprmarker`
+The binary will be at `target/release/hyprmarker`.
 
-### Install Script (Manual Build)
+### Manual Install Script
 
 ```bash
-# Build and install locally
 cargo build --release
 ./tools/install.sh
 ```
 
-The installer will:
-- Install binary to `~/.local/bin/hyprmarker`
-- Create config directory at `~/.config/hyprmarker/`
-- Optionally add Hyprland configuration
+The installer places the binary at `~/.local/bin/hyprmarker`, creates `~/.config/hyprmarker/`, and offers to configure Hyprland.
 
-## Usage
+## Running hyprmarker
 
-### Daemon Mode (Recommended)
+### Background Daemon (systemd)
 
-Run hyprmarker as a background daemon and toggle it with `Super+D`:
+Run hyprmarker as a persistent background service that listens for your keybinding.
 
-**Option 1: Systemd User Service (Recommended)**
+1. Ensure the unit file is available:  
+   - AUR package: `/usr/lib/systemd/user/hyprmarker.service` is already installed.  
+   - Manual build: copy `packaging/hyprmarker.service` to `~/.config/systemd/user/` or run `./tools/install.sh`.
+2. Enable and start the service:
+   ```bash
+   systemctl --user enable --now hyprmarker.service
+   ```
+3. Add a Hyprland keybinding:
+   ```conf
+   bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+   ```
+4. Reload Hyprland: `hyprctl reload`.
 
-Automatically starts on login and appears in system tray:
+While the daemon runs, a system tray icon appears (it may live in your Waybar drawer). Press `Super+D` to summon the overlay, draw with the mouse, then `Ctrl+Q` or `Escape` to hide it. Right-click the tray icon for toggle/quit actions.
 
 ```bash
-# Run installer and choose option 1
-./tools/install.sh
-
-# Or setup manually:
-mkdir -p ~/.config/systemd/user
-cp packaging/hyprmarker.service ~/.config/systemd/user/
-systemctl --user enable --now hyprmarker.service
+# Handy service commands
+systemctl --user restart hyprmarker.service
+systemctl --user stop hyprmarker.service
+journalctl --user -u hyprmarker.service -f
 ```
 
-Then add keybind to Hyprland config:
-```conf
-bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
-```
+### Hyprland exec-once
 
-**Option 2: Hyprland exec-once**
+Prefer to manage the daemon yourself? Add this to `~/.config/hypr/hyprland.conf`:
 
-Run installer and choose option 2, or add manually to `~/.config/hypr/hyprland.conf`:
 ```conf
-# Autostart hyprmarker daemon
 exec-once = hyprmarker --daemon
-
-# Toggle overlay with Super+D
 bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
 ```
 
-Then reload: `hyprctl reload`
-
-**Usage:**
-- Daemon starts automatically on login
-- System tray icon appears (may be in Waybar drawer/expander)
-- Press `Super+D` to show overlay and start drawing
-- Press `Ctrl+Q` or `Escape` to hide overlay (daemon keeps running)
-- Right-click tray icon for menu (Toggle/Quit)
+Reload with `hyprctl reload`.
 
 ### One-Shot Mode
 
-For quick one-time annotations:
+Launch directly into an active overlay without the daemon:
 
 ```bash
 hyprmarker --active
-
-# Or start in whiteboard mode
 hyprmarker --active --mode whiteboard
-
-# Or start in blackboard mode
 hyprmarker --active --mode blackboard
 ```
 
-Or bind to a key:
+Bind it to keys if you prefer:
+
 ```conf
 bind = $mainMod, D, exec, hyprmarker --active
 bind = $mainMod SHIFT, D, exec, hyprmarker --active --mode whiteboard
 ```
 
-### Controls Reference
+Exit the overlay with `Escape` or `Ctrl+Q`.
+
+## Controls Reference
+
+Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 
 | Action | Key/Mouse |
 |--------|-----------|
 | **Drawing Tools** |
-| Freehand pen | Default (just drag with left mouse) |
+| Freehand pen | Default (drag with left mouse button) |
 | Straight line | Hold `Shift` + drag |
 | Rectangle | Hold `Ctrl` + drag |
 | Ellipse/Circle | Hold `Tab` + drag |
@@ -183,80 +182,94 @@ bind = $mainMod SHIFT, D, exec, hyprmarker --active --mode whiteboard
 | White | `W` |
 | Black | `K` |
 | **Line Thickness** |
-| Increase | `+` or `=` or scroll down |
-| Decrease | `-` or `_` or scroll up |
+| Increase | `+`, `=`, or scroll down |
+| Decrease | `-`, `_`, or scroll up |
 | **Font Size** |
-| Increase | `Ctrl+Shift++` or `Shift+Scroll Down` |
-| Decrease | `Ctrl+Shift+-` or `Shift+Scroll Up` |
+| Increase | `Ctrl+Shift++` or `Shift` + scroll down |
+| Decrease | `Ctrl+Shift+-` or `Shift` + scroll up |
 | **Editing** |
 | Undo last shape | `Ctrl+Z` |
 | Clear all | `E` |
 | Cancel action | Right-click or `Escape` |
-| **Help** |
+| **Help & Exit** |
 | Toggle help overlay | `F10` |
 | Exit overlay | `Escape` or `Ctrl+Q` |
 
 ## Configuration
 
-hyprmarker supports customization through a TOML configuration file.
+- Config file location: `~/.config/hyprmarker/config.toml`.
+- Copy defaults to get started:
 
-### Configuration Location
+  ```bash
+  mkdir -p ~/.config/hyprmarker
+  cp config.example.toml ~/.config/hyprmarker/config.toml
+  ```
 
-`~/.config/hyprmarker/config.toml`
+- Key sections to tweak:
+  - `[drawing]` – default color, thickness, and font settings.
+  - `[performance]` – buffer count and VSync.
+  - `[ui]` – status bar visibility and position.
+  - `[board]` – whiteboard/blackboard presets and auto-adjust options.
 
-### Creating Configuration
-
-1. Copy the example config:
-   ```bash
-   mkdir -p ~/.config/hyprmarker
-   cp config.example.toml ~/.config/hyprmarker/config.toml
-   ```
-
-2. Edit to your preferences:
-   ```bash
-   nano ~/.config/hyprmarker/config.toml
-   ```
-
-### Configuration Options
+Example snippet:
 
 ```toml
 [drawing]
-# Default pen color: "red", "green", "blue", etc. or RGB [255, 0, 0]
 default_color = "red"
-default_thickness = 3.0  # Pixels (1.0-20.0)
-default_font_size = 32.0  # Pixels (8.0-72.0)
-
-# Custom font configuration (Pango-based)
-font_family = "Sans"  # Any installed font: "Monospace", "JetBrains Mono", etc.
-font_weight = "bold"  # "normal", "bold", "light", or numeric (100-900)
-font_style = "normal"  # "normal", "italic", "oblique"
-text_background_enabled = false  # Semi-transparent background behind text
-
-[arrow]
-length = 20.0  # Arrowhead length in pixels
-angle_degrees = 30.0  # Arrowhead angle (15-60)
+default_thickness = 3.0
 
 [performance]
-buffer_count = 3  # 2=double, 3=triple (recommended), 4=quad buffering
-enable_vsync = true  # Prevent tearing
-
-[ui]
-show_status_bar = true
-status_bar_position = "bottom-left"  # top-left, top-right, bottom-left, bottom-right
-
-[board]
-# Board mode configuration (whiteboard/blackboard)
-default_mode = "transparent"  # "transparent", "whiteboard", or "blackboard"
-whiteboard_color = [0.992, 0.992, 0.992]  # Off-white background (RGB 0.0-1.0)
-blackboard_color = [0.067, 0.067, 0.067]  # Near-black background
-auto_adjust_pen = true  # Auto-switch pen color for contrast
+buffer_count = 3
+enable_vsync = true
 ```
 
-See **[docs/CONFIG.md](docs/CONFIG.md)** for detailed configuration documentation.
+See **[docs/CONFIG.md](docs/CONFIG.md)** for the full configuration reference.
 
-## Architecture
+## Troubleshooting
 
-hyprmarker is built with a native Wayland backend using modern Rust libraries:
+### Service won't start
+
+- Check status: `systemctl --user status hyprmarker.service`
+- Tail logs: `journalctl --user -u hyprmarker.service -f`
+- Restart: `systemctl --user restart hyprmarker.service`
+
+### Overlay not appearing
+
+1. Verify Wayland session: `echo $WAYLAND_DISPLAY`
+2. Ensure your compositor supports `wlr-layer-shell` (Hyprland, Sway, river, etc.)
+3. Run with logs for clues: `RUST_LOG=info hyprmarker --active`
+
+### Config issues
+
+- Confirm the file exists: `ls -la ~/.config/hyprmarker/config.toml`
+- Watch for TOML errors in logs: `RUST_LOG=info hyprmarker --active`
+
+### Performance
+
+Tune `[performance]` in `config.toml` if memory or latency is a concern:
+
+```toml
+[performance]
+buffer_count = 2
+enable_vsync = true
+```
+
+## Additional Information
+
+### Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Wayland (Hyprland, Sway, etc.) | ✅ **SUPPORTED** | Requires wlr-layer-shell protocol |
+
+### Performance Characteristics
+
+- Triple-buffered rendering prevents flicker during fast drawing.
+- Frame-synchronized updates (VSync) keep strokes smooth.
+- Dirty-region updates minimize CPU/GPU overhead.
+- Tested to sustain 60 FPS on 1080p–4K displays.
+
+### Architecture Overview
 
 ```
 hyprmarker/
@@ -291,63 +304,24 @@ hyprmarker/
 └── config.example.toml   # Example configuration
 ```
 
-### Wayland Backend
+### Documentation
 
-The Wayland backend uses:
-- **wlr-layer-shell**: Overlay surface creation
-- **wl_shm**: Shared memory buffers with triple buffering
-- **Cairo**: Vector graphics rendering
-- **smithay-client-toolkit**: Wayland protocol handling
+- **[docs/SETUP.md](docs/SETUP.md)** – system setup and installation details
+- **[docs/CONFIG.md](docs/CONFIG.md)** – configuration reference
 
-**Features:**
-- ✅ Full-screen transparent overlay
-- ✅ Native HiDPI/scaling support
-- ✅ Triple-buffered rendering for smooth drawing
-- ✅ Frame-synchronized updates (VSync)
-- ✅ Exclusive input capture
-- ✅ All drawing tools with live preview
-
-## Platform Support
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Wayland (Hyprland, Sway, etc.) | ✅ **SUPPORTED** | Requires wlr-layer-shell protocol |
-
-
-## Performance
-
-hyprmarker is optimized for high-resolution displays with smooth 60 FPS drawing:
-
-- **Triple buffering**: Prevents flickering during fast drawing
-- **VSync synchronization**: Smooth frame pacing
-- **Dirty region optimization**: Minimal data transfer
-- **Efficient rendering**: Cairo vector graphics with buffer pooling
-
-Performance characteristics:
-- **4K displays**: Smooth 60 FPS
-- **1080p/1440p**: Smooth 60 FPS
-- **CPU usage**: Low, event-driven architecture
-
-Configure buffer count and VSync in `config.toml` for your setup.
-
-## Documentation
-
-- **[docs/SETUP.md](docs/SETUP.md)** - Detailed installation and system setup
-- **[docs/CONFIG.md](docs/CONFIG.md)** - Configuration reference
-
-## Comparison with ZoomIt
+### Comparison with ZoomIt
 
 | Feature | ZoomIt (Windows) | hyprmarker (Linux) |
-|---------|-----------------|-------------------|
+|---------|------------------|--------------------|
 | Freehand drawing | ✅ | ✅ |
 | Straight lines | ✅ | ✅ |
 | Rectangles | ✅ | ✅ |
 | Ellipses | ✅ | ✅ |
 | Arrows | ✅ | ✅ |
 | Text annotations | ✅ | ✅ |
-| **Whiteboard mode** | ✅ (W key) | ✅ (Ctrl+W) |
-| **Blackboard mode** | ✅ (K key) | ✅ (Ctrl+B) |
-| Multi-line text | ❌ | ✅ (Shift+Enter) |
+| **Whiteboard mode** | ✅ (W key) | ✅ (`Ctrl+W`) |
+| **Blackboard mode** | ✅ (K key) | ✅ (`Ctrl+B`) |
+| Multi-line text | ❌ | ✅ (`Shift+Enter`) |
 | Custom fonts | ❌ | ✅ (Pango) |
 | Color selection | ✅ | ✅ (8 colors) |
 | Undo | ✅ | ✅ |
@@ -360,102 +334,7 @@ Configure buffer count and VSync in `config.toml` for your setup.
 | Break timer | ✅ | ❌ (not planned) |
 | Screen recording | ✅ | ❌ (not planned) |
 
-## Troubleshooting
-
-### Overlay not appearing
-
-1. **Check Wayland environment:**
-   ```bash
-   echo $WAYLAND_DISPLAY  # Should show wayland-0 or similar
-   ```
-
-2. **Check compositor support:**
-   ```bash
-   # Verify wlr-layer-shell protocol is available
-   # Works on: Hyprland, Sway, river, etc.
-   # Does NOT work on: GNOME Wayland, KDE Wayland (no wlr-layer-shell)
-   ```
-
-3. **Check logs:**
-   ```bash
-   RUST_LOG=info ./target/release/hyprmarker --active
-   ```
-
-### Config not loading
-
-```bash
-# Verify config file exists
-ls -la ~/.config/hyprmarker/config.toml
-
-# Check for TOML syntax errors in logs
-RUST_LOG=info ./target/release/hyprmarker --active
-```
-
-### Performance issues
-
-Try adjusting performance settings in `config.toml`:
-```toml
-[performance]
-buffer_count = 2  # Reduce if memory-constrained
-enable_vsync = true  # Keep enabled to prevent tearing
-```
-
-## Development
-
-### Building for Development
-
-```bash
-cargo build
-cargo run -- --active
-```
-
-### Enable Debug Logging
-
-```bash
-RUST_LOG=debug cargo run -- --active
-```
-
-### Running Tests
-
-```bash
-cargo test
-cargo clippy  # Linting
-cargo fmt  # Code formatting
-```
-
-## Contributing
-
-Contributions are welcome! Areas where help is needed:
-
-1. **Additional compositors**: Test on more Wayland compositors
-2. **Multi-monitor support**: Per-monitor overlay surfaces
-3. **Additional tools**: Filled shapes, highlighter, eraser
-4. **Daemon mode**: Background process with hotkey toggle
-5. **Save/load**: Export annotations to image files
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details
-
-## Acknowledgments
-
-- Inspired by [ZoomIt](https://learn.microsoft.com/en-us/sysinternals/downloads/zoomit) by [Mark Russinovich](https://github.com/markrussinovich)
-- Built for [Hyprland](https://hyprland.org/) by [vaxry](https://github.com/vaxerski)
-- Similar to [Gromit-MPX](https://github.com/bk138/gromit-mpx)
-- Development approach inspired by [DHH](https://dhh.dk/)'s [Omarchy](https://omarchy.org)
-- Uses [Cairo](https://www.cairographics.org/) for rendering
-- Built with [Rust](https://www.rust-lang.org/) and [smithay-client-toolkit](https://github.com/Smithay/client-toolkit)
-
-## Development
-
-This tool was developed with AI assistance:
-- **Initial concept & planning**: ChatGPT
-- **Architecture review & design**: GitHub Copilot
-- **Implementation**: Claude Code (Anthropic)
-
-Created as a native Wayland implementation of ZoomIt annotation features for Linux desktop environments.
-
-## Roadmap
+### Roadmap
 
 - [x] Native Wayland wlr-layer-shell implementation
 - [x] Configuration file support
@@ -466,15 +345,41 @@ Created as a native Wayland implementation of ZoomIt annotation features for Lin
 - [x] Autostart with systemd user service
 - [x] Multi-line text support (Shift+Enter)
 - [x] Custom fonts with Pango rendering
-- [x] Whiteboard/Blackboard modes with isolated frames
+- [x] Whiteboard/blackboard modes with isolated frames
 - [x] Board mode configuration (colors, auto-adjust)
-- [x] CLI --mode flag for initial board selection
+- [x] CLI `--mode` flag for initial board selection
 - [ ] Multi-monitor support with per-monitor surfaces
 - [ ] Additional shapes (filled shapes, highlighter)
 - [ ] Save annotations to image file
 - [ ] Eraser tool
 - [ ] Color picker
 
----
+### License
 
-**Note**: This tool focuses solely on screen annotation. For screen magnification (zoom), consider using built-in accessibility tools or dedicated magnifiers like `wlr-randr` zoom or compositor-specific zoom features.
+MIT License — see [LICENSE](LICENSE) for details.
+
+## Contributing & Credits
+
+- Pull requests and bug reports are welcome. Priority areas include compositor compatibility testing, multi-monitor support, and new drawing tools.
+- Development basics:
+
+  ```bash
+  cargo build
+  cargo run -- --active
+  cargo test
+  cargo clippy
+  cargo fmt
+  ```
+
+- Acknowledgments:
+  - Inspired by [ZoomIt](https://learn.microsoft.com/en-us/sysinternals/downloads/zoomit) by [Mark Russinovich](https://github.com/markrussinovich)
+  - Built for [Hyprland](https://hyprland.org/) by [vaxry](https://github.com/vaxerski)
+  - Similar ideas from [Gromit-MPX](https://github.com/bk138/gromit-mpx)
+  - Development approach inspired by [DHH](https://dhh.dk/)'s [Omarchy](https://omarchy.org)
+  - Uses [Cairo](https://www.cairographics.org/) and [smithay-client-toolkit](https://github.com/Smithay/client-toolkit)
+- This tool was developed with AI assistance:
+  - Initial concept & planning: ChatGPT
+  - Architecture review & design: Codex
+  - Implementation: Claude Code (Anthropic)
+
+Created as a native Wayland implementation of ZoomIt-style annotation features for Linux desktops.
