@@ -29,7 +29,7 @@ use wayland_client::{
 };
 // Removed: Arc, Mutex - not needed after removing WaylandBackend.inner
 
-use crate::capture::CaptureManager;
+use crate::capture::{CaptureManager, CaptureOutcome};
 use crate::config::{Action, Config};
 use crate::input::{InputState, Key, MouseButton};
 
@@ -75,6 +75,9 @@ struct WaylandState {
     // Capture state tracking
     capture_in_progress: bool,
     overlay_hidden_for_capture: bool,
+
+    // Tokio runtime handle for async operations
+    tokio_handle: tokio::runtime::Handle,
 }
 
 impl WaylandBackend {
@@ -202,6 +205,9 @@ impl WaylandBackend {
         let capture_manager = CaptureManager::new(self.tokio_runtime.handle());
         info!("Capture manager initialized");
 
+        // Clone runtime handle for state
+        let tokio_handle = self.tokio_runtime.handle().clone();
+
         // Create application state
         let mut state = WaylandState {
             registry_state,
@@ -223,6 +229,7 @@ impl WaylandBackend {
             capture_manager,
             capture_in_progress: false,
             overlay_hidden_for_capture: false,
+            tokio_handle,
         };
 
         // Create layer shell surface
@@ -282,25 +289,57 @@ impl WaylandBackend {
 
             // Check for completed capture operations
             if state.capture_in_progress {
-                if let Some(result) = state.capture_manager.try_take_result() {
+                if let Some(outcome) = state.capture_manager.try_take_result() {
                     log::info!("Capture completed");
 
                     // Restore overlay
                     state.show_overlay();
                     state.capture_in_progress = false;
 
-                    // Log capture result
-                    match result.saved_path {
-                        Some(ref path) => {
-                            log::info!("Screenshot saved to: {}", path.display());
-                        }
-                        None => {
-                            log::info!("Screenshot captured (not saved to file)");
-                        }
-                    }
+                    match outcome {
+                        CaptureOutcome::Success(result) => {
+                            // Build notification message
+                            let mut message_parts = Vec::new();
 
-                    if result.copied_to_clipboard {
-                        log::info!("Screenshot copied to clipboard");
+                            if let Some(ref path) = result.saved_path {
+                                log::info!("Screenshot saved to: {}", path.display());
+                                if let Some(filename) = path.file_name() {
+                                    message_parts.push(format!(
+                                        "Saved as {}",
+                                        filename.to_string_lossy()
+                                    ));
+                                }
+                            }
+
+                            if result.copied_to_clipboard {
+                                log::info!("Screenshot copied to clipboard");
+                                message_parts.push("Copied to clipboard".to_string());
+                            }
+
+                            // Send notification
+                            let notification_body = if message_parts.is_empty() {
+                                "Screenshot captured".to_string()
+                            } else {
+                                message_parts.join(" • ")
+                            };
+
+                            crate::notification::send_notification_async(
+                                &state.tokio_handle,
+                                "Screenshot Captured".to_string(),
+                                notification_body,
+                                Some("camera-photo".to_string()),
+                            );
+                        }
+                        CaptureOutcome::Failed(error) => {
+                            log::warn!("Screenshot capture failed: {}", error);
+
+                            crate::notification::send_notification_async(
+                                &state.tokio_handle,
+                                "Screenshot Failed".to_string(),
+                                error,
+                                Some("dialog-error".to_string()),
+                            );
+                        }
                     }
                 }
             }

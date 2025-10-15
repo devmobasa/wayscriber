@@ -12,7 +12,7 @@ pub mod file;
 pub mod portal;
 pub mod types;
 
-pub use types::{CaptureError, CaptureResult, CaptureStatus, CaptureType};
+pub use types::{CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType};
 
 use file::{FileSaveConfig, save_screenshot};
 use std::sync::Arc;
@@ -29,7 +29,7 @@ pub struct CaptureManager {
     status: Arc<Mutex<CaptureStatus>>,
     /// Shared result of the last capture (if any).
     #[allow(dead_code)] // Will be used in Phase 2 for status UI
-    last_result: Arc<Mutex<Option<CaptureResult>>>,
+    last_result: Arc<Mutex<Option<CaptureOutcome>>>,
 }
 
 /// A request to perform a capture operation.
@@ -67,11 +67,16 @@ impl CaptureManager {
                     Ok(result) => {
                         log::info!("Capture successful: {:?}", result.saved_path);
                         *status_clone.lock().await = CaptureStatus::Success;
-                        *result_clone.lock().await = Some(result);
+                        *result_clone.lock().await =
+                            Some(CaptureOutcome::Success(result));
                     }
                     Err(e) => {
-                        log::error!("Capture failed: {}", e);
-                        *status_clone.lock().await = CaptureStatus::Failed(e.to_string());
+                        let error_message = e.to_string();
+                        log::error!("Capture failed: {}", error_message);
+                        *status_clone.lock().await =
+                            CaptureStatus::Failed(error_message.clone());
+                        *result_clone.lock().await =
+                            Some(CaptureOutcome::Failed(error_message));
                     }
                 }
             }
@@ -120,13 +125,13 @@ impl CaptureManager {
 
     /// Get the result of the last capture and clear it.
     #[allow(dead_code)] // Will be used in Phase 2 for status UI
-    pub async fn take_result(&self) -> Option<CaptureResult> {
+    pub async fn take_result(&self) -> Option<CaptureOutcome> {
         self.last_result.lock().await.take()
     }
 
     /// Try to get the result without waiting (non-blocking).
     #[allow(dead_code)] // Will be used in Phase 2 for status UI
-    pub fn try_take_result(&self) -> Option<CaptureResult> {
+    pub fn try_take_result(&self) -> Option<CaptureOutcome> {
         self.last_result.try_lock().ok().and_then(|mut r| r.take())
     }
 

@@ -6,6 +6,7 @@ mod config;
 mod daemon;
 mod draw;
 mod input;
+mod notification;
 mod ui;
 mod util;
 

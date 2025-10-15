@@ -33,6 +33,13 @@ pub struct CaptureResult {
     pub copied_to_clipboard: bool,
 }
 
+/// Outcome of a capture request (success or failure).
+#[derive(Debug, Clone)]
+pub enum CaptureOutcome {
+    Success(CaptureResult),
+    Failed(String),
+}
+
 /// Errors that can occur during screenshot capture.
 #[derive(Debug, Error)]
 pub enum CaptureError {
