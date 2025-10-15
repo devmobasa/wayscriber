@@ -4,16 +4,19 @@
 > Works on compositors with the wlr-layer-shell protocol (Hyprland, Sway, river, …); building from source requires Rust 1.70+.
 > Quick start: [set it up in four steps](#quick-start).
 
- <details open>
-  <summary>Demo Video (MP4)</summary>
+<details>
+<summary>📹 Demo Video (Click to expand)</summary>
+
 https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
- </details>
 
-  <details>
-  <summary>Demo GIF (Click to expand)</summary>
+</details>
+
+<details>
+<summary>🖼️ Demo GIF (Click to expand)</summary>
+
 ![Demo GIF](https://github.com/user-attachments/assets/e99eb161-c603-4133-926b-79de7a8fb567)
-  </details>
 
+</details>
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)
@@ -57,7 +60,7 @@ Need an alternative launch method? Jump to [Hyprland exec-once](#hyprland-exec-o
 
 ## Demo
 
-![Demo](demo.gif)
+https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 
 ## Installation
 
