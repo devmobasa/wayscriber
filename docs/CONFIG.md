@@ -244,6 +244,33 @@ hyprmarker --daemon --mode whiteboard
 - Blackboard: near-black background, white pen
 - Auto-adjust pen: true
 
+### `[capture]` - Screenshot Capture
+
+Configures how screenshots are stored and shared.
+
+```toml
+[capture]
+# Enable/disable capture shortcuts entirely
+enabled = true
+
+# Directory for saved screenshots (supports ~ expansion)
+save_directory = "~/Pictures/Hyprmarker"
+
+# Filename template (chrono format specifiers allowed)
+filename_template = "screenshot_%Y-%m-%d_%H%M%S"
+
+# Image format (currently "png")
+format = "png"
+
+# Copy captures to clipboard in addition to saving files
+copy_to_clipboard = true
+```
+
+**Tips:**
+- Set `copy_to_clipboard = false` if you prefer file-only captures.
+- Clipboard-only shortcuts ignore the save directory automatically.
+- Install `wl-clipboard`, `grim`, and `slurp` for the best Wayland experience; otherwise hyprmarker falls back to `xdg-desktop-portal`.
+
 ### `[keybindings]` - Custom Keybindings
 
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
@@ -287,6 +314,21 @@ set_color_orange = ["O"]
 set_color_pink = ["P"]
 set_color_white = ["W"]
 set_color_black = ["K"]
+
+# Screenshot shortcuts
+capture_full_screen = ["Ctrl+Shift+P"]
+capture_active_window = ["Ctrl+Shift+O"]
+capture_selection = ["Ctrl+Shift+I"]
+
+# Clipboard/File specific captures
+capture_clipboard_full = ["Ctrl+C"]
+capture_file_full = ["Ctrl+S"]
+capture_clipboard_selection = ["Ctrl+Shift+C"]
+capture_file_selection = ["Ctrl+Shift+S"]
+capture_clipboard_region = ["Ctrl+6"]
+capture_file_region = ["Ctrl+Shift+6"]
+
+# Help overlay (press F10 while drawing for a full reference)
 ```
 
 **Keybinding Format:**

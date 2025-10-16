@@ -20,15 +20,30 @@ pub fn copy_to_clipboard(image_data: &[u8]) -> Result<(), CaptureError> {
         image_data.len()
     );
 
-    // Try wl-clipboard-rs first
-    match copy_via_library(image_data) {
+    // Prefer wl-copy CLI (provided by wl-clipboard package); fall back to library if unavailable.
+    match copy_via_command(image_data) {
         Ok(()) => {
-            log::info!("Successfully copied to clipboard via wl-clipboard-rs");
+            log::info!("Successfully copied to clipboard via wl-copy command");
             Ok(())
         }
-        Err(e) => {
-            log::warn!("wl-clipboard-rs failed: {}, trying wl-copy fallback", e);
-            copy_via_command(image_data)
+        Err(cmd_err) => {
+            log::warn!(
+                "wl-copy command path failed ({}). Falling back to wl-clipboard-rs",
+                cmd_err
+            );
+            match copy_via_library(image_data) {
+                Ok(()) => {
+                    log::info!("Successfully copied to clipboard via wl-clipboard-rs fallback");
+                    Ok(())
+                }
+                Err(lib_err) => {
+                    let combined = format!(
+                        "wl-copy failed: {} ; wl-clipboard-rs failed: {}",
+                        cmd_err, lib_err
+                    );
+                    Err(CaptureError::ClipboardError(combined))
+                }
+            }
         }
     }
 }
@@ -90,7 +105,7 @@ fn copy_via_command(image_data: &[u8]) -> Result<(), CaptureError> {
         )));
     }
 
-    log::info!("Successfully copied to clipboard via wl-copy command");
+    log::debug!("wl-copy command completed successfully");
     Ok(())
 }
 

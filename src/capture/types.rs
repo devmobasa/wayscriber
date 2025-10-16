@@ -40,6 +40,15 @@ pub enum CaptureOutcome {
     Failed(String),
 }
 
+/// Where the captured image should be delivered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureDestination {
+    #[allow(dead_code)] // Will be used by upcoming clipboard-only actions
+    ClipboardOnly,
+    FileOnly,
+    ClipboardAndFile,
+}
+
 /// Errors that can occur during screenshot capture.
 #[derive(Debug, Error)]
 pub enum CaptureError {

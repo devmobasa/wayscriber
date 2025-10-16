@@ -529,7 +529,15 @@ impl InputState {
                 self.current_color = util::key_to_color('k').unwrap();
                 self.needs_redraw = true;
             }
-            Action::CaptureFullScreen | Action::CaptureActiveWindow | Action::CaptureSelection => {
+            Action::CaptureFullScreen
+            | Action::CaptureActiveWindow
+            | Action::CaptureSelection
+            | Action::CaptureClipboardFull
+            | Action::CaptureFileFull
+            | Action::CaptureClipboardSelection
+            | Action::CaptureFileSelection
+            | Action::CaptureClipboardRegion
+            | Action::CaptureFileRegion => {
                 // Capture actions are handled externally by WaylandState
                 // since they require access to CaptureManager
                 // Store the action for later retrieval

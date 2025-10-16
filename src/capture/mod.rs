@@ -12,7 +12,9 @@ pub mod file;
 pub mod portal;
 pub mod types;
 
-pub use types::{CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType};
+pub use types::{
+    CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType,
+};
 
 use file::{FileSaveConfig, save_screenshot};
 use std::sync::Arc;
@@ -35,8 +37,8 @@ pub struct CaptureManager {
 /// A request to perform a capture operation.
 struct CaptureRequest {
     capture_type: CaptureType,
-    save_config: FileSaveConfig,
-    copy_to_clipboard: bool,
+    destination: CaptureDestination,
+    save_config: Option<FileSaveConfig>,
 }
 
 impl CaptureManager {
@@ -101,13 +103,13 @@ impl CaptureManager {
     pub fn request_capture(
         &self,
         capture_type: CaptureType,
-        save_config: FileSaveConfig,
-        copy_to_clipboard: bool,
+        destination: CaptureDestination,
+        save_config: Option<FileSaveConfig>,
     ) -> Result<(), CaptureError> {
         let request = CaptureRequest {
             capture_type,
+            destination,
             save_config,
-            copy_to_clipboard,
         };
 
         self.request_tx
@@ -158,34 +160,68 @@ async fn perform_capture(request: CaptureRequest) -> Result<CaptureResult, Captu
                 capture_via_portal_bytes(CaptureType::ActiveWindow).await?
             }
         },
+        CaptureType::Selection { .. } => match capture_selection_hyprland().await {
+            Ok(data) => data,
+            Err(e) => {
+                log::warn!(
+                    "Selection capture via Hyprland failed: {}. Falling back to portal.",
+                    e
+                );
+                capture_via_portal_bytes(CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                })
+                .await?
+            }
+        },
         other => capture_via_portal_bytes(other).await?,
     };
 
     log::info!("Obtained screenshot data ({} bytes)", image_data.len());
 
-    // Step 3: Save to file
-    let saved_path = if !request.save_config.save_directory.as_os_str().is_empty() {
-        Some(save_screenshot(&image_data, &request.save_config)?)
-    } else {
-        None
-    };
+    log::debug!(
+        "Captured screenshot data size: {} bytes (capture_type={:?})",
+        image_data.len(),
+        request.capture_type
+    );
 
-    // Step 4: Copy to clipboard
-    let copied_to_clipboard = if request.copy_to_clipboard {
-        log::info!("Attempting to copy {} bytes to clipboard", image_data.len());
-        match clipboard::copy_to_clipboard(&image_data) {
-            Ok(()) => {
-                log::info!("Successfully copied to clipboard");
-                true
-            }
-            Err(e) => {
-                log::error!("Failed to copy to clipboard: {}", e);
-                false
+    // Step 3: Save to file (if requested)
+    let saved_path = match request.destination {
+        CaptureDestination::FileOnly | CaptureDestination::ClipboardAndFile => {
+            if let Some(save_config) = request.save_config.as_ref() {
+                if !save_config.save_directory.as_os_str().is_empty() {
+                    Some(save_screenshot(&image_data, save_config)?)
+                } else {
+                    None
+                }
+            } else {
+                None
             }
         }
-    } else {
-        log::debug!("Clipboard copy disabled in config");
-        false
+        CaptureDestination::ClipboardOnly => None,
+    };
+
+    // Step 4: Copy to clipboard (if requested)
+    let copied_to_clipboard = match request.destination {
+        CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile => {
+            log::info!("Attempting to copy {} bytes to clipboard", image_data.len());
+            match clipboard::copy_to_clipboard(&image_data) {
+                Ok(()) => {
+                    log::info!("Successfully copied to clipboard");
+                    true
+                }
+                Err(e) => {
+                    log::error!("Failed to copy to clipboard: {}", e);
+                    false
+                }
+            }
+        }
+        CaptureDestination::FileOnly => {
+            log::debug!("Clipboard copy not requested for this capture");
+            false
+        }
     };
 
     Ok(CaptureResult {
@@ -201,6 +237,8 @@ async fn perform_capture(request: CaptureRequest) -> Result<CaptureResult, Captu
 /// and cleans up the temporary file after reading.
 fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
     use std::fs;
+    use std::thread;
+    use std::time::Duration;
 
     // Parse URL to handle percent-encoding (spaces → %20, unicode, etc.)
     let url = url::Url::parse(uri)
@@ -213,14 +251,46 @@ fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
 
     log::debug!("Reading screenshot from: {}", path.display());
 
-    // Read the file
-    let data = fs::read(&path).map_err(|e| {
-        CaptureError::ImageError(format!(
-            "Failed to read screenshot file {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
+    // Wait briefly for portal to flush the file to disk (some portals write asynchronously)
+    const MAX_ATTEMPTS: usize = 60; // up to 3 seconds total
+    const ATTEMPT_DELAY_MS: u64 = 50;
+
+    let mut data = Vec::new();
+    for attempt in 0..MAX_ATTEMPTS {
+        match fs::read(&path) {
+            Ok(bytes) if !bytes.is_empty() => {
+                data = bytes;
+                break;
+            }
+            Ok(_) => {
+                log::trace!(
+                    "Portal screenshot file {} still empty (attempt {}/{})",
+                    path.display(),
+                    attempt + 1,
+                    MAX_ATTEMPTS
+                );
+            }
+            Err(e) => {
+                log::trace!(
+                    "Portal screenshot file {} not ready yet (attempt {}/{}): {}",
+                    path.display(),
+                    attempt + 1,
+                    MAX_ATTEMPTS,
+                    e
+                );
+            }
+        }
+
+        if attempt + 1 == MAX_ATTEMPTS {
+            return Err(CaptureError::ImageError(format!(
+                "Portal screenshot file {} not ready after {} attempts",
+                path.display(),
+                MAX_ATTEMPTS
+            )));
+        }
+
+        thread::sleep(Duration::from_millis(ATTEMPT_DELAY_MS));
+    }
 
     log::info!(
         "Successfully read {} bytes from portal screenshot",
@@ -338,6 +408,69 @@ async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
     })
     .await
     .map_err(|e| CaptureError::ImageError(format!("Hyprland capture task failed to join: {}", e)))?
+}
+
+/// Capture a user-selected region using `slurp` + `grim` (Hyprland/wlroots fast path).
+async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
+    tokio::task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
+        use std::process::{Command, Stdio};
+
+        // `slurp` outputs geometry in the format "x,y widthxheight"
+        let output = Command::new("slurp")
+            .args(["-f", "%x,%y %wx%h"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| {
+                CaptureError::ImageError(format!(
+                    "Failed to run slurp for region selection: {}",
+                    e
+                ))
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(CaptureError::ImageError(format!(
+                "slurp selection cancelled or failed: {}",
+                stderr.trim()
+            )));
+        }
+
+        let geometry = String::from_utf8(output.stdout)
+            .map_err(|e| CaptureError::ImageError(format!("Invalid slurp output: {}", e)))?;
+        let geometry = geometry.trim();
+
+        if geometry.is_empty() {
+            return Err(CaptureError::ImageError(
+                "slurp returned empty geometry".to_string(),
+            ));
+        }
+
+        log::debug!("Capturing selection via grim: {}", geometry);
+        let grim_output = Command::new("grim")
+            .args(["-g", geometry, "-"])
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(|e| CaptureError::ImageError(format!("Failed to run grim: {}", e)))?;
+
+        if !grim_output.status.success() {
+            let stderr = String::from_utf8_lossy(&grim_output.stderr);
+            return Err(CaptureError::ImageError(format!(
+                "grim selection capture failed: {}",
+                stderr.trim()
+            )));
+        }
+
+        if grim_output.stdout.is_empty() {
+            return Err(CaptureError::ImageError(
+                "grim returned empty selection screenshot".into(),
+            ));
+        }
+
+        Ok(grim_output.stdout)
+    })
+    .await
+    .map_err(|e| CaptureError::ImageError(format!("Selection capture task failed: {}", e)))?
 }
 
 /// Create a placeholder PNG image for testing.

@@ -46,6 +46,12 @@ pub enum Action {
     CaptureFullScreen,
     CaptureActiveWindow,
     CaptureSelection,
+    CaptureClipboardFull,
+    CaptureFileFull,
+    CaptureClipboardSelection,
+    CaptureFileSelection,
+    CaptureClipboardRegion,
+    CaptureFileRegion,
 }
 
 /// A single keybinding: a key character with optional modifiers.
@@ -211,6 +217,24 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_capture_selection")]
     pub capture_selection: Vec<String>,
+
+    #[serde(default = "default_capture_clipboard_full")]
+    pub capture_clipboard_full: Vec<String>,
+
+    #[serde(default = "default_capture_file_full")]
+    pub capture_file_full: Vec<String>,
+
+    #[serde(default = "default_capture_clipboard_selection")]
+    pub capture_clipboard_selection: Vec<String>,
+
+    #[serde(default = "default_capture_file_selection")]
+    pub capture_file_selection: Vec<String>,
+
+    #[serde(default = "default_capture_clipboard_region")]
+    pub capture_clipboard_region: Vec<String>,
+
+    #[serde(default = "default_capture_file_region")]
+    pub capture_file_region: Vec<String>,
 }
 
 impl Default for KeybindingsConfig {
@@ -239,6 +263,12 @@ impl Default for KeybindingsConfig {
             capture_full_screen: default_capture_full_screen(),
             capture_active_window: default_capture_active_window(),
             capture_selection: default_capture_selection(),
+            capture_clipboard_full: default_capture_clipboard_full(),
+            capture_file_full: default_capture_file_full(),
+            capture_clipboard_selection: default_capture_clipboard_selection(),
+            capture_file_selection: default_capture_file_selection(),
+            capture_clipboard_region: default_capture_clipboard_region(),
+            capture_file_region: default_capture_file_region(),
         }
     }
 }
@@ -353,6 +383,30 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::CaptureSelection)?;
         }
 
+        for binding_str in &self.capture_clipboard_full {
+            insert_binding(binding_str, Action::CaptureClipboardFull)?;
+        }
+
+        for binding_str in &self.capture_file_full {
+            insert_binding(binding_str, Action::CaptureFileFull)?;
+        }
+
+        for binding_str in &self.capture_clipboard_selection {
+            insert_binding(binding_str, Action::CaptureClipboardSelection)?;
+        }
+
+        for binding_str in &self.capture_file_selection {
+            insert_binding(binding_str, Action::CaptureFileSelection)?;
+        }
+
+        for binding_str in &self.capture_clipboard_region {
+            insert_binding(binding_str, Action::CaptureClipboardRegion)?;
+        }
+
+        for binding_str in &self.capture_file_region {
+            insert_binding(binding_str, Action::CaptureFileRegion)?;
+        }
+
         Ok(map)
     }
 }
@@ -451,6 +505,30 @@ fn default_capture_active_window() -> Vec<String> {
 
 fn default_capture_selection() -> Vec<String> {
     vec!["Ctrl+Shift+I".to_string()]
+}
+
+fn default_capture_clipboard_full() -> Vec<String> {
+    vec!["Ctrl+C".to_string()]
+}
+
+fn default_capture_file_full() -> Vec<String> {
+    vec!["Ctrl+S".to_string()]
+}
+
+fn default_capture_clipboard_selection() -> Vec<String> {
+    vec!["Ctrl+Shift+C".to_string()]
+}
+
+fn default_capture_file_selection() -> Vec<String> {
+    vec!["Ctrl+Shift+S".to_string()]
+}
+
+fn default_capture_clipboard_region() -> Vec<String> {
+    vec!["Ctrl+6".to_string()]
+}
+
+fn default_capture_file_region() -> Vec<String> {
+    vec!["Ctrl+Shift+6".to_string()]
 }
 
 #[cfg(test)]

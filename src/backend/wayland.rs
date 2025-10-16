@@ -29,7 +29,7 @@ use wayland_client::{
 };
 // Removed: Arc, Mutex - not needed after removing WaylandBackend.inner
 
-use crate::capture::{CaptureManager, CaptureOutcome};
+use crate::capture::{CaptureDestination, CaptureManager, CaptureOutcome};
 use crate::config::{Action, Config};
 use crate::input::{InputState, Key, MouseButton};
 
@@ -631,13 +631,72 @@ impl WaylandState {
             return;
         }
 
-        let capture_type = match action {
-            Action::CaptureFullScreen => CaptureType::FullScreen,
-            Action::CaptureActiveWindow => CaptureType::ActiveWindow,
-            Action::CaptureSelection => {
-                // TODO: Implement selection UI
-                log::warn!("Selection capture not yet implemented, falling back to full screen");
-                CaptureType::FullScreen
+        let default_destination = if self.config.capture.copy_to_clipboard {
+            CaptureDestination::ClipboardAndFile
+        } else {
+            CaptureDestination::FileOnly
+        };
+
+        let (capture_type, destination) = match action {
+            Action::CaptureFullScreen => (CaptureType::FullScreen, default_destination),
+            Action::CaptureActiveWindow => (CaptureType::ActiveWindow, default_destination),
+            Action::CaptureSelection => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                default_destination,
+            ),
+            Action::CaptureClipboardFull => (
+                CaptureType::FullScreen,
+                CaptureDestination::ClipboardOnly,
+            ),
+            Action::CaptureFileFull => (CaptureType::FullScreen, CaptureDestination::FileOnly),
+            Action::CaptureClipboardSelection => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                CaptureDestination::ClipboardOnly,
+            ),
+            Action::CaptureFileSelection => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                CaptureDestination::FileOnly,
+            ),
+            Action::CaptureClipboardRegion => {
+                log::info!("Region clipboard capture requested");
+                // TODO: implement persistent region geometry; fall back to selection for now
+                (
+                    CaptureType::Selection {
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                    },
+                    CaptureDestination::ClipboardOnly,
+                )
+            }
+            Action::CaptureFileRegion => {
+                log::info!("Region file capture requested");
+                // TODO: implement persistent region geometry; fall back to selection for now
+                (
+                    CaptureType::Selection {
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                    },
+                    CaptureDestination::FileOnly,
+                )
             }
             _ => {
                 log::error!(
@@ -648,11 +707,15 @@ impl WaylandState {
             }
         };
 
-        // Build file save config from user config
-        let save_config = FileSaveConfig {
-            save_directory: expand_tilde(&self.config.capture.save_directory),
-            filename_template: self.config.capture.filename_template.clone(),
-            format: self.config.capture.format.clone(),
+        // Build file save config from user config when needed
+        let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
+            None
+        } else {
+            Some(FileSaveConfig {
+                save_directory: expand_tilde(&self.config.capture.save_directory),
+                filename_template: self.config.capture.filename_template.clone(),
+                format: self.config.capture.format.clone(),
+            })
         };
 
         // Hide overlay before capture to prevent capturing the overlay itself
@@ -661,11 +724,10 @@ impl WaylandState {
 
         // Request capture
         log::info!("Requesting {:?} capture", capture_type);
-        if let Err(e) = self.capture_manager.request_capture(
-            capture_type,
-            save_config,
-            self.config.capture.copy_to_clipboard,
-        ) {
+        if let Err(e) =
+            self.capture_manager
+                .request_capture(capture_type, destination, save_config)
+        {
             log::error!("Failed to request capture: {}", e);
 
             // Restore overlay on error
