@@ -903,6 +903,7 @@ name = "hyprmarker"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "cairo-rs",
  "cairo-sys-rs",
  "calloop",

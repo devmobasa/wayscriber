@@ -30,6 +30,7 @@ anyhow = "1.0"
 toml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 dirs = "6.0"
+async-trait = "0.1"
 
 # Daemon mode
 signal-hook = "0.3"

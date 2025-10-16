@@ -16,7 +16,9 @@ pub use types::{
     CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType,
 };
 
+use async_trait::async_trait;
 use file::{FileSaveConfig, save_screenshot};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 
@@ -41,6 +43,112 @@ struct CaptureRequest {
     save_config: Option<FileSaveConfig>,
 }
 
+impl std::fmt::Debug for CaptureRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CaptureRequest")
+            .field("capture_type", &self.capture_type)
+            .field("destination", &self.destination)
+            .field(
+                "save_config",
+                &self
+                    .save_config
+                    .as_ref()
+                    .map(|cfg| cfg.filename_template.clone()),
+            )
+            .finish()
+    }
+}
+
+/// Abstraction over how image data is captured for the different capture types.
+#[async_trait]
+pub trait CaptureSource: Send + Sync {
+    async fn capture(&self, capture_type: CaptureType) -> Result<Vec<u8>, CaptureError>;
+}
+
+/// Abstraction over file saving for captured screenshots.
+pub trait CaptureFileSaver: Send + Sync {
+    fn save(&self, image_data: &[u8], config: &FileSaveConfig)
+        -> Result<PathBuf, CaptureError>;
+}
+
+/// Abstraction over copying screenshots to the clipboard.
+pub trait CaptureClipboard: Send + Sync {
+    fn copy(&self, image_data: &[u8]) -> Result<(), CaptureError>;
+}
+
+/// Bundle of dependencies used by the capture pipeline. Each component can be mocked in tests.
+#[derive(Clone)]
+pub struct CaptureDependencies {
+    pub source: Arc<dyn CaptureSource>,
+    pub saver: Arc<dyn CaptureFileSaver>,
+    pub clipboard: Arc<dyn CaptureClipboard>,
+}
+
+impl Default for CaptureDependencies {
+    fn default() -> Self {
+        Self {
+            source: Arc::new(DefaultCaptureSource),
+            saver: Arc::new(DefaultFileSaver),
+            clipboard: Arc::new(DefaultClipboard),
+        }
+    }
+}
+
+struct DefaultCaptureSource;
+struct DefaultFileSaver;
+struct DefaultClipboard;
+
+#[async_trait]
+impl CaptureSource for DefaultCaptureSource {
+    async fn capture(&self, capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
+        match capture_type {
+            CaptureType::ActiveWindow => match capture_active_window_hyprland().await {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    log::warn!(
+                        "Active window capture via Hyprland failed: {}. Falling back to portal.",
+                        e
+                    );
+                    capture_via_portal_bytes(CaptureType::ActiveWindow).await
+                }
+            },
+            CaptureType::Selection { .. } => match capture_selection_hyprland().await {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    log::warn!(
+                        "Selection capture via Hyprland failed: {}. Falling back to portal.",
+                        e
+                    );
+                    capture_via_portal_bytes(CaptureType::Selection {
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                    })
+                    .await
+                }
+            },
+            other => capture_via_portal_bytes(other).await,
+        }
+    }
+}
+
+impl CaptureFileSaver for DefaultFileSaver {
+    fn save(
+        &self,
+        image_data: &[u8],
+        config: &FileSaveConfig,
+    ) -> Result<PathBuf, CaptureError> {
+        save_screenshot(image_data, config)
+    }
+}
+
+impl CaptureClipboard for DefaultClipboard {
+    fn copy(&self, image_data: &[u8]) -> Result<(), CaptureError> {
+        clipboard::copy_to_clipboard(image_data)
+    }
+}
+
 impl CaptureManager {
     /// Create a new capture manager.
     ///
@@ -49,12 +157,22 @@ impl CaptureManager {
     /// # Arguments
     /// * `runtime_handle` - Tokio runtime handle for spawning async tasks
     pub fn new(runtime_handle: &tokio::runtime::Handle) -> Self {
+        Self::with_dependencies(runtime_handle, CaptureDependencies::default())
+    }
+
+    /// Create a capture manager with custom dependencies (useful for testing).
+    pub fn with_dependencies(
+        runtime_handle: &tokio::runtime::Handle,
+        dependencies: CaptureDependencies,
+    ) -> Self {
         let (request_tx, mut request_rx) = mpsc::unbounded_channel::<CaptureRequest>();
         let status = Arc::new(Mutex::new(CaptureStatus::Idle));
         let last_result = Arc::new(Mutex::new(None));
+        let dependencies = Arc::new(dependencies);
 
         let status_clone = status.clone();
         let result_clone = last_result.clone();
+        let deps_clone = dependencies.clone();
 
         // Spawn background task to handle capture requests
         runtime_handle.spawn(async move {
@@ -65,7 +183,7 @@ impl CaptureManager {
                 *status_clone.lock().await = CaptureStatus::AwaitingPermission;
 
                 // Perform capture
-                match perform_capture(request).await {
+                match perform_capture(request, deps_clone.clone()).await {
                     Ok(result) => {
                         log::info!("Capture successful: {:?}", result.saved_path);
                         *status_clone.lock().await = CaptureStatus::Success;
@@ -144,40 +262,14 @@ impl CaptureManager {
     }
 }
 
-/// Perform the actual capture operation (async).
-async fn perform_capture(request: CaptureRequest) -> Result<CaptureResult, CaptureError> {
+async fn perform_capture(
+    request: CaptureRequest,
+    dependencies: Arc<CaptureDependencies>,
+) -> Result<CaptureResult, CaptureError> {
     log::info!("Starting capture: {:?}", request.capture_type);
 
     // Step 1: Capture image bytes (prefer compositor-specific path where possible)
-    let image_data = match request.capture_type {
-        CaptureType::ActiveWindow => match capture_active_window_hyprland().await {
-            Ok(data) => data,
-            Err(e) => {
-                log::warn!(
-                    "Active window capture via Hyprland failed: {}. Falling back to portal.",
-                    e
-                );
-                capture_via_portal_bytes(CaptureType::ActiveWindow).await?
-            }
-        },
-        CaptureType::Selection { .. } => match capture_selection_hyprland().await {
-            Ok(data) => data,
-            Err(e) => {
-                log::warn!(
-                    "Selection capture via Hyprland failed: {}. Falling back to portal.",
-                    e
-                );
-                capture_via_portal_bytes(CaptureType::Selection {
-                    x: 0,
-                    y: 0,
-                    width: 0,
-                    height: 0,
-                })
-                .await?
-            }
-        },
-        other => capture_via_portal_bytes(other).await?,
-    };
+    let image_data = dependencies.source.capture(request.capture_type).await?;
 
     log::info!("Obtained screenshot data ({} bytes)", image_data.len());
 
@@ -192,7 +284,7 @@ async fn perform_capture(request: CaptureRequest) -> Result<CaptureResult, Captu
         CaptureDestination::FileOnly | CaptureDestination::ClipboardAndFile => {
             if let Some(save_config) = request.save_config.as_ref() {
                 if !save_config.save_directory.as_os_str().is_empty() {
-                    Some(save_screenshot(&image_data, save_config)?)
+                    Some(dependencies.saver.save(&image_data, save_config)?)
                 } else {
                     None
                 }
@@ -206,8 +298,11 @@ async fn perform_capture(request: CaptureRequest) -> Result<CaptureResult, Captu
     // Step 4: Copy to clipboard (if requested)
     let copied_to_clipboard = match request.destination {
         CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile => {
-            log::info!("Attempting to copy {} bytes to clipboard", image_data.len());
-            match clipboard::copy_to_clipboard(&image_data) {
+            log::info!(
+                "Attempting to copy {} bytes to clipboard",
+                image_data.len()
+            );
+            match dependencies.clipboard.copy(&image_data) {
                 Ok(()) => {
                     log::info!("Successfully copied to clipboard");
                     true
@@ -504,6 +599,71 @@ fn create_placeholder_image() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+    use tokio::time::{sleep, Duration};
+
+    #[derive(Clone)]
+    struct MockSource {
+        data: Vec<u8>,
+        error: Arc<Mutex<Option<CaptureError>>>,
+        captured_types: Arc<Mutex<Vec<CaptureType>>>,
+    }
+
+    #[async_trait]
+    impl CaptureSource for MockSource {
+        async fn capture(&self, capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
+            self.captured_types.lock().unwrap().push(capture_type);
+            if let Some(err) = self.error.lock().unwrap().take() {
+                Err(err)
+            } else {
+                Ok(self.data.clone())
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct MockSaver {
+        pub should_fail: bool,
+        pub path: PathBuf,
+        pub calls: Arc<Mutex<usize>>,
+    }
+
+    impl CaptureFileSaver for MockSaver {
+        fn save(
+            &self,
+            _image_data: &[u8],
+            _config: &FileSaveConfig,
+        ) -> Result<PathBuf, CaptureError> {
+            *self.calls.lock().unwrap() += 1;
+            if self.should_fail {
+                Err(CaptureError::SaveError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "save failed",
+                )))
+            } else {
+                Ok(self.path.clone())
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct MockClipboard {
+        pub should_fail: bool,
+        pub calls: Arc<Mutex<usize>>,
+    }
+
+    impl CaptureClipboard for MockClipboard {
+        fn copy(&self, _image_data: &[u8]) -> Result<(), CaptureError> {
+            *self.calls.lock().unwrap() += 1;
+            if self.should_fail {
+                Err(CaptureError::ClipboardError(
+                    "clipboard failure".to_string(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    }
 
     #[test]
     fn test_create_placeholder_image() {
@@ -519,5 +679,200 @@ mod tests {
         let manager = CaptureManager::new(&tokio::runtime::Handle::current());
         let status = manager.get_status().await;
         assert_eq!(status, CaptureStatus::Idle);
+    }
+
+    #[tokio::test]
+    async fn test_perform_capture_clipboard_only_success() {
+        let source = MockSource {
+            data: vec![1, 2, 3],
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        };
+        let saver = MockSaver {
+            should_fail: false,
+            path: PathBuf::from("unused.png"),
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let saver_handle = saver.clone();
+        let clipboard = MockClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let clipboard_handle = clipboard.clone();
+        let deps = CaptureDependencies {
+            source: Arc::new(source),
+            saver: Arc::new(saver),
+            clipboard: Arc::new(clipboard),
+        };
+        let request = CaptureRequest {
+            capture_type: CaptureType::FullScreen,
+            destination: CaptureDestination::ClipboardOnly,
+            save_config: None,
+        };
+
+        let result = perform_capture(request, Arc::new(deps.clone())).await.unwrap();
+        assert!(result.saved_path.is_none());
+        assert!(result.copied_to_clipboard);
+        assert_eq!(*clipboard_handle.calls.lock().unwrap(), 1);
+        assert_eq!(*saver_handle.calls.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_perform_capture_file_only_success() {
+        let source = MockSource {
+            data: vec![4, 5, 6],
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        };
+        let saver = MockSaver {
+            should_fail: false,
+            path: PathBuf::from("/tmp/test.png"),
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let saver_handle = saver.clone();
+        let clipboard = MockClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let clipboard_handle = clipboard.clone();
+        let deps = CaptureDependencies {
+            source: Arc::new(source),
+            saver: Arc::new(saver),
+            clipboard: Arc::new(clipboard),
+        };
+        let request = CaptureRequest {
+            capture_type: CaptureType::FullScreen,
+            destination: CaptureDestination::FileOnly,
+            save_config: Some(FileSaveConfig::default()),
+        };
+
+        let result = perform_capture(request, Arc::new(deps.clone())).await.unwrap();
+        assert!(result.saved_path.is_some());
+        assert!(!result.copied_to_clipboard);
+        assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
+        assert_eq!(*clipboard_handle.calls.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_perform_capture_clipboard_failure() {
+        let source = MockSource {
+            data: vec![7, 8, 9],
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        };
+        let saver = MockSaver {
+            should_fail: false,
+            path: PathBuf::from("/tmp/a.png"),
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let clipboard = MockClipboard {
+            should_fail: true,
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let clipboard_handle = clipboard.clone();
+        let deps = CaptureDependencies {
+            source: Arc::new(source),
+            saver: Arc::new(saver),
+            clipboard: Arc::new(clipboard),
+        };
+        let request = CaptureRequest {
+            capture_type: CaptureType::FullScreen,
+            destination: CaptureDestination::ClipboardOnly,
+            save_config: None,
+        };
+
+        let result = perform_capture(request, Arc::new(deps.clone())).await.unwrap();
+        assert!(!result.copied_to_clipboard);
+        assert_eq!(*clipboard_handle.calls.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_perform_capture_save_failure() {
+        let source = MockSource {
+            data: vec![10, 11, 12],
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        };
+        let saver = MockSaver {
+            should_fail: true,
+            path: PathBuf::from("/tmp/should_fail.png"),
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let saver_handle = saver.clone();
+        let clipboard = MockClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let deps = CaptureDependencies {
+            source: Arc::new(source),
+            saver: Arc::new(saver),
+            clipboard: Arc::new(clipboard),
+        };
+        let request = CaptureRequest {
+            capture_type: CaptureType::FullScreen,
+            destination: CaptureDestination::FileOnly,
+            save_config: Some(FileSaveConfig::default()),
+        };
+
+        let err = perform_capture(request, Arc::new(deps.clone())).await.unwrap_err();
+        match err {
+            CaptureError::SaveError(_) => {}
+            other => panic!("expected SaveError, got {:?}", other),
+        }
+        assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_capture_manager_with_dependencies() {
+        let clipboard_calls = Arc::new(Mutex::new(0));
+        let source = MockSource {
+            data: vec![13, 14, 15],
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        };
+        let saver = MockSaver {
+            should_fail: false,
+            path: PathBuf::from("/tmp/manager.png"),
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let clipboard = MockClipboard {
+            should_fail: false,
+            calls: clipboard_calls.clone(),
+        };
+        let deps = CaptureDependencies {
+            source: Arc::new(source),
+            saver: Arc::new(saver),
+            clipboard: Arc::new(clipboard),
+        };
+        let manager =
+            CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps.clone());
+
+        manager
+            .request_capture(
+                CaptureType::FullScreen,
+                CaptureDestination::ClipboardOnly,
+                None,
+            )
+            .unwrap();
+
+        // Wait for background thread to finish
+        let mut outcome = None;
+        for _ in 0..10 {
+            if let Some(result) = manager.try_take_result() {
+                outcome = Some(result);
+                break;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+
+        match outcome {
+            Some(CaptureOutcome::Success(result)) => {
+                assert!(result.saved_path.is_none());
+                assert!(result.copied_to_clipboard);
+            }
+            other => panic!("Expected success outcome, got {:?}", other),
+        }
+        assert_eq!(*clipboard_calls.lock().unwrap(), 1);
+        assert_eq!(manager.get_status().await, CaptureStatus::Success);
     }
 }
