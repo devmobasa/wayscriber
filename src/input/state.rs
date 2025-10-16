@@ -81,6 +81,8 @@ pub struct InputState {
     pub board_config: BoardConfig,
     /// Keybinding action map for efficient lookup
     action_map: HashMap<KeyBinding, Action>,
+    /// Pending capture action (to be handled by WaylandState)
+    pending_capture_action: Option<Action>,
 }
 
 impl InputState {
@@ -99,6 +101,7 @@ impl InputState {
     /// * `arrow_angle` - Arrowhead angle in degrees
     /// * `board_config` - Board mode configuration
     /// * `action_map` - Keybinding action map
+    #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         color: Color,
         thickness: f64,
@@ -129,6 +132,7 @@ impl InputState {
             board_previous_color: None,
             board_config,
             action_map,
+            pending_capture_action: None,
         }
     }
 
@@ -177,6 +181,17 @@ impl InputState {
         self.current_font_size = (self.current_font_size + delta).clamp(8.0, 72.0);
         self.needs_redraw = true;
         log::debug!("Font size adjusted to {:.1}px", self.current_font_size);
+    }
+
+    /// Takes and clears any pending capture action.
+    ///
+    /// This is called by WaylandState to retrieve capture actions that need
+    /// to be handled with access to CaptureManager.
+    ///
+    /// # Returns
+    /// The pending capture action if any, None otherwise
+    pub fn take_pending_capture_action(&mut self) -> Option<Action> {
+        self.pending_capture_action.take()
     }
 
     /// Switches to a different board mode with color auto-adjustment.
@@ -310,40 +325,41 @@ impl InputState {
                 };
 
                 // Check if this key combination triggers an action
-                if !key_str.is_empty() {
-                    if let Some(action) = self.find_action(&key_str) {
-                        // Actions work in text mode
-                        // Note: Exit action has special logic in handle_action - it cancels
-                        // text mode if in TextInput state, or exits app if in Idle state
-                        self.handle_action(action);
-                        return;
-                    }
+                if !key_str.is_empty()
+                    && let Some(action) = self.find_action(&key_str)
+                {
+                    // Actions work in text mode
+                    // Note: Exit action has special logic in handle_action - it cancels
+                    // text mode if in TextInput state, or exits app if in Idle state
+                    self.handle_action(action);
+                    return;
                 }
             }
 
             // No action triggered, handle as text input
             // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
-            if matches!(key, Key::Return) && !self.modifiers.shift {
-                if let DrawingState::TextInput { x, y, buffer } = &self.state {
-                    if !buffer.is_empty() {
-                        let x = *x;
-                        let y = *y;
-                        let text = buffer.clone();
+            if matches!(key, Key::Return)
+                && !self.modifiers.shift
+                && let DrawingState::TextInput { x, y, buffer } = &self.state
+            {
+                if !buffer.is_empty() {
+                    let x = *x;
+                    let y = *y;
+                    let text = buffer.clone();
 
-                        self.canvas_set.active_frame_mut().add_shape(Shape::Text {
-                            x,
-                            y,
-                            text,
-                            color: self.current_color,
-                            size: self.current_font_size,
-                            font_descriptor: self.font_descriptor.clone(),
-                            background_enabled: self.text_background_enabled,
-                        });
-                        self.needs_redraw = true;
-                    }
-                    self.state = DrawingState::Idle;
-                    return;
+                    self.canvas_set.active_frame_mut().add_shape(Shape::Text {
+                        x,
+                        y,
+                        text,
+                        color: self.current_color,
+                        size: self.current_font_size,
+                        font_descriptor: self.font_descriptor.clone(),
+                        background_enabled: self.text_background_enabled,
+                    });
+                    self.needs_redraw = true;
                 }
+                self.state = DrawingState::Idle;
+                return;
             }
 
             // Regular text input - add character to buffer
@@ -379,14 +395,13 @@ impl InputState {
         }
 
         // Handle Escape in Drawing state for canceling
-        if matches!(key, Key::Escape) {
-            if let DrawingState::Drawing { .. } = &self.state {
-                if let Some(Action::Exit) = self.find_action("Escape") {
-                    self.state = DrawingState::Idle;
-                    self.needs_redraw = true;
-                    return;
-                }
-            }
+        if matches!(key, Key::Escape)
+            && let DrawingState::Drawing { .. } = &self.state
+            && let Some(Action::Exit) = self.find_action("Escape")
+        {
+            self.state = DrawingState::Idle;
+            self.needs_redraw = true;
+            return;
         }
 
         // Convert key to string for action lookup
@@ -513,6 +528,27 @@ impl InputState {
             Action::SetColorBlack => {
                 self.current_color = util::key_to_color('k').unwrap();
                 self.needs_redraw = true;
+            }
+            Action::CaptureFullScreen
+            | Action::CaptureActiveWindow
+            | Action::CaptureSelection
+            | Action::CaptureClipboardFull
+            | Action::CaptureFileFull
+            | Action::CaptureClipboardSelection
+            | Action::CaptureFileSelection
+            | Action::CaptureClipboardRegion
+            | Action::CaptureFileRegion => {
+                // Capture actions are handled externally by WaylandState
+                // since they require access to CaptureManager
+                // Store the action for later retrieval
+                log::debug!("Capture action {:?} pending for backend", action);
+                self.pending_capture_action = Some(action);
+
+                // Clear modifiers to prevent them from being "stuck" after capture
+                // (portal dialog causes key releases to be missed)
+                self.modifiers.ctrl = false;
+                self.modifiers.shift = false;
+                self.modifiers.alt = false;
             }
         }
     }
@@ -840,8 +876,8 @@ mod tests {
                 b: 0.0,
                 a: 1.0,
             }, // Red
-            3.0,     // thickness
-            32.0,    // font_size
+            3.0,  // thickness
+            32.0, // font_size
             FontDescriptor {
                 family: "Sans".to_string(),
                 weight: "bold".to_string(),

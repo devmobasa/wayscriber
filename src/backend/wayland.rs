@@ -29,13 +29,16 @@ use wayland_client::{
 };
 // Removed: Arc, Mutex - not needed after removing WaylandBackend.inner
 
-use crate::config::Config;
+use crate::capture::{CaptureDestination, CaptureManager, CaptureOutcome};
+use crate::config::{Action, Config};
 use crate::input::{InputState, Key, MouseButton};
 
 /// Wayland backend state
 pub struct WaylandBackend {
     // Removed: inner Arc<Mutex> was unused - WaylandState is created and used directly in run()
     initial_mode: Option<String>,
+    /// Tokio runtime for async capture operations
+    tokio_runtime: tokio::runtime::Runtime,
 }
 
 /// Internal Wayland state
@@ -65,11 +68,26 @@ struct WaylandState {
     input_state: InputState,
     current_mouse_x: i32,
     current_mouse_y: i32,
+
+    // Capture manager
+    capture_manager: CaptureManager,
+
+    // Capture state tracking
+    capture_in_progress: bool,
+    overlay_hidden_for_capture: bool,
+
+    // Tokio runtime handle for async operations
+    tokio_handle: tokio::runtime::Handle,
 }
 
 impl WaylandBackend {
     pub fn new(initial_mode: Option<String>) -> Result<Self> {
-        Ok(Self { initial_mode })
+        let tokio_runtime = tokio::runtime::Runtime::new()
+            .context("Failed to create Tokio runtime for capture operations")?;
+        Ok(Self {
+            initial_mode,
+            tokio_runtime,
+        })
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -167,10 +185,10 @@ impl WaylandBackend {
                     info!("Starting in {} mode", initial_mode_str);
                     input_state.canvas_set.switch_mode(mode);
                     // Apply auto-color adjustment if enabled
-                    if config.board.auto_adjust_pen {
-                        if let Some(default_color) = mode.default_pen_color(&config.board) {
-                            input_state.current_color = default_color;
-                        }
+                    if config.board.auto_adjust_pen
+                        && let Some(default_color) = mode.default_pen_color(&config.board)
+                    {
+                        input_state.current_color = default_color;
                     }
                 }
             } else if !initial_mode_str.is_empty() {
@@ -182,6 +200,13 @@ impl WaylandBackend {
         } else if self.initial_mode.is_some() {
             warn!("Board modes disabled in config, ignoring --mode flag");
         }
+
+        // Create capture manager with runtime handle
+        let capture_manager = CaptureManager::new(self.tokio_runtime.handle());
+        info!("Capture manager initialized");
+
+        // Clone runtime handle for state
+        let tokio_handle = self.tokio_runtime.handle().clone();
 
         // Create application state
         let mut state = WaylandState {
@@ -201,6 +226,10 @@ impl WaylandBackend {
             input_state,
             current_mouse_x: 0,
             current_mouse_y: 0,
+            capture_manager,
+            capture_in_progress: false,
+            overlay_hidden_for_capture: false,
+            tokio_handle,
         };
 
         // Create layer shell surface
@@ -255,6 +284,63 @@ impl WaylandBackend {
                     warn!("Event queue error: {}", e);
                     loop_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
                     break;
+                }
+            }
+
+            // Check for completed capture operations
+            if state.capture_in_progress {
+                if let Some(outcome) = state.capture_manager.try_take_result() {
+                    log::info!("Capture completed");
+
+                    // Restore overlay
+                    state.show_overlay();
+                    state.capture_in_progress = false;
+
+                    match outcome {
+                        CaptureOutcome::Success(result) => {
+                            // Build notification message
+                            let mut message_parts = Vec::new();
+
+                            if let Some(ref path) = result.saved_path {
+                                log::info!("Screenshot saved to: {}", path.display());
+                                if let Some(filename) = path.file_name() {
+                                    message_parts.push(format!(
+                                        "Saved as {}",
+                                        filename.to_string_lossy()
+                                    ));
+                                }
+                            }
+
+                            if result.copied_to_clipboard {
+                                log::info!("Screenshot copied to clipboard");
+                                message_parts.push("Copied to clipboard".to_string());
+                            }
+
+                            // Send notification
+                            let notification_body = if message_parts.is_empty() {
+                                "Screenshot captured".to_string()
+                            } else {
+                                message_parts.join(" • ")
+                            };
+
+                            crate::notification::send_notification_async(
+                                &state.tokio_handle,
+                                "Screenshot Captured".to_string(),
+                                notification_body,
+                                Some("camera-photo".to_string()),
+                            );
+                        }
+                        CaptureOutcome::Failed(error) => {
+                            log::warn!("Screenshot capture failed: {}", error);
+
+                            crate::notification::send_notification_async(
+                                &state.tokio_handle,
+                                "Screenshot Failed".to_string(),
+                                error,
+                                Some("dialog-error".to_string()),
+                            );
+                        }
+                    }
                 }
             }
 
@@ -482,6 +568,172 @@ impl WaylandState {
         debug!("=== RENDER COMPLETE ===");
 
         Ok(())
+    }
+
+    /// Temporarily hide the overlay for screenshot capture.
+    ///
+    /// This unmaps the layer surface so the compositor doesn't render it.
+    /// The overlay state (drawings, mode, etc.) is preserved.
+    fn hide_overlay(&mut self) {
+        if self.overlay_hidden_for_capture {
+            log::warn!("Overlay already hidden for capture");
+            return;
+        }
+
+        log::info!("Hiding overlay for screenshot capture");
+
+        if let Some(layer_surface) = &self.layer_surface {
+            // Unmap the surface by setting size to 0
+            layer_surface.set_size(0, 0);
+
+            let wl_surface = layer_surface.wl_surface();
+            wl_surface.commit();
+        }
+
+        self.overlay_hidden_for_capture = true;
+
+        // Give compositor time to process the unmap
+        // (the async capture will start shortly after)
+    }
+
+    /// Restore the overlay after screenshot capture completes.
+    ///
+    /// Re-maps the layer surface to its original size and forces a redraw.
+    fn show_overlay(&mut self) {
+        if !self.overlay_hidden_for_capture {
+            log::warn!("Overlay was not hidden, nothing to restore");
+            return;
+        }
+
+        log::info!("Restoring overlay after screenshot capture");
+
+        if let Some(layer_surface) = &self.layer_surface {
+            // Restore original size
+            layer_surface.set_size(self.width, self.height);
+
+            let wl_surface = layer_surface.wl_surface();
+            wl_surface.commit();
+        }
+
+        self.overlay_hidden_for_capture = false;
+
+        // Force a redraw to show the overlay again
+        self.input_state.needs_redraw = true;
+    }
+
+    /// Handles capture actions by delegating to the CaptureManager.
+    fn handle_capture_action(&mut self, action: Action) {
+        use crate::capture::file::{FileSaveConfig, expand_tilde};
+        use crate::capture::types::CaptureType;
+
+        if !self.config.capture.enabled {
+            log::warn!("Capture action triggered but capture is disabled in config");
+            return;
+        }
+
+        let default_destination = if self.config.capture.copy_to_clipboard {
+            CaptureDestination::ClipboardAndFile
+        } else {
+            CaptureDestination::FileOnly
+        };
+
+        let (capture_type, destination) = match action {
+            Action::CaptureFullScreen => (CaptureType::FullScreen, default_destination),
+            Action::CaptureActiveWindow => (CaptureType::ActiveWindow, default_destination),
+            Action::CaptureSelection => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                default_destination,
+            ),
+            Action::CaptureClipboardFull => (
+                CaptureType::FullScreen,
+                CaptureDestination::ClipboardOnly,
+            ),
+            Action::CaptureFileFull => (CaptureType::FullScreen, CaptureDestination::FileOnly),
+            Action::CaptureClipboardSelection => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                CaptureDestination::ClipboardOnly,
+            ),
+            Action::CaptureFileSelection => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                CaptureDestination::FileOnly,
+            ),
+            Action::CaptureClipboardRegion => {
+                log::info!("Region clipboard capture requested");
+                // TODO: implement persistent region geometry; fall back to selection for now
+                (
+                    CaptureType::Selection {
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                    },
+                    CaptureDestination::ClipboardOnly,
+                )
+            }
+            Action::CaptureFileRegion => {
+                log::info!("Region file capture requested");
+                // TODO: implement persistent region geometry; fall back to selection for now
+                (
+                    CaptureType::Selection {
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                    },
+                    CaptureDestination::FileOnly,
+                )
+            }
+            _ => {
+                log::error!(
+                    "Non-capture action passed to handle_capture_action: {:?}",
+                    action
+                );
+                return;
+            }
+        };
+
+        // Build file save config from user config when needed
+        let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
+            None
+        } else {
+            Some(FileSaveConfig {
+                save_directory: expand_tilde(&self.config.capture.save_directory),
+                filename_template: self.config.capture.filename_template.clone(),
+                format: self.config.capture.format.clone(),
+            })
+        };
+
+        // Hide overlay before capture to prevent capturing the overlay itself
+        self.hide_overlay();
+        self.capture_in_progress = true;
+
+        // Request capture
+        log::info!("Requesting {:?} capture", capture_type);
+        if let Err(e) =
+            self.capture_manager
+                .request_capture(capture_type, destination, save_config)
+        {
+            log::error!("Failed to request capture: {}", e);
+
+            // Restore overlay on error
+            self.show_overlay();
+            self.capture_in_progress = false;
+        }
     }
 }
 
@@ -754,6 +1006,11 @@ impl KeyboardHandler for WaylandState {
         debug!("Key pressed: {:?}", key);
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
+
+        // Check for pending capture actions
+        if let Some(action) = self.input_state.take_pending_capture_action() {
+            self.handle_capture_action(action);
+        }
     }
 
     fn release_key(

@@ -406,3 +406,63 @@ fn default_blackboard_pen_color() -> [f64; 3] {
 fn default_board_auto_adjust() -> bool {
     true
 }
+
+/// Screenshot capture configuration.
+///
+/// Controls the behavior of screenshot capture features including file saving,
+/// clipboard integration, and capture shortcuts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaptureConfig {
+    /// Enable screenshot capture functionality
+    #[serde(default = "default_capture_enabled")]
+    pub enabled: bool,
+
+    /// Directory to save screenshots to (supports ~ expansion)
+    #[serde(default = "default_capture_directory")]
+    pub save_directory: String,
+
+    /// Filename template with chrono format specifiers (e.g., "%Y-%m-%d_%H%M%S")
+    #[serde(default = "default_capture_filename")]
+    pub filename_template: String,
+
+    /// Image format for saved screenshots (e.g., "png", "jpg")
+    #[serde(default = "default_capture_format")]
+    pub format: String,
+
+    /// Automatically copy screenshots to clipboard
+    #[serde(default = "default_capture_clipboard")]
+    pub copy_to_clipboard: bool,
+}
+
+impl Default for CaptureConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_capture_enabled(),
+            save_directory: default_capture_directory(),
+            filename_template: default_capture_filename(),
+            format: default_capture_format(),
+            copy_to_clipboard: default_capture_clipboard(),
+        }
+    }
+}
+
+// Capture config defaults
+fn default_capture_enabled() -> bool {
+    true
+}
+
+fn default_capture_directory() -> String {
+    "~/Pictures/Hyprmarker".to_string()
+}
+
+fn default_capture_filename() -> String {
+    "screenshot_%Y-%m-%d_%H%M%S".to_string()
+}
+
+fn default_capture_format() -> String {
+    "png".to_string()
+}
+
+fn default_capture_clipboard() -> bool {
+    true
+}

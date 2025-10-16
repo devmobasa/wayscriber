@@ -14,8 +14,8 @@ pub mod types;
 pub use enums::StatusPosition;
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
 pub use types::{
-    ArrowConfig, BoardConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig, StatusBarStyle,
-    UiConfig,
+    ArrowConfig, BoardConfig, CaptureConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig,
+    StatusBarStyle, UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)
@@ -81,6 +81,10 @@ pub struct Config {
     /// Keybinding customization
     #[serde(default)]
     pub keybindings: KeybindingsConfig,
+
+    /// Screenshot capture settings
+    #[serde(default)]
+    pub capture: CaptureConfig,
 }
 
 impl Config {

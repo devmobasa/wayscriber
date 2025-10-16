@@ -35,8 +35,8 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 ## Quick Start
 
 1. Install hyprmarker.  
-   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR).  
-   - Other distros: see [Installation](#installation) for dependencies and source builds.
+   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR). Screenshot tools (`wl-clipboard`, `grim`, `slurp`) are installed automatically.  
+   - Other distros: see [Installation](#installation) for dependencies and source builds, then install `wl-clipboard`, `grim`, and `slurp` for full screenshot support.
 2. Start the background service so the overlay is available instantly:
    ```bash
    systemctl --user enable --now hyprmarker.service
@@ -88,6 +88,12 @@ sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev
 
 # Fedora
 sudo dnf install cairo-devel wayland-devel pango-devel
+```
+
+Optional but recommended for screenshots:
+```bash
+sudo apt-get install wl-clipboard grim slurp   # Debian/Ubuntu
+sudo dnf install wl-clipboard grim slurp       # Fedora
 ```
 
 **Build from source:**
@@ -166,6 +172,19 @@ bind = $mainMod SHIFT, D, exec, hyprmarker --active --mode whiteboard
 ```
 
 Exit the overlay with `Escape` or `Ctrl+Q`.
+
+### Screenshot Shortcuts
+
+hyprmarker ships with keyboard shortcuts for quick captures:
+
+- `Ctrl+C` – copy the entire screen to the clipboard.
+- `Ctrl+S` – save the entire screen as a PNG (uses your capture directory).
+- `Ctrl+Shift+C` – select a region and copy it to the clipboard.
+- `Ctrl+Shift+S` – select a region and save it as a PNG.
+- `Ctrl+Shift+O` – capture the active window (Hyprland fast path, portal fallback).
+- `Ctrl+6` / `Ctrl+Shift+6` – reserved for remembered-region clipboard/file captures (coming soon).
+
+**Requirements:** install `wl-clipboard`, `grim`, and `slurp` for the fastest Hyprland workflow. If they are missing, hyprmarker falls back to `xdg-desktop-portal`'s interactive picker.
 
 ## Controls Reference
 

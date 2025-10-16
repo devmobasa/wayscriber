@@ -1,6 +1,6 @@
 [package]
 name = "hyprmarker"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
@@ -30,8 +30,17 @@ anyhow = "1.0"
 toml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 dirs = "6.0"
+async-trait = "0.1"
 
 # Daemon mode
 signal-hook = "0.3"
 ksni = "0.3"
-tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+# Screenshot capture
+zbus = "4.0"
+wl-clipboard-rs = "0.8"
+chrono = "0.4"
+futures = "0.3"
+url = "2.5"
+serde_json = "1.0"

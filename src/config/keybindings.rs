@@ -41,6 +41,17 @@ pub enum Action {
     SetColorPink,
     SetColorWhite,
     SetColorBlack,
+
+    // Screenshot capture actions
+    CaptureFullScreen,
+    CaptureActiveWindow,
+    CaptureSelection,
+    CaptureClipboardFull,
+    CaptureFileFull,
+    CaptureClipboardSelection,
+    CaptureFileSelection,
+    CaptureClipboardRegion,
+    CaptureFileRegion,
 }
 
 /// A single keybinding: a key character with optional modifiers.
@@ -197,6 +208,33 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_set_color_black")]
     pub set_color_black: Vec<String>,
+
+    #[serde(default = "default_capture_full_screen")]
+    pub capture_full_screen: Vec<String>,
+
+    #[serde(default = "default_capture_active_window")]
+    pub capture_active_window: Vec<String>,
+
+    #[serde(default = "default_capture_selection")]
+    pub capture_selection: Vec<String>,
+
+    #[serde(default = "default_capture_clipboard_full")]
+    pub capture_clipboard_full: Vec<String>,
+
+    #[serde(default = "default_capture_file_full")]
+    pub capture_file_full: Vec<String>,
+
+    #[serde(default = "default_capture_clipboard_selection")]
+    pub capture_clipboard_selection: Vec<String>,
+
+    #[serde(default = "default_capture_file_selection")]
+    pub capture_file_selection: Vec<String>,
+
+    #[serde(default = "default_capture_clipboard_region")]
+    pub capture_clipboard_region: Vec<String>,
+
+    #[serde(default = "default_capture_file_region")]
+    pub capture_file_region: Vec<String>,
 }
 
 impl Default for KeybindingsConfig {
@@ -222,6 +260,15 @@ impl Default for KeybindingsConfig {
             set_color_pink: default_set_color_pink(),
             set_color_white: default_set_color_white(),
             set_color_black: default_set_color_black(),
+            capture_full_screen: default_capture_full_screen(),
+            capture_active_window: default_capture_active_window(),
+            capture_selection: default_capture_selection(),
+            capture_clipboard_full: default_capture_clipboard_full(),
+            capture_file_full: default_capture_file_full(),
+            capture_clipboard_selection: default_capture_clipboard_selection(),
+            capture_file_selection: default_capture_file_selection(),
+            capture_clipboard_region: default_capture_clipboard_region(),
+            capture_file_region: default_capture_file_region(),
         }
     }
 }
@@ -324,6 +371,42 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::SetColorBlack)?;
         }
 
+        for binding_str in &self.capture_full_screen {
+            insert_binding(binding_str, Action::CaptureFullScreen)?;
+        }
+
+        for binding_str in &self.capture_active_window {
+            insert_binding(binding_str, Action::CaptureActiveWindow)?;
+        }
+
+        for binding_str in &self.capture_selection {
+            insert_binding(binding_str, Action::CaptureSelection)?;
+        }
+
+        for binding_str in &self.capture_clipboard_full {
+            insert_binding(binding_str, Action::CaptureClipboardFull)?;
+        }
+
+        for binding_str in &self.capture_file_full {
+            insert_binding(binding_str, Action::CaptureFileFull)?;
+        }
+
+        for binding_str in &self.capture_clipboard_selection {
+            insert_binding(binding_str, Action::CaptureClipboardSelection)?;
+        }
+
+        for binding_str in &self.capture_file_selection {
+            insert_binding(binding_str, Action::CaptureFileSelection)?;
+        }
+
+        for binding_str in &self.capture_clipboard_region {
+            insert_binding(binding_str, Action::CaptureClipboardRegion)?;
+        }
+
+        for binding_str in &self.capture_file_region {
+            insert_binding(binding_str, Action::CaptureFileRegion)?;
+        }
+
         Ok(map)
     }
 }
@@ -410,6 +493,42 @@ fn default_set_color_white() -> Vec<String> {
 
 fn default_set_color_black() -> Vec<String> {
     vec!["K".to_string()]
+}
+
+fn default_capture_full_screen() -> Vec<String> {
+    vec!["Ctrl+Shift+P".to_string()]
+}
+
+fn default_capture_active_window() -> Vec<String> {
+    vec!["Ctrl+Shift+O".to_string()]
+}
+
+fn default_capture_selection() -> Vec<String> {
+    vec!["Ctrl+Shift+I".to_string()]
+}
+
+fn default_capture_clipboard_full() -> Vec<String> {
+    vec!["Ctrl+C".to_string()]
+}
+
+fn default_capture_file_full() -> Vec<String> {
+    vec!["Ctrl+S".to_string()]
+}
+
+fn default_capture_clipboard_selection() -> Vec<String> {
+    vec!["Ctrl+Shift+C".to_string()]
+}
+
+fn default_capture_file_selection() -> Vec<String> {
+    vec!["Ctrl+Shift+S".to_string()]
+}
+
+fn default_capture_clipboard_region() -> Vec<String> {
+    vec!["Ctrl+6".to_string()]
+}
+
+fn default_capture_file_region() -> Vec<String> {
+    vec!["Ctrl+Shift+6".to_string()]
 }
 
 #[cfg(test)]
@@ -521,9 +640,11 @@ mod tests {
     #[test]
     fn test_duplicate_keybinding_detection() {
         // Create a config with duplicate keybindings
-        let mut config = KeybindingsConfig::default();
-        config.exit = vec!["Ctrl+Z".to_string()];
-        config.undo = vec!["Ctrl+Z".to_string()];
+        let config = KeybindingsConfig {
+            exit: vec!["Ctrl+Z".to_string()],
+            undo: vec!["Ctrl+Z".to_string()],
+            ..Default::default()
+        };
 
         // This should fail with a duplicate error
         let result = config.build_action_map();
@@ -536,9 +657,11 @@ mod tests {
     #[test]
     fn test_duplicate_with_different_modifier_order() {
         // Even with different modifier orders, these are the same keybinding
-        let mut config = KeybindingsConfig::default();
-        config.exit = vec!["Ctrl+Shift+W".to_string()];
-        config.toggle_whiteboard = vec!["Shift+Ctrl+W".to_string()];
+        let config = KeybindingsConfig {
+            exit: vec!["Ctrl+Shift+W".to_string()],
+            toggle_whiteboard: vec!["Shift+Ctrl+W".to_string()],
+            ..Default::default()
+        };
 
         // This should fail because they normalize to the same binding
         let result = config.build_action_map();

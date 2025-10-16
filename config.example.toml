@@ -199,6 +199,27 @@ auto_adjust_pen = true
 #   whiteboard_pen_color = [0.29, 0.23, 0.18]
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CAPTURE SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[capture]
+# Enable screenshot shortcuts (set to false to disable all capture actions)
+enabled = true
+
+# Directory where PNG files are saved (supports ~ expansion)
+save_directory = "~/Pictures/Hyprmarker"
+
+# Filename template (uses chrono format specifiers)
+filename_template = "screenshot_%Y-%m-%d_%H%M%S"
+
+# Image format for saved screenshots
+format = "png"
+
+# Copy screenshots to clipboard by default
+# Shortcut-specific actions may override this
+copy_to_clipboard = true
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -245,6 +266,19 @@ set_color_orange = ["O"]
 set_color_pink = ["P"]
 set_color_white = ["W"]
 set_color_black = ["K"]
+
+# Screenshot shortcuts
+capture_full_screen = ["Ctrl+Shift+P"]
+capture_active_window = ["Ctrl+Shift+O"]
+capture_selection = ["Ctrl+Shift+I"]
+
+# Clipboard/File capture variants
+capture_clipboard_full = ["Ctrl+C"]
+capture_file_full = ["Ctrl+S"]
+capture_clipboard_selection = ["Ctrl+Shift+C"]
+capture_file_selection = ["Ctrl+Shift+S"]
+capture_clipboard_region = ["Ctrl+6"]
+capture_file_region = ["Ctrl+Shift+6"]
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Keybinding Examples
