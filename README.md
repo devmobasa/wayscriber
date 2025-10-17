@@ -34,20 +34,31 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 
 ## Quick Start
 
-1. Install hyprmarker.  
-   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR). Screenshot tools (`wl-clipboard`, `grim`, `slurp`) are installed automatically.  
-   - Other distros: see [Installation](#installation) for dependencies and source builds, then install `wl-clipboard`, `grim`, and `slurp` for full screenshot support.
-2. Start the background service so the overlay is available instantly:
+**Install hyprmarker**  
+   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR). The binary lands in `/usr/bin` and required tools (`wl-clipboard`, `grim`, `slurp`) are pulled in automatically.  
+   - Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
+
+**Pick your launch style:**
+
+1. **Instant / one-shot launch** (no background service)  
+   ```bash
+   hyprmarker --active
+   ```
+   - Press `F10` inside the overlay for the full shortcut list.  
+   - Bind it directly if you like: `bind = $mainMod, D, exec, hyprmarker --active`.  
+   - Exit with `Escape` or `Ctrl+Q`.
+
+2. **Toggleable daemon (optional)**  
    ```bash
    systemctl --user enable --now hyprmarker.service
    ```
-3. Add a keybinding to toggle the overlay in `~/.config/hypr/hyprland.conf`:
    ```conf
+   # ~/.config/hypr/hyprland.conf
    bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
    ```
-4. Reload Hyprland (`hyprctl reload`), then press `Super+D` to draw. `F10` shows the help overlay; `Escape` hides it.
+   - The daemon runs in the background with a tray icon; press `Super+D` to toggle the overlay.
 
-Need an alternative launch method? Jump to [Hyprland exec-once](#hyprland-exec-once) or the rest of [Running hyprmarker](#running-hyprmarker).
+Reload Hyprland with `hyprctl reload` after updating your config.
 
 ## Features at a Glance
 
