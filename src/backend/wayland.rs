@@ -304,10 +304,8 @@ impl WaylandBackend {
                             if let Some(ref path) = result.saved_path {
                                 log::info!("Screenshot saved to: {}", path.display());
                                 if let Some(filename) = path.file_name() {
-                                    message_parts.push(format!(
-                                        "Saved as {}",
-                                        filename.to_string_lossy()
-                                    ));
+                                    message_parts
+                                        .push(format!("Saved as {}", filename.to_string_lossy()));
                                 }
                             }
 
@@ -649,10 +647,9 @@ impl WaylandState {
                 },
                 default_destination,
             ),
-            Action::CaptureClipboardFull => (
-                CaptureType::FullScreen,
-                CaptureDestination::ClipboardOnly,
-            ),
+            Action::CaptureClipboardFull => {
+                (CaptureType::FullScreen, CaptureDestination::ClipboardOnly)
+            }
             Action::CaptureFileFull => (CaptureType::FullScreen, CaptureDestination::FileOnly),
             Action::CaptureClipboardSelection => (
                 CaptureType::Selection {
@@ -724,9 +721,9 @@ impl WaylandState {
 
         // Request capture
         log::info!("Requesting {:?} capture", capture_type);
-        if let Err(e) =
-            self.capture_manager
-                .request_capture(capture_type, destination, save_config)
+        if let Err(e) = self
+            .capture_manager
+            .request_capture(capture_type, destination, save_config)
         {
             log::error!("Failed to request capture: {}", e);
 
@@ -1244,6 +1241,7 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::z => Key::Char('z'),
         Keysym::Z => Key::Char('Z'),
         Keysym::F10 => Key::F10,
+        Keysym::F11 => Key::F11,
         _ => {
             // For other printable characters, try to map them
             // Use the raw value to determine if it's ASCII printable

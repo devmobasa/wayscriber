@@ -23,10 +23,13 @@ pub use types::{
 pub use enums::ColorSpec;
 
 use anyhow::{Context, Result};
+use chrono::Local;
 use log::{debug, info};
+use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Main configuration structure containing all user settings.
 ///
@@ -56,7 +59,7 @@ use std::path::PathBuf;
 /// exit = ["Escape", "Ctrl+Q"]
 /// undo = ["Ctrl+Z"]
 /// ```
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct Config {
     /// Drawing tool defaults (color, thickness, font size)
     #[serde(default)]
@@ -88,6 +91,13 @@ pub struct Config {
 }
 
 impl Config {
+    /// Generates a JSON Schema describing the full configuration surface.
+    #[allow(dead_code)]
+    pub fn json_schema() -> Value {
+        serde_json::to_value(schema_for!(Config))
+            .expect("serializing configuration schema should succeed")
+    }
+
     /// Validates and clamps all configuration values to acceptable ranges.
     ///
     /// This method ensures that user-provided config values won't cause undefined behavior
@@ -100,7 +110,7 @@ impl Config {
     /// - `arrow.length`: 5.0 - 50.0
     /// - `arrow.angle_degrees`: 15.0 - 60.0
     /// - `buffer_count`: 2 - 4
-    fn validate_and_clamp(&mut self) {
+    pub fn validate_and_clamp(&mut self) {
         // Thickness: 1.0 - 20.0
         if !(1.0..=20.0).contains(&self.drawing.default_thickness) {
             log::warn!(
@@ -282,33 +292,72 @@ impl Config {
         Ok(config)
     }
 
-    /// Saves the current configuration to file.
-    ///
-    /// Serializes the config to TOML format and writes it to `~/.config/hyprmarker/config.toml`.
-    /// Creates the parent directory if it doesn't exist. This method is kept for future use
-    /// (e.g., runtime config editing).
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - The config directory cannot be created
-    /// - The config cannot be serialized to TOML
-    /// - The file cannot be written
-    #[allow(dead_code)]
-    pub fn save(&self) -> Result<()> {
+    fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {
         let config_path = Self::get_config_path()?;
 
-        // Create directory if it doesn't exist
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent).context("Failed to create config directory")?;
         }
+
+        let backup_path = if create_backup && config_path.exists() {
+            Some(Self::create_backup(&config_path)?)
+        } else {
+            None
+        };
 
         let config_str = toml::to_string_pretty(self).context("Failed to serialize config")?;
 
         fs::write(&config_path, config_str)
             .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 
-        info!("Saved config to {}", config_path.display());
+        if let Some(path) = &backup_path {
+            info!(
+                "Saved config to {} (backup at {})",
+                config_path.display(),
+                path.display()
+            );
+        } else {
+            info!("Saved config to {}", config_path.display());
+        }
+
+        Ok(backup_path)
+    }
+
+    /// Saves the current configuration to disk without creating a backup.
+    #[allow(dead_code)]
+    pub fn save(&self) -> Result<()> {
+        self.write_config(false)?;
         Ok(())
+    }
+
+    /// Saves the current configuration and creates a timestamped `.bak` copy when overwriting
+    /// an existing file. Returns the backup path if one was created.
+    #[allow(dead_code)]
+    pub fn save_with_backup(&self) -> Result<Option<PathBuf>> {
+        self.write_config(true)
+    }
+
+    fn create_backup(path: &Path) -> Result<PathBuf> {
+        let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+        let filename = match path.file_name().and_then(|name| name.to_str()) {
+            Some(name) => format!("{name}.{}.bak", timestamp),
+            None => format!("config.toml.{}.bak", timestamp),
+        };
+
+        let backup_path = path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(filename);
+
+        fs::copy(path, &backup_path).with_context(|| {
+            format!(
+                "Failed to create config backup from {} to {}",
+                path.display(),
+                backup_path.display()
+            )
+        })?;
+
+        Ok(backup_path)
     }
 
     /// Creates a default configuration file with documentation comments.

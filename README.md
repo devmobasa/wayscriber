@@ -45,6 +45,7 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
    hyprmarker --active
    ```
    - Press `F10` inside the overlay for the full shortcut list.  
+   - Press `F11` to launch the desktop configurator (requires the `hyprmarker-configurator` binary).  
    - Bind it directly if you like: `bind = $mainMod, D, exec, hyprmarker --active`.  
    - Exit with `Escape` or `Ctrl+Q`.
 
@@ -67,6 +68,7 @@ Reload Hyprland with `hyprctl reload` after updating your config.
 - Whiteboard/blackboard modes with auto pen contrast and isolated frames.
 - Quick color palette and line thickness adjustments via hotkeys or scroll wheel.
 - Status bar with live tool feedback and an in-app help overlay (`F10`).
+- Launch the native configurator from the overlay (`F11`) to edit settings without leaving your session.
 - Background daemon with tray icon and customizable TOML configuration.
 
 ## Demo
@@ -235,6 +237,7 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 | Cancel action | Right-click or `Escape` |
 | **Help & Exit** |
 | Toggle help overlay | `F10` |
+| Launch configurator | `F11` |
 | Exit overlay | `Escape` or `Ctrl+Q` |
 
 ## Configuration

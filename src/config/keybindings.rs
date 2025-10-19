@@ -3,11 +3,12 @@
 //! This module defines the configurable keybinding system that allows users
 //! to customize keyboard shortcuts for all actions in the application.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// All possible actions that can be bound to keys.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Action {
     // Exit and cancellation
@@ -31,6 +32,9 @@ pub enum Action {
 
     // UI toggles
     ToggleHelp,
+
+    // Configurator
+    OpenConfigurator,
 
     // Color selections (using char to represent the color)
     SetColorRed,
@@ -147,7 +151,7 @@ impl KeyBinding {
 /// undo = ["Ctrl+Z"]
 /// clear_canvas = ["E"]
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct KeybindingsConfig {
     #[serde(default = "default_exit")]
     pub exit: Vec<String>,
@@ -184,6 +188,9 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_toggle_help")]
     pub toggle_help: Vec<String>,
+
+    #[serde(default = "default_open_configurator")]
+    pub open_configurator: Vec<String>,
 
     #[serde(default = "default_set_color_red")]
     pub set_color_red: Vec<String>,
@@ -252,6 +259,7 @@ impl Default for KeybindingsConfig {
             toggle_blackboard: default_toggle_blackboard(),
             return_to_transparent: default_return_to_transparent(),
             toggle_help: default_toggle_help(),
+            open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
             set_color_green: default_set_color_green(),
             set_color_blue: default_set_color_blue(),
@@ -337,6 +345,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_help {
             insert_binding(binding_str, Action::ToggleHelp)?;
+        }
+
+        for binding_str in &self.open_configurator {
+            insert_binding(binding_str, Action::OpenConfigurator)?;
         }
 
         for binding_str in &self.set_color_red {
@@ -461,6 +473,10 @@ fn default_return_to_transparent() -> Vec<String> {
 
 fn default_toggle_help() -> Vec<String> {
     vec!["F10".to_string()]
+}
+
+fn default_open_configurator() -> Vec<String> {
+    vec!["F11".to_string()]
 }
 
 fn default_set_color_red() -> Vec<String> {

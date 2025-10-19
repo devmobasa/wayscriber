@@ -10,6 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="hyprmarker"
+CONFIGURATOR_BINARY_NAME="hyprmarker-configurator"
 CONFIG_DIR="$HOME/.config/hyprmarker"
 HYPR_CONFIG="$HOME/.config/hypr/hyprland.conf"
 
@@ -18,11 +19,22 @@ echo "   Hyprmarker Installation"
 echo "================================"
 echo ""
 
-# Check if binary exists
+# Ensure required binaries are built (trigger build if missing)
 if [ ! -f "$PROJECT_ROOT/target/release/$BINARY_NAME" ]; then
-    echo "Error: Binary not found at $PROJECT_ROOT/target/release/$BINARY_NAME"
-    echo "Please run 'cargo build --release' from the project root first."
-    exit 1
+    echo "Building $BINARY_NAME (release)..."
+    (cd "$PROJECT_ROOT" && cargo build --release)
+fi
+
+if [ ! -f "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" ]; then
+    echo "Building $CONFIGURATOR_BINARY_NAME (release)..."
+    (cd "$PROJECT_ROOT" && cargo build --release --manifest-path configurator/Cargo.toml --target-dir target)
+fi
+
+if [ ! -f "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" ] \
+   && [ -f "$PROJECT_ROOT/configurator/target/release/$CONFIGURATOR_BINARY_NAME" ]; then
+    mkdir -p "$PROJECT_ROOT/target/release"
+    cp "$PROJECT_ROOT/configurator/target/release/$CONFIGURATOR_BINARY_NAME" \
+       "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME"
 fi
 
 # Create install directory if needed
@@ -33,6 +45,10 @@ mkdir -p "$INSTALL_DIR"
 echo "Installing binary to $INSTALL_DIR/$BINARY_NAME"
 cp "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/$BINARY_NAME"
+
+echo "Installing configurator to $INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
+cp "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
 
 # Check if install directory is in PATH
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
@@ -199,6 +215,7 @@ echo "  - Text: Press T"
 echo "  - Colors: R/G/B/Y/O/P/W/K"
 echo "  - Thickness: +/- or scroll wheel"
 echo "  - Help: F10"
+echo "  - Launch configurator: F11"
 echo "  - Undo: Ctrl+Z"
 echo "  - Clear: E"
 echo "  - Exit: Escape"

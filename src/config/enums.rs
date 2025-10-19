@@ -2,12 +2,13 @@
 
 use crate::draw::{Color, color::*};
 use log::warn;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Status bar position on screen.
 ///
 /// Controls where the status bar appears relative to screen edges.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum StatusPosition {
     /// Top-left corner
@@ -30,7 +31,7 @@ pub enum StatusPosition {
 /// # Custom RGB color (0-255 per component)
 /// default_color = [255, 128, 0]  # Orange
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum ColorSpec {
     /// Named color: red, green, blue, yellow, orange, pink, white, black

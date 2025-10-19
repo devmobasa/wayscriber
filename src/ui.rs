@@ -157,8 +157,15 @@ pub fn render_help_overlay(
     screen_width: u32,
     screen_height: u32,
 ) {
+    let version_line = format!(
+        "  Hyprmarker {}  |  F11 → Open Configurator",
+        env!("CARGO_PKG_VERSION")
+    );
+
     let help_text = vec![
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ HYPRMARKER CONTROLS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        version_line.as_str(),
         "",
         "  BOARD MODES                                    DRAWING TOOLS",
         "    Ctrl+W          Toggle Whiteboard              Drag                 Freehand pen",

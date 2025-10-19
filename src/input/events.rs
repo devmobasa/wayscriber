@@ -35,6 +35,8 @@ pub enum Key {
     Underscore,
     /// F10 function key (toggle help)
     F10,
+    /// F11 function key (open configurator)
+    F11,
     /// Unmapped or unrecognized key
     Unknown,
 }

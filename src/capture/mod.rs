@@ -67,8 +67,7 @@ pub trait CaptureSource: Send + Sync {
 
 /// Abstraction over file saving for captured screenshots.
 pub trait CaptureFileSaver: Send + Sync {
-    fn save(&self, image_data: &[u8], config: &FileSaveConfig)
-        -> Result<PathBuf, CaptureError>;
+    fn save(&self, image_data: &[u8], config: &FileSaveConfig) -> Result<PathBuf, CaptureError>;
 }
 
 /// Abstraction over copying screenshots to the clipboard.
@@ -134,11 +133,7 @@ impl CaptureSource for DefaultCaptureSource {
 }
 
 impl CaptureFileSaver for DefaultFileSaver {
-    fn save(
-        &self,
-        image_data: &[u8],
-        config: &FileSaveConfig,
-    ) -> Result<PathBuf, CaptureError> {
+    fn save(&self, image_data: &[u8], config: &FileSaveConfig) -> Result<PathBuf, CaptureError> {
         save_screenshot(image_data, config)
     }
 }
@@ -187,16 +182,13 @@ impl CaptureManager {
                     Ok(result) => {
                         log::info!("Capture successful: {:?}", result.saved_path);
                         *status_clone.lock().await = CaptureStatus::Success;
-                        *result_clone.lock().await =
-                            Some(CaptureOutcome::Success(result));
+                        *result_clone.lock().await = Some(CaptureOutcome::Success(result));
                     }
                     Err(e) => {
                         let error_message = e.to_string();
                         log::error!("Capture failed: {}", error_message);
-                        *status_clone.lock().await =
-                            CaptureStatus::Failed(error_message.clone());
-                        *result_clone.lock().await =
-                            Some(CaptureOutcome::Failed(error_message));
+                        *status_clone.lock().await = CaptureStatus::Failed(error_message.clone());
+                        *result_clone.lock().await = Some(CaptureOutcome::Failed(error_message));
                     }
                 }
             }
@@ -298,10 +290,7 @@ async fn perform_capture(
     // Step 4: Copy to clipboard (if requested)
     let copied_to_clipboard = match request.destination {
         CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile => {
-            log::info!(
-                "Attempting to copy {} bytes to clipboard",
-                image_data.len()
-            );
+            log::info!("Attempting to copy {} bytes to clipboard", image_data.len());
             match dependencies.clipboard.copy(&image_data) {
                 Ok(()) => {
                     log::info!("Successfully copied to clipboard");
@@ -517,10 +506,7 @@ async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
             .stderr(Stdio::piped())
             .output()
             .map_err(|e| {
-                CaptureError::ImageError(format!(
-                    "Failed to run slurp for region selection: {}",
-                    e
-                ))
+                CaptureError::ImageError(format!("Failed to run slurp for region selection: {}", e))
             })?;
 
         if !output.status.success() {
@@ -600,7 +586,7 @@ fn create_placeholder_image() -> Vec<u8> {
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[derive(Clone)]
     struct MockSource {
@@ -710,7 +696,9 @@ mod tests {
             save_config: None,
         };
 
-        let result = perform_capture(request, Arc::new(deps.clone())).await.unwrap();
+        let result = perform_capture(request, Arc::new(deps.clone()))
+            .await
+            .unwrap();
         assert!(result.saved_path.is_none());
         assert!(result.copied_to_clipboard);
         assert_eq!(*clipboard_handle.calls.lock().unwrap(), 1);
@@ -746,7 +734,9 @@ mod tests {
             save_config: Some(FileSaveConfig::default()),
         };
 
-        let result = perform_capture(request, Arc::new(deps.clone())).await.unwrap();
+        let result = perform_capture(request, Arc::new(deps.clone()))
+            .await
+            .unwrap();
         assert!(result.saved_path.is_some());
         assert!(!result.copied_to_clipboard);
         assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
@@ -781,7 +771,9 @@ mod tests {
             save_config: None,
         };
 
-        let result = perform_capture(request, Arc::new(deps.clone())).await.unwrap();
+        let result = perform_capture(request, Arc::new(deps.clone()))
+            .await
+            .unwrap();
         assert!(!result.copied_to_clipboard);
         assert_eq!(*clipboard_handle.calls.lock().unwrap(), 1);
     }
@@ -814,7 +806,9 @@ mod tests {
             save_config: Some(FileSaveConfig::default()),
         };
 
-        let err = perform_capture(request, Arc::new(deps.clone())).await.unwrap_err();
+        let err = perform_capture(request, Arc::new(deps.clone()))
+            .await
+            .unwrap_err();
         match err {
             CaptureError::SaveError(_) => {}
             other => panic!("expected SaveError, got {:?}", other),
