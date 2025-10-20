@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 //! System notifications via freedesktop D-Bus.
 
 use std::collections::HashMap;

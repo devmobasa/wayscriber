@@ -284,7 +284,7 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
 
             vec![
                 StandardItem {
-                    label: format!("Toggle Overlay (Super+D)"),
+                    label: "Toggle Overlay (Super+D)".to_string(),
                     icon_name: "tool-pointer".into(),
                     activate: Box::new(|this: &mut Self| {
                         // Use Release ordering to ensure memory operations are visible
@@ -294,7 +294,7 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
                 }
                 .into(),
                 StandardItem {
-                    label: format!("Open Configurator"),
+                    label: "Open Configurator".to_string(),
                     icon_name: "preferences-desktop".into(),
                     activate: Box::new(|this: &mut Self| {
                         this.launch_configurator();
@@ -304,7 +304,7 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
                 .into(),
                 MenuItem::Separator,
                 StandardItem {
-                    label: format!("Quit"),
+                    label: "Quit".to_string(),
                     icon_name: "window-close".into(),
                     activate: Box::new(|this: &mut Self| {
                         // Use Release ordering to ensure memory operations are visible

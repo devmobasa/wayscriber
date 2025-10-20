@@ -11,6 +11,12 @@ pub struct Frame {
     pub shapes: Vec<Shape>,
 }
 
+impl Default for Frame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Frame {
     /// Creates a new empty frame with no shapes.
     pub fn new() -> Self {

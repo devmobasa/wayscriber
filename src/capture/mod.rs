@@ -437,7 +437,7 @@ async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         })?;
 
         let (x, y) = (
-            at.get(0)
+            at.first()
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[0]' value".into()))?,
             at.get(1)
@@ -445,7 +445,7 @@ async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[1]' value".into()))?,
         );
         let (width, height) = (
-            size.get(0)
+            size.first()
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[0]' value".into()))?,
             size.get(1)

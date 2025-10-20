@@ -79,14 +79,17 @@ impl BoardMode {
             }
         }
     }
+}
 
-    /// Parse mode from string (for CLI and config).
-    pub fn from_str(s: &str) -> Option<Self> {
+impl std::str::FromStr for BoardMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "transparent" => Some(Self::Transparent),
-            "whiteboard" => Some(Self::Whiteboard),
-            "blackboard" => Some(Self::Blackboard),
-            _ => None,
+            "transparent" => Ok(Self::Transparent),
+            "whiteboard" => Ok(Self::Whiteboard),
+            "blackboard" => Ok(Self::Blackboard),
+            _ => Err(()),
         }
     }
 }
@@ -94,6 +97,7 @@ impl BoardMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_default_mode_is_transparent() {
@@ -142,17 +146,17 @@ mod tests {
     #[test]
     fn test_from_str() {
         assert_eq!(
-            BoardMode::from_str("transparent"),
-            Some(BoardMode::Transparent)
+            BoardMode::from_str("transparent").unwrap(),
+            BoardMode::Transparent
         );
         assert_eq!(
-            BoardMode::from_str("Whiteboard"),
-            Some(BoardMode::Whiteboard)
+            BoardMode::from_str("Whiteboard").unwrap(),
+            BoardMode::Whiteboard
         );
         assert_eq!(
-            BoardMode::from_str("BLACKBOARD"),
-            Some(BoardMode::Blackboard)
+            BoardMode::from_str("BLACKBOARD").unwrap(),
+            BoardMode::Blackboard
         );
-        assert_eq!(BoardMode::from_str("invalid"), None);
+        assert!(BoardMode::from_str("invalid").is_err());
     }
 }

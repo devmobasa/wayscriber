@@ -28,16 +28,6 @@ impl FontDescriptor {
         }
     }
 
-    /// Creates a default font descriptor matching the current hardcoded behavior.
-    #[allow(dead_code)]
-    pub fn default() -> Self {
-        Self {
-            family: "Sans".to_string(),
-            weight: "bold".to_string(),
-            style: "normal".to_string(),
-        }
-    }
-
     /// Converts this font descriptor to a Pango font description string.
     ///
     /// Format: "Family Style Weight Size"
@@ -59,6 +49,16 @@ impl FontDescriptor {
         parts.push(format!("{}", size.round() as i32));
 
         parts.join(" ")
+    }
+}
+
+impl Default for FontDescriptor {
+    fn default() -> Self {
+        Self {
+            family: "Sans".to_string(),
+            weight: "bold".to_string(),
+            style: "normal".to_string(),
+        }
     }
 }
 
