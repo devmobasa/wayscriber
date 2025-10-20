@@ -34,32 +34,51 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 
 ## Quick Start
 
-**Install hyprmarker**  
-   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR). The binary lands in `/usr/bin` and required tools (`wl-clipboard`, `grim`, `slurp`) are pulled in automatically.  
+**1. Install hyprmarker**
+   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR). The binary lands in `/usr/bin` and required tools (`wl-clipboard`, `grim`, `slurp`) are pulled in automatically.
    - Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
 
-**Pick your launch style:**
+**2. Choose how to run it:**
 
-1. **Instant / one-shot launch** (no background service)  
-   ```bash
-   hyprmarker --active
-   ```
-   - Press `F10` inside the overlay for the full shortcut list.  
-   - Press `F11` to launch the desktop configurator (requires the `hyprmarker-configurator` binary).  
-   - Bind it directly if you like: `bind = $mainMod, D, exec, hyprmarker --active`.  
-   - Exit with `Escape` or `Ctrl+Q`.
+### Option 1: One-Shot Mode (Simple)
+Launch hyprmarker when you need it, exit when done:
 
-2. **Toggleable daemon (optional)**  
-   ```bash
-   systemctl --user enable --now hyprmarker.service
-   ```
-   ```conf
-   # ~/.config/hypr/hyprland.conf
-   bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
-   ```
-   - The daemon runs in the background with a tray icon; press `Super+D` to toggle the overlay.
+```bash
+hyprmarker --active
+```
 
-Reload Hyprland with `hyprctl reload` after updating your config.
+Or bind to a key in `~/.config/hypr/hyprland.conf`:
+```conf
+bind = SUPER, D, exec, hyprmarker --active
+```
+
+Press `F10` for help, `F11` for configurator, `Escape` to exit.
+
+### Option 2: Daemon Mode (Background Service)
+Run hyprmarker in the background and toggle it with a keybind:
+
+**Enable the service:**
+```bash
+systemctl --user enable --now hyprmarker.service
+```
+
+**Add keybinding** to `~/.config/hypr/hyprland.conf`:
+```conf
+bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+```
+
+**Reload Hyprland:**
+```bash
+hyprctl reload
+```
+
+**Note:** If the daemon doesn't start after a reboot, see [Troubleshooting](#daemon-not-starting-after-reboot).
+
+**Alternative:** Use Hyprland's exec-once instead of systemd:
+```conf
+exec-once = hyprmarker --daemon
+bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+```
 
 ## Features at a Glance
 
@@ -130,42 +149,41 @@ The installer places the binary at `~/.local/bin/hyprmarker`, creates `~/.config
 
 ## Running hyprmarker
 
-### Background Daemon (systemd)
+### Daemon Mode
 
-Run hyprmarker as a persistent background service that listens for your keybinding.
+Run hyprmarker in the background and toggle with a keybind.
 
-1. Ensure the unit file is available:  
-   - AUR package: `/usr/lib/systemd/user/hyprmarker.service` is already installed.  
-   - Manual build: copy `packaging/hyprmarker.service` to `~/.config/systemd/user/` or run `./tools/install.sh`.
-2. Enable and start the service:
-   ```bash
-   systemctl --user enable --now hyprmarker.service
-   ```
-3. Add a Hyprland keybinding:
-   ```conf
-   bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
-   ```
-4. Reload Hyprland: `hyprctl reload`.
-
-While the daemon runs, a system tray icon appears (it may live in your Waybar drawer). Press `Super+D` to summon the overlay, draw with the mouse, then `Ctrl+Q` or `Escape` to hide it. Right-click the tray icon for toggle/quit actions.
-
+**Enable the service:**
 ```bash
-# Handy service commands
+systemctl --user enable --now hyprmarker.service
+```
+
+**Add keybinding** to `~/.config/hypr/hyprland.conf`:
+```conf
+bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+```
+
+**Reload Hyprland:**
+```bash
+hyprctl reload
+```
+
+The daemon shows a system tray icon (may be in Waybar drawer). Press `Super+D` to toggle overlay, right-click tray icon for options.
+
+**Service commands:**
+```bash
+systemctl --user status hyprmarker.service
 systemctl --user restart hyprmarker.service
-systemctl --user stop hyprmarker.service
 journalctl --user -u hyprmarker.service -f
 ```
 
-### Hyprland exec-once
+**Note:** If the daemon doesn't start after reboot, see [Troubleshooting](#daemon-not-starting-after-reboot).
 
-Prefer to manage the daemon yourself? Add this to `~/.config/hypr/hyprland.conf`:
-
+**Alternative:** Use Hyprland's exec-once instead of systemd:
 ```conf
 exec-once = hyprmarker --daemon
 bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
 ```
-
-Reload with `hyprctl reload`.
 
 ### One-Shot Mode
 
@@ -271,6 +289,18 @@ enable_vsync = true
 See **[docs/CONFIG.md](docs/CONFIG.md)** for the full configuration reference.
 
 ## Troubleshooting
+
+### Daemon not starting after reboot
+
+**If using systemd:** User services don't start at boot by default. Enable lingering:
+```bash
+loginctl enable-linger $USER
+```
+
+**Simpler alternative:** Use Hyprland's `exec-once` instead:
+```conf
+exec-once = hyprmarker --daemon
+```
 
 ### Service won't start
 
