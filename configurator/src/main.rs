@@ -3,14 +3,17 @@ use std::{path::PathBuf, sync::Arc};
 use hyprmarker::config::{
     Config, StatusPosition, enums::ColorSpec, keybindings::KeybindingsConfig,
 };
+use hyprmarker::util::name_to_color;
 use iced::alignment::Horizontal;
+use iced::border::Radius;
 use iced::executor;
 use iced::theme::{self, Theme};
+use iced::widget::container::Appearance;
 use iced::widget::{
     Column, Row, Space, button, checkbox, column, container, horizontal_rule, pick_list, row,
     scrollable, text, text_input,
 };
-use iced::{Application, Command, Element, Length, Settings, Size};
+use iced::{Application, Background, Border, Command, Element, Length, Settings, Size};
 
 fn main() -> iced::Result {
     let mut settings = Settings::default();
@@ -175,6 +178,27 @@ impl Application for ConfiguratorApp {
             Message::ColorModeChanged(mode) => {
                 self.status = StatusMessage::idle();
                 self.draft.drawing_color.mode = mode;
+                if matches!(mode, ColorMode::Named) {
+                    if self.draft.drawing_color.name.trim().is_empty() {
+                        self.draft.drawing_color.selected_named = NamedColorOption::Red;
+                        self.draft.drawing_color.name = self
+                            .draft
+                            .drawing_color
+                            .selected_named
+                            .as_value()
+                            .to_string();
+                    } else {
+                        self.draft.drawing_color.update_named_from_current();
+                    }
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::NamedColorSelected(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.drawing_color.selected_named = option;
+                if option != NamedColorOption::Custom {
+                    self.draft.drawing_color.name = option.as_value().to_string();
+                }
                 self.refresh_dirty_flag();
             }
             Message::StatusPositionChanged(option) => {
@@ -190,6 +214,22 @@ impl Application for ConfiguratorApp {
             Message::BufferCountChanged(count) => {
                 self.status = StatusMessage::idle();
                 self.draft.performance_buffer_count = count;
+                self.refresh_dirty_flag();
+            }
+            Message::FontStyleOptionSelected(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.drawing_font_style_option = option;
+                if option != FontStyleOption::Custom {
+                    self.draft.drawing_font_style = option.canonical_value().to_string();
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::FontWeightOptionSelected(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.drawing_font_weight_option = option;
+                if option != FontWeightOption::Custom {
+                    self.draft.drawing_font_weight = option.canonical_value().to_string();
+                }
                 self.refresh_dirty_flag();
             }
             Message::KeybindingChanged(field, value) => {
@@ -336,7 +376,7 @@ impl ConfiguratorApp {
             .spacing(12)
             .push(
                 button(if self.draft.drawing_color.mode == ColorMode::Named {
-                    "Named Color ✓"
+                    "Named Color"
                 } else {
                     "Named Color"
                 })
@@ -344,50 +384,94 @@ impl ConfiguratorApp {
             )
             .push(
                 button(if self.draft.drawing_color.mode == ColorMode::Rgb {
-                    "RGB Color ✓"
+                    "RGB Color"
                 } else {
                     "RGB Color"
                 })
                 .on_press(Message::ColorModeChanged(ColorMode::Rgb)),
             );
 
-        let color_inputs: Element<'_, Message> = match self.draft.drawing_color.mode {
-            ColorMode::Named => text_input("e.g. red", &self.draft.drawing_color.name)
-                .on_input(|value| Message::TextChanged(TextField::DrawingColorName, value))
-                .width(Length::Fill)
-                .into(),
-            ColorMode::Rgb => {
-                let inputs = Row::new()
-                    .spacing(8)
-                    .push(
-                        text_input("R (0-255)", &self.draft.drawing_color.rgb[0]).on_input(
-                            |value| {
-                                Message::TripletChanged(TripletField::DrawingColorRgb, 0, value)
-                            },
-                        ),
-                    )
-                    .push(
-                        text_input("G (0-255)", &self.draft.drawing_color.rgb[1]).on_input(
-                            |value| {
-                                Message::TripletChanged(TripletField::DrawingColorRgb, 1, value)
-                            },
-                        ),
-                    )
-                    .push(
-                        text_input("B (0-255)", &self.draft.drawing_color.rgb[2]).on_input(
-                            |value| {
-                                Message::TripletChanged(TripletField::DrawingColorRgb, 2, value)
-                            },
-                        ),
+        let color_section: Element<'_, Message> = match self.draft.drawing_color.mode {
+            ColorMode::Named => {
+                let picker = pick_list(
+                    NamedColorOption::list(),
+                    Some(self.draft.drawing_color.selected_named),
+                    Message::NamedColorSelected,
+                )
+                .width(Length::Fixed(160.0));
+
+                let picker_row = row![
+                    picker,
+                    color_preview_badge(self.draft.drawing_color.preview_color()),
+                ]
+                .spacing(8)
+                .align_items(iced::Alignment::Center);
+
+                let mut column = Column::new().spacing(8).push(picker_row);
+
+                if self.draft.drawing_color.selected_named_is_custom() {
+                    column = column.push(
+                        text_input("Custom color name", &self.draft.drawing_color.name)
+                            .on_input(|value| {
+                                Message::TextChanged(TextField::DrawingColorName, value)
+                            })
+                            .width(Length::Fill),
                     );
-                inputs.into()
+
+                    if self.draft.drawing_color.preview_color().is_none()
+                        && !self.draft.drawing_color.name.trim().is_empty()
+                    {
+                        column = column.push(
+                            text("Unknown color name")
+                                .size(12)
+                                .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.6, 0.6))),
+                        );
+                    }
+                }
+
+                column.into()
+            }
+            ColorMode::Rgb => {
+                let rgb_inputs = row![
+                    text_input("R (0-255)", &self.draft.drawing_color.rgb[0]).on_input(|value| {
+                        Message::TripletChanged(TripletField::DrawingColorRgb, 0, value)
+                    }),
+                    text_input("G (0-255)", &self.draft.drawing_color.rgb[1]).on_input(|value| {
+                        Message::TripletChanged(TripletField::DrawingColorRgb, 1, value)
+                    }),
+                    text_input("B (0-255)", &self.draft.drawing_color.rgb[2]).on_input(|value| {
+                        Message::TripletChanged(TripletField::DrawingColorRgb, 2, value)
+                    }),
+                    color_preview_badge(self.draft.drawing_color.preview_color()),
+                ]
+                .spacing(8)
+                .align_items(iced::Alignment::Center);
+
+                let mut column = Column::new().spacing(8).push(rgb_inputs);
+
+                if self.draft.drawing_color.preview_color().is_none()
+                    && self
+                        .draft
+                        .drawing_color
+                        .rgb
+                        .iter()
+                        .any(|value| !value.trim().is_empty())
+                {
+                    column = column.push(
+                        text("RGB values must be between 0 and 255")
+                            .size(12)
+                            .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.6, 0.6))),
+                    );
+                }
+
+                column.into()
             }
         };
 
         let column = column![
             text("Drawing Defaults").size(20),
             color_mode_picker,
-            color_inputs,
+            color_section,
             row![
                 labeled_input(
                     "Thickness (px)",
@@ -407,18 +491,44 @@ impl ConfiguratorApp {
                     &self.draft.drawing_font_family,
                     TextField::DrawingFontFamily
                 ),
-                labeled_input(
-                    "Font weight",
-                    &self.draft.drawing_font_weight,
-                    TextField::DrawingFontWeight
-                ),
+                column![
+                    text("Font weight").size(14),
+                    pick_list(
+                        FontWeightOption::list(),
+                        Some(self.draft.drawing_font_weight_option),
+                        Message::FontWeightOptionSelected,
+                    )
+                    .width(Length::Fill),
+                    text_input("Custom or numeric weight", &self.draft.drawing_font_weight)
+                        .on_input(|value| Message::TextChanged(TextField::DrawingFontWeight, value))
+                        .width(Length::Fill)
+                ]
+                .spacing(6),
+                {
+                    let mut column = column![
+                        text("Font style").size(14),
+                        pick_list(
+                            FontStyleOption::list(),
+                            Some(self.draft.drawing_font_style_option),
+                            Message::FontStyleOptionSelected,
+                        )
+                        .width(Length::Fill),
+                    ]
+                    .spacing(6);
+
+                    if self.draft.drawing_font_style_option == FontStyleOption::Custom {
+                        column = column.push(
+                            text_input("Custom style", &self.draft.drawing_font_style)
+                                .on_input(|value| {
+                                    Message::TextChanged(TextField::DrawingFontStyle, value)
+                                })
+                                .width(Length::Fill),
+                        );
+                    }
+
+                    column
+                }
             ]
-            .spacing(12),
-            row![labeled_input(
-                "Font style",
-                &self.draft.drawing_font_style,
-                TextField::DrawingFontStyle
-            ),]
             .spacing(12),
             checkbox(
                 "Enable text background",
@@ -722,6 +832,49 @@ fn color_quad_editor<'a>(
     .into()
 }
 
+fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
+    let (preview_color, is_valid) = match color {
+        Some(color) => (color, true),
+        None => (iced::Color::from_rgb(0.2, 0.2, 0.2), false),
+    };
+
+    container(Space::with_width(Length::Fixed(20.0)).height(Length::Fixed(20.0)))
+        .width(Length::Fixed(24.0))
+        .height(Length::Fixed(24.0))
+        .style(theme::Container::Custom(Box::new(ColorPreviewStyle {
+            color: preview_color,
+            is_invalid: !is_valid,
+        })))
+        .into()
+}
+
+#[derive(Clone, Copy)]
+struct ColorPreviewStyle {
+    color: iced::Color,
+    is_invalid: bool,
+}
+
+impl container::StyleSheet for ColorPreviewStyle {
+    type Style = Theme;
+
+    fn appearance(&self, _style: &Self::Style) -> Appearance {
+        Appearance {
+            background: Some(Background::Color(self.color)),
+            text_color: None,
+            border: Border {
+                color: if self.is_invalid {
+                    iced::Color::from_rgb(0.9, 0.4, 0.4)
+                } else {
+                    iced::Color::from_rgb(0.4, 0.4, 0.4)
+                },
+                width: 1.0,
+                radius: Radius::from(6.0),
+            },
+            shadow: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TabId {
     Drawing,
@@ -789,11 +942,205 @@ enum ColorMode {
     Rgb,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NamedColorOption {
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Orange,
+    Pink,
+    White,
+    Black,
+    Custom,
+}
+
+impl NamedColorOption {
+    fn list() -> Vec<Self> {
+        vec![
+            Self::Red,
+            Self::Green,
+            Self::Blue,
+            Self::Yellow,
+            Self::Orange,
+            Self::Pink,
+            Self::White,
+            Self::Black,
+            Self::Custom,
+        ]
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Red => "Red",
+            Self::Green => "Green",
+            Self::Blue => "Blue",
+            Self::Yellow => "Yellow",
+            Self::Orange => "Orange",
+            Self::Pink => "Pink",
+            Self::White => "White",
+            Self::Black => "Black",
+            Self::Custom => "Custom",
+        }
+    }
+
+    fn as_value(&self) -> &'static str {
+        match self {
+            Self::Red => "red",
+            Self::Green => "green",
+            Self::Blue => "blue",
+            Self::Yellow => "yellow",
+            Self::Orange => "orange",
+            Self::Pink => "pink",
+            Self::White => "white",
+            Self::Black => "black",
+            Self::Custom => "",
+        }
+    }
+
+    fn from_str(value: &str) -> Self {
+        match value.trim().to_lowercase().as_str() {
+            "red" => Self::Red,
+            "green" => Self::Green,
+            "blue" => Self::Blue,
+            "yellow" => Self::Yellow,
+            "orange" => Self::Orange,
+            "pink" => Self::Pink,
+            "white" => Self::White,
+            "black" => Self::Black,
+            _ => Self::Custom,
+        }
+    }
+}
+
+impl std::fmt::Display for NamedColorOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FontStyleOption {
+    Normal,
+    Italic,
+    Oblique,
+    Custom,
+}
+
+impl FontStyleOption {
+    fn list() -> Vec<Self> {
+        vec![Self::Normal, Self::Italic, Self::Oblique, Self::Custom]
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Italic => "Italic",
+            Self::Oblique => "Oblique",
+            Self::Custom => "Custom",
+        }
+    }
+
+    fn canonical_value(&self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Italic => "italic",
+            Self::Oblique => "oblique",
+            Self::Custom => "",
+        }
+    }
+
+    fn from_value(value: &str) -> (Self, String) {
+        let lower = value.trim().to_lowercase();
+        match lower.as_str() {
+            "normal" => (Self::Normal, "normal".to_string()),
+            "italic" => (Self::Italic, "italic".to_string()),
+            "oblique" => (Self::Oblique, "oblique".to_string()),
+            _ => (Self::Custom, value.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for FontStyleOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FontWeightOption {
+    Normal,
+    Bold,
+    Light,
+    Ultralight,
+    Heavy,
+    Ultrabold,
+    Custom,
+}
+
+impl FontWeightOption {
+    fn list() -> Vec<Self> {
+        vec![
+            Self::Normal,
+            Self::Bold,
+            Self::Light,
+            Self::Ultralight,
+            Self::Heavy,
+            Self::Ultrabold,
+            Self::Custom,
+        ]
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Bold => "Bold",
+            Self::Light => "Light",
+            Self::Ultralight => "Ultralight",
+            Self::Heavy => "Heavy",
+            Self::Ultrabold => "Ultrabold",
+            Self::Custom => "Custom",
+        }
+    }
+
+    fn canonical_value(&self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Bold => "bold",
+            Self::Light => "light",
+            Self::Ultralight => "ultralight",
+            Self::Heavy => "heavy",
+            Self::Ultrabold => "ultrabold",
+            Self::Custom => "",
+        }
+    }
+
+    fn from_value(value: &str) -> (Self, String) {
+        let lower = value.trim().to_lowercase();
+        match lower.as_str() {
+            "normal" => (Self::Normal, "normal".to_string()),
+            "bold" => (Self::Bold, "bold".to_string()),
+            "light" => (Self::Light, "light".to_string()),
+            "ultralight" => (Self::Ultralight, "ultralight".to_string()),
+            "heavy" => (Self::Heavy, "heavy".to_string()),
+            "ultrabold" => (Self::Ultrabold, "ultrabold".to_string()),
+            _ => (Self::Custom, value.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for FontWeightOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct ColorInput {
     mode: ColorMode,
     name: String,
     rgb: [String; 3],
+    selected_named: NamedColorOption,
 }
 
 impl ColorInput {
@@ -802,12 +1149,14 @@ impl ColorInput {
             ColorSpec::Name(name) => Self {
                 mode: ColorMode::Named,
                 name: name.clone(),
+                selected_named: NamedColorOption::from_str(name),
                 rgb: ["255".into(), "0".into(), "0".into()],
             },
             ColorSpec::Rgb([r, g, b]) => Self {
                 mode: ColorMode::Rgb,
                 name: "".into(),
                 rgb: [r.to_string(), g.to_string(), b.to_string()],
+                selected_named: NamedColorOption::Custom,
             },
         }
     }
@@ -815,14 +1164,19 @@ impl ColorInput {
     fn to_color_spec(&self) -> Result<ColorSpec, FormError> {
         match self.mode {
             ColorMode::Named => {
-                let value = self.name.trim();
-                if value.is_empty() {
+                let value = if self.selected_named_is_custom() {
+                    self.name.trim().to_string()
+                } else {
+                    self.selected_named.as_value().to_string()
+                };
+
+                if value.trim().is_empty() {
                     Err(FormError::new(
                         "drawing.default_color",
                         "Please enter a color name.",
                     ))
                 } else {
-                    Ok(ColorSpec::Name(value.to_string()))
+                    Ok(ColorSpec::Name(value))
                 }
             }
             ColorMode::Rgb => {
@@ -838,6 +1192,61 @@ impl ColorInput {
                     rgb[index] = parsed as u8;
                 }
                 Ok(ColorSpec::Rgb(rgb))
+            }
+        }
+    }
+
+    fn update_named_from_current(&mut self) {
+        self.selected_named = NamedColorOption::from_str(&self.name);
+    }
+
+    fn selected_named_is_custom(&self) -> bool {
+        self.selected_named == NamedColorOption::Custom
+    }
+
+    fn preview_color(&self) -> Option<iced::Color> {
+        match self.mode {
+            ColorMode::Named => {
+                let name = if self.selected_named_is_custom() {
+                    self.name.trim().to_string()
+                } else {
+                    self.selected_named.as_value().to_string()
+                };
+
+                if name.is_empty() {
+                    return None;
+                }
+
+                if let Some(color) = name_to_color(&name) {
+                    Some(iced::Color::from_rgba(
+                        color.r as f32,
+                        color.g as f32,
+                        color.b as f32,
+                        color.a as f32,
+                    ))
+                } else {
+                    None
+                }
+            }
+            ColorMode::Rgb => {
+                let mut components = [0.0f32; 3];
+                for (index, value) in self.rgb.iter().enumerate() {
+                    let trimmed = value.trim();
+                    if trimmed.is_empty() {
+                        return None;
+                    }
+                    let parsed = trimmed.parse::<f32>().ok()?;
+                    if !(0.0..=255.0).contains(&parsed) {
+                        return None;
+                    }
+                    components[index] = parsed / 255.0;
+                }
+                Some(iced::Color::from_rgba(
+                    components[0],
+                    components[1],
+                    components[2],
+                    1.0,
+                ))
             }
         }
     }
@@ -1010,6 +1419,8 @@ struct ConfigDraft {
     drawing_font_weight: String,
     drawing_font_style: String,
     drawing_text_background_enabled: bool,
+    drawing_font_style_option: FontStyleOption,
+    drawing_font_weight_option: FontWeightOption,
 
     arrow_length: String,
     arrow_angle: String,
@@ -1052,14 +1463,19 @@ struct ConfigDraft {
 
 impl ConfigDraft {
     fn from_config(config: &Config) -> Self {
+        let (style_option, style_value) = FontStyleOption::from_value(&config.drawing.font_style);
+        let (weight_option, weight_value) =
+            FontWeightOption::from_value(&config.drawing.font_weight);
         Self {
             drawing_color: ColorInput::from_color(&config.drawing.default_color),
             drawing_default_thickness: format_float(config.drawing.default_thickness),
             drawing_default_font_size: format_float(config.drawing.default_font_size),
             drawing_font_family: config.drawing.font_family.clone(),
-            drawing_font_weight: config.drawing.font_weight.clone(),
-            drawing_font_style: config.drawing.font_style.clone(),
+            drawing_font_weight: weight_value,
+            drawing_font_style: style_value,
             drawing_text_background_enabled: config.drawing.text_background_enabled,
+            drawing_font_style_option: style_option,
+            drawing_font_weight_option: weight_option,
 
             arrow_length: format_float(config.arrow.length),
             arrow_angle: format_float(config.arrow.angle_degrees),
@@ -1289,12 +1705,21 @@ impl ConfigDraft {
 
     fn set_text(&mut self, field: TextField, value: String) {
         match field {
-            TextField::DrawingColorName => self.drawing_color.name = value,
+            TextField::DrawingColorName => {
+                self.drawing_color.name = value;
+                self.drawing_color.update_named_from_current();
+            }
             TextField::DrawingThickness => self.drawing_default_thickness = value,
             TextField::DrawingFontSize => self.drawing_default_font_size = value,
             TextField::DrawingFontFamily => self.drawing_font_family = value,
-            TextField::DrawingFontWeight => self.drawing_font_weight = value,
-            TextField::DrawingFontStyle => self.drawing_font_style = value,
+            TextField::DrawingFontWeight => {
+                self.drawing_font_weight = value;
+                self.drawing_font_weight_option = FontWeightOption::Custom;
+            }
+            TextField::DrawingFontStyle => {
+                self.drawing_font_style = value;
+                self.drawing_font_style_option = FontStyleOption::Custom;
+            }
             TextField::ArrowLength => self.arrow_length = value,
             TextField::ArrowAngle => self.arrow_angle = value,
             TextField::StatusFontSize => self.status_font_size = value,
@@ -1735,8 +2160,11 @@ enum Message {
     TripletChanged(TripletField, usize, String),
     QuadChanged(QuadField, usize, String),
     ColorModeChanged(ColorMode),
+    NamedColorSelected(NamedColorOption),
     StatusPositionChanged(StatusPositionOption),
     BoardModeChanged(BoardModeOption),
     BufferCountChanged(u32),
     KeybindingChanged(KeybindingField, String),
+    FontStyleOptionSelected(FontStyleOption),
+    FontWeightOptionSelected(FontWeightOption),
 }
