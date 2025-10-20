@@ -375,20 +375,22 @@ impl ConfiguratorApp {
         let color_mode_picker = Row::new()
             .spacing(12)
             .push(
-                button(if self.draft.drawing_color.mode == ColorMode::Named {
-                    "Named Color"
-                } else {
-                    "Named Color"
-                })
-                .on_press(Message::ColorModeChanged(ColorMode::Named)),
+                button("Named Color")
+                    .style(if self.draft.drawing_color.mode == ColorMode::Named {
+                        theme::Button::Primary
+                    } else {
+                        theme::Button::Secondary
+                    })
+                    .on_press(Message::ColorModeChanged(ColorMode::Named)),
             )
             .push(
-                button(if self.draft.drawing_color.mode == ColorMode::Rgb {
-                    "RGB Color"
-                } else {
-                    "RGB Color"
-                })
-                .on_press(Message::ColorModeChanged(ColorMode::Rgb)),
+                button("RGB Color")
+                    .style(if self.draft.drawing_color.mode == ColorMode::Rgb {
+                        theme::Button::Primary
+                    } else {
+                        theme::Button::Secondary
+                    })
+                    .on_press(Message::ColorModeChanged(ColorMode::Rgb)),
             );
 
         let color_section: Element<'_, Message> = match self.draft.drawing_color.mode {
