@@ -305,6 +305,9 @@ return_to_transparent = ["Ctrl+Shift+T"]
 # Toggle help overlay
 toggle_help = ["F10"]
 
+# Launch the desktop configurator (requires hyprmarker-configurator)
+open_configurator = ["F11"]
+
 # Color selection shortcuts
 set_color_red = ["R"]
 set_color_green = ["G"]
@@ -336,7 +339,7 @@ capture_file_region = ["Ctrl+Shift+6"]
 Keybindings are specified as strings with modifiers and keys separated by `+`:
 - Simple keys: `"E"`, `"T"`, `"Escape"`, `"F10"`
 - With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`
-- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"+", `-`, `=`, `_`
+- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"+", `-`, `=`, `_`
 
 **Supported Modifiers:**
 - `Ctrl` (or `Control`)

@@ -1,7 +1,8 @@
+#![allow(clippy::too_many_arguments)]
 //! System notifications via freedesktop D-Bus.
 
 use std::collections::HashMap;
-use zbus::{proxy, Connection};
+use zbus::{Connection, proxy};
 
 /// D-Bus interface for freedesktop Notifications.
 #[proxy(
@@ -43,7 +44,11 @@ trait Notifications {
 /// * `summary` - Notification title
 /// * `body` - Notification body text
 /// * `icon` - Optional icon name (defaults to "camera-photo")
-pub async fn send_notification(summary: &str, body: &str, icon: Option<&str>) -> Result<(), String> {
+pub async fn send_notification(
+    summary: &str,
+    body: &str,
+    icon: Option<&str>,
+) -> Result<(), String> {
     let connection = Connection::session()
         .await
         .map_err(|e| format!("Failed to connect to session bus: {}", e))?;

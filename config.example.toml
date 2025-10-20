@@ -257,6 +257,9 @@ return_to_transparent = ["Ctrl+Shift+T"]
 # Toggle help overlay
 toggle_help = ["F10"]
 
+# Launch the desktop configurator (requires hyprmarker-configurator)
+open_configurator = ["F11"]
+
 # Color selection shortcuts
 set_color_red = ["R"]
 set_color_green = ["G"]

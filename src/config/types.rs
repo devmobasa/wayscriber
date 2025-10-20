@@ -1,13 +1,14 @@
 //! Configuration type definitions.
 
 use super::enums::{ColorSpec, StatusPosition};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Drawing-related settings.
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
 /// Users can change these values at runtime using keybindings.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DrawingConfig {
     /// Default pen color - either a named color (red, green, blue, yellow, orange, pink, white, black)
     /// or an RGB array like `[255, 0, 0]` for red
@@ -59,7 +60,7 @@ impl Default for DrawingConfig {
 /// Arrow drawing settings.
 ///
 /// Controls the appearance of arrowheads when using the arrow tool (Ctrl+Shift+Drag).
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ArrowConfig {
     /// Arrowhead length in pixels (valid range: 5.0 - 50.0)
     #[serde(default = "default_arrow_length")]
@@ -84,7 +85,7 @@ impl Default for ArrowConfig {
 ///
 /// These settings control rendering performance and smoothness. Most users
 /// won't need to change these from their defaults.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct PerformanceConfig {
     /// Number of buffers for buffering (valid range: 2 - 4)
     /// - 2 = double buffering (lower memory, potential tearing)
@@ -111,7 +112,7 @@ impl Default for PerformanceConfig {
 /// UI display preferences.
 ///
 /// Controls the visibility and positioning of on-screen UI elements.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct UiConfig {
     /// Show the status bar displaying current color, thickness, and tool
     #[serde(default = "default_show_status")]
@@ -142,7 +143,7 @@ impl Default for UiConfig {
 }
 
 /// Status bar styling configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct StatusBarStyle {
     /// Font size for status bar text
     #[serde(default = "default_status_font_size")]
@@ -178,7 +179,7 @@ impl Default for StatusBarStyle {
 }
 
 /// Help overlay styling configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct HelpOverlayStyle {
     /// Font size for help overlay text
     #[serde(default = "default_help_font_size")]
@@ -333,7 +334,7 @@ fn default_help_text_color() -> [f64; 4] {
 ///
 /// Controls the appearance and behavior of board modes, including background colors,
 /// default pen colors, and whether to auto-adjust colors when entering board modes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BoardConfig {
     /// Enable board mode features (whiteboard/blackboard)
     #[serde(default = "default_board_enabled")]
@@ -411,7 +412,7 @@ fn default_board_auto_adjust() -> bool {
 ///
 /// Controls the behavior of screenshot capture features including file saving,
 /// clipboard integration, and capture shortcuts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CaptureConfig {
     /// Enable screenshot capture functionality
     #[serde(default = "default_capture_enabled")]

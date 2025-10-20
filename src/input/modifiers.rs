@@ -18,6 +18,12 @@ pub struct Modifiers {
     pub tab: bool,
 }
 
+impl Default for Modifiers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Modifiers {
     /// Creates a new Modifiers instance with all keys released.
     pub fn new() -> Self {

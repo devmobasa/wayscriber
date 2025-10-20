@@ -1,9 +1,10 @@
 /// Daemon mode implementation: background service with toggle activation
 use anyhow::{Context, Result};
 use ksni::TrayMethods;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -172,6 +173,36 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
     struct HyprmarkerTray {
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
+        configurator_binary: String,
+    }
+
+    impl HyprmarkerTray {
+        fn launch_configurator(&self) {
+            let mut command = Command::new(&self.configurator_binary);
+            command
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+
+            match command.spawn() {
+                Ok(child) => {
+                    info!(
+                        "Launched hyprmarker-configurator (binary: {}, pid: {})",
+                        self.configurator_binary,
+                        child.id()
+                    );
+                }
+                Err(err) => {
+                    error!(
+                        "Failed to launch hyprmarker-configurator using '{}': {}",
+                        self.configurator_binary, err
+                    );
+                    error!(
+                        "Set HYPRMARKER_CONFIGURATOR to override the executable path if needed."
+                    );
+                }
+            }
+        }
     }
 
     impl ksni::Tray for HyprmarkerTray {
@@ -192,8 +223,8 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
             ksni::ToolTip {
                 icon_name: "applications-graphics".into(),
                 icon_pixmap: vec![],
-                title: "Hyprmarker".into(),
-                description: "Press Super+D to toggle overlay".into(),
+                title: format!("Hyprmarker {}", env!("CARGO_PKG_VERSION")),
+                description: "Super+D toggles overlay • F11 opens configurator".into(),
             }
         }
 
@@ -253,7 +284,7 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
 
             vec![
                 StandardItem {
-                    label: "Toggle Overlay (Super+D)".into(),
+                    label: "Toggle Overlay (Super+D)".to_string(),
                     icon_name: "tool-pointer".into(),
                     activate: Box::new(|this: &mut Self| {
                         // Use Release ordering to ensure memory operations are visible
@@ -262,9 +293,18 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
                     ..Default::default()
                 }
                 .into(),
+                StandardItem {
+                    label: "Open Configurator".to_string(),
+                    icon_name: "preferences-desktop".into(),
+                    activate: Box::new(|this: &mut Self| {
+                        this.launch_configurator();
+                    }),
+                    ..Default::default()
+                }
+                .into(),
                 MenuItem::Separator,
                 StandardItem {
-                    label: "Quit".into(),
+                    label: "Quit".to_string(),
                     icon_name: "window-close".into(),
                     activate: Box::new(|this: &mut Self| {
                         // Use Release ordering to ensure memory operations are visible
@@ -277,9 +317,13 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
         }
     }
 
+    let configurator_binary = std::env::var("HYPRMARKER_CONFIGURATOR")
+        .unwrap_or_else(|_| "hyprmarker-configurator".to_string());
+
     let tray = HyprmarkerTray {
         toggle_flag,
         quit_flag: quit_flag.clone(),
+        configurator_binary,
     };
 
     info!("Creating tray service...");

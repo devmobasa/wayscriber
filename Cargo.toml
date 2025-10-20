@@ -1,6 +1,6 @@
 [package]
 name = "hyprmarker"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 
 [dependencies]
@@ -31,6 +31,7 @@ toml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 dirs = "6.0"
 async-trait = "0.1"
+schemars = { version = "0.9", features = ["derive"] }
 
 # Daemon mode
 signal-hook = "0.3"

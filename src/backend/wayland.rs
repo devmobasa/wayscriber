@@ -180,7 +180,7 @@ impl WaylandBackend {
                 .clone()
                 .unwrap_or_else(|| config.board.default_mode.clone());
 
-            if let Some(mode) = crate::input::BoardMode::from_str(&initial_mode_str) {
+            if let Ok(mode) = initial_mode_str.parse::<crate::input::BoardMode>() {
                 if mode != crate::input::BoardMode::Transparent {
                     info!("Starting in {} mode", initial_mode_str);
                     input_state.canvas_set.switch_mode(mode);
@@ -288,58 +288,56 @@ impl WaylandBackend {
             }
 
             // Check for completed capture operations
-            if state.capture_in_progress {
-                if let Some(outcome) = state.capture_manager.try_take_result() {
-                    log::info!("Capture completed");
+            if state.capture_in_progress
+                && let Some(outcome) = state.capture_manager.try_take_result()
+            {
+                log::info!("Capture completed");
 
-                    // Restore overlay
-                    state.show_overlay();
-                    state.capture_in_progress = false;
+                // Restore overlay
+                state.show_overlay();
+                state.capture_in_progress = false;
 
-                    match outcome {
-                        CaptureOutcome::Success(result) => {
-                            // Build notification message
-                            let mut message_parts = Vec::new();
+                match outcome {
+                    CaptureOutcome::Success(result) => {
+                        // Build notification message
+                        let mut message_parts = Vec::new();
 
-                            if let Some(ref path) = result.saved_path {
-                                log::info!("Screenshot saved to: {}", path.display());
-                                if let Some(filename) = path.file_name() {
-                                    message_parts.push(format!(
-                                        "Saved as {}",
-                                        filename.to_string_lossy()
-                                    ));
-                                }
+                        if let Some(ref path) = result.saved_path {
+                            log::info!("Screenshot saved to: {}", path.display());
+                            if let Some(filename) = path.file_name() {
+                                message_parts
+                                    .push(format!("Saved as {}", filename.to_string_lossy()));
                             }
-
-                            if result.copied_to_clipboard {
-                                log::info!("Screenshot copied to clipboard");
-                                message_parts.push("Copied to clipboard".to_string());
-                            }
-
-                            // Send notification
-                            let notification_body = if message_parts.is_empty() {
-                                "Screenshot captured".to_string()
-                            } else {
-                                message_parts.join(" • ")
-                            };
-
-                            crate::notification::send_notification_async(
-                                &state.tokio_handle,
-                                "Screenshot Captured".to_string(),
-                                notification_body,
-                                Some("camera-photo".to_string()),
-                            );
                         }
-                        CaptureOutcome::Failed(error) => {
-                            log::warn!("Screenshot capture failed: {}", error);
 
-                            crate::notification::send_notification_async(
-                                &state.tokio_handle,
-                                "Screenshot Failed".to_string(),
-                                error,
-                                Some("dialog-error".to_string()),
-                            );
+                        if result.copied_to_clipboard {
+                            log::info!("Screenshot copied to clipboard");
+                            message_parts.push("Copied to clipboard".to_string());
                         }
+
+                        // Send notification
+                        let notification_body = if message_parts.is_empty() {
+                            "Screenshot captured".to_string()
+                        } else {
+                            message_parts.join(" • ")
+                        };
+
+                        crate::notification::send_notification_async(
+                            &state.tokio_handle,
+                            "Screenshot Captured".to_string(),
+                            notification_body,
+                            Some("camera-photo".to_string()),
+                        );
+                    }
+                    CaptureOutcome::Failed(error) => {
+                        log::warn!("Screenshot capture failed: {}", error);
+
+                        crate::notification::send_notification_async(
+                            &state.tokio_handle,
+                            "Screenshot Failed".to_string(),
+                            error,
+                            Some("dialog-error".to_string()),
+                        );
                     }
                 }
             }
@@ -649,10 +647,9 @@ impl WaylandState {
                 },
                 default_destination,
             ),
-            Action::CaptureClipboardFull => (
-                CaptureType::FullScreen,
-                CaptureDestination::ClipboardOnly,
-            ),
+            Action::CaptureClipboardFull => {
+                (CaptureType::FullScreen, CaptureDestination::ClipboardOnly)
+            }
             Action::CaptureFileFull => (CaptureType::FullScreen, CaptureDestination::FileOnly),
             Action::CaptureClipboardSelection => (
                 CaptureType::Selection {
@@ -724,9 +721,9 @@ impl WaylandState {
 
         // Request capture
         log::info!("Requesting {:?} capture", capture_type);
-        if let Err(e) =
-            self.capture_manager
-                .request_capture(capture_type, destination, save_config)
+        if let Err(e) = self
+            .capture_manager
+            .request_capture(capture_type, destination, save_config)
         {
             log::error!("Failed to request capture: {}", e);
 
@@ -1244,6 +1241,7 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::z => Key::Char('z'),
         Keysym::Z => Key::Char('Z'),
         Keysym::F10 => Key::F10,
+        Keysym::F11 => Key::F11,
         _ => {
             // For other printable characters, try to map them
             // Use the raw value to determine if it's ASCII printable

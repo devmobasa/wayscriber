@@ -8,6 +8,7 @@ use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::{CanvasSet, Color, FontDescriptor, Shape};
 use crate::util;
 use std::collections::HashMap;
+use std::process::{Command, Stdio};
 
 /// Current drawing mode state machine.
 ///
@@ -133,6 +134,31 @@ impl InputState {
             board_config,
             action_map,
             pending_capture_action: None,
+        }
+    }
+
+    fn launch_configurator(&self) {
+        let binary = std::env::var("HYPRMARKER_CONFIGURATOR")
+            .unwrap_or_else(|_| "hyprmarker-configurator".to_string());
+
+        match Command::new(&binary)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => {
+                log::info!(
+                    "Launched hyprmarker-configurator (binary: {binary}, pid: {})",
+                    child.id()
+                );
+            }
+            Err(err) => {
+                log::error!("Failed to launch hyprmarker-configurator using '{binary}': {err}");
+                log::error!(
+                    "Set HYPRMARKER_CONFIGURATOR to override the executable path if needed."
+                );
+            }
         }
     }
 
@@ -301,7 +327,7 @@ impl InputState {
             // 2. OR it's a special non-character key (Escape, F10, etc.)
             let should_check_actions = match key {
                 // Special keys always check for actions
-                Key::Escape | Key::F10 | Key::Return => true,
+                Key::Escape | Key::F10 | Key::F11 | Key::Return => true,
                 // Character keys only check if modifiers are held
                 Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
                 // Other keys can check as well
@@ -321,6 +347,7 @@ impl InputState {
                     Key::Equals => "=".to_string(),
                     Key::Underscore => "_".to_string(),
                     Key::F10 => "F10".to_string(),
+                    Key::F11 => "F11".to_string(),
                     _ => String::new(),
                 };
 
@@ -416,6 +443,7 @@ impl InputState {
             Key::Equals => "=".to_string(),
             Key::Underscore => "_".to_string(),
             Key::F10 => "F10".to_string(),
+            Key::F11 => "F11".to_string(),
             _ => return,
         };
 
@@ -496,6 +524,9 @@ impl InputState {
             Action::ToggleHelp => {
                 self.show_help = !self.show_help;
                 self.needs_redraw = true;
+            }
+            Action::OpenConfigurator => {
+                self.launch_configurator();
             }
             Action::SetColorRed => {
                 self.current_color = util::key_to_color('r').unwrap();
