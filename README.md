@@ -445,6 +445,7 @@ MIT License — see [LICENSE](LICENSE) for details.
   cargo clippy
   cargo fmt
   ```
+  - Use `./tools/fetch-all-deps.sh` to prefetch crates for the main binary and configurator before running frozen/offline builds.
 
 - Acknowledgments:
   - Inspired by [ZoomIt](https://learn.microsoft.com/en-us/sysinternals/downloads/zoomit) by [Mark Russinovich](https://github.com/markrussinovich)
