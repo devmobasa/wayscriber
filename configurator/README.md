@@ -37,7 +37,3 @@ cargo build --release
 ```
 
 Artifacts land in `target/release/`. No Node toolchain or bundler is required.
-
-## Legacy Files
-
-The previous Tauri/React implementation is still present (`package.json`, `src/`, `src-tauri/`, etc.) for reference and can be removed once no longer needed.
