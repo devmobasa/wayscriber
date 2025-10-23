@@ -21,7 +21,7 @@ impl Default for FileSaveConfig {
         Self {
             save_directory: dirs::picture_dir()
                 .unwrap_or_else(|| PathBuf::from("~"))
-                .join("Hyprmarker"),
+                .join("Wayscriber"),
             filename_template: "screenshot_%Y-%m-%d_%H%M%S".to_string(),
             format: "png".to_string(),
         }
@@ -148,7 +148,7 @@ mod tests {
             config
                 .save_directory
                 .to_string_lossy()
-                .contains("Hyprmarker")
+                .contains("Wayscriber")
         );
     }
 }

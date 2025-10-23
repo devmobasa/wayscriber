@@ -11,6 +11,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::backend;
+use crate::legacy;
 
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,9 +40,9 @@ impl Daemon {
 
     /// Run daemon with signal handling
     pub fn run(&mut self) -> Result<()> {
-        info!("Starting hyprmarker daemon");
-        info!("Send SIGUSR1 to toggle overlay (e.g., pkill -SIGUSR1 hyprmarker)");
-        info!("Configure Hyprland: bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker");
+        info!("Starting wayscriber daemon");
+        info!("Send SIGUSR1 to toggle overlay (e.g., pkill -SIGUSR1 wayscriber)");
+        info!("Configure Hyprland: bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber");
 
         // Set up signal handling
         let mut signals = Signals::new([SIGUSR1, SIGTERM, SIGINT])
@@ -170,13 +171,13 @@ impl Daemon {
 fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Result<()> {
     use ksni;
 
-    struct HyprmarkerTray {
+    struct WayscriberTray {
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
         configurator_binary: String,
     }
 
-    impl HyprmarkerTray {
+    impl WayscriberTray {
         fn launch_configurator(&self) {
             let mut command = Command::new(&self.configurator_binary);
             command
@@ -187,31 +188,31 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
             match command.spawn() {
                 Ok(child) => {
                     info!(
-                        "Launched hyprmarker-configurator (binary: {}, pid: {})",
+                        "Launched wayscriber-configurator (binary: {}, pid: {})",
                         self.configurator_binary,
                         child.id()
                     );
                 }
                 Err(err) => {
                     error!(
-                        "Failed to launch hyprmarker-configurator using '{}': {}",
+                        "Failed to launch wayscriber-configurator using '{}': {}",
                         self.configurator_binary, err
                     );
                     error!(
-                        "Set HYPRMARKER_CONFIGURATOR to override the executable path if needed."
+                        "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
                     );
                 }
             }
         }
     }
 
-    impl ksni::Tray for HyprmarkerTray {
+    impl ksni::Tray for WayscriberTray {
         fn id(&self) -> String {
-            "hyprmarker".into()
+            "wayscriber".into()
         }
 
         fn title(&self) -> String {
-            "Hyprmarker Screen Annotation".into()
+            "Wayscriber Screen Annotation".into()
         }
 
         fn icon_name(&self) -> String {
@@ -223,7 +224,7 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
             ksni::ToolTip {
                 icon_name: "applications-graphics".into(),
                 icon_pixmap: vec![],
-                title: format!("Hyprmarker {}", env!("CARGO_PKG_VERSION")),
+                title: format!("Wayscriber {}", env!("CARGO_PKG_VERSION")),
                 description: "Super+D toggles overlay • F11 opens configurator".into(),
             }
         }
@@ -317,10 +318,10 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
         }
     }
 
-    let configurator_binary = std::env::var("HYPRMARKER_CONFIGURATOR")
-        .unwrap_or_else(|_| "hyprmarker-configurator".to_string());
+    let configurator_binary =
+        legacy::configurator_override().unwrap_or_else(|| "wayscriber-configurator".to_string());
 
-    let tray = HyprmarkerTray {
+    let tray = WayscriberTray {
         toggle_flag,
         quit_flag: quit_flag.clone(),
         configurator_binary,

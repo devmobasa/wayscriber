@@ -62,7 +62,7 @@ pub async fn send_notification(
 
     proxy
         .notify(
-            "Hyprmarker",
+            "Wayscriber",
             0,
             icon,
             summary,

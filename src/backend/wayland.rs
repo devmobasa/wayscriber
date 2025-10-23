@@ -30,8 +30,9 @@ use wayland_client::{
 // Removed: Arc, Mutex - not needed after removing WaylandBackend.inner
 
 use crate::capture::{CaptureDestination, CaptureManager, CaptureOutcome};
-use crate::config::{Action, Config};
+use crate::config::{Action, Config, ConfigSource};
 use crate::input::{InputState, Key, MouseButton};
+use crate::legacy;
 
 /// Wayland backend state
 pub struct WaylandBackend {
@@ -124,10 +125,19 @@ impl WaylandBackend {
         let registry_state = RegistryState::new(&globals);
 
         // Load configuration
-        let config = Config::load().unwrap_or_else(|e| {
-            warn!("Failed to load config: {}. Using defaults.", e);
-            Config::default()
-        });
+        let (config, config_source) = match Config::load() {
+            Ok(loaded) => (loaded.config, loaded.source),
+            Err(e) => {
+                warn!("Failed to load config: {}. Using defaults.", e);
+                (Config::default(), ConfigSource::Default)
+            }
+        };
+
+        if matches!(config_source, ConfigSource::Legacy(_)) && !legacy::warnings_suppressed() {
+            warn!(
+                "Continuing with settings from legacy hyprmarker config. Run `wayscriber --migrate-config` when convenient."
+            );
+        }
         info!("Configuration loaded");
         debug!("  Color: {:?}", config.drawing.default_color);
         debug!("  Thickness: {:.1}px", config.drawing.default_thickness);
@@ -239,7 +249,7 @@ impl WaylandBackend {
             &qh,
             wl_surface,
             Layer::Overlay,
-            Some("hyprmarker"),
+            Some("wayscriber"),
             None, // Default output
         );
 

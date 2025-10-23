@@ -1,8 +1,8 @@
 [package]
-name = "hyprmarker-configurator"
-version = "0.4.0"
+name = "wayscriber-configurator"
+version = "0.5.0"
 edition = "2024"
 
 [dependencies]
-hyprmarker = { path = ".." }
+wayscriber = { path = ".." }
 iced = { version = "0.12", features = ["tokio"] }

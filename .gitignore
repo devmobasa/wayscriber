@@ -21,7 +21,9 @@ test_run.sh
 run.sh
 
 # Packaging (but keep the service file)
-packaging/
-!packaging/hyprmarker.service
+packaging/**
+!packaging/wayscriber.service
+!packaging/PKGBUILD
+!packaging/PKGBUILD.hyprmarker-meta
 
 docs/board

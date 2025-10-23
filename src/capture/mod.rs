@@ -1,4 +1,4 @@
-//! Screenshot capture functionality for hyprmarker.
+//! Screenshot capture functionality for wayscriber.
 //!
 //! This module provides screenshot capture capabilities including:
 //! - Full screen capture

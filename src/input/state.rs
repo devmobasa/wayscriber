@@ -6,6 +6,7 @@ use super::modifiers::Modifiers;
 use super::tool::Tool;
 use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::{CanvasSet, Color, FontDescriptor, Shape};
+use crate::legacy;
 use crate::util;
 use std::collections::HashMap;
 use std::process::{Command, Stdio};
@@ -138,8 +139,8 @@ impl InputState {
     }
 
     fn launch_configurator(&self) {
-        let binary = std::env::var("HYPRMARKER_CONFIGURATOR")
-            .unwrap_or_else(|_| "hyprmarker-configurator".to_string());
+        let binary = legacy::configurator_override()
+            .unwrap_or_else(|| "wayscriber-configurator".to_string());
 
         match Command::new(&binary)
             .stdin(Stdio::null())
@@ -149,14 +150,14 @@ impl InputState {
         {
             Ok(child) => {
                 log::info!(
-                    "Launched hyprmarker-configurator (binary: {binary}, pid: {})",
+                    "Launched wayscriber-configurator (binary: {binary}, pid: {})",
                     child.id()
                 );
             }
             Err(err) => {
-                log::error!("Failed to launch hyprmarker-configurator using '{binary}': {err}");
+                log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
                 log::error!(
-                    "Set HYPRMARKER_CONFIGURATOR to override the executable path if needed."
+                    "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
                 );
             }
         }

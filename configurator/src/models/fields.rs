@@ -1,4 +1,4 @@
-use hyprmarker::config::StatusPosition;
+use wayscriber::config::StatusPosition;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontStyleOption {

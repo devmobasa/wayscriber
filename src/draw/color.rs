@@ -7,7 +7,7 @@
 /// # Examples
 ///
 /// ```
-/// use hyprmarker::draw::Color;
+/// use wayscriber::draw::Color;
 /// let red = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
 /// let semi_transparent_blue = Color { r: 0.0, g: 0.0, b: 1.0, a: 0.5 };
 /// ```

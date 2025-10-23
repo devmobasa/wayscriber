@@ -1,4 +1,6 @@
-//! Library exports for reusing hyprmarker subsystems.
+//! Library exports for reusing wayscriber subsystems.
+//!
+//! Formerly known as **hyprmarker** prior to the v0.5.0 rename.
 //!
 //! Exposes configuration data structures alongside the supporting modules they
 //! rely on so that external tools (e.g. GUI configurators) can share validation
@@ -7,6 +9,7 @@
 pub mod config;
 pub mod draw;
 pub mod input;
+pub mod legacy;
 pub mod util;
 
 pub use config::Config;

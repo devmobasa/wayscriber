@@ -1,11 +1,11 @@
 [Unit]
-Description=Hyprmarker - Screen annotation tool for Wayland
-Documentation=https://github.com/devmobasa/hyprmarker
+Description=Wayscriber - Screen annotation tool for Wayland
+Documentation=https://wayscriber.com
 PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/hyprmarker --daemon
+ExecStart=/usr/bin/wayscriber --daemon
 Restart=on-failure
 RestartSec=5
 # Ensure Wayland environment is available

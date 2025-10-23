@@ -1,18 +1,20 @@
-//! Configuration file support for hyprmarker.
+//! Configuration file support for wayscriber.
 //!
 //! This module handles loading and validating user settings from the configuration file
-//! located at `~/.config/hyprmarker/config.toml`. Settings include drawing defaults,
+//! located at `~/.config/wayscriber/config.toml`. Settings include drawing defaults,
 //! arrow appearance, performance tuning, and UI preferences.
 //!
 //! If no config file exists, sensible defaults are used automatically.
 
 pub mod enums;
 pub mod keybindings;
+pub mod migration;
 pub mod types;
 
 // Re-export commonly used types at module level
 pub use enums::StatusPosition;
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
+pub use migration::{MigrationActions, MigrationReport, migrate_config};
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig,
     StatusBarStyle, UiConfig,
@@ -22,14 +24,117 @@ pub use types::{
 #[allow(unused_imports)]
 pub use enums::ColorSpec;
 
+use crate::legacy;
 use anyhow::{Context, Result};
 use chrono::Local;
-use log::{debug, info};
+use log::{debug, info, warn};
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+const PRIMARY_CONFIG_DIR: &str = "wayscriber";
+const LEGACY_CONFIG_DIR: &str = "hyprmarker";
+
+static USING_LEGACY_CONFIG: AtomicBool = AtomicBool::new(false);
+
+/// Represents the source used to load configuration data.
+#[derive(Debug, Clone)]
+pub enum ConfigSource {
+    /// Configuration file loaded from the current Wayscriber path.
+    Primary,
+    /// Configuration file loaded from the legacy hyprmarker path.
+    Legacy(PathBuf),
+    /// Defaults were used because no configuration file was found.
+    Default,
+}
+
+/// Wrapper around [`Config`] that includes metadata about the load location.
+#[derive(Debug)]
+pub struct LoadedConfig {
+    pub config: Config,
+    pub source: ConfigSource,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::ColorSpec;
+    use std::fs;
+    use std::path::Path;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    fn with_temp_config_home<F, T>(f: F) -> T
+    where
+        F: FnOnce(&Path) -> T,
+    {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let temp = TempDir::new().expect("tempdir");
+        let original = std::env::var_os("XDG_CONFIG_HOME");
+        // SAFETY: tests run single-threaded via the mutex above; restoring the previous
+        // value prevents leaking the override to other tests.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", temp.path()); }
+        let result = f(temp.path());
+        match original {
+            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        result
+    }
+
+    #[test]
+    fn load_prefers_primary_directory() {
+        with_temp_config_home(|config_root| {
+            let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+            fs::create_dir_all(&primary_dir).unwrap();
+            fs::write(
+                primary_dir.join("config.toml"),
+                "[drawing]\ndefault_color = 'red'\n",
+            )
+            .unwrap();
+
+            let loaded = Config::load().expect("load succeeds");
+            assert!(matches!(loaded.source, ConfigSource::Primary));
+        });
+    }
+
+    #[test]
+    fn load_falls_back_to_legacy_directory() {
+        with_temp_config_home(|config_root| {
+            let legacy_dir = config_root.join(LEGACY_CONFIG_DIR);
+            fs::create_dir_all(&legacy_dir).unwrap();
+            fs::write(
+                legacy_dir.join("config.toml"),
+                "[drawing]\ndefault_color = 'blue'\n",
+            )
+            .unwrap();
+
+            let loaded = Config::load().expect("load succeeds");
+            assert!(matches!(loaded.source, ConfigSource::Legacy(_)));
+            assert!(matches!(
+                loaded.config.drawing.default_color,
+                ColorSpec::Name(ref color) if color == "blue"
+            ));
+        });
+    }
+}
+
+pub(super) fn config_home_dir() -> Result<PathBuf> {
+    dirs::config_dir().context("Could not find config directory")
+}
+
+pub(super) fn primary_config_dir() -> Result<PathBuf> {
+    config_home_dir().map(|dir| dir.join(PRIMARY_CONFIG_DIR))
+}
+
+pub(super) fn legacy_config_dir() -> Result<PathBuf> {
+    config_home_dir().map(|dir| dir.join(LEGACY_CONFIG_DIR))
+}
 
 /// Main configuration structure containing all user settings.
 ///
@@ -245,21 +350,17 @@ impl Config {
 
     /// Returns the path to the configuration file.
     ///
-    /// The config file is located at `~/.config/hyprmarker/config.toml`.
+    /// The config file is located at `~/.config/wayscriber/config.toml`.
     ///
     /// # Errors
     /// Returns an error if the config directory cannot be determined (e.g., HOME not set).
     pub fn get_config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Could not find config directory")?
-            .join("hyprmarker");
-
-        Ok(config_dir.join("config.toml"))
+        Ok(primary_config_dir()?.join("config.toml"))
     }
 
     /// Loads configuration from file, or returns defaults if not found.
     ///
-    /// Attempts to read and parse the config file at `~/.config/hyprmarker/config.toml`.
+    /// Attempts to read and parse the config file at `~/.config/wayscriber/config.toml`.
     /// If the file doesn't exist, returns a Config with default values. All loaded values
     /// are validated and clamped to acceptable ranges.
     ///
@@ -268,14 +369,27 @@ impl Config {
     /// - The config directory path cannot be determined
     /// - The file exists but cannot be read
     /// - The file exists but contains invalid TOML syntax
-    pub fn load() -> Result<Self> {
-        let config_path = Self::get_config_path()?;
+    pub fn load() -> Result<LoadedConfig> {
+        let primary_path = primary_config_dir()?.join("config.toml");
+        let legacy_path = legacy_config_dir()?.join("config.toml");
 
-        if !config_path.exists() {
+        let (config_path, source) = if primary_path.exists() {
+            (primary_path.clone(), ConfigSource::Primary)
+        } else if legacy_path.exists() {
+            (
+                legacy_path.clone(),
+                ConfigSource::Legacy(legacy_path.clone()),
+            )
+        } else {
+            USING_LEGACY_CONFIG.store(false, Ordering::Relaxed);
             info!("Config file not found, using defaults");
-            debug!("Expected config at: {}", config_path.display());
-            return Ok(Self::default());
-        }
+            debug!("Expected config at: {}", primary_path.display());
+            debug!("Checked legacy config at: {}", legacy_path.display());
+            return Ok(LoadedConfig {
+                config: Config::default(),
+                source: ConfigSource::Default,
+            });
+        };
 
         let config_str = fs::read_to_string(&config_path)
             .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
@@ -286,10 +400,31 @@ impl Config {
         // Validate and clamp values to acceptable ranges
         config.validate_and_clamp();
 
+        match &source {
+            ConfigSource::Legacy(path) => {
+                USING_LEGACY_CONFIG.store(true, Ordering::Relaxed);
+                if !legacy::warnings_suppressed() {
+                    warn!(
+                        "Loading configuration from legacy hyprmarker path: {}",
+                        path.display()
+                    );
+                    warn!(
+                        "Run `wayscriber --migrate-config` to copy settings to ~/.config/wayscriber/."
+                    );
+                }
+            }
+            ConfigSource::Primary => {
+                USING_LEGACY_CONFIG.store(false, Ordering::Relaxed);
+            }
+            ConfigSource::Default => {
+                USING_LEGACY_CONFIG.store(false, Ordering::Relaxed);
+            }
+        }
+
         info!("Loaded config from {}", config_path.display());
         debug!("Config: {:?}", config);
 
-        Ok(config)
+        Ok(LoadedConfig { config, source })
     }
 
     fn write_config(&self, create_backup: bool) -> Result<Option<PathBuf>> {
@@ -363,7 +498,7 @@ impl Config {
     /// Creates a default configuration file with documentation comments.
     ///
     /// Writes the example config from `config.example.toml` to the user's config directory.
-    /// This method is kept for future use (e.g., `hyprmarker --init-config`).
+    /// This method is kept for future use (e.g., `wayscriber --init-config`).
     ///
     /// # Errors
     /// Returns an error if:

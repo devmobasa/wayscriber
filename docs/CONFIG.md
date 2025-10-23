@@ -2,9 +2,9 @@
 
 ## Overview
 
-hyprmarker supports customization through a TOML configuration file located at:
+wayscriber supports customization through a TOML configuration file located at:
 ```
-~/.config/hyprmarker/config.toml
+~/.config/wayscriber/config.toml
 ```
 
 All settings are optional. If the configuration file doesn't exist or settings are missing, sensible defaults will be used.
@@ -12,7 +12,7 @@ All settings are optional. If the configuration file doesn't exist or settings a
 ## Configuration File Location
 
 The configuration file should be placed at:
-- Linux: `~/.config/hyprmarker/config.toml`
+- Linux: `~/.config/wayscriber/config.toml`
 - The directory will be created automatically when you first create the config file
 
 ## Example Configuration
@@ -232,9 +232,9 @@ whiteboard_pen_color = [0.29, 0.23, 0.18]
 **CLI Override:**
 You can override the default mode from the command line:
 ```bash
-hyprmarker --active --mode whiteboard
-hyprmarker --active --mode blackboard
-hyprmarker --daemon --mode whiteboard
+wayscriber --active --mode whiteboard
+wayscriber --active --mode blackboard
+wayscriber --daemon --mode whiteboard
 ```
 
 **Defaults:**
@@ -254,7 +254,7 @@ Configures how screenshots are stored and shared.
 enabled = true
 
 # Directory for saved screenshots (supports ~ expansion)
-save_directory = "~/Pictures/Hyprmarker"
+save_directory = "~/Pictures/Wayscriber"
 
 # Filename template (chrono format specifiers allowed)
 filename_template = "screenshot_%Y-%m-%d_%H%M%S"
@@ -269,7 +269,7 @@ copy_to_clipboard = true
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
-- Install `wl-clipboard`, `grim`, and `slurp` for the best Wayland experience; otherwise hyprmarker falls back to `xdg-desktop-portal`.
+- Install `wl-clipboard`, `grim`, and `slurp` for the best Wayland experience; otherwise wayscriber falls back to `xdg-desktop-portal`.
 
 ### `[keybindings]` - Custom Keybindings
 
@@ -305,7 +305,7 @@ return_to_transparent = ["Ctrl+Shift+T"]
 # Toggle help overlay
 toggle_help = ["F10"]
 
-# Launch the desktop configurator (requires hyprmarker-configurator)
+# Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
 
 # Color selection shortcuts
@@ -399,17 +399,17 @@ All defaults match the original hardcoded keybindings to maintain compatibility.
 
 1. Create the directory:
    ```bash
-   mkdir -p ~/.config/hyprmarker
+   mkdir -p ~/.config/wayscriber
    ```
 
 2. Copy the example config:
    ```bash
-   cp config.example.toml ~/.config/hyprmarker/config.toml
+   cp config.example.toml ~/.config/wayscriber/config.toml
    ```
 
 3. Edit to your preferences:
    ```bash
-   nano ~/.config/hyprmarker/config.toml
+   nano ~/.config/wayscriber/config.toml
    ```
 
 ## Configuration Priority
@@ -419,7 +419,7 @@ Settings are loaded in this order:
 2. Configuration file values (override defaults)
 3. Runtime changes via keybindings (temporary, not saved)
 
-**Note:** Changes to the config file require restarting hyprmarker daemon to take effect.
+**Note:** Changes to the config file require restarting wayscriber daemon to take effect.
 
 To reload config changes:
 ```bash
@@ -427,8 +427,8 @@ To reload config changes:
 ./reload-daemon.sh
 
 # Or manually
-pkill hyprmarker
-hyprmarker --daemon &
+pkill wayscriber
+wayscriber --daemon &
 ```
 
 ## Troubleshooting
@@ -439,18 +439,18 @@ If your config file isn't being read:
 
 1. Check the file path:
    ```bash
-   ls -la ~/.config/hyprmarker/config.toml
+   ls -la ~/.config/wayscriber/config.toml
    ```
 
 2. Verify TOML syntax:
    ```bash
    # Install a TOML validator if needed
-   toml-validator ~/.config/hyprmarker/config.toml
+   toml-validator ~/.config/wayscriber/config.toml
    ```
 
 3. Check logs for errors:
    ```bash
-   RUST_LOG=info hyprmarker --active
+   RUST_LOG=info wayscriber --active
    ```
 
 ### Invalid Values
@@ -467,18 +467,18 @@ Check the application logs for warnings about config issues.
 
 ### Per-Project Configs
 
-While hyprmarker uses a single global config, you can:
+While wayscriber uses a single global config, you can:
 1. Create different config files
-2. Symlink the active one to `~/.config/hyprmarker/config.toml`
+2. Symlink the active one to `~/.config/wayscriber/config.toml`
 
 Example:
 ```bash
 # Create project-specific configs
-cp config.example.toml ~/configs/hyprmarker-presentation.toml
-cp config.example.toml ~/configs/hyprmarker-recording.toml
+cp config.example.toml ~/configs/wayscriber-presentation.toml
+cp config.example.toml ~/configs/wayscriber-recording.toml
 
 # Switch configs
-ln -sf ~/configs/hyprmarker-presentation.toml ~/.config/hyprmarker/config.toml
+ln -sf ~/configs/wayscriber-presentation.toml ~/.config/wayscriber/config.toml
 ```
 
 ### Configuration Examples
