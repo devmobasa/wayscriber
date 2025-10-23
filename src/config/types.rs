@@ -453,7 +453,7 @@ fn default_capture_enabled() -> bool {
 }
 
 fn default_capture_directory() -> String {
-    "~/Pictures/Hyprmarker".to_string()
+    "~/Pictures/Wayscriber".to_string()
 }
 
 fn default_capture_filename() -> String {

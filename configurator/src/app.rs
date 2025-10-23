@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use hyprmarker::config::Config;
+use wayscriber::config::Config;
 use iced::alignment::Horizontal;
 use iced::border::Radius;
 use iced::executor;
@@ -98,7 +98,7 @@ impl Application for ConfiguratorApp {
     }
 
     fn title(&self) -> String {
-        "Hyprmarker Configurator (Iced)".to_string()
+        "Wayscriber Configurator (Iced)".to_string()
     }
 
     fn theme(&self) -> Theme {
@@ -800,7 +800,9 @@ impl ConfiguratorApp {
 }
 
 async fn load_config_from_disk() -> Result<Arc<Config>, String> {
-    Config::load().map(Arc::new).map_err(|err| err.to_string())
+    Config::load()
+        .map(|loaded| Arc::new(loaded.config))
+        .map_err(|err| err.to_string())
 }
 
 async fn save_config_to_disk(config: Config) -> Result<(Option<PathBuf>, Arc<Config>), String> {

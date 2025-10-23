@@ -1,7 +1,10 @@
 [package]
-name = "hyprmarker"
-version = "0.4.0"
+name = "wayscriber"
+version = "0.5.0"
 edition = "2024"
+description = "Screen annotation tool for Wayland compositors"
+homepage = "https://wayscriber.com"
+repository = "https://github.com/devmobasa/wayscriber"
 
 [dependencies]
 # Wayland
@@ -45,3 +48,6 @@ chrono = "0.4"
 futures = "0.3"
 url = "2.5"
 serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3.10"

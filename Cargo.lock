@@ -905,42 +905,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hyprmarker"
-version = "0.4.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "cairo-rs",
- "cairo-sys-rs",
- "calloop",
- "chrono",
- "clap",
- "dirs",
- "env_logger",
- "futures",
- "ksni",
- "log",
- "memmap2",
- "nix 0.30.1",
- "pango",
- "pangocairo",
- "schemars",
- "serde",
- "serde_json",
- "signal-hook",
- "smithay-client-toolkit",
- "thiserror 1.0.69",
- "tokio",
- "toml",
- "url",
- "wayland-client",
- "wayland-protocols 0.32.9",
- "wayland-protocols-wlr 0.3.9",
- "wl-clipboard-rs",
- "zbus 4.4.0",
-]
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2338,6 +2302,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34949b42822155826b41db8e5d0c1be3a2bd296c747577a43a3e6daefc296142"
 dependencies = [
  "pkg-config",
+]
+
+[[package]]
+name = "wayscriber"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cairo-rs",
+ "cairo-sys-rs",
+ "calloop",
+ "chrono",
+ "clap",
+ "dirs",
+ "env_logger",
+ "futures",
+ "ksni",
+ "log",
+ "memmap2",
+ "nix 0.30.1",
+ "pango",
+ "pangocairo",
+ "schemars",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "smithay-client-toolkit",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "toml",
+ "url",
+ "wayland-client",
+ "wayland-protocols 0.32.9",
+ "wayland-protocols-wlr 0.3.9",
+ "wl-clipboard-rs",
+ "zbus 4.4.0",
 ]
 
 [[package]]

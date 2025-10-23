@@ -1,6 +1,6 @@
-# Hyprmarker Configurator (Iced)
+# Wayscriber Configurator (Iced)
 
-Native Rust desktop UI for editing `~/.config/hyprmarker/config.toml`. The application is built on [`iced`](https://github.com/iced-rs/iced) and reuses the `hyprmarker::Config` types directly, so validation, defaults, and backup behavior match the CLI.
+Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The application is built on [`iced`](https://github.com/iced-rs/iced) and reuses the `wayscriber::Config` types directly, so validation, defaults, and backup behavior match the CLI.
 
 ## Prerequisites
 

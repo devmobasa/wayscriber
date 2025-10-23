@@ -1,5 +1,5 @@
-# hyprmarker configuration file
-# Location: ~/.config/hyprmarker/config.toml
+# wayscriber configuration file
+# Location: ~/.config/wayscriber/config.toml
 #
 # All settings are optional. If not specified, defaults will be used.
 # Delete this file to reset to defaults.
@@ -207,7 +207,7 @@ auto_adjust_pen = true
 enabled = true
 
 # Directory where PNG files are saved (supports ~ expansion)
-save_directory = "~/Pictures/Hyprmarker"
+save_directory = "~/Pictures/Wayscriber"
 
 # Filename template (uses chrono format specifiers)
 filename_template = "screenshot_%Y-%m-%d_%H%M%S"
@@ -257,7 +257,7 @@ return_to_transparent = ["Ctrl+Shift+T"]
 # Toggle help overlay
 toggle_help = ["F10"]
 
-# Launch the desktop configurator (requires hyprmarker-configurator)
+# Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
 
 # Color selection shortcuts

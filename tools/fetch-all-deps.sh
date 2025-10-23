@@ -8,7 +8,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "Fetching hyprmarker dependencies..."
+echo "Fetching wayscriber dependencies..."
 cargo fetch --locked --manifest-path "$repo_root/Cargo.toml"
 
 if [[ -f "$repo_root/configurator/Cargo.toml" ]]; then

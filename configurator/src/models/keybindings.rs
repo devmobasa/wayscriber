@@ -1,4 +1,4 @@
-use hyprmarker::config::keybindings::KeybindingsConfig;
+use wayscriber::config::keybindings::KeybindingsConfig;
 
 use super::error::FormError;
 

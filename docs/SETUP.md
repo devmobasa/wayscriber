@@ -11,7 +11,7 @@ Run the install script:
 
 This will:
 1. Build the release binary
-2. Copy it to `~/.local/bin/hyprmarker`
+2. Copy it to `~/.local/bin/wayscriber`
 3. Tell you how to add Hyprland keybind
 
 ### Manual Install
@@ -24,8 +24,8 @@ cargo build --release
 
 # Copy to user bin
 mkdir -p ~/.local/bin
-cp target/release/hyprmarker ~/.local/bin/
-chmod +x ~/.local/bin/hyprmarker
+cp target/release/wayscriber ~/.local/bin/
+chmod +x ~/.local/bin/wayscriber
 
 # Make sure ~/.local/bin is in your PATH
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
@@ -38,9 +38,9 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 Add to `~/.config/hypr/hyprland.conf`:
 
 ```conf
-# hyprmarker - Screen annotation daemon (Super+D to toggle)
-exec-once = hyprmarker --daemon
-bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+# wayscriber - Screen annotation daemon (Super+D to toggle)
+exec-once = wayscriber --daemon
+bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 ```
 
 Then reload:
@@ -56,7 +56,7 @@ For quick one-time annotations without daemon:
 
 ```bash
 # Run directly (not recommended - daemon mode is better)
-hyprmarker --active
+wayscriber --active
 ```
 
 This starts a fresh overlay each time. Exit with Escape.
@@ -88,10 +88,10 @@ Test the setup:
 
 ```bash
 # Test binary is accessible
-which hyprmarker
+which wayscriber
 
 # Test daemon mode
-hyprmarker --daemon &
+wayscriber --daemon &
 
 # Test keybind
 Press Super+D (should show overlay)
@@ -100,7 +100,7 @@ Press Escape (should hide overlay)
 
 ## Autostart
 
-Daemon mode is already included in Method 1! The `exec-once` line will start hyprmarker automatically on login.
+Daemon mode is already included in Method 1! The `exec-once` line will start wayscriber automatically on login.
 
 ## Troubleshooting
 
@@ -124,7 +124,7 @@ Daemon mode is already included in Method 1! The `exec-once` line will start hyp
 ## Uninstall
 
 ```bash
-rm ~/.local/bin/hyprmarker
+rm ~/.local/bin/wayscriber
 # Remove keybind from hyprland.conf
 ```
 
@@ -135,8 +135,8 @@ rm ~/.local/bin/hyprmarker
 1. Install: `./tools/install.sh`
 2. Add to hyprland.conf:
    ```conf
-   exec-once = hyprmarker --daemon
-   bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+   exec-once = wayscriber --daemon
+   bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
    ```
 3. Reload: `hyprctl reload`
 4. Use: Press Super+D to toggle overlay

@@ -1,6 +1,6 @@
-# hyprmarker
+# wayscriber
 
-> TL;DR: hyprmarker is a ZoomIt-like screen annotation tool for Wayland compositors, written in Rust.
+> TL;DR: wayscriber is a ZoomIt-like screen annotation tool for Wayland compositors, written in Rust.
 > Works on compositors with the wlr-layer-shell protocol (Hyprland, Sway, river, …); building from source requires Rust 1.70+.
 > Quick start: [set it up in four steps](#quick-start).
 
@@ -21,57 +21,58 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)
 
-- [Why hyprmarker?](#why-hyprmarker)
+- [Why wayscriber?](#why-wayscriber)
 - [Quick Start](#quick-start)
 - [Features at a Glance](#features-at-a-glance)
 - [Demo](#demo)
 - [Installation](#installation)
-- [Running hyprmarker](#running-hyprmarker)
+- [Running wayscriber](#running-wayscriber)
 - [Controls Reference](#controls-reference)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Additional Information](#additional-information)
+- [Project History](#project-history)
 - [Contributing & Credits](#contributing--credits)
 
-## Why hyprmarker?
+## Why wayscriber?
 
 - Works across Wayland compositors (Sway, Wayfire, River, Hyprland, …) via wlr-layer-shell. Tested extensively on Hyprland and confirmed working on Niri; reports from other compositors welcome.
 - Built for live presentations, classroom sessions, and screenshares - toggle with a key and annotate your screen instantly without breaking flow.
-- Complements tools like [Satty](https://github.com/gabm/Satty): Satty excels at capture → annotate → save workflows, while hyprmarker stays resident as an always-available drawing layer with instant mode switching.
+- Complements tools like [Satty](https://github.com/gabm/Satty): Satty excels at capture → annotate → save workflows, while wayscriber stays resident as an always-available drawing layer with instant mode switching.
 
 ## Quick Start
 
-**1. Install hyprmarker**
-   - Arch Linux: `yay -S hyprmarker` or `paru -S hyprmarker` (AUR). The binary lands in `/usr/bin` and required tools (`wl-clipboard`, `grim`, `slurp`) are pulled in automatically.
+**1. Install wayscriber**
+   - Arch Linux: `yay -S wayscriber` or `paru -S wayscriber` (AUR). The binary lands in `/usr/bin` and required tools (`wl-clipboard`, `grim`, `slurp`) are pulled in automatically.
    - Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
 
 **2. Choose how to run it:**
 
 ### Option 1: One-Shot Mode (Simple)
-Launch hyprmarker when you need it, exit when done:
+Launch wayscriber when you need it, exit when done:
 
 ```bash
-hyprmarker --active
+wayscriber --active
 ```
 
 Or bind to a key in `~/.config/hypr/hyprland.conf`:
 ```conf
-bind = SUPER, D, exec, hyprmarker --active
+bind = SUPER, D, exec, wayscriber --active
 ```
 
 Press `F10` for help, `F11` for configurator, `Escape` to exit.
 
 ### Option 2: Daemon Mode (Background Service)
-Run hyprmarker in the background and toggle it with a keybind:
+Run wayscriber in the background and toggle it with a keybind:
 
 **Enable the service:**
 ```bash
-systemctl --user enable --now hyprmarker.service
+systemctl --user enable --now wayscriber.service
 ```
 
 **Add keybinding** to `~/.config/hypr/hyprland.conf`:
 ```conf
-bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 ```
 
 **Reload Hyprland:**
@@ -83,8 +84,8 @@ hyprctl reload
 
 **Alternative:** Use Hyprland's exec-once instead of systemd:
 ```conf
-exec-once = hyprmarker --daemon
-bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+exec-once = wayscriber --daemon
+bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 ```
 
 ## Features at a Glance
@@ -109,13 +110,13 @@ See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
 
 ```bash
 # Using yay
-yay -S hyprmarker
+yay -S wayscriber
 
 # Or using paru
-paru -S hyprmarker
+paru -S wayscriber
 ```
 
-The package installs the user service at `/usr/lib/systemd/user/hyprmarker.service`.
+The package installs the user service at `/usr/lib/systemd/user/wayscriber.service`.
 
 ### Other Distros
 
@@ -138,12 +139,12 @@ sudo dnf install wl-clipboard grim slurp       # Fedora
 **Build from source:**
 
 ```bash
-git clone https://github.com/devmobasa/hyprmarker.git
-cd hyprmarker
+git clone https://github.com/devmobasa/wayscriber.git
+cd wayscriber
 cargo build --release
 ```
 
-The binary will be at `target/release/hyprmarker`.
+The binary will be at `target/release/wayscriber`.
 
 ### Manual Install Script
 
@@ -152,22 +153,22 @@ cargo build --release
 ./tools/install.sh
 ```
 
-The installer places the binary at `~/.local/bin/hyprmarker`, creates `~/.config/hyprmarker/`, and offers to configure Hyprland.
+The installer places the binary at `~/.local/bin/wayscriber`, creates `~/.config/wayscriber/`, and offers to configure Hyprland.
 
-## Running hyprmarker
+## Running wayscriber
 
 ### Daemon Mode
 
-Run hyprmarker in the background and toggle with a keybind.
+Run wayscriber in the background and toggle with a keybind.
 
 **Enable the service:**
 ```bash
-systemctl --user enable --now hyprmarker.service
+systemctl --user enable --now wayscriber.service
 ```
 
 **Add keybinding** to `~/.config/hypr/hyprland.conf`:
 ```conf
-bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 ```
 
 **Reload Hyprland:**
@@ -179,17 +180,17 @@ The daemon shows a system tray icon (may be in Waybar drawer). Press `Super+D` t
 
 **Service commands:**
 ```bash
-systemctl --user status hyprmarker.service
-systemctl --user restart hyprmarker.service
-journalctl --user -u hyprmarker.service -f
+systemctl --user status wayscriber.service
+systemctl --user restart wayscriber.service
+journalctl --user -u wayscriber.service -f
 ```
 
 **Note:** If the daemon doesn't start after reboot, see [Troubleshooting](#daemon-not-starting-after-reboot).
 
 **Alternative:** Use Hyprland's exec-once instead of systemd:
 ```conf
-exec-once = hyprmarker --daemon
-bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
+exec-once = wayscriber --daemon
+bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 ```
 
 ### One-Shot Mode
@@ -197,23 +198,23 @@ bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker
 Launch directly into an active overlay without the daemon:
 
 ```bash
-hyprmarker --active
-hyprmarker --active --mode whiteboard
-hyprmarker --active --mode blackboard
+wayscriber --active
+wayscriber --active --mode whiteboard
+wayscriber --active --mode blackboard
 ```
 
 Bind it to keys if you prefer:
 
 ```conf
-bind = $mainMod, D, exec, hyprmarker --active
-bind = $mainMod SHIFT, D, exec, hyprmarker --active --mode whiteboard
+bind = $mainMod, D, exec, wayscriber --active
+bind = $mainMod SHIFT, D, exec, wayscriber --active --mode whiteboard
 ```
 
 Exit the overlay with `Escape` or `Ctrl+Q`.
 
 ### Screenshot Shortcuts
 
-hyprmarker ships with keyboard shortcuts for quick captures:
+wayscriber ships with keyboard shortcuts for quick captures:
 
 - `Ctrl+C` – copy the entire screen to the clipboard.
 - `Ctrl+S` – save the entire screen as a PNG (uses your capture directory).
@@ -222,7 +223,7 @@ hyprmarker ships with keyboard shortcuts for quick captures:
 - `Ctrl+Shift+O` – capture the active window (Hyprland fast path, portal fallback).
 - `Ctrl+6` / `Ctrl+Shift+6` – reserved for remembered-region clipboard/file captures (coming soon).
 
-**Requirements:** install `wl-clipboard`, `grim`, and `slurp` for the fastest Hyprland workflow. If they are missing, hyprmarker falls back to `xdg-desktop-portal`'s interactive picker.
+**Requirements:** install `wl-clipboard`, `grim`, and `slurp` for the fastest Hyprland workflow. If they are missing, wayscriber falls back to `xdg-desktop-portal`'s interactive picker.
 
 ## Controls Reference
 
@@ -267,12 +268,12 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 
 ## Configuration
 
-- Config file location: `~/.config/hyprmarker/config.toml`.
+- Config file location: `~/.config/wayscriber/config.toml`.
 - Copy defaults to get started:
 
   ```bash
-  mkdir -p ~/.config/hyprmarker
-  cp config.example.toml ~/.config/hyprmarker/config.toml
+  mkdir -p ~/.config/wayscriber
+  cp config.example.toml ~/.config/wayscriber/config.toml
   ```
 
 - Key sections to tweak:
@@ -306,25 +307,25 @@ loginctl enable-linger $USER
 
 **Simpler alternative:** Use Hyprland's `exec-once` instead:
 ```conf
-exec-once = hyprmarker --daemon
+exec-once = wayscriber --daemon
 ```
 
 ### Service won't start
 
-- Check status: `systemctl --user status hyprmarker.service`
-- Tail logs: `journalctl --user -u hyprmarker.service -f`
-- Restart: `systemctl --user restart hyprmarker.service`
+- Check status: `systemctl --user status wayscriber.service`
+- Tail logs: `journalctl --user -u wayscriber.service -f`
+- Restart: `systemctl --user restart wayscriber.service`
 
 ### Overlay not appearing
 
 1. Verify Wayland session: `echo $WAYLAND_DISPLAY`
 2. Ensure your compositor supports `wlr-layer-shell` (Hyprland, Sway, river, etc.)
-3. Run with logs for clues: `RUST_LOG=info hyprmarker --active`
+3. Run with logs for clues: `RUST_LOG=info wayscriber --active`
 
 ### Config issues
 
-- Confirm the file exists: `ls -la ~/.config/hyprmarker/config.toml`
-- Watch for TOML errors in logs: `RUST_LOG=info hyprmarker --active`
+- Confirm the file exists: `ls -la ~/.config/wayscriber/config.toml`
+- Watch for TOML errors in logs: `RUST_LOG=info wayscriber --active`
 
 ### Performance
 
@@ -354,7 +355,7 @@ enable_vsync = true
 ### Architecture Overview
 
 ```
-hyprmarker/
+wayscriber/
 ├── src/
 │   ├── main.rs           # Entry point, CLI parsing
 │   ├── daemon.rs         # Daemon mode with signal handling
@@ -386,14 +387,27 @@ hyprmarker/
 └── config.example.toml   # Example configuration
 ```
 
+### Project History
+
+Wayscriber shipped under the name **hyprmarker** through the v0.4 release line. The rename in v0.5.0 reflects the broader compositor support that has been built since the original Hyprland-only prototype. Use `wayscriber --migrate-config` to copy existing settings, and see **[docs/MIGRATION.md](docs/MIGRATION.md)** for the full compatibility checklist.
+
+**Coming from hyprmarker?** Uninstall the old package (`paru -R hyprmarker`, etc.) and disable the legacy user service before installing Wayscriber:
+
+```bash
+systemctl --user disable --now hyprmarker.service 2>/dev/null || true
+```
+
+Then install Wayscriber and enable `wayscriber.service` if you want the daemon on login.
+
 ### Documentation
 
 - **[docs/SETUP.md](docs/SETUP.md)** – system setup and installation details
 - **[docs/CONFIG.md](docs/CONFIG.md)** – configuration reference
+- **[docs/MIGRATION.md](docs/MIGRATION.md)** – guidance for migrating from hyprmarker
 
 ### Comparison with ZoomIt
 
-| Feature | ZoomIt (Windows) | hyprmarker (Linux) |
+| Feature | ZoomIt (Windows) | wayscriber (Linux) |
 |---------|------------------|--------------------|
 | Freehand drawing | ✅ | ✅ |
 | Straight lines | ✅ | ✅ |

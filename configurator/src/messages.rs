@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use hyprmarker::config::Config;
+use wayscriber::config::Config;
 
 use crate::models::{
     BoardModeOption, ColorMode, FontStyleOption, FontWeightOption, KeybindingField,

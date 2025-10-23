@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installation script for hyprmarker
+# Installation script for wayscriber
 
 set -e
 
@@ -9,26 +9,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 INSTALL_DIR="$HOME/.local/bin"
-BINARY_NAME="hyprmarker"
-CONFIGURATOR_BINARY_NAME="hyprmarker-configurator"
-CONFIG_DIR="$HOME/.config/hyprmarker"
+BINARY_NAME="wayscriber"
+CONFIGURATOR_BINARY_NAME="wayscriber-configurator"
+LEGACY_BINARY_NAME="hyprmarker"
+LEGACY_CONFIGURATOR_BINARY_NAME="hyprmarker-configurator"
+CONFIG_DIR="$HOME/.config/wayscriber"
 HYPR_CONFIG="$HOME/.config/hypr/hyprland.conf"
 
 echo "================================"
-echo "   Hyprmarker Installation"
+echo "   Wayscriber Installation"
 echo "================================"
 echo ""
 
-# Ensure required binaries are built (trigger build if missing)
-if [ ! -f "$PROJECT_ROOT/target/release/$BINARY_NAME" ]; then
-    echo "Building $BINARY_NAME (release)..."
-    (cd "$PROJECT_ROOT" && cargo build --release)
-fi
+# Ensure required binaries are built
+echo "Building Wayscriber binaries (release)..."
+(cd "$PROJECT_ROOT" && cargo build --release --bins)
 
-if [ ! -f "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" ]; then
-    echo "Building $CONFIGURATOR_BINARY_NAME (release)..."
-    (cd "$PROJECT_ROOT" && cargo build --release --manifest-path configurator/Cargo.toml --target-dir target)
-fi
+echo "Building Wayscriber configurator binaries (release)..."
+(cd "$PROJECT_ROOT" && cargo build --release --bins --manifest-path configurator/Cargo.toml --target-dir target)
 
 if [ ! -f "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" ] \
    && [ -f "$PROJECT_ROOT/configurator/target/release/$CONFIGURATOR_BINARY_NAME" ]; then
@@ -46,9 +44,17 @@ echo "Installing binary to $INSTALL_DIR/$BINARY_NAME"
 cp "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
+echo "Installing legacy compatibility alias to $INSTALL_DIR/$LEGACY_BINARY_NAME"
+cp "$PROJECT_ROOT/target/release/$LEGACY_BINARY_NAME" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/$LEGACY_BINARY_NAME"
+
 echo "Installing configurator to $INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
 cp "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
+
+echo "Installing configurator alias to $INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
+cp "$PROJECT_ROOT/target/release/$LEGACY_CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
 
 # Check if install directory is in PATH
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
@@ -86,7 +92,7 @@ echo "   $BINARY_NAME --daemon &"
 echo ""
 echo "3. For Hyprland integration, add to $HYPR_CONFIG:"
 echo ""
-echo "   # Autostart hyprmarker daemon"
+echo "   # Autostart wayscriber daemon"
 echo "   exec-once = $INSTALL_DIR/$BINARY_NAME --daemon"
 echo ""
 echo "   # Toggle overlay with Super+D"
@@ -112,30 +118,30 @@ case $REPLY in
     1)
         # Systemd user service
         SYSTEMD_DIR="$HOME/.config/systemd/user"
-        SERVICE_FILE="$SYSTEMD_DIR/hyprmarker.service"
+        SERVICE_FILE="$SYSTEMD_DIR/wayscriber.service"
 
         echo "Setting up systemd user service..."
         mkdir -p "$SYSTEMD_DIR"
 
-        if [ -f "$PROJECT_ROOT/packaging/hyprmarker.service" ]; then
-            cp "$PROJECT_ROOT/packaging/hyprmarker.service" "$SERVICE_FILE"
+        if [ -f "$PROJECT_ROOT/packaging/wayscriber.service" ]; then
+            cp "$PROJECT_ROOT/packaging/wayscriber.service" "$SERVICE_FILE"
             echo "✅ Service file installed to $SERVICE_FILE"
 
             # Enable and start the service
             systemctl --user daemon-reload
-            systemctl --user enable hyprmarker.service
-            systemctl --user start hyprmarker.service
+            systemctl --user enable wayscriber.service
+            systemctl --user start wayscriber.service
 
             echo "✅ Service enabled and started"
             echo ""
             echo "Service status:"
-            systemctl --user status hyprmarker.service --no-pager -l
+            systemctl --user status wayscriber.service --no-pager -l
             echo ""
             echo "Commands:"
-            echo "  Start:   systemctl --user start hyprmarker"
-            echo "  Stop:    systemctl --user stop hyprmarker"
-            echo "  Status:  systemctl --user status hyprmarker"
-            echo "  Logs:    journalctl --user -u hyprmarker -f"
+            echo "  Start:   systemctl --user start wayscriber"
+            echo "  Stop:    systemctl --user stop wayscriber"
+            echo "  Status:  systemctl --user status wayscriber"
+            echo "  Logs:    journalctl --user -u wayscriber -f"
         else
             echo "⚠️  Service file not found. Please run installer from repository root."
         fi
@@ -150,7 +156,7 @@ case $REPLY in
                     echo "⚠️  Keybind already configured"
                 else
                     echo "" >> "$HYPR_CONFIG"
-                    echo "# hyprmarker toggle keybind" >> "$HYPR_CONFIG"
+                    echo "# wayscriber toggle keybind" >> "$HYPR_CONFIG"
                     echo "bind = SUPER, D, exec, pkill -SIGUSR1 $BINARY_NAME" >> "$HYPR_CONFIG"
                     echo "✅ Keybind added to Hyprland config"
                     echo ""
@@ -164,11 +170,11 @@ case $REPLY in
         # Hyprland exec-once
         if [ -f "$HYPR_CONFIG" ]; then
             echo "Adding to Hyprland config..."
-            if grep -q "hyprmarker --daemon" "$HYPR_CONFIG"; then
-                echo "⚠️  hyprmarker already configured in Hyprland config"
+            if grep -q "wayscriber --daemon" "$HYPR_CONFIG"; then
+                echo "⚠️  wayscriber already configured in Hyprland config"
             else
                 echo "" >> "$HYPR_CONFIG"
-                echo "# hyprmarker - Screen annotation tool" >> "$HYPR_CONFIG"
+                echo "# wayscriber - Screen annotation tool" >> "$HYPR_CONFIG"
                 echo "exec-once = $INSTALL_DIR/$BINARY_NAME --daemon" >> "$HYPR_CONFIG"
                 echo "bind = SUPER, D, exec, pkill -SIGUSR1 $BINARY_NAME" >> "$HYPR_CONFIG"
                 echo "✅ Added to Hyprland config"

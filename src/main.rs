@@ -1,17 +1,20 @@
 use clap::{ArgAction, Parser};
 
+use crate::config::{MigrationActions, MigrationReport};
+
 mod backend;
 mod capture;
 mod config;
 mod daemon;
 mod draw;
 mod input;
+mod legacy;
 mod notification;
 mod ui;
 mod util;
 
 #[derive(Parser, Debug)]
-#[command(name = "hyprmarker")]
+#[command(name = "wayscriber")]
 #[command(version, about = "Screen annotation tool for Wayland compositors")]
 struct Cli {
     /// Run as daemon (background, toggle with Super+D)
@@ -25,12 +28,27 @@ struct Cli {
     /// Initial board mode (transparent, whiteboard, or blackboard)
     #[arg(long, short = 'm', value_name = "MODE")]
     mode: Option<String>,
+
+    /// Copy configuration files from ~/.config/hyprmarker to ~/.config/wayscriber
+    #[arg(long, action = ArgAction::SetTrue)]
+    migrate_config: bool,
+
+    /// Preview the migration without copying files (requires --migrate-config)
+    #[arg(long = "dry-run", action = ArgAction::SetTrue, requires = "migrate_config")]
+    migrate_config_dry_run: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let cli = Cli::parse();
+
+    maybe_print_alias_notice();
+
+    if cli.migrate_config {
+        run_config_migration(cli.migrate_config_dry_run)?;
+        return Ok(());
+    }
 
     // Check for Wayland environment
     if std::env::var("WAYLAND_DISPLAY").is_err() && (cli.daemon || cli.active) {
@@ -72,18 +90,18 @@ fn main() -> anyhow::Result<()> {
         log::info!("Annotation overlay closed.");
     } else {
         // No flags: show usage
-        println!("hyprmarker: Screen annotation tool for Wayland compositors");
+        println!("wayscriber: Screen annotation tool for Wayland compositors");
         println!();
         println!("Usage:");
-        println!("  hyprmarker --daemon    Run as background daemon (toggle with Super+D)");
-        println!("  hyprmarker --active    Show overlay immediately (one-shot mode)");
-        println!("  hyprmarker --help      Show help");
+        println!("  wayscriber --daemon    Run as background daemon (toggle with Super+D)");
+        println!("  wayscriber --active    Show overlay immediately (one-shot mode)");
+        println!("  wayscriber --help      Show help");
         println!();
         println!("Daemon mode (recommended):");
-        println!("  1. Run: hyprmarker --daemon");
+        println!("  1. Run: wayscriber --daemon");
         println!("  2. Add to Hyprland config:");
-        println!("     exec-once = hyprmarker --daemon");
-        println!("     bind = SUPER, D, exec, pkill -SIGUSR1 hyprmarker");
+        println!("     exec-once = wayscriber --daemon");
+        println!("     bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber");
         println!("  3. Press Super+D to toggle overlay on/off");
         println!();
         println!("Requirements:");
@@ -92,4 +110,86 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn run_config_migration(dry_run: bool) -> anyhow::Result<()> {
+    let report = config::migrate_config(dry_run)?;
+    print_migration_report(&report);
+    Ok(())
+}
+
+fn print_migration_report(report: &MigrationReport) {
+    match &report.actions {
+        MigrationActions::NoLegacyConfig => {
+            println!(
+                "No legacy hyprmarker configuration found at {}. Nothing to migrate.",
+                report.legacy_dir.display()
+            );
+        }
+        MigrationActions::DryRun {
+            target_exists,
+            files_to_copy,
+        } => {
+            println!(
+                "Dry-run: would copy {} {} from {} to {}.",
+                files_to_copy,
+                pluralize(*files_to_copy, "file", "files"),
+                report.legacy_dir.display(),
+                report.target_dir.display()
+            );
+
+            if *target_exists {
+                println!("An existing Wayscriber config would be backed up before copying.");
+            }
+
+            println!(
+                "Run without --dry-run to perform the migration. See docs/MIGRATION.md for the full checklist."
+            );
+        }
+        MigrationActions::Migrated {
+            target_existed,
+            files_copied,
+            backup_path,
+        } => {
+            println!(
+                "Copied {} {} from {} to {}.",
+                files_copied,
+                pluralize(*files_copied, "file", "files"),
+                report.legacy_dir.display(),
+                report.target_dir.display()
+            );
+
+            if let Some(path) = backup_path {
+                println!(
+                    "Existing Wayscriber config was moved to {} before copying.",
+                    path.display()
+                );
+            } else if *target_existed {
+                println!("Existing Wayscriber config was overwritten after creating a backup.");
+            }
+
+            println!(
+                "Legacy files remain at {}. Remove them when you are comfortable.",
+                report.legacy_dir.display()
+            );
+            println!("See docs/MIGRATION.md for next steps.");
+        }
+    }
+}
+
+fn maybe_print_alias_notice() {
+    if let Some(alias) = legacy::alias_invocation() {
+        if legacy::warnings_suppressed() {
+            return;
+        }
+
+        eprintln!("{alias} has been renamed to wayscriber.");
+        eprintln!("Update your shortcuts and scripts to invoke `wayscriber` directly.");
+        eprintln!("Run `wayscriber --migrate-config` to copy existing settings.");
+        eprintln!("Set HYPRMARKER_SILENCE_RENAME=1 to silence this warning during scripted runs.");
+    }
+}
+
+fn pluralize<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
+    if count == 1 { singular } else { plural }
 }

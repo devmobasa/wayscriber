@@ -1,4 +1,4 @@
-use hyprmarker::config::Config;
+use wayscriber::config::Config;
 
 use super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::error::FormError;
