@@ -35,7 +35,7 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 
 ## Why hyprmarker?
 
-- Works across Wayland compositors (Sway, Wayfire, River, Hyprland, …) via wlr-layer-shell. Tested extensively on Hyprland. Reports from other compositors welcome.
+- Works across Wayland compositors (Sway, Wayfire, River, Hyprland, …) via wlr-layer-shell. Tested extensively on Hyprland and confirmed working on Niri; reports from other compositors welcome.
 - Built for live presentations, classroom sessions, and screenshares - toggle with a key and annotate your screen instantly without breaking flow.
 - Complements tools like [Satty](https://github.com/gabm/Satty): Satty excels at capture → annotate → save workflows, while hyprmarker stays resident as an always-available drawing layer with instant mode switching.
 
