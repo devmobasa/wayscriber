@@ -1,7 +1,7 @@
 # Maintainer: hyprarcher <hyprarcher@proton.me>
 pkgname=hyprmarker
 pkgver=0.4.0
-pkgrel=1
+pkgrel=2
 pkgdesc='ZoomIt-like screen annotation tool for Wayland compositors with wlr-layer-shell support'
 arch=('x86_64' 'aarch64')
 url='https://github.com/devmobasa/hyprmarker'
@@ -80,7 +80,8 @@ makedepends=(
     'git'
 )
 provides=('hyprmarker')
-conflicts=('hyprmarker<0.5.1')
+conflicts=('hyprmarker<0.5.1' 'hyprmarker-debug<0.5.1')
+replaces=('hyprmarker' 'hyprmarker-debug')
 source=("git+https://github.com/devmobasa/wayscriber.git#tag=v$pkgver")
 sha256sums=('SKIP')
 
