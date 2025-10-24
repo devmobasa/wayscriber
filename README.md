@@ -118,6 +118,14 @@ paru -S wayscriber
 
 The package installs the user service at `/usr/lib/systemd/user/wayscriber.service`.
 
+> **Upgrading from the old `hyprmarker` packages?**  
+> Remove the legacy packages once and reinstall under the new name:
+> ```bash
+> sudo pacman -Rns hyprmarker hyprmarker-debug  # ignore if either package is already gone
+> yay -S wayscriber
+> ```
+> After this one-time cleanup, future upgrades work exactly like any other AUR package.
+
 ### Other Distros
 
 **Install dependencies:**
