@@ -163,7 +163,9 @@ mod tests {
         let original = std::env::var_os("XDG_CONFIG_HOME");
         // SAFETY: tests serialize access via the mutex above and restore the environment
         // variable afterward.
-        unsafe { std::env::set_var("XDG_CONFIG_HOME", temp.path()); }
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        }
         let result = f(temp.path());
         match original {
             Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },

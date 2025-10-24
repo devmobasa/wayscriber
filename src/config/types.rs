@@ -303,23 +303,23 @@ fn default_status_dot_radius() -> f64 {
 
 // Help overlay style defaults
 fn default_help_font_size() -> f64 {
-    16.0
+    18.0
 }
 
 fn default_help_line_height() -> f64 {
-    22.0
+    28.0
 }
 
 fn default_help_padding() -> f64 {
-    20.0
+    32.0
 }
 
 fn default_help_bg_color() -> [f64; 4] {
-    [0.0, 0.0, 0.0, 0.85]
+    [0.09, 0.1, 0.13, 0.92]
 }
 
 fn default_help_border_color() -> [f64; 4] {
-    [0.3, 0.6, 1.0, 0.9]
+    [0.33, 0.39, 0.52, 0.88]
 }
 
 fn default_help_border_width() -> f64 {
@@ -327,7 +327,7 @@ fn default_help_border_width() -> f64 {
 }
 
 fn default_help_text_color() -> [f64; 4] {
-    [1.0, 1.0, 1.0, 1.0]
+    [0.95, 0.96, 0.98, 1.0]
 }
 
 /// Board mode configuration for whiteboard/blackboard features.

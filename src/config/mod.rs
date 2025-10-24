@@ -60,8 +60,8 @@ pub struct LoadedConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::ColorSpec;
+    use super::*;
     use std::fs;
     use std::path::Path;
     use std::sync::Mutex;
@@ -78,7 +78,9 @@ mod tests {
         let original = std::env::var_os("XDG_CONFIG_HOME");
         // SAFETY: tests run single-threaded via the mutex above; restoring the previous
         // value prevents leaking the override to other tests.
-        unsafe { std::env::set_var("XDG_CONFIG_HOME", temp.path()); }
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        }
         let result = f(temp.path());
         match original {
             Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
