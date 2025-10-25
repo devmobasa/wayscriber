@@ -375,9 +375,11 @@ pub fn render_help_overlay(
     ];
 
     let title_text = "Wayscriber Controls";
+    let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
     let version_line = format!(
-        "Wayscriber {}  •  F11 → Open Configurator",
-        env!("CARGO_PKG_VERSION")
+        "Wayscriber {} ({})  •  F11 → Open Configurator",
+        env!("CARGO_PKG_VERSION"),
+        commit_hash
     );
     let note_text = "Note: Each board mode has independent drawings";
 
