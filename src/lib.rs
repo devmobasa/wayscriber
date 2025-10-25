@@ -10,6 +10,7 @@ pub mod config;
 pub mod draw;
 pub mod input;
 pub mod legacy;
+pub mod ui;
 pub mod util;
 
 pub use config::Config;

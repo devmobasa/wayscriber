@@ -193,3 +193,29 @@ fn maybe_print_alias_notice() {
 fn pluralize<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
     if count == 1 { singular } else { plural }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn dry_run_requires_migrate_flag() {
+        let result = Cli::try_parse_from(["wayscriber", "--dry-run"]);
+        assert!(result.is_err(), "dry-run without migrate should fail");
+    }
+
+    #[test]
+    fn migrate_with_dry_run_parses_successfully() {
+        let cli = Cli::try_parse_from(["wayscriber", "--migrate-config", "--dry-run"]).unwrap();
+        assert!(cli.migrate_config);
+        assert!(cli.migrate_config_dry_run);
+    }
+
+    #[test]
+    fn active_mode_with_explicit_board_mode() {
+        let cli = Cli::try_parse_from(["wayscriber", "--active", "--mode", "whiteboard"]).unwrap();
+        assert!(cli.active);
+        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
+    }
+}

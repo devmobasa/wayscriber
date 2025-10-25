@@ -40,6 +40,36 @@ const LEGACY_CONFIG_DIR: &str = "hyprmarker";
 
 static USING_LEGACY_CONFIG: AtomicBool = AtomicBool::new(false);
 
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    use std::path::Path;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    pub(crate) fn with_temp_config_home<F, T>(f: F) -> T
+    where
+        F: FnOnce(&Path) -> T,
+    {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let temp = TempDir::new().expect("tempdir");
+        let original = std::env::var_os("XDG_CONFIG_HOME");
+        // SAFETY: tests serialize access via the mutex above and restore the previous value.
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        }
+        let result = f(temp.path());
+        match original {
+            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        result
+    }
+}
+
 /// Represents the source used to load configuration data.
 #[derive(Debug, Clone)]
 pub enum ConfigSource {
@@ -62,32 +92,8 @@ pub struct LoadedConfig {
 mod tests {
     use super::ColorSpec;
     use super::*;
+    use crate::config::test_helpers::with_temp_config_home;
     use std::fs;
-    use std::path::Path;
-    use std::sync::Mutex;
-    use tempfile::TempDir;
-
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
-
-    fn with_temp_config_home<F, T>(f: F) -> T
-    where
-        F: FnOnce(&Path) -> T,
-    {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        let temp = TempDir::new().expect("tempdir");
-        let original = std::env::var_os("XDG_CONFIG_HOME");
-        // SAFETY: tests run single-threaded via the mutex above; restoring the previous
-        // value prevents leaking the override to other tests.
-        unsafe {
-            std::env::set_var("XDG_CONFIG_HOME", temp.path());
-        }
-        let result = f(temp.path());
-        match original {
-            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
-            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
-        }
-        result
-    }
 
     #[test]
     fn load_prefers_primary_directory() {
@@ -122,6 +128,95 @@ mod tests {
                 loaded.config.drawing.default_color,
                 ColorSpec::Name(ref color) if color == "blue"
             ));
+        });
+    }
+
+    #[test]
+    fn validate_and_clamp_clamps_out_of_range_values() {
+        let mut config = Config::default();
+        config.drawing.default_thickness = 40.0;
+        config.drawing.default_font_size = 3.0;
+        config.drawing.font_weight = "not-a-real-weight".to_string();
+        config.drawing.font_style = "diagonal".to_string();
+        config.arrow.length = 100.0;
+        config.arrow.angle_degrees = 5.0;
+        config.performance.buffer_count = 8;
+        config.board.default_mode = "magenta-board".to_string();
+        config.board.whiteboard_color = [1.5, -0.5, 0.5];
+        config.board.blackboard_color = [-0.2, 2.0, 0.5];
+        config.board.whiteboard_pen_color = [2.0, 2.0, 2.0];
+        config.board.blackboard_pen_color = [-1.0, -1.0, -1.0];
+
+        config.validate_and_clamp();
+
+        assert_eq!(config.drawing.default_thickness, 20.0);
+        assert_eq!(config.drawing.default_font_size, 8.0);
+        assert_eq!(config.drawing.font_weight, "bold");
+        assert_eq!(config.drawing.font_style, "normal");
+        assert_eq!(config.arrow.length, 50.0);
+        assert_eq!(config.arrow.angle_degrees, 15.0);
+        assert_eq!(config.performance.buffer_count, 4);
+        assert_eq!(config.board.default_mode, "transparent");
+        assert!(
+            config
+                .board
+                .whiteboard_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert!(
+            config
+                .board
+                .blackboard_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert!(
+            config
+                .board
+                .whiteboard_pen_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert!(
+            config
+                .board
+                .blackboard_pen_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+    }
+
+    #[test]
+    fn save_with_backup_creates_timestamped_file() {
+        with_temp_config_home(|config_root| {
+            let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+            fs::create_dir_all(&config_dir).unwrap();
+            let config_file = config_dir.join("config.toml");
+            fs::write(&config_file, "legacy = true").unwrap();
+
+            let config = Config::default();
+            let backup_path = config
+                .save_with_backup()
+                .expect("save_with_backup should succeed")
+                .expect("backup should be created");
+
+            assert!(backup_path.exists());
+            assert!(
+                backup_path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .contains("config.toml."),
+                "backup file should include timestamp suffix"
+            );
+            assert_eq!(fs::read_to_string(&backup_path).unwrap(), "legacy = true");
+
+            let new_contents = fs::read_to_string(&config_file).unwrap();
+            assert!(
+                new_contents.contains("[drawing]"),
+                "new config should be serialized TOML"
+            );
         });
     }
 }

@@ -146,33 +146,9 @@ fn copy_directory(src: &Path, dest: &Path, dry_run: bool) -> Result<usize> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::with_temp_config_home;
     use super::*;
     use std::fs;
-    use std::path::Path;
-    use std::sync::Mutex;
-    use tempfile::TempDir;
-
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
-
-    fn with_temp_config_home<F, T>(f: F) -> T
-    where
-        F: FnOnce(&Path) -> T,
-    {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        let temp = TempDir::new().expect("tempdir");
-        let original = std::env::var_os("XDG_CONFIG_HOME");
-        // SAFETY: tests serialize access via the mutex above and restore the environment
-        // variable afterward.
-        unsafe {
-            std::env::set_var("XDG_CONFIG_HOME", temp.path());
-        }
-        let result = f(temp.path());
-        match original {
-            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
-            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
-        }
-        result
-    }
 
     #[test]
     fn migrate_copies_legacy_into_new_directory() {
