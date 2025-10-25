@@ -51,3 +51,5 @@ serde_json = "1.0"
 
 [dev-dependencies]
 tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
