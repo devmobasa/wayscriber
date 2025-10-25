@@ -125,6 +125,8 @@ case $REPLY in
 
         if [ -f "$PROJECT_ROOT/packaging/wayscriber.service" ]; then
             cp "$PROJECT_ROOT/packaging/wayscriber.service" "$SERVICE_FILE"
+            sed -i "s|ExecStart=/usr/bin/wayscriber --daemon|ExecStart=$INSTALL_DIR/$BINARY_NAME --daemon|" "$SERVICE_FILE"
+            sed -i "s|Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\"|Environment=\"PATH=$INSTALL_DIR:/usr/local/bin:/usr/bin:/bin\"|" "$SERVICE_FILE"
             echo "✅ Service file installed to $SERVICE_FILE"
 
             # Enable and start the service
