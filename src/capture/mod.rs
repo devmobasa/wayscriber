@@ -99,11 +99,19 @@ struct DefaultFileSaver;
 struct DefaultClipboard;
 
 fn hyprland_env_detected() -> bool {
-    env::var_os("HYPRLAND_INSTANCE_SIGNATURE")
-        .or_else(|| env::var_os("HYPRLAND_INSTANCE_SIGNATURE_1"))
-        .is_some()
-        || env::var("XDG_CURRENT_DESKTOP")
-            .map(|desktop| desktop.to_lowercase().contains("hyprland"))
+    let signature = env::var_os("HYPRLAND_INSTANCE_SIGNATURE")
+        .or_else(|| env::var_os("HYPRLAND_INSTANCE_SIGNATURE_1"));
+    let desktop = env::var("XDG_CURRENT_DESKTOP").ok();
+    hyprland_env_detected_from(signature, desktop)
+}
+
+fn hyprland_env_detected_from(
+    signature: Option<std::ffi::OsString>,
+    desktop: Option<String>,
+) -> bool {
+    signature.is_some()
+        || desktop
+            .map(|value| value.to_lowercase().contains("hyprland"))
             .unwrap_or(false)
 }
 
@@ -626,7 +634,6 @@ fn create_placeholder_image() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::fs;
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
@@ -695,33 +702,14 @@ mod tests {
         }
     }
 
-    fn with_env_var<F: FnOnce()>(key: &str, value: Option<&str>, test: F) {
-        let original = env::var_os(key);
-        match value {
-            Some(v) => env::set_var(key, v),
-            None => env::remove_var(key),
-        }
-        test();
-        match original {
-            Some(val) => env::set_var(key, val),
-            None => env::remove_var(key),
-        }
-    }
-
     #[test]
     fn detects_hyprland_via_signature() {
-        with_env_var("HYPRLAND_INSTANCE_SIGNATURE", Some("abc"), || {
-            assert!(hyprland_env_detected());
-        });
+        assert!(hyprland_env_detected_from(Some("abc".into()), None));
     }
 
     #[test]
     fn detects_hyprland_via_desktop_value() {
-        with_env_var("HYPRLAND_INSTANCE_SIGNATURE", None, || {
-            with_env_var("XDG_CURRENT_DESKTOP", Some("Hyprland"), || {
-                assert!(hyprland_env_detected());
-            });
-        });
+        assert!(hyprland_env_detected_from(None, Some("Hyprland".into())));
     }
 
     #[test]
