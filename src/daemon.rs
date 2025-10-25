@@ -1,5 +1,5 @@
 /// Daemon mode implementation: background service with toggle activation
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use ksni::TrayMethods;
 use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
@@ -7,7 +7,9 @@ use signal_hook::iterator::Signals;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::backend;
@@ -23,12 +25,15 @@ pub enum OverlayState {
 /// Daemon state manager
 type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
 
+const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
+
 pub struct Daemon {
     overlay_state: OverlayState,
     should_quit: Arc<AtomicBool>,
     toggle_requested: Arc<AtomicBool>,
     initial_mode: Option<String>,
     backend_runner: Arc<BackendRunner>,
+    tray_thread: Option<JoinHandle<()>>,
 }
 
 pub(crate) struct WayscriberTray {
@@ -203,6 +208,7 @@ impl Daemon {
             toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
             backend_runner,
+            tray_thread: None,
         }
     }
 
@@ -260,11 +266,9 @@ impl Daemon {
         // Start system tray
         let tray_toggle = self.toggle_requested.clone();
         let tray_quit = self.should_quit.clone();
-        thread::spawn(move || {
-            if let Err(e) = run_system_tray(tray_toggle, tray_quit) {
-                warn!("System tray failed: {}", e);
-            }
-        });
+        let tray_handle = start_system_tray(tray_toggle, tray_quit)
+            .context("Failed to start system tray")?;
+        self.tray_thread = Some(tray_handle);
 
         info!("Daemon ready - waiting for toggle signal");
 
@@ -290,6 +294,13 @@ impl Daemon {
         }
 
         info!("Daemon shutting down");
+        self.should_quit.store(true, Ordering::Release);
+        if let Some(handle) = self.tray_thread.take() {
+            match handle.join() {
+                Ok(()) => info!("System tray thread joined"),
+                Err(err) => warn!("System tray thread panicked: {:?}", err),
+            }
+        }
         Ok(())
     }
 
@@ -351,22 +362,29 @@ impl Daemon {
 }
 
 /// System tray implementation
-fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Result<()> {
+fn start_system_tray(
+    toggle_flag: Arc<AtomicBool>,
+    quit_flag: Arc<AtomicBool>,
+) -> Result<JoinHandle<()>> {
     let configurator_binary =
         legacy::configurator_override().unwrap_or_else(|| "wayscriber-configurator".to_string());
 
-    let tray = WayscriberTray::new(toggle_flag, quit_flag.clone(), configurator_binary);
+    let tray_quit_flag = quit_flag.clone();
+    let tray = WayscriberTray::new(toggle_flag, tray_quit_flag.clone(), configurator_binary);
+    let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();
 
     info!("Creating tray service...");
+    info!("Spawning system tray runtime thread...");
 
-    // ksni 0.3+ uses async API - spawn service in background tokio runtime
-    // Note: This thread will be terminated when the main daemon loop exits.
-    // The tray library handles its own cleanup when dropped.
-    let _tray_thread = std::thread::spawn(move || {
+    let ready_thread_tx = ready_tx.clone();
+    let tray_thread = thread::spawn(move || {
         let rt = match tokio::runtime::Runtime::new() {
             Ok(runtime) => runtime,
             Err(e) => {
                 warn!("Failed to create Tokio runtime for system tray: {}", e);
+                report_tray_readiness(&ready_thread_tx, Err(anyhow!(
+                    "Failed to create Tokio runtime for system tray: {e}"
+                )));
                 return;
             }
         };
@@ -375,13 +393,13 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
             match tray.spawn().await {
                 Ok(handle) => {
                     info!("System tray spawned successfully");
+                    report_tray_readiness(&ready_thread_tx, Ok(()));
 
                     // Monitor quit flag and shutdown gracefully
                     loop {
                         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                        if quit_flag.load(Ordering::Acquire) {
+                        if tray_quit_flag.load(Ordering::Acquire) {
                             info!("Quit signal received - shutting down system tray");
-                            // Shutdown awaiter will clean up the tray service
                             let _ = handle.shutdown().await;
                             break;
                         }
@@ -389,14 +407,43 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
                 }
                 Err(e) => {
                     warn!("System tray error: {}", e);
+                    report_tray_readiness(&ready_thread_tx, Err(anyhow!("System tray error: {e}")));
                 }
             }
         });
     });
 
-    info!("System tray thread started");
+    drop(ready_tx);
 
-    Ok(())
+    info!("Waiting for system tray readiness signal...");
+    match ready_rx.recv_timeout(TRAY_START_TIMEOUT) {
+        Ok(result) => {
+            result?;
+            info!("System tray thread started");
+            Ok(tray_thread)
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            warn!("Timed out waiting for system tray to start");
+            quit_flag.store(true, Ordering::Release);
+            let _ = tray_thread.join();
+            Err(anyhow!("Timed out waiting for system tray to start"))
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            let _ = tray_thread.join();
+            Err(anyhow!(
+                "System tray thread exited before signaling readiness"
+            ))
+        }
+    }
+}
+
+fn report_tray_readiness(tx: &mpsc::Sender<Result<()>>, result: Result<()>) {
+    if let Err(err) = tx.send(result) {
+        debug!(
+            "System tray readiness receiver dropped before signal could be delivered: {}",
+            err
+        );
+    }
 }
 
 #[cfg(test)]
