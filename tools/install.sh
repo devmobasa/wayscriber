@@ -21,6 +21,28 @@ echo "   Wayscriber Installation"
 echo "================================"
 echo ""
 
+die() {
+    echo "❌ $*" >&2
+    exit 1
+}
+
+ensure_replacement() {
+    local file="$1"
+    local search="$2"
+    local replacement="$3"
+    local description="$4"
+
+    if ! grep -q -- "$search" "$file"; then
+        die "Expected pattern '$search' not found in $file while preparing $description."
+    fi
+
+    sed -i "s|$search|$replacement|" "$file"
+
+    if ! grep -q -- "$replacement" "$file"; then
+        die "Failed to set '$replacement' in $file for $description."
+    fi
+}
+
 # Ensure required binaries are built
 echo "Building Wayscriber binaries (release)..."
 (cd "$PROJECT_ROOT" && cargo build --release --bins)
@@ -125,8 +147,19 @@ case $REPLY in
 
         if [ -f "$PROJECT_ROOT/packaging/wayscriber.service" ]; then
             cp "$PROJECT_ROOT/packaging/wayscriber.service" "$SERVICE_FILE"
-            sed -i "s|ExecStart=/usr/bin/wayscriber --daemon|ExecStart=$INSTALL_DIR/$BINARY_NAME --daemon|" "$SERVICE_FILE"
-            sed -i "s|Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\"|Environment=\"PATH=$INSTALL_DIR:/usr/local/bin:/usr/bin:/bin\"|" "$SERVICE_FILE"
+
+            ensure_replacement \
+                "$SERVICE_FILE" \
+                "ExecStart=/usr/bin/wayscriber --daemon" \
+                "ExecStart=$INSTALL_DIR/$BINARY_NAME --daemon" \
+                "ExecStart override"
+
+            ensure_replacement \
+                "$SERVICE_FILE" \
+                "Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\"" \
+                "Environment=\"PATH=$INSTALL_DIR:/usr/local/bin:/usr/bin:/bin\"" \
+                "PATH override"
+
             echo "✅ Service file installed to $SERVICE_FILE"
 
             # Enable and start the service
