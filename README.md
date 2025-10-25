@@ -60,7 +60,7 @@ Or bind to a key in `~/.config/hypr/hyprland.conf`:
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press `F10` for help, `F11` for configurator, `Escape` to exit.
+Press `F10` for help, `F11` to close the overlay and open the configurator, `Escape` to exit (once active screenshots finish).
 
 ### Option 2: Daemon Mode (Background Service)
 Run wayscriber in the background and toggle it with a keybind:
@@ -95,7 +95,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 - Whiteboard/blackboard modes with auto pen contrast and isolated frames.
 - Quick color palette and line thickness adjustments via hotkeys or scroll wheel.
 - Status bar with live tool feedback and an in-app help overlay (`F10`).
-- Launch the native configurator from the overlay (`F11`) to edit settings without leaving your session.
+- Launch the native configurator from the overlay (`F11` closes the overlay first, then opens the configurator so it can receive focus).
 - Background daemon with tray icon and customizable TOML configuration.
 
 ## Demo
@@ -271,7 +271,7 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 | Cancel action | Right-click or `Escape` |
 | **Help & Exit** |
 | Toggle help overlay | `F10` |
-| Launch configurator | `F11` |
+| Launch configurator | `F11` (closes overlay, then opens configurator) |
 | Exit overlay | `Escape` or `Ctrl+Q` |
 
 ## Configuration

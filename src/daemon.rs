@@ -21,8 +21,7 @@ pub enum OverlayState {
 }
 
 /// Daemon state manager
-type BackendRunner =
-    dyn Fn(Option<String>) -> Result<Option<SystemCommand>> + Send + Sync;
+type BackendRunner = dyn Fn(Option<String>) -> Result<Option<SystemCommand>> + Send + Sync;
 
 pub struct Daemon {
     overlay_state: OverlayState,
@@ -418,11 +417,13 @@ mod tests {
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
 
     fn runner_counter(count: Arc<AtomicUsize>) -> Arc<BackendRunner> {
-        Arc::new(move |mode: Option<String>| -> Result<Option<SystemCommand>> {
-            assert_eq!(mode.as_deref(), Some("whiteboard"));
-            count.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(None)
-        })
+        Arc::new(
+            move |mode: Option<String>| -> Result<Option<SystemCommand>> {
+                assert_eq!(mode.as_deref(), Some("whiteboard"));
+                count.fetch_add(1, AtomicOrdering::SeqCst);
+                Ok(None)
+            },
+        )
     }
 
     #[test]

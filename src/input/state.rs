@@ -216,6 +216,34 @@ impl InputState {
         self.capture_guard_active = false;
     }
 
+    /// Returns true if exit requests are currently deferred by an in-progress capture.
+    pub fn capture_guard_active(&self) -> bool {
+        self.capture_guard_active
+    }
+
+    /// Requests an immediate exit regardless of capture guard state.
+    pub fn force_exit(&mut self) {
+        self.should_exit = true;
+    }
+
+    fn handle_exit_request(&mut self, force: bool) {
+        match &self.state {
+            DrawingState::TextInput { .. } | DrawingState::Drawing { .. } => {
+                self.state = DrawingState::Idle;
+                self.needs_redraw = true;
+            }
+            DrawingState::Idle => {
+                if force || !self.capture_guard_active {
+                    self.should_exit = true;
+                } else {
+                    log::info!(
+                        "Screenshot capture in progress - delay exit until capture completes"
+                    );
+                }
+            }
+        }
+    }
+
     /// Switches to a different board mode with color auto-adjustment.
     ///
     /// Handles mode transitions with automatic color adjustment for contrast:
@@ -453,24 +481,7 @@ impl InputState {
     fn handle_action(&mut self, action: Action) {
         match action {
             Action::Exit => {
-                // Exit drawing mode or cancel current action
-                match &self.state {
-                    DrawingState::TextInput { .. } | DrawingState::Drawing { .. } => {
-                        // Cancel current action
-                        self.state = DrawingState::Idle;
-                        self.needs_redraw = true;
-                    }
-                    DrawingState::Idle => {
-                        if self.capture_guard_active {
-                            log::info!(
-                                "Screenshot capture in progress - ignoring exit request until capture completes"
-                            );
-                        } else {
-                            // Exit application
-                            self.should_exit = true;
-                        }
-                    }
-                }
+                self.handle_exit_request(false);
             }
             Action::EnterTextMode => {
                 if matches!(self.state, DrawingState::Idle) {
@@ -1295,6 +1306,14 @@ mod tests {
 
         state.end_capture_guard();
         state.on_key_press(Key::Escape);
+        assert!(state.should_exit);
+    }
+
+    #[test]
+    fn force_exit_bypasses_capture_guard() {
+        let mut state = create_test_input_state();
+        state.begin_capture_guard();
+        state.force_exit();
         assert!(state.should_exit);
     }
 }

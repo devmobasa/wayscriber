@@ -1,7 +1,6 @@
 // Wayland backend using wlr-layer-shell for overlay
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
-use std::collections::HashMap;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
@@ -23,6 +22,7 @@ use smithay_client_toolkit::{
     },
     shm::{Shm, ShmHandler, slot::SlotPool},
 };
+use std::collections::HashMap;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle,
     globals::registry_queue_init,
@@ -32,9 +32,9 @@ use wayland_client::{
 
 use crate::capture::{CaptureDestination, CaptureManager, CaptureOutcome};
 use crate::config::{
+    Action, BoardConfig, Config, ConfigSource,
     enums::StatusPosition,
     types::{HelpOverlayStyle, StatusBarStyle},
-    Action, BoardConfig, Config, ConfigSource,
 };
 use crate::draw::{Color, FontDescriptor, Shape};
 use crate::input::{BoardMode, DrawingState, InputState, Key, MouseButton, SystemCommand, Tool};
@@ -83,6 +83,7 @@ struct WaylandState {
     tokio_handle: tokio::runtime::Handle,
 }
 
+/// Wayland layer-surface plus buffer pool metadata for a single output.
 struct OutputSurface {
     id: u32,
     output: wl_output::WlOutput,
@@ -97,6 +98,7 @@ struct OutputSurface {
     scale_factor: i32,
 }
 
+/// Immutable view of the UI/drawing state used for multi-output rendering.
 struct RenderSnapshot {
     board_mode: BoardMode,
     board_config: BoardConfig,
@@ -374,7 +376,10 @@ impl WaylandBackend {
             let can_render = state.input_state.needs_redraw && state.surfaces_ready_for_render();
 
             if can_render {
-                debug!("Main loop: triggering render across {} surfaces", state.surfaces.len());
+                debug!(
+                    "Main loop: triggering render across {} surfaces",
+                    state.surfaces.len()
+                );
                 match state.render(&qh) {
                     Ok(()) => {
                         // Reset failure counter on successful render
@@ -401,7 +406,9 @@ impl WaylandBackend {
                     }
                 }
             } else if state.input_state.needs_redraw && !state.surfaces_ready_for_render() {
-                debug!("Main loop: Skipping render - waiting for surfaces to configure or frame callbacks");
+                debug!(
+                    "Main loop: Skipping render - waiting for surfaces to configure or frame callbacks"
+                );
             }
         }
 
@@ -419,7 +426,12 @@ impl WaylandBackend {
 }
 
 impl RenderSnapshot {
-    fn capture(state: &InputState, config: &Config, workspace_size: (u32, u32), mouse: (i32, i32)) -> Self {
+    fn capture(
+        state: &InputState,
+        config: &Config,
+        workspace_size: (u32, u32),
+        mouse: (i32, i32),
+    ) -> Self {
         let provisional_shape = state.get_provisional_shape(mouse.0, mouse.1);
         let text_overlay = match &state.state {
             DrawingState::TextInput { x, y, buffer } => Some(TextOverlaySnapshot {
@@ -465,6 +477,11 @@ impl RenderSnapshot {
             state.current_font_size as i32
         );
 
+        let mut status_text = status_text;
+        if state.capture_guard_active() {
+            status_text.push_str("  (Capture running – Escape disabled)");
+        }
+
         Self {
             board_mode: state.board_mode(),
             board_config: state.board_config.clone(),
@@ -491,7 +508,9 @@ impl WaylandState {
     fn initialize_output_surfaces(&mut self, qh: &QueueHandle<Self>) {
         let outputs: Vec<_> = self.output_state.outputs().collect();
         if outputs.is_empty() {
-            warn!("No outputs reported by compositor; overlay will activate once an output appears");
+            warn!(
+                "No outputs reported by compositor; overlay will activate once an output appears"
+            );
         }
 
         for output in outputs {
@@ -501,11 +520,7 @@ impl WaylandState {
         self.recompute_workspace_bounds();
     }
 
-    fn create_surface_for_output(
-        &mut self,
-        output: wl_output::WlOutput,
-        qh: &QueueHandle<Self>,
-    ) {
+    fn create_surface_for_output(&mut self, output: wl_output::WlOutput, qh: &QueueHandle<Self>) {
         let id = output.id().protocol_id();
         if self.surfaces.contains_key(&id) {
             return;
@@ -527,7 +542,8 @@ impl WaylandState {
         layer_surface.set_exclusive_zone(-1);
         layer_surface.commit();
 
-        let (logical_position, scale_factor) = self.output_state
+        let (logical_position, scale_factor) = self
+            .output_state
             .info(&output)
             .map(|info| {
                 let pos = info
@@ -545,8 +561,7 @@ impl WaylandState {
             id, logical_position.0, logical_position.1
         );
 
-        self.surface_map
-            .insert(wl_surface.id().protocol_id(), id);
+        self.surface_map.insert(wl_surface.id().protocol_id(), id);
         self.surfaces.insert(
             id,
             OutputSurface {
@@ -570,8 +585,7 @@ impl WaylandState {
     fn remove_surface_for_output(&mut self, output: &wl_output::WlOutput) {
         let id = output.id().protocol_id();
         if self.surfaces.remove(&id).is_some() {
-            self.surface_map
-                .retain(|_, surface_id| surface_id != &id);
+            self.surface_map.retain(|_, surface_id| surface_id != &id);
             debug!("Removed overlay surface for output {}", id);
         }
         self.recompute_workspace_bounds();
@@ -650,7 +664,6 @@ impl WaylandState {
         })
     }
 
-
     fn render(&mut self, qh: &QueueHandle<Self>) -> Result<()> {
         debug!("=== RENDER START ({} surfaces) ===", self.surfaces.len());
         let snapshot = RenderSnapshot::capture(
@@ -706,7 +719,8 @@ impl WaylandState {
                 "Creating new SlotPool for output {} ({}x{}, {} bytes, {} buffers)",
                 surface.id, surface.width, surface.height, pool_size, buffer_count
             );
-            surface.pool = Some(SlotPool::new(pool_size, shm).context("Failed to create slot pool")?);
+            surface.pool =
+                Some(SlotPool::new(pool_size, shm).context("Failed to create slot pool")?);
         }
 
         let pool = surface
@@ -724,6 +738,8 @@ impl WaylandState {
             .context("Failed to create buffer")?;
 
         let cairo_surface = unsafe {
+            // SAFETY: `canvas` originates from SlotPool and lives until the buffer is committed
+            // below. No other references exist while we build the Cairo surface.
             cairo::ImageSurface::create_for_data_unsafe(
                 canvas.as_mut_ptr(),
                 cairo::Format::ARgb32,
@@ -797,15 +813,13 @@ impl WaylandState {
         drop(ctx);
         drop(cairo_surface);
 
+        surface.wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
         surface
             .wl_surface
-            .attach(Some(buffer.wl_buffer()), 0, 0);
-        surface.wl_surface.damage_buffer(0, 0, surface.width as i32, surface.height as i32);
+            .damage_buffer(0, 0, surface.width as i32, surface.height as i32);
 
         if enable_vsync {
-            surface
-                .wl_surface
-                .frame(qh, surface.wl_surface.clone());
+            surface.wl_surface.frame(qh, surface.wl_surface.clone());
             surface.frame_callback_pending = true;
         }
 
@@ -1144,7 +1158,7 @@ impl ShmHandler for WaylandState {
 impl LayerShellHandler for WaylandState {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
         info!("Layer surface closed by compositor");
-        self.input_state.should_exit = true;
+        self.input_state.force_exit();
     }
 
     fn configure(
@@ -1164,8 +1178,8 @@ impl LayerShellHandler for WaylandState {
                 );
 
                 if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
-                    let size_changed =
-                        surface.width != configure.new_size.0 || surface.height != configure.new_size.1;
+                    let size_changed = surface.width != configure.new_size.0
+                        || surface.height != configure.new_size.1;
 
                     surface.width = configure.new_size.0;
                     surface.height = configure.new_size.1;
@@ -1339,9 +1353,7 @@ impl PointerHandler for WaylandState {
 
         for event in events {
             let surface_id = event.surface.id().protocol_id();
-            let offset = self
-                .surface_offset(surface_id)
-                .unwrap_or((0, 0));
+            let offset = self.surface_offset(surface_id).unwrap_or((0, 0));
             let global_x = event.position.0 as i32 + offset.0;
             let global_y = event.position.1 as i32 + offset.1;
 
@@ -1415,13 +1427,21 @@ impl PointerHandler for WaylandState {
                         if shift_mode {
                             debug!(
                                 "Font size {}: {:.1}px",
-                                if scroll_direction > 0 { "decreased" } else { "increased" },
+                                if scroll_direction > 0 {
+                                    "decreased"
+                                } else {
+                                    "increased"
+                                },
                                 self.input_state.current_font_size
                             );
                         } else {
                             debug!(
                                 "Thickness {}: {:.0}px",
-                                if scroll_direction > 0 { "decreased" } else { "increased" },
+                                if scroll_direction > 0 {
+                                    "decreased"
+                                } else {
+                                    "increased"
+                                },
                                 self.input_state.current_thickness
                             );
                         }

@@ -177,7 +177,12 @@ pub fn render_status_bar_custom(
 
     let dot_x = x + STATUS_DOT_OFFSET_X;
     let dot_y = y - text_height / 2.0;
-    ctx.set_source_rgba(current_color.r, current_color.g, current_color.b, current_color.a);
+    ctx.set_source_rgba(
+        current_color.r,
+        current_color.g,
+        current_color.b,
+        current_color.a,
+    );
     ctx.arc(dot_x, dot_y, style.dot_radius, 0.0, 2.0 * PI);
     let _ = ctx.fill();
 
@@ -384,7 +389,7 @@ pub fn render_help_overlay(
     let title_text = "Wayscriber Controls";
     let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
     let version_line = format!(
-        "Wayscriber {} ({})  •  F11 → Open Configurator",
+        "Wayscriber {} ({})  •  F11 → Close & Configure",
         env!("CARGO_PKG_VERSION"),
         commit_hash
     );

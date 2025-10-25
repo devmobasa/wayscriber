@@ -46,7 +46,10 @@ fn escape_in_drawing_mode_cancels_stroke_without_exiting() {
 
     state.on_key_press(Key::Escape);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.needs_redraw, "cancelling a stroke should trigger redraw");
+    assert!(
+        state.needs_redraw,
+        "cancelling a stroke should trigger redraw"
+    );
     assert!(
         !state.should_exit,
         "Escape during drawing cancels stroke rather than closing overlay"
@@ -93,7 +96,20 @@ fn escape_during_capture_keeps_overlay_visible_until_capture_completes() {
 
     state.end_capture_guard();
     state.on_key_press(Key::Escape);
-    assert!(state.should_exit, "Exit should function once capture completes");
+    assert!(
+        state.should_exit,
+        "Exit should function once capture completes"
+    );
+}
+
+#[test]
+fn pressing_f10_toggles_help_overlay() {
+    let mut state = make_input_state();
+    assert!(!state.show_help);
+    state.on_key_press(Key::F10);
+    assert!(state.show_help);
+    state.on_key_press(Key::F10);
+    assert!(!state.show_help);
 }
 
 #[test]
