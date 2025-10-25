@@ -231,7 +231,7 @@ wayscriber ships with keyboard shortcuts for quick captures:
 - `Ctrl+Shift+O` – capture the active window (Hyprland fast path, portal fallback).
 - `Ctrl+6` / `Ctrl+Shift+6` – reserved for remembered-region clipboard/file captures (coming soon).
 
-**Requirements:** install `wl-clipboard`, `grim`, and `slurp` for the fastest Hyprland workflow. If they are missing, wayscriber falls back to `xdg-desktop-portal`'s interactive picker.
+**Requirements:** install `hyprctl`, `grim`, `slurp`, and `wl-clipboard` for the fastest Hyprland workflow. If any of these tools are missing (or Hyprland isn’t detected), Wayscriber automatically uses `xdg-desktop-portal`’s interactive picker instead.
 
 ## Controls Reference
 

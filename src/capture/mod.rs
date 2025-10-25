@@ -18,6 +18,7 @@ pub use types::{
 
 use async_trait::async_trait;
 use file::{FileSaveConfig, save_screenshot};
+use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
@@ -97,36 +98,21 @@ struct DefaultCaptureSource;
 struct DefaultFileSaver;
 struct DefaultClipboard;
 
+fn hyprland_env_detected() -> bool {
+    env::var_os("HYPRLAND_INSTANCE_SIGNATURE")
+        .or_else(|| env::var_os("HYPRLAND_INSTANCE_SIGNATURE_1"))
+        .is_some()
+        || env::var("XDG_CURRENT_DESKTOP")
+            .map(|desktop| desktop.to_lowercase().contains("hyprland"))
+            .unwrap_or(false)
+}
+
 #[async_trait]
 impl CaptureSource for DefaultCaptureSource {
     async fn capture(&self, capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
         match capture_type {
-            CaptureType::ActiveWindow => match capture_active_window_hyprland().await {
-                Ok(data) => Ok(data),
-                Err(e) => {
-                    log::warn!(
-                        "Active window capture via Hyprland failed: {}. Falling back to portal.",
-                        e
-                    );
-                    capture_via_portal_bytes(CaptureType::ActiveWindow).await
-                }
-            },
-            CaptureType::Selection { .. } => match capture_selection_hyprland().await {
-                Ok(data) => Ok(data),
-                Err(e) => {
-                    log::warn!(
-                        "Selection capture via Hyprland failed: {}. Falling back to portal.",
-                        e
-                    );
-                    capture_via_portal_bytes(CaptureType::Selection {
-                        x: 0,
-                        y: 0,
-                        width: 0,
-                        height: 0,
-                    })
-                    .await
-                }
-            },
+            CaptureType::ActiveWindow => capture_active_window_best_effort().await,
+            CaptureType::Selection { .. } => capture_selection_best_effort().await,
             other => capture_via_portal_bytes(other).await,
         }
     }
@@ -416,6 +402,48 @@ async fn capture_via_portal_bytes(capture_type: CaptureType) -> Result<Vec<u8>, 
 }
 
 /// Capture the currently focused Hyprland window using `hyprctl` + `grim`.
+async fn capture_active_window_best_effort() -> Result<Vec<u8>, CaptureError> {
+    if hyprland_env_detected() {
+        match capture_active_window_hyprland().await {
+            Ok(bytes) => return Ok(bytes),
+            Err(e) => {
+                log::warn!(
+                    "Active window capture via Hyprland failed: {}. Falling back to portal.",
+                    e
+                );
+            }
+        }
+    } else {
+        log::debug!("Hyprland environment not detected; using portal for active window capture");
+    }
+
+    capture_via_portal_bytes(CaptureType::ActiveWindow).await
+}
+
+async fn capture_selection_best_effort() -> Result<Vec<u8>, CaptureError> {
+    if hyprland_env_detected() {
+        match capture_selection_hyprland().await {
+            Ok(bytes) => return Ok(bytes),
+            Err(e) => {
+                log::warn!(
+                    "Selection capture via Hyprland failed: {}. Falling back to portal.",
+                    e
+                );
+            }
+        }
+    } else {
+        log::debug!("Hyprland environment not detected; using portal for selection capture");
+    }
+
+    capture_via_portal_bytes(CaptureType::Selection {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+    })
+    .await
+}
+
 async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
     tokio::task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
         use serde_json::Value;
@@ -598,6 +626,7 @@ fn create_placeholder_image() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
     use std::fs;
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
@@ -664,6 +693,35 @@ mod tests {
                 Ok(())
             }
         }
+    }
+
+    fn with_env_var<F: FnOnce()>(key: &str, value: Option<&str>, test: F) {
+        let original = env::var_os(key);
+        match value {
+            Some(v) => env::set_var(key, v),
+            None => env::remove_var(key),
+        }
+        test();
+        match original {
+            Some(val) => env::set_var(key, val),
+            None => env::remove_var(key),
+        }
+    }
+
+    #[test]
+    fn detects_hyprland_via_signature() {
+        with_env_var("HYPRLAND_INSTANCE_SIGNATURE", Some("abc"), || {
+            assert!(hyprland_env_detected());
+        });
+    }
+
+    #[test]
+    fn detects_hyprland_via_desktop_value() {
+        with_env_var("HYPRLAND_INSTANCE_SIGNATURE", None, || {
+            with_env_var("XDG_CURRENT_DESKTOP", Some("Hyprland"), || {
+                assert!(hyprland_env_detected());
+            });
+        });
     }
 
     #[test]
