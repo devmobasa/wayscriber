@@ -157,10 +157,34 @@ mod tests {
         assert_eq!(config.arrow.angle_degrees, 15.0);
         assert_eq!(config.performance.buffer_count, 4);
         assert_eq!(config.board.default_mode, "transparent");
-        assert!(config.board.whiteboard_color.iter().all(|c| (0.0..=1.0).contains(c)));
-        assert!(config.board.blackboard_color.iter().all(|c| (0.0..=1.0).contains(c)));
-        assert!(config.board.whiteboard_pen_color.iter().all(|c| (0.0..=1.0).contains(c)));
-        assert!(config.board.blackboard_pen_color.iter().all(|c| (0.0..=1.0).contains(c)));
+        assert!(
+            config
+                .board
+                .whiteboard_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert!(
+            config
+                .board
+                .blackboard_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert!(
+            config
+                .board
+                .whiteboard_pen_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert!(
+            config
+                .board
+                .blackboard_pen_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
     }
 
     #[test]
@@ -186,10 +210,7 @@ mod tests {
                     .contains("config.toml."),
                 "backup file should include timestamp suffix"
             );
-            assert_eq!(
-                fs::read_to_string(&backup_path).unwrap(),
-                "legacy = true"
-            );
+            assert_eq!(fs::read_to_string(&backup_path).unwrap(), "legacy = true");
 
             let new_contents = fs::read_to_string(&config_file).unwrap();
             assert!(

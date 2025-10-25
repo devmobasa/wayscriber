@@ -911,9 +911,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("capture file.png");
         fs::write(&file_path, b"portal-bytes").unwrap();
-        let uri = url::Url::from_file_path(&file_path)
-            .unwrap()
-            .to_string();
+        let uri = url::Url::from_file_path(&file_path).unwrap().to_string();
 
         let data = read_image_from_uri(&uri).expect("read succeeds");
         assert_eq!(data, b"portal-bytes");
