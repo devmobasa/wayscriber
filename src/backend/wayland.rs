@@ -1,6 +1,7 @@
 // Wayland backend using wlr-layer-shell for overlay
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
+use std::collections::HashMap;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
@@ -52,15 +53,11 @@ struct WaylandState {
     output_state: OutputState,
     seat_state: SeatState,
 
-    // Surface and buffer
-    layer_surface: Option<LayerSurface>,
-    pool: Option<SlotPool>,
-    width: u32,
-    height: u32,
-    configured: bool,
-
-    // Frame synchronization
-    frame_callback_pending: bool,
+    // Surface management
+    surfaces: HashMap<u32, OutputSurface>,
+    surface_map: HashMap<u32, u32>,
+    workspace_origin: (i32, i32),
+    workspace_size: (u32, u32),
 
     // Configuration
     config: Config,
@@ -79,6 +76,20 @@ struct WaylandState {
 
     // Tokio runtime handle for async operations
     tokio_handle: tokio::runtime::Handle,
+}
+
+struct OutputSurface {
+    id: u32,
+    output: wl_output::WlOutput,
+    wl_surface: wl_surface::WlSurface,
+    layer_surface: LayerSurface,
+    pool: Option<SlotPool>,
+    width: u32,
+    height: u32,
+    configured: bool,
+    frame_callback_pending: bool,
+    logical_position: (i32, i32),
+    scale_factor: i32,
 }
 
 impl WaylandBackend {
@@ -226,12 +237,10 @@ impl WaylandBackend {
             shm,
             output_state,
             seat_state,
-            layer_surface: None,
-            pool: None,
-            width: 0,
-            height: 0,
-            configured: false,
-            frame_callback_pending: false,
+            surfaces: HashMap::new(),
+            surface_map: HashMap::new(),
+            workspace_origin: (0, 0),
+            workspace_size: (0, 0),
             config,
             input_state,
             current_mouse_x: 0,
@@ -242,31 +251,7 @@ impl WaylandBackend {
             tokio_handle,
         };
 
-        // Create layer shell surface
-        info!("Creating layer shell surface");
-        let wl_surface = state.compositor_state.create_surface(&qh);
-        let layer_surface = state.layer_shell.create_layer_surface(
-            &qh,
-            wl_surface,
-            Layer::Overlay,
-            Some("wayscriber"),
-            None, // Default output
-        );
-
-        // Configure the layer surface for fullscreen overlay
-        layer_surface.set_anchor(Anchor::all());
-        // NOTE: Using Exclusive keyboard interactivity for complete input capture
-        // If clipboard operations are interrupted during overlay toggle, consider switching
-        // to KeyboardInteractivity::OnDemand which cooperates better with other applications
-        layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
-        layer_surface.set_size(0, 0); // Use full screen size
-        layer_surface.set_exclusive_zone(-1);
-
-        // Commit the surface
-        layer_surface.commit();
-
-        state.layer_surface = Some(layer_surface);
-        info!("Layer shell surface created");
+        state.initialize_output_surfaces(&qh);
 
         // Track consecutive render failures for error recovery
         let mut consecutive_render_failures = 0u32;
@@ -355,31 +340,15 @@ impl WaylandBackend {
 
             // Render if configured and needs redraw, but only if no frame callback pending
             // This throttles rendering to display refresh rate (when vsync is enabled)
-            let can_render = state.configured
-                && state.input_state.needs_redraw
-                && (!state.frame_callback_pending || !state.config.performance.enable_vsync);
+            let can_render = state.input_state.needs_redraw && state.surfaces_ready_for_render();
 
             if can_render {
-                debug!(
-                    "Main loop: needs_redraw=true, frame_callback_pending={}, triggering render",
-                    state.frame_callback_pending
-                );
+                debug!("Main loop: triggering render across {} surfaces", state.surfaces.len());
                 match state.render(&qh) {
                     Ok(()) => {
                         // Reset failure counter on successful render
                         consecutive_render_failures = 0;
                         state.input_state.needs_redraw = false;
-                        // Only set frame_callback_pending if vsync is enabled
-                        if state.config.performance.enable_vsync {
-                            state.frame_callback_pending = true;
-                            debug!(
-                                "Main loop: needs_redraw set to false, frame_callback_pending set to true (vsync enabled)"
-                            );
-                        } else {
-                            debug!(
-                                "Main loop: needs_redraw set to false, frame_callback_pending unchanged (vsync disabled)"
-                            );
-                        }
                     }
                     Err(e) => {
                         consecutive_render_failures += 1;
@@ -400,8 +369,8 @@ impl WaylandBackend {
                         state.input_state.needs_redraw = false;
                     }
                 }
-            } else if state.input_state.needs_redraw && state.frame_callback_pending {
-                debug!("Main loop: Skipping render - frame callback already pending");
+            } else if state.input_state.needs_redraw && !state.surfaces_ready_for_render() {
+                debug!("Main loop: Skipping render - waiting for surfaces to configure or frame callbacks");
             }
         }
 
@@ -419,109 +388,253 @@ impl WaylandBackend {
 }
 
 impl WaylandState {
-    fn render(&mut self, _qh: &QueueHandle<Self>) -> Result<()> {
-        debug!("=== RENDER START ===");
-        let layer_surface = self
-            .layer_surface
-            .as_ref()
-            .context("Layer surface not created")?;
-        let wl_surface = layer_surface.wl_surface();
-
-        // Create pool if needed
-        if self.pool.is_none() {
-            // Create pool with configured number of buffers to prevent reuse during fast drawing
-            // This prevents flickering when drawing quickly
-            let buffer_size = (self.width * self.height * 4) as usize;
-            let buffer_count = self.config.performance.buffer_count as usize;
-            let pool_size = buffer_size * buffer_count;
-            info!(
-                "Creating new SlotPool ({}x{}, {} bytes, {} buffers)",
-                self.width, self.height, pool_size, buffer_count
-            );
-            let pool = SlotPool::new(pool_size, &self.shm).context("Failed to create slot pool")?;
-            self.pool = Some(pool);
+    fn initialize_output_surfaces(&mut self, qh: &QueueHandle<Self>) {
+        let outputs: Vec<_> = self.output_state.outputs().collect();
+        if outputs.is_empty() {
+            warn!("No outputs reported by compositor; overlay will activate once an output appears");
         }
 
-        let pool = self
+        for output in outputs {
+            self.create_surface_for_output(output, qh);
+        }
+
+        self.recompute_workspace_bounds();
+    }
+
+    fn create_surface_for_output(
+        &mut self,
+        output: wl_output::WlOutput,
+        qh: &QueueHandle<Self>,
+    ) {
+        let id = output.id().protocol_id();
+        if self.surfaces.contains_key(&id) {
+            return;
+        }
+
+        let wl_surface = self.compositor_state.create_surface(qh);
+        let layer_surface = self.layer_shell.create_layer_surface(
+            qh,
+            wl_surface.clone(),
+            Layer::Overlay,
+            Some("wayscriber"),
+            Some(output.clone()),
+        );
+
+        layer_surface.set_anchor(Anchor::all());
+        layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        layer_surface.set_size(0, 0);
+        layer_surface.set_exclusive_zone(-1);
+        layer_surface.commit();
+
+        let (logical_position, scale_factor) = self.output_state
+            .info(&output)
+            .map(|info| {
+                let pos = info
+                    .logical_position
+                    .or(Some(info.location))
+                    .unwrap_or((0, 0));
+                (pos, info.scale_factor.max(1))
+            })
+            .unwrap_or(((0, 0), 1));
+
+        wl_surface.set_buffer_scale(scale_factor);
+
+        info!(
+            "Created overlay surface for output {} at logical position ({}, {})",
+            id, logical_position.0, logical_position.1
+        );
+
+        self.surface_map
+            .insert(wl_surface.id().protocol_id(), id);
+        self.surfaces.insert(
+            id,
+            OutputSurface {
+                id,
+                output,
+                wl_surface,
+                layer_surface,
+                pool: None,
+                width: 0,
+                height: 0,
+                configured: false,
+                frame_callback_pending: false,
+                logical_position,
+                scale_factor,
+            },
+        );
+
+        self.input_state.needs_redraw = true;
+    }
+
+    fn remove_surface_for_output(&mut self, output: &wl_output::WlOutput) {
+        let id = output.id().protocol_id();
+        if let Some(surface) = self.surfaces.remove(&id) {
+            self.surface_map
+                .retain(|_, surface_id| surface_id != &id);
+            debug!("Removed overlay surface for output {}", id);
+        }
+        self.recompute_workspace_bounds();
+    }
+
+    fn recompute_workspace_bounds(&mut self) {
+        if self.surfaces.is_empty() {
+            self.workspace_origin = (0, 0);
+            self.workspace_size = (0, 0);
+            self.input_state.update_screen_dimensions(0, 0);
+            return;
+        }
+
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+
+        for surface in self.surfaces.values() {
+            let info = self.output_state.info(&surface.output);
+            let logical_position = info
+                .as_ref()
+                .and_then(|i| i.logical_position)
+                .or_else(|| info.as_ref().map(|i| i.location))
+                .unwrap_or(surface.logical_position);
+
+            let logical_size = info
+                .as_ref()
+                .and_then(|i| i.logical_size)
+                .unwrap_or((surface.width as i32, surface.height as i32));
+
+            min_x = min_x.min(logical_position.0);
+            min_y = min_y.min(logical_position.1);
+            max_x = max_x.max(logical_position.0 + logical_size.0.max(1));
+            max_y = max_y.max(logical_position.1 + logical_size.1.max(1));
+        }
+
+        if min_x == i32::MAX || min_y == i32::MAX {
+            min_x = 0;
+            min_y = 0;
+        }
+        if max_x <= min_x {
+            max_x = min_x + 1;
+        }
+        if max_y <= min_y {
+            max_y = min_y + 1;
+        }
+
+        self.workspace_origin = (min_x, min_y);
+        self.workspace_size = ((max_x - min_x) as u32, (max_y - min_y) as u32);
+        self.input_state
+            .update_screen_dimensions(self.workspace_size.0, self.workspace_size.1);
+    }
+
+    fn surfaces_ready_for_render(&self) -> bool {
+        if self.surfaces.is_empty() {
+            return false;
+        }
+
+        if self.config.performance.enable_vsync {
+            self.surfaces
+                .values()
+                .all(|surface| surface.configured && !surface.frame_callback_pending)
+        } else {
+            self.surfaces.values().all(|surface| surface.configured)
+        }
+    }
+
+    fn surface_offset(&self, surface_id: u32) -> Option<(i32, i32)> {
+        let output_id = self.surface_map.get(&surface_id)?;
+        self.surfaces.get(output_id).map(|surface| {
+            (
+                surface.logical_position.0 - self.workspace_origin.0,
+                surface.logical_position.1 - self.workspace_origin.1,
+            )
+        })
+    }
+
+    fn surface_mut_by_layer(
+        &mut self,
+        layer: &LayerSurface,
+    ) -> Option<&mut OutputSurface> {
+        let target = layer.wl_surface().id().protocol_id();
+        let output_id = *self.surface_map.get(&target)?;
+        self.surfaces.get_mut(&output_id)
+    }
+
+    fn surface_mut_by_wl_surface(
+        &mut self,
+        surface: &wl_surface::WlSurface,
+    ) -> Option<&mut OutputSurface> {
+        let target = surface.id().protocol_id();
+        let output_id = *self.surface_map.get(&target)?;
+        self.surfaces.get_mut(&output_id)
+    }
+
+    fn render(&mut self, qh: &QueueHandle<Self>) -> Result<()> {
+        debug!("=== RENDER START ({} surfaces) ===", self.surfaces.len());
+        for surface in self.surfaces.values_mut() {
+            if surface.configured && surface.width > 0 && surface.height > 0 {
+                self.render_surface(surface, qh)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn render_surface(
+        &mut self,
+        surface: &mut OutputSurface,
+        qh: &QueueHandle<Self>,
+    ) -> Result<()> {
+        let buffer_extent = (surface.width * surface.height * 4) as usize;
+        let buffer_count = self.config.performance.buffer_count as usize;
+
+        if surface.pool.is_none() {
+            let pool_size = buffer_extent * buffer_count.max(1);
+            info!(
+                "Creating new SlotPool for output {} ({}x{}, {} bytes, {} buffers)",
+                surface.id, surface.width, surface.height, pool_size, buffer_count
+            );
+            surface.pool = Some(
+                SlotPool::new(pool_size, &self.shm).context("Failed to create slot pool")?,
+            );
+        }
+
+        let pool = surface
             .pool
             .as_mut()
-            .context("Buffer pool not initialized despite check at line 215")?;
+            .context("Output surface pool missing despite initialization")?;
 
-        // Get a buffer from the pool
-        debug!("Requesting buffer from pool");
         let (buffer, canvas) = pool
             .create_buffer(
-                self.width as i32,
-                self.height as i32,
-                (self.width * 4) as i32,
+                surface.width as i32,
+                surface.height as i32,
+                (surface.width * 4) as i32,
                 wl_shm::Format::Argb8888,
             )
             .context("Failed to create buffer")?;
-        debug!("Buffer acquired from pool");
 
-        // Create Cairo surface from the buffer
-        // SAFETY: This unsafe block creates a Cairo surface from raw memory buffer.
-        // Safety invariants that must be maintained:
-        // 1. `canvas` is a valid mutable slice from SlotPool with exactly (width * height * 4) bytes
-        // 2. The buffer format ARgb32 matches the allocation (4 bytes per pixel: alpha, red, green, blue)
-        // 3. The stride (width * 4) correctly represents the number of bytes per row
-        // 4. `cairo_surface` and `ctx` are explicitly dropped (lines 315-316) before the buffer
-        //    is committed to Wayland, ensuring Cairo doesn't access memory after ownership transfers
-        // 5. No other references to this memory exist during Cairo's usage
-        // 6. The buffer remains valid throughout Cairo's usage (enforced by Rust's borrow checker
-        //    since `canvas` is borrowed until buffer.damage_buffer() call)
         let cairo_surface = unsafe {
-            cairo::ImageSurface::create_for_data_unsafe(
-                canvas.as_mut_ptr(),
+            cairo::ImageSurface::create_for_data(
+                canvas,
                 cairo::Format::ARgb32,
-                self.width as i32,
-                self.height as i32,
-                (self.width * 4) as i32,
+                surface.width as i32,
+                surface.height as i32,
+                (surface.width * 4) as i32,
             )
             .context("Failed to create Cairo surface")?
         };
-
-        // Render using Cairo
         let ctx = cairo::Context::new(&cairo_surface).context("Failed to create Cairo context")?;
 
-        // Clear with fully transparent background
-        debug!("Clearing background");
-        ctx.set_operator(cairo::Operator::Clear);
-        ctx.paint().context("Failed to clear background")?;
+        let offset_x = (surface.logical_position.0 - self.workspace_origin.0) as f64;
+        let offset_y = (surface.logical_position.1 - self.workspace_origin.1) as f64;
+        ctx.translate(-offset_x, -offset_y);
+
+        ctx.set_operator(cairo::Operator::Source);
+        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+        ctx.paint()?;
         ctx.set_operator(cairo::Operator::Over);
 
-        // Render board background if in board mode (whiteboard/blackboard)
-        crate::draw::render_board_background(
-            &ctx,
-            self.input_state.board_mode(),
-            &self.input_state.board_config,
-        );
+        crate::draw::render_canvas(&ctx, &self.input_state);
 
-        // Render all completed shapes from active frame
-        debug!(
-            "Rendering {} completed shapes",
-            self.input_state.canvas_set.active_frame().shapes.len()
-        );
-        crate::draw::render_shapes(&ctx, &self.input_state.canvas_set.active_frame().shapes);
-
-        // Render provisional shape if actively drawing
-        // Use optimized method that avoids cloning for freehand
-        if self.input_state.render_provisional_shape(
-            &ctx,
-            self.current_mouse_x,
-            self.current_mouse_y,
-        ) {
-            debug!("Rendered provisional shape");
-        }
-
-        // Render text cursor/buffer if in text mode
-        if let crate::input::DrawingState::TextInput { x, y, buffer } = &self.input_state.state {
-            let preview_text = if buffer.is_empty() {
-                "_".to_string() // Show cursor when buffer is empty
-            } else {
-                // Show buffer with cursor at end (handles newlines naturally)
-                format!("{}_", buffer)
-            };
+        if let DrawingState::TextInput { x, y, ref buffer } = self.input_state.state {
+            let preview_text = if buffer.is_empty() { "|" } else { buffer };
             crate::draw::render_text(
                 &ctx,
                 *x,
@@ -534,54 +647,46 @@ impl WaylandState {
             );
         }
 
-        // Render status bar if enabled
         if self.config.ui.show_status_bar {
             crate::ui::render_status_bar(
                 &ctx,
                 &self.input_state,
                 self.config.ui.status_bar_position,
                 &self.config.ui.status_bar_style,
-                self.width,
-                self.height,
+                self.workspace_size.0,
+                self.workspace_size.1,
             );
         }
 
-        // Render help overlay if toggled
         if self.input_state.show_help {
             crate::ui::render_help_overlay(
                 &ctx,
                 &self.config.ui.help_overlay_style,
-                self.width,
-                self.height,
+                self.workspace_size.0,
+                self.workspace_size.1,
             );
         }
 
-        // Flush Cairo
-        debug!("Flushing Cairo surface");
         cairo_surface.flush();
         drop(ctx);
         drop(cairo_surface);
 
-        // Attach buffer and commit
-        debug!("Attaching buffer and committing surface");
-        wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
-        wl_surface.damage_buffer(0, 0, self.width as i32, self.height as i32);
+        surface
+            .wl_surface
+            .attach(Some(buffer.wl_buffer()), 0, 0);
+        surface.wl_surface.damage_buffer(0, 0, surface.width as i32, surface.height as i32);
 
-        // Only request frame callback if vsync is enabled
-        // This throttles rendering to display refresh rate
         if self.config.performance.enable_vsync {
-            debug!("Requesting frame callback (vsync enabled)");
-            wl_surface.frame(_qh, wl_surface.clone());
-        } else {
-            debug!("Skipping frame callback (vsync disabled - allows back-to-back renders)");
+            surface
+                .wl_surface
+                .frame(qh, surface.wl_surface.clone());
+            surface.frame_callback_pending = true;
         }
 
-        wl_surface.commit();
-        debug!("=== RENDER COMPLETE ===");
-
+        surface.wl_surface.commit();
         Ok(())
     }
-
+}
     /// Temporarily hide the overlay for screenshot capture.
     ///
     /// This unmaps the layer surface so the compositor doesn't render it.
@@ -594,12 +699,9 @@ impl WaylandState {
 
         log::info!("Hiding overlay for screenshot capture");
 
-        if let Some(layer_surface) = &self.layer_surface {
-            // Unmap the surface by setting size to 0
-            layer_surface.set_size(0, 0);
-
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
+        for surface in self.surfaces.values() {
+            surface.layer_surface.set_size(0, 0);
+            surface.wl_surface.commit();
         }
 
         self.overlay_hidden_for_capture = true;
@@ -619,12 +721,11 @@ impl WaylandState {
 
         log::info!("Restoring overlay after screenshot capture");
 
-        if let Some(layer_surface) = &self.layer_surface {
-            // Restore original size
-            layer_surface.set_size(self.width, self.height);
-
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
+        for surface in self.surfaces.values() {
+            surface
+                .layer_surface
+                .set_size(surface.width as i32, surface.height as i32);
+            surface.wl_surface.commit();
         }
 
         self.overlay_hidden_for_capture = false;
