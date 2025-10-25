@@ -892,7 +892,7 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::BoardConfig;
+    use crate::config::{Action, BoardConfig};
     use crate::draw::{Color, FontDescriptor};
 
     fn create_test_input_state() -> InputState {
@@ -1126,5 +1126,86 @@ mod tests {
         // Color should have changed
         assert_ne!(state.current_color, original_color);
         assert_eq!(state.current_color, util::key_to_color('g').unwrap());
+    }
+
+    #[test]
+    fn capture_action_sets_pending_and_clears_modifiers() {
+        let mut state = create_test_input_state();
+        state.modifiers.ctrl = true;
+        state.modifiers.shift = true;
+        state.modifiers.alt = true;
+
+        state.handle_action(Action::CaptureClipboardFull);
+
+        assert_eq!(
+            state.pending_capture_action,
+            Some(Action::CaptureClipboardFull)
+        );
+        assert!(!state.modifiers.ctrl);
+        assert!(!state.modifiers.shift);
+        assert!(!state.modifiers.alt);
+
+        let pending = state.take_pending_capture_action();
+        assert_eq!(pending, Some(Action::CaptureClipboardFull));
+        assert!(state.pending_capture_action.is_none());
+    }
+
+    #[test]
+    fn board_mode_toggle_restores_previous_color() {
+        let mut state = create_test_input_state();
+        let initial_color = state.current_color;
+        assert_eq!(state.board_mode(), BoardMode::Transparent);
+
+        state.switch_board_mode(BoardMode::Whiteboard);
+        assert_eq!(state.board_mode(), BoardMode::Whiteboard);
+        assert_eq!(state.board_previous_color, Some(initial_color));
+        let expected_pen = BoardMode::Whiteboard
+            .default_pen_color(&state.board_config)
+            .expect("whiteboard should have default pen");
+        assert_eq!(state.current_color, expected_pen);
+
+        state.switch_board_mode(BoardMode::Whiteboard);
+        assert_eq!(state.board_mode(), BoardMode::Transparent);
+        assert_eq!(state.current_color, initial_color);
+        assert!(state.board_previous_color.is_none());
+    }
+
+    #[test]
+    fn mouse_drag_creates_shapes_for_each_tool() {
+        let mut state = create_test_input_state();
+
+        // Pen
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        state.on_mouse_motion(10, 10);
+        state.on_mouse_release(MouseButton::Left, 10, 10);
+        assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+
+        // Line (Shift)
+        state.modifiers.shift = true;
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        state.on_mouse_release(MouseButton::Left, 5, 5);
+        assert_eq!(state.canvas_set.active_frame().shapes.len(), 2);
+
+        // Rectangle (Ctrl)
+        state.modifiers.shift = false;
+        state.modifiers.ctrl = true;
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        state.on_mouse_release(MouseButton::Left, 5, 5);
+        assert_eq!(state.canvas_set.active_frame().shapes.len(), 3);
+
+        // Ellipse (Tab)
+        state.modifiers.ctrl = false;
+        state.modifiers.tab = true;
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        state.on_mouse_release(MouseButton::Left, 4, 4);
+        assert_eq!(state.canvas_set.active_frame().shapes.len(), 4);
+
+        // Arrow (Ctrl+Shift)
+        state.modifiers.tab = false;
+        state.modifiers.ctrl = true;
+        state.modifiers.shift = true;
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        state.on_mouse_release(MouseButton::Left, 6, 6);
+        assert_eq!(state.canvas_set.active_frame().shapes.len(), 5);
     }
 }

@@ -214,3 +214,53 @@ pub fn ellipse_bounds(x1: i32, y1: i32, x2: i32, y2: i32) -> (i32, i32, i32, i32
     let ry = ((y2 - y1).abs()) / 2;
     (cx, cy, rx, ry)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::{BLACK, RED, WHITE};
+
+    #[test]
+    fn arrowhead_caps_at_thirty_percent_of_line_length() {
+        let [(lx, ly), _] = calculate_arrowhead_custom(10, 10, 0, 10, 100.0, 30.0);
+        let distance = ((10.0 - lx).powi(2) + (10.0 - ly).powi(2)).sqrt();
+        assert!((distance - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn arrowhead_handles_degenerate_lines() {
+        let [(lx, ly), (rx, ry)] = calculate_arrowhead_custom(5, 5, 5, 5, 15.0, 45.0);
+        assert_eq!((lx, ly), (5.0, 5.0));
+        assert_eq!((rx, ry), (5.0, 5.0));
+    }
+
+    #[test]
+    fn ellipse_bounds_compute_center_and_radii() {
+        let (cx, cy, rx, ry) = ellipse_bounds(0, 0, 10, 4);
+        assert_eq!((cx, cy, rx, ry), (5, 2, 5, 2));
+    }
+
+    #[test]
+    fn key_and_name_color_mappings_round_trip() {
+        assert_eq!(key_to_color('r').unwrap(), RED);
+        assert_eq!(key_to_color('K').unwrap(), BLACK);
+        assert!(key_to_color('x').is_none());
+        assert_eq!(name_to_color("white").unwrap(), WHITE);
+        assert!(name_to_color("chartreuse").is_none());
+    }
+
+    #[test]
+    fn color_to_name_matches_known_colors() {
+        assert_eq!(color_to_name(&RED), "Red");
+        assert_eq!(color_to_name(&BLACK), "Black");
+        assert_eq!(
+            color_to_name(&Color {
+                r: 0.42,
+                g: 0.42,
+                b: 0.42,
+                a: 1.0
+            }),
+            "Custom"
+        );
+    }
+}
