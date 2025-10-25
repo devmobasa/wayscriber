@@ -585,7 +585,9 @@ fn create_placeholder_image() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::sync::{Arc, Mutex};
+    use tempfile::TempDir;
     use tokio::time::{Duration, sleep};
 
     #[derive(Clone)]
@@ -868,5 +870,56 @@ mod tests {
         }
         assert_eq!(*clipboard_calls.lock().unwrap(), 1);
         assert_eq!(manager.get_status().await, CaptureStatus::Success);
+    }
+
+    #[tokio::test]
+    async fn test_perform_capture_clipboard_and_file_success() {
+        let source = MockSource {
+            data: vec![21, 22, 23],
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        };
+        let saver = MockSaver {
+            should_fail: false,
+            path: PathBuf::from("/tmp/combined.png"),
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let clipboard = MockClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+        };
+        let deps = CaptureDependencies {
+            source: Arc::new(source),
+            saver: Arc::new(saver.clone()),
+            clipboard: Arc::new(clipboard.clone()),
+        };
+        let request = CaptureRequest {
+            capture_type: CaptureType::FullScreen,
+            destination: CaptureDestination::ClipboardAndFile,
+            save_config: Some(FileSaveConfig::default()),
+        };
+
+        let result = perform_capture(request, Arc::new(deps)).await.unwrap();
+        assert!(result.saved_path.is_some());
+        assert!(result.copied_to_clipboard);
+        assert_eq!(*saver.calls.lock().unwrap(), 1);
+        assert_eq!(*clipboard.calls.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_read_image_from_uri_reads_and_removes_file() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("capture file.png");
+        fs::write(&file_path, b"portal-bytes").unwrap();
+        let uri = url::Url::from_file_path(&file_path)
+            .unwrap()
+            .to_string();
+
+        let data = read_image_from_uri(&uri).expect("read succeeds");
+        assert_eq!(data, b"portal-bytes");
+        assert!(
+            !file_path.exists(),
+            "read_image_from_uri should delete the portal temp file"
+        );
     }
 }
