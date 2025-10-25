@@ -279,14 +279,17 @@ pub fn render_help_overlay(
                         },
                         Row {
                             key: "Ctrl+Shift+O",
-                            action: "Active window (Hyprland)",
+                            action: "Active window (Hyprland/Sway fast path)",
                         },
                         Row {
                             key: "Ctrl+Shift+I",
                             action: "Selection (capture defaults)",
                         },
                     ],
-                    badges: Vec::new(),
+                    badges: vec![Badge {
+                        label: "Needs hyprctl/swaymsg + grim/slurp/wl-clipboard; portal fallback if unavailable",
+                        color: [0.85, 0.65, 0.1],
+                    }],
                 },
             ],
         },

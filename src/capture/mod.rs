@@ -105,13 +105,28 @@ fn hyprland_env_detected() -> bool {
     hyprland_env_detected_from(signature, desktop)
 }
 
+fn sway_env_detected() -> bool {
+    let sway_socket = env::var_os("SWAYSOCK");
+    let desktop = env::var("XDG_CURRENT_DESKTOP").ok();
+    sway_env_detected_from(sway_socket, desktop)
+}
+
 fn hyprland_env_detected_from(
     signature: Option<std::ffi::OsString>,
     desktop: Option<String>,
 ) -> bool {
     signature.is_some()
         || desktop
+            .as_deref()
             .map(|value| value.to_lowercase().contains("hyprland"))
+            .unwrap_or(false)
+}
+
+fn sway_env_detected_from(socket: Option<std::ffi::OsString>, desktop: Option<String>) -> bool {
+    socket.is_some()
+        || desktop
+            .as_deref()
+            .map(|value| value.to_lowercase().contains("sway"))
             .unwrap_or(false)
 }
 
@@ -416,31 +431,39 @@ async fn capture_active_window_best_effort() -> Result<Vec<u8>, CaptureError> {
             Ok(bytes) => return Ok(bytes),
             Err(e) => {
                 log::warn!(
-                    "Active window capture via Hyprland failed: {}. Falling back to portal.",
+                    "Active window capture via Hyprland failed: {}. Falling back to additional compositor paths.",
                     e
                 );
             }
         }
-    } else {
-        log::debug!("Hyprland environment not detected; using portal for active window capture");
+    }
+
+    if sway_env_detected() {
+        match capture_active_window_sway().await {
+            Ok(bytes) => return Ok(bytes),
+            Err(e) => {
+                log::warn!(
+                    "Active window capture via Sway failed: {}. Falling back to portal.",
+                    e
+                );
+            }
+        }
     }
 
     capture_via_portal_bytes(CaptureType::ActiveWindow).await
 }
 
 async fn capture_selection_best_effort() -> Result<Vec<u8>, CaptureError> {
-    if hyprland_env_detected() {
-        match capture_selection_hyprland().await {
+    if hyprland_env_detected() || sway_env_detected() {
+        match capture_selection_wlroots().await {
             Ok(bytes) => return Ok(bytes),
             Err(e) => {
                 log::warn!(
-                    "Selection capture via Hyprland failed: {}. Falling back to portal.",
+                    "Selection capture via grim/slurp failed: {}. Falling back to portal.",
                     e
                 );
             }
         }
-    } else {
-        log::debug!("Hyprland environment not detected; using portal for selection capture");
     }
 
     capture_via_portal_bytes(CaptureType::Selection {
@@ -457,7 +480,6 @@ async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         use serde_json::Value;
         use std::process::{Command, Stdio};
 
-        // Query Hyprland for the active window geometry
         let output = Command::new("hyprctl")
             .args(["activewindow", "-j"])
             .stdout(Stdio::piped())
@@ -478,73 +500,47 @@ async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
             CaptureError::InvalidResponse(format!("Failed to parse hyprctl output: {}", e))
         })?;
 
-        let at = json.get("at").and_then(|v| v.as_array()).ok_or_else(|| {
-            CaptureError::InvalidResponse("Missing 'at' in hyprctl output".into())
-        })?;
-        let size = json.get("size").and_then(|v| v.as_array()).ok_or_else(|| {
-            CaptureError::InvalidResponse("Missing 'size' in hyprctl output".into())
-        })?;
-
-        let (x, y) = (
-            at.first()
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[0]' value".into()))?,
-            at.get(1)
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[1]' value".into()))?,
-        );
-        let (width, height) = (
-            size.first()
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[0]' value".into()))?,
-            size.get(1)
-                .and_then(|v| v.as_f64())
-                .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[1]' value".into()))?,
-        );
-
-        if width <= 0.0 || height <= 0.0 {
-            return Err(CaptureError::InvalidResponse(
-                "Active window has non-positive dimensions".into(),
-            ));
-        }
-
-        let geometry = format!(
-            "{},{} {}x{}",
-            x.round() as i32,
-            y.round() as i32,
-            width.round() as u32,
-            height.round() as u32
-        );
-
-        log::debug!("Capturing active window via grim: {}", geometry);
-        let grim_output = Command::new("grim")
-            .args(["-g", &geometry, "-"])
-            .stdout(Stdio::piped())
-            .output()
-            .map_err(|e| CaptureError::ImageError(format!("Failed to run grim: {}", e)))?;
-
-        if !grim_output.status.success() {
-            let stderr = String::from_utf8_lossy(&grim_output.stderr);
-            return Err(CaptureError::ImageError(format!(
-                "grim failed: {}",
-                stderr.trim()
-            )));
-        }
-
-        if grim_output.stdout.is_empty() {
-            return Err(CaptureError::ImageError(
-                "grim returned empty screenshot".into(),
-            ));
-        }
-
-        Ok(grim_output.stdout)
+        let (x, y, width, height) = parse_hyprland_geometry(&json)?;
+        run_grim_capture(x, y, width, height)
     })
     .await
     .map_err(|e| CaptureError::ImageError(format!("Hyprland capture task failed to join: {}", e)))?
 }
 
-/// Capture a user-selected region using `slurp` + `grim` (Hyprland/wlroots fast path).
-async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
+async fn capture_active_window_sway() -> Result<Vec<u8>, CaptureError> {
+    tokio::task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
+        use serde_json::Value;
+        use std::process::{Command, Stdio};
+
+        let output = Command::new("swaymsg")
+            .args(["-t", "get_tree"])
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(|e| {
+                CaptureError::ImageError(format!("Failed to run swaymsg get_tree: {}", e))
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(CaptureError::ImageError(format!(
+                "swaymsg get_tree failed: {}",
+                stderr.trim()
+            )));
+        }
+
+        let json: Value = serde_json::from_slice(&output.stdout).map_err(|e| {
+            CaptureError::InvalidResponse(format!("Failed to parse swaymsg output: {}", e))
+        })?;
+
+        let (x, y, width, height) = parse_sway_geometry(&json)?;
+        run_grim_capture(x, y, width, height)
+    })
+    .await
+    .map_err(|e| CaptureError::ImageError(format!("Sway capture task failed to join: {}", e)))?
+}
+
+/// Capture a user-selected region using `slurp` + `grim` (wlroots fast path).
+async fn capture_selection_wlroots() -> Result<Vec<u8>, CaptureError> {
     tokio::task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
         use std::process::{Command, Stdio};
 
@@ -603,6 +599,138 @@ async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
     .map_err(|e| CaptureError::ImageError(format!("Selection capture task failed: {}", e)))?
 }
 
+fn parse_hyprland_geometry(json: &serde_json::Value) -> Result<(i32, i32, u32, u32), CaptureError> {
+    let at = json
+        .get("at")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| CaptureError::InvalidResponse("Missing 'at' in hyprctl output".into()))?;
+    let size = json
+        .get("size")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| CaptureError::InvalidResponse("Missing 'size' in hyprctl output".into()))?;
+
+    let x = at
+        .get(0)
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[0]' value".into()))?;
+    let y = at
+        .get(1)
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[1]' value".into()))?;
+    let width = size
+        .get(0)
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[0]' value".into()))?;
+    let height = size
+        .get(1)
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[1]' value".into()))?;
+
+    if width <= 0.0 || height <= 0.0 {
+        return Err(CaptureError::InvalidResponse(
+            "Active window has non-positive dimensions".into(),
+        ));
+    }
+
+    Ok((
+        x.round() as i32,
+        y.round() as i32,
+        width.round() as u32,
+        height.round() as u32,
+    ))
+}
+
+fn parse_sway_geometry(json: &serde_json::Value) -> Result<(i32, i32, u32, u32), CaptureError> {
+    let focused = find_focused_node(json).ok_or_else(|| {
+        CaptureError::InvalidResponse("Could not find focused node in sway tree".into())
+    })?;
+
+    let rect = focused
+        .get("rect")
+        .ok_or_else(|| CaptureError::InvalidResponse("Missing 'rect' in sway node".into()))?;
+
+    let x = rect
+        .get("x")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid rect.x".into()))?;
+    let y = rect
+        .get("y")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid rect.y".into()))?;
+    let width = rect
+        .get("width")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid rect.width".into()))?;
+    let height = rect
+        .get("height")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| CaptureError::InvalidResponse("Invalid rect.height".into()))?;
+
+    if width <= 0.0 || height <= 0.0 {
+        return Err(CaptureError::InvalidResponse(
+            "Focused window has non-positive dimensions".into(),
+        ));
+    }
+
+    Ok((
+        x.round() as i32,
+        y.round() as i32,
+        width.round() as u32,
+        height.round() as u32,
+    ))
+}
+
+fn find_focused_node<'a>(node: &'a serde_json::Value) -> Option<&'a serde_json::Value> {
+    if node.get("focused").and_then(|v| v.as_bool()) == Some(true) {
+        return Some(node);
+    }
+
+    if let Some(nodes) = node.get("nodes").and_then(|n| n.as_array()) {
+        for child in nodes {
+            if let Some(found) = find_focused_node(child) {
+                return Some(found);
+            }
+        }
+    }
+    if let Some(floating) = node.get("floating_nodes").and_then(|n| n.as_array()) {
+        for child in floating {
+            if let Some(found) = find_focused_node(child) {
+                return Some(found);
+            }
+        }
+    }
+
+    None
+}
+
+fn run_grim_capture(x: i32, y: i32, width: u32, height: u32) -> Result<Vec<u8>, CaptureError> {
+    use std::process::{Command, Stdio};
+
+    let geometry = format!("{},{} {}x{}", x, y, width, height);
+    log::debug!("Capturing via grim: {}", geometry);
+    let grim_output = Command::new("grim")
+        .args(["-g", &geometry, "-"])
+        .stdout(Stdio::piped())
+        .output()
+        .map_err(|e| CaptureError::ImageError(format!("Failed to run grim: {}", e)))?;
+
+    if !grim_output.status.success() {
+        let stderr = String::from_utf8_lossy(&grim_output.stderr);
+        return Err(CaptureError::ImageError(format!(
+            "grim failed: {}",
+            stderr.trim()
+        )));
+    }
+
+    if grim_output.stdout.is_empty() {
+        return Err(CaptureError::ImageError(
+            "grim returned empty screenshot".into(),
+        ));
+    }
+
+    Ok(grim_output.stdout)
+}
+
 /// Create a placeholder PNG image for testing.
 ///
 /// TODO: Remove this in Phase 2 when we read actual portal screenshots.
@@ -634,6 +762,7 @@ fn create_placeholder_image() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::fs;
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
@@ -710,6 +839,62 @@ mod tests {
     #[test]
     fn detects_hyprland_via_desktop_value() {
         assert!(hyprland_env_detected_from(None, Some("Hyprland".into())));
+    }
+
+    #[test]
+    fn detects_sway_via_socket() {
+        assert!(sway_env_detected_from(
+            Some("/run/user/1000/sway-ipc".into()),
+            None
+        ));
+    }
+
+    #[test]
+    fn detects_sway_via_desktop_value() {
+        assert!(sway_env_detected_from(None, Some("sway".into())));
+    }
+
+    #[test]
+    fn parse_hyprland_geometry_handles_fractional_values() {
+        let json = json!({
+            "at": [10.4, 20.6],
+            "size": [100.2, 200.8]
+        });
+        let (x, y, w, h) = parse_hyprland_geometry(&json).unwrap();
+        assert_eq!((10, 21, 100, 201), (x, y, w, h));
+    }
+
+    #[test]
+    fn parse_hyprland_geometry_rejects_missing_fields() {
+        let json = json!({ "size": [100.0, 100.0] });
+        assert!(parse_hyprland_geometry(&json).is_err());
+    }
+
+    #[test]
+    fn parse_sway_geometry_finds_focused_node() {
+        let json = json!({
+            "nodes": [
+                {"focused": false, "nodes": []},
+                {
+                    "focused": false,
+                    "nodes": [],
+                    "floating_nodes": [
+                        {
+                            "focused": true,
+                            "rect": {"x": 5, "y": 7.2, "width": 300.6, "height": 199.4}
+                        }
+                    ]
+                }
+            ]
+        });
+        let (x, y, w, h) = parse_sway_geometry(&json).unwrap();
+        assert_eq!((5, 7, 301, 199), (x, y, w, h));
+    }
+
+    #[test]
+    fn parse_sway_geometry_errors_without_focused_node() {
+        let json = json!({ "nodes": [] });
+        assert!(parse_sway_geometry(&json).is_err());
     }
 
     #[test]

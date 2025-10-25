@@ -162,7 +162,8 @@ fn build_portal_options(
         }
         CaptureType::ActiveWindow => {
             // Interactive = true lets user select window
-            // TODO: Try to get active window first, fall back to interactive
+            // The compositor-specific fast paths handle active-window capture first; this portal
+            // path is purely the interactive fallback.
             options.insert("modal".to_string(), false.into());
             options.insert("interactive".to_string(), true.into());
         }
