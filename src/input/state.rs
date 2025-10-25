@@ -85,6 +85,8 @@ pub struct InputState {
     pending_capture_action: Option<Action>,
     /// Pending system command to be handled after the overlay exits
     pending_system_command: Option<SystemCommand>,
+    /// Whether exit requests are temporarily blocked while awaiting capture completion
+    capture_guard_active: bool,
 }
 
 impl InputState {
@@ -136,6 +138,7 @@ impl InputState {
             action_map,
             pending_capture_action: None,
             pending_system_command: None,
+            capture_guard_active: false,
         }
     }
 
@@ -200,6 +203,17 @@ impl InputState {
     /// Takes and clears any pending system command (e.g., launch configurator).
     pub fn take_pending_system_command(&mut self) -> Option<SystemCommand> {
         self.pending_system_command.take()
+    }
+
+    /// Marks that a capture is in progress so exit actions are deferred.
+    pub fn begin_capture_guard(&mut self) {
+        self.capture_guard_active = true;
+        self.should_exit = false;
+    }
+
+    /// Clears the capture guard flag once capture completes or fails.
+    pub fn end_capture_guard(&mut self) {
+        self.capture_guard_active = false;
     }
 
     /// Switches to a different board mode with color auto-adjustment.
@@ -447,8 +461,14 @@ impl InputState {
                         self.needs_redraw = true;
                     }
                     DrawingState::Idle => {
-                        // Exit application
-                        self.should_exit = true;
+                        if self.capture_guard_active {
+                            log::info!(
+                                "Screenshot capture in progress - ignoring exit request until capture completes"
+                            );
+                        } else {
+                            // Exit application
+                            self.should_exit = true;
+                        }
                     }
                 }
             }
@@ -1262,5 +1282,18 @@ mod tests {
             Some(SystemCommand::LaunchConfigurator)
         );
         assert!(state.take_pending_system_command().is_none());
+    }
+
+    #[test]
+    fn exit_request_is_deferred_while_capture_guard_active() {
+        let mut state = create_test_input_state();
+        state.begin_capture_guard();
+        state.on_key_press(Key::Escape);
+        assert!(matches!(state.state, DrawingState::Idle));
+        assert!(!state.should_exit);
+
+        state.end_capture_guard();
+        state.on_key_press(Key::Escape);
+        assert!(state.should_exit);
     }
 }

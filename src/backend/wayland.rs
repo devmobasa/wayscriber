@@ -306,6 +306,7 @@ impl WaylandBackend {
                 // Restore overlay
                 state.show_overlay();
                 state.capture_in_progress = false;
+                state.input_state.end_capture_guard();
 
                 match outcome {
                     CaptureOutcome::Success(result) => {
@@ -731,6 +732,7 @@ impl WaylandState {
         // Hide overlay before capture to prevent capturing the overlay itself
         self.hide_overlay();
         self.capture_in_progress = true;
+        self.input_state.begin_capture_guard();
 
         // Request capture
         log::info!("Requesting {:?} capture", capture_type);
@@ -743,6 +745,7 @@ impl WaylandState {
             // Restore overlay on error
             self.show_overlay();
             self.capture_in_progress = false;
+            self.input_state.end_capture_guard();
         }
     }
 }

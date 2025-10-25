@@ -80,11 +80,20 @@ fn pressing_f11_requests_overlay_exit_before_launching_configurator() {
 }
 
 #[test]
-#[ignore = "Pending capture guard that blocks Escape while capture is running"]
 fn escape_during_capture_keeps_overlay_visible_until_capture_completes() {
-    todo!(
-        "Implement once capture_in_progress is observable in input handling and Escape can cancel captures"
+    let mut state = make_input_state();
+    state.begin_capture_guard();
+
+    state.on_key_press(Key::Escape);
+
+    assert!(
+        !state.should_exit,
+        "Escape should not close overlay while capture guard is active"
     );
+
+    state.end_capture_guard();
+    state.on_key_press(Key::Escape);
+    assert!(state.should_exit, "Exit should function once capture completes");
 }
 
 #[test]
