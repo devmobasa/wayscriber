@@ -1,7 +1,7 @@
 use cairo::{Context, ImageSurface};
 use wayscriber::config::{HelpOverlayStyle, KeybindingsConfig, StatusBarStyle, StatusPosition};
 use wayscriber::draw::Color;
-use wayscriber::input::{InputState};
+use wayscriber::input::InputState;
 
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();

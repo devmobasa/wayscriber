@@ -33,7 +33,9 @@ fn dry_run_requires_migrate_flag() {
         .arg("--dry-run")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("required arguments were not provided"));
+        .stderr(predicate::str::contains(
+            "required arguments were not provided",
+        ));
 }
 
 #[test]

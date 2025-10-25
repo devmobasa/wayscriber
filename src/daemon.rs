@@ -21,21 +21,43 @@ pub enum OverlayState {
 }
 
 /// Daemon state manager
+type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
+
 pub struct Daemon {
     overlay_state: OverlayState,
     should_quit: Arc<AtomicBool>,
     toggle_requested: Arc<AtomicBool>,
     initial_mode: Option<String>,
+    backend_runner: Arc<BackendRunner>,
 }
 
 impl Daemon {
     pub fn new(initial_mode: Option<String>) -> Self {
+        Self::with_backend_runner_internal(
+            initial_mode,
+            Arc::new(|mode| backend::run_wayland(mode)),
+        )
+    }
+
+    fn with_backend_runner_internal(
+        initial_mode: Option<String>,
+        backend_runner: Arc<BackendRunner>,
+    ) -> Self {
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            backend_runner,
         }
+    }
+
+    #[cfg(test)]
+    pub fn with_backend_runner(
+        initial_mode: Option<String>,
+        backend_runner: Arc<BackendRunner>,
+    ) -> Self {
+        Self::with_backend_runner_internal(initial_mode, backend_runner)
     }
 
     /// Run daemon with signal handling
@@ -144,7 +166,7 @@ impl Daemon {
         info!("Overlay state set to Visible");
 
         // Run the Wayland backend (this will block until overlay is closed)
-        let result = backend::run_wayland(self.initial_mode.clone());
+        let result = (self.backend_runner)(self.initial_mode.clone());
 
         // When run_wayland returns, the overlay was closed
         self.overlay_state = OverlayState::Hidden;
@@ -167,11 +189,18 @@ impl Daemon {
     }
 }
 
+#[cfg(test)]
+impl Daemon {
+    pub fn test_state(&self) -> OverlayState {
+        self.overlay_state
+    }
+}
+
 /// System tray implementation
 fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Result<()> {
     use ksni;
 
-    struct WayscriberTray {
+    pub(crate) struct WayscriberTray {
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
         configurator_binary: String,
@@ -367,4 +396,41 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
     info!("System tray thread started");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
+    fn runner_counter(count: Arc<AtomicUsize>) -> Arc<BackendRunner> {
+        Arc::new(move |mode: Option<String>| -> Result<()> {
+            assert_eq!(mode.as_deref(), Some("whiteboard"));
+            count.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn toggle_overlay_invokes_backend_when_hidden() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let runner = runner_counter(counter.clone());
+        let mut daemon = Daemon::with_backend_runner(Some("whiteboard".into()), runner);
+
+        daemon.toggle_overlay().unwrap();
+        assert_eq!(counter.load(AtomicOrdering::SeqCst), 1);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    }
+
+    #[test]
+    fn hide_overlay_is_idempotent() {
+        let runner = Arc::new(|_: Option<String>| Ok(())) as Arc<BackendRunner>;
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+        daemon.hide_overlay().unwrap();
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+
+        daemon.overlay_state = OverlayState::Visible;
+        daemon.toggle_overlay().unwrap();
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+    }
 }
