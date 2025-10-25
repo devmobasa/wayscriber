@@ -640,6 +640,30 @@ impl InputState {
         }
     }
 
+    /// Processes a mouse scroll event originating from the pointer wheel.
+    ///
+    /// Positive values represent scroll-up (toward the user), negative values scroll-down.
+    /// When Shift is held, the scroll adjusts font size; otherwise it changes pen thickness.
+    pub fn on_scroll(&mut self, scroll_direction: i32) {
+        if scroll_direction == 0 {
+            return;
+        }
+
+        if self.modifiers.shift {
+            if scroll_direction > 0 {
+                self.adjust_font_size(-2.0);
+            } else if scroll_direction < 0 {
+                self.adjust_font_size(2.0);
+            }
+        } else if scroll_direction > 0 {
+            self.current_thickness = (self.current_thickness - 1.0).max(1.0);
+            self.needs_redraw = true;
+        } else if scroll_direction < 0 {
+            self.current_thickness = (self.current_thickness + 1.0).min(20.0);
+            self.needs_redraw = true;
+        }
+    }
+
     /// Processes mouse motion (dragging) events.
     ///
     /// # Arguments
@@ -1207,5 +1231,38 @@ mod tests {
         state.on_mouse_press(MouseButton::Left, 0, 0);
         state.on_mouse_release(MouseButton::Left, 6, 6);
         assert_eq!(state.canvas_set.active_frame().shapes.len(), 5);
+    }
+
+    #[test]
+    fn scroll_without_shift_adjusts_thickness_and_marks_redraw() {
+        let mut state = create_test_input_state();
+        state.current_thickness = 5.0;
+        state.needs_redraw = false;
+
+        state.on_scroll(1);
+        assert_eq!(state.current_thickness, 4.0);
+        assert!(state.needs_redraw);
+
+        state.needs_redraw = false;
+        state.on_scroll(-1);
+        assert_eq!(state.current_thickness, 5.0);
+        assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn scroll_with_shift_adjusts_font_size_via_shortcut() {
+        let mut state = create_test_input_state();
+        state.modifiers.shift = true;
+        state.current_font_size = 20.0;
+        state.needs_redraw = false;
+
+        state.on_scroll(1);
+        assert_eq!(state.current_font_size, 18.0);
+        assert!(state.needs_redraw);
+
+        state.needs_redraw = false;
+        state.on_scroll(-1);
+        assert_eq!(state.current_font_size, 20.0);
+        assert!(state.needs_redraw);
     }
 }
