@@ -16,3 +16,16 @@ pub fn run_wayland(initial_mode: Option<String>) -> Result<()> {
     backend.hide()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[ignore]
+    fn wayland_backend_smoke_test() {
+        if std::env::var("WAYLAND_DISPLAY").is_err() {
+            eprintln!("WAYLAND_DISPLAY not set; skipping Wayland smoke test");
+            return;
+        }
+        super::run_wayland(None).expect("Wayland backend should start");
+    }
+}
