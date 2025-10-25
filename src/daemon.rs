@@ -5,7 +5,7 @@ use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -27,33 +27,34 @@ type BackendRunner =
 pub struct Daemon {
     overlay_state: OverlayState,
     should_quit: Arc<AtomicBool>,
-    toggle_requested: Arc<AtomicBool>,
+    toggle_counter: Arc<AtomicU64>,
+    last_processed_toggle: u64,
     initial_mode: Option<String>,
     backend_runner: Arc<BackendRunner>,
 }
 
 pub(crate) struct WayscriberTray {
-    toggle_flag: Arc<AtomicBool>,
+    toggle_counter: Arc<AtomicU64>,
     quit_flag: Arc<AtomicBool>,
     configurator_binary: String,
 }
 
 impl WayscriberTray {
     fn new(
-        toggle_flag: Arc<AtomicBool>,
+        toggle_counter: Arc<AtomicU64>,
         quit_flag: Arc<AtomicBool>,
         configurator_binary: String,
     ) -> Self {
         Self {
-            toggle_flag,
+            toggle_counter,
             quit_flag,
             configurator_binary,
         }
     }
 
     #[cfg(test)]
-    fn new_for_tests(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Self {
-        Self::new(toggle_flag, quit_flag, "true".into())
+    fn new_for_tests(toggle_counter: Arc<AtomicU64>, quit_flag: Arc<AtomicBool>) -> Self {
+        Self::new(toggle_counter, quit_flag, "true".into())
     }
 }
 
@@ -135,7 +136,7 @@ impl ksni::Tray for WayscriberTray {
                 label: "Toggle Overlay (Super+D)".to_string(),
                 icon_name: "tool-pointer".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.toggle_flag.store(true, Ordering::Release);
+                    this.toggle_counter.fetch_add(1, Ordering::Release);
                 }),
                 ..Default::default()
             }
@@ -178,7 +179,8 @@ impl Daemon {
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
-            toggle_requested: Arc::new(AtomicBool::new(false)),
+            toggle_counter: Arc::new(AtomicU64::new(0)),
+            last_processed_toggle: 0,
             initial_mode,
             backend_runner,
         }
@@ -202,7 +204,7 @@ impl Daemon {
         let mut signals = Signals::new([SIGUSR1, SIGTERM, SIGINT])
             .context("Failed to register signal handler")?;
 
-        let toggle_flag = self.toggle_requested.clone();
+        let toggle_counter = self.toggle_counter.clone();
         let quit_flag = self.should_quit.clone();
 
         // Spawn signal handler thread
@@ -217,7 +219,7 @@ impl Daemon {
                         info!("Received SIGUSR1 - toggling overlay");
                         // Use Release ordering to ensure all prior memory operations
                         // are visible to the thread that reads this flag
-                        toggle_flag.store(true, Ordering::Release);
+                        toggle_counter.fetch_add(1, Ordering::Release);
                     }
                     SIGTERM | SIGINT => {
                         info!(
@@ -236,7 +238,7 @@ impl Daemon {
         });
 
         // Start system tray
-        let tray_toggle = self.toggle_requested.clone();
+        let tray_toggle = self.toggle_counter.clone();
         let tray_quit = self.should_quit.clone();
         thread::spawn(move || {
             if let Err(e) = run_system_tray(tray_toggle, tray_quit) {
@@ -256,12 +258,7 @@ impl Daemon {
                 break;
             }
 
-            // Check for toggle request
-            // Use Acquire ordering to ensure we see all memory operations
-            // that happened before the flag was set
-            if self.toggle_requested.swap(false, Ordering::Acquire) {
-                self.toggle_overlay()?;
-            }
+            self.poll_toggle_requests()?;
 
             // Small sleep to avoid busy-waiting
             thread::sleep(Duration::from_millis(100));
@@ -326,6 +323,26 @@ impl Daemon {
         Ok(())
     }
 
+    fn poll_toggle_requests(&mut self) -> Result<()> {
+        let current = self.toggle_counter.load(Ordering::Acquire);
+
+        match self.overlay_state {
+            OverlayState::Hidden => {
+                if current != self.last_processed_toggle {
+                    let target = current;
+                    self.toggle_overlay()?;
+                    self.last_processed_toggle = target;
+                }
+            }
+            OverlayState::Visible => {
+                // Drop pending toggles while overlay is running to avoid immediate reopen
+                self.last_processed_toggle = current;
+            }
+        }
+
+        Ok(())
+    }
+
     fn handle_system_command(&self, command: Option<SystemCommand>) {
         match command {
             Some(SystemCommand::LaunchConfigurator) => {
@@ -346,11 +363,11 @@ impl Daemon {
 }
 
 /// System tray implementation
-fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Result<()> {
+fn run_system_tray(toggle_counter: Arc<AtomicU64>, quit_flag: Arc<AtomicBool>) -> Result<()> {
     let configurator_binary =
         legacy::configurator_override().unwrap_or_else(|| "wayscriber-configurator".to_string());
 
-    let tray = WayscriberTray::new(toggle_flag, quit_flag.clone(), configurator_binary);
+    let tray = WayscriberTray::new(toggle_counter, quit_flag.clone(), configurator_binary);
 
     info!("Creating tray service...");
 
@@ -398,7 +415,7 @@ fn run_system_tray(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> 
 mod tests {
     use super::*;
     use ksni::{Tray, menu::MenuItem};
-    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
 
     fn runner_counter(count: Arc<AtomicUsize>) -> Arc<BackendRunner> {
         Arc::new(move |mode: Option<String>| -> Result<Option<SystemCommand>> {
@@ -446,21 +463,50 @@ mod tests {
 
     #[test]
     fn tray_toggle_action_sets_flag() {
-        let toggle = Arc::new(AtomicBool::new(false));
+        let toggle = Arc::new(AtomicU64::new(0));
         let quit = Arc::new(AtomicBool::new(false));
         let mut tray = WayscriberTray::new_for_tests(toggle.clone(), quit);
 
         activate_menu_item(&mut tray, "Toggle Overlay");
-        assert!(toggle.load(Ordering::SeqCst));
+        assert_eq!(toggle.load(Ordering::SeqCst), 1);
     }
 
     #[test]
     fn tray_quit_action_sets_quit_flag() {
-        let toggle = Arc::new(AtomicBool::new(false));
+        let toggle = Arc::new(AtomicU64::new(0));
         let quit = Arc::new(AtomicBool::new(false));
         let mut tray = WayscriberTray::new_for_tests(toggle, quit.clone());
 
         activate_menu_item(&mut tray, "Quit");
         assert!(quit.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn toggles_during_active_session_do_not_trigger_reopen() {
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let runner = Arc::new({
+            let call_count = call_count.clone();
+            move |_: Option<String>| {
+                call_count.fetch_add(1, AtomicOrdering::SeqCst);
+                Ok(None)
+            }
+        }) as Arc<BackendRunner>;
+
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+
+        // Overlay running
+        daemon.overlay_state = OverlayState::Visible;
+        daemon.toggle_counter.fetch_add(2, Ordering::SeqCst);
+        daemon.poll_toggle_requests().unwrap();
+        assert_eq!(call_count.load(AtomicOrdering::SeqCst), 0);
+        assert_eq!(daemon.last_processed_toggle, 2);
+
+        // Overlay exits and user toggles again
+        daemon.overlay_state = OverlayState::Hidden;
+        daemon.toggle_counter.fetch_add(1, Ordering::SeqCst);
+        daemon.poll_toggle_requests().unwrap();
+
+        assert_eq!(call_count.load(AtomicOrdering::SeqCst), 1);
+        assert_eq!(daemon.last_processed_toggle, 3);
     }
 }
