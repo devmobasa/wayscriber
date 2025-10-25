@@ -1,6 +1,6 @@
 use wayscriber::config::{BoardConfig, KeybindingsConfig};
 use wayscriber::draw::{Color, FontDescriptor};
-use wayscriber::input::{DrawingState, InputState, Key, MouseButton};
+use wayscriber::input::{DrawingState, InputState, Key, MouseButton, SystemCommand};
 
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
@@ -54,13 +54,13 @@ fn escape_in_drawing_mode_cancels_stroke_without_exiting() {
 }
 
 #[test]
-#[ignore = "Pending exit-before-configurator launch handling"]
 fn pressing_f11_requests_overlay_exit_before_launching_configurator() {
     let mut state = make_input_state();
     assert!(
         !state.should_exit,
         "sanity check: overlay should not be exiting before F11"
     );
+    assert!(state.take_pending_system_command().is_none());
 
     state.on_key_press(Key::F11);
 
@@ -69,8 +69,14 @@ fn pressing_f11_requests_overlay_exit_before_launching_configurator() {
         "Pressing F11 should request overlay exit before spawning the configurator"
     );
 
-    // Once the backend plumbs exit reasons, this test should also assert that the
-    // configurator launch is deferred until after the Wayland surface is unmapped.
+    assert_eq!(
+        state.take_pending_system_command(),
+        Some(SystemCommand::LaunchConfigurator)
+    );
+    assert!(
+        state.take_pending_system_command().is_none(),
+        "command should clear once consumed"
+    );
 }
 
 #[test]

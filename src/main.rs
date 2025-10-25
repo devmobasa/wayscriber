@@ -85,7 +85,13 @@ fn main() -> anyhow::Result<()> {
         log::info!("");
 
         // Run Wayland backend
-        backend::run_wayland(cli.mode)?;
+        let command = backend::run_wayland(cli.mode)?;
+
+        if let Some(input::SystemCommand::LaunchConfigurator) = command {
+            if let Err(err) = legacy::launch_configurator(None) {
+                log::error!("Failed to launch configurator after overlay exit: {err}");
+            }
+        }
 
         log::info!("Annotation overlay closed.");
     } else {

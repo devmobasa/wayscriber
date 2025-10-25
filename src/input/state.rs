@@ -1,15 +1,13 @@
 //! Drawing state machine and input state management.
 
 use super::board_mode::BoardMode;
-use super::events::{Key, MouseButton};
+use super::events::{Key, MouseButton, SystemCommand};
 use super::modifiers::Modifiers;
 use super::tool::Tool;
 use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::{CanvasSet, Color, FontDescriptor, Shape};
-use crate::legacy;
 use crate::util;
 use std::collections::HashMap;
-use std::process::{Command, Stdio};
 
 /// Current drawing mode state machine.
 ///
@@ -85,6 +83,8 @@ pub struct InputState {
     action_map: HashMap<KeyBinding, Action>,
     /// Pending capture action (to be handled by WaylandState)
     pending_capture_action: Option<Action>,
+    /// Pending system command to be handled after the overlay exits
+    pending_system_command: Option<SystemCommand>,
 }
 
 impl InputState {
@@ -135,31 +135,7 @@ impl InputState {
             board_config,
             action_map,
             pending_capture_action: None,
-        }
-    }
-
-    fn launch_configurator(&self) {
-        let binary = legacy::configurator_override()
-            .unwrap_or_else(|| "wayscriber-configurator".to_string());
-
-        match Command::new(&binary)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(child) => {
-                log::info!(
-                    "Launched wayscriber-configurator (binary: {binary}, pid: {})",
-                    child.id()
-                );
-            }
-            Err(err) => {
-                log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
-                log::error!(
-                    "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
-                );
-            }
+            pending_system_command: None,
         }
     }
 
@@ -219,6 +195,11 @@ impl InputState {
     /// The pending capture action if any, None otherwise
     pub fn take_pending_capture_action(&mut self) -> Option<Action> {
         self.pending_capture_action.take()
+    }
+
+    /// Takes and clears any pending system command (e.g., launch configurator).
+    pub fn take_pending_system_command(&mut self) -> Option<SystemCommand> {
+        self.pending_system_command.take()
     }
 
     /// Switches to a different board mode with color auto-adjustment.
@@ -527,7 +508,8 @@ impl InputState {
                 self.needs_redraw = true;
             }
             Action::OpenConfigurator => {
-                self.launch_configurator();
+                self.pending_system_command = Some(SystemCommand::LaunchConfigurator);
+                self.should_exit = true;
             }
             Action::SetColorRed => {
                 self.current_color = util::key_to_color('r').unwrap();
@@ -1264,5 +1246,21 @@ mod tests {
         state.on_scroll(-1);
         assert_eq!(state.current_font_size, 20.0);
         assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn open_configurator_sets_exit_request() {
+        let mut state = create_test_input_state();
+        assert!(!state.should_exit);
+        assert!(state.take_pending_system_command().is_none());
+
+        state.on_key_press(Key::F11);
+
+        assert!(state.should_exit);
+        assert_eq!(
+            state.take_pending_system_command(),
+            Some(SystemCommand::LaunchConfigurator)
+        );
+        assert!(state.take_pending_system_command().is_none());
     }
 }

@@ -1,5 +1,7 @@
 use anyhow::Result;
 
+use crate::input::SystemCommand;
+
 pub mod wayland;
 
 // Removed: Backend trait - no longer needed with single backend
@@ -9,12 +11,12 @@ pub mod wayland;
 ///
 /// # Arguments
 /// * `initial_mode` - Optional board mode to start in (overrides config default)
-pub fn run_wayland(initial_mode: Option<String>) -> Result<()> {
+pub fn run_wayland(initial_mode: Option<String>) -> Result<Option<SystemCommand>> {
     let mut backend = wayland::WaylandBackend::new(initial_mode)?;
     backend.init()?;
-    backend.show()?; // show() calls run() internally
+    let exit_command = backend.show()?; // show() calls run() internally
     backend.hide()?;
-    Ok(())
+    Ok(exit_command)
 }
 
 #[cfg(test)]

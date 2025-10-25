@@ -51,3 +51,10 @@ pub enum MouseButton {
     /// Middle mouse button (currently unused)
     Middle,
 }
+
+/// High-level system commands requested by the input layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemCommand {
+    /// Launch the external configurator after the overlay exits.
+    LaunchConfigurator,
+}

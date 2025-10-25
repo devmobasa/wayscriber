@@ -31,7 +31,7 @@ use wayland_client::{
 
 use crate::capture::{CaptureDestination, CaptureManager, CaptureOutcome};
 use crate::config::{Action, Config, ConfigSource};
-use crate::input::{InputState, Key, MouseButton};
+use crate::input::{InputState, Key, MouseButton, SystemCommand};
 use crate::legacy;
 
 /// Wayland backend state
@@ -91,7 +91,7 @@ impl WaylandBackend {
         })
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(&mut self) -> Result<Option<SystemCommand>> {
         info!("Starting Wayland backend");
 
         // Connect to Wayland compositor
@@ -406,10 +406,13 @@ impl WaylandBackend {
 
         info!("Wayland backend exiting");
 
+        // Capture any requested system command before tearing down state
+        let system_command = state.input_state.take_pending_system_command();
+
         // Return error if loop exited due to error, otherwise success
         match loop_error {
             Some(e) => Err(e),
-            None => Ok(()),
+            None => Ok(system_command),
         }
     }
 }
@@ -750,7 +753,7 @@ impl WaylandBackend {
         Ok(())
     }
 
-    pub fn show(&mut self) -> Result<()> {
+    pub fn show(&mut self) -> Result<Option<SystemCommand>> {
         info!("Showing Wayland overlay");
         self.run()
     }

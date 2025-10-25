@@ -4,13 +4,13 @@ use ksni::TrayMethods;
 use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
-use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
 use crate::backend;
+use crate::input::SystemCommand;
 use crate::legacy;
 
 /// Overlay state for daemon mode
@@ -21,7 +21,8 @@ pub enum OverlayState {
 }
 
 /// Daemon state manager
-type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
+type BackendRunner =
+    dyn Fn(Option<String>) -> Result<Option<SystemCommand>> + Send + Sync;
 
 pub struct Daemon {
     overlay_state: OverlayState,
@@ -58,30 +59,7 @@ impl WayscriberTray {
 
 impl WayscriberTray {
     fn launch_configurator(&self) {
-        let mut command = Command::new(&self.configurator_binary);
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-
-        match command.spawn() {
-            Ok(child) => {
-                info!(
-                    "Launched wayscriber-configurator (binary: {}, pid: {})",
-                    self.configurator_binary,
-                    child.id()
-                );
-            }
-            Err(err) => {
-                error!(
-                    "Failed to launch wayscriber-configurator using '{}': {}",
-                    self.configurator_binary, err
-                );
-                error!(
-                    "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
-                );
-            }
-        }
+        let _ = legacy::launch_configurator(Some(&self.configurator_binary));
     }
 }
 
@@ -326,7 +304,13 @@ impl Daemon {
         self.overlay_state = OverlayState::Hidden;
         info!("Overlay closed, back to daemon mode");
 
-        result
+        match result {
+            Ok(command) => {
+                self.handle_system_command(command);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Hide overlay (destroy layer surface, return to hidden state)
@@ -340,6 +324,17 @@ impl Daemon {
         // or when the backend exits naturally
         self.overlay_state = OverlayState::Hidden;
         Ok(())
+    }
+
+    fn handle_system_command(&self, command: Option<SystemCommand>) {
+        match command {
+            Some(SystemCommand::LaunchConfigurator) => {
+                if let Err(err) = legacy::launch_configurator(None) {
+                    error!("Failed to launch configurator after overlay exit: {}", err);
+                }
+            }
+            None => {}
+        }
     }
 }
 
@@ -406,10 +401,10 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
     fn runner_counter(count: Arc<AtomicUsize>) -> Arc<BackendRunner> {
-        Arc::new(move |mode: Option<String>| -> Result<()> {
+        Arc::new(move |mode: Option<String>| -> Result<Option<SystemCommand>> {
             assert_eq!(mode.as_deref(), Some("whiteboard"));
             count.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(())
+            Ok(None)
         })
     }
 
@@ -426,7 +421,7 @@ mod tests {
 
     #[test]
     fn hide_overlay_is_idempotent() {
-        let runner = Arc::new(|_: Option<String>| Ok(())) as Arc<BackendRunner>;
+        let runner = Arc::new(|_: Option<String>| Ok(None)) as Arc<BackendRunner>;
         let mut daemon = Daemon::with_backend_runner(None, runner);
         daemon.hide_overlay().unwrap();
         assert_eq!(daemon.test_state(), OverlayState::Hidden);
