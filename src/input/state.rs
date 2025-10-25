@@ -875,6 +875,7 @@ impl InputState {
     ///
     /// # Returns
     /// `true` if a provisional shape was rendered, `false` otherwise
+    #[allow(dead_code)]
     pub fn render_provisional_shape(
         &self,
         ctx: &cairo::Context,

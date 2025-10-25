@@ -24,15 +24,20 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler, slot::SlotPool},
 };
 use wayland_client::{
-    Connection, Dispatch, QueueHandle,
+    Connection, Dispatch, Proxy, QueueHandle,
     globals::registry_queue_init,
     protocol::{wl_buffer, wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
 };
 // Removed: Arc, Mutex - not needed after removing WaylandBackend.inner
 
 use crate::capture::{CaptureDestination, CaptureManager, CaptureOutcome};
-use crate::config::{Action, Config, ConfigSource};
-use crate::input::{InputState, Key, MouseButton, SystemCommand};
+use crate::config::{
+    enums::StatusPosition,
+    types::{HelpOverlayStyle, StatusBarStyle},
+    Action, BoardConfig, Config, ConfigSource,
+};
+use crate::draw::{Color, FontDescriptor, Shape};
+use crate::input::{BoardMode, DrawingState, InputState, Key, MouseButton, SystemCommand, Tool};
 use crate::legacy;
 
 /// Wayland backend state
@@ -90,6 +95,32 @@ struct OutputSurface {
     frame_callback_pending: bool,
     logical_position: (i32, i32),
     scale_factor: i32,
+}
+
+struct RenderSnapshot {
+    board_mode: BoardMode,
+    board_config: BoardConfig,
+    shapes: Vec<Shape>,
+    provisional_shape: Option<Shape>,
+    text_overlay: Option<TextOverlaySnapshot>,
+    status_bar_position: StatusPosition,
+    status_bar_style: StatusBarStyle,
+    status_text: String,
+    help_style: HelpOverlayStyle,
+    show_status_bar: bool,
+    show_help: bool,
+    current_color: Color,
+    current_font_size: f64,
+    font_descriptor: FontDescriptor,
+    text_background_enabled: bool,
+    workspace_size: (u32, u32),
+    buffer_count_hint: usize,
+}
+
+struct TextOverlaySnapshot {
+    x: i32,
+    y: i32,
+    buffer: String,
 }
 
 impl WaylandBackend {
@@ -387,6 +418,75 @@ impl WaylandBackend {
     }
 }
 
+impl RenderSnapshot {
+    fn capture(state: &InputState, config: &Config, workspace_size: (u32, u32), mouse: (i32, i32)) -> Self {
+        let provisional_shape = state.get_provisional_shape(mouse.0, mouse.1);
+        let text_overlay = match &state.state {
+            DrawingState::TextInput { x, y, buffer } => Some(TextOverlaySnapshot {
+                x: *x,
+                y: *y,
+                buffer: buffer.clone(),
+            }),
+            _ => None,
+        };
+
+        let tool = state.modifiers.current_tool();
+        let tool_name = match &state.state {
+            DrawingState::TextInput { .. } => "Text",
+            DrawingState::Drawing { tool, .. } => match tool {
+                Tool::Pen => "Pen",
+                Tool::Line => "Line",
+                Tool::Rect => "Rectangle",
+                Tool::Ellipse => "Circle",
+                Tool::Arrow => "Arrow",
+            },
+            DrawingState::Idle => match tool {
+                Tool::Pen => "Pen",
+                Tool::Line => "Line",
+                Tool::Rect => "Rectangle",
+                Tool::Ellipse => "Circle",
+                Tool::Arrow => "Arrow",
+            },
+        };
+
+        let color_name = crate::util::color_to_name(&state.current_color);
+        let mode_badge = match state.board_mode() {
+            BoardMode::Transparent => "",
+            BoardMode::Whiteboard => "[WHITEBOARD] ",
+            BoardMode::Blackboard => "[BLACKBOARD] ",
+        };
+
+        let status_text = format!(
+            "{}[{}] [{}px] [{}] [Text {}px]  F10=Help",
+            mode_badge,
+            color_name,
+            state.current_thickness as i32,
+            tool_name,
+            state.current_font_size as i32
+        );
+
+        Self {
+            board_mode: state.board_mode(),
+            board_config: state.board_config.clone(),
+            shapes: state.canvas_set.active_frame().shapes.clone(),
+            provisional_shape,
+            text_overlay,
+            status_bar_position: config.ui.status_bar_position,
+            status_bar_style: config.ui.status_bar_style.clone(),
+            status_text,
+            help_style: config.ui.help_overlay_style.clone(),
+            show_status_bar: config.ui.show_status_bar,
+            show_help: state.show_help,
+            current_color: state.current_color,
+            current_font_size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            text_background_enabled: state.text_background_enabled,
+            workspace_size,
+            buffer_count_hint: config.performance.buffer_count as usize,
+        }
+    }
+}
+
 impl WaylandState {
     fn initialize_output_surfaces(&mut self, qh: &QueueHandle<Self>) {
         let outputs: Vec<_> = self.output_state.outputs().collect();
@@ -412,12 +512,13 @@ impl WaylandState {
         }
 
         let wl_surface = self.compositor_state.create_surface(qh);
+        let output_ref = output.clone();
         let layer_surface = self.layer_shell.create_layer_surface(
             qh,
             wl_surface.clone(),
             Layer::Overlay,
             Some("wayscriber"),
-            Some(output.clone()),
+            Some(&output_ref),
         );
 
         layer_surface.set_anchor(Anchor::all());
@@ -450,7 +551,7 @@ impl WaylandState {
             id,
             OutputSurface {
                 id,
-                output,
+                output: output_ref,
                 wl_surface,
                 layer_surface,
                 pool: None,
@@ -468,7 +569,7 @@ impl WaylandState {
 
     fn remove_surface_for_output(&mut self, output: &wl_output::WlOutput) {
         let id = output.id().protocol_id();
-        if let Some(surface) = self.surfaces.remove(&id) {
+        if self.surfaces.remove(&id).is_some() {
             self.surface_map
                 .retain(|_, surface_id| surface_id != &id);
             debug!("Removed overlay surface for output {}", id);
@@ -549,41 +650,55 @@ impl WaylandState {
         })
     }
 
-    fn surface_mut_by_layer(
-        &mut self,
-        layer: &LayerSurface,
-    ) -> Option<&mut OutputSurface> {
-        let target = layer.wl_surface().id().protocol_id();
-        let output_id = *self.surface_map.get(&target)?;
-        self.surfaces.get_mut(&output_id)
-    }
-
-    fn surface_mut_by_wl_surface(
-        &mut self,
-        surface: &wl_surface::WlSurface,
-    ) -> Option<&mut OutputSurface> {
-        let target = surface.id().protocol_id();
-        let output_id = *self.surface_map.get(&target)?;
-        self.surfaces.get_mut(&output_id)
-    }
 
     fn render(&mut self, qh: &QueueHandle<Self>) -> Result<()> {
         debug!("=== RENDER START ({} surfaces) ===", self.surfaces.len());
-        for surface in self.surfaces.values_mut() {
-            if surface.configured && surface.width > 0 && surface.height > 0 {
-                self.render_surface(surface, qh)?;
+        let snapshot = RenderSnapshot::capture(
+            &self.input_state,
+            &self.config,
+            self.workspace_size,
+            (self.current_mouse_x, self.current_mouse_y),
+        );
+
+        let ready: Vec<u32> = self
+            .surfaces
+            .iter()
+            .filter_map(|(id, surface)| {
+                if surface.configured && surface.width > 0 && surface.height > 0 {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let enable_vsync = self.config.performance.enable_vsync;
+        let workspace_origin = self.workspace_origin;
+        for id in ready {
+            if let Some(surface) = self.surfaces.get_mut(&id) {
+                Self::render_surface_on_output(
+                    &self.shm,
+                    workspace_origin,
+                    enable_vsync,
+                    &snapshot,
+                    surface,
+                    qh,
+                )?;
             }
         }
         Ok(())
     }
 
-    fn render_surface(
-        &mut self,
+    fn render_surface_on_output(
+        shm: &Shm,
+        workspace_origin: (i32, i32),
+        enable_vsync: bool,
+        snapshot: &RenderSnapshot,
         surface: &mut OutputSurface,
         qh: &QueueHandle<Self>,
     ) -> Result<()> {
         let buffer_extent = (surface.width * surface.height * 4) as usize;
-        let buffer_count = self.config.performance.buffer_count as usize;
+        let buffer_count = snapshot.buffer_count_hint;
 
         if surface.pool.is_none() {
             let pool_size = buffer_extent * buffer_count.max(1);
@@ -591,9 +706,7 @@ impl WaylandState {
                 "Creating new SlotPool for output {} ({}x{}, {} bytes, {} buffers)",
                 surface.id, surface.width, surface.height, pool_size, buffer_count
             );
-            surface.pool = Some(
-                SlotPool::new(pool_size, &self.shm).context("Failed to create slot pool")?,
-            );
+            surface.pool = Some(SlotPool::new(pool_size, shm).context("Failed to create slot pool")?);
         }
 
         let pool = surface
@@ -611,8 +724,8 @@ impl WaylandState {
             .context("Failed to create buffer")?;
 
         let cairo_surface = unsafe {
-            cairo::ImageSurface::create_for_data(
-                canvas,
+            cairo::ImageSurface::create_for_data_unsafe(
+                canvas.as_mut_ptr(),
                 cairo::Format::ARgb32,
                 surface.width as i32,
                 surface.height as i32,
@@ -622,50 +735,63 @@ impl WaylandState {
         };
         let ctx = cairo::Context::new(&cairo_surface).context("Failed to create Cairo context")?;
 
-        let offset_x = (surface.logical_position.0 - self.workspace_origin.0) as f64;
-        let offset_y = (surface.logical_position.1 - self.workspace_origin.1) as f64;
-        ctx.translate(-offset_x, -offset_y);
-
-        ctx.set_operator(cairo::Operator::Source);
-        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+        ctx.set_operator(cairo::Operator::Clear);
         ctx.paint()?;
         ctx.set_operator(cairo::Operator::Over);
 
-        crate::draw::render_canvas(&ctx, &self.input_state);
+        let _ = ctx.save();
+        let offset_x = (surface.logical_position.0 - workspace_origin.0) as f64;
+        let offset_y = (surface.logical_position.1 - workspace_origin.1) as f64;
+        ctx.translate(-offset_x, -offset_y);
 
-        if let DrawingState::TextInput { x, y, ref buffer } = self.input_state.state {
-            let preview_text = if buffer.is_empty() { "|" } else { buffer };
+        crate::draw::render_board_background(&ctx, snapshot.board_mode, &snapshot.board_config);
+        crate::draw::render_shapes(&ctx, &snapshot.shapes);
+
+        if let Some(shape) = &snapshot.provisional_shape {
+            crate::draw::render_shape(&ctx, shape);
+        }
+
+        if let Some(text) = &snapshot.text_overlay {
+            let preview_text = if text.buffer.is_empty() {
+                "_".to_string()
+            } else {
+                format!("{}_", text.buffer)
+            };
             crate::draw::render_text(
                 &ctx,
-                *x,
-                *y,
+                text.x,
+                text.y,
                 &preview_text,
-                self.input_state.current_color,
-                self.input_state.current_font_size,
-                &self.input_state.font_descriptor,
-                self.input_state.text_background_enabled,
+                snapshot.current_color,
+                snapshot.current_font_size,
+                &snapshot.font_descriptor,
+                snapshot.text_background_enabled,
             );
         }
 
-        if self.config.ui.show_status_bar {
-            crate::ui::render_status_bar(
+        if snapshot.show_status_bar {
+            crate::ui::render_status_bar_custom(
                 &ctx,
-                &self.input_state,
-                self.config.ui.status_bar_position,
-                &self.config.ui.status_bar_style,
-                self.workspace_size.0,
-                self.workspace_size.1,
+                &snapshot.status_text,
+                snapshot.board_mode,
+                &snapshot.current_color,
+                snapshot.status_bar_position,
+                &snapshot.status_bar_style,
+                snapshot.workspace_size.0,
+                snapshot.workspace_size.1,
             );
         }
 
-        if self.input_state.show_help {
+        if snapshot.show_help {
             crate::ui::render_help_overlay(
                 &ctx,
-                &self.config.ui.help_overlay_style,
-                self.workspace_size.0,
-                self.workspace_size.1,
+                &snapshot.help_style,
+                snapshot.workspace_size.0,
+                snapshot.workspace_size.1,
             );
         }
+
+        let _ = ctx.restore();
 
         cairo_surface.flush();
         drop(ctx);
@@ -676,7 +802,7 @@ impl WaylandState {
             .attach(Some(buffer.wl_buffer()), 0, 0);
         surface.wl_surface.damage_buffer(0, 0, surface.width as i32, surface.height as i32);
 
-        if self.config.performance.enable_vsync {
+        if enable_vsync {
             surface
                 .wl_surface
                 .frame(qh, surface.wl_surface.clone());
@@ -686,7 +812,6 @@ impl WaylandState {
         surface.wl_surface.commit();
         Ok(())
     }
-}
     /// Temporarily hide the overlay for screenshot capture.
     ///
     /// This unmaps the layer surface so the compositor doesn't render it.
@@ -724,7 +849,7 @@ impl WaylandState {
         for surface in self.surfaces.values() {
             surface
                 .layer_surface
-                .set_size(surface.width as i32, surface.height as i32);
+                .set_size(surface.width, surface.height);
             surface.wl_surface.commit();
         }
 
@@ -907,12 +1032,18 @@ impl CompositorHandler for WaylandState {
         _surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
-        // Frame callback - compositor is ready for next frame
-        debug!(
-            "Frame callback received (time: {}ms), clearing frame_callback_pending",
-            _time
-        );
-        self.frame_callback_pending = false;
+        let surface_id = _surface.id().protocol_id();
+        if let Some(output_id) = self.surface_map.get(&surface_id).copied() {
+            if let Some(surface) = self.surfaces.get_mut(&output_id) {
+                surface.frame_callback_pending = false;
+                debug!(
+                    "Frame callback received for output {} ({} ms)",
+                    surface.id, _time
+                );
+            }
+        } else {
+            debug!("Frame callback received for unknown surface ({_time} ms)");
+        }
 
         // If we're actively drawing, request another render
         // (input events may have set needs_redraw while we were waiting)
@@ -930,7 +1061,11 @@ impl CompositorHandler for WaylandState {
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
-        debug!("Surface entered output");
+        debug!(
+            "Surface {} entered output {}",
+            _surface.id().protocol_id(),
+            _output.id().protocol_id()
+        );
     }
 
     fn surface_leave(
@@ -940,7 +1075,11 @@ impl CompositorHandler for WaylandState {
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
-        debug!("Surface left output");
+        debug!(
+            "Surface {} left output {}",
+            _surface.id().protocol_id(),
+            _output.id().protocol_id()
+        );
     }
 }
 
@@ -953,28 +1092,44 @@ impl OutputHandler for WaylandState {
     fn new_output(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
+        qh: &QueueHandle<Self>,
+        output: wl_output::WlOutput,
     ) {
-        debug!("New output detected");
+        debug!("New output detected: {}", output.id().protocol_id());
+        self.create_surface_for_output(output, qh);
+        self.recompute_workspace_bounds();
     }
 
     fn update_output(
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
+        output: wl_output::WlOutput,
     ) {
-        debug!("Output updated");
+        if let Some(surface) = self.surfaces.get_mut(&output.id().protocol_id()) {
+            if let Some(info) = self.output_state.info(&output) {
+                if let Some(pos) = info.logical_position.or(Some(info.location)) {
+                    surface.logical_position = pos;
+                }
+                let new_scale = info.scale_factor.max(1);
+                if new_scale != surface.scale_factor {
+                    surface.scale_factor = new_scale;
+                    surface.wl_surface.set_buffer_scale(new_scale);
+                    surface.pool = None;
+                }
+            }
+        }
+        self.recompute_workspace_bounds();
     }
 
     fn output_destroyed(
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
+        output: wl_output::WlOutput,
     ) {
-        debug!("Output destroyed");
+        debug!("Output destroyed: {}", output.id().protocol_id());
+        self.remove_surface_for_output(&output);
     }
 }
 
@@ -1000,33 +1155,32 @@ impl LayerShellHandler for WaylandState {
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        info!(
-            "Layer surface configured: {}x{}",
-            configure.new_size.0, configure.new_size.1
-        );
+        let surface_id = _layer.wl_surface().id().protocol_id();
+        if let Some(output_id) = self.surface_map.get(&surface_id).copied() {
+            if let Some(surface) = self.surfaces.get_mut(&output_id) {
+                info!(
+                    "Layer surface configured for output {}: {}x{}",
+                    surface.id, configure.new_size.0, configure.new_size.1
+                );
 
-        // Update dimensions
-        if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
-            let size_changed =
-                self.width != configure.new_size.0 || self.height != configure.new_size.1;
+                if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
+                    let size_changed =
+                        surface.width != configure.new_size.0 || surface.height != configure.new_size.1;
 
-            self.width = configure.new_size.0;
-            self.height = configure.new_size.1;
+                    surface.width = configure.new_size.0;
+                    surface.height = configure.new_size.1;
 
-            // Recreate pool if dimensions changed
-            if size_changed && self.pool.is_some() {
-                info!("Surface size changed - recreating SlotPool");
-                self.pool = None;
+                    if size_changed {
+                        surface.pool = None;
+                    }
+                }
+
+                surface.configured = true;
             }
 
-            // Update input state with actual screen dimensions
-            self.input_state
-                .update_screen_dimensions(self.width, self.height);
+            self.recompute_workspace_bounds();
+            self.input_state.needs_redraw = true;
         }
-
-        // Mark as configured and request first draw
-        self.configured = true;
-        self.input_state.needs_redraw = true;
     }
 }
 
@@ -1184,21 +1338,28 @@ impl PointerHandler for WaylandState {
         use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT};
 
         for event in events {
+            let surface_id = event.surface.id().protocol_id();
+            let offset = self
+                .surface_offset(surface_id)
+                .unwrap_or((0, 0));
+            let global_x = event.position.0 as i32 + offset.0;
+            let global_y = event.position.1 as i32 + offset.1;
+
             match event.kind {
                 PointerEventKind::Enter { .. } => {
                     debug!(
-                        "Pointer entered at ({}, {})",
-                        event.position.0, event.position.1
+                        "Pointer entered surface {} at global ({}, {})",
+                        surface_id, global_x, global_y
                     );
-                    self.current_mouse_x = event.position.0 as i32;
-                    self.current_mouse_y = event.position.1 as i32;
+                    self.current_mouse_x = global_x;
+                    self.current_mouse_y = global_y;
                 }
                 PointerEventKind::Leave { .. } => {
-                    debug!("Pointer left surface");
+                    debug!("Pointer left surface {}", surface_id);
                 }
                 PointerEventKind::Motion { .. } => {
-                    self.current_mouse_x = event.position.0 as i32;
-                    self.current_mouse_y = event.position.1 as i32;
+                    self.current_mouse_x = global_x;
+                    self.current_mouse_y = global_y;
                     self.input_state
                         .on_mouse_motion(self.current_mouse_x, self.current_mouse_y);
                     // Note: needs_redraw is set inside on_mouse_motion if actively drawing
@@ -1206,8 +1367,8 @@ impl PointerHandler for WaylandState {
                 }
                 PointerEventKind::Press { button, .. } => {
                     debug!(
-                        "Button {} pressed at ({}, {})",
-                        button, event.position.0, event.position.1
+                        "Button {} pressed on surface {} at global ({}, {})",
+                        button, surface_id, global_x, global_y
                     );
 
                     let mb = match button {
@@ -1217,15 +1378,14 @@ impl PointerHandler for WaylandState {
                         _ => continue,
                     };
 
-                    self.input_state.on_mouse_press(
-                        mb,
-                        event.position.0 as i32,
-                        event.position.1 as i32,
-                    );
+                    self.input_state.on_mouse_press(mb, global_x, global_y);
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Release { button, .. } => {
-                    debug!("Button {} released", button);
+                    debug!(
+                        "Button {} released on surface {} at global ({}, {})",
+                        button, surface_id, global_x, global_y
+                    );
 
                     let mb = match button {
                         BTN_LEFT => MouseButton::Left,
@@ -1234,11 +1394,7 @@ impl PointerHandler for WaylandState {
                         _ => continue,
                     };
 
-                    self.input_state.on_mouse_release(
-                        mb,
-                        event.position.0 as i32,
-                        event.position.1 as i32,
-                    );
+                    self.input_state.on_mouse_release(mb, global_x, global_y);
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Axis { vertical, .. } => {

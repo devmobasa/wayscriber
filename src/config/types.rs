@@ -143,7 +143,7 @@ impl Default for UiConfig {
 }
 
 /// Status bar styling configuration.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct StatusBarStyle {
     /// Font size for status bar text
     #[serde(default = "default_status_font_size")]
@@ -179,7 +179,7 @@ impl Default for StatusBarStyle {
 }
 
 /// Help overlay styling configuration.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HelpOverlayStyle {
     /// Font size for help overlay text
     #[serde(default = "default_help_font_size")]

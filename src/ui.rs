@@ -1,5 +1,6 @@
 /// UI rendering: status bar, help overlay, visual indicators
 use crate::config::StatusPosition;
+use crate::draw::Color;
 use crate::input::{BoardMode, DrawingState, InputState, Tool};
 use std::f64::consts::{FRAC_PI_2, PI};
 
@@ -57,6 +58,7 @@ fn draw_rounded_rect(ctx: &cairo::Context, x: f64, y: f64, width: f64, height: f
 }
 
 /// Render status bar showing current color, thickness, and tool
+#[allow(dead_code)]
 pub fn render_status_bar(
     ctx: &cairo::Context,
     input_state: &InputState,
@@ -98,33 +100,51 @@ pub fn render_status_bar(
         BoardMode::Blackboard => "[BLACKBOARD] ",
     };
 
-    // Build status text with mode badge and font size
     let font_size = input_state.current_font_size;
     let status_text = format!(
         "{}[{}] [{}px] [{}] [Text {}px]  F10=Help",
         mode_badge, color_name, thickness as i32, tool_name, font_size as i32
     );
 
-    // Set font
+    render_status_bar_custom(
+        ctx,
+        &status_text,
+        input_state.board_mode(),
+        color,
+        position,
+        style,
+        screen_width,
+        screen_height,
+    );
+}
+
+pub fn render_status_bar_custom(
+    ctx: &cairo::Context,
+    status_text: &str,
+    board_mode: BoardMode,
+    current_color: &Color,
+    position: StatusPosition,
+    style: &crate::config::StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) {
     log::debug!("Status bar font_size from config: {}", style.font_size);
     ctx.set_font_size(style.font_size);
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
 
-    // Measure text
-    let extents = match ctx.text_extents(&status_text) {
+    let extents = match ctx.text_extents(status_text) {
         Ok(ext) => ext,
         Err(e) => {
             log::warn!(
                 "Failed to measure status bar text: {}, skipping status bar",
                 e
             );
-            return; // Gracefully skip rendering if font measurement fails
+            return;
         }
     };
     let text_width = extents.width();
     let text_height = extents.height();
 
-    // Calculate position using configurable padding
     let padding = style.padding;
     let (x, y) = match position {
         StatusPosition::TopLeft => (padding, padding + text_height),
@@ -139,23 +159,12 @@ pub fn render_status_bar(
         ),
     };
 
-    // Adjust colors based on board mode for better contrast
-    let (bg_color, text_color) = match input_state.board_mode() {
-        BoardMode::Transparent => {
-            // Use config colors for transparent mode
-            (style.bg_color, style.text_color)
-        }
-        BoardMode::Whiteboard => {
-            // Dark text and background on white board
-            ([0.2, 0.2, 0.2, 0.85], [0.0, 0.0, 0.0, 1.0])
-        }
-        BoardMode::Blackboard => {
-            // Light text and background on dark board
-            ([0.8, 0.8, 0.8, 0.85], [1.0, 1.0, 1.0, 1.0])
-        }
+    let (bg_color, text_color) = match board_mode {
+        BoardMode::Transparent => (style.bg_color, style.text_color),
+        BoardMode::Whiteboard => ([0.2, 0.2, 0.2, 0.85], [0.0, 0.0, 0.0, 1.0]),
+        BoardMode::Blackboard => ([0.8, 0.8, 0.8, 0.85], [1.0, 1.0, 1.0, 1.0]),
     };
 
-    // Draw semi-transparent background with adaptive color
     let [r, g, b, a] = bg_color;
     ctx.set_source_rgba(r, g, b, a);
     ctx.rectangle(
@@ -166,18 +175,16 @@ pub fn render_status_bar(
     );
     let _ = ctx.fill();
 
-    // Draw color indicator dot
     let dot_x = x + STATUS_DOT_OFFSET_X;
     let dot_y = y - text_height / 2.0;
-    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    ctx.set_source_rgba(current_color.r, current_color.g, current_color.b, current_color.a);
     ctx.arc(dot_x, dot_y, style.dot_radius, 0.0, 2.0 * PI);
     let _ = ctx.fill();
 
-    // Draw text with adaptive color
     let [r, g, b, a] = text_color;
     ctx.set_source_rgba(r, g, b, a);
     ctx.move_to(x, y);
-    let _ = ctx.show_text(&status_text);
+    let _ = ctx.show_text(status_text);
 }
 
 /// Render help overlay showing all keybindings
