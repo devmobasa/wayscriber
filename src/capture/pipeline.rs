@@ -1,10 +1,11 @@
-use std::{fmt, sync::Arc};
+use std::{fmt, path::PathBuf, sync::Arc};
 
 use crate::capture::{
-    dependencies::CaptureDependencies,
+    dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
     file::FileSaveConfig,
     types::{CaptureDestination, CaptureError, CaptureResult, CaptureType},
 };
+use tokio::task;
 
 #[derive(Clone)]
 pub(crate) struct CaptureRequest {
@@ -56,9 +57,16 @@ pub(crate) async fn perform_capture(
     // Step 3: Save to file (if requested)
     let saved_path = match request.destination {
         CaptureDestination::FileOnly | CaptureDestination::ClipboardAndFile => {
-            if let Some(save_config) = request.save_config.as_ref() {
+            if let Some(save_config) = request.save_config.clone() {
                 if !save_config.save_directory.as_os_str().is_empty() {
-                    Some(dependencies.saver.save(&image_data, save_config)?)
+                    Some(
+                        save_image(
+                            Arc::clone(&dependencies.saver),
+                            image_data.clone(),
+                            save_config,
+                        )
+                        .await?,
+                    )
                 } else {
                     None
                 }
@@ -73,16 +81,7 @@ pub(crate) async fn perform_capture(
     let copied_to_clipboard = match request.destination {
         CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile => {
             log::info!("Attempting to copy {} bytes to clipboard", image_data.len());
-            match dependencies.clipboard.copy(&image_data) {
-                Ok(()) => {
-                    log::info!("Successfully copied to clipboard");
-                    true
-                }
-                Err(e) => {
-                    log::error!("Failed to copy to clipboard: {}", e);
-                    false
-                }
-            }
+            copy_to_clipboard(Arc::clone(&dependencies.clipboard), image_data.clone()).await
         }
         CaptureDestination::FileOnly => {
             log::debug!("Clipboard copy not requested for this capture");
@@ -95,4 +94,30 @@ pub(crate) async fn perform_capture(
         saved_path,
         copied_to_clipboard,
     })
+}
+
+async fn save_image(
+    saver: Arc<dyn CaptureFileSaver>,
+    image_data: Vec<u8>,
+    config: FileSaveConfig,
+) -> Result<PathBuf, CaptureError> {
+    task::spawn_blocking(move || saver.save(&image_data, &config))
+        .await
+        .map_err(|e| CaptureError::ImageError(format!("Save task failed: {}", e)))?
+}
+
+async fn copy_to_clipboard(clipboard: Arc<dyn CaptureClipboard>, image_data: Vec<u8>) -> bool {
+    match task::spawn_blocking(move || clipboard.copy(&image_data))
+        .await
+        .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {}", e)))
+    {
+        Ok(Ok(())) => {
+            log::info!("Successfully copied to clipboard");
+            true
+        }
+        Ok(Err(e)) | Err(e) => {
+            log::error!("Failed to copy to clipboard: {}", e);
+            false
+        }
+    }
 }
