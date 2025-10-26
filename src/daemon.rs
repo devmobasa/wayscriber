@@ -4,15 +4,18 @@ use ksni::TrayMethods;
 use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
-use std::process::{Command, Stdio};
+use std::env;
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use crate::backend;
+#[cfg(unix)]
+use libc;
+
 use crate::legacy;
 
 /// Overlay state for daemon mode
@@ -32,8 +35,9 @@ pub struct Daemon {
     should_quit: Arc<AtomicBool>,
     toggle_requested: Arc<AtomicBool>,
     initial_mode: Option<String>,
-    backend_runner: Arc<BackendRunner>,
+    backend_runner: Option<Arc<BackendRunner>>,
     tray_thread: Option<JoinHandle<()>>,
+    overlay_child: Option<Child>,
 }
 
 pub(crate) struct WayscriberTray {
@@ -192,12 +196,18 @@ impl ksni::Tray for WayscriberTray {
 
 impl Daemon {
     pub fn new(initial_mode: Option<String>) -> Self {
-        Self::with_backend_runner_internal(
+        Self {
+            overlay_state: OverlayState::Hidden,
+            should_quit: Arc::new(AtomicBool::new(false)),
+            toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
-            Arc::new(|mode| backend::run_wayland(mode)),
-        )
+            backend_runner: None,
+            tray_thread: None,
+            overlay_child: None,
+        }
     }
 
+    #[cfg(test)]
     fn with_backend_runner_internal(
         initial_mode: Option<String>,
         backend_runner: Arc<BackendRunner>,
@@ -207,8 +217,9 @@ impl Daemon {
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
-            backend_runner,
+            backend_runner: Some(backend_runner),
             tray_thread: None,
+            overlay_child: None,
         }
     }
 
@@ -274,6 +285,8 @@ impl Daemon {
 
         // Main daemon loop
         loop {
+            self.update_overlay_process_state()?;
+
             // Check for quit signal
             // Use Acquire ordering to ensure we see all memory operations
             // that happened before the flag was set
@@ -294,6 +307,10 @@ impl Daemon {
         }
 
         info!("Daemon shutting down");
+        // Ensure overlay is stopped before exit
+        if let Err(err) = self.hide_overlay() {
+            warn!("Failed to hide overlay during shutdown: {}", err);
+        }
         self.should_quit.store(true, Ordering::Release);
         if let Some(handle) = self.tray_thread.take() {
             match handle.join() {
@@ -326,18 +343,17 @@ impl Daemon {
             return Ok(());
         }
 
-        // Set state to visible before running
-        self.overlay_state = OverlayState::Visible;
-        info!("Overlay state set to Visible");
+        if let Some(runner) = &self.backend_runner {
+            self.overlay_state = OverlayState::Visible;
+            info!("Overlay state set to Visible");
+            let result = runner(self.initial_mode.clone());
+            self.overlay_state = OverlayState::Hidden;
+            info!("Overlay closed, back to daemon mode");
+            return result;
+        }
 
-        // Run the Wayland backend (this will block until overlay is closed)
-        let result = (self.backend_runner)(self.initial_mode.clone());
-
-        // When run_wayland returns, the overlay was closed
-        self.overlay_state = OverlayState::Hidden;
-        info!("Overlay closed, back to daemon mode");
-
-        result
+        self.spawn_overlay_process()?;
+        Ok(())
     }
 
     /// Hide overlay (destroy layer surface, return to hidden state)
@@ -347,8 +363,14 @@ impl Daemon {
             return Ok(());
         }
 
-        // NOTE: The overlay will be closed when user presses Escape
-        // or when the backend exits naturally
+        if self.backend_runner.is_some() {
+            // Internal runner does not keep additional state to tear down
+            debug!("Internal backend runner hidden");
+            self.overlay_state = OverlayState::Hidden;
+            return Ok(());
+        }
+
+        self.terminate_overlay_process()?;
         self.overlay_state = OverlayState::Hidden;
         Ok(())
     }
@@ -437,6 +459,95 @@ fn start_system_tray(
                 "System tray thread exited before signaling readiness"
             ))
         }
+    }
+}
+
+impl Daemon {
+    fn spawn_overlay_process(&mut self) -> Result<()> {
+        let exe = env::current_exe().context("Failed to determine current executable path")?;
+        let mut command = Command::new(exe);
+        command.arg("--active");
+        if let Some(mode) = &self.initial_mode {
+            command.arg("--mode").arg(mode);
+        }
+        command.stdin(Stdio::null());
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+
+        info!("Spawning overlay process...");
+        let child = command.spawn().context("Failed to spawn overlay process")?;
+        let pid = child.id();
+        self.overlay_child = Some(child);
+        self.overlay_state = OverlayState::Visible;
+        info!("Overlay process started (pid {pid})");
+        Ok(())
+    }
+
+    fn terminate_overlay_process(&mut self) -> Result<()> {
+        if let Some(mut child) = self.overlay_child.take() {
+            info!("Stopping overlay process (pid {})", child.id());
+            #[cfg(unix)]
+            {
+                if unsafe { libc::kill(child.id() as i32, libc::SIGTERM) } != 0 {
+                    warn!(
+                        "Failed to signal overlay process: {}",
+                        std::io::Error::last_os_error()
+                    );
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                if let Err(err) = child.kill() {
+                    warn!("Failed to signal overlay process: {}", err);
+                }
+            }
+
+            let deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        info!("Overlay process exited with status {:?}", status);
+                        break;
+                    }
+                    Ok(None) => {
+                        if Instant::now() >= deadline {
+                            warn!("Overlay process did not exit, sending SIGKILL");
+                            let _ = child.kill();
+                            let _ = child.wait();
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(50));
+                    }
+                    Err(err) => {
+                        warn!("Failed to query overlay process status: {}", err);
+                        let _ = child.kill();
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn update_overlay_process_state(&mut self) -> Result<()> {
+        if self.backend_runner.is_some() {
+            return Ok(());
+        }
+
+        if let Some(child) = self.overlay_child.as_mut() {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    info!("Overlay process exited with status {:?}", status);
+                    self.overlay_child = None;
+                    self.overlay_state = OverlayState::Hidden;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    warn!("Failed to poll overlay process status: {}", err);
+                }
+            }
+        }
+        Ok(())
     }
 }
 
