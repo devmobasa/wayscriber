@@ -36,7 +36,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
             CaptureError::InvalidResponse("Missing 'size' in hyprctl output".into())
         })?;
 
-        let (x, y) = (
+        let (mut x, mut y) = (
             at.first()
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[0]' value".into()))?,
@@ -44,7 +44,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[1]' value".into()))?,
         );
-        let (width, height) = (
+        let (mut width, mut height) = (
             size.first()
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[0]' value".into()))?,
@@ -57,6 +57,22 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
             return Err(CaptureError::InvalidResponse(
                 "Active window has non-positive dimensions".into(),
             ));
+        }
+
+        let monitor_id = json.get("monitor").and_then(|v| v.as_i64());
+        let monitor_name = json.get("monitor").and_then(|v| v.as_str());
+
+        if let Some(scale) = hyprland_monitor_scale(monitor_id, monitor_name)? {
+            if (scale - 1.0).abs() > f64::EPSILON {
+                log::debug!(
+                    "Applying monitor scale {:.2} to active window capture",
+                    scale
+                );
+                x *= scale;
+                y *= scale;
+                width *= scale;
+                height *= scale;
+            }
         }
 
         let geometry = format!(
@@ -155,4 +171,67 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
     .map_err(|e| {
         CaptureError::ImageError(format!("Selection capture task failed to join: {}", e))
     })?
+}
+
+fn hyprland_monitor_scale(
+    monitor_id: Option<i64>,
+    monitor_name: Option<&str>,
+) -> Result<Option<f64>, CaptureError> {
+    use serde_json::Value;
+    use std::process::{Command, Stdio};
+
+    if monitor_id.is_none() && monitor_name.is_none() {
+        return Ok(None);
+    }
+
+    let output = Command::new("hyprctl")
+        .args(["monitors", "-j"])
+        .stdout(Stdio::piped())
+        .output()
+        .map_err(|e| CaptureError::ImageError(format!("Failed to run hyprctl monitors: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CaptureError::ImageError(format!(
+            "hyprctl monitors failed: {}",
+            stderr.trim()
+        )));
+    }
+
+    let monitors: Value = serde_json::from_slice(&output.stdout).map_err(|e| {
+        CaptureError::InvalidResponse(format!("Failed to parse hyprctl monitors output: {}", e))
+    })?;
+
+    let list = monitors.as_array().ok_or_else(|| {
+        CaptureError::InvalidResponse("hyprctl monitors did not return an array".into())
+    })?;
+
+    for monitor in list {
+        let id_match = monitor_id
+            .and_then(|target| {
+                monitor
+                    .get("id")
+                    .and_then(|v| v.as_i64())
+                    .map(|id| id == target)
+            })
+            .unwrap_or(false);
+        let name_match = monitor_name
+            .and_then(|target| {
+                monitor
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|name| name == target)
+            })
+            .unwrap_or(false);
+
+        if id_match || name_match {
+            if let Some(scale) = monitor.get("scale").and_then(|v| v.as_f64()) {
+                return Ok(Some(scale));
+            } else {
+                return Ok(Some(1.0));
+            }
+        }
+    }
+
+    Ok(None)
 }
