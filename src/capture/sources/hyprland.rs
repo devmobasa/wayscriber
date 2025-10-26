@@ -126,6 +126,10 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
             })?;
 
         if !output.status.success() {
+            if output.status.code() == Some(1) {
+                log::info!("Selection capture cancelled by user (slurp exit code 1)");
+                return Err(CaptureError::Cancelled("Selection cancelled".into()));
+            }
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(CaptureError::ImageError(format!(
                 "slurp failed: {}",

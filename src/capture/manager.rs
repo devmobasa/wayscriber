@@ -63,6 +63,11 @@ impl CaptureManager {
                         *status_clone.lock().await = CaptureStatus::Success;
                         *result_clone.lock().await = Some(CaptureOutcome::Success(result));
                     }
+                    Err(CaptureError::Cancelled(reason)) => {
+                        log::info!("Capture cancelled: {}", reason);
+                        *status_clone.lock().await = CaptureStatus::Cancelled(reason.clone());
+                        *result_clone.lock().await = Some(CaptureOutcome::Cancelled(reason));
+                    }
                     Err(e) => {
                         let error_message = e.to_string();
                         log::error!("Capture failed: {}", error_message);

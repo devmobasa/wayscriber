@@ -36,7 +36,14 @@ pub(crate) async fn perform_capture(
     log::info!("Starting capture: {:?}", request.capture_type);
 
     // Step 1: Capture image bytes (prefer compositor-specific path where possible)
-    let image_data = dependencies.source.capture(request.capture_type).await?;
+    let image_data = match dependencies.source.capture(request.capture_type).await {
+        Ok(data) => data,
+        Err(CaptureError::Cancelled(reason)) => {
+            log::info!("Capture cancelled: {}", reason);
+            return Err(CaptureError::Cancelled(reason));
+        }
+        Err(err) => return Err(err),
+    };
 
     log::info!("Obtained screenshot data ({} bytes)", image_data.len());
 

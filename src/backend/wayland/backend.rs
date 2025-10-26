@@ -288,6 +288,9 @@ impl WaylandBackend {
                             Some("dialog-error".to_string()),
                         );
                     }
+                    CaptureOutcome::Cancelled(reason) => {
+                        log::info!("Capture cancelled: {}", reason);
+                    }
                 }
             }
 

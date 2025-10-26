@@ -38,6 +38,7 @@ pub struct CaptureResult {
 pub enum CaptureOutcome {
     Success(CaptureResult),
     Failed(String),
+    Cancelled(String),
 }
 
 /// Where the captured image should be delivered.
@@ -73,6 +74,9 @@ pub enum CaptureError {
 
     #[error("Portal returned invalid response: {0}")]
     InvalidResponse(String),
+
+    #[error("Capture cancelled: {0}")]
+    Cancelled(String),
 }
 
 /// Status of an ongoing capture operation.
@@ -89,4 +93,6 @@ pub enum CaptureStatus {
     Success,
     /// Capture failed.
     Failed(String),
+    /// Capture was cancelled by the user.
+    Cancelled(String),
 }
