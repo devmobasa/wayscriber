@@ -291,6 +291,14 @@ impl WaylandState {
             return;
         }
 
+        if self.capture_in_progress {
+            log::warn!(
+                "Capture action {:?} requested while another capture is running; ignoring",
+                action
+            );
+            return;
+        }
+
         let default_destination = if self.config.capture.copy_to_clipboard {
             CaptureDestination::ClipboardAndFile
         } else {
