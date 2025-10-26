@@ -1,3 +1,5 @@
+// Holds the live Wayland protocol state shared by the backend loop and the handler
+// submodules; provides rendering, capture routing, and overlay helpers used across them.
 use anyhow::{Context, Result};
 use log::{debug, info};
 use smithay_client_toolkit::{

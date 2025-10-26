@@ -1,3 +1,5 @@
+// Coordinates backend startup/shutdown and drives the event loop while delegating
+// rendering & protocol state to `WaylandState` and its handler modules.
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
