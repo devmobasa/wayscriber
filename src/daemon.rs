@@ -1,5 +1,5 @@
 /// Daemon mode implementation: background service with toggle activation
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use ksni::TrayMethods;
 use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
@@ -266,8 +266,8 @@ impl Daemon {
         // Start system tray
         let tray_toggle = self.toggle_requested.clone();
         let tray_quit = self.should_quit.clone();
-        let tray_handle = start_system_tray(tray_toggle, tray_quit)
-            .context("Failed to start system tray")?;
+        let tray_handle =
+            start_system_tray(tray_toggle, tray_quit).context("Failed to start system tray")?;
         self.tray_thread = Some(tray_handle);
 
         info!("Daemon ready - waiting for toggle signal");
@@ -382,9 +382,12 @@ fn start_system_tray(
             Ok(runtime) => runtime,
             Err(e) => {
                 warn!("Failed to create Tokio runtime for system tray: {}", e);
-                report_tray_readiness(&ready_thread_tx, Err(anyhow!(
-                    "Failed to create Tokio runtime for system tray: {e}"
-                )));
+                report_tray_readiness(
+                    &ready_thread_tx,
+                    Err(anyhow!(
+                        "Failed to create Tokio runtime for system tray: {e}"
+                    )),
+                );
                 return;
             }
         };
