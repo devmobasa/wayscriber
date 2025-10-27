@@ -145,6 +145,27 @@ fn test_text_mode_plain_letters_not_triggering_actions() {
 }
 
 #[test]
+fn test_text_mode_allows_symbol_keys_without_modifiers() {
+    let mut state = create_test_input_state();
+
+    state.state = DrawingState::TextInput {
+        x: 0,
+        y: 0,
+        buffer: String::new(),
+    };
+
+    for key in ['-', '+', '=', '_', '!', '@', '#', '$'] {
+        state.on_key_press(Key::Char(key));
+    }
+
+    if let DrawingState::TextInput { buffer, .. } = &state.state {
+        assert_eq!(buffer, "-+=_!@#$");
+    } else {
+        panic!("Expected to remain in text input mode");
+    }
+}
+
+#[test]
 fn test_text_mode_ctrl_keys_trigger_actions() {
     let mut state = create_test_input_state();
 
