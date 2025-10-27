@@ -367,6 +367,10 @@ pub fn render_help_overlay(
                             key: "F10",
                             action: "Toggle help",
                         },
+                        Row {
+                            key: "F12",
+                            action: "Toggle status bar",
+                        },
                     ],
                     badges: Vec::new(),
                 },

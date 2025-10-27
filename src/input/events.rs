@@ -29,6 +29,8 @@ pub enum Key {
     F10,
     /// F11 function key (open configurator)
     F11,
+    /// F12 function key (toggle status bar)
+    F12,
     /// Unmapped or unrecognized key
     Unknown,
 }

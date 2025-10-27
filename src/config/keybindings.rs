@@ -32,6 +32,7 @@ pub enum Action {
 
     // UI toggles
     ToggleHelp,
+    ToggleStatusBar,
 
     // Configurator
     OpenConfigurator,
@@ -188,6 +189,8 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_toggle_help")]
     pub toggle_help: Vec<String>,
+    #[serde(default = "default_toggle_status_bar")]
+    pub toggle_status_bar: Vec<String>,
 
     #[serde(default = "default_open_configurator")]
     pub open_configurator: Vec<String>,
@@ -259,6 +262,7 @@ impl Default for KeybindingsConfig {
             toggle_blackboard: default_toggle_blackboard(),
             return_to_transparent: default_return_to_transparent(),
             toggle_help: default_toggle_help(),
+            toggle_status_bar: default_toggle_status_bar(),
             open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
             set_color_green: default_set_color_green(),
@@ -345,6 +349,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_help {
             insert_binding(binding_str, Action::ToggleHelp)?;
+        }
+
+        for binding_str in &self.toggle_status_bar {
+            insert_binding(binding_str, Action::ToggleStatusBar)?;
         }
 
         for binding_str in &self.open_configurator {
@@ -473,6 +481,10 @@ fn default_return_to_transparent() -> Vec<String> {
 
 fn default_toggle_help() -> Vec<String> {
     vec!["F10".to_string()]
+}
+
+fn default_toggle_status_bar() -> Vec<String> {
+    vec!["F12".to_string()]
 }
 
 fn default_open_configurator() -> Vec<String> {

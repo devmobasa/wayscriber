@@ -69,6 +69,8 @@ pub struct InputState {
     pub needs_redraw: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
+    /// Whether the status bar is currently visible (toggled via keybinding)
+    pub show_status_bar: bool,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -97,6 +99,7 @@ impl InputState {
     /// * `text_background_enabled` - Whether to draw background behind text
     /// * `arrow_length` - Arrowhead length in pixels
     /// * `arrow_angle` - Arrowhead angle in degrees
+    /// * `show_status_bar` - Whether the status bar starts visible
     /// * `board_config` - Board mode configuration
     /// * `action_map` - Keybinding action map
     #[allow(clippy::too_many_arguments)]
@@ -108,6 +111,7 @@ impl InputState {
         text_background_enabled: bool,
         arrow_length: f64,
         arrow_angle: f64,
+        show_status_bar: bool,
         board_config: BoardConfig,
         action_map: HashMap<KeyBinding, Action>,
     ) -> Self {
@@ -125,6 +129,7 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             show_help: false,
+            show_status_bar,
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,

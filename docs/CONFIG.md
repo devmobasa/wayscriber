@@ -305,6 +305,9 @@ return_to_transparent = ["Ctrl+Shift+T"]
 # Toggle help overlay
 toggle_help = ["F10"]
 
+# Toggle status bar visibility
+toggle_status_bar = ["F12"]
+
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
 

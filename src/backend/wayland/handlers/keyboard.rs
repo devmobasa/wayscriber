@@ -137,6 +137,7 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::Z => Key::Char('Z'),
         Keysym::F10 => Key::F10,
         Keysym::F11 => Key::F11,
+        Keysym::F12 => Key::F12,
         _ => {
             let raw = keysym.raw();
             if (0x20..=0x7E).contains(&raw) {

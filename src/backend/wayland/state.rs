@@ -215,7 +215,7 @@ impl WaylandState {
         }
 
         // Render status bar if enabled
-        if self.config.ui.show_status_bar {
+        if self.input_state.show_status_bar {
             crate::ui::render_status_bar(
                 &ctx,
                 &self.input_state,
