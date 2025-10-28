@@ -13,8 +13,7 @@
 *.swp
 *.swo
 
-# ZoomIt reference files (not part of our implementation)
-/ZoomIt/
+
 
 # Test scripts
 test_run.sh
@@ -27,3 +26,5 @@ packaging/**
 !packaging/PKGBUILD.hyprmarker-meta
 
 docs/board
+
+dist/

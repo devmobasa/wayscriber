@@ -43,8 +43,13 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 ## Quick Start
 
 **1. Install wayscriber**
-   - Arch Linux: `yay -S wayscriber` or `paru -S wayscriber` (AUR). The binary lands in `/usr/bin` and required tools (`wl-clipboard`, `grim`, `slurp`) are pulled in automatically.
-   - Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
+1. Arch Linux (AUR):  (build from source)
+	- `yay -S wayscriber` 
+	- `paru -S wayscriber` 
+2. Arch Linux (AUR, prebuilt): 
+	- `yay -S wayscriber-bin` 
+	- `paru -S wayscriber-bin`.
+3. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
 
 **2. Choose how to run it:**
 
@@ -109,11 +114,17 @@ See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
 ### Arch Linux (AUR)
 
 ```bash
-# Using yay
+# yay – build from source
 yay -S wayscriber
 
-# Or using paru
+# yay – prebuilt binaries
+yay -S wayscriber-bin
+
+# paru – build from source
 paru -S wayscriber
+
+# paru – prebuilt binaries
+paru -S wayscriber-bin
 ```
 
 The package installs the user service at `/usr/lib/systemd/user/wayscriber.service`.
@@ -122,7 +133,7 @@ The package installs the user service at `/usr/lib/systemd/user/wayscriber.servi
 > Remove the legacy packages once and reinstall under the new name:
 > ```bash
 > sudo pacman -Rns hyprmarker hyprmarker-debug  # ignore if either package is already gone
-> yay -S wayscriber
+> yay -S wayscriber    # or yay -S wayscriber-bin
 > ```
 > After this one-time cleanup, future upgrades work exactly like any other AUR package.
 
