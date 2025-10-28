@@ -109,8 +109,10 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::Shift_L | Keysym::Shift_R => Key::Shift,
         Keysym::Control_L | Keysym::Control_R => Key::Ctrl,
         Keysym::Alt_L | Keysym::Alt_R => Key::Alt,
-        Keysym::plus | Keysym::equal => Key::Plus,
-        Keysym::minus | Keysym::underscore => Key::Minus,
+        Keysym::plus => Key::Char('+'),
+        Keysym::equal => Key::Char('='),
+        Keysym::minus => Key::Char('-'),
+        Keysym::underscore => Key::Char('_'),
         Keysym::t => Key::Char('t'),
         Keysym::T => Key::Char('T'),
         Keysym::e => Key::Char('e'),
@@ -135,6 +137,7 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::Z => Key::Char('Z'),
         Keysym::F10 => Key::F10,
         Keysym::F11 => Key::F11,
+        Keysym::F12 => Key::F12,
         _ => {
             let raw = keysym.raw();
             if (0x20..=0x7E).contains(&raw) {

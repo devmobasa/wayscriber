@@ -4339,6 +4339,7 @@ dependencies = [
  "env_logger",
  "futures",
  "ksni",
+ "libc",
  "log",
  "memmap2 0.9.8",
  "nix 0.30.1",

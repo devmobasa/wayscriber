@@ -19,6 +19,7 @@ fn make_input_state() -> InputState {
         false,
         20.0,
         30.0,
+        true,
         wayscriber::config::BoardConfig::default(),
         action_map,
     )

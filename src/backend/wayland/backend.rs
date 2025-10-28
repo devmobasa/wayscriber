@@ -128,6 +128,7 @@ impl WaylandBackend {
             config.drawing.text_background_enabled,
             config.arrow.length,
             config.arrow.angle_degrees,
+            config.ui.show_status_bar,
             config.board.clone(),
             action_map,
         );
@@ -287,6 +288,9 @@ impl WaylandBackend {
                             error,
                             Some("dialog-error".to_string()),
                         );
+                    }
+                    CaptureOutcome::Cancelled(reason) => {
+                        log::info!("Capture cancelled: {}", reason);
                     }
                 }
             }

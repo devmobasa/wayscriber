@@ -27,6 +27,7 @@ fn create_test_input_state() -> InputState {
         false,                  // text_background_enabled
         20.0,                   // arrow_length
         30.0,                   // arrow_angle
+        true,                   // show_status_bar
         BoardConfig::default(), // board_config
         action_map,             // action_map
     )
@@ -142,6 +143,27 @@ fn test_text_mode_plain_letters_not_triggering_actions() {
 
     // Color should still not have changed
     assert_eq!(state.current_color, original_color);
+}
+
+#[test]
+fn test_text_mode_allows_symbol_keys_without_modifiers() {
+    let mut state = create_test_input_state();
+
+    state.state = DrawingState::TextInput {
+        x: 0,
+        y: 0,
+        buffer: String::new(),
+    };
+
+    for key in ['-', '+', '=', '_', '!', '@', '#', '$'] {
+        state.on_key_press(Key::Char(key));
+    }
+
+    if let DrawingState::TextInput { buffer, .. } = &state.state {
+        assert_eq!(buffer, "-+=_!@#$");
+    } else {
+        panic!("Expected to remain in text input mode");
+    }
 }
 
 #[test]

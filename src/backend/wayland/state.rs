@@ -215,7 +215,7 @@ impl WaylandState {
         }
 
         // Render status bar if enabled
-        if self.config.ui.show_status_bar {
+        if self.input_state.show_status_bar {
             crate::ui::render_status_bar(
                 &ctx,
                 &self.input_state,
@@ -288,6 +288,14 @@ impl WaylandState {
     pub(super) fn handle_capture_action(&mut self, action: Action) {
         if !self.config.capture.enabled {
             log::warn!("Capture action triggered but capture is disabled in config");
+            return;
+        }
+
+        if self.capture_in_progress {
+            log::warn!(
+                "Capture action {:?} requested while another capture is running; ignoring",
+                action
+            );
             return;
         }
 

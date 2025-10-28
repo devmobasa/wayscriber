@@ -25,18 +25,12 @@ pub enum Key {
     Ctrl,
     /// Alt modifier
     Alt,
-    /// Plus key (increase thickness)
-    Plus,
-    /// Minus key (decrease thickness)
-    Minus,
-    /// Equals key (alternate for plus)
-    Equals,
-    /// Underscore key (alternate for minus)
-    Underscore,
     /// F10 function key (toggle help)
     F10,
     /// F11 function key (open configurator)
     F11,
+    /// F12 function key (toggle status bar)
+    F12,
     /// Unmapped or unrecognized key
     Unknown,
 }

@@ -46,7 +46,7 @@ impl InputState {
             // 2. OR it's a special non-character key (Escape, F10, etc.)
             let should_check_actions = match key {
                 // Special keys always check for actions
-                Key::Escape | Key::F10 | Key::F11 | Key::Return => true,
+                Key::Escape | Key::F10 | Key::F11 | Key::F12 | Key::Return => true,
                 // Character keys only check if modifiers are held
                 Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
                 // Other keys can check as well
@@ -61,12 +61,9 @@ impl InputState {
                     Key::Return => "Return".to_string(),
                     Key::Backspace => "Backspace".to_string(),
                     Key::Space => "Space".to_string(),
-                    Key::Plus => "+".to_string(),
-                    Key::Minus => "-".to_string(),
-                    Key::Equals => "=".to_string(),
-                    Key::Underscore => "_".to_string(),
                     Key::F10 => "F10".to_string(),
                     Key::F11 => "F11".to_string(),
+                    Key::F12 => "F12".to_string(),
                     _ => String::new(),
                 };
 
@@ -157,12 +154,9 @@ impl InputState {
             Key::Return => "Return".to_string(),
             Key::Backspace => "Backspace".to_string(),
             Key::Space => "Space".to_string(),
-            Key::Plus => "+".to_string(),
-            Key::Minus => "-".to_string(),
-            Key::Equals => "=".to_string(),
-            Key::Underscore => "_".to_string(),
             Key::F10 => "F10".to_string(),
             Key::F11 => "F11".to_string(),
+            Key::F12 => "F12".to_string(),
             _ => return,
         };
 
@@ -242,6 +236,10 @@ impl InputState {
             }
             Action::ToggleHelp => {
                 self.show_help = !self.show_help;
+                self.needs_redraw = true;
+            }
+            Action::ToggleStatusBar => {
+                self.show_status_bar = !self.show_status_bar;
                 self.needs_redraw = true;
             }
             Action::OpenConfigurator => {
