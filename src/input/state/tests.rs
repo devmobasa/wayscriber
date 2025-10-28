@@ -201,6 +201,38 @@ fn test_text_mode_ctrl_keys_trigger_actions() {
 }
 
 #[test]
+fn test_text_mode_respects_length_cap() {
+    let mut state = create_test_input_state();
+
+    state.state = DrawingState::TextInput {
+        x: 0,
+        y: 0,
+        buffer: "a".repeat(10_000),
+    };
+
+    state.on_key_press(Key::Char('b'));
+
+    if let DrawingState::TextInput { buffer, .. } = &state.state {
+        assert_eq!(buffer.len(), 10_000);
+        assert!(buffer.ends_with('a'));
+    } else {
+        panic!("Expected to remain in text input mode");
+    }
+
+    // After trimming, adding should work again
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.truncate(9_999);
+    }
+
+    state.on_key_press(Key::Char('c'));
+
+    if let DrawingState::TextInput { buffer, .. } = &state.state {
+        assert!(buffer.ends_with('c'));
+        assert_eq!(buffer.len(), 10_000);
+    }
+}
+
+#[test]
 fn test_text_mode_escape_exits() {
     let mut state = create_test_input_state();
 

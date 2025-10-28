@@ -370,6 +370,12 @@ impl WaylandBackend {
             if let Some(snapshot) = session::snapshot_from_input(&state.input_state, options) {
                 if let Err(err) = session::save_snapshot(&snapshot, options) {
                     warn!("Failed to save session state: {}", err);
+                    notification::send_notification_async(
+                        &state.tokio_handle,
+                        "Failed to Save Session".to_string(),
+                        format!("Your drawings may not persist: {}", err),
+                        Some("dialog-error".to_string()),
+                    );
                 }
             }
         }

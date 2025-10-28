@@ -2,8 +2,11 @@ use crate::config::Action;
 use crate::draw::Shape;
 use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
+use log::warn;
 
 use super::{DrawingState, InputState};
+
+pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
 
 impl InputState {
     /// Processes a key press event.
@@ -108,8 +111,14 @@ impl InputState {
             if let DrawingState::TextInput { buffer, .. } = &mut self.state {
                 match key {
                     Key::Char(c) => {
-                        buffer.push(c);
-                        self.needs_redraw = true;
+                        if Self::push_text_char(buffer, c) {
+                            self.needs_redraw = true;
+                        } else {
+                            warn!(
+                                "Text input reached maximum length of {} characters",
+                                MAX_TEXT_LENGTH
+                            );
+                        }
                         return;
                     }
                     Key::Backspace => {
@@ -118,14 +127,26 @@ impl InputState {
                         return;
                     }
                     Key::Space => {
-                        buffer.push(' ');
-                        self.needs_redraw = true;
+                        if Self::push_text_char(buffer, ' ') {
+                            self.needs_redraw = true;
+                        } else {
+                            warn!(
+                                "Text input reached maximum length of {} characters",
+                                MAX_TEXT_LENGTH
+                            );
+                        }
                         return;
                     }
                     Key::Return if self.modifiers.shift => {
                         // Shift+Enter: insert newline
-                        buffer.push('\n');
-                        self.needs_redraw = true;
+                        if Self::push_text_char(buffer, '\n') {
+                            self.needs_redraw = true;
+                        } else {
+                            warn!(
+                                "Text input reached maximum length of {} characters",
+                                MAX_TEXT_LENGTH
+                            );
+                        }
                         return;
                     }
                     _ => {
@@ -163,6 +184,16 @@ impl InputState {
         // Look up action based on keybinding
         if let Some(action) = self.find_action(&key_str) {
             self.handle_action(action);
+        }
+    }
+
+    fn push_text_char(buffer: &mut String, ch: char) -> bool {
+        let additional = ch.len_utf8();
+        if buffer.len() + additional <= MAX_TEXT_LENGTH {
+            buffer.push(ch);
+            true
+        } else {
+            false
         }
     }
 
