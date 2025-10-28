@@ -113,12 +113,13 @@ fn session_info_reports_saved_snapshot() {
     let loaded = wayscriber::config::Config::load().unwrap();
     let config_dir =
         wayscriber::config::Config::config_directory_from_source(&loaded.source).unwrap();
-    let options = wayscriber::session::options_from_config(
+    let mut options = wayscriber::session::options_from_config(
         &loaded.config.session,
         &config_dir,
         Some(display),
     )
     .unwrap();
+    options.set_output_identity(Some("DP-1"));
 
     match original_config {
         Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
@@ -161,7 +162,9 @@ fn session_info_reports_saved_snapshot() {
         .arg("--session-info")
         .assert()
         .success()
+        .stdout(predicate::str::contains("Per-output persistence: true"))
         .stdout(predicate::str::contains("Session file       :"))
+        .stdout(predicate::str::contains("Output identity: DP_1"))
         .stdout(predicate::str::contains("transparent 1"))
         .stdout(predicate::str::contains("Tool state stored: false"));
 }

@@ -149,25 +149,6 @@ impl WaylandBackend {
             action_map,
         );
 
-        if let Some(options) = session_options.as_ref() {
-            match session::load_snapshot(options) {
-                Ok(Some(snapshot)) => {
-                    debug!(
-                        "Restoring session from {}",
-                        options.session_file_path().display()
-                    );
-                    session::apply_snapshot(&mut input_state, snapshot, options);
-                }
-                Ok(None) => {
-                    debug!(
-                        "Session file {} empty or absent",
-                        options.session_file_path().display()
-                    );
-                }
-                Err(err) => warn!("Failed to load session state: {}", err),
-            }
-        }
-
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
         if config.board.enabled {
             let initial_mode_str = self
@@ -214,6 +195,7 @@ impl WaylandBackend {
             config,
             input_state,
             capture_manager,
+            session_options,
             tokio_handle,
         );
 
@@ -384,7 +366,7 @@ impl WaylandBackend {
 
         info!("Wayland backend exiting");
 
-        if let Some(options) = session_options.as_ref() {
+        if let Some(options) = state.session_options() {
             if let Some(snapshot) = session::snapshot_from_input(&state.input_state, options) {
                 if let Err(err) = session::save_snapshot(&snapshot, options) {
                     warn!("Failed to save session state: {}", err);

@@ -190,10 +190,14 @@ fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
         println!("  Persist whiteboard : {}", inspection.persist_whiteboard);
         println!("  Persist blackboard : {}", inspection.persist_blackboard);
         println!("  Restore tool state : {}", inspection.restore_tool_state);
+        println!("  Per-output persistence: {}", inspection.per_output);
         println!(
             "  Session file       : {}",
             inspection.session_path.display()
         );
+        if let Some(identity) = &inspection.active_identity {
+            println!("    Output identity: {}", identity);
+        }
         if inspection.exists {
             if let Some(size) = inspection.size_bytes {
                 println!("    Size     : {} bytes", size);

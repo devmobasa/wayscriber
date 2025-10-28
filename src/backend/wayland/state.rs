@@ -13,7 +13,10 @@ use smithay_client_toolkit::{
     },
     shm::{Shm, slot::SlotPool},
 };
-use wayland_client::{QueueHandle, protocol::wl_shm};
+use wayland_client::{
+    QueueHandle,
+    protocol::{wl_output, wl_shm},
+};
 
 use crate::{
     capture::{
@@ -23,6 +26,7 @@ use crate::{
     },
     config::{Action, Config},
     input::{DrawingState, InputState},
+    session::SessionOptions,
 };
 
 /// Internal Wayland state shared across modules.
@@ -60,6 +64,11 @@ pub(super) struct WaylandState {
     pub(super) capture_in_progress: bool,
     pub(super) overlay_hidden_for_capture: bool,
 
+    // Session persistence
+    pub(super) session_options: Option<SessionOptions>,
+    pub(super) session_loaded: bool,
+    pub(super) last_loaded_identity: Option<String>,
+
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,
 }
@@ -76,6 +85,7 @@ impl WaylandState {
         config: Config,
         input_state: InputState,
         capture_manager: CaptureManager,
+        session_options: Option<SessionOptions>,
         tokio_handle: tokio::runtime::Handle,
     ) -> Self {
         Self {
@@ -98,8 +108,43 @@ impl WaylandState {
             capture_manager,
             capture_in_progress: false,
             overlay_hidden_for_capture: false,
+            session_options,
+            session_loaded: false,
+            last_loaded_identity: None,
             tokio_handle,
         }
+    }
+
+    pub(super) fn session_options(&self) -> Option<&SessionOptions> {
+        self.session_options.as_ref()
+    }
+
+    pub(super) fn session_options_mut(&mut self) -> Option<&mut SessionOptions> {
+        self.session_options.as_mut()
+    }
+
+    pub(super) fn output_identity_for(&self, output: &wl_output::WlOutput) -> Option<String> {
+        let info = self.output_state.info(output)?;
+
+        let mut components: Vec<String> = Vec::new();
+
+        if let Some(name) = info.name.filter(|s| !s.is_empty()) {
+            components.push(name);
+        }
+
+        if !info.make.is_empty() {
+            components.push(info.make);
+        }
+
+        if !info.model.is_empty() {
+            components.push(info.model);
+        }
+
+        if components.is_empty() {
+            components.push(format!("id{}", info.id));
+        }
+
+        Some(components.join("-"))
     }
 
     pub(super) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<()> {

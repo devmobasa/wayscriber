@@ -514,6 +514,10 @@ pub struct SessionConfig {
     /// Number of rotated backups to retain (0 disables backups).
     #[serde(default = "default_backup_retention")]
     pub backup_retention: usize,
+
+    /// Separate persistence per output instead of per display.
+    #[serde(default = "default_session_per_output")]
+    pub per_output: bool,
 }
 
 impl Default for SessionConfig {
@@ -530,6 +534,7 @@ impl Default for SessionConfig {
             compress: default_session_compression(),
             auto_compress_threshold_kb: default_auto_compress_threshold_kb(),
             backup_retention: default_backup_retention(),
+            per_output: default_session_per_output(),
         }
     }
 }
@@ -578,4 +583,8 @@ fn default_auto_compress_threshold_kb() -> u64 {
 
 fn default_backup_retention() -> usize {
     1
+}
+
+fn default_session_per_output() -> bool {
+    true
 }

@@ -48,13 +48,15 @@ pub struct SessionOptions {
     pub auto_compress_threshold_bytes: u64,
     pub display_id: String,
     pub backup_retention: usize,
+    pub output_identity: Option<String>,
+    pub per_output: bool,
 }
 
 impl SessionOptions {
     /// Creates a basic options struct with sensible defaults. Intended mainly for tests.
     pub fn new(base_dir: PathBuf, display_id: impl Into<String>) -> Self {
         let raw_display = display_id.into();
-        let display_id = sanitize_display_id(&raw_display);
+        let display_id = sanitize_identifier(&raw_display);
         Self {
             base_dir,
             persist_transparent: false,
@@ -67,6 +69,8 @@ impl SessionOptions {
             auto_compress_threshold_bytes: DEFAULT_AUTO_COMPRESS_THRESHOLD_BYTES,
             display_id,
             backup_retention: 1,
+            output_identity: None,
+            per_output: true,
         }
     }
 
@@ -75,17 +79,51 @@ impl SessionOptions {
     }
 
     pub fn session_file_path(&self) -> PathBuf {
-        let file_name = format!("session-{}.json", &self.display_id);
-        self.base_dir.join(file_name)
+        self.base_dir
+            .join(format!("{}.json", self.session_file_stem()))
     }
 
     pub fn backup_file_path(&self) -> PathBuf {
-        self.session_file_path().with_extension("json.bak")
+        self.base_dir
+            .join(format!("{}.json.bak", self.session_file_stem()))
     }
 
     pub fn lock_file_path(&self) -> PathBuf {
         self.base_dir
-            .join(format!("session-{}.lock", &self.display_id))
+            .join(format!("{}.lock", self.session_file_stem()))
+    }
+
+    pub fn file_prefix(&self) -> String {
+        format!("session-{}", self.display_id)
+    }
+
+    fn session_file_stem(&self) -> String {
+        if self.per_output {
+            match &self.output_identity {
+                Some(identity) => format!("{}-{}", self.file_prefix(), identity),
+                None => self.file_prefix(),
+            }
+        } else {
+            self.file_prefix()
+        }
+    }
+
+    pub fn set_output_identity(&mut self, identity: Option<&str>) -> bool {
+        if !self.per_output {
+            self.output_identity = None;
+            return false;
+        }
+        let sanitized = identity.map(|s| sanitize_identifier(s));
+        if self.output_identity == sanitized {
+            false
+        } else {
+            self.output_identity = sanitized;
+            true
+        }
+    }
+
+    pub fn output_identity(&self) -> Option<&str> {
+        self.output_identity.as_deref()
     }
 }
 
@@ -155,6 +193,7 @@ pub fn options_from_config(
         SessionCompression::Off => CompressionMode::Off,
     };
     options.backup_retention = session_cfg.backup_retention;
+    options.per_output = session_cfg.per_output;
 
     Ok(options)
 }
@@ -601,7 +640,7 @@ fn temp_path(target: &Path) -> Result<PathBuf> {
     Ok(candidate)
 }
 
-fn sanitize_display_id(raw: &str) -> String {
+fn sanitize_identifier(raw: &str) -> String {
     if raw.is_empty() {
         return "default".to_string();
     }
@@ -613,11 +652,11 @@ fn sanitize_display_id(raw: &str) -> String {
 
 fn resolve_display_id(display_id: Option<&str>) -> String {
     if let Some(id) = display_id {
-        return sanitize_display_id(id);
+        return sanitize_identifier(id);
     }
 
     match env::var("WAYLAND_DISPLAY") {
-        Ok(value) => sanitize_display_id(&value),
+        Ok(value) => sanitize_identifier(&value),
         Err(_) => "default".to_string(),
     }
 }
@@ -649,6 +688,8 @@ pub struct SessionInspection {
     pub backup_path: PathBuf,
     pub backup_exists: bool,
     pub backup_size_bytes: Option<u64>,
+    pub active_identity: Option<String>,
+    pub per_output: bool,
     pub persist_transparent: bool,
     pub persist_whiteboard: bool,
     pub persist_blackboard: bool,
@@ -672,25 +713,25 @@ pub fn clear_session(options: &SessionOptions) -> Result<ClearOutcome> {
     let backup_path = options.backup_file_path();
     let lock_path = options.lock_file_path();
 
-    let mut removed_session = false;
-    if session_path.exists() {
-        fs::remove_file(&session_path)
-            .with_context(|| format!("failed to remove session file {}", session_path.display()))?;
-        removed_session = true;
-    }
+    let mut removed_session = remove_file_if_exists(&session_path)?;
+    let mut removed_backup = remove_file_if_exists(&backup_path)?;
+    let mut removed_lock = remove_file_if_exists(&lock_path)?;
 
-    let mut removed_backup = false;
-    if backup_path.exists() {
-        fs::remove_file(&backup_path).with_context(|| {
-            format!("failed to remove session backup {}", backup_path.display())
-        })?;
-        removed_backup = true;
-    }
+    if options.per_output && options.output_identity().is_none() {
+        let prefix = options.file_prefix();
+        let base_dir = &options.base_dir;
 
-    let mut removed_lock = false;
-    if lock_path.exists() {
-        if fs::remove_file(&lock_path).is_ok() {
-            removed_lock = true;
+        if !removed_session {
+            removed_session = remove_matching_files(base_dir, &prefix, ".json")? || removed_session;
+        }
+
+        if !removed_backup {
+            removed_backup =
+                remove_matching_files(base_dir, &prefix, ".json.bak")? || removed_backup;
+        }
+
+        if !removed_lock {
+            removed_lock = remove_matching_files(base_dir, &prefix, ".lock")? || removed_lock;
         }
     }
 
@@ -701,16 +742,114 @@ pub fn clear_session(options: &SessionOptions) -> Result<ClearOutcome> {
     })
 }
 
+fn remove_file_if_exists(path: &Path) -> Result<bool> {
+    if path.exists() {
+        fs::remove_file(path).with_context(|| format!("failed to remove {}", path.display()))?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+fn remove_matching_files(dir: &Path, prefix: &str, suffix: &str) -> Result<bool> {
+    let mut removed = false;
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries {
+            let entry = entry?;
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with(prefix) && name.ends_with(suffix) {
+                    fs::remove_file(&path)
+                        .with_context(|| format!("failed to remove {}", path.display()))?;
+                    removed = true;
+                }
+            }
+        }
+    }
+    Ok(removed)
+}
+
+fn find_existing_variant(
+    dir: &Path,
+    prefix: &str,
+    suffix: &str,
+) -> Option<(PathBuf, Option<String>)> {
+    let entries = fs::read_dir(dir).ok()?;
+    let mut matches: Vec<(PathBuf, Option<String>)> = Vec::new();
+
+    for entry in entries {
+        let entry = entry.ok()?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if let Some(name) = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+        {
+            if name.starts_with(prefix) && name.ends_with(suffix) {
+                matches.push((path, extract_identity(&name, prefix, suffix)));
+            }
+        }
+    }
+
+    matches.sort_by(|a, b| {
+        let a_name = a.0.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let b_name = b.0.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        a_name.cmp(b_name)
+    });
+
+    matches.into_iter().next()
+}
+
+fn extract_identity(name: &str, prefix: &str, suffix: &str) -> Option<String> {
+    if !name.starts_with(prefix) || !name.ends_with(suffix) {
+        return None;
+    }
+
+    let start = prefix.len();
+    let end = name.len() - suffix.len();
+    if start >= end {
+        return None;
+    }
+
+    let trimmed = name[start..end].trim_start_matches('-');
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 /// Inspect the current session file for CLI reporting.
 pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
-    let session_path = options.session_file_path();
-    let metadata = fs::metadata(&session_path).ok();
+    let prefix = options.file_prefix();
+    let mut session_path = options.session_file_path();
+    let mut session_identity = options.output_identity().map(|s| s.to_string());
+    let mut metadata = fs::metadata(&session_path).ok();
+
+    if metadata.is_none() && options.per_output && options.output_identity().is_none() {
+        if let Some((path, identity)) = find_existing_variant(&options.base_dir, &prefix, ".json") {
+            metadata = fs::metadata(&path).ok();
+            session_path = path;
+            session_identity = identity;
+        }
+    }
+
     let exists = metadata.is_some();
     let size_bytes = metadata.as_ref().map(|m| m.len());
     let modified = metadata.as_ref().and_then(|m| m.modified().ok());
 
-    let backup_path = options.backup_file_path();
-    let backup_meta = fs::metadata(&backup_path).ok();
+    let mut backup_path = options.backup_file_path();
+    let mut backup_meta = fs::metadata(&backup_path).ok();
+    if backup_meta.is_none() && options.per_output && options.output_identity().is_none() {
+        if let Some((path, _)) = find_existing_variant(&options.base_dir, &prefix, ".json.bak") {
+            backup_meta = fs::metadata(&path).ok();
+            backup_path = path;
+        }
+    }
+
     let backup_exists = backup_meta.is_some();
     let backup_size = backup_meta.as_ref().map(|m| m.len());
 
@@ -719,7 +858,7 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let mut compressed = false;
 
     if exists {
-        let lock_path = options.lock_file_path();
+        let lock_path = session_path.with_extension("lock");
         let lock_file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -771,6 +910,8 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         backup_path,
         backup_exists,
         backup_size_bytes: backup_size,
+        active_identity: session_identity,
+        per_output: options.per_output,
         persist_transparent: options.persist_transparent,
         persist_whiteboard: options.persist_whiteboard,
         persist_blackboard: options.persist_blackboard,
@@ -830,6 +971,8 @@ mod tests {
             auto_compress_threshold_bytes: DEFAULT_AUTO_COMPRESS_THRESHOLD_BYTES,
             display_id: "test".into(),
             backup_retention: 1,
+            output_identity: None,
+            per_output: true,
         };
 
         let input = dummy_input_state();
@@ -871,16 +1014,17 @@ mod tests {
         cfg.storage = SessionStorageMode::Custom;
         cfg.custom_directory = Some(custom_dir.to_string_lossy().to_string());
 
-        let options = options_from_config(&cfg, temp.path(), Some("display-1")).unwrap();
+        let mut options = options_from_config(&cfg, temp.path(), Some("display-1")).unwrap();
         assert_eq!(options.base_dir, custom_dir);
         assert!(options.persist_transparent);
+        options.set_output_identity(Some("DP-1"));
         assert_eq!(
             options
                 .session_file_path()
                 .file_name()
                 .unwrap()
                 .to_string_lossy(),
-            "session-display_1.json"
+            "session-display_1-DP_1.json"
         );
     }
 
@@ -897,7 +1041,7 @@ mod tests {
             std::env::remove_var("WAYLAND_DISPLAY");
         }
 
-        let options = options_from_config(&cfg, temp.path(), None).unwrap();
+        let mut options = options_from_config(&cfg, temp.path(), None).unwrap();
         match original_display {
             Some(value) => unsafe { std::env::set_var("WAYLAND_DISPLAY", value) },
             None => {}
@@ -913,5 +1057,24 @@ mod tests {
                 .to_string_lossy(),
             "session-default.json"
         );
+        options.set_output_identity(Some("Monitor-Primary"));
+        assert_eq!(
+            options
+                .session_file_path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy(),
+            "session-default-Monitor_Primary.json"
+        );
+    }
+
+    #[test]
+    fn session_file_without_per_output_suffix_when_disabled() {
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+        options.per_output = false;
+        let original = options.session_file_path();
+        options.set_output_identity(Some("DP-1"));
+        assert_eq!(options.session_file_path(), original);
+        assert!(options.output_identity().is_none());
     }
 }

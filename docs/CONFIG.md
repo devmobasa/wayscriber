@@ -283,6 +283,7 @@ persist_blackboard = false
 restore_tool_state = true
 storage = "auto"
 # custom_directory = "/absolute/path"
+per_output = true
 max_shapes_per_frame = 10000
 max_file_size_mb = 10
 compress = "auto"
@@ -294,6 +295,7 @@ backup_retention = 1
 - `restore_tool_state` — save pen colour, thickness, font size, arrow settings, and status bar visibility
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
+- `per_output` — when `true` (default) keep a separate session file for each monitor; set to `false` to share one file per Wayland display as in earlier releases
 - `max_shapes_per_frame` — trims older shapes if a frame grows beyond this count when loading/saving
 - `max_file_size_mb` — skips loading and writing session files beyond this size cap
 - `compress` — `auto` (gzip files above the threshold), `on`, or `off`
