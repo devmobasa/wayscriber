@@ -68,41 +68,40 @@ impl InputState {
                 };
 
                 // Check if this key combination triggers an action
-                if !key_str.is_empty()
-                    && let Some(action) = self.find_action(&key_str)
-                {
-                    // Actions work in text mode
-                    // Note: Exit action has special logic in handle_action - it cancels
-                    // text mode if in TextInput state, or exits app if in Idle state
-                    self.handle_action(action);
-                    return;
+                if !key_str.is_empty() {
+                    if let Some(action) = self.find_action(&key_str) {
+                        // Actions work in text mode
+                        // Note: Exit action has special logic in handle_action - it cancels
+                        // text mode if in TextInput state, or exits app if in Idle state
+                        self.handle_action(action);
+                        return;
+                    }
                 }
             }
 
             // No action triggered, handle as text input
             // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
-            if matches!(key, Key::Return)
-                && !self.modifiers.shift
-                && let DrawingState::TextInput { x, y, buffer } = &self.state
-            {
-                if !buffer.is_empty() {
-                    let x = *x;
-                    let y = *y;
-                    let text = buffer.clone();
+            if matches!(key, Key::Return) && !self.modifiers.shift {
+                if let DrawingState::TextInput { x, y, buffer } = &self.state {
+                    if !buffer.is_empty() {
+                        let x = *x;
+                        let y = *y;
+                        let text = buffer.clone();
 
-                    self.canvas_set.active_frame_mut().add_shape(Shape::Text {
-                        x,
-                        y,
-                        text,
-                        color: self.current_color,
-                        size: self.current_font_size,
-                        font_descriptor: self.font_descriptor.clone(),
-                        background_enabled: self.text_background_enabled,
-                    });
-                    self.needs_redraw = true;
+                        self.canvas_set.active_frame_mut().add_shape(Shape::Text {
+                            x,
+                            y,
+                            text,
+                            color: self.current_color,
+                            size: self.current_font_size,
+                            font_descriptor: self.font_descriptor.clone(),
+                            background_enabled: self.text_background_enabled,
+                        });
+                        self.needs_redraw = true;
+                    }
+                    self.state = DrawingState::Idle;
+                    return;
                 }
-                self.state = DrawingState::Idle;
-                return;
             }
 
             // Regular text input - add character to buffer
@@ -138,13 +137,14 @@ impl InputState {
         }
 
         // Handle Escape in Drawing state for canceling
-        if matches!(key, Key::Escape)
-            && let DrawingState::Drawing { .. } = &self.state
-            && let Some(Action::Exit) = self.find_action("Escape")
-        {
-            self.state = DrawingState::Idle;
-            self.needs_redraw = true;
-            return;
+        if matches!(key, Key::Escape) {
+            if let DrawingState::Drawing { .. } = &self.state {
+                if let Some(Action::Exit) = self.find_action("Escape") {
+                    self.state = DrawingState::Idle;
+                    self.needs_redraw = true;
+                    return;
+                }
+            }
         }
 
         // Convert key to string for action lookup
