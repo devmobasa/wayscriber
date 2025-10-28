@@ -220,6 +220,40 @@ format = "png"
 copy_to_clipboard = true
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# SESSION PERSISTENCE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[session]
+# Enable persistence per mode (default to false for clean startup)
+persist_transparent = false
+persist_whiteboard = false
+persist_blackboard = false
+
+# Restore pen colour/thickness/font size between runs
+restore_tool_state = true
+
+# Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
+storage = "auto"
+
+# When storage = "custom", set the directory here (supports ~ expansion)
+# custom_directory = "/path/to/persistent/sessions"
+
+# Clamp runaway files by limiting shapes per frame
+max_shapes_per_frame = 10000
+
+# Maximum session file size (in megabytes); larger files are ignored
+max_file_size_mb = 10
+
+# Compression mode: "auto", "on", or "off"
+compress = "auto"
+
+# For compress = "auto": minimum file size (KiB) before gzip is used
+auto_compress_threshold_kb = 100
+
+# Number of rotated backups to retain (0 disables backups)
+backup_retention = 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 

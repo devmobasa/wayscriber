@@ -36,6 +36,8 @@ dirs = "6.0"
 async-trait = "0.1"
 schemars = { version = "0.9", features = ["derive"] }
 libc = "0.2"
+fs2 = "0.4"
+flate2 = "1.0"
 
 # Daemon mode
 signal-hook = "0.3"

@@ -75,6 +75,30 @@ impl CanvasSet {
     pub fn clear_active(&mut self) {
         self.active_frame_mut().clear();
     }
+
+    /// Returns an immutable reference to the frame for the requested mode, if it exists.
+    pub fn frame(&self, mode: BoardMode) -> Option<&Frame> {
+        match mode {
+            BoardMode::Transparent => Some(&self.transparent),
+            BoardMode::Whiteboard => self.whiteboard.as_ref(),
+            BoardMode::Blackboard => self.blackboard.as_ref(),
+        }
+    }
+
+    /// Replaces the frame for the requested mode with the provided data.
+    pub fn set_frame(&mut self, mode: BoardMode, frame: Option<Frame>) {
+        match mode {
+            BoardMode::Transparent => {
+                self.transparent = frame.unwrap_or_else(Frame::new);
+            }
+            BoardMode::Whiteboard => {
+                self.whiteboard = frame;
+            }
+            BoardMode::Blackboard => {
+                self.blackboard = frame;
+            }
+        }
+    }
 }
 
 impl Default for CanvasSet {

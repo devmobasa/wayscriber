@@ -271,6 +271,42 @@ copy_to_clipboard = true
 - Clipboard-only shortcuts ignore the save directory automatically.
 - Install `wl-clipboard`, `grim`, and `slurp` for the best Wayland experience; otherwise wayscriber falls back to `xdg-desktop-portal`.
 
+### `[session]` - Session Persistence
+
+Optional on-disk persistence for your drawings. Disabled by default so each session starts fresh.
+
+```toml
+[session]
+persist_transparent = false
+persist_whiteboard = false
+persist_blackboard = false
+restore_tool_state = true
+storage = "auto"
+# custom_directory = "/absolute/path"
+max_shapes_per_frame = 10000
+max_file_size_mb = 10
+compress = "auto"
+auto_compress_threshold_kb = 100
+backup_retention = 1
+```
+
+- `persist_*` — choose which board modes (transparent/whiteboard/blackboard) survive restarts
+- `restore_tool_state` — save pen colour, thickness, font size, arrow settings, and status bar visibility
+- `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
+- `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
+- `max_shapes_per_frame` — trims older shapes if a frame grows beyond this count when loading/saving
+- `max_file_size_mb` — skips loading and writing session files beyond this size cap
+- `compress` — `auto` (gzip files above the threshold), `on`, or `off`
+- `auto_compress_threshold_kb` — size threshold for `compress = "auto"`
+- `backup_retention` — how many rotated `.bak` files to keep (set to 0 to disable backups)
+
+> **Privacy note:** Session files are stored unencrypted. Clear the session directory or disable persistence when working with sensitive material.
+
+Use the CLI helpers for quick maintenance:
+
+- `wayscriber --session-info` prints the active storage path, file details, and shape counts.
+- `wayscriber --clear-session` removes the session file, backup, and lock.
+
 ### `[keybindings]` - Custom Keybindings
 
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.

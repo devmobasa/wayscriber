@@ -1,11 +1,13 @@
 //! Frame container for managing collections of shapes.
 
 use super::shape::Shape;
+use serde::{Deserialize, Serialize};
 
 /// Container for all shapes in the current drawing session.
 ///
 /// Manages a collection of [`Shape`]s and provides operations like adding,
 /// clearing, and undoing shapes. Acts as the drawing canvas state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Frame {
     /// Vector of all shapes in draw order (first = bottom layer, last = top layer)
     pub shapes: Vec<Shape>,

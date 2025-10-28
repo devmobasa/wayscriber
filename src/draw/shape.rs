@@ -2,12 +2,13 @@
 
 use super::color::Color;
 use super::font::FontDescriptor;
+use serde::{Deserialize, Serialize};
 
 /// Represents a drawable shape or annotation on screen.
 ///
 /// Each variant represents a different drawing tool/primitive with its specific parameters.
 /// All shapes store their own color and size information for independent rendering.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Shape {
     /// Freehand drawing - polyline connecting mouse drag points
     Freehand {

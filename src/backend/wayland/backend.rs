@@ -13,6 +13,7 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
+use std::env;
 use wayland_client::{Connection, globals::registry_queue_init};
 
 use super::state::WaylandState;
@@ -20,7 +21,7 @@ use crate::{
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
     input::{BoardMode, InputState},
-    legacy, notification,
+    legacy, notification, session,
 };
 
 /// Wayland backend state
@@ -106,6 +107,21 @@ impl WaylandBackend {
             config.ui.help_overlay_style.font_size
         );
 
+        let config_dir = Config::config_directory_from_source(&config_source)?;
+
+        let display_env = env::var("WAYLAND_DISPLAY").ok();
+        let session_options = match session::options_from_config(
+            &config.session,
+            &config_dir,
+            display_env.as_deref(),
+        ) {
+            Ok(opts) => Some(opts),
+            Err(err) => {
+                warn!("Session persistence disabled: {}", err);
+                None
+            }
+        };
+
         // Create font descriptor from config
         let font_descriptor = crate::draw::FontDescriptor::new(
             config.drawing.font_family.clone(),
@@ -132,6 +148,25 @@ impl WaylandBackend {
             config.board.clone(),
             action_map,
         );
+
+        if let Some(options) = session_options.as_ref() {
+            match session::load_snapshot(options) {
+                Ok(Some(snapshot)) => {
+                    debug!(
+                        "Restoring session from {}",
+                        options.session_file_path().display()
+                    );
+                    session::apply_snapshot(&mut input_state, snapshot, options);
+                }
+                Ok(None) => {
+                    debug!(
+                        "Session file {} empty or absent",
+                        options.session_file_path().display()
+                    );
+                }
+                Err(err) => warn!("Failed to load session state: {}", err),
+            }
+        }
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
         if config.board.enabled {
@@ -348,6 +383,14 @@ impl WaylandBackend {
         }
 
         info!("Wayland backend exiting");
+
+        if let Some(options) = session_options.as_ref() {
+            if let Some(snapshot) = session::snapshot_from_input(&state.input_state, options) {
+                if let Err(err) = session::save_snapshot(&snapshot, options) {
+                    warn!("Failed to save session state: {}", err);
+                }
+            }
+        }
 
         // Return error if loop exited due to error, otherwise success
         match loop_error {

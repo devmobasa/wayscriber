@@ -1,5 +1,7 @@
 //! RGBA color type and predefined color constants.
 
+use serde::{Deserialize, Serialize};
+
 /// Represents an RGBA color with floating-point components.
 ///
 /// All components are in the range 0.0 (minimum) to 1.0 (maximum).
@@ -11,7 +13,7 @@
 /// let red = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
 /// let semi_transparent_blue = Color { r: 0.0, g: 0.0, b: 1.0, a: 0.5 };
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Color {
     /// Red component (0.0 = no red, 1.0 = full red)
     pub r: f64,
