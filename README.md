@@ -65,7 +65,7 @@ Or bind to a key in `~/.config/hypr/hyprland.conf`:
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press `F10` for help, `F11` for configurator, `Escape` to exit.
+Press `F10` for help, `F11` for configurator, `Escape`/`Ctrl+Q` to exit, and `F12` to toggle the status bar.
 
 ### Option 2: Daemon Mode (Background Service)
 Run wayscriber in the background and toggle it with a keybind:
