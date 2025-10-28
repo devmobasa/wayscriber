@@ -240,7 +240,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  Usage"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Daemon mode (background, toggle with Super+D):"
+echo "Daemon mode (background; bind a shortcut such as Super+D):"
 echo "  $BINARY_NAME --daemon"
 echo ""
 echo "One-shot mode (overlay shows immediately):"

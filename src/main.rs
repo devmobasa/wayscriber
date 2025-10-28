@@ -17,7 +17,7 @@ mod util;
 #[command(name = "wayscriber")]
 #[command(version, about = "Screen annotation tool for Wayland compositors")]
 struct Cli {
-    /// Run as daemon (background, toggle with Super+D)
+    /// Run as daemon (background service; bind a toggle like Super+D)
     #[arg(long, short = 'd', action = ArgAction::SetTrue)]
     daemon: bool,
 
@@ -93,16 +93,16 @@ fn main() -> anyhow::Result<()> {
         println!("wayscriber: Screen annotation tool for Wayland compositors");
         println!();
         println!("Usage:");
-        println!("  wayscriber --daemon    Run as background daemon (toggle with Super+D)");
-        println!("  wayscriber --active    Show overlay immediately (one-shot mode)");
-        println!("  wayscriber --help      Show help");
+        println!("  wayscriber -d, --daemon    Run as background daemon (bind a toggle like Super+D)");
+        println!("  wayscriber -a, --active    Show overlay immediately (one-shot mode)");
+        println!("  wayscriber -h, --help      Show help");
         println!();
-        println!("Daemon mode (recommended):");
+        println!("Daemon mode (recommended). Example Hyprland setup:");
         println!("  1. Run: wayscriber --daemon");
         println!("  2. Add to Hyprland config:");
         println!("     exec-once = wayscriber --daemon");
         println!("     bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber");
-        println!("  3. Press Super+D to toggle overlay on/off");
+        println!("  3. Press your bound shortcut (e.g. Super+D) to toggle overlay on/off");
         println!();
         println!("Requirements:");
         println!("  - Wayland compositor (Hyprland, Sway, etc.)");
