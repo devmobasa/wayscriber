@@ -1,0 +1,27 @@
+pkgbase = wayscriber
+	pkgdesc = Screen annotation tool for Wayland compositors (formerly hyprmarker)
+	pkgver = 0.6.0
+	pkgrel = 1
+	url = https://wayscriber.com
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cargo
+	makedepends = git
+	depends = cairo
+	depends = wayland
+	depends = pango
+	depends = gcc-libs
+	depends = glibc
+	depends = wl-clipboard
+	depends = grim
+	depends = slurp
+	provides = hyprmarker
+	conflicts = hyprmarker<0.6.0
+	conflicts = hyprmarker-debug<0.6.0
+	replaces = hyprmarker
+	replaces = hyprmarker-debug
+	source = git+https://github.com/devmobasa/wayscriber.git#tag=v0.6.0
+	sha256sums = SKIP
+
+pkgname = wayscriber

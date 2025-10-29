@@ -59,7 +59,7 @@ package() {
 }
 # Maintainer: wayscriber maintainers <devmobasa+aur@proton.me>
 pkgname=wayscriber
-pkgver=0.5.2
+pkgver=0.6.0
 pkgrel=1
 pkgdesc='Screen annotation tool for Wayland compositors (formerly hyprmarker)'
 arch=('x86_64' 'aarch64')
@@ -80,7 +80,7 @@ makedepends=(
     'git'
 )
 provides=('hyprmarker')
-conflicts=('hyprmarker<0.5.2' 'hyprmarker-debug<0.5.2')
+conflicts=('hyprmarker<0.6.0' 'hyprmarker-debug<0.6.0')
 replaces=('hyprmarker' 'hyprmarker-debug')
 source=("git+https://github.com/devmobasa/wayscriber.git#tag=v$pkgver")
 sha256sums=('SKIP')
@@ -103,11 +103,9 @@ build() {
 package() {
     cd "$pkgname"
 
-    # Install binaries (new names + compatibility aliases)
+    # Install binaries
     install -Dm755 "target/release/wayscriber" "$pkgdir/usr/bin/wayscriber"
-    install -Dm755 "target/release/hyprmarker" "$pkgdir/usr/bin/hyprmarker"
     install -Dm755 "target/release/wayscriber-configurator" "$pkgdir/usr/bin/wayscriber-configurator"
-    install -Dm755 "target/release/hyprmarker-configurator" "$pkgdir/usr/bin/hyprmarker-configurator"
 
     # Install systemd user service
     install -Dm644 packaging/wayscriber.service "$pkgdir/usr/lib/systemd/user/wayscriber.service"
