@@ -1,17 +1,10 @@
 // Holds the live Wayland protocol state shared by the backend loop and the handler
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
 use anyhow::{Context, Result};
-use log::{debug, info};
+use log::debug;
 use smithay_client_toolkit::{
-    compositor::CompositorState,
-    output::OutputState,
-    registry::RegistryState,
-    seat::SeatState,
-    shell::{
-        WaylandSurface,
-        wlr_layer::{LayerShell, LayerSurface},
-    },
-    shm::{Shm, slot::SlotPool},
+    compositor::CompositorState, output::OutputState, registry::RegistryState, seat::SeatState,
+    shell::{WaylandSurface, wlr_layer::LayerShell}, shm::Shm,
 };
 use wayland_client::{
     QueueHandle,
@@ -30,6 +23,8 @@ use crate::{
     util::Rect,
 };
 
+use super::surface::SurfaceState;
+
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
     // Wayland protocol objects
@@ -40,15 +35,8 @@ pub(super) struct WaylandState {
     pub(super) output_state: OutputState,
     pub(super) seat_state: SeatState,
 
-    // Surface and buffer
-    pub(super) layer_surface: Option<LayerSurface>,
-    pub(super) pool: Option<SlotPool>,
-    pub(super) width: u32,
-    pub(super) height: u32,
-    pub(super) configured: bool,
-
-    // Frame synchronization
-    pub(super) frame_callback_pending: bool,
+    // Surface and buffer management
+    pub(super) surface: SurfaceState,
 
     // Configuration
     pub(super) config: Config,
@@ -96,12 +84,7 @@ impl WaylandState {
             shm,
             output_state,
             seat_state,
-            layer_surface: None,
-            pool: None,
-            width: 0,
-            height: 0,
-            configured: false,
-            frame_callback_pending: false,
+            surface: SurfaceState::new(),
             config,
             input_state,
             current_mouse_x: 0,
@@ -150,43 +133,26 @@ impl WaylandState {
 
     pub(super) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<()> {
         debug!("=== RENDER START ===");
-        let layer_surface = self
-            .layer_surface
-            .as_ref()
-            .context("Layer surface not created")?;
-        let wl_surface = layer_surface.wl_surface();
-
         // Create pool if needed
-        if self.pool.is_none() {
-            // Create pool with configured number of buffers to prevent reuse during fast drawing
-            // This prevents flickering when drawing quickly
-            let buffer_size = (self.width * self.height * 4) as usize;
-            let buffer_count = self.config.performance.buffer_count as usize;
-            let pool_size = buffer_size * buffer_count;
-            info!(
-                "Creating new SlotPool ({}x{}, {} bytes, {} buffers)",
-                self.width, self.height, pool_size, buffer_count
-            );
-            let pool = SlotPool::new(pool_size, &self.shm).context("Failed to create slot pool")?;
-            self.pool = Some(pool);
-        }
-
-        let pool = self
-            .pool
-            .as_mut()
-            .context("Buffer pool not initialized despite previous check")?;
+        let buffer_count = self.config.performance.buffer_count as usize;
+        let width = self.surface.width();
+        let height = self.surface.height();
 
         // Get a buffer from the pool
-        debug!("Requesting buffer from pool");
-        let (buffer, canvas) = pool
-            .create_buffer(
-                self.width as i32,
-                self.height as i32,
-                (self.width * 4) as i32,
-                wl_shm::Format::Argb8888,
-            )
-            .context("Failed to create buffer")?;
-        debug!("Buffer acquired from pool");
+        let (buffer, canvas) = {
+            let pool = self.surface.ensure_pool(&self.shm, buffer_count)?;
+            debug!("Requesting buffer from pool");
+            let result = pool
+                .create_buffer(
+                    width as i32,
+                    height as i32,
+                    (width * 4) as i32,
+                    wl_shm::Format::Argb8888,
+                )
+                .context("Failed to create buffer")?;
+            debug!("Buffer acquired from pool");
+            result
+        };
 
         // SAFETY: This unsafe block creates a Cairo surface from raw memory buffer.
         // Safety invariants that must be maintained:
@@ -201,9 +167,9 @@ impl WaylandState {
             cairo::ImageSurface::create_for_data_unsafe(
                 canvas.as_mut_ptr(),
                 cairo::Format::ARgb32,
-                self.width as i32,
-                self.height as i32,
-                (self.width * 4) as i32,
+                width as i32,
+                height as i32,
+                (width * 4) as i32,
             )
             .context("Failed to create Cairo surface")?
         };
@@ -267,19 +233,14 @@ impl WaylandState {
                 &self.input_state,
                 self.config.ui.status_bar_position,
                 &self.config.ui.status_bar_style,
-                self.width,
-                self.height,
+                width,
+                height,
             );
         }
 
         // Render help overlay if toggled
         if self.input_state.show_help {
-            crate::ui::render_help_overlay(
-                &ctx,
-                &self.config.ui.help_overlay_style,
-                self.width,
-                self.height,
-            );
+            crate::ui::render_help_overlay(&ctx, &self.config.ui.help_overlay_style, width, height);
         }
 
         // Flush Cairo
@@ -290,10 +251,15 @@ impl WaylandState {
 
         // Attach buffer and commit
         debug!("Attaching buffer and committing surface");
+        let wl_surface = self
+            .surface
+            .layer_surface()
+            .context("Layer surface not created")?
+            .wl_surface();
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
-        let surface_width = self.width.min(i32::MAX as u32) as i32;
-        let surface_height = self.height.min(i32::MAX as u32) as i32;
+        let surface_width = width.min(i32::MAX as u32) as i32;
+        let surface_height = height.min(i32::MAX as u32) as i32;
 
         let dirty_regions = resolve_damage_regions(
             surface_width,
@@ -337,8 +303,10 @@ impl WaylandState {
 
         log::info!("Restoring overlay after screenshot capture");
 
-        if let Some(layer_surface) = &self.layer_surface {
-            layer_surface.set_size(self.width, self.height);
+        let width = self.surface.width();
+        let height = self.surface.height();
+        if let Some(layer_surface) = self.surface.layer_surface_mut() {
+            layer_surface.set_size(width, height);
 
             let wl_surface = layer_surface.wl_surface();
             wl_surface.commit();
@@ -475,7 +443,7 @@ impl WaylandState {
 
         log::info!("Hiding overlay for screenshot capture");
 
-        if let Some(layer_surface) = &self.layer_surface {
+        if let Some(layer_surface) = self.surface.layer_surface_mut() {
             layer_surface.set_size(0, 0);
 
             let wl_surface = layer_surface.wl_surface();

@@ -42,7 +42,7 @@ impl CompositorHandler for WaylandState {
             "Frame callback received (time: {}ms), clearing frame_callback_pending",
             time
         );
-        self.frame_callback_pending = false;
+        self.surface.set_frame_callback_pending(false);
 
         if self.input_state.needs_redraw {
             debug!(

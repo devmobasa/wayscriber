@@ -237,7 +237,7 @@ impl WaylandBackend {
         // Commit the surface
         layer_surface.commit();
 
-        state.layer_surface = Some(layer_surface);
+        state.surface.set_layer_surface(layer_surface);
         info!("Layer shell surface created");
 
         // Track consecutive render failures for error recovery
@@ -331,14 +331,15 @@ impl WaylandBackend {
 
             // Render if configured and needs redraw, but only if no frame callback pending
             // This throttles rendering to display refresh rate (when vsync is enabled)
-            let can_render = state.configured
+            let can_render = state.surface.is_configured()
                 && state.input_state.needs_redraw
-                && (!state.frame_callback_pending || !state.config.performance.enable_vsync);
+                && (!state.surface.frame_callback_pending()
+                    || !state.config.performance.enable_vsync);
 
             if can_render {
                 debug!(
                     "Main loop: needs_redraw=true, frame_callback_pending={}, triggering render",
-                    state.frame_callback_pending
+                    state.surface.frame_callback_pending()
                 );
                 match state.render(&qh) {
                     Ok(()) => {
@@ -347,7 +348,7 @@ impl WaylandBackend {
                         state.input_state.needs_redraw = false;
                         // Only set frame_callback_pending if vsync is enabled
                         if state.config.performance.enable_vsync {
-                            state.frame_callback_pending = true;
+                            state.surface.set_frame_callback_pending(true);
                             debug!(
                                 "Main loop: needs_redraw set to false, frame_callback_pending set to true (vsync enabled)"
                             );
@@ -376,7 +377,7 @@ impl WaylandBackend {
                         state.input_state.needs_redraw = false;
                     }
                 }
-            } else if state.input_state.needs_redraw && state.frame_callback_pending {
+            } else if state.input_state.needs_redraw && state.surface.frame_callback_pending() {
                 debug!("Main loop: Skipping render - frame callback already pending");
             }
         }
