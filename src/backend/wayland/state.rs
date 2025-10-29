@@ -27,7 +27,7 @@ use crate::{
     util::Rect,
 };
 
-use super::{capture::CaptureState, surface::SurfaceState};
+use super::{capture::CaptureState, session::SessionState, surface::SurfaceState};
 
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
@@ -54,9 +54,7 @@ pub(super) struct WaylandState {
     pub(super) capture: CaptureState,
 
     // Session persistence
-    pub(super) session_options: Option<SessionOptions>,
-    pub(super) session_loaded: bool,
-    pub(super) last_loaded_identity: Option<String>,
+    pub(super) session: SessionState,
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,
@@ -90,19 +88,17 @@ impl WaylandState {
             current_mouse_x: 0,
             current_mouse_y: 0,
             capture: CaptureState::new(capture_manager),
-            session_options,
-            session_loaded: false,
-            last_loaded_identity: None,
+            session: SessionState::new(session_options),
             tokio_handle,
         }
     }
 
     pub(super) fn session_options(&self) -> Option<&SessionOptions> {
-        self.session_options.as_ref()
+        self.session.options()
     }
 
     pub(super) fn session_options_mut(&mut self) -> Option<&mut SessionOptions> {
-        self.session_options.as_mut()
+        self.session.options_mut()
     }
 
     pub(super) fn output_identity_for(&self, output: &wl_output::WlOutput) -> Option<String> {

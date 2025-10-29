@@ -63,7 +63,7 @@ impl CompositorHandler for WaylandState {
         let identity = self.output_identity_for(output);
 
         let mut load_result = None;
-        let already_loaded = self.session_loaded;
+        let already_loaded = self.session.is_loaded();
         let mut load_requested = false;
         if let Some(options) = self.session_options_mut() {
             let changed = options.set_output_identity(identity.as_deref());
@@ -106,10 +106,10 @@ impl CompositorHandler for WaylandState {
             }
 
             if load_requested {
-                self.last_loaded_identity = current_options
+                let identity = current_options
                     .as_ref()
                     .and_then(|opts| opts.output_identity().map(|s| s.to_string()));
-                self.session_loaded = true;
+                self.session.mark_loaded(identity);
                 self.input_state.needs_redraw = true;
             }
         }
