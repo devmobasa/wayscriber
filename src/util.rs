@@ -214,43 +214,43 @@ impl Rect {
         Self::new(min_x, min_y, width, height)
     }
 
-    /// Expands this rectangle to include another rectangle.
-    pub fn expand_to_include(&mut self, other: Rect) {
-        let min_x = self.x.min(other.x);
-        let min_y = self.y.min(other.y);
-        let max_x = (self.x + self.width).max(other.x + other.width);
-        let max_y = (self.y + self.height).max(other.y + other.height);
+    // /// Expands this rectangle to include another rectangle.
+    // pub fn expand_to_include(&mut self, other: Rect) {
+    //     let min_x = self.x.min(other.x);
+    //     let min_y = self.y.min(other.y);
+    //     let max_x = (self.x + self.width).max(other.x + other.width);
+    //     let max_y = (self.y + self.height).max(other.y + other.height);
 
-        self.x = min_x;
-        self.y = min_y;
-        self.width = max_x - min_x;
-        self.height = max_y - min_y;
-    }
+    //     self.x = min_x;
+    //     self.y = min_y;
+    //     self.width = max_x - min_x;
+    //     self.height = max_y - min_y;
+    // }
 
-    /// Returns a rectangle that covers both input rectangles.
-    pub fn union(self, other: Rect) -> Rect {
-        let mut rect = self;
-        rect.expand_to_include(other);
-        rect
-    }
+    // /// Returns a rectangle that covers both input rectangles.
+    // pub fn union(self, other: Rect) -> Rect {
+    //     let mut rect = self;
+    //     rect.expand_to_include(other);
+    //     rect
+    // }
 
-    /// Expands the rectangle evenly in all directions by `amount`.
-    pub fn inflate(&mut self, amount: i32) {
-        self.x -= amount;
-        self.y -= amount;
-        self.width += amount * 2;
-        self.height += amount * 2;
-    }
+    // /// Expands the rectangle evenly in all directions by `amount`.
+    // pub fn inflate(&mut self, amount: i32) {
+    //     self.x -= amount;
+    //     self.y -= amount;
+    //     self.width += amount * 2;
+    //     self.height += amount * 2;
+    // }
 
-    /// Clamps the rectangle to the given bounds.
-    pub fn clamp_to_bounds(&mut self, width: i32, height: i32) {
-        let max_x = (self.x + self.width).clamp(0, width);
-        let max_y = (self.y + self.height).clamp(0, height);
-        self.x = self.x.clamp(0, width);
-        self.y = self.y.clamp(0, height);
-        self.width = (max_x - self.x).max(0);
-        self.height = (max_y - self.y).max(0);
-    }
+    // /// Clamps the rectangle to the given bounds.
+    // pub fn clamp_to_bounds(&mut self, width: i32, height: i32) {
+    //     let max_x = (self.x + self.width).clamp(0, width);
+    //     let max_y = (self.y + self.height).clamp(0, height);
+    //     self.x = self.x.clamp(0, width);
+    //     self.y = self.y.clamp(0, height);
+    //     self.width = (max_x - self.x).max(0);
+    //     self.height = (max_y - self.y).max(0);
+    // }
 
     /// Returns true if rectangle has a positive area.
     pub fn is_valid(&self) -> bool {
