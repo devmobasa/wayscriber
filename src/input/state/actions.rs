@@ -91,19 +91,26 @@ impl InputState {
                         let y = *y;
                         let text = buffer.clone();
 
-                        let added = self.canvas_set.active_frame_mut().try_add_shape(
-                            Shape::Text {
-                                x,
-                                y,
-                                text,
-                                color: self.current_color,
-                                size: self.current_font_size,
-                                font_descriptor: self.font_descriptor.clone(),
-                                background_enabled: self.text_background_enabled,
-                            },
-                            self.max_shapes_per_frame,
-                        );
+                        let shape = Shape::Text {
+                            x,
+                            y,
+                            text,
+                            color: self.current_color,
+                            size: self.current_font_size,
+                            font_descriptor: self.font_descriptor.clone(),
+                            background_enabled: self.text_background_enabled,
+                        };
+                        let bounds = shape.bounding_box();
+
+                        self.clear_text_preview_dirty();
+                        self.last_text_preview_bounds = None;
+
+                        let added = self
+                            .canvas_set
+                            .active_frame_mut()
+                            .try_add_shape(shape, self.max_shapes_per_frame);
                         if added {
+                            self.dirty_tracker.mark_optional_rect(bounds);
                             self.needs_redraw = true;
                         } else {
                             warn!(
@@ -123,6 +130,7 @@ impl InputState {
                     Key::Char(c) => {
                         if Self::push_text_char(buffer, c) {
                             self.needs_redraw = true;
+                            self.update_text_preview_dirty();
                         } else {
                             warn!(
                                 "Text input reached maximum length of {} characters",
@@ -134,11 +142,13 @@ impl InputState {
                     Key::Backspace => {
                         buffer.pop();
                         self.needs_redraw = true;
+                        self.update_text_preview_dirty();
                         return;
                     }
                     Key::Space => {
                         if Self::push_text_char(buffer, ' ') {
                             self.needs_redraw = true;
+                            self.update_text_preview_dirty();
                         } else {
                             warn!(
                                 "Text input reached maximum length of {} characters",
@@ -151,6 +161,7 @@ impl InputState {
                         // Shift+Enter: insert newline
                         if Self::push_text_char(buffer, '\n') {
                             self.needs_redraw = true;
+                            self.update_text_preview_dirty();
                         } else {
                             warn!(
                                 "Text input reached maximum length of {} characters",
@@ -213,8 +224,15 @@ impl InputState {
             Action::Exit => {
                 // Exit drawing mode or cancel current action
                 match &self.state {
-                    DrawingState::TextInput { .. } | DrawingState::Drawing { .. } => {
-                        // Cancel current action
+                    DrawingState::TextInput { .. } => {
+                        self.clear_text_preview_dirty();
+                        self.last_text_preview_bounds = None;
+                        self.state = DrawingState::Idle;
+                        self.needs_redraw = true;
+                    }
+                    DrawingState::Drawing { .. } => {
+                        self.clear_provisional_dirty();
+                        self.last_provisional_bounds = None;
                         self.state = DrawingState::Idle;
                         self.needs_redraw = true;
                     }
@@ -231,24 +249,30 @@ impl InputState {
                         y: (self.screen_height / 2) as i32,
                         buffer: String::new(),
                     };
+                    self.last_text_preview_bounds = None;
+                    self.update_text_preview_dirty();
                     self.needs_redraw = true;
                 }
             }
             Action::ClearCanvas => {
                 self.canvas_set.clear_active();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::Undo => {
-                if self.canvas_set.active_frame_mut().undo() {
+                if let Some(shape) = self.canvas_set.active_frame_mut().undo() {
+                    self.dirty_tracker.mark_shape(&shape);
                     self.needs_redraw = true;
                 }
             }
             Action::IncreaseThickness => {
                 self.current_thickness = (self.current_thickness + 1.0).min(20.0);
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::DecreaseThickness => {
                 self.current_thickness = (self.current_thickness - 1.0).max(1.0);
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::IncreaseFontSize => {
@@ -277,10 +301,12 @@ impl InputState {
             }
             Action::ToggleHelp => {
                 self.show_help = !self.show_help;
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::ToggleStatusBar => {
                 self.show_status_bar = !self.show_status_bar;
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::OpenConfigurator => {
@@ -288,34 +314,42 @@ impl InputState {
             }
             Action::SetColorRed => {
                 self.current_color = util::key_to_color('r').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::SetColorGreen => {
                 self.current_color = util::key_to_color('g').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::SetColorBlue => {
                 self.current_color = util::key_to_color('b').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::SetColorYellow => {
                 self.current_color = util::key_to_color('y').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::SetColorOrange => {
                 self.current_color = util::key_to_color('o').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::SetColorPink => {
                 self.current_color = util::key_to_color('p').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::SetColorWhite => {
                 self.current_color = util::key_to_color('w').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::SetColorBlack => {
                 self.current_color = util::key_to_color('k').unwrap();
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::CaptureFullScreen

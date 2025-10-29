@@ -48,16 +48,9 @@ impl Frame {
         }
     }
 
-    /// Removes the most recently added shape.
-    ///
-    /// Returns `true` if a shape was removed, `false` if the frame was already empty.
-    pub fn undo(&mut self) -> bool {
-        if self.shapes.is_empty() {
-            false
-        } else {
-            self.shapes.pop();
-            true
-        }
+    /// Removes and returns the most recently added shape, if any.
+    pub fn undo(&mut self) -> Option<Shape> {
+        self.shapes.pop()
     }
 }
 

@@ -27,6 +27,7 @@ use crate::{
     config::{Action, Config},
     input::{DrawingState, InputState},
     session::SessionOptions,
+    util::Rect,
 };
 
 /// Internal Wayland state shared across modules.
@@ -290,7 +291,27 @@ impl WaylandState {
         // Attach buffer and commit
         debug!("Attaching buffer and committing surface");
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
-        wl_surface.damage_buffer(0, 0, self.width as i32, self.height as i32);
+
+        let surface_width = self.width.min(i32::MAX as u32) as i32;
+        let surface_height = self.height.min(i32::MAX as u32) as i32;
+
+        let dirty_regions = resolve_damage_regions(
+            surface_width,
+            surface_height,
+            self.input_state.take_dirty_regions(),
+        );
+
+        if dirty_regions.is_empty() {
+            debug!("No valid dirty regions; skipping damage request");
+        } else {
+            for rect in &dirty_regions {
+                debug!(
+                    "Damaging buffer region x={} y={} w={} h={}",
+                    rect.x, rect.y, rect.width, rect.height
+                );
+                wl_surface.damage_buffer(rect.x, rect.y, rect.width, rect.height);
+            }
+        }
 
         if self.config.performance.enable_vsync {
             debug!("Requesting frame callback (vsync enabled)");
@@ -462,5 +483,71 @@ impl WaylandState {
         }
 
         self.overlay_hidden_for_capture = true;
+    }
+}
+
+fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Vec<Rect> {
+    regions.retain(Rect::is_valid);
+
+    if regions.is_empty() && width > 0 && height > 0 {
+        if let Some(full) = Rect::new(0, 0, width, height) {
+            regions.push(full);
+        }
+    }
+
+    regions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_damage_returns_full_when_empty() {
+        let regions = resolve_damage_regions(1920, 1080, Vec::new());
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0], Rect::new(0, 0, 1920, 1080).unwrap());
+    }
+
+    #[test]
+    fn resolve_damage_filters_invalid_rects() {
+        let regions = resolve_damage_regions(
+            800,
+            600,
+            vec![
+                Rect {
+                    x: 10,
+                    y: 10,
+                    width: 50,
+                    height: 40,
+                },
+                Rect {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 10,
+                },
+            ],
+        );
+
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0], Rect::new(10, 10, 50, 40).unwrap());
+    }
+
+    #[test]
+    fn resolve_damage_preserves_existing_regions() {
+        let regions = resolve_damage_regions(
+            800,
+            600,
+            vec![Rect {
+                x: 5,
+                y: 5,
+                width: 20,
+                height: 30,
+            }],
+        );
+
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0], Rect::new(5, 5, 20, 30).unwrap());
     }
 }

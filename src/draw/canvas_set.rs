@@ -184,7 +184,7 @@ mod tests {
             color: RED,
             thick: 3.0,
         });
-        canvas_set.active_frame_mut().undo();
+        let _ = canvas_set.active_frame_mut().undo();
         assert_eq!(canvas_set.active_frame().shapes.len(), 0);
 
         // Switch to whiteboard and add shape
@@ -199,7 +199,7 @@ mod tests {
         });
 
         // Undo should only affect whiteboard frame
-        canvas_set.active_frame_mut().undo();
+        let _ = canvas_set.active_frame_mut().undo();
         assert_eq!(canvas_set.active_frame().shapes.len(), 0);
 
         // Transparent frame should still be empty (undo happened there earlier)
