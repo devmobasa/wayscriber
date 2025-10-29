@@ -270,13 +270,13 @@ impl WaylandBackend {
             }
 
             // Check for completed capture operations
-            if state.capture_in_progress {
-                if let Some(outcome) = state.capture_manager.try_take_result() {
+            if state.capture.is_in_progress() {
+                if let Some(outcome) = state.capture.manager_mut().try_take_result() {
                     log::info!("Capture completed");
 
                     // Restore overlay
                     state.show_overlay();
-                    state.capture_in_progress = false;
+                    state.capture.clear_in_progress();
 
                     match outcome {
                         CaptureOutcome::Success(result) => {

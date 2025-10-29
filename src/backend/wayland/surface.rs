@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use log::info;
 use smithay_client_toolkit::{
     shell::wlr_layer::LayerSurface,
-    shm::{slot::SlotPool, Shm},
+    shm::{Shm, slot::SlotPool},
 };
 
 /// Tracks the active layer surface, buffer pool, and associated sizing state.
@@ -105,5 +105,4 @@ impl SurfaceState {
             .as_mut()
             .context("Buffer pool not initialized despite previous check")
     }
-
 }

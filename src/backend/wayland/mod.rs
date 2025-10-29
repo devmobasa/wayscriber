@@ -1,6 +1,7 @@
 mod backend;
+mod capture;
 mod handlers;
-mod surface;
 mod state;
+mod surface;
 
 pub use backend::WaylandBackend;

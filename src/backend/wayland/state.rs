@@ -3,8 +3,12 @@
 use anyhow::{Context, Result};
 use log::debug;
 use smithay_client_toolkit::{
-    compositor::CompositorState, output::OutputState, registry::RegistryState, seat::SeatState,
-    shell::{WaylandSurface, wlr_layer::LayerShell}, shm::Shm,
+    compositor::CompositorState,
+    output::OutputState,
+    registry::RegistryState,
+    seat::SeatState,
+    shell::{WaylandSurface, wlr_layer::LayerShell},
+    shm::Shm,
 };
 use wayland_client::{
     QueueHandle,
@@ -23,7 +27,7 @@ use crate::{
     util::Rect,
 };
 
-use super::surface::SurfaceState;
+use super::{capture::CaptureState, surface::SurfaceState};
 
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
@@ -47,11 +51,7 @@ pub(super) struct WaylandState {
     pub(super) current_mouse_y: i32,
 
     // Capture manager
-    pub(super) capture_manager: CaptureManager,
-
-    // Capture state tracking
-    pub(super) capture_in_progress: bool,
-    pub(super) overlay_hidden_for_capture: bool,
+    pub(super) capture: CaptureState,
 
     // Session persistence
     pub(super) session_options: Option<SessionOptions>,
@@ -89,9 +89,7 @@ impl WaylandState {
             input_state,
             current_mouse_x: 0,
             current_mouse_y: 0,
-            capture_manager,
-            capture_in_progress: false,
-            overlay_hidden_for_capture: false,
+            capture: CaptureState::new(capture_manager),
             session_options,
             session_loaded: false,
             last_loaded_identity: None,
@@ -296,26 +294,10 @@ impl WaylandState {
     ///
     /// Re-maps the layer surface to its original size and forces a redraw.
     pub(super) fn show_overlay(&mut self) {
-        if !self.overlay_hidden_for_capture {
-            log::warn!("Overlay was not hidden, nothing to restore");
-            return;
+        if self.capture.show_overlay(&mut self.surface) {
+            // Force a redraw to show the overlay again
+            self.input_state.needs_redraw = true;
         }
-
-        log::info!("Restoring overlay after screenshot capture");
-
-        let width = self.surface.width();
-        let height = self.surface.height();
-        if let Some(layer_surface) = self.surface.layer_surface_mut() {
-            layer_surface.set_size(width, height);
-
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
-        }
-
-        self.overlay_hidden_for_capture = false;
-
-        // Force a redraw to show the overlay again
-        self.input_state.needs_redraw = true;
     }
 
     /// Handles capture actions by delegating to the CaptureManager.
@@ -325,7 +307,7 @@ impl WaylandState {
             return;
         }
 
-        if self.capture_in_progress {
+        if self.capture.is_in_progress() {
             log::warn!(
                 "Capture action {:?} requested while another capture is running; ignoring",
                 action
@@ -418,39 +400,22 @@ impl WaylandState {
         };
 
         // Hide overlay before capture to prevent capturing the overlay itself
-        self.hide_overlay();
-        self.capture_in_progress = true;
+        self.capture.hide_overlay(&mut self.surface);
+        self.capture.mark_in_progress();
 
         // Request capture
         log::info!("Requesting {:?} capture", capture_type);
-        if let Err(e) = self
-            .capture_manager
-            .request_capture(capture_type, destination, save_config)
+        if let Err(e) =
+            self.capture
+                .manager_mut()
+                .request_capture(capture_type, destination, save_config)
         {
             log::error!("Failed to request capture: {}", e);
 
             // Restore overlay on error
             self.show_overlay();
-            self.capture_in_progress = false;
+            self.capture.clear_in_progress();
         }
-    }
-
-    fn hide_overlay(&mut self) {
-        if self.overlay_hidden_for_capture {
-            log::warn!("Overlay already hidden for capture");
-            return;
-        }
-
-        log::info!("Hiding overlay for screenshot capture");
-
-        if let Some(layer_surface) = self.surface.layer_surface_mut() {
-            layer_surface.set_size(0, 0);
-
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
-        }
-
-        self.overlay_hidden_for_capture = true;
     }
 }
 
