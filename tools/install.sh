@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the project root (parent of tools/)
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-INSTALL_DIR="$HOME/.local/bin"
+INSTALL_DIR="${WAYSCRIBER_INSTALL_DIR:-/usr/bin}"
 BINARY_NAME="wayscriber"
 CONFIGURATOR_BINARY_NAME="wayscriber-configurator"
 LEGACY_BINARY_NAME="hyprmarker"
@@ -57,33 +57,47 @@ if [ ! -f "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" ] \
        "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME"
 fi
 
-# Create install directory if needed
-echo "Creating installation directory: $INSTALL_DIR"
-mkdir -p "$INSTALL_DIR"
+if [ ! -d "$INSTALL_DIR" ] || [ ! -w "$INSTALL_DIR" ]; then
+    if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then
+        :
+    else
+        if [ "$(id -u)" -ne 0 ]; then
+            if command -v sudo >/dev/null 2>&1; then
+                SUDO="sudo"
+                echo "Using sudo to install into $INSTALL_DIR"
+            else
+                die "Write access to $INSTALL_DIR required. Re-run with sudo or set WAYSCRIBER_INSTALL_DIR."
+            fi
+        fi
+    fi
+fi
 
-# Copy binary
+# Ensure install directory exists
+${SUDO:-} install -d "$INSTALL_DIR"
+
+# Copy binaries
 echo "Installing binary to $INSTALL_DIR/$BINARY_NAME"
-cp "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$BINARY_NAME"
+${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
 
-echo "Installing legacy compatibility alias to $INSTALL_DIR/$LEGACY_BINARY_NAME"
-cp "$PROJECT_ROOT/target/release/$LEGACY_BINARY_NAME" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$LEGACY_BINARY_NAME"
+if [ -f "$PROJECT_ROOT/target/release/$LEGACY_BINARY_NAME" ]; then
+    echo "Installing legacy compatibility alias to $INSTALL_DIR/$LEGACY_BINARY_NAME"
+    ${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$LEGACY_BINARY_NAME" "$INSTALL_DIR/$LEGACY_BINARY_NAME"
+else
+    echo "Creating legacy compatibility copy at $INSTALL_DIR/$LEGACY_BINARY_NAME"
+    ${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/$LEGACY_BINARY_NAME"
+fi
 
 echo "Installing configurator to $INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
-cp "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
+${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
 
 echo "Installing configurator alias to $INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
-cp "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
-chmod +x "$INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
+${SUDO:-} ln -sf "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
 
-# Check if install directory is in PATH
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
     echo "⚠️  Warning: $INSTALL_DIR is not in your PATH"
-    echo "   Add this line to your ~/.bashrc or ~/.zshrc:"
-    echo "   export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo "   Add this line to your shell config:"
+    echo "   export PATH=\"$INSTALL_DIR:\$PATH\""
     echo ""
 fi
 
@@ -138,29 +152,47 @@ echo ""
 
 case $REPLY in
     1)
-        # Systemd user service
-        SYSTEMD_DIR="$HOME/.config/systemd/user"
-        SERVICE_FILE="$SYSTEMD_DIR/wayscriber.service"
+        SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+        SYSTEMD_SYSTEM_DIR="/usr/lib/systemd/user"
+        USER_SERVICE_FILE="$SYSTEMD_USER_DIR/wayscriber.service"
+        SYSTEM_SERVICE_FILE="$SYSTEMD_SYSTEM_DIR/wayscriber.service"
 
         echo "Setting up systemd user service..."
-        mkdir -p "$SYSTEMD_DIR"
+
+        if [ -f "$USER_SERVICE_FILE" ]; then
+            echo "Removing legacy service override at $USER_SERVICE_FILE"
+            rm -f "$USER_SERVICE_FILE"
+        fi
 
         if [ -f "$PROJECT_ROOT/packaging/wayscriber.service" ]; then
-            cp "$PROJECT_ROOT/packaging/wayscriber.service" "$SERVICE_FILE"
+            TARGET_SERVICE="$SYSTEM_SERVICE_FILE"
+            TARGET_DIR="$SYSTEMD_SYSTEM_DIR"
+            TARGET_SUDO="${SUDO:-}"
 
-            ensure_replacement \
-                "$SERVICE_FILE" \
-                "ExecStart=/usr/bin/wayscriber --daemon" \
-                "ExecStart=$INSTALL_DIR/$BINARY_NAME --daemon" \
-                "ExecStart override"
+            if [ "$INSTALL_DIR" != "/usr/bin" ]; then
+                TARGET_SERVICE="$USER_SERVICE_FILE"
+                TARGET_DIR="$SYSTEMD_USER_DIR"
+                TARGET_SUDO=""
+            fi
 
-            ensure_replacement \
-                "$SERVICE_FILE" \
-                "Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\"" \
-                "Environment=\"PATH=$INSTALL_DIR:/usr/local/bin:/usr/bin:/bin\"" \
-                "PATH override"
+            ${TARGET_SUDO} install -d "$TARGET_DIR"
+            ${TARGET_SUDO} install -Dm644 "$PROJECT_ROOT/packaging/wayscriber.service" "$TARGET_SERVICE"
 
-            echo "✅ Service file installed to $SERVICE_FILE"
+            if [ "$TARGET_SERVICE" = "$USER_SERVICE_FILE" ]; then
+                ensure_replacement \
+                    "$TARGET_SERVICE" \
+                    "ExecStart=/usr/bin/wayscriber --daemon" \
+                    "ExecStart=$INSTALL_DIR/$BINARY_NAME --daemon" \
+                    "ExecStart override"
+
+                ensure_replacement \
+                    "$TARGET_SERVICE" \
+                    "Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\"" \
+                    "Environment=\"PATH=$INSTALL_DIR:/usr/local/bin:/usr/bin:/bin\"" \
+                    "PATH override"
+            fi
+
+            echo "✅ Service file installed to $TARGET_SERVICE"
 
             # Enable and start the service
             systemctl --user daemon-reload
