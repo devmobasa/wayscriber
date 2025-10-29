@@ -49,7 +49,7 @@ impl CanvasSet {
     /// For board modes that don't exist yet, returns a reference to a static empty frame
     /// instead of creating one (since we can't mutate in an immutable method).
     pub fn active_frame(&self) -> &Frame {
-        static EMPTY_FRAME: Frame = Frame { shapes: Vec::new() };
+        static EMPTY_FRAME: Frame = Frame::new();
 
         match self.active_mode {
             BoardMode::Transparent => &self.transparent,
@@ -74,6 +74,30 @@ impl CanvasSet {
     /// Clears only the active frame.
     pub fn clear_active(&mut self) {
         self.active_frame_mut().clear();
+    }
+
+    /// Returns an immutable reference to the frame for the requested mode, if it exists.
+    pub fn frame(&self, mode: BoardMode) -> Option<&Frame> {
+        match mode {
+            BoardMode::Transparent => Some(&self.transparent),
+            BoardMode::Whiteboard => self.whiteboard.as_ref(),
+            BoardMode::Blackboard => self.blackboard.as_ref(),
+        }
+    }
+
+    /// Replaces the frame for the requested mode with the provided data.
+    pub fn set_frame(&mut self, mode: BoardMode, frame: Option<Frame>) {
+        match mode {
+            BoardMode::Transparent => {
+                self.transparent = frame.unwrap_or_default();
+            }
+            BoardMode::Whiteboard => {
+                self.whiteboard = frame;
+            }
+            BoardMode::Blackboard => {
+                self.blackboard = frame;
+            }
+        }
     }
 }
 
@@ -160,7 +184,7 @@ mod tests {
             color: RED,
             thick: 3.0,
         });
-        canvas_set.active_frame_mut().undo();
+        let _ = canvas_set.active_frame_mut().undo();
         assert_eq!(canvas_set.active_frame().shapes.len(), 0);
 
         // Switch to whiteboard and add shape
@@ -175,7 +199,7 @@ mod tests {
         });
 
         // Undo should only affect whiteboard frame
-        canvas_set.active_frame_mut().undo();
+        let _ = canvas_set.active_frame_mut().undo();
         assert_eq!(canvas_set.active_frame().shapes.len(), 0);
 
         // Transparent frame should still be empty (undo happened there earlier)

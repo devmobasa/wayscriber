@@ -17,7 +17,7 @@ pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
 pub use migration::{MigrationActions, MigrationReport, migrate_config};
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig,
-    StatusBarStyle, UiConfig,
+    SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle, UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)
@@ -25,7 +25,7 @@ pub use types::{
 pub use enums::ColorSpec;
 
 use crate::legacy;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::Local;
 use log::{debug, info, warn};
 use schemars::{JsonSchema, schema_for};
@@ -290,6 +290,10 @@ pub struct Config {
     /// Screenshot capture settings
     #[serde(default)]
     pub capture: CaptureConfig,
+
+    /// Session persistence settings
+    #[serde(default)]
+    pub session: SessionConfig,
 }
 
 impl Config {
@@ -443,6 +447,43 @@ impl Config {
             log::warn!("Invalid keybinding configuration: {}. Using defaults.", e);
             self.keybindings = KeybindingsConfig::default();
         }
+
+        if self.session.max_shapes_per_frame == 0 {
+            log::warn!("session.max_shapes_per_frame must be positive; using 1 instead");
+            self.session.max_shapes_per_frame = 1;
+        }
+
+        if self.session.max_file_size_mb == 0 {
+            log::warn!("session.max_file_size_mb must be positive; using 1 MB instead");
+            self.session.max_file_size_mb = 1;
+        } else if self.session.max_file_size_mb > 1024 {
+            log::warn!(
+                "session.max_file_size_mb {} too large, clamping to 1024",
+                self.session.max_file_size_mb
+            );
+            self.session.max_file_size_mb = 1024;
+        }
+
+        if self.session.auto_compress_threshold_kb == 0 {
+            log::warn!("session.auto_compress_threshold_kb must be positive; using 1 KiB");
+            self.session.auto_compress_threshold_kb = 1;
+        }
+
+        if matches!(self.session.storage, SessionStorageMode::Custom) {
+            let custom = self
+                .session
+                .custom_directory
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            if custom.is_none() {
+                log::warn!(
+                    "session.storage set to 'custom' but session.custom_directory missing or empty; falling back to 'auto'"
+                );
+                self.session.storage = SessionStorageMode::Auto;
+                self.session.custom_directory = None;
+            }
+        }
     }
 
     /// Returns the path to the configuration file.
@@ -453,6 +494,24 @@ impl Config {
     /// Returns an error if the config directory cannot be determined (e.g., HOME not set).
     pub fn get_config_path() -> Result<PathBuf> {
         Ok(primary_config_dir()?.join("config.toml"))
+    }
+
+    /// Determines the directory containing the active configuration file based on the source.
+    pub fn config_directory_from_source(source: &ConfigSource) -> Result<PathBuf> {
+        match source {
+            ConfigSource::Primary | ConfigSource::Default => {
+                let path = Self::get_config_path()?;
+                path.parent().map(PathBuf::from).ok_or_else(|| {
+                    anyhow!("Config path {} has no parent directory", path.display())
+                })
+            }
+            ConfigSource::Legacy(path) => path.parent().map(PathBuf::from).ok_or_else(|| {
+                anyhow!(
+                    "Legacy config path {} has no parent directory",
+                    path.display()
+                )
+            }),
+        }
     }
 
     /// Loads configuration from file, or returns defaults if not found.

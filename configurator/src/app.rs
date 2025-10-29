@@ -15,8 +15,8 @@ use iced::{Application, Background, Border, Command, Element, Length, Settings, 
 use crate::messages::Message;
 use crate::models::{
     BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, FontStyleOption,
-    FontWeightOption, NamedColorOption, QuadField, StatusPositionOption, TabId, TextField,
-    ToggleField, TripletField,
+    FontWeightOption, NamedColorOption, QuadField, SessionCompressionOption,
+    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField, TripletField,
 };
 
 pub fn run() -> iced::Result {
@@ -242,6 +242,16 @@ impl Application for ConfiguratorApp {
                 self.draft.board_default_mode = option;
                 self.refresh_dirty_flag();
             }
+            Message::SessionStorageModeChanged(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.session_storage_mode = option;
+                self.refresh_dirty_flag();
+            }
+            Message::SessionCompressionChanged(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.session_compression = option;
+                self.refresh_dirty_flag();
+            }
             Message::BufferCountChanged(count) => {
                 self.status = StatusMessage::idle();
                 self.draft.performance_buffer_count = count;
@@ -373,6 +383,7 @@ impl ConfiguratorApp {
             TabId::Ui => self.ui_tab(),
             TabId::Board => self.board_tab(),
             TabId::Capture => self.capture_tab(),
+            TabId::Session => self.session_tab(),
             TabId::Keybindings => self.keybindings_tab(),
         };
 
@@ -766,6 +777,80 @@ impl ConfiguratorApp {
             .spacing(12),
         )
         .into()
+    }
+
+    fn session_tab(&self) -> Element<'_, Message> {
+        let storage_pick = pick_list(
+            SessionStorageModeOption::list(),
+            Some(self.draft.session_storage_mode),
+            Message::SessionStorageModeChanged,
+        );
+        let compression_pick = pick_list(
+            SessionCompressionOption::list(),
+            Some(self.draft.session_compression),
+            Message::SessionCompressionChanged,
+        );
+
+        let mut column = column![
+            text("Session Persistence").size(20),
+            checkbox(
+                "Persist transparent mode drawings",
+                self.draft.session_persist_transparent,
+            )
+            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPersistTransparent, value)),
+            checkbox(
+                "Persist whiteboard mode drawings",
+                self.draft.session_persist_whiteboard,
+            )
+            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPersistWhiteboard, value)),
+            checkbox(
+                "Persist blackboard mode drawings",
+                self.draft.session_persist_blackboard,
+            )
+            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPersistBlackboard, value)),
+            checkbox(
+                "Restore tool state on startup",
+                self.draft.session_restore_tool_state,
+            )
+            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionRestoreToolState, value)),
+            checkbox("Per-output persistence", self.draft.session_per_output)
+                .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPerOutput, value)),
+            row![text("Storage mode:"), storage_pick].spacing(12),
+        ]
+        .spacing(12);
+
+        if self.draft.session_storage_mode == SessionStorageModeOption::Custom {
+            column = column.push(labeled_input(
+                "Custom directory",
+                &self.draft.session_custom_directory,
+                TextField::SessionCustomDirectory,
+            ));
+        }
+
+        column = column
+            .push(row![text("Compression:"), compression_pick].spacing(12))
+            .push(labeled_input(
+                "Max shapes per frame",
+                &self.draft.session_max_shapes_per_frame,
+                TextField::SessionMaxShapesPerFrame,
+            ))
+            .push(labeled_input(
+                "Max file size (MB)",
+                &self.draft.session_max_file_size_mb,
+                TextField::SessionMaxFileSizeMb,
+            ))
+            .push(labeled_input(
+                "Auto-compress threshold (KB)",
+                &self.draft.session_auto_compress_threshold_kb,
+                TextField::SessionAutoCompressThresholdKb,
+            ))
+            .push(labeled_input(
+                "Backup retention count",
+                &self.draft.session_backup_retention,
+                TextField::SessionBackupRetention,
+            ));
+
+        scrollable(column).into()
     }
 
     fn keybindings_tab(&self) -> Element<'_, Message> {

@@ -27,22 +27,19 @@ impl LayerShellHandler for WaylandState {
         );
 
         if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
-            let size_changed =
-                self.width != configure.new_size.0 || self.height != configure.new_size.1;
+            let size_changed = self
+                .surface
+                .update_dimensions(configure.new_size.0, configure.new_size.1);
 
-            self.width = configure.new_size.0;
-            self.height = configure.new_size.1;
-
-            if size_changed && self.pool.is_some() {
+            if size_changed {
                 info!("Surface size changed - recreating SlotPool");
-                self.pool = None;
             }
 
             self.input_state
-                .update_screen_dimensions(self.width, self.height);
+                .update_screen_dimensions(self.surface.width(), self.surface.height());
         }
 
-        self.configured = true;
+        self.surface.set_configured(true);
         self.input_state.needs_redraw = true;
     }
 }

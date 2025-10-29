@@ -172,14 +172,6 @@ pub fn color_to_name(color: &Color) -> &'static str {
 /// Clamps a value to a specified range.
 ///
 /// Kept for future use (e.g., dirty region optimization, bounds checking).
-///
-/// # Arguments
-/// * `val` - Value to clamp
-/// * `min` - Minimum allowed value
-/// * `max` - Maximum allowed value
-///
-/// # Returns
-/// The clamped value: `min` if `val < min`, `max` if `val > max`, otherwise `val`.
 #[allow(dead_code)]
 pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
     if val < min {
@@ -188,6 +180,81 @@ pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
         max
     } else {
         val
+    }
+}
+
+/// Axis-aligned rectangle helper used for dirty region tracking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+impl Rect {
+    /// Creates a new rectangle. Width/height must be non-negative.
+    pub fn new(x: i32, y: i32, width: i32, height: i32) -> Option<Self> {
+        if width <= 0 || height <= 0 {
+            None
+        } else {
+            Some(Self {
+                x,
+                y,
+                width,
+                height,
+            })
+        }
+    }
+
+    /// Builds a rectangle from min/max bounds (inclusive min, exclusive max).
+    pub fn from_min_max(min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Option<Self> {
+        let width = max_x - min_x;
+        let height = max_y - min_y;
+        Self::new(min_x, min_y, width, height)
+    }
+
+    // /// Expands this rectangle to include another rectangle.
+    // pub fn expand_to_include(&mut self, other: Rect) {
+    //     let min_x = self.x.min(other.x);
+    //     let min_y = self.y.min(other.y);
+    //     let max_x = (self.x + self.width).max(other.x + other.width);
+    //     let max_y = (self.y + self.height).max(other.y + other.height);
+
+    //     self.x = min_x;
+    //     self.y = min_y;
+    //     self.width = max_x - min_x;
+    //     self.height = max_y - min_y;
+    // }
+
+    // /// Returns a rectangle that covers both input rectangles.
+    // pub fn union(self, other: Rect) -> Rect {
+    //     let mut rect = self;
+    //     rect.expand_to_include(other);
+    //     rect
+    // }
+
+    // /// Expands the rectangle evenly in all directions by `amount`.
+    // pub fn inflate(&mut self, amount: i32) {
+    //     self.x -= amount;
+    //     self.y -= amount;
+    //     self.width += amount * 2;
+    //     self.height += amount * 2;
+    // }
+
+    // /// Clamps the rectangle to the given bounds.
+    // pub fn clamp_to_bounds(&mut self, width: i32, height: i32) {
+    //     let max_x = (self.x + self.width).clamp(0, width);
+    //     let max_y = (self.y + self.height).clamp(0, height);
+    //     self.x = self.x.clamp(0, width);
+    //     self.y = self.y.clamp(0, height);
+    //     self.width = (max_x - self.x).max(0);
+    //     self.height = (max_y - self.y).max(0);
+    // }
+
+    /// Returns true if rectangle has a positive area.
+    pub fn is_valid(&self) -> bool {
+        self.width > 0 && self.height > 0
     }
 }
 

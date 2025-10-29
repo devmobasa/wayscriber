@@ -1,7 +1,7 @@
 use super::*;
 use crate::config::{Action, BoardConfig};
-use crate::draw::{Color, FontDescriptor};
-use crate::input::{BoardMode, Key, MouseButton};
+use crate::draw::{Color, FontDescriptor, Shape};
+use crate::input::{BoardMode, Key, MouseButton, Tool};
 use crate::util;
 
 fn create_test_input_state() -> InputState {
@@ -30,6 +30,7 @@ fn create_test_input_state() -> InputState {
         true,                   // show_status_bar
         BoardConfig::default(), // board_config
         action_map,             // action_map
+        usize::MAX,
     )
 }
 
@@ -197,6 +198,86 @@ fn test_text_mode_ctrl_keys_trigger_actions() {
 
     // Now that we're in Idle, pressing Ctrl+Q again should exit the app
     state.on_key_press(Key::Char('Q'));
+    assert!(state.should_exit);
+}
+
+#[test]
+fn test_redo_restores_shape_after_undo() {
+    let mut state = create_test_input_state();
+
+    state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 10,
+        y2: 10,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+
+    state.handle_action(Action::Undo);
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
+
+    state.handle_action(Action::Redo);
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+}
+
+#[test]
+fn test_text_mode_respects_length_cap() {
+    let mut state = create_test_input_state();
+
+    state.state = DrawingState::TextInput {
+        x: 0,
+        y: 0,
+        buffer: "a".repeat(10_000),
+    };
+
+    state.on_key_press(Key::Char('b'));
+
+    if let DrawingState::TextInput { buffer, .. } = &state.state {
+        assert_eq!(buffer.len(), 10_000);
+        assert!(buffer.ends_with('a'));
+    } else {
+        panic!("Expected to remain in text input mode");
+    }
+
+    // After trimming, adding should work again
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.truncate(9_999);
+    }
+
+    state.on_key_press(Key::Char('c'));
+
+    if let DrawingState::TextInput { buffer, .. } = &state.state {
+        assert!(buffer.ends_with('c'));
+        assert_eq!(buffer.len(), 10_000);
+    }
+}
+
+#[test]
+fn test_escape_cancels_active_drawing_only() {
+    let mut state = create_test_input_state();
+    state.state = DrawingState::Drawing {
+        tool: Tool::Pen,
+        start_x: 0,
+        start_y: 0,
+        points: vec![(0, 0), (5, 5)],
+    };
+
+    state.on_key_press(Key::Escape);
+
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.should_exit == false);
+}
+
+#[test]
+fn test_escape_from_idle_requests_exit() {
+    let mut state = create_test_input_state();
+    assert!(matches!(state.state, DrawingState::Idle));
+
+    state.on_key_press(Key::Escape);
+
     assert!(state.should_exit);
 }
 

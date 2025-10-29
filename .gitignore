@@ -28,3 +28,6 @@ packaging/**
 docs/board
 
 dist/
+
+# Performance testing scripts and results
+perf/

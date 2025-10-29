@@ -251,6 +251,10 @@ impl Daemon {
         // The thread will be terminated by the OS when the process exits.
         thread::spawn(move || {
             for sig in signals.forever() {
+                if quit_flag.load(Ordering::Acquire) {
+                    info!("Signal handler thread exiting");
+                    break;
+                }
                 match sig {
                     SIGUSR1 => {
                         info!("Received SIGUSR1 - toggling overlay");

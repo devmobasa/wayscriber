@@ -10,6 +10,7 @@ mod draw;
 mod input;
 mod legacy;
 mod notification;
+mod session;
 mod ui;
 mod util;
 
@@ -36,6 +37,33 @@ struct Cli {
     /// Preview the migration without copying files (requires --migrate-config)
     #[arg(long = "dry-run", action = ArgAction::SetTrue, requires = "migrate_config")]
     migrate_config_dry_run: bool,
+
+    /// Delete persisted session data and backups
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "active",
+            "migrate_config",
+            "migrate_config_dry_run"
+        ]
+    )]
+    clear_session: bool,
+
+    /// Show session persistence status and file paths
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "active",
+            "migrate_config",
+            "migrate_config_dry_run",
+            "clear_session"
+        ]
+    )]
+    session_info: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -44,6 +72,11 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     maybe_print_alias_notice();
+
+    if cli.clear_session || cli.session_info {
+        run_session_cli_commands(&cli)?;
+        return Ok(());
+    }
 
     if cli.migrate_config {
         run_config_migration(cli.migrate_config_dry_run)?;
@@ -93,7 +126,9 @@ fn main() -> anyhow::Result<()> {
         println!("wayscriber: Screen annotation tool for Wayland compositors");
         println!();
         println!("Usage:");
-        println!("  wayscriber -d, --daemon    Run as background daemon (bind a toggle like Super+D)");
+        println!(
+            "  wayscriber -d, --daemon    Run as background daemon (bind a toggle like Super+D)"
+        );
         println!("  wayscriber -a, --active    Show overlay immediately (one-shot mode)");
         println!("  wayscriber -h, --help      Show help");
         println!();
@@ -115,6 +150,88 @@ fn main() -> anyhow::Result<()> {
 fn run_config_migration(dry_run: bool) -> anyhow::Result<()> {
     let report = config::migrate_config(dry_run)?;
     print_migration_report(&report);
+    Ok(())
+}
+
+fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
+    let loaded = config::Config::load()?;
+    let config_dir = config::Config::config_directory_from_source(&loaded.source)?;
+    let display_env = std::env::var("WAYLAND_DISPLAY").ok();
+
+    let options =
+        session::options_from_config(&loaded.config.session, &config_dir, display_env.as_deref())?;
+
+    if cli.clear_session {
+        let outcome = session::clear_session(&options)?;
+        println!("Session file: {}", options.session_file_path().display());
+        if outcome.removed_session {
+            println!("  Removed session file");
+        } else {
+            println!("  No session file present");
+        }
+        if outcome.removed_backup {
+            println!("  Removed backup file");
+        }
+        if outcome.removed_lock {
+            println!("  Removed lock file");
+        }
+        if !outcome.removed_session && !outcome.removed_backup && !outcome.removed_lock {
+            println!("  No session artefacts found");
+        }
+        return Ok(());
+    }
+
+    if cli.session_info {
+        use chrono::{DateTime, Local};
+
+        let inspection = session::inspect_session(&options)?;
+        println!("Session persistence status:");
+        println!("  Persist transparent: {}", inspection.persist_transparent);
+        println!("  Persist whiteboard : {}", inspection.persist_whiteboard);
+        println!("  Persist blackboard : {}", inspection.persist_blackboard);
+        println!("  Restore tool state : {}", inspection.restore_tool_state);
+        println!("  Per-output persistence: {}", inspection.per_output);
+        println!(
+            "  Session file       : {}",
+            inspection.session_path.display()
+        );
+        if let Some(identity) = &inspection.active_identity {
+            println!("    Output identity: {}", identity);
+        }
+        if inspection.exists {
+            if let Some(size) = inspection.size_bytes {
+                println!("    Size     : {} bytes", size);
+            }
+            if let Some(modified) = inspection.modified {
+                let dt: DateTime<Local> = modified.into();
+                println!("    Modified : {}", dt.format("%Y-%m-%d %H:%M:%S"));
+            }
+            println!("    Compressed: {}", inspection.compressed);
+            if let Some(counts) = inspection.frame_counts {
+                println!(
+                    "    Shapes   : transparent {}, whiteboard {}, blackboard {}",
+                    counts.transparent, counts.whiteboard, counts.blackboard
+                );
+            }
+            println!("    Tool state stored: {}", inspection.tool_state_present);
+        } else {
+            println!("    (not found)");
+        }
+
+        println!("  Backup file       : {}", inspection.backup_path.display());
+        if inspection.backup_exists {
+            if let Some(size) = inspection.backup_size_bytes {
+                println!("    Size     : {} bytes", size);
+            }
+        } else {
+            println!("    (not found)");
+        }
+
+        println!("  Storage directory : {}", options.base_dir.display());
+
+        return Ok(());
+    }
+
     Ok(())
 }
 

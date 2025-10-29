@@ -13,6 +13,7 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
+use std::env;
 use wayland_client::{Connection, globals::registry_queue_init};
 
 use super::state::WaylandState;
@@ -20,8 +21,22 @@ use crate::{
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
     input::{BoardMode, InputState},
-    legacy, notification,
+    legacy, notification, session,
 };
+
+fn friendly_capture_error(error: &str) -> String {
+    let lower = error.to_lowercase();
+
+    if lower.contains("requestcancelled") || lower.contains("cancelled") {
+        "Screen capture cancelled by user".to_string()
+    } else if lower.contains("permission") {
+        "Permission denied. Enable screen sharing in system settings.".to_string()
+    } else if lower.contains("busy") {
+        "Screen capture in progress. Try again in a moment.".to_string()
+    } else {
+        "Screen capture failed. Please try again.".to_string()
+    }
+}
 
 /// Wayland backend state
 pub struct WaylandBackend {
@@ -106,6 +121,21 @@ impl WaylandBackend {
             config.ui.help_overlay_style.font_size
         );
 
+        let config_dir = Config::config_directory_from_source(&config_source)?;
+
+        let display_env = env::var("WAYLAND_DISPLAY").ok();
+        let session_options = match session::options_from_config(
+            &config.session,
+            &config_dir,
+            display_env.as_deref(),
+        ) {
+            Ok(opts) => Some(opts),
+            Err(err) => {
+                warn!("Session persistence disabled: {}", err);
+                None
+            }
+        };
+
         // Create font descriptor from config
         let font_descriptor = crate::draw::FontDescriptor::new(
             config.drawing.font_family.clone(),
@@ -131,6 +161,7 @@ impl WaylandBackend {
             config.ui.show_status_bar,
             config.board.clone(),
             action_map,
+            config.session.max_shapes_per_frame,
         );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
@@ -179,6 +210,7 @@ impl WaylandBackend {
             config,
             input_state,
             capture_manager,
+            session_options,
             tokio_handle,
         );
 
@@ -205,7 +237,7 @@ impl WaylandBackend {
         // Commit the surface
         layer_surface.commit();
 
-        state.layer_surface = Some(layer_surface);
+        state.surface.set_layer_surface(layer_surface);
         info!("Layer shell surface created");
 
         // Track consecutive render failures for error recovery
@@ -238,13 +270,13 @@ impl WaylandBackend {
             }
 
             // Check for completed capture operations
-            if state.capture_in_progress {
-                if let Some(outcome) = state.capture_manager.try_take_result() {
+            if state.capture.is_in_progress() {
+                if let Some(outcome) = state.capture.manager_mut().try_take_result() {
                     log::info!("Capture completed");
 
                     // Restore overlay
                     state.show_overlay();
-                    state.capture_in_progress = false;
+                    state.capture.clear_in_progress();
 
                     match outcome {
                         CaptureOutcome::Success(result) => {
@@ -279,12 +311,14 @@ impl WaylandBackend {
                             );
                         }
                         CaptureOutcome::Failed(error) => {
+                            let friendly_error = friendly_capture_error(&error);
+
                             log::warn!("Screenshot capture failed: {}", error);
 
                             notification::send_notification_async(
                                 &state.tokio_handle,
                                 "Screenshot Failed".to_string(),
-                                error,
+                                friendly_error,
                                 Some("dialog-error".to_string()),
                             );
                         }
@@ -297,14 +331,15 @@ impl WaylandBackend {
 
             // Render if configured and needs redraw, but only if no frame callback pending
             // This throttles rendering to display refresh rate (when vsync is enabled)
-            let can_render = state.configured
+            let can_render = state.surface.is_configured()
                 && state.input_state.needs_redraw
-                && (!state.frame_callback_pending || !state.config.performance.enable_vsync);
+                && (!state.surface.frame_callback_pending()
+                    || !state.config.performance.enable_vsync);
 
             if can_render {
                 debug!(
                     "Main loop: needs_redraw=true, frame_callback_pending={}, triggering render",
-                    state.frame_callback_pending
+                    state.surface.frame_callback_pending()
                 );
                 match state.render(&qh) {
                     Ok(()) => {
@@ -313,7 +348,7 @@ impl WaylandBackend {
                         state.input_state.needs_redraw = false;
                         // Only set frame_callback_pending if vsync is enabled
                         if state.config.performance.enable_vsync {
-                            state.frame_callback_pending = true;
+                            state.surface.set_frame_callback_pending(true);
                             debug!(
                                 "Main loop: needs_redraw set to false, frame_callback_pending set to true (vsync enabled)"
                             );
@@ -342,12 +377,26 @@ impl WaylandBackend {
                         state.input_state.needs_redraw = false;
                     }
                 }
-            } else if state.input_state.needs_redraw && state.frame_callback_pending {
+            } else if state.input_state.needs_redraw && state.surface.frame_callback_pending() {
                 debug!("Main loop: Skipping render - frame callback already pending");
             }
         }
 
         info!("Wayland backend exiting");
+
+        if let Some(options) = state.session_options() {
+            if let Some(snapshot) = session::snapshot_from_input(&state.input_state, options) {
+                if let Err(err) = session::save_snapshot(&snapshot, options) {
+                    warn!("Failed to save session state: {}", err);
+                    notification::send_notification_async(
+                        &state.tokio_handle,
+                        "Failed to Save Session".to_string(),
+                        format!("Your drawings may not persist: {}", err),
+                        Some("dialog-error".to_string()),
+                    );
+                }
+            }
+        }
 
         // Return error if loop exited due to error, otherwise success
         match loop_error {

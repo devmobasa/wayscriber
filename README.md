@@ -100,6 +100,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 - Whiteboard/blackboard modes with auto pen contrast and isolated frames.
 - Quick color palette and line thickness adjustments via hotkeys or scroll wheel.
 - Status bar with live tool feedback and an in-app help overlay (`F10`).
+- Optional session persistence (per-mode toggles, compression, per-output files) with `wayscriber --session-info` and `wayscriber --clear-session`.
 - Launch the native configurator from the overlay (`F11`) to edit settings without leaving your session.
 - Background daemon with tray icon and customizable TOML configuration.
 
@@ -278,6 +279,7 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 | Decrease | `Ctrl+Shift+-` or `Shift` + scroll up |
 | **Editing** |
 | Undo last shape | `Ctrl+Z` |
+| Redo last undo | `Ctrl+Shift+Z` or `Ctrl+Y` |
 | Clear all | `E` |
 | Cancel action | Right-click or `Escape` |
 | **Help & Exit** |

@@ -1,6 +1,7 @@
 use crate::draw::Shape;
 use crate::input::{events::MouseButton, tool::Tool};
 use crate::util;
+use log::warn;
 
 use super::{DrawingState, InputState};
 
@@ -17,6 +18,7 @@ impl InputState {
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
+        let mut text_repositioned = false;
         match button {
             MouseButton::Left => {
                 // Start drawing with current tool
@@ -28,22 +30,31 @@ impl InputState {
                         start_y: y,
                         points: vec![(x, y)],
                     };
+                    self.last_provisional_bounds = None;
+                    self.update_provisional_dirty(x, y);
                     self.needs_redraw = true;
                 } else if let DrawingState::TextInput { x: tx, y: ty, .. } = &mut self.state {
                     // Update text position if in text mode
                     *tx = x;
                     *ty = y;
-                    self.needs_redraw = true;
+                    text_repositioned = true;
                 }
             }
             MouseButton::Right => {
                 // Right-click could cancel or exit
                 if !matches!(self.state, DrawingState::Idle) {
+                    self.clear_provisional_dirty();
+                    self.last_provisional_bounds = None;
                     self.state = DrawingState::Idle;
                     self.needs_redraw = true;
                 }
             }
             _ => {}
+        }
+
+        if text_repositioned {
+            self.update_text_preview_dirty();
+            self.needs_redraw = true;
         }
     }
 
@@ -57,11 +68,17 @@ impl InputState {
     /// - When drawing with Pen tool: Adds points to the freehand stroke
     /// - When drawing with other tools: Triggers redraw for live preview
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
+        let mut drawing = false;
         if let DrawingState::Drawing { tool, points, .. } = &mut self.state {
             if *tool == Tool::Pen {
                 // Add point to freehand stroke
                 points.push((x, y));
             }
+            drawing = true;
+        }
+
+        if drawing {
+            self.update_provisional_dirty(x, y);
             // For other tools, we'll update the end point in release
             self.needs_redraw = true;
         }
@@ -148,10 +165,25 @@ impl InputState {
                     arrow_angle: self.arrow_angle,
                 },
             };
+            let bounds = shape.bounding_box();
 
-            self.canvas_set.active_frame_mut().add_shape(shape);
-            self.state = DrawingState::Idle;
-            self.needs_redraw = true;
+            self.clear_provisional_dirty();
+
+            if self
+                .canvas_set
+                .active_frame_mut()
+                .try_add_shape(shape, self.max_shapes_per_frame)
+            {
+                self.state = DrawingState::Idle;
+                self.dirty_tracker.mark_optional_rect(bounds);
+                self.needs_redraw = true;
+            } else {
+                warn!(
+                    "Shape limit ({}) reached; discarding new shape",
+                    self.max_shapes_per_frame
+                );
+                self.state = DrawingState::Idle;
+            }
         }
     }
 }

@@ -220,6 +220,43 @@ format = "png"
 copy_to_clipboard = true
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# SESSION PERSISTENCE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[session]
+# Enable persistence per mode (default to false for clean startup)
+persist_transparent = false
+persist_whiteboard = false
+persist_blackboard = false
+
+# Restore pen colour/thickness/font size between runs
+restore_tool_state = true
+
+# Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
+storage = "auto"
+
+# Store separate sessions per monitor (set false to reuse one file per display)
+per_output = true
+
+# When storage = "custom", set the directory here (supports ~ expansion)
+# custom_directory = "/path/to/persistent/sessions"
+
+# Clamp runaway files by limiting shapes per frame
+max_shapes_per_frame = 10000
+
+# Maximum session file size (in megabytes); larger files are ignored
+max_file_size_mb = 10
+
+# Compression mode: "auto", "on", or "off"
+compress = "auto"
+
+# For compress = "auto": minimum file size (KiB) before gzip is used
+auto_compress_threshold_kb = 100
+
+# Number of rotated backups to retain (0 disables backups)
+backup_retention = 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -240,6 +277,9 @@ clear_canvas = ["E"]
 
 # Undo last annotation
 undo = ["Ctrl+Z"]
+
+# Redo last undone annotation
+redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
 
 # Adjust pen thickness
 increase_thickness = ["+", "="]
@@ -294,14 +334,17 @@ capture_file_region = ["Ctrl+Shift+6"]
 #   exit = ["Escape", "Q"]
 #   clear_canvas = ["D"]
 #   undo = ["U"]
+#   redo = ["R"]
 
 # Emacs-style keybindings:
 #   exit = ["Ctrl+G"]
 #   undo = ["Ctrl+/"]
+#   redo = ["Ctrl+?"]
 #   clear_canvas = ["Ctrl+K"]
 
 # Gaming-friendly (WASD area):
 #   exit = ["Q"]
 #   toggle_help = ["H"]
 #   undo = ["Z"]
-#   clear_canvas = ["X"]
+#   redo = ["X"]
+#   clear_canvas = ["C"]

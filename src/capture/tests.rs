@@ -44,8 +44,7 @@ impl CaptureFileSaver for MockSaver {
     fn save(&self, _image_data: &[u8], _config: &FileSaveConfig) -> Result<PathBuf, CaptureError> {
         *self.calls.lock().unwrap() += 1;
         if self.should_fail {
-            Err(CaptureError::SaveError(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(CaptureError::SaveError(std::io::Error::other(
                 "save failed",
             )))
         } else {

@@ -22,6 +22,7 @@ fn make_input_state() -> InputState {
         true,
         wayscriber::config::BoardConfig::default(),
         action_map,
+        usize::MAX,
     )
 }
 
