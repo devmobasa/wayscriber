@@ -49,7 +49,7 @@ impl CanvasSet {
     /// For board modes that don't exist yet, returns a reference to a static empty frame
     /// instead of creating one (since we can't mutate in an immutable method).
     pub fn active_frame(&self) -> &Frame {
-        static EMPTY_FRAME: Frame = Frame { shapes: Vec::new() };
+        static EMPTY_FRAME: Frame = Frame::new();
 
         match self.active_mode {
             BoardMode::Transparent => &self.transparent,

@@ -278,6 +278,9 @@ clear_canvas = ["E"]
 # Undo last annotation
 undo = ["Ctrl+Z"]
 
+# Redo last undone annotation
+redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
+
 # Adjust pen thickness
 increase_thickness = ["+", "="]
 decrease_thickness = ["-", "_"]
@@ -331,14 +334,17 @@ capture_file_region = ["Ctrl+Shift+6"]
 #   exit = ["Escape", "Q"]
 #   clear_canvas = ["D"]
 #   undo = ["U"]
+#   redo = ["R"]
 
 # Emacs-style keybindings:
 #   exit = ["Ctrl+G"]
 #   undo = ["Ctrl+/"]
+#   redo = ["Ctrl+?"]
 #   clear_canvas = ["Ctrl+K"]
 
 # Gaming-friendly (WASD area):
 #   exit = ["Q"]
 #   toggle_help = ["H"]
 #   undo = ["Z"]
-#   clear_canvas = ["X"]
+#   redo = ["X"]
+#   clear_canvas = ["C"]

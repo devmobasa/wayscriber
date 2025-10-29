@@ -1,6 +1,6 @@
 use super::*;
 use crate::config::{Action, BoardConfig};
-use crate::draw::{Color, FontDescriptor};
+use crate::draw::{Color, FontDescriptor, Shape};
 use crate::input::{BoardMode, Key, MouseButton, Tool};
 use crate::util;
 
@@ -199,6 +199,28 @@ fn test_text_mode_ctrl_keys_trigger_actions() {
     // Now that we're in Idle, pressing Ctrl+Q again should exit the app
     state.on_key_press(Key::Char('Q'));
     assert!(state.should_exit);
+}
+
+#[test]
+fn test_redo_restores_shape_after_undo() {
+    let mut state = create_test_input_state();
+
+    state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 10,
+        y2: 10,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+
+    state.handle_action(Action::Undo);
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
+
+    state.handle_action(Action::Redo);
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
 }
 
 #[test]

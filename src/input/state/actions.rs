@@ -265,6 +265,12 @@ impl InputState {
                     self.needs_redraw = true;
                 }
             }
+            Action::Redo => {
+                if let Some(shape) = self.canvas_set.active_frame_mut().redo() {
+                    self.dirty_tracker.mark_shape(&shape);
+                    self.needs_redraw = true;
+                }
+            }
             Action::IncreaseThickness => {
                 self.current_thickness = (self.current_thickness + 1.0).min(20.0);
                 self.dirty_tracker.mark_full();

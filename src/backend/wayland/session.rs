@@ -1,8 +1,7 @@
 //! Session persistence bookkeeping for per-output snapshots.
 //!
-//! Tracks the current session options and which monitor identity was last
-//! loaded so WaylandState can coordinate persistence without storing extra
-//! fields.
+//! Tracks the current session options and whether a snapshot has been loaded
+//! so WaylandState can coordinate persistence without storing extra fields.
 
 use crate::session::SessionOptions;
 
@@ -10,7 +9,6 @@ use crate::session::SessionOptions;
 pub struct SessionState {
     options: Option<SessionOptions>,
     loaded: bool,
-    last_loaded_identity: Option<String>,
 }
 
 impl SessionState {
@@ -19,7 +17,6 @@ impl SessionState {
         Self {
             options,
             loaded: false,
-            last_loaded_identity: None,
         }
     }
 
@@ -39,13 +36,7 @@ impl SessionState {
     }
 
     /// Marks the session as loaded and records the identity used.
-    pub fn mark_loaded(&mut self, identity: Option<String>) {
+    pub fn mark_loaded(&mut self) {
         self.loaded = true;
-        self.last_loaded_identity = identity;
-    }
-
-    /// Returns the identity associated with the last loaded snapshot, if any.
-    pub fn last_loaded_identity(&self) -> Option<&str> {
-        self.last_loaded_identity.as_deref()
     }
 }

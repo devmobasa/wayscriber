@@ -18,6 +18,7 @@ pub enum Action {
     EnterTextMode,
     ClearCanvas,
     Undo,
+    Redo,
 
     // Thickness controls
     IncreaseThickness,
@@ -166,6 +167,9 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_undo")]
     pub undo: Vec<String>,
 
+    #[serde(default = "default_redo")]
+    pub redo: Vec<String>,
+
     #[serde(default = "default_increase_thickness")]
     pub increase_thickness: Vec<String>,
 
@@ -254,6 +258,7 @@ impl Default for KeybindingsConfig {
             enter_text_mode: default_enter_text_mode(),
             clear_canvas: default_clear_canvas(),
             undo: default_undo(),
+            redo: default_redo(),
             increase_thickness: default_increase_thickness(),
             decrease_thickness: default_decrease_thickness(),
             increase_font_size: default_increase_font_size(),
@@ -317,6 +322,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.undo {
             insert_binding(binding_str, Action::Undo)?;
+        }
+
+        for binding_str in &self.redo {
+            insert_binding(binding_str, Action::Redo)?;
         }
 
         for binding_str in &self.increase_thickness {
@@ -449,6 +458,10 @@ fn default_clear_canvas() -> Vec<String> {
 
 fn default_undo() -> Vec<String> {
     vec!["Ctrl+Z".to_string()]
+}
+
+fn default_redo() -> Vec<String> {
+    vec!["Ctrl+Shift+Z".to_string(), "Ctrl+Y".to_string()]
 }
 
 fn default_increase_thickness() -> Vec<String> {
@@ -663,6 +676,9 @@ mod tests {
 
         let ctrl_z = KeyBinding::parse("Ctrl+Z").unwrap();
         assert_eq!(map.get(&ctrl_z), Some(&Action::Undo));
+
+        let ctrl_shift_z = KeyBinding::parse("Ctrl+Shift+Z").unwrap();
+        assert_eq!(map.get(&ctrl_shift_z), Some(&Action::Redo));
     }
 
     #[test]

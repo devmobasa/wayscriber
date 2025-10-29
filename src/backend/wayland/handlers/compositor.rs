@@ -106,10 +106,7 @@ impl CompositorHandler for WaylandState {
             }
 
             if load_requested {
-                let identity = current_options
-                    .as_ref()
-                    .and_then(|opts| opts.output_identity().map(|s| s.to_string()));
-                self.session.mark_loaded(identity);
+                self.session.mark_loaded();
                 self.input_state.needs_redraw = true;
             }
         }

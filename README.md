@@ -279,6 +279,7 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 | Decrease | `Ctrl+Shift+-` or `Shift` + scroll up |
 | **Editing** |
 | Undo last shape | `Ctrl+Z` |
+| Redo last undo | `Ctrl+Shift+Z` or `Ctrl+Y` |
 | Clear all | `E` |
 | Cancel action | Right-click or `Escape` |
 | **Help & Exit** |
