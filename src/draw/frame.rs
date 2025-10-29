@@ -31,8 +31,21 @@ impl Frame {
     }
 
     /// Adds a new shape to the frame (drawn on top of existing shapes).
+    #[allow(dead_code)]
     pub fn add_shape(&mut self, shape: Shape) {
         self.shapes.push(shape);
+    }
+
+    /// Attempts to add a shape, enforcing a maximum shape count when `max` > 0.
+    ///
+    /// Returns `true` if the shape was added, `false` if the limit would be exceeded.
+    pub fn try_add_shape(&mut self, shape: Shape, max: usize) -> bool {
+        if max == 0 || self.shapes.len() < max {
+            self.shapes.push(shape);
+            true
+        } else {
+            false
+        }
     }
 
     /// Removes the most recently added shape.
@@ -45,5 +58,49 @@ impl Frame {
             self.shapes.pop();
             true
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::Color;
+
+    #[test]
+    fn try_add_shape_respects_limit() {
+        let mut frame = Frame::new();
+        assert!(frame.try_add_shape(
+            Shape::Line {
+                x1: 0,
+                y1: 0,
+                x2: 1,
+                y2: 1,
+                color: Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+                thick: 2.0,
+            },
+            1
+        ));
+
+        assert!(!frame.try_add_shape(
+            Shape::Line {
+                x1: 1,
+                y1: 1,
+                x2: 2,
+                y2: 2,
+                color: Color {
+                    r: 0.0,
+                    g: 1.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+                thick: 2.0,
+            },
+            1
+        ));
     }
 }

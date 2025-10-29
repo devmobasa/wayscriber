@@ -91,16 +91,26 @@ impl InputState {
                         let y = *y;
                         let text = buffer.clone();
 
-                        self.canvas_set.active_frame_mut().add_shape(Shape::Text {
-                            x,
-                            y,
-                            text,
-                            color: self.current_color,
-                            size: self.current_font_size,
-                            font_descriptor: self.font_descriptor.clone(),
-                            background_enabled: self.text_background_enabled,
-                        });
-                        self.needs_redraw = true;
+                        let added = self.canvas_set.active_frame_mut().try_add_shape(
+                            Shape::Text {
+                                x,
+                                y,
+                                text,
+                                color: self.current_color,
+                                size: self.current_font_size,
+                                font_descriptor: self.font_descriptor.clone(),
+                                background_enabled: self.text_background_enabled,
+                            },
+                            self.max_shapes_per_frame,
+                        );
+                        if added {
+                            self.needs_redraw = true;
+                        } else {
+                            warn!(
+                                "Shape limit ({}) reached; new text not added",
+                                self.max_shapes_per_frame
+                            );
+                        }
                     }
                     self.state = DrawingState::Idle;
                     return;

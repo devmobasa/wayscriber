@@ -1,6 +1,7 @@
 use crate::draw::Shape;
 use crate::input::{events::MouseButton, tool::Tool};
 use crate::util;
+use log::warn;
 
 use super::{DrawingState, InputState};
 
@@ -149,9 +150,20 @@ impl InputState {
                 },
             };
 
-            self.canvas_set.active_frame_mut().add_shape(shape);
-            self.state = DrawingState::Idle;
-            self.needs_redraw = true;
+            if self
+                .canvas_set
+                .active_frame_mut()
+                .try_add_shape(shape, self.max_shapes_per_frame)
+            {
+                self.state = DrawingState::Idle;
+                self.needs_redraw = true;
+            } else {
+                warn!(
+                    "Shape limit ({}) reached; discarding new shape",
+                    self.max_shapes_per_frame
+                );
+                self.state = DrawingState::Idle;
+            }
         }
     }
 }

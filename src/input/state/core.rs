@@ -83,6 +83,8 @@ pub struct InputState {
     action_map: HashMap<KeyBinding, Action>,
     /// Pending capture action (to be handled by WaylandState)
     pending_capture_action: Option<Action>,
+    /// Maximum number of shapes allowed per frame (0 = unlimited)
+    pub max_shapes_per_frame: usize,
 }
 
 impl InputState {
@@ -114,6 +116,7 @@ impl InputState {
         show_status_bar: bool,
         board_config: BoardConfig,
         action_map: HashMap<KeyBinding, Action>,
+        max_shapes_per_frame: usize,
     ) -> Self {
         Self {
             canvas_set: CanvasSet::new(),
@@ -136,6 +139,7 @@ impl InputState {
             board_config,
             action_map,
             pending_capture_action: None,
+            max_shapes_per_frame,
         }
     }
 

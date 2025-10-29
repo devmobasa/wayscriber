@@ -2,7 +2,7 @@ use super::*;
 use crate::config::{Action, BoardConfig, SessionConfig, SessionStorageMode};
 use crate::draw::FontDescriptor;
 use crate::draw::{Color, Shape};
-use crate::input::InputState;
+use crate::input::{InputState, board_mode::BoardMode};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -28,6 +28,7 @@ fn dummy_input_state() -> InputState {
         true,
         BoardConfig::default(),
         action_map,
+        usize::MAX,
     )
 }
 
@@ -142,4 +143,82 @@ fn session_file_without_per_output_suffix_when_disabled() {
     options.set_output_identity(Some("DP-1"));
     assert_eq!(options.session_file_path(), original);
     assert!(options.output_identity().is_none());
+}
+
+#[test]
+fn session_roundtrip_preserves_shapes_across_frames() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-2");
+    options.persist_transparent = true;
+    options.persist_whiteboard = true;
+    options.persist_blackboard = true;
+    options.set_output_identity(Some("HDMI-1"));
+
+    let mut input = dummy_input_state();
+    input.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 20,
+        y2: 20,
+        color: Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 3.0,
+    });
+
+    input.canvas_set.switch_mode(BoardMode::Whiteboard);
+    input.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 5,
+        y: 5,
+        text: "hello".into(),
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        size: 24.0,
+        font_descriptor: FontDescriptor::default(),
+        background_enabled: false,
+    });
+
+    input.canvas_set.switch_mode(BoardMode::Blackboard);
+    input
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::Ellipse {
+            cx: 10,
+            cy: 10,
+            rx: 4,
+            ry: 8,
+            color: Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            thick: 1.5,
+        });
+
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot produced");
+    save_snapshot(&snapshot, &options).expect("save snapshot");
+
+    let loaded_snapshot = load_snapshot(&options)
+        .expect("load snapshot result")
+        .expect("snapshot present");
+
+    let mut fresh_input = dummy_input_state();
+    apply_snapshot(&mut fresh_input, loaded_snapshot, &options);
+
+    fresh_input.canvas_set.switch_mode(BoardMode::Transparent);
+    assert_eq!(fresh_input.canvas_set.active_frame().shapes.len(), 1);
+
+    fresh_input.canvas_set.switch_mode(BoardMode::Whiteboard);
+    assert_eq!(fresh_input.canvas_set.active_frame().shapes.len(), 1);
+
+    fresh_input.canvas_set.switch_mode(BoardMode::Blackboard);
+    assert_eq!(fresh_input.canvas_set.active_frame().shapes.len(), 1);
 }

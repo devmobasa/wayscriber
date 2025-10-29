@@ -24,6 +24,20 @@ use crate::{
     legacy, notification, session,
 };
 
+fn friendly_capture_error(error: &str) -> String {
+    let lower = error.to_lowercase();
+
+    if lower.contains("requestcancelled") || lower.contains("cancelled") {
+        "Screen capture cancelled by user".to_string()
+    } else if lower.contains("permission") {
+        "Permission denied. Enable screen sharing in system settings.".to_string()
+    } else if lower.contains("busy") {
+        "Screen capture in progress. Try again in a moment.".to_string()
+    } else {
+        "Screen capture failed. Please try again.".to_string()
+    }
+}
+
 /// Wayland backend state
 pub struct WaylandBackend {
     initial_mode: Option<String>,
@@ -147,6 +161,7 @@ impl WaylandBackend {
             config.ui.show_status_bar,
             config.board.clone(),
             action_map,
+            config.session.max_shapes_per_frame,
         );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
@@ -296,12 +311,14 @@ impl WaylandBackend {
                             );
                         }
                         CaptureOutcome::Failed(error) => {
+                            let friendly_error = friendly_capture_error(&error);
+
                             log::warn!("Screenshot capture failed: {}", error);
 
                             notification::send_notification_async(
                                 &state.tokio_handle,
                                 "Screenshot Failed".to_string(),
-                                error,
+                                friendly_error,
                                 Some("dialog-error".to_string()),
                             );
                         }
