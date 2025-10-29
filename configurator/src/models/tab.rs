@@ -6,17 +6,19 @@ pub enum TabId {
     Ui,
     Board,
     Capture,
+    Session,
     Keybindings,
 }
 
 impl TabId {
-    pub const ALL: [TabId; 7] = [
+    pub const ALL: [TabId; 8] = [
         TabId::Drawing,
         TabId::Arrow,
         TabId::Performance,
         TabId::Ui,
         TabId::Board,
         TabId::Capture,
+        TabId::Session,
         TabId::Keybindings,
     ];
 
@@ -28,6 +30,7 @@ impl TabId {
             TabId::Ui => "UI",
             TabId::Board => "Board",
             TabId::Capture => "Capture",
+            TabId::Session => "Session",
             TabId::Keybindings => "Keybindings",
         }
     }

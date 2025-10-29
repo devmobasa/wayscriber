@@ -3,8 +3,8 @@ use wayscriber::config::Config;
 use super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::error::FormError;
 use super::fields::{
-    BoardModeOption, FontStyleOption, FontWeightOption, QuadField, StatusPositionOption, TextField,
-    ToggleField, TripletField,
+    BoardModeOption, FontStyleOption, FontWeightOption, QuadField, SessionCompressionOption,
+    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField, TripletField,
 };
 use super::keybindings::KeybindingsDraft;
 use super::util::{format_float, parse_f64};
@@ -56,6 +56,19 @@ pub struct ConfigDraft {
     pub capture_filename_template: String,
     pub capture_format: String,
     pub capture_copy_to_clipboard: bool,
+
+    pub session_persist_transparent: bool,
+    pub session_persist_whiteboard: bool,
+    pub session_persist_blackboard: bool,
+    pub session_restore_tool_state: bool,
+    pub session_per_output: bool,
+    pub session_storage_mode: SessionStorageModeOption,
+    pub session_custom_directory: String,
+    pub session_max_shapes_per_frame: String,
+    pub session_max_file_size_mb: String,
+    pub session_compression: SessionCompressionOption,
+    pub session_auto_compress_threshold_kb: String,
+    pub session_backup_retention: String,
 
     pub keybindings: KeybindingsDraft,
 }
@@ -114,6 +127,26 @@ impl ConfigDraft {
             capture_filename_template: config.capture.filename_template.clone(),
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
+
+            session_persist_transparent: config.session.persist_transparent,
+            session_persist_whiteboard: config.session.persist_whiteboard,
+            session_persist_blackboard: config.session.persist_blackboard,
+            session_restore_tool_state: config.session.restore_tool_state,
+            session_per_output: config.session.per_output,
+            session_storage_mode: SessionStorageModeOption::from_mode(config.session.storage.clone()),
+            session_custom_directory: config
+                .session
+                .custom_directory
+                .clone()
+                .unwrap_or_default(),
+            session_max_shapes_per_frame: config.session.max_shapes_per_frame.to_string(),
+            session_max_file_size_mb: config.session.max_file_size_mb.to_string(),
+            session_compression: SessionCompressionOption::from_compression(config.session.compress.clone()),
+            session_auto_compress_threshold_kb: config
+                .session
+                .auto_compress_threshold_kb
+                .to_string(),
+            session_backup_retention: config.session.backup_retention.to_string(),
 
             keybindings: KeybindingsDraft::from_config(&config.keybindings),
         }
@@ -276,6 +309,44 @@ impl ConfigDraft {
         config.capture.format = self.capture_format.clone();
         config.capture.copy_to_clipboard = self.capture_copy_to_clipboard;
 
+        config.session.persist_transparent = self.session_persist_transparent;
+        config.session.persist_whiteboard = self.session_persist_whiteboard;
+        config.session.persist_blackboard = self.session_persist_blackboard;
+        config.session.restore_tool_state = self.session_restore_tool_state;
+        config.session.per_output = self.session_per_output;
+        config.session.storage = self.session_storage_mode.to_mode();
+        let custom_dir = self.session_custom_directory.trim();
+        config.session.custom_directory = if custom_dir.is_empty() {
+            None
+        } else {
+            Some(custom_dir.to_string())
+        };
+        parse_usize_field(
+            &self.session_max_shapes_per_frame,
+            "session.max_shapes_per_frame",
+            &mut errors,
+            |value| config.session.max_shapes_per_frame = value,
+        );
+        parse_u64_field(
+            &self.session_max_file_size_mb,
+            "session.max_file_size_mb",
+            &mut errors,
+            |value| config.session.max_file_size_mb = value,
+        );
+        config.session.compress = self.session_compression.to_compression();
+        parse_u64_field(
+            &self.session_auto_compress_threshold_kb,
+            "session.auto_compress_threshold_kb",
+            &mut errors,
+            |value| config.session.auto_compress_threshold_kb = value,
+        );
+        parse_usize_field(
+            &self.session_backup_retention,
+            "session.backup_retention",
+            &mut errors,
+            |value| config.session.backup_retention = value,
+        );
+
         match self.keybindings.to_config() {
             Ok(cfg) => config.keybindings = cfg,
             Err(errs) => errors.extend(errs),
@@ -299,6 +370,21 @@ impl ConfigDraft {
             ToggleField::BoardAutoAdjust => self.board_auto_adjust_pen = value,
             ToggleField::CaptureEnabled => self.capture_enabled = value,
             ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
+            ToggleField::SessionPersistTransparent => {
+                self.session_persist_transparent = value;
+            }
+            ToggleField::SessionPersistWhiteboard => {
+                self.session_persist_whiteboard = value;
+            }
+            ToggleField::SessionPersistBlackboard => {
+                self.session_persist_blackboard = value;
+            }
+            ToggleField::SessionRestoreToolState => {
+                self.session_restore_tool_state = value;
+            }
+            ToggleField::SessionPerOutput => {
+                self.session_per_output = value;
+            }
         }
     }
 
@@ -331,6 +417,13 @@ impl ConfigDraft {
             TextField::CaptureSaveDirectory => self.capture_save_directory = value,
             TextField::CaptureFilename => self.capture_filename_template = value,
             TextField::CaptureFormat => self.capture_format = value,
+            TextField::SessionCustomDirectory => self.session_custom_directory = value,
+            TextField::SessionMaxShapesPerFrame => self.session_max_shapes_per_frame = value,
+            TextField::SessionMaxFileSizeMb => self.session_max_file_size_mb = value,
+            TextField::SessionAutoCompressThresholdKb => {
+                self.session_auto_compress_threshold_kb = value
+            }
+            TextField::SessionBackupRetention => self.session_backup_retention = value,
         }
     }
 
@@ -374,5 +467,25 @@ where
     match parse_f64(value.trim()) {
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err)),
+    }
+}
+
+fn parse_usize_field<F>(value: &str, field: &'static str, errors: &mut Vec<FormError>, apply: F)
+where
+    F: FnOnce(usize),
+{
+    match value.trim().parse::<usize>() {
+        Ok(parsed) => apply(parsed),
+        Err(err) => errors.push(FormError::new(field, err.to_string())),
+    }
+}
+
+fn parse_u64_field<F>(value: &str, field: &'static str, errors: &mut Vec<FormError>, apply: F)
+where
+    F: FnOnce(u64),
+{
+    match value.trim().parse::<u64>() {
+        Ok(parsed) => apply(parsed),
+        Err(err) => errors.push(FormError::new(field, err.to_string())),
     }
 }
