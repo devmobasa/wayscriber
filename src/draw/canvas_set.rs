@@ -89,7 +89,7 @@ impl CanvasSet {
     pub fn set_frame(&mut self, mode: BoardMode, frame: Option<Frame>) {
         match mode {
             BoardMode::Transparent => {
-                self.transparent = frame.unwrap_or_else(Frame::new);
+                self.transparent = frame.unwrap_or_default();
             }
             BoardMode::Whiteboard => {
                 self.whiteboard = frame;
