@@ -1,4 +1,8 @@
-//! Manages layer-surface state and shared memory buffers for the Wayland backend.
+//! Layer-surface management for the Wayland backend.
+//!
+//! This module owns the wl_surface/layer surface handle and the shm slot
+//! pool. WaylandState asks SurfaceState for buffers and size information
+//! instead of juggling the raw objects directly.
 
 use anyhow::{Context, Result};
 use log::info;

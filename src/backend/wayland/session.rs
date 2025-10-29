@@ -1,4 +1,8 @@
-//! Session persistence state for loading/saving snapshots per output.
+//! Session persistence bookkeeping for per-output snapshots.
+//!
+//! Tracks the current session options and which monitor identity was last
+//! loaded so WaylandState can coordinate persistence without storing extra
+//! fields.
 
 use crate::session::SessionOptions;
 

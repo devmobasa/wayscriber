@@ -1,4 +1,7 @@
 //! Capture controller for managing overlay visibility and capture state.
+//!
+//! Keeps the overlay hide/show logic alongside the CaptureManager so the
+//! main Wayland loop only coordinates events instead of tracking flags.
 
 use crate::capture::CaptureManager;
 use log::{info, warn};
