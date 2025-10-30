@@ -2,6 +2,11 @@
 // rendering & protocol state to `WaylandState` and its handler modules.
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
+#[cfg(unix)]
+use signal_hook::{
+    consts::signal::{SIGINT, SIGTERM, SIGUSR1},
+    iterator::Signals,
+};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
@@ -13,7 +18,15 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
-use std::env;
+use std::{
+    env,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+#[cfg(unix)]
+use std::thread;
 use wayland_client::{Connection, globals::registry_queue_init};
 
 use super::state::WaylandState;
@@ -215,6 +228,34 @@ impl WaylandBackend {
             tokio_handle,
         );
 
+        // Gracefully exit the overlay when external signals request termination
+        #[cfg(unix)]
+        let exit_flag: Option<Arc<AtomicBool>> = {
+            let flag = Arc::new(AtomicBool::new(false));
+            match Signals::new([SIGTERM, SIGINT, SIGUSR1]) {
+                Ok(mut signals) => {
+                    let exit_flag_clone = Arc::clone(&flag);
+                    thread::spawn(move || {
+                        for sig in signals.forever() {
+                            debug!(
+                                "Overlay received signal {}; scheduling graceful shutdown",
+                                sig
+                            );
+                            exit_flag_clone.store(true, Ordering::Release);
+                        }
+                    });
+                    Some(flag)
+                }
+                Err(err) => {
+                    warn!("Failed to register overlay signal handlers: {}", err);
+                    Some(flag)
+                }
+            }
+        };
+
+        #[cfg(not(unix))]
+        let exit_flag: Option<Arc<AtomicBool>> = None;
+
         // Create layer shell surface
         info!("Creating layer shell surface");
         let wl_surface = state.compositor_state.create_surface(&qh);
@@ -248,6 +289,14 @@ impl WaylandBackend {
         // Main event loop
         let mut loop_error: Option<anyhow::Error> = None;
         loop {
+            if exit_flag
+                .as_ref()
+                .map(|flag| flag.load(Ordering::Acquire))
+                .unwrap_or(false)
+            {
+                state.input_state.should_exit = true;
+            }
+
             // Check if we should exit before blocking
             if state.input_state.should_exit {
                 info!("Exit requested, breaking event loop");
