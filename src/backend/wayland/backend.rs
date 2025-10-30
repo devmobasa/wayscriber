@@ -18,15 +18,15 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
+#[cfg(unix)]
+use std::thread;
 use std::{
     env,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
-#[cfg(unix)]
-use std::thread;
 use wayland_client::{Connection, globals::registry_queue_init};
 
 use super::state::WaylandState;

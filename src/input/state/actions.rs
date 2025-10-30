@@ -336,41 +336,49 @@ impl InputState {
                 self.current_color = util::key_to_color('r').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorGreen => {
                 self.current_color = util::key_to_color('g').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorBlue => {
                 self.current_color = util::key_to_color('b').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorYellow => {
                 self.current_color = util::key_to_color('y').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorOrange => {
                 self.current_color = util::key_to_color('o').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorPink => {
                 self.current_color = util::key_to_color('p').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorWhite => {
                 self.current_color = util::key_to_color('w').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorBlack => {
                 self.current_color = util::key_to_color('k').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::CaptureFullScreen
             | Action::CaptureActiveWindow

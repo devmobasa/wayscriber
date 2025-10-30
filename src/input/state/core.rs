@@ -138,7 +138,7 @@ impl InputState {
         max_shapes_per_frame: usize,
         click_highlight_settings: ClickHighlightSettings,
     ) -> Self {
-        Self {
+        let mut state = Self {
             canvas_set: CanvasSet::new(),
             current_color: color,
             current_thickness: thickness,
@@ -165,7 +165,13 @@ impl InputState {
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
+        };
+
+        if state.click_highlight.uses_pen_color() {
+            state.sync_highlight_color();
         }
+
+        state
     }
 
     pub(super) fn launch_configurator(&self) {
@@ -411,6 +417,13 @@ impl InputState {
         }
     }
 
+    pub fn sync_highlight_color(&mut self) {
+        if self.click_highlight.apply_pen_color(self.current_color) {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+        }
+    }
+
     /// Advances highlight animations; returns true if highlights remain active.
     pub fn advance_click_highlights(&mut self, now: Instant) -> bool {
         self.click_highlight.advance(now, &mut self.dirty_tracker)
@@ -498,6 +511,7 @@ impl InputState {
                     self.board_previous_color = Some(self.current_color);
                     if let Some(default_color) = target_mode.default_pen_color(&self.board_config) {
                         self.current_color = default_color;
+                        self.sync_highlight_color();
                     }
                 }
                 // Exiting board mode to transparent
@@ -506,6 +520,7 @@ impl InputState {
                     if let Some(prev_color) = self.board_previous_color {
                         self.current_color = prev_color;
                         self.board_previous_color = None;
+                        self.sync_highlight_color();
                     }
                 }
                 // Switching between board modes
@@ -514,6 +529,7 @@ impl InputState {
                     // Apply new board's default color
                     if let Some(default_color) = target_mode.default_pen_color(&self.board_config) {
                         self.current_color = default_color;
+                        self.sync_highlight_color();
                     }
                 }
                 // All other transitions (shouldn't happen, but handle gracefully)

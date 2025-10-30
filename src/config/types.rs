@@ -209,6 +209,10 @@ pub struct ClickHighlightConfig {
     /// Outline color RGBA (0.0-1.0)
     #[serde(default = "default_click_highlight_outline_color")]
     pub outline_color: [f64; 4],
+
+    /// Derive highlight color from current pen color
+    #[serde(default = "default_click_highlight_use_pen_color")]
+    pub use_pen_color: bool,
 }
 
 impl Default for ClickHighlightConfig {
@@ -220,6 +224,7 @@ impl Default for ClickHighlightConfig {
             duration_ms: default_click_highlight_duration_ms(),
             fill_color: default_click_highlight_fill_color(),
             outline_color: default_click_highlight_outline_color(),
+            use_pen_color: default_click_highlight_use_pen_color(),
         }
     }
 }
@@ -399,6 +404,10 @@ fn default_click_highlight_fill_color() -> [f64; 4] {
 
 fn default_click_highlight_outline_color() -> [f64; 4] {
     [1.0, 0.6, 0.0, 0.9]
+}
+
+fn default_click_highlight_use_pen_color() -> bool {
+    true
 }
 
 /// Board mode configuration for whiteboard/blackboard features.

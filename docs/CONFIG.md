@@ -140,6 +140,7 @@ outline_thickness = 4.0
 duration_ms = 750
 fill_color = [1.0, 0.8, 0.0, 0.35]
 outline_color = [1.0, 0.6, 0.0, 0.9]
+use_pen_color = true  # Existing highlights update immediately when you change pen color
 ```
 
 **Status Bar:**
@@ -157,7 +158,7 @@ outline_color = [1.0, 0.6, 0.0, 0.9]
 - **Font sizes**: Customize text size for status bar and help overlay
 - **Colors**: All RGBA values (0.0-1.0 range) with transparency control
 - **Layout**: Padding, line height, dot size, border width all configurable
-- **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; combine with the highlight-only tool toggle for presentation mode
+- **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; by default the halo follows your current pen color (set `use_pen_color = false` to keep a fixed color)
 
 **Defaults:**
 - Show status bar: true

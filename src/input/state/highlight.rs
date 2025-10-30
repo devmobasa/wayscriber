@@ -15,51 +15,64 @@ pub struct ClickHighlightSettings {
     pub duration: Duration,
     pub fill_color: Color,
     pub outline_color: Color,
+    pub base_fill_color: Color,
+    pub base_outline_color: Color,
+    pub use_pen_color: bool,
 }
 
 impl ClickHighlightSettings {
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn disabled() -> Self {
+        let base_fill = Color {
+            r: 1.0,
+            g: 0.8,
+            b: 0.0,
+            a: 0.35,
+        };
+        let base_outline = Color {
+            r: 1.0,
+            g: 0.6,
+            b: 0.0,
+            a: 0.9,
+        };
         Self {
             enabled: false,
-            radius: 48.0,
+            radius: 24.0,
             outline_thickness: 4.0,
             duration: Duration::from_millis(750),
-            fill_color: Color {
-                r: 1.0,
-                g: 0.8,
-                b: 0.0,
-                a: 0.35,
-            },
-            outline_color: Color {
-                r: 1.0,
-                g: 0.6,
-                b: 0.0,
-                a: 0.9,
-            },
+            fill_color: base_fill,
+            outline_color: base_outline,
+            base_fill_color: base_fill,
+            base_outline_color: base_outline,
+            use_pen_color: true,
         }
     }
 }
 
 impl From<&ClickHighlightConfig> for ClickHighlightSettings {
     fn from(cfg: &ClickHighlightConfig) -> Self {
+        let fill = Color {
+            r: cfg.fill_color[0],
+            g: cfg.fill_color[1],
+            b: cfg.fill_color[2],
+            a: cfg.fill_color[3],
+        };
+        let outline = Color {
+            r: cfg.outline_color[0],
+            g: cfg.outline_color[1],
+            b: cfg.outline_color[2],
+            a: cfg.outline_color[3],
+        };
         ClickHighlightSettings {
             enabled: cfg.enabled,
             radius: cfg.radius,
             outline_thickness: cfg.outline_thickness,
             duration: Duration::from_millis(cfg.duration_ms),
-            fill_color: Color {
-                r: cfg.fill_color[0],
-                g: cfg.fill_color[1],
-                b: cfg.fill_color[2],
-                a: cfg.fill_color[3],
-            },
-            outline_color: Color {
-                r: cfg.outline_color[0],
-                g: cfg.outline_color[1],
-                b: cfg.outline_color[2],
-                a: cfg.outline_color[3],
-            },
+            fill_color: fill,
+            outline_color: outline,
+            base_fill_color: fill,
+            base_outline_color: outline,
+            use_pen_color: cfg.use_pen_color,
         }
     }
 }
@@ -100,6 +113,10 @@ impl ClickHighlightState {
 
     pub fn enabled(&self) -> bool {
         self.enabled
+    }
+
+    pub fn uses_pen_color(&self) -> bool {
+        self.settings.use_pen_color
     }
 
     pub fn toggle(&mut self, tracker: &mut DirtyTracker) -> bool {
@@ -208,6 +225,33 @@ impl ClickHighlightState {
         let size = extent * 2;
         Rect::new(x - extent, y - extent, size, size)
     }
+
+    pub fn apply_pen_color(&mut self, pen: Color) -> bool {
+        if !self.settings.use_pen_color {
+            return false;
+        }
+
+        let new_fill = Color {
+            r: pen.r,
+            g: pen.g,
+            b: pen.b,
+            a: self.settings.base_fill_color.a,
+        };
+        let new_outline = Color {
+            r: pen.r,
+            g: pen.g,
+            b: pen.b,
+            a: self.settings.base_outline_color.a,
+        };
+
+        if self.settings.fill_color == new_fill && self.settings.outline_color == new_outline {
+            return false;
+        }
+
+        self.settings.fill_color = new_fill;
+        self.settings.outline_color = new_outline;
+        true
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +275,61 @@ mod tests {
         let mut tracker = DirtyTracker::new();
         assert!(state.toggle(&mut tracker));
         assert!(state.enabled());
+    }
+
+    #[test]
+    fn apply_pen_color_overrides_settings_when_enabled() {
+        let mut settings = ClickHighlightSettings::disabled();
+        settings.use_pen_color = true;
+        let mut state = ClickHighlightState::new(settings);
+        let pen = Color {
+            r: 0.2,
+            g: 0.4,
+            b: 0.6,
+            a: 1.0,
+        };
+
+        assert!(state.apply_pen_color(pen));
+        assert_eq!(state.settings.fill_color.r, pen.r);
+        assert_eq!(state.settings.fill_color.g, pen.g);
+        assert_eq!(state.settings.fill_color.b, pen.b);
+        assert_eq!(
+            state.settings.fill_color.a,
+            state.settings.base_fill_color.a
+        );
+    }
+
+    #[test]
+    fn apply_pen_color_noop_when_disabled() {
+        let mut settings = ClickHighlightSettings::disabled();
+        settings.use_pen_color = false;
+        let mut state = ClickHighlightState::new(settings.clone());
+        let pen = Color {
+            r: 0.6,
+            g: 0.4,
+            b: 0.2,
+            a: 1.0,
+        };
+
+        assert!(!state.apply_pen_color(pen));
+        assert_eq!(state.settings.fill_color, settings.base_fill_color);
+        assert_eq!(state.settings.outline_color, settings.base_outline_color);
+    }
+
+    #[test]
+    fn apply_pen_color_idempotent() {
+        let mut settings = ClickHighlightSettings::disabled();
+        settings.use_pen_color = true;
+        let mut state = ClickHighlightState::new(settings);
+        let pen = Color {
+            r: 0.4,
+            g: 0.6,
+            b: 0.8,
+            a: 1.0,
+        };
+
+        assert!(state.apply_pen_color(pen));
+        assert!(!state.apply_pen_color(pen));
     }
 
     #[test]
