@@ -104,6 +104,23 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 - Launch the native configurator from the overlay (`F11`) to edit settings without leaving your session.
 - Background daemon with tray icon and customizable TOML configuration.
 
+### Session Persistence
+
+Wayscriber can remember your boards between runs (per monitor and per board color) along with pen color/thickness. Persistence is opt-in. Toggle it from the configurator (`F11 → Session` tab) or launch the GUI directly:
+
+```bash
+wayscriber-configurator
+```
+
+Prefer text? Edit `~/.config/wayscriber/config.toml`. Helpful commands:
+
+```bash
+wayscriber --session-info     # Inspect saved sessions
+wayscriber --clear-session    # Remove stored boards
+```
+
+Grab a walk-through in `docs/configuration.md` if you want to edit the TOML by hand.
+
 ## Demo
 
 https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
