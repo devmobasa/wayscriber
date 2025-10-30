@@ -2,6 +2,11 @@
 // rendering & protocol state to `WaylandState` and its handler modules.
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
+#[cfg(unix)]
+use signal_hook::{
+    consts::signal::{SIGINT, SIGTERM, SIGUSR1},
+    iterator::Signals,
+};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
@@ -13,14 +18,22 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
-use std::env;
+#[cfg(unix)]
+use std::thread;
+use std::{
+    env,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 use wayland_client::{Connection, globals::registry_queue_init};
 
 use super::state::WaylandState;
 use crate::{
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
-    input::{BoardMode, InputState},
+    input::{BoardMode, ClickHighlightSettings, InputState},
     legacy, notification, session,
 };
 
@@ -162,6 +175,7 @@ impl WaylandBackend {
             config.board.clone(),
             action_map,
             config.session.max_shapes_per_frame,
+            ClickHighlightSettings::from(&config.ui.click_highlight),
         );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
@@ -214,6 +228,34 @@ impl WaylandBackend {
             tokio_handle,
         );
 
+        // Gracefully exit the overlay when external signals request termination
+        #[cfg(unix)]
+        let exit_flag: Option<Arc<AtomicBool>> = {
+            let flag = Arc::new(AtomicBool::new(false));
+            match Signals::new([SIGTERM, SIGINT, SIGUSR1]) {
+                Ok(mut signals) => {
+                    let exit_flag_clone = Arc::clone(&flag);
+                    thread::spawn(move || {
+                        for sig in signals.forever() {
+                            debug!(
+                                "Overlay received signal {}; scheduling graceful shutdown",
+                                sig
+                            );
+                            exit_flag_clone.store(true, Ordering::Release);
+                        }
+                    });
+                    Some(flag)
+                }
+                Err(err) => {
+                    warn!("Failed to register overlay signal handlers: {}", err);
+                    Some(flag)
+                }
+            }
+        };
+
+        #[cfg(not(unix))]
+        let exit_flag: Option<Arc<AtomicBool>> = None;
+
         // Create layer shell surface
         info!("Creating layer shell surface");
         let wl_surface = state.compositor_state.create_surface(&qh);
@@ -247,6 +289,14 @@ impl WaylandBackend {
         // Main event loop
         let mut loop_error: Option<anyhow::Error> = None;
         loop {
+            if exit_flag
+                .as_ref()
+                .map(|flag| flag.load(Ordering::Acquire))
+                .unwrap_or(false)
+            {
+                state.input_state.should_exit = true;
+            }
+
             // Check if we should exit before blocking
             if state.input_state.should_exit {
                 info!("Exit requested, breaking event loop");
@@ -342,19 +392,19 @@ impl WaylandBackend {
                     state.surface.frame_callback_pending()
                 );
                 match state.render(&qh) {
-                    Ok(()) => {
+                    Ok(keep_rendering) => {
                         // Reset failure counter on successful render
                         consecutive_render_failures = 0;
-                        state.input_state.needs_redraw = false;
+                        state.input_state.needs_redraw = keep_rendering;
                         // Only set frame_callback_pending if vsync is enabled
                         if state.config.performance.enable_vsync {
                             state.surface.set_frame_callback_pending(true);
                             debug!(
-                                "Main loop: needs_redraw set to false, frame_callback_pending set to true (vsync enabled)"
+                                "Main loop: render complete, frame_callback_pending set to true (vsync enabled)"
                             );
                         } else {
                             debug!(
-                                "Main loop: needs_redraw set to false, frame_callback_pending unchanged (vsync disabled)"
+                                "Main loop: render complete, frame_callback_pending unchanged (vsync disabled)"
                             );
                         }
                     }

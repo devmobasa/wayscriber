@@ -21,7 +21,8 @@ pub use dirty::DirtyTracker;
 pub use font::FontDescriptor;
 pub use frame::Frame;
 pub use render::{
-    render_board_background, render_freehand_borrowed, render_shape, render_shapes, render_text,
+    render_board_background, render_click_highlight, render_freehand_borrowed, render_shape,
+    render_shapes, render_text,
 };
 pub use shape::Shape;
 

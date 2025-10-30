@@ -16,8 +16,9 @@ pub use enums::StatusPosition;
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
 pub use migration::{MigrationActions, MigrationReport, migrate_config};
 pub use types::{
-    ArrowConfig, BoardConfig, CaptureConfig, DrawingConfig, HelpOverlayStyle, PerformanceConfig,
-    SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle, UiConfig,
+    ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
+    PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
+    UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)
@@ -439,6 +440,54 @@ impl Config {
                 );
                 self.board.blackboard_pen_color[i] =
                     self.board.blackboard_pen_color[i].clamp(0.0, 1.0);
+            }
+        }
+
+        // Validate click highlight settings
+        if !(16.0..=160.0).contains(&self.ui.click_highlight.radius) {
+            log::warn!(
+                "Invalid click highlight radius {:.1}, clamping to 16.0-160.0 range",
+                self.ui.click_highlight.radius
+            );
+            self.ui.click_highlight.radius = self.ui.click_highlight.radius.clamp(16.0, 160.0);
+        }
+
+        if !(1.0..=12.0).contains(&self.ui.click_highlight.outline_thickness) {
+            log::warn!(
+                "Invalid click highlight outline thickness {:.1}, clamping to 1.0-12.0 range",
+                self.ui.click_highlight.outline_thickness
+            );
+            self.ui.click_highlight.outline_thickness =
+                self.ui.click_highlight.outline_thickness.clamp(1.0, 12.0);
+        }
+
+        if !(150..=1500).contains(&self.ui.click_highlight.duration_ms) {
+            log::warn!(
+                "Invalid click highlight duration {}ms, clamping to 150-1500ms range",
+                self.ui.click_highlight.duration_ms
+            );
+            self.ui.click_highlight.duration_ms =
+                self.ui.click_highlight.duration_ms.clamp(150, 1500);
+        }
+
+        for i in 0..4 {
+            if !(0.0..=1.0).contains(&self.ui.click_highlight.fill_color[i]) {
+                log::warn!(
+                    "Invalid click highlight fill_color[{}] = {:.3}, clamping to 0.0-1.0",
+                    i,
+                    self.ui.click_highlight.fill_color[i]
+                );
+                self.ui.click_highlight.fill_color[i] =
+                    self.ui.click_highlight.fill_color[i].clamp(0.0, 1.0);
+            }
+            if !(0.0..=1.0).contains(&self.ui.click_highlight.outline_color[i]) {
+                log::warn!(
+                    "Invalid click highlight outline_color[{}] = {:.3}, clamping to 0.0-1.0",
+                    i,
+                    self.ui.click_highlight.outline_color[i]
+                );
+                self.ui.click_highlight.outline_color[i] =
+                    self.ui.click_highlight.outline_color[i].clamp(0.0, 1.0);
             }
         }
 

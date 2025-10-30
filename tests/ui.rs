@@ -1,7 +1,7 @@
 use cairo::{Context, ImageSurface};
 use wayscriber::config::{HelpOverlayStyle, KeybindingsConfig, StatusBarStyle, StatusPosition};
 use wayscriber::draw::Color;
-use wayscriber::input::InputState;
+use wayscriber::input::{ClickHighlightSettings, InputState};
 
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
@@ -23,6 +23,7 @@ fn make_input_state() -> InputState {
         wayscriber::config::BoardConfig::default(),
         action_map,
         usize::MAX,
+        ClickHighlightSettings::disabled(),
     )
 }
 

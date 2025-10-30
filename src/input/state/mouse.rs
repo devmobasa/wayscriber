@@ -21,18 +21,21 @@ impl InputState {
         let mut text_repositioned = false;
         match button {
             MouseButton::Left => {
+                self.trigger_click_highlight(x, y);
                 // Start drawing with current tool
                 if matches!(self.state, DrawingState::Idle) {
-                    let tool = self.modifiers.current_tool();
-                    self.state = DrawingState::Drawing {
-                        tool,
-                        start_x: x,
-                        start_y: y,
-                        points: vec![(x, y)],
-                    };
-                    self.last_provisional_bounds = None;
-                    self.update_provisional_dirty(x, y);
-                    self.needs_redraw = true;
+                    let tool = self.active_tool();
+                    if tool != Tool::Highlight {
+                        self.state = DrawingState::Drawing {
+                            tool,
+                            start_x: x,
+                            start_y: y,
+                            points: vec![(x, y)],
+                        };
+                        self.last_provisional_bounds = None;
+                        self.update_provisional_dirty(x, y);
+                        self.needs_redraw = true;
+                    }
                 } else if let DrawingState::TextInput { x: tx, y: ty, .. } = &mut self.state {
                     // Update text position if in text mode
                     *tx = x;
@@ -164,6 +167,10 @@ impl InputState {
                     arrow_length: self.arrow_length,
                     arrow_angle: self.arrow_angle,
                 },
+                Tool::Highlight => {
+                    self.state = DrawingState::Idle;
+                    return;
+                }
             };
             let bounds = shape.bounding_box();
 

@@ -35,6 +35,14 @@ pub struct ConfigDraft {
     pub status_bar_text_color: ColorQuadInput,
     pub status_dot_radius: String,
 
+    pub click_highlight_enabled: bool,
+    pub click_highlight_use_pen_color: bool,
+    pub click_highlight_radius: String,
+    pub click_highlight_outline_thickness: String,
+    pub click_highlight_duration_ms: String,
+    pub click_highlight_fill_color: ColorQuadInput,
+    pub click_highlight_outline_color: ColorQuadInput,
+
     pub help_font_size: String,
     pub help_line_height: String,
     pub help_padding: String,
@@ -104,6 +112,18 @@ impl ConfigDraft {
             status_bar_bg_color: ColorQuadInput::from(config.ui.status_bar_style.bg_color),
             status_bar_text_color: ColorQuadInput::from(config.ui.status_bar_style.text_color),
             status_dot_radius: format_float(config.ui.status_bar_style.dot_radius),
+
+            click_highlight_enabled: config.ui.click_highlight.enabled,
+            click_highlight_use_pen_color: config.ui.click_highlight.use_pen_color,
+            click_highlight_radius: format_float(config.ui.click_highlight.radius),
+            click_highlight_outline_thickness: format_float(
+                config.ui.click_highlight.outline_thickness,
+            ),
+            click_highlight_duration_ms: config.ui.click_highlight.duration_ms.to_string(),
+            click_highlight_fill_color: ColorQuadInput::from(config.ui.click_highlight.fill_color),
+            click_highlight_outline_color: ColorQuadInput::from(
+                config.ui.click_highlight.outline_color,
+            ),
 
             help_font_size: format_float(config.ui.help_overlay_style.font_size),
             help_line_height: format_float(config.ui.help_overlay_style.line_height),
@@ -224,6 +244,41 @@ impl ConfigDraft {
             &mut errors,
             |value| config.ui.status_bar_style.dot_radius = value,
         );
+
+        config.ui.click_highlight.enabled = self.click_highlight_enabled;
+        config.ui.click_highlight.use_pen_color = self.click_highlight_use_pen_color;
+        parse_field(
+            &self.click_highlight_radius,
+            "ui.click_highlight.radius",
+            &mut errors,
+            |value| config.ui.click_highlight.radius = value,
+        );
+        parse_field(
+            &self.click_highlight_outline_thickness,
+            "ui.click_highlight.outline_thickness",
+            &mut errors,
+            |value| config.ui.click_highlight.outline_thickness = value,
+        );
+        parse_u64_field(
+            &self.click_highlight_duration_ms,
+            "ui.click_highlight.duration_ms",
+            &mut errors,
+            |value| config.ui.click_highlight.duration_ms = value,
+        );
+        match self
+            .click_highlight_fill_color
+            .to_array("ui.click_highlight.fill_color")
+        {
+            Ok(values) => config.ui.click_highlight.fill_color = values,
+            Err(err) => errors.push(err),
+        }
+        match self
+            .click_highlight_outline_color
+            .to_array("ui.click_highlight.outline_color")
+        {
+            Ok(values) => config.ui.click_highlight.outline_color = values,
+            Err(err) => errors.push(err),
+        }
 
         parse_field(
             &self.help_font_size,
@@ -366,6 +421,10 @@ impl ConfigDraft {
             }
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
+            ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
+            ToggleField::UiClickHighlightUsePenColor => {
+                self.click_highlight_use_pen_color = value
+            }
             ToggleField::BoardEnabled => self.board_enabled = value,
             ToggleField::BoardAutoAdjust => self.board_auto_adjust_pen = value,
             ToggleField::CaptureEnabled => self.capture_enabled = value,
@@ -410,6 +469,11 @@ impl ConfigDraft {
             TextField::StatusFontSize => self.status_font_size = value,
             TextField::StatusPadding => self.status_padding = value,
             TextField::StatusDotRadius => self.status_dot_radius = value,
+            TextField::HighlightRadius => self.click_highlight_radius = value,
+            TextField::HighlightOutlineThickness => {
+                self.click_highlight_outline_thickness = value
+            }
+            TextField::HighlightDurationMs => self.click_highlight_duration_ms = value,
             TextField::HelpFontSize => self.help_font_size = value,
             TextField::HelpLineHeight => self.help_line_height = value,
             TextField::HelpPadding => self.help_padding = value,
@@ -456,6 +520,10 @@ impl ConfigDraft {
             QuadField::HelpBg => self.help_bg_color.set_component(index, value),
             QuadField::HelpBorder => self.help_border_color.set_component(index, value),
             QuadField::HelpText => self.help_text_color.set_component(index, value),
+            QuadField::HighlightFill => self.click_highlight_fill_color.set_component(index, value),
+            QuadField::HighlightOutline => {
+                self.click_highlight_outline_color.set_component(index, value)
+            }
         }
     }
 }

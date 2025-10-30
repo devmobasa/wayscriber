@@ -2,7 +2,7 @@ use crate::config::Action;
 use crate::draw::Shape;
 use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
-use log::warn;
+use log::{info, warn};
 
 use super::{DrawingState, InputState};
 
@@ -315,6 +315,20 @@ impl InputState {
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
+            Action::ToggleClickHighlight => {
+                let enabled = self.toggle_click_highlight();
+                info!(
+                    "Click highlight {}",
+                    if enabled { "enabled" } else { "disabled" }
+                );
+            }
+            Action::ToggleHighlightTool => {
+                let enabled = self.toggle_highlight_tool();
+                info!(
+                    "Highlight tool {}",
+                    if enabled { "selected" } else { "released" }
+                );
+            }
             Action::OpenConfigurator => {
                 self.launch_configurator();
             }
@@ -322,41 +336,49 @@ impl InputState {
                 self.current_color = util::key_to_color('r').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorGreen => {
                 self.current_color = util::key_to_color('g').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorBlue => {
                 self.current_color = util::key_to_color('b').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorYellow => {
                 self.current_color = util::key_to_color('y').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorOrange => {
                 self.current_color = util::key_to_color('o').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorPink => {
                 self.current_color = util::key_to_color('p').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorWhite => {
                 self.current_color = util::key_to_color('w').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::SetColorBlack => {
                 self.current_color = util::key_to_color('k').unwrap();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.sync_highlight_color();
             }
             Action::CaptureFullScreen
             | Action::CaptureActiveWindow

@@ -702,7 +702,48 @@ impl ConfiguratorApp {
                     TextField::HelpBorderWidth,
                 )
             ]
-            .spacing(12)
+            .spacing(12),
+            text("Click Highlight").size(18),
+            checkbox(
+                "Enable click highlight",
+                self.draft.click_highlight_enabled,
+            )
+            .on_toggle(|value| Message::ToggleChanged(ToggleField::UiClickHighlightEnabled, value)),
+            checkbox(
+                "Link highlight color to current pen",
+                self.draft.click_highlight_use_pen_color,
+            )
+            .on_toggle(|value| {
+                Message::ToggleChanged(ToggleField::UiClickHighlightUsePenColor, value)
+            }),
+            row![
+                labeled_input(
+                    "Radius",
+                    &self.draft.click_highlight_radius,
+                    TextField::HighlightRadius,
+                ),
+                labeled_input(
+                    "Outline thickness",
+                    &self.draft.click_highlight_outline_thickness,
+                    TextField::HighlightOutlineThickness,
+                ),
+                labeled_input(
+                    "Duration (ms)",
+                    &self.draft.click_highlight_duration_ms,
+                    TextField::HighlightDurationMs,
+                )
+            ]
+            .spacing(12),
+            color_quad_editor(
+                "Fill RGBA (0-1)",
+                &self.draft.click_highlight_fill_color,
+                QuadField::HighlightFill,
+            ),
+            color_quad_editor(
+                "Outline RGBA (0-1)",
+                &self.draft.click_highlight_outline_color,
+                QuadField::HighlightOutline,
+            )
         ]
         .spacing(12);
 

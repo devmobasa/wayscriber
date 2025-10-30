@@ -87,6 +87,7 @@ impl InputState {
                     arrow_length: self.arrow_length,
                     arrow_angle: self.arrow_angle,
                 }),
+                Tool::Highlight => None,
                 // No provisional shape for other tools
             }
         } else {
@@ -130,6 +131,7 @@ impl InputState {
                     );
                     true
                 }
+                Tool::Highlight => false,
                 _ => {
                     // For other tools, use the normal path (no clone needed)
                     if let Some(shape) = self.get_provisional_shape(current_x, current_y) {

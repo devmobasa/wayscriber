@@ -122,6 +122,33 @@ text_color = [1.0, 1.0, 1.0, 1.0]
 dot_radius = 6.0
 
 # ───────────────────────────────────────────────────────────────────────────────
+# Click Highlight (visual feedback for mouse clicks)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.click_highlight]
+# Start with the highlight effect enabled when the overlay launches
+enabled = false
+
+# Radius of the highlight circle in pixels (16 - 160)
+radius = 24.0
+
+# Outline thickness in pixels (1 - 12)
+outline_thickness = 4.0
+
+# Highlight lifetime in milliseconds (150 - 1500)
+duration_ms = 750
+
+# Fill color [R, G, B, A]
+fill_color = [1.0, 0.8, 0.0, 0.35]
+
+# Outline color [R, G, B, A]
+outline_color = [1.0, 0.6, 0.0, 0.9]
+
+# Use current pen color for highlight fill/outline (alpha still comes from above colors)
+# Note: active highlights update immediately when the pen color changes
+use_pen_color = true
+
+# ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
 # ───────────────────────────────────────────────────────────────────────────────
 
