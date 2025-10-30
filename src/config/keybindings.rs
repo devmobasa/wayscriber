@@ -34,6 +34,8 @@ pub enum Action {
     // UI toggles
     ToggleHelp,
     ToggleStatusBar,
+    ToggleClickHighlight,
+    ToggleHighlightTool,
 
     // Configurator
     OpenConfigurator,
@@ -195,6 +197,10 @@ pub struct KeybindingsConfig {
     pub toggle_help: Vec<String>,
     #[serde(default = "default_toggle_status_bar")]
     pub toggle_status_bar: Vec<String>,
+    #[serde(default = "default_toggle_click_highlight")]
+    pub toggle_click_highlight: Vec<String>,
+    #[serde(default = "default_toggle_highlight_tool")]
+    pub toggle_highlight_tool: Vec<String>,
 
     #[serde(default = "default_open_configurator")]
     pub open_configurator: Vec<String>,
@@ -268,6 +274,8 @@ impl Default for KeybindingsConfig {
             return_to_transparent: default_return_to_transparent(),
             toggle_help: default_toggle_help(),
             toggle_status_bar: default_toggle_status_bar(),
+            toggle_click_highlight: default_toggle_click_highlight(),
+            toggle_highlight_tool: default_toggle_highlight_tool(),
             open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
             set_color_green: default_set_color_green(),
@@ -362,6 +370,14 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_status_bar {
             insert_binding(binding_str, Action::ToggleStatusBar)?;
+        }
+
+        for binding_str in &self.toggle_click_highlight {
+            insert_binding(binding_str, Action::ToggleClickHighlight)?;
+        }
+
+        for binding_str in &self.toggle_highlight_tool {
+            insert_binding(binding_str, Action::ToggleHighlightTool)?;
         }
 
         for binding_str in &self.open_configurator {
@@ -498,6 +514,14 @@ fn default_toggle_help() -> Vec<String> {
 
 fn default_toggle_status_bar() -> Vec<String> {
     vec!["F12".to_string()]
+}
+
+fn default_toggle_click_highlight() -> Vec<String> {
+    vec!["Ctrl+Shift+H".to_string()]
+}
+
+fn default_toggle_highlight_tool() -> Vec<String> {
+    vec!["Ctrl+Alt+H".to_string()]
 }
 
 fn default_open_configurator() -> Vec<String> {
@@ -679,6 +703,18 @@ mod tests {
 
         let ctrl_shift_z = KeyBinding::parse("Ctrl+Shift+Z").unwrap();
         assert_eq!(map.get(&ctrl_shift_z), Some(&Action::Redo));
+
+        let toggle_highlight = KeyBinding::parse("Ctrl+Shift+H").unwrap();
+        assert_eq!(
+            map.get(&toggle_highlight),
+            Some(&Action::ToggleClickHighlight)
+        );
+
+        let toggle_highlight_tool = KeyBinding::parse("Ctrl+Alt+H").unwrap();
+        assert_eq!(
+            map.get(&toggle_highlight_tool),
+            Some(&Action::ToggleHighlightTool)
+        );
     }
 
     #[test]

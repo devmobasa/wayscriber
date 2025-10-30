@@ -20,7 +20,7 @@ use super::state::WaylandState;
 use crate::{
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
-    input::{BoardMode, InputState},
+    input::{BoardMode, ClickHighlightSettings, InputState},
     legacy, notification, session,
 };
 
@@ -162,6 +162,7 @@ impl WaylandBackend {
             config.board.clone(),
             action_map,
             config.session.max_shapes_per_frame,
+            ClickHighlightSettings::from(&config.ui.click_highlight),
         );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
@@ -342,19 +343,19 @@ impl WaylandBackend {
                     state.surface.frame_callback_pending()
                 );
                 match state.render(&qh) {
-                    Ok(()) => {
+                    Ok(keep_rendering) => {
                         // Reset failure counter on successful render
                         consecutive_render_failures = 0;
-                        state.input_state.needs_redraw = false;
+                        state.input_state.needs_redraw = keep_rendering;
                         // Only set frame_callback_pending if vsync is enabled
                         if state.config.performance.enable_vsync {
                             state.surface.set_frame_callback_pending(true);
                             debug!(
-                                "Main loop: needs_redraw set to false, frame_callback_pending set to true (vsync enabled)"
+                                "Main loop: render complete, frame_callback_pending set to true (vsync enabled)"
                             );
                         } else {
                             debug!(
-                                "Main loop: needs_redraw set to false, frame_callback_pending unchanged (vsync disabled)"
+                                "Main loop: render complete, frame_callback_pending unchanged (vsync disabled)"
                             );
                         }
                     }

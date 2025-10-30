@@ -2,7 +2,7 @@ use crate::config::Action;
 use crate::draw::Shape;
 use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
-use log::warn;
+use log::{info, warn};
 
 use super::{DrawingState, InputState};
 
@@ -314,6 +314,20 @@ impl InputState {
                 self.show_status_bar = !self.show_status_bar;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+            }
+            Action::ToggleClickHighlight => {
+                let enabled = self.toggle_click_highlight();
+                info!(
+                    "Click highlight {}",
+                    if enabled { "enabled" } else { "disabled" }
+                );
+            }
+            Action::ToggleHighlightTool => {
+                let enabled = self.toggle_highlight_tool();
+                info!(
+                    "Highlight tool {}",
+                    if enabled { "selected" } else { "released" }
+                );
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();

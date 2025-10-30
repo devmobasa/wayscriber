@@ -129,6 +129,10 @@ pub struct UiConfig {
     /// Help overlay styling options
     #[serde(default)]
     pub help_overlay_style: HelpOverlayStyle,
+
+    /// Click highlight visual indicator settings
+    #[serde(default)]
+    pub click_highlight: ClickHighlightConfig,
 }
 
 impl Default for UiConfig {
@@ -138,6 +142,7 @@ impl Default for UiConfig {
             status_bar_position: default_status_position(),
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
+            click_highlight: ClickHighlightConfig::default(),
         }
     }
 }
@@ -174,6 +179,47 @@ impl Default for StatusBarStyle {
             bg_color: default_status_bg_color(),
             text_color: default_status_text_color(),
             dot_radius: default_status_dot_radius(),
+        }
+    }
+}
+
+/// Click highlight configuration for mouse press indicator.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ClickHighlightConfig {
+    /// Whether the highlight effect starts enabled
+    #[serde(default = "default_click_highlight_enabled")]
+    pub enabled: bool,
+
+    /// Radius of the highlight circle in pixels
+    #[serde(default = "default_click_highlight_radius")]
+    pub radius: f64,
+
+    /// Outline thickness in pixels
+    #[serde(default = "default_click_highlight_outline")]
+    pub outline_thickness: f64,
+
+    /// Lifetime of the highlight in milliseconds
+    #[serde(default = "default_click_highlight_duration_ms")]
+    pub duration_ms: u64,
+
+    /// Fill color RGBA (0.0-1.0)
+    #[serde(default = "default_click_highlight_fill_color")]
+    pub fill_color: [f64; 4],
+
+    /// Outline color RGBA (0.0-1.0)
+    #[serde(default = "default_click_highlight_outline_color")]
+    pub outline_color: [f64; 4],
+}
+
+impl Default for ClickHighlightConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_click_highlight_enabled(),
+            radius: default_click_highlight_radius(),
+            outline_thickness: default_click_highlight_outline(),
+            duration_ms: default_click_highlight_duration_ms(),
+            fill_color: default_click_highlight_fill_color(),
+            outline_color: default_click_highlight_outline_color(),
         }
     }
 }
@@ -328,6 +374,31 @@ fn default_help_border_width() -> f64 {
 
 fn default_help_text_color() -> [f64; 4] {
     [0.95, 0.96, 0.98, 1.0]
+}
+
+// Click highlight defaults
+fn default_click_highlight_enabled() -> bool {
+    false
+}
+
+fn default_click_highlight_radius() -> f64 {
+    24.0
+}
+
+fn default_click_highlight_outline() -> f64 {
+    4.0
+}
+
+fn default_click_highlight_duration_ms() -> u64 {
+    750
+}
+
+fn default_click_highlight_fill_color() -> [f64; 4] {
+    [1.0, 0.8, 0.0, 0.35]
+}
+
+fn default_click_highlight_outline_color() -> [f64; 4] {
+    [1.0, 0.6, 0.0, 0.9]
 }
 
 /// Board mode configuration for whiteboard/blackboard features.

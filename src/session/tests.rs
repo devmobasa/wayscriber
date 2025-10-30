@@ -2,7 +2,7 @@ use super::*;
 use crate::config::{Action, BoardConfig, SessionConfig, SessionStorageMode};
 use crate::draw::FontDescriptor;
 use crate::draw::{Color, Shape};
-use crate::input::{InputState, board_mode::BoardMode};
+use crate::input::{ClickHighlightSettings, InputState, board_mode::BoardMode};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -29,6 +29,7 @@ fn dummy_input_state() -> InputState {
         BoardConfig::default(),
         action_map,
         usize::MAX,
+        ClickHighlightSettings::disabled(),
     )
 }
 

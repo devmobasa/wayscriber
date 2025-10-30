@@ -1,7 +1,7 @@
 use super::*;
 use crate::config::{Action, BoardConfig};
 use crate::draw::{Color, FontDescriptor, Shape};
-use crate::input::{BoardMode, Key, MouseButton, Tool};
+use crate::input::{BoardMode, ClickHighlightSettings, Key, MouseButton, Tool};
 use crate::util;
 
 fn create_test_input_state() -> InputState {
@@ -31,6 +31,7 @@ fn create_test_input_state() -> InputState {
         BoardConfig::default(), // board_config
         action_map,             // action_map
         usize::MAX,
+        ClickHighlightSettings::disabled(),
     )
 }
 
@@ -417,4 +418,49 @@ fn mouse_drag_creates_shapes_for_each_tool() {
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_release(MouseButton::Left, 6, 6);
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 5);
+}
+
+#[test]
+fn toggle_click_highlight_action_changes_state() {
+    let mut state = create_test_input_state();
+    assert!(!state.click_highlight_enabled());
+
+    state.handle_action(Action::ToggleClickHighlight);
+    assert!(state.click_highlight_enabled());
+    assert!(state.needs_redraw);
+
+    state.needs_redraw = false;
+    state.handle_action(Action::ToggleClickHighlight);
+    assert!(!state.click_highlight_enabled());
+    assert!(state.needs_redraw);
+}
+
+#[test]
+fn highlight_tool_prevents_drawing() {
+    let mut state = create_test_input_state();
+    assert_eq!(state.active_tool(), Tool::Pen);
+    assert!(!state.highlight_tool_active());
+
+    state.handle_action(Action::ToggleHighlightTool);
+    assert!(state.highlight_tool_active());
+    assert_eq!(state.active_tool(), Tool::Highlight);
+
+    // Enable highlight effect to ensure no shapes are added while clicks happen
+    state.handle_action(Action::ToggleClickHighlight);
+
+    let initial_shapes = state.canvas_set.active_frame().shapes.len();
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    state.on_mouse_release(MouseButton::Left, 20, 20);
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), initial_shapes);
+    assert!(matches!(state.state, DrawingState::Idle));
+
+    // Toggle highlight tool off and ensure pen drawing resumes
+    state.handle_action(Action::ToggleHighlightTool);
+    assert!(!state.highlight_tool_active());
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    state.on_mouse_release(MouseButton::Left, 5, 5);
+    assert_eq!(
+        state.canvas_set.active_frame().shapes.len(),
+        initial_shapes + 1
+    );
 }

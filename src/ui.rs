@@ -67,7 +67,7 @@ pub fn render_status_bar(
 ) {
     let color = &input_state.current_color;
     let thickness = input_state.current_thickness;
-    let tool = input_state.modifiers.current_tool();
+    let tool = input_state.active_tool();
 
     // Determine tool name
     let tool_name = match &input_state.state {
@@ -78,6 +78,7 @@ pub fn render_status_bar(
             Tool::Rect => "Rectangle",
             Tool::Ellipse => "Circle",
             Tool::Arrow => "Arrow",
+            Tool::Highlight => "Highlight",
         },
         DrawingState::Idle => match tool {
             Tool::Pen => "Pen",
@@ -85,6 +86,7 @@ pub fn render_status_bar(
             Tool::Rect => "Rectangle",
             Tool::Ellipse => "Circle",
             Tool::Arrow => "Arrow",
+            Tool::Highlight => "Highlight",
         },
     };
 
@@ -100,9 +102,15 @@ pub fn render_status_bar(
 
     // Build status text with mode badge and font size
     let font_size = input_state.current_font_size;
+    let highlight_badge = if input_state.click_highlight_enabled() {
+        " [HL]"
+    } else {
+        ""
+    };
+
     let status_text = format!(
-        "{}[{}] [{}px] [{}] [Text {}px]  F10=Help",
-        mode_badge, color_name, thickness as i32, tool_name, font_size as i32
+        "{}[{}] [{}px] [{}] [Text {}px]{}  F10=Help",
+        mode_badge, color_name, thickness as i32, tool_name, font_size as i32, highlight_badge
     );
 
     // Set font
@@ -304,6 +312,10 @@ pub fn render_help_overlay(
                             action: "Arrow",
                         },
                         Row {
+                            key: "Ctrl+Alt+H",
+                            action: "Toggle highlight-only tool",
+                        },
+                        Row {
                             key: "T",
                             action: "Text mode",
                         },
@@ -358,6 +370,10 @@ pub fn render_help_overlay(
                         Row {
                             key: "Ctrl+Z",
                             action: "Undo",
+                        },
+                        Row {
+                            key: "Ctrl+Shift+H",
+                            action: "Toggle click highlight",
                         },
                         Row {
                             key: "Escape / Ctrl+Q",

@@ -13,7 +13,7 @@ pub mod tool;
 // Re-export commonly used types at module level
 pub use board_mode::BoardMode;
 pub use events::{Key, MouseButton};
-pub use state::{DrawingState, InputState};
+pub use state::{ClickHighlightSettings, DrawingState, InputState};
 pub use tool::Tool;
 
 // Re-export for public API (unused internally but part of public interface)

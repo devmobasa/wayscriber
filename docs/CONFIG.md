@@ -131,6 +131,15 @@ bg_color = [0.0, 0.0, 0.0, 0.85]     # Darker background
 border_color = [0.3, 0.6, 1.0, 0.9]  # Light blue
 border_width = 2.0
 text_color = [1.0, 1.0, 1.0, 1.0]    # White
+
+# Click highlight styling (visual feedback for mouse clicks)
+[ui.click_highlight]
+enabled = false
+radius = 24.0
+outline_thickness = 4.0
+duration_ms = 750
+fill_color = [1.0, 0.8, 0.0, 0.35]
+outline_color = [1.0, 0.6, 0.0, 0.9]
 ```
 
 **Status Bar:**
@@ -148,6 +157,7 @@ text_color = [1.0, 1.0, 1.0, 1.0]    # White
 - **Font sizes**: Customize text size for status bar and help overlay
 - **Colors**: All RGBA values (0.0-1.0 range) with transparency control
 - **Layout**: Padding, line height, dot size, border width all configurable
+- **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; combine with the highlight-only tool toggle for presentation mode
 
 **Defaults:**
 - Show status bar: true
@@ -345,6 +355,12 @@ toggle_help = ["F10"]
 
 # Toggle status bar visibility
 toggle_status_bar = ["F12"]
+
+# Toggle click highlight (visual mouse halo)
+toggle_click_highlight = ["Ctrl+Shift+H"]
+
+# Toggle highlight-only drawing tool
+toggle_highlight_tool = ["Ctrl+Alt+H"]
 
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]

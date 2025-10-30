@@ -10,6 +10,7 @@ use smithay_client_toolkit::{
     shell::{WaylandSurface, wlr_layer::LayerShell},
     shm::Shm,
 };
+use std::time::Instant;
 use wayland_client::{
     QueueHandle,
     protocol::{wl_output, wl_shm},
@@ -125,12 +126,14 @@ impl WaylandState {
         Some(components.join("-"))
     }
 
-    pub(super) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<()> {
+    pub(super) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
         debug!("=== RENDER START ===");
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
         let width = self.surface.width();
         let height = self.surface.height();
+        let now = Instant::now();
+        let highlight_active = self.input_state.advance_click_highlights(now);
 
         // Get a buffer from the pool
         let (buffer, canvas) = {
@@ -220,6 +223,9 @@ impl WaylandState {
             );
         }
 
+        // Render click highlight overlays before UI so status/help remain legible
+        self.input_state.render_click_highlights(&ctx, now);
+
         // Render status bar if enabled
         if self.input_state.show_status_bar {
             crate::ui::render_status_bar(
@@ -283,13 +289,14 @@ impl WaylandState {
         wl_surface.commit();
         debug!("=== RENDER COMPLETE ===");
 
-        Ok(())
+        Ok(highlight_active)
     }
 
     /// Restore the overlay after screenshot capture completes.
     ///
     /// Re-maps the layer surface to its original size and forces a redraw.
     pub(super) fn show_overlay(&mut self) {
+        self.input_state.clear_click_highlights();
         if self.capture.show_overlay(&mut self.surface) {
             // Force a redraw to show the overlay again
             self.input_state.needs_redraw = true;
