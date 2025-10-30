@@ -221,6 +221,8 @@ pub enum ToggleField {
     DrawingTextBackground,
     PerformanceVsync,
     UiShowStatusBar,
+    UiClickHighlightEnabled,
+    UiClickHighlightUsePenColor,
     BoardEnabled,
     BoardAutoAdjust,
     CaptureEnabled,
@@ -245,6 +247,9 @@ pub enum TextField {
     StatusFontSize,
     StatusPadding,
     StatusDotRadius,
+    HighlightRadius,
+    HighlightOutlineThickness,
+    HighlightDurationMs,
     HelpFontSize,
     HelpLineHeight,
     HelpPadding,
@@ -275,6 +280,8 @@ pub enum QuadField {
     HelpBg,
     HelpBorder,
     HelpText,
+    HighlightFill,
+    HighlightOutline,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
