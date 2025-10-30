@@ -95,14 +95,13 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 
 ## Features at a Glance
 
-- Freehand drawing plus straight lines, rectangles, ellipses, and arrows.
-- Text annotations with multi-line support, custom fonts, and adjustable size.
-- Whiteboard/blackboard modes with auto pen contrast and isolated frames.
-- Quick color palette and line thickness adjustments via hotkeys or scroll wheel.
-- Status bar with live tool feedback and an in-app help overlay (`F10`).
-- Optional session persistence (per-mode toggles, compression, per-output files) with `wayscriber --session-info` and `wayscriber --clear-session`.
-- Launch the native configurator from the overlay (`F11`) to edit settings without leaving your session.
-- Background daemon with tray icon and customizable TOML configuration.
+- **Drawing & editing**: Freehand pen, straight lines, rectangles, ellipses, arrows, and multiline text with smoothing; undo & redo; quick line-width and color changes via hotkeys or scroll.
+- **Board modes**: Whiteboard, blackboard, and transparent overlays, each with isolated frames and auto pen contrast; snap back to transparent with `Ctrl+Shift+T`.
+- **Capture shortcuts**: Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard` when available.
+- **Session persistence**: Opt-in per board/monitor storage that restores your canvas plus pen color & thickness; inspect with `wayscriber --session-info` or clear with `wayscriber --clear-session`.
+- **Workflow helpers**: Background daemon with SIGUSR1 toggle, tray icon, one-shot mode, live status bar, and in-app help overlay (`F10`).
+- **Configurator & CLI**: Launch `wayscriber-configurator` (or press `F11`) to tweak colors, bindings, persistence, compression, and more; power users can edit the TOML or use CLI switches.
+- **Performance & reliability**: Dirty-region rendering keeps redraws fast, while session files use atomic writes, size limits, compression, and backups for safety.
 
 ### Session Persistence
 
@@ -119,7 +118,7 @@ wayscriber --session-info     # Inspect saved sessions
 wayscriber --clear-session    # Remove stored boards
 ```
 
-Grab a walk-through in `docs/configuration.md` if you want to edit the TOML by hand.
+Grab a walk-through in `docs/CONFIG.md` if you want to edit the TOML by hand.
 
 ## Demo
 
