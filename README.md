@@ -179,6 +179,10 @@ sudo dnf install wl-clipboard grim slurp       # Fedora
 git clone https://github.com/devmobasa/wayscriber.git
 cd wayscriber
 cargo build --release
+
+# Optional: enable experimental GTK backend (Wayland GNOME support)
+# Requires GTK4 development headers (e.g. `libgtk-4-dev` on Debian/Ubuntu)
+cargo build --release --features gtk-backend
 ```
 
 The binary will be at `target/release/wayscriber`.
@@ -238,6 +242,8 @@ Launch directly into an active overlay without the daemon:
 wayscriber --active
 wayscriber --active --mode whiteboard
 wayscriber --active --mode blackboard
+# GNOME (GTK backend; requires build with --features gtk-backend)
+wayscriber --backend gtk4 --active
 ```
 
 Bind it to keys if you prefer:

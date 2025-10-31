@@ -14,6 +14,18 @@ This will:
 2. Copy it to `~/.local/bin/wayscriber`
 3. Tell you how to add Hyprland keybind
 
+### GNOME Wayland (Experimental)
+
+GNOME users can try the in-progress GTK backend by building with the feature flag and forcing the GTK backend at runtime:
+
+```bash
+# Install GTK4 development headers (Debian/Ubuntu: `sudo apt install libgtk-4-dev libgdk-pixbuf-2.0-dev`)
+cargo build --release --features gtk-backend
+./target/release/wayscriber --backend gtk4 --active
+```
+
+> **Heads up:** the GTK path is still being fleshed out (portal captures, multi-monitor handling, and daemon integration are works in progress).
+
 ### Manual Install
 
 If you prefer manual installation:

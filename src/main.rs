@@ -1,4 +1,4 @@
-use clap::{ArgAction, Parser};
+use clap::{ArgAction, Parser, ValueEnum};
 
 use crate::config::{MigrationActions, MigrationReport};
 
@@ -13,6 +13,43 @@ mod notification;
 mod session;
 mod ui;
 mod util;
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum BackendArg {
+    #[value(alias = "auto")]
+    Auto,
+    #[value(alias = "wlr", alias = "layer-shell", alias = "wlr-layer-shell")]
+    WlrLayerShell,
+    #[value(alias = "gtk-4")]
+    Gtk4,
+}
+
+impl BackendArg {
+    fn to_backend_kind(self) -> Option<backend::BackendKind> {
+        match self {
+            BackendArg::Auto => None,
+            BackendArg::WlrLayerShell => Some(backend::BackendKind::WlrLayerShell),
+            BackendArg::Gtk4 => Some(backend::BackendKind::Gtk4),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BackendResolutionSource {
+    Cli,
+    Env,
+    Auto,
+}
+
+impl std::fmt::Display for BackendResolutionSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BackendResolutionSource::Cli => f.write_str("command-line override"),
+            BackendResolutionSource::Env => f.write_str("environment override"),
+            BackendResolutionSource::Auto => f.write_str("auto-detected"),
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "wayscriber")]
@@ -29,6 +66,10 @@ struct Cli {
     /// Initial board mode (transparent, whiteboard, or blackboard)
     #[arg(long, short = 'm', value_name = "MODE")]
     mode: Option<String>,
+
+    /// Backend implementation to use (auto, wlr-layer-shell, gtk4)
+    #[arg(long, value_name = "BACKEND", value_enum, default_value_t = BackendArg::Auto)]
+    backend: BackendArg,
 
     /// Copy configuration files from ~/.config/hyprmarker to ~/.config/wayscriber
     #[arg(long, action = ArgAction::SetTrue)]
@@ -92,12 +133,22 @@ fn main() -> anyhow::Result<()> {
 
     if cli.daemon {
         // Daemon mode: background service with toggle activation
-        log::info!("Starting in daemon mode");
-        let mut daemon = daemon::Daemon::new(cli.mode);
+        let (backend_kind, backend_source) = resolve_backend_selection(cli.backend)?;
+        log::info!(
+            "Starting in daemon mode using backend {} ({})",
+            backend_kind.keyword(),
+            backend_source
+        );
+        let mut daemon = daemon::Daemon::new(cli.mode.clone(), backend_kind);
         daemon.run()?;
     } else if cli.active {
         // One-shot mode: show overlay immediately and exit when done
-        log::info!("Starting Wayland overlay...");
+        let (backend_kind, backend_source) = resolve_backend_selection(cli.backend)?;
+        log::info!(
+            "Starting overlay using backend {} ({})",
+            backend_kind.keyword(),
+            backend_source
+        );
         log::info!("Starting annotation overlay...");
         log::info!("Controls:");
         log::info!("  - Freehand: Just drag");
@@ -117,8 +168,40 @@ fn main() -> anyhow::Result<()> {
         log::info!("  - Exit: Escape");
         log::info!("");
 
-        // Run Wayland backend
-        backend::run_wayland(cli.mode)?;
+        // Run selected backend
+        let mut backend = backend::create_backend(backend_kind, cli.mode.clone())?;
+        if let Err(err) = backend::run_backend(backend.as_mut()) {
+            #[cfg(feature = "gtk-backend")]
+            {
+                if backend_kind == backend::BackendKind::WlrLayerShell
+                    && err
+                        .to_string()
+                        .contains("zwlr_layer_shell_v1 not available")
+                {
+                    log::warn!(
+                        "Layer-shell protocol missing. Retrying with GTK backend (experimental)."
+                    );
+                    let mut fallback =
+                        backend::create_backend(backend::BackendKind::Gtk4, cli.mode.clone())?;
+                    backend::run_backend(fallback.as_mut())?;
+                } else {
+                    return Err(err);
+                }
+            }
+            #[cfg(not(feature = "gtk-backend"))]
+            {
+                if backend_kind == backend::BackendKind::WlrLayerShell
+                    && err
+                        .to_string()
+                        .contains("zwlr_layer_shell_v1 not available")
+                {
+                    log::error!(
+                        "Layer-shell protocol unavailable. Rebuild with `--features gtk-backend` and run `wayscriber --backend gtk4 --active` to try the GTK overlay."
+                    );
+                }
+                return Err(err);
+            }
+        }
 
         log::info!("Annotation overlay closed.");
     } else {
@@ -130,6 +213,7 @@ fn main() -> anyhow::Result<()> {
             "  wayscriber -d, --daemon    Run as background daemon (bind a toggle like Super+D)"
         );
         println!("  wayscriber -a, --active    Show overlay immediately (one-shot mode)");
+        println!("  wayscriber --backend <NAME>  Override backend (auto, wlr-layer-shell, gtk4)");
         println!("  wayscriber -h, --help      Show help");
         println!();
         println!("Daemon mode (recommended). Example Hyprland setup:");
@@ -145,6 +229,46 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn resolve_backend_selection(
+    cli_backend: BackendArg,
+) -> anyhow::Result<(backend::BackendKind, BackendResolutionSource)> {
+    if let Some(kind) = cli_backend.to_backend_kind() {
+        return Ok((kind, BackendResolutionSource::Cli));
+    }
+
+    if let Some(kind) = backend_from_env()? {
+        return Ok((kind, BackendResolutionSource::Env));
+    }
+
+    Ok((backend::detect_backend(), BackendResolutionSource::Auto))
+}
+
+fn backend_from_env() -> anyhow::Result<Option<backend::BackendKind>> {
+    match std::env::var("WAYSCRIBER_BACKEND") {
+        Ok(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("auto") {
+                return Ok(None);
+            }
+
+            backend::BackendKind::from_keyword(trimmed)
+                .map(Some)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Invalid backend \"{}\" specified in WAYSCRIBER_BACKEND. \
+                     Supported values: auto, wlr-layer-shell, gtk4.",
+                        value
+                    )
+                })
+        }
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(err) => Err(anyhow::anyhow!(
+            "Failed to read WAYSCRIBER_BACKEND: {}",
+            err
+        )),
+    }
 }
 
 fn run_config_migration(dry_run: bool) -> anyhow::Result<()> {

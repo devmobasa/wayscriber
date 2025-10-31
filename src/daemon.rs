@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use libc;
 
+use crate::backend;
 use crate::legacy;
 
 /// Overlay state for daemon mode
@@ -26,7 +27,7 @@ pub enum OverlayState {
 }
 
 /// Daemon state manager
-type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
+type BackendRunner = dyn Fn(backend::BackendKind, Option<String>) -> Result<()> + Send + Sync;
 
 const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -35,6 +36,7 @@ pub struct Daemon {
     should_quit: Arc<AtomicBool>,
     toggle_requested: Arc<AtomicBool>,
     initial_mode: Option<String>,
+    backend_kind: backend::BackendKind,
     backend_runner: Option<Arc<BackendRunner>>,
     tray_thread: Option<JoinHandle<()>>,
     overlay_child: Option<Child>,
@@ -195,12 +197,13 @@ impl ksni::Tray for WayscriberTray {
 }
 
 impl Daemon {
-    pub fn new(initial_mode: Option<String>) -> Self {
+    pub fn new(initial_mode: Option<String>, backend_kind: backend::BackendKind) -> Self {
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            backend_kind,
             backend_runner: None,
             tray_thread: None,
             overlay_child: None,
@@ -210,6 +213,7 @@ impl Daemon {
     #[cfg(test)]
     fn with_backend_runner_internal(
         initial_mode: Option<String>,
+        backend_kind: backend::BackendKind,
         backend_runner: Arc<BackendRunner>,
     ) -> Self {
         Self {
@@ -217,6 +221,7 @@ impl Daemon {
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            backend_kind,
             backend_runner: Some(backend_runner),
             tray_thread: None,
             overlay_child: None,
@@ -226,9 +231,10 @@ impl Daemon {
     #[cfg(test)]
     pub fn with_backend_runner(
         initial_mode: Option<String>,
+        backend_kind: backend::BackendKind,
         backend_runner: Arc<BackendRunner>,
     ) -> Self {
-        Self::with_backend_runner_internal(initial_mode, backend_runner)
+        Self::with_backend_runner_internal(initial_mode, backend_kind, backend_runner)
     }
 
     /// Run daemon with signal handling
@@ -350,7 +356,7 @@ impl Daemon {
         if let Some(runner) = &self.backend_runner {
             self.overlay_state = OverlayState::Visible;
             info!("Overlay state set to Visible");
-            let result = runner(self.initial_mode.clone());
+            let result = runner(self.backend_kind, self.initial_mode.clone());
             self.overlay_state = OverlayState::Hidden;
             info!("Overlay closed, back to daemon mode");
             return result;
@@ -471,6 +477,7 @@ impl Daemon {
         let exe = env::current_exe().context("Failed to determine current executable path")?;
         let mut command = Command::new(exe);
         command.arg("--active");
+        command.arg("--backend").arg(self.backend_kind.keyword());
         if let Some(mode) = &self.initial_mode {
             command.arg("--mode").arg(mode);
         }
@@ -571,18 +578,25 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
     fn runner_counter(count: Arc<AtomicUsize>) -> Arc<BackendRunner> {
-        Arc::new(move |mode: Option<String>| -> Result<()> {
-            assert_eq!(mode.as_deref(), Some("whiteboard"));
-            count.fetch_add(1, AtomicOrdering::SeqCst);
-            Ok(())
-        })
+        Arc::new(
+            move |backend_kind: backend::BackendKind, mode: Option<String>| -> Result<()> {
+                assert_eq!(backend_kind, backend::BackendKind::WlrLayerShell);
+                assert_eq!(mode.as_deref(), Some("whiteboard"));
+                count.fetch_add(1, AtomicOrdering::SeqCst);
+                Ok(())
+            },
+        )
     }
 
     #[test]
     fn toggle_overlay_invokes_backend_when_hidden() {
         let counter = Arc::new(AtomicUsize::new(0));
         let runner = runner_counter(counter.clone());
-        let mut daemon = Daemon::with_backend_runner(Some("whiteboard".into()), runner);
+        let mut daemon = Daemon::with_backend_runner(
+            Some("whiteboard".into()),
+            backend::BackendKind::WlrLayerShell,
+            runner,
+        );
 
         daemon.toggle_overlay().unwrap();
         assert_eq!(counter.load(AtomicOrdering::SeqCst), 1);
@@ -591,8 +605,9 @@ mod tests {
 
     #[test]
     fn hide_overlay_is_idempotent() {
-        let runner = Arc::new(|_: Option<String>| Ok(())) as Arc<BackendRunner>;
-        let mut daemon = Daemon::with_backend_runner(None, runner);
+        let runner = Arc::new(|_, _| Ok(())) as Arc<BackendRunner>;
+        let mut daemon =
+            Daemon::with_backend_runner(None, backend::BackendKind::WlrLayerShell, runner);
         daemon.hide_overlay().unwrap();
         assert_eq!(daemon.test_state(), OverlayState::Hidden);
 

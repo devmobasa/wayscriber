@@ -5,4 +5,4 @@ mod session;
 mod state;
 mod surface;
 
-pub use backend::WaylandBackend;
+pub use backend::WlrLayerShellBackend;

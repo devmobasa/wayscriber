@@ -7,13 +7,14 @@ This document explains how the application boots, how user input travels through
 ## 1. Execution Flow From `main.rs`
 
 1. **CLI parsing (`src/main.rs`)**
-   - Uses `clap` to parse `--daemon`, `--active`, `--mode`, and migration flags.
+   - Uses `clap` to parse `--daemon`, `--active`, `--mode`, `--backend`, and migration flags.
    - Immediately handles `--migrate-config` via `config::migrate_config` and exits.
    - Verifies `WAYLAND_DISPLAY` when a Wayland session is required.
 
 2. **Mode selection**
-   - `--daemon`: instantiate `daemon::Daemon` with the optional initial board mode and call `run()`.
-   - `--active`: print usage/help tips, then call `backend::run_wayland`.
+   - Resolve backend selection (CLI/env overrides or auto-detect) before launching overlay logic.
+   - `--daemon`: instantiate `daemon::Daemon` with the chosen backend and optional initial board mode, then call `run()`.
+   - `--active`: print usage/help tips, build the requested backend via `backend::create_backend`, and drive it with `backend::run_backend`.
    - No flags: print a usage summary and exit.
 
 3. **Shared subsystems automatically pulled in**
@@ -32,7 +33,7 @@ This document explains how the application boots, how user input travels through
    - `toggle_requested`: set by signals or tray to show/hide overlay.
    - `should_quit`: set by signals or tray quit item.
 4. On toggle:
-   - Launches (or terminates) the Wayland backend via `backend::run_wayland`.
+   - Launches (or terminates) the selected backend via the stored runner (`backend::run_backend`).
    - Keeps track of overlay state so repeated toggles do the right thing.
 5. On exit:
    - Signals the backend to shut down and joins the tray thread.
@@ -41,29 +42,30 @@ Daemon mode therefore provides a persistent background service that reacts to us
 
 ---
 
-## 3. Active Mode / Wayland Backend
+## 3. Active Mode / Backends
 
 **Modules:**
-- `src/backend/mod.rs`: exported API (`run_wayland`)
-- `src/backend/wayland/backend.rs`: high-level bootstrapper
+- `src/backend/mod.rs`: backend trait, factory, and auto-detection utilities
+- `src/backend/wayland/backend.rs`: wlr-layer-shell bootstrapper (default backend today)
+- `src/backend/gtk4/` (feature `gtk-backend`): GTK overlay backend scaffold for GNOME sessions
 - `src/backend/wayland/state.rs`: runtime state (surfaces, buffers, runtime handles)
 - `src/backend/wayland/handlers/*.rs`: smithay trait impls (input, compositor, registry, etc.)
 
 **Flow:**
-1. `backend::run_wayland` creates `WaylandBackend`.
-2. `WaylandBackend::run`:
+1. `backend::create_backend` resolves to a concrete implementation based on CLI/env/autodetect.
+2. The wlr-layer-shell backend (`WlrLayerShellBackend`) then:
    - Connects to Wayland (`smithay-client-toolkit`).
    - Binds compositor, layer shell, SHM, outputs, seats, registry.
    - Loads configuration (color defaults, board settings, keybindings).
    - Initializes `InputState` (see section 4).
    - Creates the layer-shell overlay surface and enters the event loop.
-3. Main loop responsibilities:
+3. Its main loop responsibilities remain:
    - Dispatch Wayland events via smithay handlers (keyboard, pointer, seat, compositor).
    - Throttle rendering with frame callbacks / vsync support.
    - Communicate with `capture::CaptureManager` for screenshot actions.
    - Exit when `InputState.should_exit` is set (Escape, tray close, etc.).
 
-`WaylandState` centralizes everything the handlers need: current buffers, Cairo context, mouse positions, capture state, and tokio handle for async work.
+`WaylandState` centralizes everything the handlers need: current buffers, Cairo context, mouse positions, capture state, and tokio handle for async work. The GTK backend will reuse the same drawing/input state but integrate with the GTK main loop instead of smithay once fully implemented.
 
 ---
 
@@ -149,7 +151,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 |------|------|
 | `src/main.rs` | CLI entry point, mode selection, migration trigger. |
 | `src/daemon.rs` | Background daemon, tray menu, signal handling, overlay toggling. |
-| `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
+| `src/backend/` | Backend trait + implementations (`wayland/` with smithay, optional `gtk4/` scaffold). |
 | `src/input/` | Event/state machine for drawing tools, board modes, and capture triggers. |
 | `src/draw/` | Vector drawing primitives, canvases, fonts. |
 | `src/ui.rs` | Status/help overlays. |

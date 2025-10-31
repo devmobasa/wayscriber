@@ -1,0 +1,475 @@
+//! GTK4 backend implementation for GNOME-based compositors.
+//!
+//! This backend is guarded by the `gtk-backend` feature and provides a
+//! transparent fullscreen overlay using GTK4/GDK on Wayland. It currently
+//! focuses on core drawing functionality; advanced features (screen capture,
+//! multi-monitor awareness) will be iterated on in follow-up changes.
+
+#![cfg(feature = "gtk-backend")]
+
+use std::{cell::RefCell, rc::Rc, time::Instant};
+
+use anyhow::{Context, Result, anyhow};
+use gdk::prelude::ListModelExt;
+use glib::prelude::Cast;
+use gtk4::{
+    gdk,
+    glib::{self, ControlFlow, Propagation, SignalHandlerId},
+    prelude::*,
+};
+use log::{debug, info, warn};
+
+use crate::{
+    backend::common,
+    capture::CaptureManager,
+    config::{Config, ConfigSource},
+    input::{MouseButton, events::Key},
+};
+
+/// GTK backend implementation shared across daemon/CLI modes.
+pub struct Gtk4Backend {
+    initial_mode: Option<String>,
+    application: gtk4::Application,
+    runtime: tokio::runtime::Runtime,
+    state: Option<Rc<RefCell<GtkState>>>,
+    activate_handler: Option<SignalHandlerId>,
+    visible: bool,
+}
+
+impl Gtk4Backend {
+    pub fn new(initial_mode: Option<String>) -> Result<Self> {
+        let runtime = tokio::runtime::Runtime::new()
+            .context("Failed to create Tokio runtime for GTK backend")?;
+
+        let application = gtk4::Application::builder()
+            .application_id("com.wayscriber.overlay")
+            .build();
+
+        Ok(Self {
+            initial_mode,
+            application,
+            runtime,
+            state: None,
+            activate_handler: None,
+            visible: false,
+        })
+    }
+
+    fn ensure_state(&mut self) -> Result<Rc<RefCell<GtkState>>> {
+        if let Some(state) = &self.state {
+            return Ok(state.clone());
+        }
+
+        // Load configuration and initialise input state
+        let (config, config_source) = common::load_config();
+        if matches!(config_source, ConfigSource::Legacy(_)) {
+            warn!(
+                "Continuing with settings from legacy hyprmarker config. Run `wayscriber --migrate-config` when convenient."
+            );
+        }
+
+        let input_state = common::build_input_state(&config, self.initial_mode.clone())?;
+
+        let capture_manager = CaptureManager::new(self.runtime.handle());
+
+        let state = Rc::new(RefCell::new(GtkState {
+            config,
+            input_state,
+            capture_manager,
+            current_mouse_x: 0,
+            current_mouse_y: 0,
+        }));
+
+        self.state = Some(state.clone());
+        Ok(state)
+    }
+
+    fn setup_activate_handler(&mut self, state: Rc<RefCell<GtkState>>) {
+        // Disconnect previous handler if show() is called multiple times.
+        if let Some(handler) = self.activate_handler.take() {
+            self.application.disconnect(handler);
+        }
+
+        let state_for_activate = Rc::clone(&state);
+        let handler = self.application.connect_activate(move |app| {
+            let state = Rc::clone(&state_for_activate);
+            if let Err(err) = build_overlay(app, state) {
+                log::error!("Failed to initialise GTK overlay: {err:?}");
+                app.quit();
+            }
+        });
+
+        self.activate_handler = Some(handler);
+    }
+}
+
+impl crate::backend::Backend for Gtk4Backend {
+    fn init(&mut self) -> Result<()> {
+        info!("Initializing GTK4 backend");
+        self.visible = false;
+        Ok(())
+    }
+
+    fn show(&mut self) -> Result<()> {
+        info!("Showing GTK4 overlay");
+        let state = self.ensure_state()?;
+        self.setup_activate_handler(state);
+        self.visible = true;
+
+        let status = self.application.run_with_args::<&str>(&[]);
+        self.visible = false;
+        self.state = None;
+
+        if status.value() != 0 {
+            return Err(anyhow!("GTK application exited with status {:?}", status));
+        }
+
+        Ok(())
+    }
+
+    fn hide(&mut self) -> Result<()> {
+        if self.visible {
+            info!("Requesting GTK overlay shutdown");
+            self.application.quit();
+            self.visible = false;
+        }
+        Ok(())
+    }
+
+    fn is_visible(&self) -> bool {
+        self.visible
+    }
+}
+
+/// Runtime state owned by the GTK overlay thread.
+struct GtkState {
+    config: Config,
+    input_state: crate::input::InputState,
+    #[allow(dead_code)]
+    capture_manager: CaptureManager,
+    current_mouse_x: i32,
+    current_mouse_y: i32,
+}
+
+fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Result<()> {
+    let (width, height) = detect_monitor_size()?;
+
+    let window = gtk4::ApplicationWindow::builder()
+        .application(app)
+        .title("Wayscriber")
+        .default_width(width as i32)
+        .default_height(height as i32)
+        .decorated(false)
+        .resizable(false)
+        .build();
+
+    window.fullscreen();
+    window.set_deletable(true);
+
+    apply_transparent_css(&window);
+
+    let drawing_area = gtk4::DrawingArea::builder()
+        .content_width(width as i32)
+        .content_height(height as i32)
+        .hexpand(true)
+        .vexpand(true)
+        .build();
+
+    let draw_state = state.clone();
+    drawing_area.set_draw_func(move |area, ctx, width, height| {
+        if let Err(err) = render_canvas(&draw_state, ctx, width, height) {
+            log::error!("GTK render error: {err:?}");
+        } else {
+            // Queue another frame if the input state still needs redraw.
+            if draw_state.borrow().input_state.needs_redraw {
+                area.queue_draw();
+            }
+        }
+    });
+
+    register_input_handlers(&window, &drawing_area, state.clone());
+
+    let app_weak = app.downgrade();
+    let tick_state = state.clone();
+    drawing_area.add_tick_callback(move |area, _clock| {
+        let mut state_mut = tick_state.borrow_mut();
+
+        if state_mut.input_state.should_exit {
+            info!("GTK backend detected exit request; closing window");
+            state_mut.input_state.should_exit = false;
+            if let Some(app) = app_weak.upgrade() {
+                drop(state_mut);
+                app.quit();
+                return ControlFlow::Break;
+            }
+        }
+
+        if let Some(action) = state_mut.input_state.take_pending_capture_action() {
+            warn!(
+                "Capture action {:?} not yet implemented on GTK backend",
+                action
+            );
+        }
+
+        // Trigger redraw if needed (e.g., animations/click highlights)
+        if state_mut.input_state.needs_redraw {
+            debug!("GTK backend scheduling redraw");
+            area.queue_draw();
+            state_mut.input_state.needs_redraw = false;
+        }
+
+        drop(state_mut);
+        ControlFlow::Continue
+    });
+
+    window.set_child(Some(&drawing_area));
+    window.present();
+    drawing_area.queue_draw();
+
+    Ok(())
+}
+
+fn detect_monitor_size() -> Result<(u32, u32)> {
+    let display = gdk::Display::default().ok_or_else(|| anyhow!("No default display available"))?;
+    let monitors = display.monitors();
+    let monitor = monitors
+        .item(0)
+        .and_then(|obj| obj.downcast::<gdk::Monitor>().ok())
+        .ok_or_else(|| anyhow!("No monitor found"))?;
+    let geometry = monitor.geometry();
+    Ok((geometry.width() as u32, geometry.height() as u32))
+}
+
+fn apply_transparent_css(window: &gtk4::ApplicationWindow) {
+    let css_provider = gtk4::CssProvider::new();
+    css_provider.load_from_string(
+        r#"
+        window {
+            background-color: transparent;
+        }
+        drawingarea {
+            background-color: transparent;
+        }
+    "#,
+    );
+
+    let display = gtk4::prelude::WidgetExt::display(window);
+    gtk4::style_context_add_provider_for_display(
+        &display,
+        &css_provider,
+        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+}
+
+fn register_input_handlers(
+    window: &gtk4::ApplicationWindow,
+    drawing_area: &gtk4::DrawingArea,
+    state: Rc<RefCell<GtkState>>,
+) {
+    let motion_state = state.clone();
+    let motion = gtk4::EventControllerMotion::new();
+    motion.connect_motion(move |_, x, y| {
+        let mut state = motion_state.borrow_mut();
+        let mouse_x = x.round() as i32;
+        let mouse_y = y.round() as i32;
+        state.current_mouse_x = mouse_x;
+        state.current_mouse_y = mouse_y;
+        state.input_state.on_mouse_motion(mouse_x, mouse_y);
+        state.input_state.needs_redraw = true;
+    });
+    drawing_area.add_controller(motion);
+
+    let gesture = gtk4::GestureClick::new();
+    gesture.set_button(0); // listen to all buttons
+    let press_state = state.clone();
+    gesture.connect_pressed(move |gesture, _n_press, x, y| {
+        let button = gesture.current_button() as i32;
+        if let Some(mapped) = map_mouse_button(button) {
+            let mut state = press_state.borrow_mut();
+            let mouse_x = x.round() as i32;
+            let mouse_y = y.round() as i32;
+            state.current_mouse_x = mouse_x;
+            state.current_mouse_y = mouse_y;
+            state.input_state.on_mouse_press(mapped, mouse_x, mouse_y);
+            state.input_state.needs_redraw = true;
+        }
+    });
+    let release_state = state.clone();
+    gesture.connect_released(move |gesture, _n_press, x, y| {
+        let button = gesture.current_button() as i32;
+        if let Some(mapped) = map_mouse_button(button) {
+            let mut state = release_state.borrow_mut();
+            let mouse_x = x.round() as i32;
+            let mouse_y = y.round() as i32;
+            state.current_mouse_x = mouse_x;
+            state.current_mouse_y = mouse_y;
+            state.input_state.on_mouse_release(mapped, mouse_x, mouse_y);
+            state.input_state.needs_redraw = true;
+        }
+    });
+    drawing_area.add_controller(gesture);
+
+    let scroll_state = state.clone();
+    let scroll = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
+    scroll.connect_scroll(move |_, _dx, dy| {
+        let mut state = scroll_state.borrow_mut();
+        let vertical = if dy.abs() > 0.1 { dy } else { 0.0 };
+        if state.input_state.modifiers.shift {
+            if vertical > 0.0 {
+                state.input_state.adjust_font_size(-2.0);
+            } else if vertical < 0.0 {
+                state.input_state.adjust_font_size(2.0);
+            }
+        } else if vertical > 0.0 {
+            state.input_state.current_thickness =
+                (state.input_state.current_thickness - 1.0).max(1.0);
+        } else if vertical < 0.0 {
+            state.input_state.current_thickness =
+                (state.input_state.current_thickness + 1.0).min(20.0);
+        }
+        state.input_state.needs_redraw = true;
+        Propagation::Stop
+    });
+    drawing_area.add_controller(scroll);
+
+    let key_controller = gtk4::EventControllerKey::new();
+    let key_state = state.clone();
+    key_controller.connect_key_pressed(move |_, key, _code, _mods| {
+        let mapped = map_key(&key);
+        let mut state = key_state.borrow_mut();
+        state.input_state.on_key_press(mapped);
+        state.input_state.needs_redraw = true;
+        Propagation::Stop
+    });
+    let key_release_state = state;
+    key_controller.connect_key_released(move |_, key, _code, _mods| {
+        let mapped = map_key(&key);
+        let mut state = key_release_state.borrow_mut();
+        state.input_state.on_key_release(mapped);
+    });
+    window.add_controller(key_controller);
+}
+
+fn render_canvas(
+    state: &Rc<RefCell<GtkState>>,
+    ctx: &gtk4::cairo::Context,
+    width: i32,
+    height: i32,
+) -> Result<()> {
+    let mut state = state.borrow_mut();
+
+    let width_u32 = width.max(1) as u32;
+    let height_u32 = height.max(1) as u32;
+
+    let raw_ptr = ctx.to_raw_none() as *mut cairo::ffi::cairo_t;
+    let cairo_ctx = unsafe { cairo::Context::from_raw_none(raw_ptr) };
+
+    cairo_ctx.set_operator(cairo::Operator::Clear);
+    cairo_ctx.paint().context("Failed to clear GTK surface")?;
+    cairo_ctx.set_operator(cairo::Operator::Over);
+
+    let now = Instant::now();
+    let highlight_active = state.input_state.advance_click_highlights(now);
+    if highlight_active {
+        state.input_state.needs_redraw = true;
+    }
+
+    crate::draw::render_board_background(
+        &cairo_ctx,
+        state.input_state.board_mode(),
+        &state.input_state.board_config,
+    );
+
+    crate::draw::render_shapes(
+        &cairo_ctx,
+        &state.input_state.canvas_set.active_frame().shapes,
+    );
+
+    state.input_state.render_provisional_shape(
+        &cairo_ctx,
+        state.current_mouse_x,
+        state.current_mouse_y,
+    );
+
+    if let crate::input::state::DrawingState::TextInput { x, y, buffer } = &state.input_state.state
+    {
+        let preview_text = if buffer.is_empty() {
+            "_".to_string()
+        } else {
+            format!("{}_", buffer)
+        };
+        crate::draw::render_text(
+            &cairo_ctx,
+            *x,
+            *y,
+            &preview_text,
+            state.input_state.current_color,
+            state.input_state.current_font_size,
+            &state.input_state.font_descriptor,
+            state.input_state.text_background_enabled,
+        );
+    }
+
+    state.input_state.render_click_highlights(&cairo_ctx, now);
+
+    if state.input_state.show_status_bar {
+        crate::ui::render_status_bar(
+            &cairo_ctx,
+            &state.input_state,
+            state.config.ui.status_bar_position,
+            &state.config.ui.status_bar_style,
+            width_u32,
+            height_u32,
+        );
+    }
+
+    if state.input_state.show_help {
+        crate::ui::render_help_overlay(
+            &cairo_ctx,
+            &state.config.ui.help_overlay_style,
+            width_u32,
+            height_u32,
+        );
+    }
+
+    state.input_state.needs_redraw = false;
+
+    Ok(())
+}
+
+fn map_mouse_button(button: i32) -> Option<MouseButton> {
+    match button {
+        1 => Some(MouseButton::Left),
+        2 => Some(MouseButton::Middle),
+        3 => Some(MouseButton::Right),
+        _ => None,
+    }
+}
+
+fn map_key(key: &gdk::Key) -> Key {
+    if let Some(name) = key.name() {
+        match name.as_str() {
+            "Escape" => return Key::Escape,
+            "Return" => return Key::Return,
+            "BackSpace" => return Key::Backspace,
+            "Tab" => return Key::Tab,
+            "space" => return Key::Space,
+            "Shift_L" | "Shift_R" => return Key::Shift,
+            "Control_L" | "Control_R" => return Key::Ctrl,
+            "Alt_L" | "Alt_R" | "Meta_L" | "Meta_R" => return Key::Alt,
+            "F10" => return Key::F10,
+            "F11" => return Key::F11,
+            "F12" => return Key::F12,
+            "plus" => return Key::Char('+'),
+            "minus" => return Key::Char('-'),
+            "equal" => return Key::Char('='),
+            "underscore" => return Key::Char('_'),
+            _ => {}
+        }
+    }
+
+    key.to_unicode()
+        .filter(|c| !c.is_control())
+        .map(Key::Char)
+        .unwrap_or(Key::Unknown)
+}

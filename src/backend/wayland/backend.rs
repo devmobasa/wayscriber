@@ -31,9 +31,9 @@ use wayland_client::{Connection, globals::registry_queue_init};
 
 use super::state::WaylandState;
 use crate::{
+    backend::common,
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
-    input::{BoardMode, ClickHighlightSettings, InputState},
     legacy, notification, session,
 };
 
@@ -52,23 +52,25 @@ fn friendly_capture_error(error: &str) -> String {
 }
 
 /// Wayland backend state
-pub struct WaylandBackend {
+pub struct WlrLayerShellBackend {
     initial_mode: Option<String>,
     /// Tokio runtime for async capture operations
     tokio_runtime: tokio::runtime::Runtime,
+    visible: bool,
 }
 
-impl WaylandBackend {
+impl WlrLayerShellBackend {
     pub fn new(initial_mode: Option<String>) -> Result<Self> {
         let tokio_runtime = tokio::runtime::Runtime::new()
             .context("Failed to create Tokio runtime for capture operations")?;
         Ok(Self {
             initial_mode,
             tokio_runtime,
+            visible: false,
         })
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    fn run_event_loop(&mut self) -> Result<()> {
         info!("Starting Wayland backend");
 
         // Connect to Wayland compositor
@@ -102,13 +104,7 @@ impl WaylandBackend {
         let registry_state = RegistryState::new(&globals);
 
         // Load configuration
-        let (config, config_source) = match Config::load() {
-            Ok(loaded) => (loaded.config, loaded.source),
-            Err(e) => {
-                warn!("Failed to load config: {}. Using defaults.", e);
-                (Config::default(), ConfigSource::Default)
-            }
-        };
+        let (config, config_source) = common::load_config();
 
         if matches!(config_source, ConfigSource::Legacy(_)) && !legacy::warnings_suppressed() {
             warn!(
@@ -149,62 +145,8 @@ impl WaylandBackend {
             }
         };
 
-        // Create font descriptor from config
-        let font_descriptor = crate::draw::FontDescriptor::new(
-            config.drawing.font_family.clone(),
-            config.drawing.font_weight.clone(),
-            config.drawing.font_style.clone(),
-        );
-
-        // Build keybinding action map
-        let action_map = config
-            .keybindings
-            .build_action_map()
-            .expect("Failed to build keybinding action map");
-
-        // Initialize input state with config defaults
-        let mut input_state = InputState::with_defaults(
-            config.drawing.default_color.to_color(),
-            config.drawing.default_thickness,
-            config.drawing.default_font_size,
-            font_descriptor,
-            config.drawing.text_background_enabled,
-            config.arrow.length,
-            config.arrow.angle_degrees,
-            config.ui.show_status_bar,
-            config.board.clone(),
-            action_map,
-            config.session.max_shapes_per_frame,
-            ClickHighlightSettings::from(&config.ui.click_highlight),
-        );
-
-        // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
-        if config.board.enabled {
-            let initial_mode_str = self
-                .initial_mode
-                .clone()
-                .unwrap_or_else(|| config.board.default_mode.clone());
-
-            if let Ok(mode) = initial_mode_str.parse::<BoardMode>() {
-                if mode != BoardMode::Transparent {
-                    info!("Starting in {} mode", initial_mode_str);
-                    input_state.canvas_set.switch_mode(mode);
-                    // Apply auto-color adjustment if enabled
-                    if config.board.auto_adjust_pen {
-                        if let Some(default_color) = mode.default_pen_color(&config.board) {
-                            input_state.current_color = default_color;
-                        }
-                    }
-                }
-            } else if !initial_mode_str.is_empty() {
-                warn!(
-                    "Invalid board mode '{}', using transparent",
-                    initial_mode_str
-                );
-            }
-        } else if self.initial_mode.is_some() {
-            warn!("Board modes disabled in config, ignoring --mode flag");
-        }
+        // Initialize input state with config defaults (applies initial mode if provided)
+        let input_state = common::build_input_state(&config, self.initial_mode.clone())?;
 
         // Create capture manager with runtime handle
         let capture_manager = CaptureManager::new(self.tokio_runtime.handle());
@@ -454,19 +396,30 @@ impl WaylandBackend {
             None => Ok(()),
         }
     }
+}
 
-    pub fn init(&mut self) -> Result<()> {
-        info!("Initializing Wayland backend");
+impl crate::backend::Backend for WlrLayerShellBackend {
+    fn init(&mut self) -> Result<()> {
+        info!("Initializing wlr-layer-shell backend");
+        self.visible = false;
         Ok(())
     }
 
-    pub fn show(&mut self) -> Result<()> {
-        info!("Showing Wayland overlay");
-        self.run()
+    fn show(&mut self) -> Result<()> {
+        info!("Showing wlr-layer-shell overlay");
+        self.visible = true;
+        let result = self.run_event_loop();
+        self.visible = false;
+        result
     }
 
-    pub fn hide(&mut self) -> Result<()> {
-        info!("Hiding Wayland overlay");
+    fn hide(&mut self) -> Result<()> {
+        info!("Hiding wlr-layer-shell overlay");
+        self.visible = false;
         Ok(())
+    }
+
+    fn is_visible(&self) -> bool {
+        self.visible
     }
 }
