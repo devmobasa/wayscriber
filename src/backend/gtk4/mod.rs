@@ -326,7 +326,8 @@ struct GtkState {
 }
 
 fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Result<()> {
-    let (width, height) = detect_monitor_size()?;
+    let display = gdk::Display::default().ok_or_else(|| anyhow!("No default display available"))?;
+    let (monitor, (width, height)) = detect_monitor(&display)?;
 
     let window = gtk4::ApplicationWindow::builder()
         .application(app)
@@ -338,6 +339,7 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
         .build();
 
     window.fullscreen();
+    window.fullscreen_on_monitor(&monitor);
     window.set_default_size(width as i32, height as i32);
     window.set_deletable(true);
     if let Some(surface) = window.surface() {
@@ -376,6 +378,13 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
     });
 
     register_input_handlers(&window, &drawing_area, state.clone());
+
+    let monitor_for_map = monitor.clone();
+    window.connect_map(move |win| {
+        debug!("GTK window mapped; enforcing fullscreen on monitor");
+        win.fullscreen_on_monitor(&monitor_for_map);
+        win.present();
+    });
 
     let app_weak = app.downgrade();
     let tick_state = state.clone();
@@ -416,8 +425,7 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
     Ok(())
 }
 
-fn detect_monitor_size() -> Result<(u32, u32)> {
-    let display = gdk::Display::default().ok_or_else(|| anyhow!("No default display available"))?;
+fn detect_monitor(display: &gdk::Display) -> Result<(gdk::Monitor, (u32, u32))> {
     let monitors = display.monitors();
     let monitor = monitors
         .item(0)
@@ -426,7 +434,7 @@ fn detect_monitor_size() -> Result<(u32, u32)> {
     let geometry = monitor.geometry();
     let size = (geometry.width() as u32, geometry.height() as u32);
     debug!("Detected monitor geometry {:?}", size);
-    Ok(size)
+    Ok((monitor, size))
 }
 
 fn apply_transparent_css(window: &gtk4::ApplicationWindow) {
