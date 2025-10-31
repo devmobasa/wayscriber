@@ -24,6 +24,7 @@ use crate::{
     capture::CaptureManager,
     config::{Config, ConfigSource},
     input::{MouseButton, events::Key},
+    notification, session,
 };
 
 /// GTK backend implementation shared across daemon/CLI modes.
@@ -68,14 +69,57 @@ impl Gtk4Backend {
             );
         }
 
-        let input_state = common::build_input_state(&config, self.initial_mode.clone())?;
+        let mut input_state = common::build_input_state(&config, self.initial_mode.clone())?;
 
         let capture_manager = CaptureManager::new(self.runtime.handle());
+
+        let config_dir = Config::config_directory_from_source(&config_source)?;
+        let display_env = std::env::var("WAYLAND_DISPLAY").ok();
+
+        let session_options = match session::options_from_config(
+            &config.session,
+            &config_dir,
+            display_env.as_deref(),
+        ) {
+            Ok(opts) => Some(opts),
+            Err(err) => {
+                warn!("Session persistence disabled: {}", err);
+                None
+            }
+        };
+
+        let mut session_loaded = false;
+        if let Some(ref options) = session_options {
+            match session::load_snapshot(options) {
+                Ok(Some(snapshot)) => {
+                    debug!(
+                        "Restoring session from {}",
+                        options.session_file_path().display()
+                    );
+                    session::apply_snapshot(&mut input_state, snapshot, options);
+                    input_state.needs_redraw = true;
+                    session_loaded = true;
+                }
+                Ok(None) => {
+                    debug!(
+                        "No session snapshot found at {}",
+                        options.session_file_path().display()
+                    );
+                    session_loaded = true;
+                }
+                Err(err) => {
+                    warn!("Failed to load session state: {}", err);
+                    session_loaded = true;
+                }
+            }
+        }
 
         let state = Rc::new(RefCell::new(GtkState {
             config,
             input_state,
             capture_manager,
+            session_options,
+            session_loaded,
             current_mouse_x: 0,
             current_mouse_y: 0,
         }));
@@ -101,6 +145,22 @@ impl Gtk4Backend {
 
         self.activate_handler = Some(handler);
     }
+
+    fn save_session_snapshot(&self, state: &GtkState) {
+        if let Some(options) = state.session_options.as_ref() {
+            if let Some(snapshot) = session::snapshot_from_input(&state.input_state, options) {
+                if let Err(err) = session::save_snapshot(&snapshot, options) {
+                    warn!("Failed to save session state: {}", err);
+                    notification::send_notification_async(
+                        self.runtime.handle(),
+                        "Failed to Save Session".to_string(),
+                        format!("Your drawings may not persist: {}", err),
+                        Some("dialog-error".to_string()),
+                    );
+                }
+            }
+        }
+    }
 }
 
 impl crate::backend::Backend for Gtk4Backend {
@@ -113,11 +173,16 @@ impl crate::backend::Backend for Gtk4Backend {
     fn show(&mut self) -> Result<()> {
         info!("Showing GTK4 overlay");
         let state = self.ensure_state()?;
-        self.setup_activate_handler(state);
+        self.setup_activate_handler(state.clone());
         self.visible = true;
 
         let status = self.application.run_with_args::<&str>(&[]);
         self.visible = false;
+        if let Some(state_rc) = self.state.take() {
+            self.save_session_snapshot(&state_rc.borrow());
+        } else {
+            self.save_session_snapshot(&state.borrow());
+        }
         self.state = None;
 
         if status.value() != 0 {
@@ -147,6 +212,9 @@ struct GtkState {
     input_state: crate::input::InputState,
     #[allow(dead_code)]
     capture_manager: CaptureManager,
+    session_options: Option<session::SessionOptions>,
+    #[allow(dead_code)]
+    session_loaded: bool,
     current_mouse_x: i32,
     current_mouse_y: i32,
 }
