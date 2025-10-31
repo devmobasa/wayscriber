@@ -49,6 +49,13 @@ pub struct Gtk4Backend {
 
 impl Gtk4Backend {
     pub fn new(initial_mode: Option<String>) -> Result<Self> {
+        if std::env::var("GSK_RENDERER").is_err() {
+            log::debug!("GSK_RENDERER not set; forcing cairo renderer for GTK backend");
+            unsafe {
+                std::env::set_var("GSK_RENDERER", "cairo");
+            }
+        }
+
         let runtime = tokio::runtime::Runtime::new()
             .context("Failed to create Tokio runtime for GTK backend")?;
 
@@ -76,6 +83,14 @@ impl Gtk4Backend {
         if matches!(config_source, ConfigSource::Legacy(_)) {
             warn!(
                 "Continuing with settings from legacy hyprmarker config. Run `wayscriber --migrate-config` when convenient."
+            );
+        }
+
+        if let Some(display) = gdk::Display::default() {
+            debug!(
+                "GTK display rgba={} composited={}",
+                display.is_rgba(),
+                display.is_composited()
             );
         }
 
@@ -809,6 +824,15 @@ fn render_canvas(
     cairo_ctx.set_operator(cairo::Operator::Clear);
     cairo_ctx.paint().context("Failed to clear GTK surface")?;
     cairo_ctx.set_operator(cairo::Operator::Over);
+
+    debug!(
+        "GTK render: mode={:?} size={}x{} desired_visible={} capture_in_progress={}",
+        state.input_state.board_mode(),
+        width_u32,
+        height_u32,
+        state.desired_visible,
+        state.capture_in_progress
+    );
 
     let now = Instant::now();
     let highlight_active = state.input_state.advance_click_highlights(now);
