@@ -427,6 +427,7 @@ fn hide_overlay_window(state: &mut GtkState) {
         window.set_visible(false);
     }
     state.desired_visible = false;
+    debug!("GTK overlay hidden (desired_visible=false)");
     state.input_state.needs_redraw = false;
 }
 
@@ -436,6 +437,7 @@ fn show_overlay_window(state: &mut GtkState) {
         window.present();
     }
     state.desired_visible = true;
+    debug!("GTK overlay shown (desired_visible=true)");
     state.input_state.needs_redraw = true;
 }
 
@@ -443,6 +445,7 @@ fn hide_overlay_for_capture(state: &mut GtkState) {
     if let Some(window) = state.window.upgrade() {
         window.set_visible(false);
     }
+    debug!("GTK overlay hidden for capture");
     state.input_state.needs_redraw = false;
 }
 
@@ -568,6 +571,10 @@ fn start_capture_poll(state: &Rc<RefCell<GtkState>>) {
             if let Some(outcome) = state.capture_manager.try_take_result() {
                 state.capture_in_progress = false;
                 state.capture_poll = None;
+                debug!(
+                    "GTK capture completed; desired_visible={}, overlay_state will refresh",
+                    state.desired_visible
+                );
                 handle_capture_outcome(&mut state, outcome);
                 return ControlFlow::Break;
             }
