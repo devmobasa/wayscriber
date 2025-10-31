@@ -17,12 +17,16 @@ use gtk4::{
     glib::{self, ControlFlow, Propagation, SignalHandlerId},
     prelude::*,
 };
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     backend::common,
-    capture::CaptureManager,
-    config::{Config, ConfigSource},
+    capture::{
+        CaptureManager, CaptureOutcome,
+        file::{FileSaveConfig, expand_tilde},
+        types::{CaptureDestination, CaptureType},
+    },
+    config::{Action, Config, ConfigSource},
     input::{MouseButton, events::Key},
     notification, session,
 };
@@ -120,6 +124,9 @@ impl Gtk4Backend {
             capture_manager,
             session_options,
             session_loaded,
+            capture_in_progress: false,
+            window: glib::WeakRef::new(),
+            tokio_handle: self.runtime.handle().clone(),
             current_mouse_x: 0,
             current_mouse_y: 0,
         }));
@@ -215,6 +222,9 @@ struct GtkState {
     session_options: Option<session::SessionOptions>,
     #[allow(dead_code)]
     session_loaded: bool,
+    capture_in_progress: bool,
+    window: glib::WeakRef<gtk4::ApplicationWindow>,
+    tokio_handle: tokio::runtime::Handle,
     current_mouse_x: i32,
     current_mouse_y: i32,
 }
@@ -236,6 +246,8 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
     if let Some(surface) = window.surface() {
         surface.set_opaque_region(None);
     }
+
+    state.borrow_mut().window = window.downgrade();
 
     apply_transparent_css(&window);
 
@@ -275,11 +287,58 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
             }
         }
 
+        if state_mut.capture_in_progress {
+            if let Some(outcome) = state_mut.capture_manager.try_take_result() {
+                show_overlay_window(&mut state_mut);
+                state_mut.capture_in_progress = false;
+                area.queue_draw();
+
+                match outcome {
+                    CaptureOutcome::Success(result) => {
+                        let mut parts = Vec::new();
+                        if let Some(ref path) = result.saved_path {
+                            info!("Screenshot saved to: {}", path.display());
+                            if let Some(filename) = path.file_name() {
+                                parts.push(format!("Saved as {}", filename.to_string_lossy()));
+                            }
+                        }
+                        if result.copied_to_clipboard {
+                            info!("Screenshot copied to clipboard");
+                            parts.push("Copied to clipboard".to_string());
+                        }
+
+                        let body = if parts.is_empty() {
+                            "Screenshot captured".to_string()
+                        } else {
+                            parts.join(" • ")
+                        };
+
+                        notification::send_notification_async(
+                            &state_mut.tokio_handle,
+                            "Screenshot Captured".to_string(),
+                            body,
+                            Some("camera-photo".to_string()),
+                        );
+                    }
+                    CaptureOutcome::Failed(err) => {
+                        let friendly = friendly_capture_error(&err);
+                        warn!("Screenshot capture failed: {}", err);
+                        notification::send_notification_async(
+                            &state_mut.tokio_handle,
+                            "Screenshot Failed".to_string(),
+                            friendly,
+                            Some("dialog-error".to_string()),
+                        );
+                    }
+                    CaptureOutcome::Cancelled(reason) => {
+                        info!("Capture cancelled: {}", reason);
+                    }
+                }
+            }
+        }
+
         if let Some(action) = state_mut.input_state.take_pending_capture_action() {
-            warn!(
-                "Capture action {:?} not yet implemented on GTK backend",
-                action
-            );
+            handle_capture_action(&mut state_mut, action);
         }
 
         // Trigger redraw if needed (e.g., animations/click highlights)
@@ -330,6 +389,122 @@ fn apply_transparent_css(window: &gtk4::ApplicationWindow) {
         &css_provider,
         gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+}
+
+fn hide_overlay_window(state: &mut GtkState) {
+    if let Some(window) = state.window.upgrade() {
+        window.set_visible(false);
+    }
+    state.input_state.needs_redraw = false;
+}
+
+fn show_overlay_window(state: &mut GtkState) {
+    if let Some(window) = state.window.upgrade() {
+        window.set_visible(true);
+        window.present();
+    }
+    state.input_state.needs_redraw = true;
+}
+
+fn handle_capture_action(state: &mut GtkState, action: Action) {
+    if !state.config.capture.enabled {
+        warn!("Capture action triggered but capture is disabled in config");
+        return;
+    }
+
+    if state.capture_in_progress {
+        warn!(
+            "Capture action {:?} requested while another capture is running; ignoring",
+            action
+        );
+        return;
+    }
+
+    let default_destination = if state.config.capture.copy_to_clipboard {
+        CaptureDestination::ClipboardAndFile
+    } else {
+        CaptureDestination::FileOnly
+    };
+
+    let (capture_type, destination) = match action {
+        Action::CaptureFullScreen => (CaptureType::FullScreen, default_destination),
+        Action::CaptureActiveWindow => (CaptureType::ActiveWindow, default_destination),
+        Action::CaptureSelection => (
+            CaptureType::Selection {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0,
+            },
+            default_destination,
+        ),
+        Action::CaptureClipboardFull => {
+            (CaptureType::FullScreen, CaptureDestination::ClipboardOnly)
+        }
+        Action::CaptureFileFull => (CaptureType::FullScreen, CaptureDestination::FileOnly),
+        Action::CaptureClipboardSelection | Action::CaptureClipboardRegion => (
+            CaptureType::Selection {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0,
+            },
+            CaptureDestination::ClipboardOnly,
+        ),
+        Action::CaptureFileSelection | Action::CaptureFileRegion => (
+            CaptureType::Selection {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0,
+            },
+            CaptureDestination::FileOnly,
+        ),
+        other => {
+            error!(
+                "Non-capture action passed to GTK capture handler: {:?}",
+                other
+            );
+            return;
+        }
+    };
+
+    let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
+        None
+    } else {
+        Some(FileSaveConfig {
+            save_directory: expand_tilde(&state.config.capture.save_directory),
+            filename_template: state.config.capture.filename_template.clone(),
+            format: state.config.capture.format.clone(),
+        })
+    };
+
+    hide_overlay_window(state);
+    state.capture_in_progress = true;
+
+    info!("Requesting {:?} capture", capture_type);
+    if let Err(err) = state
+        .capture_manager
+        .request_capture(capture_type, destination, save_config)
+    {
+        error!("Failed to request capture: {}", err);
+        state.capture_in_progress = false;
+        show_overlay_window(state);
+    }
+}
+
+fn friendly_capture_error(error: &str) -> String {
+    let lower = error.to_lowercase();
+
+    if lower.contains("requestcancelled") || lower.contains("cancelled") {
+        "Screen capture cancelled by user".to_string()
+    } else if lower.contains("permission") {
+        "Permission denied. Enable screen sharing in system settings.".to_string()
+    } else if lower.contains("busy") {
+        "Screen capture in progress. Try again in a moment.".to_string()
+    } else {
+        "Screen capture failed. Please try again.".to_string()
+    }
 }
 
 fn register_input_handlers(
