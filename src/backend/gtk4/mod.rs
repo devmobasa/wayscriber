@@ -7,7 +7,13 @@
 
 #![cfg(feature = "gtk-backend")]
 
-use std::{cell::RefCell, rc::Rc, time::Instant};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Mutex, mpsc},
+    thread,
+    time::Instant,
+};
 
 use anyhow::{Context, Result, anyhow};
 use gdk::prelude::ListModelExt;
@@ -20,6 +26,7 @@ use gtk4::{
 use log::{debug, error, info, warn};
 
 use crate::{
+    backend::Backend,
     backend::common,
     capture::{
         CaptureManager, CaptureOutcome,
@@ -135,18 +142,37 @@ impl Gtk4Backend {
         Ok(state)
     }
 
-    fn setup_activate_handler(&mut self, state: Rc<RefCell<GtkState>>) {
+    fn setup_activate_handler(
+        &mut self,
+        state: Rc<RefCell<GtkState>>,
+        ready: Option<mpsc::Sender<Result<()>>>,
+        start_visible: bool,
+    ) {
         // Disconnect previous handler if show() is called multiple times.
         if let Some(handler) = self.activate_handler.take() {
             self.application.disconnect(handler);
         }
 
         let state_for_activate = Rc::clone(&state);
+        let ready_clone = ready.clone();
         let handler = self.application.connect_activate(move |app| {
             let state = Rc::clone(&state_for_activate);
-            if let Err(err) = build_overlay(app, state) {
-                log::error!("Failed to initialise GTK overlay: {err:?}");
-                app.quit();
+            match build_overlay(app, state.clone()) {
+                Ok(()) => {
+                    if !start_visible {
+                        hide_overlay_window(&mut state.borrow_mut());
+                    }
+                    if let Some(tx) = ready_clone.as_ref() {
+                        let _ = tx.send(Ok(()));
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to initialise GTK overlay: {err:?}");
+                    if let Some(tx) = ready_clone.as_ref() {
+                        let _ = tx.send(Err(err));
+                    }
+                    app.quit();
+                }
             }
         });
 
@@ -168,6 +194,44 @@ impl Gtk4Backend {
             }
         }
     }
+
+    fn run_daemon_loop(
+        &mut self,
+        command_rx: mpsc::Receiver<GtkCommand>,
+        ready_tx: mpsc::Sender<Result<()>>,
+    ) -> Result<()> {
+        let state = self.ensure_state()?;
+        self.setup_activate_handler(state.clone(), Some(ready_tx), false);
+
+        let app = self.application.clone();
+        let state_for_idle = state.clone();
+        let command_rx = Arc::new(Mutex::new(command_rx));
+        let command_rx_idle = command_rx.clone();
+        glib::idle_add_local(move || {
+            let guard = command_rx_idle
+                .lock()
+                .expect("Failed to lock GTK command receiver");
+            while let Ok(command) = guard.try_recv() {
+                let mut state = state_for_idle.borrow_mut();
+                match command {
+                    GtkCommand::Show => show_overlay_window(&mut state),
+                    GtkCommand::Hide => hide_overlay_window(&mut state),
+                    GtkCommand::Quit => {
+                        app.quit();
+                        return ControlFlow::Break;
+                    }
+                }
+            }
+            ControlFlow::Continue
+        });
+
+        let status = self.application.run_with_args::<&str>(&[]);
+        if status.value() != 0 {
+            return Err(anyhow!("GTK application exited with status {:?}", status));
+        }
+
+        Ok(())
+    }
 }
 
 impl crate::backend::Backend for Gtk4Backend {
@@ -180,7 +244,7 @@ impl crate::backend::Backend for Gtk4Backend {
     fn show(&mut self) -> Result<()> {
         info!("Showing GTK4 overlay");
         let state = self.ensure_state()?;
-        self.setup_activate_handler(state.clone());
+        self.setup_activate_handler(state.clone(), None, true);
         self.visible = true;
 
         let status = self.application.run_with_args::<&str>(&[]);
@@ -504,6 +568,74 @@ fn friendly_capture_error(error: &str) -> String {
         "Screen capture in progress. Try again in a moment.".to_string()
     } else {
         "Screen capture failed. Please try again.".to_string()
+    }
+}
+
+enum GtkCommand {
+    Show,
+    Hide,
+    Quit,
+}
+
+pub struct GtkDaemonController {
+    sender: mpsc::Sender<GtkCommand>,
+    handle: Option<thread::JoinHandle<Result<()>>>,
+}
+
+impl GtkDaemonController {
+    pub fn start(initial_mode: Option<String>) -> Result<Self> {
+        let (cmd_tx, cmd_rx) = mpsc::channel();
+        let (ready_tx, ready_rx) = mpsc::channel();
+
+        let handle = thread::Builder::new()
+            .name("wayscriber-gtk-daemon".into())
+            .spawn(move || -> Result<()> {
+                let mut backend = Gtk4Backend::new(initial_mode)?;
+                backend.init()?;
+                backend.run_daemon_loop(cmd_rx, ready_tx)?;
+                Ok(())
+            })?;
+
+        match ready_rx.recv() {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                let _ = handle.join();
+                return Err(err);
+            }
+            Err(_) => {
+                let _ = handle.join();
+                return Err(anyhow!("GTK daemon backend failed to start"));
+            }
+        }
+
+        Ok(Self {
+            sender: cmd_tx,
+            handle: Some(handle),
+        })
+    }
+
+    pub fn show(&self) -> Result<()> {
+        self.sender
+            .send(GtkCommand::Show)
+            .map_err(|_| anyhow!("GTK backend command channel closed"))
+    }
+
+    pub fn hide(&self) -> Result<()> {
+        self.sender
+            .send(GtkCommand::Hide)
+            .map_err(|_| anyhow!("GTK backend command channel closed"))
+    }
+
+    pub fn shutdown(mut self) -> Result<()> {
+        let _ = self.sender.send(GtkCommand::Quit);
+        if let Some(handle) = self.handle.take() {
+            match handle.join() {
+                Ok(result) => result,
+                Err(err) => Err(anyhow!("GTK controller thread panicked: {:?}", err)),
+            }
+        } else {
+            Ok(())
+        }
     }
 }
 

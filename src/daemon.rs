@@ -17,6 +17,8 @@ use std::time::{Duration, Instant};
 use libc;
 
 use crate::backend;
+#[cfg(feature = "gtk-backend")]
+use crate::backend::gtk4::GtkDaemonController;
 use crate::legacy;
 
 /// Overlay state for daemon mode
@@ -40,6 +42,8 @@ pub struct Daemon {
     backend_runner: Option<Arc<BackendRunner>>,
     tray_thread: Option<JoinHandle<()>>,
     overlay_child: Option<Child>,
+    #[cfg(feature = "gtk-backend")]
+    gtk_controller: Option<GtkDaemonController>,
 }
 
 pub(crate) struct WayscriberTray {
@@ -198,6 +202,19 @@ impl ksni::Tray for WayscriberTray {
 
 impl Daemon {
     pub fn new(initial_mode: Option<String>, backend_kind: backend::BackendKind) -> Self {
+        #[cfg(feature = "gtk-backend")]
+        let gtk_controller = if backend_kind == backend::BackendKind::Gtk4 {
+            match GtkDaemonController::start(initial_mode.clone()) {
+                Ok(controller) => Some(controller),
+                Err(err) => {
+                    warn!("Failed to start GTK backend controller: {}", err);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
@@ -207,6 +224,8 @@ impl Daemon {
             backend_runner: None,
             tray_thread: None,
             overlay_child: None,
+            #[cfg(feature = "gtk-backend")]
+            gtk_controller,
         }
     }
 
@@ -225,6 +244,8 @@ impl Daemon {
             backend_runner: Some(backend_runner),
             tray_thread: None,
             overlay_child: None,
+            #[cfg(feature = "gtk-backend")]
+            gtk_controller: None,
         }
     }
 
@@ -328,6 +349,8 @@ impl Daemon {
                 Err(err) => warn!("System tray thread panicked: {:?}", err),
             }
         }
+        #[cfg(feature = "gtk-backend")]
+        self.shutdown_gtk_controller();
         Ok(())
     }
 
@@ -353,6 +376,15 @@ impl Daemon {
             return Ok(());
         }
 
+        #[cfg(feature = "gtk-backend")]
+        if self.backend_kind == backend::BackendKind::Gtk4 {
+            if let Some(controller) = self.gtk_controller.as_ref() {
+                controller.show()?;
+                self.overlay_state = OverlayState::Visible;
+                return Ok(());
+            }
+        }
+
         if let Some(runner) = &self.backend_runner {
             self.overlay_state = OverlayState::Visible;
             info!("Overlay state set to Visible");
@@ -371,6 +403,15 @@ impl Daemon {
         if self.overlay_state == OverlayState::Hidden {
             debug!("Overlay already hidden");
             return Ok(());
+        }
+
+        #[cfg(feature = "gtk-backend")]
+        if self.backend_kind == backend::BackendKind::Gtk4 {
+            if let Some(controller) = self.gtk_controller.as_ref() {
+                controller.hide()?;
+                self.overlay_state = OverlayState::Hidden;
+                return Ok(());
+            }
         }
 
         if self.backend_runner.is_some() {
@@ -545,6 +586,11 @@ impl Daemon {
             return Ok(());
         }
 
+        #[cfg(feature = "gtk-backend")]
+        if self.gtk_controller.is_some() {
+            return Ok(());
+        }
+
         if let Some(child) = self.overlay_child.as_mut() {
             match child.try_wait() {
                 Ok(Some(status)) => {
@@ -568,6 +614,17 @@ fn report_tray_readiness(tx: &mpsc::Sender<Result<()>>, result: Result<()>) {
             "System tray readiness receiver dropped before signal could be delivered: {}",
             err
         );
+    }
+}
+
+#[cfg(feature = "gtk-backend")]
+impl Daemon {
+    fn shutdown_gtk_controller(&mut self) {
+        if let Some(controller) = self.gtk_controller.take() {
+            if let Err(err) = controller.shutdown() {
+                warn!("Failed to shut down GTK backend controller: {}", err);
+            }
+        }
     }
 }
 

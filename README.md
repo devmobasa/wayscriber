@@ -219,6 +219,9 @@ hyprctl reload
 
 The daemon shows a system tray icon (may be in Waybar drawer). Press `Super+D` to toggle overlay, right-click tray icon for options.
 
+> **GNOME (GTK backend):** build with `cargo build --release --features gtk-backend` and run
+> `wayscriber --backend gtk4 --daemon` to use the same SIGUSR1 toggling flow.
+
 **Service commands:**
 ```bash
 systemctl --user status wayscriber.service

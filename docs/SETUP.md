@@ -22,6 +22,8 @@ GNOME users can try the in-progress GTK backend by building with the feature fla
 # Install GTK4 development headers (Debian/Ubuntu: `sudo apt install libgtk-4-dev libgdk-pixbuf-2.0-dev`)
 cargo build --release --features gtk-backend
 ./target/release/wayscriber --backend gtk4 --active
+# Daemon mode toggle
+./target/release/wayscriber --backend gtk4 --daemon
 ```
 
 > **Heads up:** the GTK path is still being fleshed out (portal captures, multi-monitor handling, and daemon integration are works in progress).
