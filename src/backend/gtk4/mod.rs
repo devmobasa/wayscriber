@@ -86,15 +86,17 @@ impl Gtk4Backend {
             );
         }
 
-        if let Some(display) = gdk::Display::default() {
-            debug!(
-                "GTK display rgba={} composited={}",
-                display.is_rgba(),
-                display.is_composited()
-            );
-        }
-
         let mut input_state = common::build_input_state(&config, self.initial_mode.clone())?;
+
+        if let Some(display) = gdk::Display::default() {
+            let rgba = display.is_rgba();
+            let composited = display.is_composited();
+            debug!("GTK display rgba={} composited={}", rgba, composited);
+            if !rgba {
+                warn!("Display does not support RGBA surfaces; forcing whiteboard fallback");
+                state_helpers::force_whiteboard(&mut input_state);
+            }
+        }
 
         let capture_manager = CaptureManager::new(self.runtime.handle());
 
@@ -336,6 +338,7 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
         .build();
 
     window.fullscreen();
+    window.set_default_size(width as i32, height as i32);
     window.set_deletable(true);
     if let Some(surface) = window.surface() {
         surface.set_opaque_region(None);
@@ -346,11 +349,19 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
     apply_transparent_css(&window);
 
     let drawing_area = gtk4::DrawingArea::builder()
-        .content_width(width as i32)
-        .content_height(height as i32)
         .hexpand(true)
         .vexpand(true)
         .build();
+
+    let resize_state = state.clone();
+    drawing_area.connect_resize(move |_, width, height| {
+        debug!(
+            "GTK resize allocation: {}x{} (mode={:?})",
+            width,
+            height,
+            resize_state.borrow().input_state.board_mode()
+        );
+    });
 
     let draw_state = state.clone();
     drawing_area.set_draw_func(move |area, ctx, width, height| {
@@ -413,7 +424,9 @@ fn detect_monitor_size() -> Result<(u32, u32)> {
         .and_then(|obj| obj.downcast::<gdk::Monitor>().ok())
         .ok_or_else(|| anyhow!("No monitor found"))?;
     let geometry = monitor.geometry();
-    Ok((geometry.width() as u32, geometry.height() as u32))
+    let size = (geometry.width() as u32, geometry.height() as u32);
+    debug!("Detected monitor geometry {:?}", size);
+    Ok(size)
 }
 
 fn apply_transparent_css(window: &gtk4::ApplicationWindow) {
@@ -646,6 +659,17 @@ fn handle_capture_outcome(state: &mut GtkState, outcome: CaptureOutcome) {
         }
         CaptureOutcome::Cancelled(reason) => {
             info!("Capture cancelled: {}", reason);
+        }
+    }
+}
+
+mod state_helpers {
+    use crate::input::{BoardMode, InputState};
+
+    pub fn force_whiteboard(state: &mut InputState) {
+        if state.board_mode() != BoardMode::Whiteboard {
+            state.canvas_set.switch_mode(BoardMode::Whiteboard);
+            state.needs_redraw = true;
         }
     }
 }
