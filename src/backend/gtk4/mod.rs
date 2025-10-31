@@ -165,6 +165,9 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
 
     window.fullscreen();
     window.set_deletable(true);
+    if let Some(surface) = window.surface() {
+        surface.set_opaque_region(None);
+    }
 
     apply_transparent_css(&window);
 
