@@ -12,7 +12,7 @@ use std::{
     rc::Rc,
     sync::{Arc, Mutex, mpsc},
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -20,14 +20,13 @@ use gdk::prelude::ListModelExt;
 use glib::prelude::Cast;
 use gtk4::{
     gdk,
-    glib::{self, ControlFlow, Propagation, SignalHandlerId},
+    glib::{self, ControlFlow, Propagation, SignalHandlerId, SourceId},
     prelude::*,
 };
 use log::{debug, error, info, warn};
 
 use crate::{
-    backend::Backend,
-    backend::common,
+    backend::{Backend, common},
     capture::{
         CaptureManager, CaptureOutcome,
         file::{FileSaveConfig, expand_tilde},
@@ -132,6 +131,8 @@ impl Gtk4Backend {
             session_options,
             session_loaded,
             capture_in_progress: false,
+            desired_visible: false,
+            capture_poll: None,
             window: glib::WeakRef::new(),
             tokio_handle: self.runtime.handle().clone(),
             current_mouse_x: 0,
@@ -159,8 +160,13 @@ impl Gtk4Backend {
             let state = Rc::clone(&state_for_activate);
             match build_overlay(app, state.clone()) {
                 Ok(()) => {
-                    if !start_visible {
-                        hide_overlay_window(&mut state.borrow_mut());
+                    {
+                        let mut state_mut = state.borrow_mut();
+                        if start_visible {
+                            show_overlay_window(&mut state_mut);
+                        } else {
+                            hide_overlay_window(&mut state_mut);
+                        }
                     }
                     if let Some(tx) = ready_clone.as_ref() {
                         let _ = tx.send(Ok(()));
@@ -226,6 +232,13 @@ impl Gtk4Backend {
         });
 
         let status = self.application.run_with_args::<&str>(&[]);
+
+        if let Some(state_rc) = self.state.take() {
+            self.save_session_snapshot(&state_rc.borrow());
+        } else {
+            self.save_session_snapshot(&state.borrow());
+        }
+
         if status.value() != 0 {
             return Err(anyhow!("GTK application exited with status {:?}", status));
         }
@@ -287,6 +300,8 @@ struct GtkState {
     #[allow(dead_code)]
     session_loaded: bool,
     capture_in_progress: bool,
+    desired_visible: bool,
+    capture_poll: Option<SourceId>,
     window: glib::WeakRef<gtk4::ApplicationWindow>,
     tokio_handle: tokio::runtime::Handle,
     current_mouse_x: i32,
@@ -339,80 +354,32 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
     let app_weak = app.downgrade();
     let tick_state = state.clone();
     drawing_area.add_tick_callback(move |area, _clock| {
-        let mut state_mut = tick_state.borrow_mut();
+        {
+            let mut state_mut = tick_state.borrow_mut();
 
-        if state_mut.input_state.should_exit {
-            info!("GTK backend detected exit request; closing window");
-            state_mut.input_state.should_exit = false;
-            if let Some(app) = app_weak.upgrade() {
-                drop(state_mut);
-                app.quit();
-                return ControlFlow::Break;
-            }
-        }
-
-        if state_mut.capture_in_progress {
-            if let Some(outcome) = state_mut.capture_manager.try_take_result() {
-                show_overlay_window(&mut state_mut);
-                state_mut.capture_in_progress = false;
-                area.queue_draw();
-
-                match outcome {
-                    CaptureOutcome::Success(result) => {
-                        let mut parts = Vec::new();
-                        if let Some(ref path) = result.saved_path {
-                            info!("Screenshot saved to: {}", path.display());
-                            if let Some(filename) = path.file_name() {
-                                parts.push(format!("Saved as {}", filename.to_string_lossy()));
-                            }
-                        }
-                        if result.copied_to_clipboard {
-                            info!("Screenshot copied to clipboard");
-                            parts.push("Copied to clipboard".to_string());
-                        }
-
-                        let body = if parts.is_empty() {
-                            "Screenshot captured".to_string()
-                        } else {
-                            parts.join(" • ")
-                        };
-
-                        notification::send_notification_async(
-                            &state_mut.tokio_handle,
-                            "Screenshot Captured".to_string(),
-                            body,
-                            Some("camera-photo".to_string()),
-                        );
-                    }
-                    CaptureOutcome::Failed(err) => {
-                        let friendly = friendly_capture_error(&err);
-                        warn!("Screenshot capture failed: {}", err);
-                        notification::send_notification_async(
-                            &state_mut.tokio_handle,
-                            "Screenshot Failed".to_string(),
-                            friendly,
-                            Some("dialog-error".to_string()),
-                        );
-                    }
-                    CaptureOutcome::Cancelled(reason) => {
-                        info!("Capture cancelled: {}", reason);
-                    }
+            if state_mut.input_state.should_exit {
+                info!("GTK backend detected exit request; closing window");
+                state_mut.input_state.should_exit = false;
+                if let Some(app) = app_weak.upgrade() {
+                    drop(state_mut);
+                    app.quit();
+                    return ControlFlow::Break;
                 }
             }
+
+            if let Some(action) = state_mut.input_state.take_pending_capture_action() {
+                drop(state_mut);
+                handle_capture_action(&tick_state, action);
+                return ControlFlow::Continue;
+            }
+
+            if state_mut.input_state.needs_redraw {
+                debug!("GTK backend scheduling redraw");
+                area.queue_draw();
+                state_mut.input_state.needs_redraw = false;
+            }
         }
 
-        if let Some(action) = state_mut.input_state.take_pending_capture_action() {
-            handle_capture_action(&mut state_mut, action);
-        }
-
-        // Trigger redraw if needed (e.g., animations/click highlights)
-        if state_mut.input_state.needs_redraw {
-            debug!("GTK backend scheduling redraw");
-            area.queue_draw();
-            state_mut.input_state.needs_redraw = false;
-        }
-
-        drop(state_mut);
         ControlFlow::Continue
     });
 
@@ -459,6 +426,7 @@ fn hide_overlay_window(state: &mut GtkState) {
     if let Some(window) = state.window.upgrade() {
         window.set_visible(false);
     }
+    state.desired_visible = false;
     state.input_state.needs_redraw = false;
 }
 
@@ -467,94 +435,110 @@ fn show_overlay_window(state: &mut GtkState) {
         window.set_visible(true);
         window.present();
     }
+    state.desired_visible = true;
     state.input_state.needs_redraw = true;
 }
 
-fn handle_capture_action(state: &mut GtkState, action: Action) {
-    if !state.config.capture.enabled {
-        warn!("Capture action triggered but capture is disabled in config");
-        return;
+fn hide_overlay_for_capture(state: &mut GtkState) {
+    if let Some(window) = state.window.upgrade() {
+        window.set_visible(false);
     }
+    state.input_state.needs_redraw = false;
+}
 
-    if state.capture_in_progress {
-        warn!(
-            "Capture action {:?} requested while another capture is running; ignoring",
-            action
-        );
-        return;
-    }
+fn handle_capture_action(state: &Rc<RefCell<GtkState>>, action: Action) {
+    {
+        let mut state_mut = state.borrow_mut();
 
-    let default_destination = if state.config.capture.copy_to_clipboard {
-        CaptureDestination::ClipboardAndFile
-    } else {
-        CaptureDestination::FileOnly
-    };
-
-    let (capture_type, destination) = match action {
-        Action::CaptureFullScreen => (CaptureType::FullScreen, default_destination),
-        Action::CaptureActiveWindow => (CaptureType::ActiveWindow, default_destination),
-        Action::CaptureSelection => (
-            CaptureType::Selection {
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 0,
-            },
-            default_destination,
-        ),
-        Action::CaptureClipboardFull => {
-            (CaptureType::FullScreen, CaptureDestination::ClipboardOnly)
+        if !state_mut.config.capture.enabled {
+            warn!("Capture action triggered but capture is disabled in config");
+            return;
         }
-        Action::CaptureFileFull => (CaptureType::FullScreen, CaptureDestination::FileOnly),
-        Action::CaptureClipboardSelection | Action::CaptureClipboardRegion => (
-            CaptureType::Selection {
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 0,
-            },
-            CaptureDestination::ClipboardOnly,
-        ),
-        Action::CaptureFileSelection | Action::CaptureFileRegion => (
-            CaptureType::Selection {
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 0,
-            },
-            CaptureDestination::FileOnly,
-        ),
-        other => {
-            error!(
-                "Non-capture action passed to GTK capture handler: {:?}",
-                other
+
+        if state_mut.capture_in_progress {
+            warn!(
+                "Capture action {:?} requested while another capture is running; ignoring",
+                action
             );
             return;
         }
-    };
 
-    let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
-        None
-    } else {
-        Some(FileSaveConfig {
-            save_directory: expand_tilde(&state.config.capture.save_directory),
-            filename_template: state.config.capture.filename_template.clone(),
-            format: state.config.capture.format.clone(),
-        })
-    };
+        let default_destination = if state_mut.config.capture.copy_to_clipboard {
+            CaptureDestination::ClipboardAndFile
+        } else {
+            CaptureDestination::FileOnly
+        };
 
-    hide_overlay_window(state);
-    state.capture_in_progress = true;
+        let (capture_type, destination) = match action {
+            Action::CaptureFullScreen => (CaptureType::FullScreen, default_destination),
+            Action::CaptureActiveWindow => (CaptureType::ActiveWindow, default_destination),
+            Action::CaptureSelection => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                default_destination,
+            ),
+            Action::CaptureClipboardFull => {
+                (CaptureType::FullScreen, CaptureDestination::ClipboardOnly)
+            }
+            Action::CaptureFileFull => (CaptureType::FullScreen, CaptureDestination::FileOnly),
+            Action::CaptureClipboardSelection | Action::CaptureClipboardRegion => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                CaptureDestination::ClipboardOnly,
+            ),
+            Action::CaptureFileSelection | Action::CaptureFileRegion => (
+                CaptureType::Selection {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
+                CaptureDestination::FileOnly,
+            ),
+            other => {
+                error!(
+                    "Non-capture action passed to GTK capture handler: {:?}",
+                    other
+                );
+                return;
+            }
+        };
 
-    info!("Requesting {:?} capture", capture_type);
-    if let Err(err) = state
-        .capture_manager
-        .request_capture(capture_type, destination, save_config)
-    {
-        error!("Failed to request capture: {}", err);
-        state.capture_in_progress = false;
-        show_overlay_window(state);
+        let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
+            None
+        } else {
+            Some(FileSaveConfig {
+                save_directory: expand_tilde(&state_mut.config.capture.save_directory),
+                filename_template: state_mut.config.capture.filename_template.clone(),
+                format: state_mut.config.capture.format.clone(),
+            })
+        };
+
+        hide_overlay_for_capture(&mut state_mut);
+        state_mut.capture_in_progress = true;
+
+        info!("Requesting {:?} capture", capture_type);
+        if let Err(err) =
+            state_mut
+                .capture_manager
+                .request_capture(capture_type, destination, save_config)
+        {
+            error!("Failed to request capture: {}", err);
+            state_mut.capture_in_progress = false;
+            show_overlay_window(&mut state_mut);
+            return;
+        }
     }
+
+    start_capture_poll(state);
 }
 
 fn friendly_capture_error(error: &str) -> String {
@@ -568,6 +552,79 @@ fn friendly_capture_error(error: &str) -> String {
         "Screen capture in progress. Try again in a moment.".to_string()
     } else {
         "Screen capture failed. Please try again.".to_string()
+    }
+}
+
+fn start_capture_poll(state: &Rc<RefCell<GtkState>>) {
+    let mut state_mut = state.borrow_mut();
+    if state_mut.capture_poll.is_some() {
+        return;
+    }
+
+    let state_weak = Rc::downgrade(state);
+    let source_id = glib::timeout_add_local(Duration::from_millis(50), move || {
+        if let Some(state_rc) = state_weak.upgrade() {
+            let mut state = state_rc.borrow_mut();
+            if let Some(outcome) = state.capture_manager.try_take_result() {
+                state.capture_in_progress = false;
+                state.capture_poll = None;
+                handle_capture_outcome(&mut state, outcome);
+                return ControlFlow::Break;
+            }
+            ControlFlow::Continue
+        } else {
+            ControlFlow::Break
+        }
+    });
+
+    state_mut.capture_poll = Some(source_id);
+}
+
+fn handle_capture_outcome(state: &mut GtkState, outcome: CaptureOutcome) {
+    if state.desired_visible {
+        show_overlay_window(state);
+    }
+
+    match outcome {
+        CaptureOutcome::Success(result) => {
+            let mut parts = Vec::new();
+            if let Some(ref path) = result.saved_path {
+                info!("Screenshot saved to: {}", path.display());
+                if let Some(filename) = path.file_name() {
+                    parts.push(format!("Saved as {}", filename.to_string_lossy()));
+                }
+            }
+            if result.copied_to_clipboard {
+                info!("Screenshot copied to clipboard");
+                parts.push("Copied to clipboard".to_string());
+            }
+
+            let body = if parts.is_empty() {
+                "Screenshot captured".to_string()
+            } else {
+                parts.join(" • ")
+            };
+
+            notification::send_notification_async(
+                &state.tokio_handle,
+                "Screenshot Captured".to_string(),
+                body,
+                Some("camera-photo".to_string()),
+            );
+        }
+        CaptureOutcome::Failed(err) => {
+            let friendly = friendly_capture_error(&err);
+            warn!("Screenshot capture failed: {}", err);
+            notification::send_notification_async(
+                &state.tokio_handle,
+                "Screenshot Failed".to_string(),
+                friendly,
+                Some("dialog-error".to_string()),
+            );
+        }
+        CaptureOutcome::Cancelled(reason) => {
+            info!("Capture cancelled: {}", reason);
+        }
     }
 }
 

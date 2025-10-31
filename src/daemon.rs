@@ -394,6 +394,27 @@ impl Daemon {
             return result;
         }
 
+        #[cfg(feature = "gtk-backend")]
+        if self.backend_kind == backend::BackendKind::Gtk4 {
+            if self.gtk_controller.is_none() {
+                match GtkDaemonController::start(self.initial_mode.clone()) {
+                    Ok(controller) => {
+                        self.gtk_controller = Some(controller);
+                    }
+                    Err(err) => {
+                        error!("Failed to start GTK backend controller: {}", err);
+                        return Err(err);
+                    }
+                }
+            }
+
+            if let Some(controller) = self.gtk_controller.as_ref() {
+                controller.show()?;
+                self.overlay_state = OverlayState::Visible;
+                return Ok(());
+            }
+        }
+
         self.spawn_overlay_process()?;
         Ok(())
     }
@@ -419,6 +440,15 @@ impl Daemon {
             debug!("Internal backend runner hidden");
             self.overlay_state = OverlayState::Hidden;
             return Ok(());
+        }
+
+        #[cfg(feature = "gtk-backend")]
+        if self.backend_kind == backend::BackendKind::Gtk4 {
+            if let Some(controller) = self.gtk_controller.as_ref() {
+                controller.hide()?;
+                self.overlay_state = OverlayState::Hidden;
+                return Ok(());
+            }
         }
 
         self.terminate_overlay_process()?;
