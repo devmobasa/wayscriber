@@ -93,8 +93,7 @@ impl Gtk4Backend {
             let composited = display.is_composited();
             debug!("GTK display rgba={} composited={}", rgba, composited);
             if !rgba {
-                warn!("Display does not support RGBA surfaces; forcing whiteboard fallback");
-                state_helpers::force_whiteboard(&mut input_state);
+                warn!("Display reports no RGBA support; transparent mode may not be available");
             }
         }
 
@@ -328,6 +327,9 @@ struct GtkState {
 fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Result<()> {
     let display = gdk::Display::default().ok_or_else(|| anyhow!("No default display available"))?;
     let (monitor, (width, height)) = detect_monitor(&display)?;
+    if let Some(model) = monitor.model() {
+        debug!("Targeting monitor '{}' for GTK overlay", model);
+    }
 
     let window = gtk4::ApplicationWindow::builder()
         .application(app)
@@ -338,13 +340,32 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
         .resizable(false)
         .build();
 
-    window.fullscreen();
-    window.fullscreen_on_monitor(&monitor);
+    window.connect_realize(|win| {
+        let display = gtk4::prelude::WidgetExt::display(win);
+        let rgba = display.is_rgba();
+        let composited = display.is_composited();
+        debug!(
+            "GTK window realized; display rgba={} composited={}",
+            rgba, composited
+        );
+        if !rgba {
+            warn!("Display reports no RGBA support; transparent mode may not be available");
+        }
+
+        match win.surface() {
+            Some(surface) => {
+                debug!("GTK surface realised; clearing opaque region for transparency");
+                surface.set_opaque_region(None);
+            }
+            None => {
+                warn!("GTK window realised without GDK surface; transparency may fail");
+            }
+        }
+    });
+
     window.set_default_size(width as i32, height as i32);
     window.set_deletable(true);
-    if let Some(surface) = window.surface() {
-        surface.set_opaque_region(None);
-    }
+    window.maximize();
 
     state.borrow_mut().window = window.downgrade();
 
@@ -379,10 +400,11 @@ fn build_overlay(app: &gtk4::Application, state: Rc<RefCell<GtkState>>) -> Resul
 
     register_input_handlers(&window, &drawing_area, state.clone());
 
-    let monitor_for_map = monitor.clone();
-    window.connect_map(move |win| {
-        debug!("GTK window mapped; enforcing fullscreen on monitor");
-        win.fullscreen_on_monitor(&monitor_for_map);
+    window.connect_map(|win| {
+        debug!("GTK window mapped; ensuring transparent surface hint is preserved");
+        if let Some(surface) = win.surface() {
+            surface.set_opaque_region(None);
+        }
         win.present();
     });
 
@@ -667,17 +689,6 @@ fn handle_capture_outcome(state: &mut GtkState, outcome: CaptureOutcome) {
         }
         CaptureOutcome::Cancelled(reason) => {
             info!("Capture cancelled: {}", reason);
-        }
-    }
-}
-
-mod state_helpers {
-    use crate::input::{BoardMode, InputState};
-
-    pub fn force_whiteboard(state: &mut InputState) {
-        if state.board_mode() != BoardMode::Whiteboard {
-            state.canvas_set.switch_mode(BoardMode::Whiteboard);
-            state.needs_redraw = true;
         }
     }
 }
