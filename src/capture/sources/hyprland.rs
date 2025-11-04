@@ -2,6 +2,42 @@ use tokio::task;
 
 use crate::capture::types::CaptureError;
 
+/// Capture the entire Wayland scene using `grim`.
+pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
+    task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {
+        use std::process::{Command, Stdio};
+
+        log::debug!("Capturing full screen via grim");
+        let output = Command::new("grim")
+            .arg("-")
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(|e| {
+                CaptureError::ImageError(format!("Failed to run grim for full screen: {}", e))
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(CaptureError::ImageError(format!(
+                "grim full screen capture failed: {}",
+                stderr.trim()
+            )));
+        }
+
+        if output.stdout.is_empty() {
+            return Err(CaptureError::ImageError(
+                "grim returned empty screenshot for full screen capture".into(),
+            ));
+        }
+
+        Ok(output.stdout)
+    })
+    .await
+    .map_err(|e| {
+        CaptureError::ImageError(format!("Full screen capture task failed to join: {}", e))
+    })?
+}
+
 /// Capture the currently focused Hyprland window using `hyprctl` + `grim`.
 pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
     task::spawn_blocking(|| -> Result<Vec<u8>, CaptureError> {

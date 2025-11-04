@@ -6,6 +6,16 @@ pub(crate) mod reader;
 
 pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
     match capture_type {
+        CaptureType::FullScreen => match hyprland::capture_full_screen_hyprland().await {
+            Ok(data) => Ok(data),
+            Err(e) => {
+                log::warn!(
+                    "Full screen capture via Hyprland failed: {}. Falling back to portal.",
+                    e
+                );
+                portal::capture_via_portal_bytes(CaptureType::FullScreen).await
+            }
+        },
         CaptureType::ActiveWindow => match hyprland::capture_active_window_hyprland().await {
             Ok(data) => Ok(data),
             Err(e) => {
@@ -32,6 +42,5 @@ pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, Capture
                 .await
             }
         },
-        other => portal::capture_via_portal_bytes(other).await,
     }
 }
