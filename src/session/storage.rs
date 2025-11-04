@@ -1,6 +1,7 @@
 use super::options::SessionOptions;
 use super::snapshot;
 use anyhow::{Context, Result};
+use fs2::FileExt;
 use log::warn;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -121,19 +122,18 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
             .create(true)
             .open(&lock_path)
             .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-        lock_file
-            .lock_shared()
+        FileExt::lock_shared(&lock_file)
             .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
 
         let loaded = snapshot::load_snapshot_inner(&session_path, options);
 
-        lock_file.unlock().unwrap_or_else(|err| {
+        if let Err(err) = FileExt::unlock(&lock_file) {
             warn!(
                 "failed to unlock session file {}: {}",
                 lock_path.display(),
                 err
-            )
-        });
+            );
+        }
 
         if let Some(loaded) = loaded? {
             frame_counts = Some(FrameCounts {

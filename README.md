@@ -1,7 +1,7 @@
 # wayscriber
 
 > TL;DR: wayscriber is a ZoomIt-like screen annotation tool for Wayland compositors, written in Rust.
-> Works on compositors with the wlr-layer-shell protocol (Hyprland, Sway, river, …); building from source requires Rust 1.70+.
+> Works on compositors with the wlr-layer-shell protocol (Hyprland, Sway, river, …); building from source requires Rust 1.85+.
 > Quick start: [set it up in four steps](#quick-start).
 
 <details>
@@ -19,7 +19,7 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 </details>
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)
 
 - [Why wayscriber?](#why-wayscriber)
 - [Quick Start](#quick-start)

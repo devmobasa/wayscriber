@@ -155,19 +155,18 @@ pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Re
         .create(true)
         .open(&lock_path)
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-    lock_file
-        .lock_exclusive()
+    FileExt::lock_exclusive(&lock_file)
         .with_context(|| format!("failed to lock session file {}", lock_path.display()))?;
 
     let result = save_snapshot_inner(snapshot, options);
 
-    lock_file.unlock().unwrap_or_else(|err| {
+    if let Err(err) = FileExt::unlock(&lock_file) {
         warn!(
             "failed to unlock session file {}: {}",
             lock_path.display(),
             err
-        )
-    });
+        );
+    }
 
     result
 }
@@ -314,19 +313,18 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
         .create(true)
         .open(&lock_path)
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-    lock_file
-        .lock_shared()
+    FileExt::lock_shared(&lock_file)
         .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
 
     let result = load_snapshot_inner(&session_path, options);
 
-    lock_file.unlock().unwrap_or_else(|err| {
+    if let Err(err) = FileExt::unlock(&lock_file) {
         warn!(
             "failed to unlock session file {}: {}",
             lock_path.display(),
             err
-        )
-    });
+        );
+    }
 
     match result? {
         Some(loaded) => Ok(Some(loaded.snapshot)),
