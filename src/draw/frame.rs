@@ -102,11 +102,13 @@ impl Frame {
         self.next_shape_id = 1;
     }
 
+    #[allow(dead_code)]
     /// Returns the number of shapes in the frame.
     pub fn len(&self) -> usize {
         self.shapes.len()
     }
 
+    #[allow(dead_code)]
     /// Returns true if the frame contains no shapes.
     pub fn is_empty(&self) -> bool {
         self.shapes.is_empty()
@@ -115,7 +117,9 @@ impl Frame {
     /// Adds a shape at the end of the stack and returns its identifier.
     pub fn add_shape(&mut self, shape: Shape) -> ShapeId {
         let index = self.shapes.len();
-        self.insert_new_shape(index, shape)
+        let id = self.insert_new_shape(index, shape);
+        self.redo_stack.clear();
+        id
     }
 
     /// Attempts to add a shape respecting a maximum count.
@@ -133,10 +137,13 @@ impl Frame {
         Some(self.add_shape(shape))
     }
 
+    #[allow(dead_code)]
     /// Inserts a shape at the given index and returns its identifier.
     pub fn insert_shape_at(&mut self, index: usize, shape: Shape) -> ShapeId {
         let index = index.min(self.shapes.len());
-        self.insert_new_shape(index, shape)
+        let id = self.insert_new_shape(index, shape);
+        self.redo_stack.clear();
+        id
     }
 
     /// Records an undoable action, enforcing a stack limit.
@@ -165,23 +172,27 @@ impl Frame {
         Some(action)
     }
 
+    #[allow(dead_code)]
     /// Legacy helper used by existing code paths to undo an action and retrieve a representative shape.
     pub fn undo(&mut self) -> Option<Shape> {
         let action = self.undo_last()?;
         Self::primary_shape_for_undo(&action)
     }
 
+    #[allow(dead_code)]
     /// Legacy helper used by existing code paths to redo an action and retrieve a representative shape.
     pub fn redo(&mut self) -> Option<Shape> {
         let action = self.redo_last()?;
         Self::primary_shape_for_redo(&action)
     }
 
+    #[allow(dead_code)]
     /// Returns a reference to the undo stack (for testing).
     pub fn undo_stack_len(&self) -> usize {
         self.undo_stack.len()
     }
 
+    #[allow(dead_code)]
     /// Returns a reference to the redo stack length (for testing).
     pub fn redo_stack_len(&self) -> usize {
         self.redo_stack.len()
@@ -317,7 +328,8 @@ impl Frame {
         }
     }
 
-    fn primary_shape_for_undo(action: &UndoAction) -> Option<Shape> {
+    #[allow(dead_code)]
+    pub fn primary_shape_for_undo(action: &UndoAction) -> Option<Shape> {
         match action {
             UndoAction::Create { shapes } => shapes.first().map(|(_, s)| s.shape.clone()),
             UndoAction::Delete { shapes } => shapes.first().map(|(_, s)| s.shape.clone()),
@@ -329,7 +341,8 @@ impl Frame {
         }
     }
 
-    fn primary_shape_for_redo(action: &UndoAction) -> Option<Shape> {
+    #[allow(dead_code)]
+    pub fn primary_shape_for_redo(action: &UndoAction) -> Option<Shape> {
         match action {
             UndoAction::Create { shapes } => shapes.first().map(|(_, s)| s.shape.clone()),
             UndoAction::Delete { shapes } => shapes.first().map(|(_, s)| s.shape.clone()),

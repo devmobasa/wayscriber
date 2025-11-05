@@ -60,15 +60,17 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
                     tolerance,
                 )
         }
-        Shape::Text {
-            x,
-            y,
-            text,
-            size,
-            font_descriptor: _,
-            background_enabled: _,
-            ..
-        } => text_hit(*x, *y, text, *size, point, tolerance),
+        Shape::Text { .. } => {
+            if let Some(bounds) = shape.shape.bounding_box() {
+                let inflate = tolerance.ceil() as i32;
+                bounds
+                    .inflated(inflate)
+                    .unwrap_or(bounds)
+                    .contains(point.0, point.1)
+            } else {
+                false
+            }
+        }
     }
 }
 
@@ -254,21 +256,6 @@ fn arrowhead_hit(
     edges.iter().any(|&(a, b)| {
         distance_point_to_segment(p_as_i32(p), to_i32_pair(a), to_i32_pair(b)) <= padded
     })
-}
-
-fn text_hit(x: i32, y: i32, text: &str, size: f64, point: (i32, i32), tolerance: f64) -> bool {
-    let width_estimate = (text.len() as f64 * size * 0.55).max(1.0);
-    let height_estimate = size.max(1.0);
-    let rect = Rect::new(
-        x,
-        y - height_estimate as i32,
-        width_estimate as i32,
-        height_estimate as i32,
-    )
-    .unwrap_or_else(|| Rect::new(x, y, 1, 1).unwrap());
-    rect.inflated(tolerance.ceil() as i32)
-        .map(|inflated| inflated.contains(point.0, point.1))
-        .unwrap_or(false)
 }
 
 fn distance_point_to_segment(point: (i32, i32), start: (i32, i32), end: (i32, i32)) -> f64 {

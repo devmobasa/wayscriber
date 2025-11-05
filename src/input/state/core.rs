@@ -4,7 +4,7 @@ use super::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{
-    CanvasSet, Color, DirtyTracker, FontDescriptor, Shape, ShapeId,
+    CanvasSet, Color, DirtyTracker, FontDescriptor, Frame, Shape, ShapeId,
     shape::{
         bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_line,
         bounding_box_for_points, bounding_box_for_rect, bounding_box_for_text,
@@ -53,7 +53,6 @@ pub enum DrawingState {
 #[derive(Debug, Clone)]
 pub enum SelectionState {
     None,
-    Pending { pointer: (i32, i32) },
     Active { shape_ids: Vec<ShapeId> },
 }
 
@@ -88,8 +87,6 @@ pub enum MenuCommand {
     Unlock,
     Properties,
     EditText,
-    ChangeColor,
-    AdjustThickness,
     ClearAll,
     ToggleHighlightTool,
     ToggleClickHighlight,
@@ -140,6 +137,15 @@ pub struct ContextMenuLayout {
     pub padding_y: f64,
     pub shortcut_width: f64,
     pub arrow_width: f64,
+}
+
+const SPATIAL_GRID_CELL_SIZE: i32 = 64;
+
+#[derive(Debug, Clone)]
+struct SpatialGrid {
+    cell_size: i32,
+    cells: HashMap<(i32, i32), Vec<usize>>,
+    shape_count: usize,
 }
 
 /// Summarizes shape metadata for the on-screen properties panel.
@@ -225,6 +231,8 @@ pub struct InputState {
     pub undo_stack_limit: usize,
     /// Cached layout details for the currently open context menu
     pub context_menu_layout: Option<ContextMenuLayout>,
+    /// Optional spatial index for accelerating hit-testing when many shapes are present
+    spatial_index: Option<SpatialGrid>,
     /// Last known pointer position (for keyboard anchors and hover refresh)
     last_pointer_position: (i32, i32),
     /// Recompute hover next time layout is available
@@ -300,6 +308,7 @@ impl InputState {
             max_linear_hit_test: 400,
             undo_stack_limit: 100,
             context_menu_layout: None,
+            spatial_index: None,
             last_pointer_position: (0, 0),
             pending_menu_hover_recalc: false,
             shape_properties_panel: None,
@@ -345,11 +354,6 @@ impl InputState {
     fn set_properties_panel(&mut self, panel: ShapePropertiesPanel) {
         self.shape_properties_panel = Some(panel);
         self.needs_redraw = true;
-    }
-
-    /// Begins a pending selection at the provided pointer coordinate.
-    pub fn begin_pending_selection(&mut self, pointer: (i32, i32)) {
-        self.selection_state = SelectionState::Pending { pointer };
     }
 
     /// Enables or disables context menu interactions.
@@ -423,6 +427,9 @@ impl InputState {
             return;
         }
         self.close_properties_panel();
+        if let Some(layout) = self.context_menu_layout.take() {
+            self.mark_context_menu_region(layout);
+        }
         self.context_menu_state = ContextMenuState::Open {
             anchor,
             shape_ids,
@@ -460,17 +467,6 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    /// Updates the hover index within the open context menu.
-    pub fn set_context_menu_hover(&mut self, hover: Option<usize>) {
-        if let ContextMenuState::Open {
-            ref mut hover_index,
-            ..
-        } = self.context_menu_state
-        {
-            *hover_index = hover;
-        }
-    }
-
     /// Updates the keyboard focus entry for the context menu.
     pub fn set_context_menu_focus(&mut self, focus: Option<usize>) {
         if let ContextMenuState::Open {
@@ -492,8 +488,10 @@ impl InputState {
 
     /// Closes the currently open context menu.
     pub fn close_context_menu(&mut self) {
+        if let Some(layout) = self.context_menu_layout.take() {
+            self.mark_context_menu_region(layout);
+        }
         self.context_menu_state = ContextMenuState::Hidden;
-        self.context_menu_layout = None;
         self.pending_menu_hover_recalc = false;
         self.needs_redraw = true;
     }
@@ -506,11 +504,13 @@ impl InputState {
     /// Clears cached hit-test bounds.
     pub fn invalidate_hit_cache(&mut self) {
         self.hit_test_cache.clear();
+        self.spatial_index = None;
     }
 
     /// Removes cached hit-test data for a single shape.
     pub fn invalidate_hit_cache_for(&mut self, id: ShapeId) {
         self.hit_test_cache.remove(&id);
+        self.spatial_index = None;
     }
 
     /// Updates the hit-test tolerance (in pixels).
@@ -529,6 +529,44 @@ impl InputState {
         self.undo_stack_limit = limit.max(1);
     }
 
+    fn hit_test_single(&mut self, index: usize, x: i32, y: i32, tolerance: f64) -> Option<ShapeId> {
+        let frame = self.canvas_set.active_frame();
+        if index >= frame.shapes.len() {
+            return None;
+        }
+
+        let (shape_id, bounds, hit) = {
+            let drawn = &frame.shapes[index];
+            let cached = self.hit_test_cache.get(&drawn.id).copied();
+            let bounds = cached.or_else(|| hit_test::compute_hit_bounds(drawn, tolerance));
+            let hit = bounds
+                .as_ref()
+                .map(|rect| rect.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance))
+                .unwrap_or(false);
+            (drawn.id, bounds, hit)
+        };
+
+        if let Some(bounds) = bounds {
+            self.hit_test_cache.entry(shape_id).or_insert(bounds);
+            if hit {
+                return Some(shape_id);
+            }
+        }
+        None
+    }
+
+    fn hit_test_indices<I>(&mut self, indices: I, x: i32, y: i32, tolerance: f64) -> Option<ShapeId>
+    where
+        I: IntoIterator<Item = usize>,
+    {
+        for index in indices {
+            if let Some(shape_id) = self.hit_test_single(index, x, y, tolerance) {
+                return Some(shape_id);
+            }
+        }
+        None
+    }
+
     /// Performs hit-testing against the active frame and returns the top-most shape id.
     pub fn hit_test_at(&mut self, x: i32, y: i32) -> Option<ShapeId> {
         let tolerance = self.hit_test_tolerance;
@@ -536,34 +574,27 @@ impl InputState {
         let threshold = self.max_linear_hit_test;
 
         if len > threshold {
-            // Placeholder: spatial index will replace this branch in a future iteration.
-            // For now we continue with the linear scan while keeping the cached bounds hot.
-        }
-
-        for index in (0..len).rev() {
-            let (shape_id, bounds, hit) = {
-                let frame = self.canvas_set.active_frame();
-                let drawn = &frame.shapes[index];
-
-                let cached = self.hit_test_cache.get(&drawn.id).copied();
-                let bounds = cached.or_else(|| hit_test::compute_hit_bounds(drawn, tolerance));
-                let hit = bounds
-                    .as_ref()
-                    .map(|rect| rect.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance))
-                    .unwrap_or(false);
-
-                (drawn.id, bounds, hit)
+            let rebuild = match &self.spatial_index {
+                Some(grid) if grid.shape_count == len => false,
+                _ => true,
             };
 
-            if let Some(bounds) = bounds {
-                self.hit_test_cache.entry(shape_id).or_insert(bounds);
-                if hit {
-                    return Some(shape_id);
+            if rebuild {
+                let frame = self.canvas_set.active_frame();
+                self.spatial_index = SpatialGrid::build(frame, SPATIAL_GRID_CELL_SIZE);
+            }
+
+            if let Some(grid) = &self.spatial_index {
+                let candidates = grid.query((x, y));
+                if let Some(hit) = self.hit_test_indices(candidates.into_iter(), x, y, tolerance) {
+                    return Some(hit);
                 }
             }
+        } else {
+            self.spatial_index = None;
         }
 
-        None
+        self.hit_test_indices((0..len).rev(), x, y, tolerance)
     }
 
     /// Returns the entries to render for the currently open context menu.
@@ -679,6 +710,21 @@ impl InputState {
             true
         } else {
             false
+        }
+    }
+
+    fn mark_context_menu_region(&mut self, layout: ContextMenuLayout) {
+        let x = layout.origin_x.floor() as i32;
+        let y = layout.origin_y.floor() as i32;
+        let width = layout.width.ceil() as i32 + 2;
+        let height = layout.height.ceil() as i32 + 2;
+        let width = width.max(1);
+        let height = height.max(1);
+
+        if let Some(rect) = Rect::new(x, y, width, height) {
+            self.dirty_tracker.mark_rect(rect);
+        } else {
+            self.dirty_tracker.mark_full();
         }
     }
 
@@ -865,6 +911,10 @@ impl InputState {
             self.update_context_menu_hover_from_pointer_internal(px, py, false);
             self.pending_menu_hover_recalc = false;
         }
+
+        if let Some(layout) = self.context_menu_layout {
+            self.mark_context_menu_region(layout);
+        }
     }
 
     /// Maps pointer coordinates to a context menu entry index, if applicable.
@@ -959,7 +1009,6 @@ impl InputState {
                 self.begin_text_edit_for_selection();
                 true
             }
-            MenuCommand::ChangeColor | MenuCommand::AdjustThickness => false,
             MenuCommand::ClearAll => self.clear_active_shapes(),
             MenuCommand::ToggleHighlightTool => {
                 self.toggle_highlight_tool();
@@ -1496,20 +1545,6 @@ impl InputState {
             Some(MenuCommand::Delete),
         ));
         entries.push(ContextMenuEntry::new(
-            "Change Color…",
-            Option::<&str>::None,
-            true,
-            true,
-            Some(MenuCommand::ChangeColor),
-        ));
-        entries.push(ContextMenuEntry::new(
-            "Thickness…",
-            Option::<&str>::None,
-            true,
-            true,
-            Some(MenuCommand::AdjustThickness),
-        ));
-        entries.push(ContextMenuEntry::new(
             "Duplicate",
             Some("D"),
             false,
@@ -1951,5 +1986,62 @@ impl InputState {
         self.needs_redraw = true;
 
         log::info!("Switched from {:?} to {:?} mode", current_mode, target_mode);
+    }
+}
+
+impl SpatialGrid {
+    fn build(frame: &Frame, cell_size: i32) -> Option<Self> {
+        let cell_size = cell_size.max(1);
+        if frame.shapes.is_empty() {
+            return None;
+        }
+
+        let mut cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
+
+        for (index, drawn) in frame.shapes.iter().enumerate() {
+            let Some(bounds) = drawn.shape.bounding_box() else {
+                continue;
+            };
+
+            let min_cell_x = bounds.x.div_euclid(cell_size);
+            let max_cell_x = (bounds.x + bounds.width - 1).div_euclid(cell_size);
+            let min_cell_y = bounds.y.div_euclid(cell_size);
+            let max_cell_y = (bounds.y + bounds.height - 1).div_euclid(cell_size);
+
+            for cx in min_cell_x..=max_cell_x {
+                for cy in min_cell_y..=max_cell_y {
+                    cells.entry((cx, cy)).or_default().push(index);
+                }
+            }
+        }
+
+        if cells.is_empty() {
+            return None;
+        }
+
+        Some(Self {
+            cell_size,
+            cells,
+            shape_count: frame.shapes.len(),
+        })
+    }
+
+    fn query(&self, point: (i32, i32)) -> Vec<usize> {
+        let cell_x = point.0.div_euclid(self.cell_size);
+        let cell_y = point.1.div_euclid(self.cell_size);
+
+        let mut unique = HashSet::new();
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                let key = (cell_x + dx, cell_y + dy);
+                if let Some(indices) = self.cells.get(&key) {
+                    unique.extend(indices.iter().copied());
+                }
+            }
+        }
+
+        let mut result: Vec<usize> = unique.into_iter().collect();
+        result.sort_unstable_by(|a, b| b.cmp(a));
+        result
     }
 }
