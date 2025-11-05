@@ -278,7 +278,7 @@ impl InputState {
             if let Some((new_id, _snapshot)) = addition {
                 self.invalidate_hit_cache_for(new_id);
                 self.dirty_tracker.mark_optional_rect(bounds);
-                self.set_selection(vec![new_id]);
+                self.clear_selection();
                 self.needs_redraw = true;
             } else if limit_reached {
                 warn!(
