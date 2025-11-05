@@ -41,6 +41,29 @@ impl InputState {
             _ => {}
         }
 
+        if matches!(key, Key::Escape) && self.properties_panel().is_some() {
+            self.close_properties_panel();
+            return;
+        }
+
+        if self.is_context_menu_open() {
+            let handled = match key {
+                Key::Escape => {
+                    self.close_context_menu();
+                    true
+                }
+                Key::Up => self.focus_previous_context_menu_entry(),
+                Key::Down => self.focus_next_context_menu_entry(),
+                Key::Home => self.focus_first_context_menu_entry(),
+                Key::End => self.focus_last_context_menu_entry(),
+                Key::Return | Key::Space => self.activate_context_menu_selection(),
+                _ => false,
+            };
+            if handled {
+                return;
+            }
+        }
+
         // In text input mode, only check actions if modifiers are pressed or it's a special key
         // This allows plain letters to be typed without triggering color/tool actions
         if matches!(&self.state, DrawingState::TextInput { .. }) {
@@ -67,6 +90,7 @@ impl InputState {
                     Key::F10 => "F10".to_string(),
                     Key::F11 => "F11".to_string(),
                     Key::F12 => "F12".to_string(),
+                    Key::Menu => "Menu".to_string(),
                     _ => String::new(),
                 };
 
@@ -199,6 +223,7 @@ impl InputState {
             Key::F10 => "F10".to_string(),
             Key::F11 => "F11".to_string(),
             Key::F12 => "F12".to_string(),
+            Key::Menu => "Menu".to_string(),
             _ => return,
         };
 
@@ -220,6 +245,9 @@ impl InputState {
 
     /// Handle an action triggered by a keybinding.
     pub(super) fn handle_action(&mut self, action: Action) {
+        if !matches!(action, Action::OpenContextMenu) {
+            self.close_properties_panel();
+        }
         match action {
             Action::Exit => {
                 // Exit drawing mode or cancel current action
@@ -260,15 +288,13 @@ impl InputState {
                 self.needs_redraw = true;
             }
             Action::Undo => {
-                if let Some(shape) = self.canvas_set.active_frame_mut().undo() {
-                    self.dirty_tracker.mark_shape(&shape);
-                    self.needs_redraw = true;
+                if let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
+                    self.apply_action_side_effects(&action);
                 }
             }
             Action::Redo => {
-                if let Some(shape) = self.canvas_set.active_frame_mut().redo() {
-                    self.dirty_tracker.mark_shape(&shape);
-                    self.needs_redraw = true;
+                if let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
+                    self.apply_action_side_effects(&action);
                 }
             }
             Action::IncreaseThickness => {
@@ -328,6 +354,9 @@ impl InputState {
                     "Highlight tool {}",
                     if enabled { "selected" } else { "released" }
                 );
+            }
+            Action::OpenContextMenu => {
+                self.toggle_context_menu_via_keyboard();
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();

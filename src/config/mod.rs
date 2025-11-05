@@ -336,6 +336,27 @@ impl Config {
             self.drawing.default_font_size = self.drawing.default_font_size.clamp(8.0, 72.0);
         }
 
+        if !(1.0..=20.0).contains(&self.drawing.hit_test_tolerance) {
+            log::warn!(
+                "Invalid hit_test_tolerance {:.1}, clamping to 1.0-20.0 range",
+                self.drawing.hit_test_tolerance
+            );
+            self.drawing.hit_test_tolerance = self.drawing.hit_test_tolerance.clamp(1.0, 20.0);
+        }
+
+        if self.drawing.hit_test_linear_threshold == 0 {
+            log::warn!("hit_test_linear_threshold must be at least 1; using default 400");
+            self.drawing.hit_test_linear_threshold = 400;
+        }
+
+        if !(10..=1000).contains(&self.drawing.undo_stack_limit) {
+            log::warn!(
+                "Invalid undo_stack_limit {}, clamping to 10-1000 range",
+                self.drawing.undo_stack_limit
+            );
+            self.drawing.undo_stack_limit = self.drawing.undo_stack_limit.clamp(10, 1000);
+        }
+
         // Arrow length: 5.0 - 50.0
         if !(5.0..=50.0).contains(&self.arrow.length) {
             log::warn!(
