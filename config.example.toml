@@ -20,6 +20,15 @@ default_thickness = 3.0
 # Default font size for text mode (8.0 - 72.0)
 default_font_size = 32.0
 
+# Hit-test tolerance in pixels (1.0 - 20.0)
+hit_test_tolerance = 6.0
+
+# Number of shapes processed linearly before spatial indexing kicks in
+hit_test_linear_threshold = 400
+
+# Undo history size (10 - 1000)
+undo_stack_limit = 100
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Font Configuration (Pango-based text rendering)
 # ───────────────────────────────────────────────────────────────────────────────
@@ -147,6 +156,10 @@ outline_color = [1.0, 0.6, 0.0, 0.9]
 # Use current pen color for highlight fill/outline (alpha still comes from above colors)
 # Note: active highlights update immediately when the pen color changes
 use_pen_color = true
+
+[ui.context_menu]
+# Enable right-click / keyboard context menus
+enabled = true
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
@@ -326,6 +339,9 @@ toggle_help = ["F10"]
 
 # Toggle status bar
 toggle_status_bar = ["F12"]
+
+# Toggle context menu (keyboard alternative to right-click)
+open_context_menu = ["Shift+F10", "Menu"]
 
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]

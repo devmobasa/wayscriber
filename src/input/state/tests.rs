@@ -1,3 +1,4 @@
+use super::core::MenuCommand;
 use super::*;
 use crate::config::{Action, BoardConfig};
 use crate::draw::{Color, FontDescriptor, Shape};
@@ -477,4 +478,54 @@ fn sync_highlight_color_marks_dirty_when_pen_color_changes() {
     };
     state.sync_highlight_color();
     assert!(state.needs_redraw);
+}
+
+#[test]
+fn context_menu_respects_enable_flag() {
+    let mut state = create_test_input_state();
+    state.set_context_menu_enabled(false);
+    state.toggle_context_menu_via_keyboard();
+    assert!(!state.is_context_menu_open());
+
+    state.set_context_menu_enabled(true);
+    state.toggle_context_menu_via_keyboard();
+    assert!(state.is_context_menu_open());
+}
+
+#[test]
+fn properties_command_opens_panel() {
+    let mut state = create_test_input_state();
+    let shape_id = {
+        let frame = state.canvas_set.active_frame_mut();
+        frame.add_shape(Shape::Rect {
+            x: 10,
+            y: 10,
+            w: 40,
+            h: 30,
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 2.0,
+        })
+    };
+
+    state.set_selection(vec![shape_id]);
+    state.execute_menu_command(MenuCommand::Properties);
+    assert!(state.properties_panel().is_some());
+    assert!(!state.is_context_menu_open());
+}
+
+#[test]
+fn keyboard_context_menu_sets_initial_focus() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+    match &state.context_menu_state {
+        ContextMenuState::Open { keyboard_focus, .. } => {
+            assert!(keyboard_focus.is_some());
+        }
+        ContextMenuState::Hidden => panic!("Context menu should be open"),
+    }
 }

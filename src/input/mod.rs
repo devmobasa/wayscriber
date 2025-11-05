@@ -6,6 +6,7 @@
 
 pub mod board_mode;
 pub mod events;
+pub mod hit_test;
 pub mod modifiers;
 pub mod state;
 pub mod tool;

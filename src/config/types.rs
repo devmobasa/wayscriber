@@ -23,6 +23,18 @@ pub struct DrawingConfig {
     #[serde(default = "default_font_size")]
     pub default_font_size: f64,
 
+    /// Hit-test tolerance in pixels for selection (valid range: 1.0 - 20.0)
+    #[serde(default = "default_hit_test_tolerance")]
+    pub hit_test_tolerance: f64,
+
+    /// Number of shapes processed linearly before enabling spatial index
+    #[serde(default = "default_hit_test_threshold")]
+    pub hit_test_linear_threshold: usize,
+
+    /// Maximum undo actions retained (valid range: 10 - 1000)
+    #[serde(default = "default_undo_stack_limit")]
+    pub undo_stack_limit: usize,
+
     /// Font family name for text rendering (e.g., "Sans", "Monospace", "JetBrains Mono")
     /// Falls back to "Sans" if the specified font is not available
     /// Note: Install fonts system-wide and reference by family name
@@ -49,6 +61,9 @@ impl Default for DrawingConfig {
             default_color: default_color(),
             default_thickness: default_thickness(),
             default_font_size: default_font_size(),
+            hit_test_tolerance: default_hit_test_tolerance(),
+            hit_test_linear_threshold: default_hit_test_threshold(),
+            undo_stack_limit: default_undo_stack_limit(),
             font_family: default_font_family(),
             font_weight: default_font_weight(),
             font_style: default_font_style(),
@@ -133,6 +148,10 @@ pub struct UiConfig {
     /// Click highlight visual indicator settings
     #[serde(default)]
     pub click_highlight: ClickHighlightConfig,
+
+    /// Context menu preferences
+    #[serde(default)]
+    pub context_menu: ContextMenuUiConfig,
 }
 
 impl Default for UiConfig {
@@ -143,6 +162,7 @@ impl Default for UiConfig {
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
             click_highlight: ClickHighlightConfig::default(),
+            context_menu: ContextMenuUiConfig::default(),
         }
     }
 }
@@ -213,6 +233,21 @@ pub struct ClickHighlightConfig {
     /// Derive highlight color from current pen color
     #[serde(default = "default_click_highlight_use_pen_color")]
     pub use_pen_color: bool,
+}
+
+/// Context menu visibility configuration.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ContextMenuUiConfig {
+    #[serde(default = "default_context_menu_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for ContextMenuUiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_context_menu_enabled(),
+        }
+    }
 }
 
 impl Default for ClickHighlightConfig {
@@ -305,6 +340,18 @@ fn default_font_style() -> String {
 
 fn default_text_background() -> bool {
     false
+}
+
+fn default_hit_test_tolerance() -> f64 {
+    6.0
+}
+
+fn default_hit_test_threshold() -> usize {
+    400
+}
+
+fn default_undo_stack_limit() -> usize {
+    100
 }
 
 fn default_arrow_length() -> f64 {
@@ -407,6 +454,10 @@ fn default_click_highlight_outline_color() -> [f64; 4] {
 }
 
 fn default_click_highlight_use_pen_color() -> bool {
+    true
+}
+
+fn default_context_menu_enabled() -> bool {
     true
 }
 

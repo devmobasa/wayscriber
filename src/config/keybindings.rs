@@ -36,6 +36,7 @@ pub enum Action {
     ToggleStatusBar,
     ToggleClickHighlight,
     ToggleHighlightTool,
+    OpenContextMenu,
 
     // Configurator
     OpenConfigurator,
@@ -201,6 +202,8 @@ pub struct KeybindingsConfig {
     pub toggle_click_highlight: Vec<String>,
     #[serde(default = "default_toggle_highlight_tool")]
     pub toggle_highlight_tool: Vec<String>,
+    #[serde(default = "default_open_context_menu")]
+    pub open_context_menu: Vec<String>,
 
     #[serde(default = "default_open_configurator")]
     pub open_configurator: Vec<String>,
@@ -276,6 +279,7 @@ impl Default for KeybindingsConfig {
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
+            open_context_menu: default_open_context_menu(),
             open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
             set_color_green: default_set_color_green(),
@@ -378,6 +382,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_highlight_tool {
             insert_binding(binding_str, Action::ToggleHighlightTool)?;
+        }
+
+        for binding_str in &self.open_context_menu {
+            insert_binding(binding_str, Action::OpenContextMenu)?;
         }
 
         for binding_str in &self.open_configurator {
@@ -522,6 +530,10 @@ fn default_toggle_click_highlight() -> Vec<String> {
 
 fn default_toggle_highlight_tool() -> Vec<String> {
     vec!["Ctrl+Alt+H".to_string()]
+}
+
+fn default_open_context_menu() -> Vec<String> {
+    vec!["Shift+F10".to_string(), "Menu".to_string()]
 }
 
 fn default_open_configurator() -> Vec<String> {

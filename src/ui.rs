@@ -1,6 +1,6 @@
 /// UI rendering: status bar, help overlay, visual indicators
 use crate::config::StatusPosition;
-use crate::input::{BoardMode, DrawingState, InputState, Tool};
+use crate::input::{BoardMode, DrawingState, InputState, Tool, state::ContextMenuState};
 use std::f64::consts::{FRAC_PI_2, PI};
 
 // ============================================================================
@@ -374,6 +374,10 @@ pub fn render_help_overlay(
                         Row {
                             key: "Ctrl+Shift+H",
                             action: "Toggle click highlight",
+                        },
+                        Row {
+                            key: "Right Click / Shift+F10",
+                            action: "Context menu",
                         },
                         Row {
                             key: "Escape / Ctrl+Q",
@@ -799,4 +803,204 @@ pub fn render_help_overlay(
     let note_baseline = cursor_y + note_font_size;
     ctx.move_to(note_x, note_baseline);
     let _ = ctx.show_text(note_text);
+}
+
+/// Renders a floating context menu for shape or canvas actions.
+pub fn render_context_menu(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    _screen_width: u32,
+    _screen_height: u32,
+) {
+    let (hover_index, focus_index) = match &input_state.context_menu_state {
+        ContextMenuState::Open {
+            hover_index,
+            keyboard_focus,
+            ..
+        } => (*hover_index, *keyboard_focus),
+        ContextMenuState::Hidden => return,
+    };
+
+    let entries = input_state.context_menu_entries();
+    if entries.is_empty() {
+        return;
+    }
+
+    let layout = match input_state.context_menu_layout() {
+        Some(layout) => *layout,
+        None => return,
+    };
+
+    let _ = ctx.save();
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(layout.font_size);
+
+    // Background and border
+    ctx.set_source_rgba(0.1, 0.13, 0.17, 0.95);
+    ctx.rectangle(
+        layout.origin_x,
+        layout.origin_y,
+        layout.width,
+        layout.height,
+    );
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(0.18, 0.22, 0.28, 0.9);
+    ctx.set_line_width(1.0);
+    ctx.rectangle(
+        layout.origin_x,
+        layout.origin_y,
+        layout.width,
+        layout.height,
+    );
+    let _ = ctx.stroke();
+
+    let active_index = hover_index.or(focus_index);
+
+    for (index, entry) in entries.iter().enumerate() {
+        let row_top = layout.origin_y + layout.padding_y + layout.row_height * index as f64;
+        let row_center = row_top + layout.row_height * 0.5;
+
+        if active_index == Some(index) && !entry.disabled {
+            ctx.set_source_rgba(0.25, 0.32, 0.45, 0.9);
+            ctx.rectangle(layout.origin_x, row_top, layout.width, layout.row_height);
+            let _ = ctx.fill();
+        }
+
+        let (text_r, text_g, text_b, text_a) = if entry.disabled {
+            (0.6, 0.64, 0.68, 0.5)
+        } else {
+            (0.9, 0.92, 0.97, 1.0)
+        };
+
+        ctx.set_source_rgba(text_r, text_g, text_b, text_a);
+        ctx.move_to(
+            layout.origin_x + layout.padding_x,
+            row_center + layout.font_size * 0.35,
+        );
+        let _ = ctx.show_text(&entry.label);
+
+        if let Some(shortcut) = &entry.shortcut {
+            ctx.set_source_rgba(0.7, 0.73, 0.78, text_a);
+            let shortcut_x = layout.origin_x + layout.width
+                - layout.padding_x
+                - layout.arrow_width
+                - layout.shortcut_width;
+            ctx.move_to(shortcut_x, row_center + layout.font_size * 0.35);
+            let _ = ctx.show_text(shortcut);
+        }
+
+        if entry.has_submenu {
+            let arrow_x =
+                layout.origin_x + layout.width - layout.padding_x - layout.arrow_width * 0.6;
+            let arrow_y = row_center;
+            ctx.set_source_rgba(0.75, 0.78, 0.84, text_a);
+            ctx.move_to(arrow_x, arrow_y - 5.0);
+            ctx.line_to(arrow_x + 6.0, arrow_y);
+            ctx.line_to(arrow_x, arrow_y + 5.0);
+            let _ = ctx.fill();
+        }
+    }
+
+    let _ = ctx.restore();
+}
+
+pub fn render_properties_panel(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    let panel = match input_state.properties_panel() {
+        Some(panel) => panel,
+        None => return,
+    };
+
+    let title_font_size = 15.0;
+    let body_font_size = 13.0;
+    let line_height = 18.0;
+    let padding_x = 16.0;
+    let padding_y = 12.0;
+    let margin = 12.0;
+
+    let _ = ctx.save();
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(title_font_size);
+    let mut max_width = ctx
+        .text_extents(&panel.title)
+        .map(|ext| ext.width())
+        .unwrap_or(0.0);
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(body_font_size);
+    for line in &panel.lines {
+        if let Ok(extents) = ctx.text_extents(line) {
+            max_width = max_width.max(extents.width());
+        }
+    }
+
+    let content_height = if panel.lines.is_empty() {
+        0.0
+    } else {
+        line_height * panel.lines.len() as f64
+    };
+    let title_height = title_font_size + 4.0;
+    let panel_width = max_width + padding_x * 2.0;
+    let panel_height = padding_y * 2.0 + title_height + content_height;
+
+    let screen_w = screen_width as f64;
+    let screen_h = screen_height as f64;
+    let mut origin_x = panel.anchor.0;
+    let mut origin_y = panel.anchor.1;
+
+    if origin_x + panel_width > screen_w - margin {
+        origin_x = (screen_w - panel_width - margin).max(margin);
+    }
+    if origin_y + panel_height > screen_h - margin {
+        origin_y = (screen_h - panel_height - margin).max(margin);
+    }
+    if origin_x < margin {
+        origin_x = margin;
+    }
+    if origin_y < margin {
+        origin_y = margin;
+    }
+
+    ctx.set_source_rgba(0.08, 0.11, 0.17, 0.92);
+    ctx.rectangle(origin_x, origin_y, panel_width, panel_height);
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(0.18, 0.22, 0.3, 0.95);
+    ctx.set_line_width(1.0);
+    ctx.rectangle(origin_x, origin_y, panel_width, panel_height);
+    let _ = ctx.stroke();
+
+    let mut text_y = origin_y + padding_y + title_font_size;
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(title_font_size);
+    if panel.multiple_selection {
+        ctx.set_source_rgba(0.88, 0.91, 0.97, 1.0);
+    } else {
+        ctx.set_source_rgba(0.93, 0.95, 0.99, 1.0);
+    }
+    ctx.move_to(origin_x + padding_x, text_y);
+    let _ = ctx.show_text(&panel.title);
+
+    ctx.set_source_rgba(0.35, 0.4, 0.5, 0.9);
+    ctx.move_to(origin_x + padding_x, text_y + 4.0);
+    ctx.line_to(origin_x + panel_width - padding_x, text_y + 4.0);
+    let _ = ctx.stroke();
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(body_font_size);
+    ctx.set_source_rgba(0.86, 0.89, 0.95, 1.0);
+    text_y += 12.0;
+    for line in &panel.lines {
+        ctx.move_to(origin_x + padding_x, text_y);
+        let _ = ctx.show_text(line);
+        text_y += line_height;
+    }
+
+    let _ = ctx.restore();
 }

@@ -151,6 +151,18 @@ impl Shape {
             } => bounding_box_for_text(*x, *y, text, *size, font_descriptor, *background_enabled),
         }
     }
+
+    /// Returns a human-readable label for the shape variant.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Shape::Freehand { .. } => "Freehand",
+            Shape::Line { .. } => "Line",
+            Shape::Rect { .. } => "Rectangle",
+            Shape::Ellipse { .. } => "Ellipse",
+            Shape::Arrow { .. } => "Arrow",
+            Shape::Text { .. } => "Text",
+        }
+    }
 }
 
 fn stroke_padding(thick: f64) -> i32 {

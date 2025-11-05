@@ -2,17 +2,20 @@
 
 use super::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::config::{Action, BoardConfig, KeyBinding};
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{
-    CanvasSet, Color, DirtyTracker, FontDescriptor,
+    CanvasSet, Color, DirtyTracker, FontDescriptor, Shape, ShapeId,
     shape::{
         bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_line,
         bounding_box_for_points, bounding_box_for_rect, bounding_box_for_text,
     },
 };
-use crate::input::{board_mode::BoardMode, modifiers::Modifiers, tool::Tool};
+use crate::input::{board_mode::BoardMode, hit_test, modifiers::Modifiers, tool::Tool};
 use crate::legacy;
 use crate::util::{self, Rect};
-use std::collections::HashMap;
+use cairo::Context as CairoContext;
+use chrono::{Local, Utc};
+use std::collections::{HashMap, HashSet};
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
@@ -44,6 +47,108 @@ pub enum DrawingState {
         /// Accumulated text buffer
         buffer: String,
     },
+}
+
+/// Tracks current selection state.
+#[derive(Debug, Clone)]
+pub enum SelectionState {
+    None,
+    Pending { pointer: (i32, i32) },
+    Active { shape_ids: Vec<ShapeId> },
+}
+
+/// Distinguishes between canvas-level and shape-level context menus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextMenuKind {
+    Shape,
+    Canvas,
+}
+
+/// Tracks the context menu lifecycle.
+#[derive(Debug, Clone)]
+pub enum ContextMenuState {
+    Hidden,
+    Open {
+        anchor: (i32, i32),
+        shape_ids: Vec<ShapeId>,
+        kind: ContextMenuKind,
+        hover_index: Option<usize>,
+        keyboard_focus: Option<usize>,
+    },
+}
+
+/// Commands triggered by context menu selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuCommand {
+    Delete,
+    Duplicate,
+    MoveToFront,
+    MoveToBack,
+    Lock,
+    Unlock,
+    Properties,
+    EditText,
+    ChangeColor,
+    AdjustThickness,
+    ClearAll,
+    ToggleHighlightTool,
+    ToggleClickHighlight,
+    SwitchToWhiteboard,
+    SwitchToBlackboard,
+    ReturnToTransparent,
+    ToggleHelp,
+}
+
+/// Lightweight descriptor for rendering context menu entries.
+#[derive(Debug, Clone)]
+pub struct ContextMenuEntry {
+    pub label: String,
+    pub shortcut: Option<String>,
+    pub has_submenu: bool,
+    pub disabled: bool,
+    pub command: Option<MenuCommand>,
+}
+
+impl ContextMenuEntry {
+    pub fn new(
+        label: impl Into<String>,
+        shortcut: Option<impl Into<String>>,
+        has_submenu: bool,
+        disabled: bool,
+        command: Option<MenuCommand>,
+    ) -> Self {
+        Self {
+            label: label.into(),
+            shortcut: shortcut.map(|s| s.into()),
+            has_submenu,
+            disabled,
+            command,
+        }
+    }
+}
+
+/// Layout metadata for rendering and hit-testing the context menu.
+#[derive(Debug, Clone, Copy)]
+pub struct ContextMenuLayout {
+    pub origin_x: f64,
+    pub origin_y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub row_height: f64,
+    pub font_size: f64,
+    pub padding_x: f64,
+    pub padding_y: f64,
+    pub shortcut_width: f64,
+    pub arrow_width: f64,
+}
+
+/// Summarizes shape metadata for the on-screen properties panel.
+#[derive(Debug, Clone)]
+pub struct ShapePropertiesPanel {
+    pub title: String,
+    pub anchor: (f64, f64),
+    pub lines: Vec<String>,
+    pub multiple_selection: bool,
 }
 
 /// Main input state containing all drawing session state.
@@ -104,6 +209,28 @@ pub struct InputState {
     pub(crate) click_highlight: ClickHighlightState,
     /// Optional tool override independent of modifier keys
     tool_override: Option<Tool>,
+    /// Current selection information
+    pub selection_state: SelectionState,
+    /// Current context menu state
+    pub context_menu_state: ContextMenuState,
+    /// Whether context menu interactions are enabled
+    context_menu_enabled: bool,
+    /// Cached hit-test bounds per shape id
+    hit_test_cache: HashMap<ShapeId, Rect>,
+    /// Hit test tolerance in pixels
+    pub hit_test_tolerance: f64,
+    /// Threshold before enabling spatial indexing
+    pub max_linear_hit_test: usize,
+    /// Maximum number of undo actions retained in history
+    pub undo_stack_limit: usize,
+    /// Cached layout details for the currently open context menu
+    pub context_menu_layout: Option<ContextMenuLayout>,
+    /// Last known pointer position (for keyboard anchors and hover refresh)
+    last_pointer_position: (i32, i32),
+    /// Recompute hover next time layout is available
+    pending_menu_hover_recalc: bool,
+    /// Optional properties panel describing the current selection
+    shape_properties_panel: Option<ShapePropertiesPanel>,
 }
 
 impl InputState {
@@ -165,6 +292,17 @@ impl InputState {
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
+            selection_state: SelectionState::None,
+            context_menu_state: ContextMenuState::Hidden,
+            context_menu_enabled: true,
+            hit_test_cache: HashMap::new(),
+            hit_test_tolerance: 6.0,
+            max_linear_hit_test: 400,
+            undo_stack_limit: 100,
+            context_menu_layout: None,
+            last_pointer_position: (0, 0),
+            pending_menu_hover_recalc: false,
+            shape_properties_panel: None,
         };
 
         if state.click_highlight.uses_pen_color() {
@@ -172,6 +310,1271 @@ impl InputState {
         }
 
         state
+    }
+
+    /// Returns ids of the currently selected shapes.
+    pub fn selected_shape_ids(&self) -> &[ShapeId] {
+        match &self.selection_state {
+            SelectionState::Active { shape_ids } => shape_ids,
+            _ => &[],
+        }
+    }
+
+    /// Updates the cached pointer location.
+    pub fn update_pointer_position(&mut self, x: i32, y: i32) {
+        self.last_pointer_position = (x, y);
+    }
+
+    /// Returns true if any shapes are selected.
+    pub fn has_selection(&self) -> bool {
+        matches!(self.selection_state, SelectionState::Active { .. })
+    }
+
+    /// Returns an active properties panel description, if any.
+    pub fn properties_panel(&self) -> Option<&ShapePropertiesPanel> {
+        self.shape_properties_panel.as_ref()
+    }
+
+    /// Hides the properties panel if visible.
+    pub fn close_properties_panel(&mut self) {
+        if self.shape_properties_panel.take().is_some() {
+            self.needs_redraw = true;
+        }
+    }
+
+    fn set_properties_panel(&mut self, panel: ShapePropertiesPanel) {
+        self.shape_properties_panel = Some(panel);
+        self.needs_redraw = true;
+    }
+
+    /// Begins a pending selection at the provided pointer coordinate.
+    pub fn begin_pending_selection(&mut self, pointer: (i32, i32)) {
+        self.selection_state = SelectionState::Pending { pointer };
+    }
+
+    /// Enables or disables context menu interactions.
+    pub fn set_context_menu_enabled(&mut self, enabled: bool) {
+        self.context_menu_enabled = enabled;
+        if !enabled && self.is_context_menu_open() {
+            self.close_context_menu();
+        }
+    }
+
+    /// Returns true if context menus are currently permitted.
+    pub fn context_menu_enabled(&self) -> bool {
+        self.context_menu_enabled
+    }
+
+    /// Clears any active selection state.
+    pub fn clear_selection(&mut self) {
+        self.selection_state = SelectionState::None;
+        self.close_properties_panel();
+    }
+
+    /// Replaces the selection with the provided ids.
+    pub fn set_selection(&mut self, ids: Vec<ShapeId>) {
+        if ids.is_empty() {
+            self.selection_state = SelectionState::None;
+            self.close_properties_panel();
+            return;
+        }
+
+        let mut seen = HashSet::new();
+        let mut ordered = Vec::new();
+        for id in ids {
+            if seen.insert(id) {
+                ordered.push(id);
+            }
+        }
+        self.selection_state = SelectionState::Active { shape_ids: ordered };
+        self.close_properties_panel();
+    }
+
+    /// Extends the current selection with additional ids.
+    pub fn extend_selection<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = ShapeId>,
+    {
+        match &mut self.selection_state {
+            SelectionState::Active { shape_ids } => {
+                let mut seen: HashSet<ShapeId> = shape_ids.iter().copied().collect();
+                for id in iter {
+                    if seen.insert(id) {
+                        shape_ids.push(id);
+                    }
+                }
+                self.close_properties_panel();
+            }
+            _ => {
+                let ids: Vec<ShapeId> = iter.into_iter().collect();
+                self.set_selection(ids);
+            }
+        }
+    }
+
+    /// Opens a context menu at the given anchor for the provided kind.
+    pub fn open_context_menu(
+        &mut self,
+        anchor: (i32, i32),
+        shape_ids: Vec<ShapeId>,
+        kind: ContextMenuKind,
+    ) {
+        if !self.context_menu_enabled {
+            return;
+        }
+        self.close_properties_panel();
+        self.context_menu_state = ContextMenuState::Open {
+            anchor,
+            shape_ids,
+            kind,
+            hover_index: None,
+            keyboard_focus: None,
+        };
+        self.pending_menu_hover_recalc = true;
+    }
+
+    pub fn toggle_context_menu_via_keyboard(&mut self) {
+        if !self.context_menu_enabled {
+            return;
+        }
+        if self.is_context_menu_open() {
+            self.close_context_menu();
+            return;
+        }
+
+        let selection = self.selected_shape_ids().to_vec();
+        if selection.is_empty() {
+            let anchor = self.keyboard_canvas_menu_anchor();
+            self.update_pointer_position(anchor.0, anchor.1);
+            self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Canvas);
+            self.pending_menu_hover_recalc = false;
+            self.set_context_menu_focus(None);
+            self.focus_first_context_menu_entry();
+        } else {
+            let anchor = self.keyboard_shape_menu_anchor(&selection);
+            self.update_pointer_position(anchor.0, anchor.1);
+            self.open_context_menu(anchor, selection, ContextMenuKind::Shape);
+            self.pending_menu_hover_recalc = false;
+            self.focus_first_context_menu_entry();
+        }
+        self.needs_redraw = true;
+    }
+
+    /// Updates the hover index within the open context menu.
+    pub fn set_context_menu_hover(&mut self, hover: Option<usize>) {
+        if let ContextMenuState::Open {
+            ref mut hover_index,
+            ..
+        } = self.context_menu_state
+        {
+            *hover_index = hover;
+        }
+    }
+
+    /// Updates the keyboard focus entry for the context menu.
+    pub fn set_context_menu_focus(&mut self, focus: Option<usize>) {
+        if let ContextMenuState::Open {
+            ref mut keyboard_focus,
+            ref mut hover_index,
+            ..
+        } = self.context_menu_state
+        {
+            let changed = *keyboard_focus != focus;
+            *keyboard_focus = focus;
+            if focus.is_some() {
+                *hover_index = None;
+            }
+            if changed {
+                self.needs_redraw = true;
+            }
+        }
+    }
+
+    /// Closes the currently open context menu.
+    pub fn close_context_menu(&mut self) {
+        self.context_menu_state = ContextMenuState::Hidden;
+        self.context_menu_layout = None;
+        self.pending_menu_hover_recalc = false;
+        self.needs_redraw = true;
+    }
+
+    /// Returns true if a context menu is currently visible.
+    pub fn is_context_menu_open(&self) -> bool {
+        matches!(self.context_menu_state, ContextMenuState::Open { .. })
+    }
+
+    /// Clears cached hit-test bounds.
+    pub fn invalidate_hit_cache(&mut self) {
+        self.hit_test_cache.clear();
+    }
+
+    /// Removes cached hit-test data for a single shape.
+    pub fn invalidate_hit_cache_for(&mut self, id: ShapeId) {
+        self.hit_test_cache.remove(&id);
+    }
+
+    /// Updates the hit-test tolerance (in pixels).
+    pub fn set_hit_test_tolerance(&mut self, tolerance: f64) {
+        self.hit_test_tolerance = tolerance.max(1.0);
+        self.invalidate_hit_cache();
+    }
+
+    /// Updates the threshold used before building a spatial index.
+    pub fn set_hit_test_threshold(&mut self, threshold: usize) {
+        self.max_linear_hit_test = threshold.max(1);
+    }
+
+    /// Updates the undo stack limit for subsequent actions.
+    pub fn set_undo_stack_limit(&mut self, limit: usize) {
+        self.undo_stack_limit = limit.max(1);
+    }
+
+    /// Performs hit-testing against the active frame and returns the top-most shape id.
+    pub fn hit_test_at(&mut self, x: i32, y: i32) -> Option<ShapeId> {
+        let tolerance = self.hit_test_tolerance;
+        let len = self.canvas_set.active_frame().shapes.len();
+        let threshold = self.max_linear_hit_test;
+
+        if len > threshold {
+            // Placeholder: spatial index will replace this branch in a future iteration.
+            // For now we continue with the linear scan while keeping the cached bounds hot.
+        }
+
+        for index in (0..len).rev() {
+            let (shape_id, bounds, hit) = {
+                let frame = self.canvas_set.active_frame();
+                let drawn = &frame.shapes[index];
+
+                let cached = self.hit_test_cache.get(&drawn.id).copied();
+                let bounds = cached.or_else(|| hit_test::compute_hit_bounds(drawn, tolerance));
+                let hit = bounds
+                    .as_ref()
+                    .map(|rect| rect.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance))
+                    .unwrap_or(false);
+
+                (drawn.id, bounds, hit)
+            };
+
+            if let Some(bounds) = bounds {
+                self.hit_test_cache.entry(shape_id).or_insert(bounds);
+                if hit {
+                    return Some(shape_id);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Returns the entries to render for the currently open context menu.
+    pub fn context_menu_entries(&self) -> Vec<ContextMenuEntry> {
+        match &self.context_menu_state {
+            ContextMenuState::Hidden => Vec::new(),
+            ContextMenuState::Open {
+                kind, shape_ids, ..
+            } => match kind {
+                ContextMenuKind::Canvas => self.canvas_menu_entries(),
+                ContextMenuKind::Shape => self.shape_menu_entries(shape_ids),
+            },
+        }
+    }
+
+    fn current_menu_focus_or_hover(&self) -> Option<usize> {
+        if let ContextMenuState::Open {
+            hover_index,
+            keyboard_focus,
+            ..
+        } = &self.context_menu_state
+        {
+            hover_index.or(*keyboard_focus)
+        } else {
+            None
+        }
+    }
+
+    fn select_edge_context_menu_entry(&mut self, start_front: bool) -> bool {
+        if !self.is_context_menu_open() {
+            return false;
+        }
+        let entries = self.context_menu_entries();
+        let iter: Box<dyn Iterator<Item = (usize, &ContextMenuEntry)>> = if start_front {
+            Box::new(entries.iter().enumerate())
+        } else {
+            Box::new(entries.iter().enumerate().rev())
+        };
+        for (index, entry) in iter {
+            if !entry.disabled {
+                self.set_context_menu_focus(Some(index));
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn focus_next_context_menu_entry(&mut self) -> bool {
+        self.advance_context_menu_focus(true)
+    }
+
+    pub(crate) fn focus_previous_context_menu_entry(&mut self) -> bool {
+        self.advance_context_menu_focus(false)
+    }
+
+    fn advance_context_menu_focus(&mut self, forward: bool) -> bool {
+        if !self.is_context_menu_open() {
+            return false;
+        }
+        let entries = self.context_menu_entries();
+        if entries.is_empty() {
+            return false;
+        }
+
+        let len = entries.len();
+        let mut index = self
+            .current_menu_focus_or_hover()
+            .unwrap_or_else(|| if forward { len - 1 } else { 0 });
+
+        for _ in 0..len {
+            index = if forward {
+                (index + 1) % len
+            } else {
+                (index + len - 1) % len
+            };
+            if !entries[index].disabled {
+                self.set_context_menu_focus(Some(index));
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn focus_first_context_menu_entry(&mut self) -> bool {
+        self.select_edge_context_menu_entry(true)
+    }
+
+    pub(crate) fn focus_last_context_menu_entry(&mut self) -> bool {
+        self.select_edge_context_menu_entry(false)
+    }
+
+    pub(crate) fn activate_context_menu_selection(&mut self) -> bool {
+        if !self.is_context_menu_open() {
+            return false;
+        }
+        let entries = self.context_menu_entries();
+        if entries.is_empty() {
+            return false;
+        }
+        let index = match self.current_menu_focus_or_hover() {
+            Some(idx) => idx,
+            None => return false,
+        };
+        if let Some(entry) = entries.get(index) {
+            if entry.disabled {
+                return false;
+            }
+            if let Some(command) = entry.command {
+                self.execute_menu_command(command);
+            } else {
+                self.close_context_menu();
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn canvas_menu_entries(&self) -> Vec<ContextMenuEntry> {
+        let mut entries = Vec::new();
+        entries.push(ContextMenuEntry::new(
+            "Clear All",
+            Some("E"),
+            false,
+            false,
+            Some(MenuCommand::ClearAll),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Toggle Highlight Tool",
+            Some("Ctrl+Alt+H"),
+            false,
+            false,
+            Some(MenuCommand::ToggleHighlightTool),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Toggle Click Highlight",
+            Some("Ctrl+Shift+H"),
+            false,
+            false,
+            Some(MenuCommand::ToggleClickHighlight),
+        ));
+
+        match self.canvas_set.active_mode() {
+            BoardMode::Transparent => {
+                entries.push(ContextMenuEntry::new(
+                    "Switch to Whiteboard",
+                    Some("Ctrl+W"),
+                    false,
+                    false,
+                    Some(MenuCommand::SwitchToWhiteboard),
+                ));
+                entries.push(ContextMenuEntry::new(
+                    "Switch to Blackboard",
+                    Some("Ctrl+B"),
+                    false,
+                    false,
+                    Some(MenuCommand::SwitchToBlackboard),
+                ));
+            }
+            BoardMode::Whiteboard => {
+                entries.push(ContextMenuEntry::new(
+                    "Return to Transparent",
+                    Some("Ctrl+Shift+T"),
+                    false,
+                    false,
+                    Some(MenuCommand::ReturnToTransparent),
+                ));
+                entries.push(ContextMenuEntry::new(
+                    "Switch to Blackboard",
+                    Some("Ctrl+B"),
+                    false,
+                    false,
+                    Some(MenuCommand::SwitchToBlackboard),
+                ));
+            }
+            BoardMode::Blackboard => {
+                entries.push(ContextMenuEntry::new(
+                    "Return to Transparent",
+                    Some("Ctrl+Shift+T"),
+                    false,
+                    false,
+                    Some(MenuCommand::ReturnToTransparent),
+                ));
+                entries.push(ContextMenuEntry::new(
+                    "Switch to Whiteboard",
+                    Some("Ctrl+W"),
+                    false,
+                    false,
+                    Some(MenuCommand::SwitchToWhiteboard),
+                ));
+            }
+        }
+
+        entries.push(ContextMenuEntry::new(
+            "Help",
+            Some("F10"),
+            false,
+            false,
+            Some(MenuCommand::ToggleHelp),
+        ));
+        entries
+    }
+
+    /// Returns cached context menu layout, if available.
+    pub fn context_menu_layout(&self) -> Option<&ContextMenuLayout> {
+        self.context_menu_layout.as_ref()
+    }
+
+    /// Clears cached layout data (used when menu closes).
+    pub fn clear_context_menu_layout(&mut self) {
+        self.context_menu_layout = None;
+        self.pending_menu_hover_recalc = false;
+    }
+
+    /// Recomputes context menu layout for rendering and hit-testing.
+    pub fn update_context_menu_layout(
+        &mut self,
+        ctx: &CairoContext,
+        screen_width: u32,
+        screen_height: u32,
+    ) {
+        if !self.is_context_menu_open() {
+            self.context_menu_layout = None;
+            return;
+        }
+
+        let entries = self.context_menu_entries();
+        if entries.is_empty() {
+            self.context_menu_layout = None;
+            return;
+        }
+
+        const FONT_SIZE: f64 = 14.0;
+        const ROW_HEIGHT: f64 = 24.0;
+        const PADDING_X: f64 = 12.0;
+        const PADDING_Y: f64 = 8.0;
+        const GAP_BETWEEN_COLUMNS: f64 = 20.0;
+        const ARROW_WIDTH: f64 = 10.0;
+
+        let _ = ctx.save();
+        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        ctx.set_font_size(FONT_SIZE);
+
+        let mut max_label_width: f64 = 0.0;
+        let mut max_shortcut_width: f64 = 0.0;
+        for entry in &entries {
+            if let Ok(extents) = ctx.text_extents(&entry.label) {
+                max_label_width = max_label_width.max(extents.width());
+            }
+            if let Some(shortcut) = &entry.shortcut {
+                if let Ok(extents) = ctx.text_extents(shortcut) {
+                    max_shortcut_width = max_shortcut_width.max(extents.width());
+                }
+            }
+        }
+
+        let _ = ctx.restore();
+
+        let menu_width = PADDING_X * 2.0
+            + max_label_width
+            + GAP_BETWEEN_COLUMNS
+            + max_shortcut_width
+            + ARROW_WIDTH;
+        let menu_height = PADDING_Y * 2.0 + ROW_HEIGHT * entries.len() as f64;
+
+        let mut origin_x = match &self.context_menu_state {
+            ContextMenuState::Open { anchor, .. } => anchor.0 as f64,
+            ContextMenuState::Hidden => 0.0,
+        };
+        let mut origin_y = match &self.context_menu_state {
+            ContextMenuState::Open { anchor, .. } => anchor.1 as f64,
+            ContextMenuState::Hidden => 0.0,
+        };
+
+        let screen_w = screen_width as f64;
+        let screen_h = screen_height as f64;
+        if origin_x + menu_width > screen_w - 6.0 {
+            origin_x = (screen_w - menu_width - 6.0).max(6.0);
+        }
+        if origin_y + menu_height > screen_h - 6.0 {
+            origin_y = (screen_h - menu_height - 6.0).max(6.0);
+        }
+
+        self.context_menu_layout = Some(ContextMenuLayout {
+            origin_x,
+            origin_y,
+            width: menu_width,
+            height: menu_height,
+            row_height: ROW_HEIGHT,
+            font_size: FONT_SIZE,
+            padding_x: PADDING_X,
+            padding_y: PADDING_Y,
+            shortcut_width: max_shortcut_width,
+            arrow_width: ARROW_WIDTH,
+        });
+
+        if self.pending_menu_hover_recalc {
+            let (px, py) = self.last_pointer_position;
+            self.update_context_menu_hover_from_pointer_internal(px, py, false);
+            self.pending_menu_hover_recalc = false;
+        }
+    }
+
+    /// Maps pointer coordinates to a context menu entry index, if applicable.
+    pub fn context_menu_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.context_menu_layout()?;
+        let entries = self.context_menu_entries();
+        if entries.is_empty() {
+            return None;
+        }
+
+        let xf = x as f64;
+        let yf = y as f64;
+        if xf < layout.origin_x || xf > layout.origin_x + layout.width {
+            return None;
+        }
+        if yf < layout.origin_y + layout.padding_y
+            || yf > layout.origin_y + layout.height - layout.padding_y
+        {
+            return None;
+        }
+
+        let rel_y = yf - layout.origin_y - layout.padding_y;
+        if rel_y < 0.0 {
+            return None;
+        }
+
+        let index = (rel_y / layout.row_height).floor() as usize;
+        if index < entries.len() {
+            Some(index)
+        } else {
+            None
+        }
+    }
+
+    fn update_context_menu_hover_from_pointer_internal(
+        &mut self,
+        x: i32,
+        y: i32,
+        mark_redraw: bool,
+    ) {
+        if !self.is_context_menu_open() {
+            return;
+        }
+        let new_hover = self.context_menu_index_at(x, y);
+        let mut changed = false;
+        if let ContextMenuState::Open {
+            ref mut hover_index,
+            ..
+        } = self.context_menu_state
+        {
+            if *hover_index != new_hover {
+                *hover_index = new_hover;
+                changed = true;
+            }
+        }
+        if changed && mark_redraw {
+            self.needs_redraw = true;
+        }
+        if new_hover.is_some() {
+            if let ContextMenuState::Open {
+                ref mut keyboard_focus,
+                ..
+            } = self.context_menu_state
+            {
+                if keyboard_focus.is_some() {
+                    *keyboard_focus = None;
+                }
+            }
+        }
+    }
+
+    /// Updates hover index based on pointer location when menu is open.
+    pub fn update_context_menu_hover_from_pointer(&mut self, x: i32, y: i32) {
+        self.update_context_menu_hover_from_pointer_internal(x, y, true);
+    }
+
+    /// Executes the supplied menu command, updating state and recording undo where needed.
+    pub fn execute_menu_command(&mut self, command: MenuCommand) {
+        if !matches!(command, MenuCommand::Properties) {
+            self.close_properties_panel();
+        }
+
+        let changed = match command {
+            MenuCommand::Delete => self.delete_selected_shapes(),
+            MenuCommand::Duplicate => self.duplicate_selected_shapes(),
+            MenuCommand::MoveToFront => self.move_selection_to_front(),
+            MenuCommand::MoveToBack => self.move_selection_to_back(),
+            MenuCommand::Lock => self.set_selection_locked(true),
+            MenuCommand::Unlock => self.set_selection_locked(false),
+            MenuCommand::Properties => self.show_properties_panel(),
+            MenuCommand::EditText => {
+                self.begin_text_edit_for_selection();
+                true
+            }
+            MenuCommand::ChangeColor | MenuCommand::AdjustThickness => false,
+            MenuCommand::ClearAll => self.clear_active_shapes(),
+            MenuCommand::ToggleHighlightTool => {
+                self.toggle_highlight_tool();
+                true
+            }
+            MenuCommand::ToggleClickHighlight => {
+                self.toggle_click_highlight();
+                true
+            }
+            MenuCommand::SwitchToWhiteboard => {
+                self.switch_board_mode(BoardMode::Whiteboard);
+                true
+            }
+            MenuCommand::SwitchToBlackboard => {
+                self.switch_board_mode(BoardMode::Blackboard);
+                true
+            }
+            MenuCommand::ReturnToTransparent => {
+                self.switch_board_mode(BoardMode::Transparent);
+                true
+            }
+            MenuCommand::ToggleHelp => {
+                self.show_help = !self.show_help;
+                true
+            }
+        };
+
+        if changed {
+            self.needs_redraw = true;
+        }
+        self.close_context_menu();
+    }
+
+    fn delete_selected_shapes(&mut self) -> bool {
+        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
+        if ids.is_empty() {
+            return false;
+        }
+
+        let mut removed = Vec::new();
+        for id in ids {
+            if let Some((index, shape)) = self.canvas_set.active_frame_mut().remove_shape_by_id(id)
+            {
+                removed.push((index, shape));
+            }
+        }
+
+        if removed.is_empty() {
+            return false;
+        }
+
+        for (_, shape) in &removed {
+            self.dirty_tracker.mark_shape(&shape.shape);
+            self.invalidate_hit_cache_for(shape.id);
+        }
+
+        self.canvas_set.active_frame_mut().push_undo_action(
+            UndoAction::Delete { shapes: removed },
+            self.undo_stack_limit,
+        );
+        self.clear_selection();
+        true
+    }
+
+    fn duplicate_selected_shapes(&mut self) -> bool {
+        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
+        if ids.is_empty() {
+            return false;
+        }
+
+        let mut created = Vec::new();
+        let mut new_ids = Vec::new();
+        for id in ids {
+            let original = {
+                let frame = self.canvas_set.active_frame();
+                frame.shape(id).cloned()
+            };
+            let Some(shape) = original else {
+                continue;
+            };
+            if shape.locked {
+                continue;
+            }
+
+            let mut cloned_shape = shape.shape.clone();
+            Self::offset_shape(&mut cloned_shape, 12, 12);
+            let new_id = {
+                let frame = self.canvas_set.active_frame_mut();
+                frame.add_shape(cloned_shape)
+            };
+
+            if let Some((index, stored)) = {
+                let frame = self.canvas_set.active_frame();
+                frame
+                    .find_index(new_id)
+                    .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
+            } {
+                self.dirty_tracker.mark_shape(&stored.shape);
+                self.invalidate_hit_cache_for(new_id);
+                created.push((index, stored));
+                new_ids.push(new_id);
+            }
+        }
+
+        if created.is_empty() {
+            return false;
+        }
+
+        self.canvas_set.active_frame_mut().push_undo_action(
+            UndoAction::Create { shapes: created },
+            self.undo_stack_limit,
+        );
+        self.set_selection(new_ids);
+        true
+    }
+
+    fn show_properties_panel(&mut self) -> bool {
+        let ids = self.selected_shape_ids();
+        if ids.is_empty() {
+            return false;
+        }
+
+        let frame = self.canvas_set.active_frame();
+        let anchor_rect = self.selection_bounding_box(ids);
+        let anchor = anchor_rect
+            .map(|rect| {
+                (
+                    (rect.x + rect.width + 12) as f64,
+                    (rect.y - 12).max(12) as f64,
+                )
+            })
+            .unwrap_or_else(|| {
+                let (px, py) = self.last_pointer_position;
+                ((px + 16) as f64, (py - 16) as f64)
+            });
+
+        if ids.len() > 1 {
+            let total = ids.len();
+            let locked = ids
+                .iter()
+                .filter(|id| frame.shape(**id).map(|shape| shape.locked).unwrap_or(false))
+                .count();
+            let mut lines = Vec::new();
+            lines.push(format!("Shapes selected: {total}"));
+            if locked > 0 {
+                lines.push(format!("Locked: {locked}/{total}"));
+            }
+            if let Some(bounds) = anchor_rect {
+                lines.push(format!(
+                    "Bounds: {}×{} px",
+                    bounds.width.max(0),
+                    bounds.height.max(0)
+                ));
+            }
+            self.set_properties_panel(ShapePropertiesPanel {
+                title: "Selection Summary".to_string(),
+                anchor,
+                lines,
+                multiple_selection: true,
+            });
+            return true;
+        }
+
+        let shape_id = ids[0];
+        let index = match frame.find_index(shape_id) {
+            Some(idx) => idx,
+            None => return false,
+        };
+        let drawn = match frame.shape(shape_id) {
+            Some(shape) => shape,
+            None => return false,
+        };
+
+        let mut lines = Vec::new();
+        lines.push(format!("Shape ID: {shape_id}"));
+        lines.push(format!("Type: {}", drawn.shape.kind_name()));
+        lines.push(format!("Layer: {} of {}", index + 1, frame.shapes.len()));
+        lines.push(format!(
+            "Locked: {}",
+            if drawn.locked { "Yes" } else { "No" }
+        ));
+        if let Some(timestamp) = Self::format_timestamp(drawn.created_at) {
+            lines.push(format!("Created: {timestamp}"));
+        }
+        if let Some(bounds) = drawn.shape.bounding_box() {
+            lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
+        }
+
+        self.set_properties_panel(ShapePropertiesPanel {
+            title: "Shape Properties".to_string(),
+            anchor,
+            lines,
+            multiple_selection: false,
+        });
+        true
+    }
+
+    fn selection_bounding_box(&self, ids: &[ShapeId]) -> Option<Rect> {
+        let frame = self.canvas_set.active_frame();
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        let mut found = false;
+
+        for id in ids {
+            if let Some(shape) = frame.shape(*id) {
+                if let Some(bounds) = shape.shape.bounding_box() {
+                    min_x = min_x.min(bounds.x);
+                    min_y = min_y.min(bounds.y);
+                    max_x = max_x.max(bounds.x + bounds.width);
+                    max_y = max_y.max(bounds.y + bounds.height);
+                    found = true;
+                }
+            }
+        }
+
+        if found {
+            Rect::from_min_max(min_x, min_y, max_x, max_y)
+        } else {
+            None
+        }
+    }
+
+    fn keyboard_canvas_menu_anchor(&self) -> (i32, i32) {
+        let (px, py) = self.last_pointer_position;
+        if px != 0 || py != 0 {
+            return self.clamp_anchor(px, py);
+        }
+        let cx = (self.screen_width / 2).saturating_sub(1) as i32;
+        let cy = (self.screen_height / 2).saturating_sub(1) as i32;
+        self.clamp_anchor(cx, cy)
+    }
+
+    fn keyboard_shape_menu_anchor(&self, ids: &[ShapeId]) -> (i32, i32) {
+        if let Some(bounds) = self.selection_bounding_box(ids) {
+            let x = bounds.x + bounds.width;
+            let y = bounds.y;
+            return self.clamp_anchor(x, y);
+        }
+        self.keyboard_canvas_menu_anchor()
+    }
+
+    fn clamp_anchor(&self, x: i32, y: i32) -> (i32, i32) {
+        let max_x = self.screen_width.saturating_sub(8) as i32;
+        let max_y = self.screen_height.saturating_sub(8) as i32;
+        (x.clamp(0, max_x), y.clamp(0, max_y))
+    }
+
+    fn move_selection_to_front(&mut self) -> bool {
+        self.reorder_selection(true)
+    }
+
+    fn move_selection_to_back(&mut self) -> bool {
+        self.reorder_selection(false)
+    }
+
+    fn reorder_selection(&mut self, to_front: bool) -> bool {
+        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
+        if ids.is_empty() {
+            return false;
+        }
+
+        let mut actions = Vec::new();
+        let len = self.canvas_set.active_frame().shapes.len();
+        for id in ids {
+            let movement = {
+                let frame = self.canvas_set.active_frame_mut();
+                if let Some(from) = frame.find_index(id) {
+                    let target = if to_front { len.saturating_sub(1) } else { 0 };
+                    if from == target {
+                        None
+                    } else if frame.move_shape(from, target).is_some() {
+                        Some((from, target))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some((from, target)) = movement {
+                actions.push(UndoAction::Reorder {
+                    shape_id: id,
+                    from,
+                    to: target,
+                });
+                if let Some(shape) = self.canvas_set.active_frame().shape(id) {
+                    self.dirty_tracker.mark_shape(&shape.shape);
+                    self.invalidate_hit_cache_for(id);
+                }
+            }
+        }
+
+        if actions.is_empty() {
+            return false;
+        }
+
+        self.canvas_set
+            .active_frame_mut()
+            .push_undo_action(UndoAction::Compound(actions), self.undo_stack_limit);
+        true
+    }
+
+    fn set_selection_locked(&mut self, locked: bool) -> bool {
+        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
+        if ids.is_empty() {
+            return false;
+        }
+
+        let mut actions = Vec::new();
+        for id in ids {
+            let result = {
+                let frame = self.canvas_set.active_frame_mut();
+                if let Some(shape) = frame.shape_mut(id) {
+                    if shape.locked == locked {
+                        None
+                    } else {
+                        let before = ShapeSnapshot {
+                            shape: shape.shape.clone(),
+                            locked: !locked,
+                        };
+                        shape.locked = locked;
+                        let after = ShapeSnapshot {
+                            shape: shape.shape.clone(),
+                            locked,
+                        };
+                        Some((before, after, shape.shape.clone()))
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some((before, after, shape_for_dirty)) = result {
+                actions.push(UndoAction::Modify {
+                    shape_id: id,
+                    before,
+                    after,
+                });
+                self.dirty_tracker.mark_shape(&shape_for_dirty);
+                self.invalidate_hit_cache_for(id);
+            }
+        }
+
+        if actions.is_empty() {
+            return false;
+        }
+
+        self.canvas_set
+            .active_frame_mut()
+            .push_undo_action(UndoAction::Compound(actions), self.undo_stack_limit);
+        true
+    }
+
+    fn clear_active_shapes(&mut self) -> bool {
+        let frame = self.canvas_set.active_frame_mut();
+        if frame.shapes.is_empty() {
+            return false;
+        }
+
+        let removed: Vec<(usize, crate::draw::DrawnShape)> =
+            frame.shapes.iter().cloned().enumerate().collect();
+        frame.shapes.clear();
+        frame.push_undo_action(
+            UndoAction::Delete { shapes: removed },
+            self.undo_stack_limit,
+        );
+        self.invalidate_hit_cache();
+        self.clear_selection();
+        true
+    }
+
+    fn begin_text_edit_for_selection(&mut self) {
+        if self.selected_shape_ids().len() != 1 {
+            return;
+        }
+        let shape_id = self.selected_shape_ids()[0];
+        let frame = self.canvas_set.active_frame();
+        if let Some(shape) = frame.shape(shape_id) {
+            if let Shape::Text { x, y, text, .. } = &shape.shape {
+                self.state = DrawingState::TextInput {
+                    x: *x,
+                    y: *y,
+                    buffer: text.clone(),
+                };
+                self.update_text_preview_dirty();
+            }
+        }
+    }
+
+    fn offset_shape(shape: &mut Shape, dx: i32, dy: i32) {
+        match shape {
+            Shape::Freehand { points, .. } => {
+                for point in points {
+                    point.0 += dx;
+                    point.1 += dy;
+                }
+            }
+            Shape::Line { x1, y1, x2, y2, .. } => {
+                *x1 += dx;
+                *x2 += dx;
+                *y1 += dy;
+                *y2 += dy;
+            }
+            Shape::Rect { x, y, .. } => {
+                *x += dx;
+                *y += dy;
+            }
+            Shape::Ellipse { cx, cy, .. } => {
+                *cx += dx;
+                *cy += dy;
+            }
+            Shape::Arrow { x1, y1, x2, y2, .. } => {
+                *x1 += dx;
+                *x2 += dx;
+                *y1 += dy;
+                *y2 += dy;
+            }
+            Shape::Text { x, y, .. } => {
+                *x += dx;
+                *y += dy;
+            }
+        }
+    }
+
+    pub fn apply_action_side_effects(&mut self, action: &UndoAction) {
+        self.invalidate_hit_cache_from_action(action);
+        self.mark_dirty_from_action(action);
+        self.clear_selection();
+        self.needs_redraw = true;
+    }
+
+    fn mark_dirty_from_action(&mut self, action: &UndoAction) {
+        match action {
+            UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
+                for (_, shape) in shapes {
+                    self.dirty_tracker.mark_shape(&shape.shape);
+                }
+            }
+            UndoAction::Modify {
+                before,
+                after,
+                shape_id,
+                ..
+            } => {
+                self.dirty_tracker.mark_shape(&before.shape);
+                self.dirty_tracker.mark_shape(&after.shape);
+                self.invalidate_hit_cache_for(*shape_id);
+            }
+            UndoAction::Reorder { shape_id, .. } => {
+                if let Some(shape) = self.canvas_set.active_frame().shape(*shape_id) {
+                    self.dirty_tracker.mark_shape(&shape.shape);
+                    self.invalidate_hit_cache_for(*shape_id);
+                }
+            }
+            UndoAction::Compound(actions) => {
+                for action in actions {
+                    self.mark_dirty_from_action(action);
+                }
+            }
+        }
+    }
+
+    fn invalidate_hit_cache_from_action(&mut self, action: &UndoAction) {
+        match action {
+            UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
+                for (_, shape) in shapes {
+                    self.invalidate_hit_cache_for(shape.id);
+                }
+            }
+            UndoAction::Modify { shape_id, .. } => {
+                self.invalidate_hit_cache_for(*shape_id);
+            }
+            UndoAction::Reorder { shape_id, .. } => {
+                self.invalidate_hit_cache_for(*shape_id);
+            }
+            UndoAction::Compound(actions) => {
+                for action in actions {
+                    self.invalidate_hit_cache_from_action(action);
+                }
+            }
+        }
+    }
+
+    fn shape_menu_entries(&self, ids: &[ShapeId]) -> Vec<ContextMenuEntry> {
+        if ids.is_empty() {
+            return Vec::new();
+        }
+
+        let frame = self.canvas_set.active_frame();
+        let mut locked_count = 0;
+        let mut text_shape = false;
+
+        for id in ids {
+            if let Some(shape) = frame.shape(*id) {
+                if shape.locked {
+                    locked_count += 1;
+                }
+                if ids.len() == 1 && matches!(shape.shape, Shape::Text { .. }) {
+                    text_shape = true;
+                }
+            }
+        }
+
+        let all_locked = locked_count == ids.len();
+        let any_locked = locked_count > 0;
+        let mut entries = Vec::new();
+
+        if all_locked {
+            entries.push(ContextMenuEntry::new(
+                "Unlock Shape",
+                Some("L"),
+                false,
+                false,
+                Some(MenuCommand::Unlock),
+            ));
+            entries.push(ContextMenuEntry::new(
+                "Properties…",
+                Some("I"),
+                false,
+                false,
+                Some(MenuCommand::Properties),
+            ));
+            return entries;
+        }
+
+        entries.push(ContextMenuEntry::new(
+            "Delete",
+            Some("Del"),
+            false,
+            false,
+            Some(MenuCommand::Delete),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Change Color…",
+            Option::<&str>::None,
+            true,
+            true,
+            Some(MenuCommand::ChangeColor),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Thickness…",
+            Option::<&str>::None,
+            true,
+            true,
+            Some(MenuCommand::AdjustThickness),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Duplicate",
+            Some("D"),
+            false,
+            false,
+            Some(MenuCommand::Duplicate),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Move to Front",
+            Some("PgUp"),
+            false,
+            false,
+            Some(MenuCommand::MoveToFront),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Move to Back",
+            Some("PgDn"),
+            false,
+            false,
+            Some(MenuCommand::MoveToBack),
+        ));
+
+        let lock_label = if any_locked {
+            "Unlock Shape"
+        } else {
+            "Lock Shape"
+        };
+        let lock_command = if any_locked {
+            MenuCommand::Unlock
+        } else {
+            MenuCommand::Lock
+        };
+        entries.push(ContextMenuEntry::new(
+            lock_label,
+            Some("L"),
+            false,
+            false,
+            Some(lock_command),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Properties…",
+            Some("I"),
+            false,
+            false,
+            Some(MenuCommand::Properties),
+        ));
+
+        if text_shape {
+            entries.push(ContextMenuEntry::new(
+                "Edit Text…",
+                Some("Enter"),
+                false,
+                false,
+                Some(MenuCommand::EditText),
+            ));
+        }
+
+        entries
+    }
+
+    fn format_timestamp(ms: u64) -> Option<String> {
+        let seconds = (ms / 1000) as i64;
+        let nanos = ((ms % 1000) * 1_000_000) as u32;
+        let utc_dt = chrono::DateTime::<Utc>::from_timestamp(seconds, nanos)?;
+        let local_dt = utc_dt.with_timezone(&Local);
+        Some(local_dt.format("%Y-%m-%d %H:%M:%S").to_string())
     }
 
     pub(super) fn launch_configurator(&self) {

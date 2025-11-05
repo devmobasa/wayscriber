@@ -26,6 +26,8 @@ impl PointerHandler for WaylandState {
                     );
                     self.current_mouse_x = event.position.0 as i32;
                     self.current_mouse_y = event.position.1 as i32;
+                    self.input_state
+                        .update_pointer_position(self.current_mouse_x, self.current_mouse_y);
                 }
                 PointerEventKind::Leave { .. } => {
                     debug!("Pointer left surface");
@@ -33,6 +35,8 @@ impl PointerHandler for WaylandState {
                 PointerEventKind::Motion { .. } => {
                     self.current_mouse_x = event.position.0 as i32;
                     self.current_mouse_y = event.position.1 as i32;
+                    self.input_state
+                        .update_pointer_position(self.current_mouse_x, self.current_mouse_y);
                     self.input_state
                         .on_mouse_motion(self.current_mouse_x, self.current_mouse_y);
                 }
