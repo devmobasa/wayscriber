@@ -283,9 +283,9 @@ impl InputState {
                 }
             }
             Action::ClearCanvas => {
-                self.canvas_set.clear_active();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                if self.clear_all() {
+                    info!("Cleared canvas via keybinding");
+                }
             }
             Action::Undo => {
                 if let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
