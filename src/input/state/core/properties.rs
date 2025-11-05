@@ -1,5 +1,6 @@
 use super::base::InputState;
 use crate::draw::Shape;
+use chrono::{DateTime, Local, Utc};
 
 #[derive(Debug, Clone)]
 pub struct ShapePropertiesPanel {
@@ -90,7 +91,7 @@ impl InputState {
             "Locked: {}",
             if drawn.locked { "Yes" } else { "No" }
         ));
-        if let Some(timestamp) = InputState::format_timestamp(drawn.created_at) {
+        if let Some(timestamp) = format_timestamp(drawn.created_at) {
             lines.push(format!("Created: {timestamp}"));
         }
         if let Some(bounds) = drawn.shape.bounding_box() {
@@ -116,4 +117,12 @@ fn kind_name(shape: &Shape) -> &'static str {
         Shape::Arrow { .. } => "Arrow",
         Shape::Text { .. } => "Text",
     }
+}
+
+fn format_timestamp(ms: u64) -> Option<String> {
+    let seconds = (ms / 1000) as i64;
+    let nanos = ((ms % 1000) * 1_000_000) as u32;
+    let utc_dt = DateTime::<Utc>::from_timestamp(seconds, nanos)?;
+    let local_dt = utc_dt.with_timezone(&Local);
+    Some(local_dt.format("%Y-%m-%d %H:%M:%S").to_string())
 }
