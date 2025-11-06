@@ -338,6 +338,18 @@ clear_canvas = ["E"]
 # Undo last annotation
 undo = ["Ctrl+Z"]
 
+# Redo last undone annotation
+redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
+
+# Duplicate current selection
+duplicate_selection = ["Ctrl+D"]
+
+# Nudge selection (hold Shift for a larger step)
+nudge_selection_up = ["ArrowUp"]
+nudge_selection_down = ["ArrowDown"]
+nudge_selection_left = ["ArrowLeft"]
+nudge_selection_right = ["ArrowRight"]
+
 # Adjust pen thickness
 increase_thickness = ["+", "="]
 decrease_thickness = ["-", "_"]
@@ -397,7 +409,7 @@ capture_file_region = ["Ctrl+Shift+6"]
 Keybindings are specified as strings with modifiers and keys separated by `+`:
 - Simple keys: `"E"`, `"T"`, `"Escape"`, `"F10"`
 - With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`
-- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"+", `-`, `=`, `_`
+- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"+"`, `"-"`, `"="`, `"_"`
 
 **Supported Modifiers:**
 - `Ctrl` (or `Control`)

@@ -19,6 +19,11 @@ pub enum Action {
     ClearCanvas,
     Undo,
     Redo,
+    DuplicateSelection,
+    NudgeSelectionUp,
+    NudgeSelectionDown,
+    NudgeSelectionLeft,
+    NudgeSelectionRight,
 
     // Thickness controls
     IncreaseThickness,
@@ -173,6 +178,21 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_redo")]
     pub redo: Vec<String>,
 
+    #[serde(default = "default_duplicate_selection")]
+    pub duplicate_selection: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_up")]
+    pub nudge_selection_up: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_down")]
+    pub nudge_selection_down: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_left")]
+    pub nudge_selection_left: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_right")]
+    pub nudge_selection_right: Vec<String>,
+
     #[serde(default = "default_increase_thickness")]
     pub increase_thickness: Vec<String>,
 
@@ -268,6 +288,11 @@ impl Default for KeybindingsConfig {
             clear_canvas: default_clear_canvas(),
             undo: default_undo(),
             redo: default_redo(),
+            duplicate_selection: default_duplicate_selection(),
+            nudge_selection_up: default_nudge_selection_up(),
+            nudge_selection_down: default_nudge_selection_down(),
+            nudge_selection_left: default_nudge_selection_left(),
+            nudge_selection_right: default_nudge_selection_right(),
             increase_thickness: default_increase_thickness(),
             decrease_thickness: default_decrease_thickness(),
             increase_font_size: default_increase_font_size(),
@@ -338,6 +363,26 @@ impl KeybindingsConfig {
 
         for binding_str in &self.redo {
             insert_binding(binding_str, Action::Redo)?;
+        }
+
+        for binding_str in &self.duplicate_selection {
+            insert_binding(binding_str, Action::DuplicateSelection)?;
+        }
+
+        for binding_str in &self.nudge_selection_up {
+            insert_binding(binding_str, Action::NudgeSelectionUp)?;
+        }
+
+        for binding_str in &self.nudge_selection_down {
+            insert_binding(binding_str, Action::NudgeSelectionDown)?;
+        }
+
+        for binding_str in &self.nudge_selection_left {
+            insert_binding(binding_str, Action::NudgeSelectionLeft)?;
+        }
+
+        for binding_str in &self.nudge_selection_right {
+            insert_binding(binding_str, Action::NudgeSelectionRight)?;
         }
 
         for binding_str in &self.increase_thickness {
@@ -486,6 +531,26 @@ fn default_undo() -> Vec<String> {
 
 fn default_redo() -> Vec<String> {
     vec!["Ctrl+Shift+Z".to_string(), "Ctrl+Y".to_string()]
+}
+
+fn default_duplicate_selection() -> Vec<String> {
+    vec!["Ctrl+D".to_string()]
+}
+
+fn default_nudge_selection_up() -> Vec<String> {
+    vec!["ArrowUp".to_string()]
+}
+
+fn default_nudge_selection_down() -> Vec<String> {
+    vec!["ArrowDown".to_string()]
+}
+
+fn default_nudge_selection_left() -> Vec<String> {
+    vec!["ArrowLeft".to_string()]
+}
+
+fn default_nudge_selection_right() -> Vec<String> {
+    vec!["ArrowRight".to_string()]
 }
 
 fn default_increase_thickness() -> Vec<String> {

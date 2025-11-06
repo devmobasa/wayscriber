@@ -4,6 +4,9 @@ use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
 use log::{info, warn};
 
+const KEYBOARD_NUDGE_SMALL: i32 = 8;
+const KEYBOARD_NUDGE_LARGE: i32 = 32;
+
 use super::{DrawingState, InputState};
 
 pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
@@ -72,7 +75,15 @@ impl InputState {
             // 2. OR it's a special non-character key (Escape, F10, etc.)
             let should_check_actions = match key {
                 // Special keys always check for actions
-                Key::Escape | Key::F10 | Key::F11 | Key::F12 | Key::Return => true,
+                Key::Escape
+                | Key::F10
+                | Key::F11
+                | Key::F12
+                | Key::Return
+                | Key::Up
+                | Key::Down
+                | Key::Left
+                | Key::Right => true,
                 // Character keys only check if modifiers are held
                 Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
                 // Other keys can check as well
@@ -91,6 +102,10 @@ impl InputState {
                     Key::F11 => "F11".to_string(),
                     Key::F12 => "F12".to_string(),
                     Key::Menu => "Menu".to_string(),
+                    Key::Up => "ArrowUp".to_string(),
+                    Key::Down => "ArrowDown".to_string(),
+                    Key::Left => "ArrowLeft".to_string(),
+                    Key::Right => "ArrowRight".to_string(),
                     _ => String::new(),
                 };
 
@@ -224,6 +239,10 @@ impl InputState {
             Key::F11 => "F11".to_string(),
             Key::F12 => "F12".to_string(),
             Key::Menu => "Menu".to_string(),
+            Key::Up => "ArrowUp".to_string(),
+            Key::Down => "ArrowDown".to_string(),
+            Key::Left => "ArrowLeft".to_string(),
+            Key::Right => "ArrowRight".to_string(),
             _ => return,
         };
 
@@ -264,6 +283,10 @@ impl InputState {
                         self.state = DrawingState::Idle;
                         self.needs_redraw = true;
                     }
+                    DrawingState::MovingSelection { snapshots, .. } => {
+                        self.restore_selection_from_snapshots(snapshots.clone());
+                        self.state = DrawingState::Idle;
+                    }
                     DrawingState::Idle => {
                         // Exit application
                         self.should_exit = true;
@@ -295,6 +318,51 @@ impl InputState {
             Action::Redo => {
                 if let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
                     self.apply_action_side_effects(&action);
+                }
+            }
+            Action::DuplicateSelection => {
+                if self.duplicate_selection() {
+                    info!("Duplicated selection");
+                }
+            }
+            Action::NudgeSelectionUp => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(0, -step) {
+                    info!("Moved selection up by {} px", step);
+                }
+            }
+            Action::NudgeSelectionDown => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(0, step) {
+                    info!("Moved selection down by {} px", step);
+                }
+            }
+            Action::NudgeSelectionLeft => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(-step, 0) {
+                    info!("Moved selection left by {} px", step);
+                }
+            }
+            Action::NudgeSelectionRight => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(step, 0) {
+                    info!("Moved selection right by {} px", step);
                 }
             }
             Action::IncreaseThickness => {

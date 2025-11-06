@@ -55,7 +55,7 @@ impl InputState {
             }
 
             let mut cloned_shape = shape.shape.clone();
-            Self::offset_shape(&mut cloned_shape, 12, 12);
+            Self::translate_shape(&mut cloned_shape, 12, 12);
             let new_id = {
                 let frame = self.canvas_set.active_frame_mut();
                 frame.add_shape(cloned_shape)
@@ -82,6 +82,7 @@ impl InputState {
             UndoAction::Create { shapes: created },
             self.undo_stack_limit,
         );
+        self.needs_redraw = true;
         self.set_selection(new_ids);
         true
     }
@@ -140,6 +141,153 @@ impl InputState {
             .active_frame_mut()
             .push_undo_action(UndoAction::Compound(actions), self.undo_stack_limit);
         true
+    }
+
+    pub(crate) fn capture_movable_selection_snapshots(&self) -> Vec<(ShapeId, ShapeSnapshot)> {
+        let frame = self.canvas_set.active_frame();
+        self.selected_shape_ids()
+            .iter()
+            .filter_map(|id| {
+                frame.shape(*id).and_then(|shape| {
+                    if shape.locked {
+                        None
+                    } else {
+                        Some((
+                            *id,
+                            ShapeSnapshot {
+                                shape: shape.shape.clone(),
+                                locked: shape.locked,
+                            },
+                        ))
+                    }
+                })
+            })
+            .collect()
+    }
+
+    pub(crate) fn apply_translation_to_selection(&mut self, dx: i32, dy: i32) -> bool {
+        if dx == 0 && dy == 0 {
+            return false;
+        }
+        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
+        if ids.is_empty() {
+            return false;
+        }
+
+        let mut moved_any = false;
+        for id in ids {
+            let bounds = {
+                let frame = self.canvas_set.active_frame_mut();
+                if let Some(shape) = frame.shape_mut(id) {
+                    if shape.locked {
+                        None
+                    } else {
+                        let before = shape.shape.bounding_box();
+                        Self::translate_shape(&mut shape.shape, dx, dy);
+                        let after = shape.shape.bounding_box();
+                        Some((before, after))
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some((before_bounds, after_bounds)) = bounds {
+                self.dirty_tracker.mark_optional_rect(before_bounds);
+                self.dirty_tracker.mark_optional_rect(after_bounds);
+                self.invalidate_hit_cache_for(id);
+                moved_any = true;
+            }
+        }
+
+        if moved_any {
+            self.needs_redraw = true;
+        }
+        moved_any
+    }
+
+    pub(crate) fn push_translation_undo(&mut self, before: Vec<(ShapeId, ShapeSnapshot)>) -> bool {
+        if before.is_empty() {
+            return false;
+        }
+
+        let mut actions = Vec::new();
+        {
+            let frame = self.canvas_set.active_frame();
+            for (shape_id, before_snapshot) in &before {
+                if let Some(shape) = frame.shape(*shape_id) {
+                    let after_snapshot = ShapeSnapshot {
+                        shape: shape.shape.clone(),
+                        locked: shape.locked,
+                    };
+                    actions.push(UndoAction::Modify {
+                        shape_id: *shape_id,
+                        before: before_snapshot.clone(),
+                        after: after_snapshot,
+                    });
+                }
+            }
+        }
+
+        if actions.is_empty() {
+            return false;
+        }
+
+        let undo_action = if actions.len() == 1 {
+            actions.into_iter().next().unwrap()
+        } else {
+            UndoAction::Compound(actions)
+        };
+
+        self.canvas_set
+            .active_frame_mut()
+            .push_undo_action(undo_action, self.undo_stack_limit);
+        true
+    }
+
+    pub(crate) fn translate_selection_with_undo(&mut self, dx: i32, dy: i32) -> bool {
+        if dx == 0 && dy == 0 {
+            return false;
+        }
+        let before = self.capture_movable_selection_snapshots();
+        if before.is_empty() {
+            return false;
+        }
+        if !self.apply_translation_to_selection(dx, dy) {
+            return false;
+        }
+        self.push_translation_undo(before);
+        true
+    }
+
+    pub(crate) fn restore_selection_from_snapshots(
+        &mut self,
+        snapshots: Vec<(ShapeId, ShapeSnapshot)>,
+    ) {
+        if snapshots.is_empty() {
+            return;
+        }
+
+        for (shape_id, snapshot) in snapshots {
+            let bounds = {
+                let frame = self.canvas_set.active_frame_mut();
+                if let Some(shape) = frame.shape_mut(shape_id) {
+                    let before = shape.shape.bounding_box();
+                    shape.shape = snapshot.shape.clone();
+                    shape.locked = snapshot.locked;
+                    let after = shape.shape.bounding_box();
+                    Some((before, after))
+                } else {
+                    None
+                }
+            };
+            if let Some((before_bounds, after_bounds)) = bounds {
+                self.dirty_tracker.mark_optional_rect(before_bounds);
+                self.dirty_tracker.mark_optional_rect(after_bounds);
+                self.invalidate_hit_cache_for(shape_id);
+            }
+        }
+        self.needs_redraw = true;
     }
 
     pub(crate) fn set_selection_locked(&mut self, locked: bool) -> bool {
@@ -230,7 +378,7 @@ impl InputState {
         false
     }
 
-    fn offset_shape(shape: &mut Shape, dx: i32, dy: i32) {
+    fn translate_shape(shape: &mut Shape, dx: i32, dy: i32) {
         match shape {
             Shape::Freehand { points, .. } => {
                 for point in points {

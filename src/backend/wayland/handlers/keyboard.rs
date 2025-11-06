@@ -108,6 +108,8 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::space => Key::Space,
         Keysym::Up => Key::Up,
         Keysym::Down => Key::Down,
+        Keysym::Left => Key::Left,
+        Keysym::Right => Key::Right,
         Keysym::Home => Key::Home,
         Keysym::End => Key::End,
         Keysym::Shift_L | Keysym::Shift_R => Key::Shift,
