@@ -718,6 +718,8 @@ impl InputState {
             }
             MenuCommand::ToggleHelp => {
                 self.show_help = !self.show_help;
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
                 self.close_context_menu();
             }
         }
