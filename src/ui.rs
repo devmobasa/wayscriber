@@ -80,6 +80,7 @@ pub fn render_status_bar(
             Tool::Arrow => "Arrow",
             Tool::Highlight => "Highlight",
         },
+        DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Idle => match tool {
             Tool::Pen => "Pen",
             Tool::Line => "Line",

@@ -81,24 +81,49 @@ impl InputState {
                     return;
                 }
 
-                if matches!(self.state, DrawingState::Idle) {
-                    let tool = self.active_tool();
-                    if tool != Tool::Highlight {
-                        self.state = DrawingState::Drawing {
-                            tool,
-                            start_x: x,
-                            start_y: y,
-                            points: vec![(x, y)],
-                        };
-                        self.last_provisional_bounds = None;
-                        self.update_provisional_dirty(x, y);
+                match &mut self.state {
+                    DrawingState::Idle => {
+                        if let Some(hit_id) = self.hit_test_at(x, y) {
+                            if !self.selected_shape_ids().contains(&hit_id) {
+                                if self.modifiers.shift {
+                                    self.extend_selection([hit_id]);
+                                } else {
+                                    self.set_selection(vec![hit_id]);
+                                }
+                            }
+
+                            let snapshots = self.capture_movable_selection_snapshots();
+                            if !snapshots.is_empty() {
+                                self.state = DrawingState::MovingSelection {
+                                    last_x: x,
+                                    last_y: y,
+                                    snapshots,
+                                    moved: false,
+                                };
+                                return;
+                            }
+                        }
+
+                        let tool = self.active_tool();
+                        if tool != Tool::Highlight {
+                            self.state = DrawingState::Drawing {
+                                tool,
+                                start_x: x,
+                                start_y: y,
+                                points: vec![(x, y)],
+                            };
+                            self.last_provisional_bounds = None;
+                            self.update_provisional_dirty(x, y);
+                            self.needs_redraw = true;
+                        }
+                    }
+                    DrawingState::TextInput { x: tx, y: ty, .. } => {
+                        *tx = x;
+                        *ty = y;
+                        self.update_text_preview_dirty();
                         self.needs_redraw = true;
                     }
-                } else if let DrawingState::TextInput { x: tx, y: ty, .. } = &mut self.state {
-                    *tx = x;
-                    *ty = y;
-                    self.update_text_preview_dirty();
-                    self.needs_redraw = true;
+                    DrawingState::Drawing { .. } | DrawingState::MovingSelection { .. } => {}
                 }
             }
             MouseButton::Middle => {}
@@ -116,6 +141,28 @@ impl InputState {
     /// - When drawing with other tools: Triggers redraw for live preview
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
+
+        if let DrawingState::MovingSelection { last_x, last_y, .. } = &self.state {
+            let dx = x - *last_x;
+            let dy = y - *last_y;
+            if dx != 0 || dy != 0 {
+                if self.apply_translation_to_selection(dx, dy) {
+                    if let DrawingState::MovingSelection {
+                        last_x,
+                        last_y,
+                        moved,
+                        ..
+                    } = &mut self.state
+                    {
+                        *last_x = x;
+                        *last_y = y;
+                        *moved = true;
+                    }
+                }
+            }
+            return;
+        }
+
         if self.is_context_menu_open() {
             self.update_context_menu_hover_from_pointer(x, y);
             return;
@@ -175,119 +222,128 @@ impl InputState {
         }
 
         let state = std::mem::replace(&mut self.state, DrawingState::Idle);
-        if let DrawingState::Drawing {
-            tool,
-            start_x,
-            start_y,
-            points,
-        } = state
-        {
-            let shape = match tool {
-                Tool::Pen => Shape::Freehand {
-                    points,
-                    color: self.current_color,
-                    thick: self.current_thickness,
-                },
-                Tool::Line => Shape::Line {
-                    x1: start_x,
-                    y1: start_y,
-                    x2: x,
-                    y2: y,
-                    color: self.current_color,
-                    thick: self.current_thickness,
-                },
-                Tool::Rect => {
-                    let (left, width) = if x >= start_x {
-                        (start_x, x - start_x)
-                    } else {
-                        (x, start_x - x)
-                    };
-                    let (top, height) = if y >= start_y {
-                        (start_y, y - start_y)
-                    } else {
-                        (y, start_y - y)
-                    };
-                    Shape::Rect {
-                        x: left,
-                        y: top,
-                        w: width,
-                        h: height,
+        match state {
+            DrawingState::MovingSelection {
+                snapshots, moved, ..
+            } => {
+                if moved {
+                    self.push_translation_undo(snapshots);
+                }
+            }
+            DrawingState::Drawing {
+                tool,
+                start_x,
+                start_y,
+                points,
+            } => {
+                let shape = match tool {
+                    Tool::Pen => Shape::Freehand {
+                        points,
                         color: self.current_color,
                         thick: self.current_thickness,
-                    }
-                }
-                Tool::Ellipse => {
-                    let (cx, cy, rx, ry) = util::ellipse_bounds(start_x, start_y, x, y);
-                    Shape::Ellipse {
-                        cx,
-                        cy,
-                        rx,
-                        ry,
+                    },
+                    Tool::Line => Shape::Line {
+                        x1: start_x,
+                        y1: start_y,
+                        x2: x,
+                        y2: y,
                         color: self.current_color,
                         thick: self.current_thickness,
+                    },
+                    Tool::Rect => {
+                        let (left, width) = if x >= start_x {
+                            (start_x, x - start_x)
+                        } else {
+                            (x, start_x - x)
+                        };
+                        let (top, height) = if y >= start_y {
+                            (start_y, y - start_y)
+                        } else {
+                            (y, start_y - y)
+                        };
+                        Shape::Rect {
+                            x: left,
+                            y: top,
+                            w: width,
+                            h: height,
+                            color: self.current_color,
+                            thick: self.current_thickness,
+                        }
                     }
-                }
-                Tool::Arrow => Shape::Arrow {
-                    x1: start_x,
-                    y1: start_y,
-                    x2: x,
-                    y2: y,
-                    color: self.current_color,
-                    thick: self.current_thickness,
-                    arrow_length: self.arrow_length,
-                    arrow_angle: self.arrow_angle,
-                },
-                Tool::Highlight => {
-                    self.clear_provisional_dirty();
-                    return;
-                }
-            };
+                    Tool::Ellipse => {
+                        let (cx, cy, rx, ry) = util::ellipse_bounds(start_x, start_y, x, y);
+                        Shape::Ellipse {
+                            cx,
+                            cy,
+                            rx,
+                            ry,
+                            color: self.current_color,
+                            thick: self.current_thickness,
+                        }
+                    }
+                    Tool::Arrow => Shape::Arrow {
+                        x1: start_x,
+                        y1: start_y,
+                        x2: x,
+                        y2: y,
+                        color: self.current_color,
+                        thick: self.current_thickness,
+                        arrow_length: self.arrow_length,
+                        arrow_angle: self.arrow_angle,
+                    },
+                    Tool::Highlight => {
+                        self.clear_provisional_dirty();
+                        return;
+                    }
+                };
 
-            let bounds = shape.bounding_box();
-            self.clear_provisional_dirty();
+                let bounds = shape.bounding_box();
+                self.clear_provisional_dirty();
 
-            let mut limit_reached = false;
-            let addition = {
-                let frame = self.canvas_set.active_frame_mut();
-                match frame.try_add_shape_with_id(shape.clone(), self.max_shapes_per_frame) {
-                    Some(new_id) => {
-                        if let Some(index) = frame.find_index(new_id) {
-                            if let Some(new_shape) = frame.shape(new_id) {
-                                let snapshot = new_shape.clone();
-                                frame.push_undo_action(
-                                    UndoAction::Create {
-                                        shapes: vec![(index, snapshot.clone())],
-                                    },
-                                    self.undo_stack_limit,
-                                );
-                                Some((new_id, snapshot))
+                let mut limit_reached = false;
+                let addition = {
+                    let frame = self.canvas_set.active_frame_mut();
+                    match frame.try_add_shape_with_id(shape.clone(), self.max_shapes_per_frame) {
+                        Some(new_id) => {
+                            if let Some(index) = frame.find_index(new_id) {
+                                if let Some(new_shape) = frame.shape(new_id) {
+                                    let snapshot = new_shape.clone();
+                                    frame.push_undo_action(
+                                        UndoAction::Create {
+                                            shapes: vec![(index, snapshot.clone())],
+                                        },
+                                        self.undo_stack_limit,
+                                    );
+                                    Some((new_id, snapshot))
+                                } else {
+                                    None
+                                }
                             } else {
                                 None
                             }
-                        } else {
+                        }
+                        None => {
+                            limit_reached = true;
                             None
                         }
                     }
-                    None => {
-                        limit_reached = true;
-                        None
-                    }
-                }
-            };
+                };
 
-            if let Some((new_id, _snapshot)) = addition {
-                self.invalidate_hit_cache_for(new_id);
-                self.dirty_tracker.mark_optional_rect(bounds);
-                self.clear_selection();
-                self.needs_redraw = true;
-            } else if limit_reached {
-                warn!(
-                    "Shape limit ({}) reached; discarding new shape",
-                    self.max_shapes_per_frame
-                );
+                if let Some((new_id, _snapshot)) = addition {
+                    self.invalidate_hit_cache_for(new_id);
+                    self.dirty_tracker.mark_optional_rect(bounds);
+                    self.clear_selection();
+                    self.needs_redraw = true;
+                } else if limit_reached {
+                    warn!(
+                        "Shape limit ({}) reached; discarding new shape",
+                        self.max_shapes_per_frame
+                    );
+                }
             }
-        } else {
-            self.state = state;
+            other_state => {
+                self.state = other_state;
+            }
         }
     }
 }

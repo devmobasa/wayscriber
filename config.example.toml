@@ -321,6 +321,15 @@ undo = ["Ctrl+Z"]
 # Redo last undone annotation
 redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
 
+# Duplicate currently selected annotations
+duplicate_selection = ["Ctrl+D"]
+
+# Nudge selected annotations (hold Shift for a larger step)
+nudge_selection_up = ["ArrowUp"]
+nudge_selection_down = ["ArrowDown"]
+nudge_selection_left = ["ArrowLeft"]
+nudge_selection_right = ["ArrowRight"]
+
 # Adjust pen thickness
 increase_thickness = ["+", "="]
 decrease_thickness = ["-", "_"]

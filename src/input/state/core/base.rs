@@ -7,12 +7,12 @@ use super::{
     selection::SelectionState,
 };
 use crate::config::{Action, BoardConfig, KeyBinding};
+use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{modifiers::Modifiers, tool::Tool};
 use crate::util::Rect;
 use std::collections::HashMap;
-
 /// Current drawing mode state machine.
 ///
 /// Tracks whether the user is idle, actively drawing a shape, or entering text.
@@ -40,6 +40,17 @@ pub enum DrawingState {
         y: i32,
         /// Accumulated text buffer
         buffer: String,
+    },
+    /// Selection move mode - user is dragging selected shapes
+    MovingSelection {
+        /// Last pointer X coordinate applied
+        last_x: i32,
+        /// Last pointer Y coordinate applied
+        last_y: i32,
+        /// Snapshots of shapes prior to movement (for undo/cancel)
+        snapshots: Vec<(ShapeId, ShapeSnapshot)>,
+        /// Whether any translation has been applied
+        moved: bool,
     },
 }
 

@@ -23,6 +23,10 @@ pub enum Key {
     Up,
     /// Down arrow key
     Down,
+    /// Left arrow key
+    Left,
+    /// Right arrow key
+    Right,
     /// Home key
     Home,
     /// End key
