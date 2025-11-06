@@ -126,7 +126,12 @@ fn duplicate_selection_via_action_creates_offset_shape() {
     let frame = state.canvas_set.active_frame();
     assert_eq!(frame.shapes.len(), 2);
 
-    let new_id = state.selected_shape_ids()[0];
+    let new_id = frame
+        .shapes
+        .iter()
+        .map(|shape| shape.id)
+        .find(|id| *id != original_id)
+        .expect("duplicate shape id");
     let original = frame.shape(original_id).unwrap();
     let duplicate = frame.shape(new_id).unwrap();
 
