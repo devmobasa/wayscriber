@@ -1,6 +1,9 @@
 use super::base::{DrawingState, InputState};
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{DrawnShape, Shape, ShapeId};
+use crate::util::Rect;
+
+const SELECTION_HALO_PADDING: i32 = 6;
 
 impl InputState {
     pub(crate) fn delete_selection(&mut self) -> bool {
@@ -22,7 +25,7 @@ impl InputState {
         }
 
         for (_, shape) in &removed {
-            self.dirty_tracker.mark_shape(&shape.shape);
+            self.mark_selection_dirty_region(shape.shape.bounding_box());
             self.invalidate_hit_cache_for(shape.id);
         }
 
@@ -67,7 +70,7 @@ impl InputState {
                     .find_index(new_id)
                     .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
             } {
-                self.dirty_tracker.mark_shape(&stored.shape);
+                self.mark_selection_dirty_region(stored.shape.bounding_box());
                 self.invalidate_hit_cache_for(new_id);
                 created.push((index, stored));
                 new_ids.push(new_id);
@@ -193,8 +196,8 @@ impl InputState {
             };
 
             if let Some((before_bounds, after_bounds)) = bounds {
-                self.dirty_tracker.mark_optional_rect(before_bounds);
-                self.dirty_tracker.mark_optional_rect(after_bounds);
+                self.mark_selection_dirty_region(before_bounds);
+                self.mark_selection_dirty_region(after_bounds);
                 self.invalidate_hit_cache_for(id);
                 moved_any = true;
             }
@@ -282,8 +285,8 @@ impl InputState {
                 }
             };
             if let Some((before_bounds, after_bounds)) = bounds {
-                self.dirty_tracker.mark_optional_rect(before_bounds);
-                self.dirty_tracker.mark_optional_rect(after_bounds);
+                self.mark_selection_dirty_region(before_bounds);
+                self.mark_selection_dirty_region(after_bounds);
                 self.invalidate_hit_cache_for(shape_id);
             }
         }
@@ -409,6 +412,16 @@ impl InputState {
             Shape::Text { x, y, .. } => {
                 *x += dx;
                 *y += dy;
+            }
+        }
+    }
+
+    fn mark_selection_dirty_region(&mut self, rect: Option<Rect>) {
+        if let Some(rect) = rect {
+            if let Some(inflated) = rect.inflated(SELECTION_HALO_PADDING) {
+                self.dirty_tracker.mark_rect(inflated);
+            } else {
+                self.dirty_tracker.mark_rect(rect);
             }
         }
     }
