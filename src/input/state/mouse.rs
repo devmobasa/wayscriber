@@ -83,24 +83,27 @@ impl InputState {
 
                 match &mut self.state {
                     DrawingState::Idle => {
-                        if let Some(hit_id) = self.hit_test_at(x, y) {
-                            if !self.selected_shape_ids().contains(&hit_id) {
-                                if self.modifiers.shift {
-                                    self.extend_selection([hit_id]);
-                                } else {
-                                    self.set_selection(vec![hit_id]);
+                        let selection_click = self.modifiers.alt;
+                        if selection_click {
+                            if let Some(hit_id) = self.hit_test_at(x, y) {
+                                if !self.selected_shape_ids().contains(&hit_id) {
+                                    if self.modifiers.shift {
+                                        self.extend_selection([hit_id]);
+                                    } else {
+                                        self.set_selection(vec![hit_id]);
+                                    }
                                 }
-                            }
 
-                            let snapshots = self.capture_movable_selection_snapshots();
-                            if !snapshots.is_empty() {
-                                self.state = DrawingState::MovingSelection {
-                                    last_x: x,
-                                    last_y: y,
-                                    snapshots,
-                                    moved: false,
-                                };
-                                return;
+                                let snapshots = self.capture_movable_selection_snapshots();
+                                if !snapshots.is_empty() {
+                                    self.state = DrawingState::MovingSelection {
+                                        last_x: x,
+                                        last_y: y,
+                                        snapshots,
+                                        moved: false,
+                                    };
+                                    return;
+                                }
                             }
                         }
 
