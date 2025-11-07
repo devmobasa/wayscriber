@@ -358,6 +358,8 @@ impl InputState {
         );
         self.invalidate_hit_cache();
         self.clear_selection();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
         true
     }
 
