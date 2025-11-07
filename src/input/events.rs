@@ -27,6 +27,8 @@ pub enum Key {
     Left,
     /// Right arrow key
     Right,
+    /// Delete key
+    Delete,
     /// Home key
     Home,
     /// End key

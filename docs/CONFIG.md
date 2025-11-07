@@ -350,6 +350,9 @@ nudge_selection_down = ["ArrowDown"]
 nudge_selection_left = ["ArrowLeft"]
 nudge_selection_right = ["ArrowRight"]
 
+# Delete selection
+delete_selection = ["Delete"]
+
 # Adjust pen thickness
 increase_thickness = ["+", "="]
 decrease_thickness = ["-", "_"]

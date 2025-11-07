@@ -24,6 +24,7 @@ pub enum Action {
     NudgeSelectionDown,
     NudgeSelectionLeft,
     NudgeSelectionRight,
+    DeleteSelection,
 
     // Thickness controls
     IncreaseThickness,
@@ -193,6 +194,9 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_nudge_selection_right")]
     pub nudge_selection_right: Vec<String>,
 
+    #[serde(default = "default_delete_selection")]
+    pub delete_selection: Vec<String>,
+
     #[serde(default = "default_increase_thickness")]
     pub increase_thickness: Vec<String>,
 
@@ -293,6 +297,7 @@ impl Default for KeybindingsConfig {
             nudge_selection_down: default_nudge_selection_down(),
             nudge_selection_left: default_nudge_selection_left(),
             nudge_selection_right: default_nudge_selection_right(),
+            delete_selection: default_delete_selection(),
             increase_thickness: default_increase_thickness(),
             decrease_thickness: default_decrease_thickness(),
             increase_font_size: default_increase_font_size(),
@@ -383,6 +388,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.nudge_selection_right {
             insert_binding(binding_str, Action::NudgeSelectionRight)?;
+        }
+
+        for binding_str in &self.delete_selection {
+            insert_binding(binding_str, Action::DeleteSelection)?;
         }
 
         for binding_str in &self.increase_thickness {
@@ -551,6 +560,10 @@ fn default_nudge_selection_left() -> Vec<String> {
 
 fn default_nudge_selection_right() -> Vec<String> {
     vec!["ArrowRight".to_string()]
+}
+
+fn default_delete_selection() -> Vec<String> {
+    vec!["Delete".to_string()]
 }
 
 fn default_increase_thickness() -> Vec<String> {
