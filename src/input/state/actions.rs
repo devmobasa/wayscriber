@@ -83,7 +83,8 @@ impl InputState {
                 | Key::Up
                 | Key::Down
                 | Key::Left
-                | Key::Right => true,
+                | Key::Right
+                | Key::Delete => true,
                 // Character keys only check if modifiers are held
                 Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
                 // Other keys can check as well
@@ -106,6 +107,7 @@ impl InputState {
                     Key::Down => "ArrowDown".to_string(),
                     Key::Left => "ArrowLeft".to_string(),
                     Key::Right => "ArrowRight".to_string(),
+                    Key::Delete => "Delete".to_string(),
                     _ => String::new(),
                 };
 
@@ -243,6 +245,7 @@ impl InputState {
             Key::Down => "ArrowDown".to_string(),
             Key::Left => "ArrowLeft".to_string(),
             Key::Right => "ArrowRight".to_string(),
+            Key::Delete => "Delete".to_string(),
             _ => return,
         };
 
@@ -363,6 +366,11 @@ impl InputState {
                 };
                 if self.translate_selection_with_undo(step, 0) {
                     info!("Moved selection right by {} px", step);
+                }
+            }
+            Action::DeleteSelection => {
+                if self.delete_selection() {
+                    info!("Deleted selection");
                 }
             }
             Action::IncreaseThickness => {
