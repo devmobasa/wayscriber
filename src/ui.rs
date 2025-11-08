@@ -212,190 +212,202 @@ pub fn render_help_overlay(
         badges: Vec<Badge>,
     }
 
-    struct Column {
-        sections: Vec<Section>,
+    struct MeasuredSection {
+        section: Section,
+        width: f64,
+        height: f64,
+        key_column_width: f64,
     }
 
-    let columns = vec![
-        Column {
-            sections: vec![
-                Section {
-                    title: "Board Modes",
-                    rows: vec![
-                        Row {
-                            key: "Ctrl+W",
-                            action: "Toggle Whiteboard",
-                        },
-                        Row {
-                            key: "Ctrl+B",
-                            action: "Toggle Blackboard",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+T",
-                            action: "Return to Transparent",
-                        },
-                    ],
-                    badges: Vec::new(),
+    let sections = vec![
+        Section {
+            title: "Board Modes",
+            rows: vec![
+                Row {
+                    key: "Ctrl+W",
+                    action: "Toggle Whiteboard",
                 },
-                Section {
-                    title: "Pen & Text",
-                    rows: vec![
-                        Row {
-                            key: "+/- or Scroll",
-                            action: "Adjust pen thickness",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+/-",
-                            action: "Font size",
-                        },
-                        Row {
-                            key: "Shift+Scroll",
-                            action: "Font size",
-                        },
-                    ],
-                    badges: Vec::new(),
+                Row {
+                    key: "Ctrl+B",
+                    action: "Toggle Blackboard",
                 },
-                Section {
-                    title: "Screenshots",
-                    rows: vec![
-                        Row {
-                            key: "Ctrl+C",
-                            action: "Full screen → clipboard",
-                        },
-                        Row {
-                            key: "Ctrl+S",
-                            action: "Full screen → file",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+C",
-                            action: "Region → clipboard",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+S",
-                            action: "Region → file",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+O",
-                            action: "Active window (Hyprland)",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+I",
-                            action: "Selection (capture defaults)",
-                        },
-                    ],
-                    badges: Vec::new(),
+                Row {
+                    key: "Ctrl+Shift+T",
+                    action: "Return to Transparent",
+                },
+            ],
+            badges: Vec::new(),
+        },
+        Section {
+            title: "Selection",
+            rows: vec![
+                Row {
+                    key: "Alt+Click",
+                    action: "Select & move shape",
+                },
+                Row {
+                    key: "Shift+Alt+Click",
+                    action: "Add to selection",
+                },
+                Row {
+                    key: "Delete",
+                    action: "Delete selection",
+                },
+                Row {
+                    key: "Ctrl+D",
+                    action: "Duplicate selection",
+                },
+            ],
+            badges: Vec::new(),
+        },
+        Section {
+            title: "Drawing Tools",
+            rows: vec![
+                Row {
+                    key: "Drag",
+                    action: "Freehand pen",
+                },
+                Row {
+                    key: "Shift+Drag",
+                    action: "Straight line",
+                },
+                Row {
+                    key: "Ctrl+Drag",
+                    action: "Rectangle",
+                },
+                Row {
+                    key: "Tab+Drag",
+                    action: "Circle",
+                },
+                Row {
+                    key: "Ctrl+Shift+Drag",
+                    action: "Arrow",
+                },
+                Row {
+                    key: "Ctrl+Alt+H",
+                    action: "Toggle highlight-only tool",
+                },
+                Row {
+                    key: "T",
+                    action: "Text mode",
+                },
+            ],
+            badges: Vec::new(),
+        },
+        Section {
+            title: "Pen & Text",
+            rows: vec![
+                Row {
+                    key: "+/- or Scroll",
+                    action: "Adjust pen thickness",
+                },
+                Row {
+                    key: "Ctrl+Shift+/-",
+                    action: "Font size",
+                },
+                Row {
+                    key: "Shift+Scroll",
+                    action: "Font size",
+                },
+            ],
+            badges: vec![
+                Badge {
+                    label: "R",
+                    color: [0.94, 0.36, 0.36],
+                },
+                Badge {
+                    label: "G",
+                    color: [0.30, 0.78, 0.51],
+                },
+                Badge {
+                    label: "B",
+                    color: [0.36, 0.60, 0.95],
+                },
+                Badge {
+                    label: "Y",
+                    color: [0.98, 0.80, 0.10],
+                },
+                Badge {
+                    label: "O",
+                    color: [0.98, 0.55, 0.26],
+                },
+                Badge {
+                    label: "P",
+                    color: [0.78, 0.47, 0.96],
+                },
+                Badge {
+                    label: "W",
+                    color: [0.90, 0.92, 0.96],
+                },
+                Badge {
+                    label: "K",
+                    color: [0.28, 0.30, 0.38],
                 },
             ],
         },
-        Column {
-            sections: vec![
-                Section {
-                    title: "Drawing Tools",
-                    rows: vec![
-                        Row {
-                            key: "Drag",
-                            action: "Freehand pen",
-                        },
-                        Row {
-                            key: "Shift+Drag",
-                            action: "Straight line",
-                        },
-                        Row {
-                            key: "Ctrl+Drag",
-                            action: "Rectangle",
-                        },
-                        Row {
-                            key: "Tab+Drag",
-                            action: "Circle",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+Drag",
-                            action: "Arrow",
-                        },
-                        Row {
-                            key: "Ctrl+Alt+H",
-                            action: "Toggle highlight-only tool",
-                        },
-                        Row {
-                            key: "T",
-                            action: "Text mode",
-                        },
-                    ],
-                    badges: Vec::new(),
+        Section {
+            title: "Actions",
+            rows: vec![
+                Row {
+                    key: "E",
+                    action: "Clear frame",
                 },
-                Section {
-                    title: "Colors",
-                    rows: Vec::new(),
-                    badges: vec![
-                        Badge {
-                            label: "R",
-                            color: [0.94, 0.36, 0.36],
-                        },
-                        Badge {
-                            label: "G",
-                            color: [0.30, 0.78, 0.51],
-                        },
-                        Badge {
-                            label: "B",
-                            color: [0.36, 0.60, 0.95],
-                        },
-                        Badge {
-                            label: "Y",
-                            color: [0.98, 0.80, 0.10],
-                        },
-                        Badge {
-                            label: "O",
-                            color: [0.98, 0.55, 0.26],
-                        },
-                        Badge {
-                            label: "P",
-                            color: [0.78, 0.47, 0.96],
-                        },
-                        Badge {
-                            label: "W",
-                            color: [0.90, 0.92, 0.96],
-                        },
-                        Badge {
-                            label: "K",
-                            color: [0.28, 0.30, 0.38],
-                        },
-                    ],
+                Row {
+                    key: "Ctrl+Z",
+                    action: "Undo",
                 },
-                Section {
-                    title: "Actions",
-                    rows: vec![
-                        Row {
-                            key: "E",
-                            action: "Clear frame",
-                        },
-                        Row {
-                            key: "Ctrl+Z",
-                            action: "Undo",
-                        },
-                        Row {
-                            key: "Ctrl+Shift+H",
-                            action: "Toggle click highlight",
-                        },
-                        Row {
-                            key: "Right Click / Shift+F10",
-                            action: "Context menu",
-                        },
-                        Row {
-                            key: "Escape / Ctrl+Q",
-                            action: "Exit",
-                        },
-                        Row {
-                            key: "F10",
-                            action: "Toggle help",
-                        },
-                        Row {
-                            key: "F12",
-                            action: "Toggle status bar",
-                        },
-                    ],
-                    badges: Vec::new(),
+                Row {
+                    key: "Ctrl+Shift+H",
+                    action: "Toggle click highlight",
+                },
+                Row {
+                    key: "Right Click / Shift+F10",
+                    action: "Context menu",
+                },
+                Row {
+                    key: "Escape / Ctrl+Q",
+                    action: "Exit",
+                },
+                Row {
+                    key: "F10",
+                    action: "Toggle help",
+                },
+                Row {
+                    key: "F12",
+                    action: "Toggle status bar",
                 },
             ],
+            badges: Vec::new(),
+        },
+        Section {
+            title: "Screenshots",
+            rows: vec![
+                Row {
+                    key: "Ctrl+C",
+                    action: "Full screen → clipboard",
+                },
+                Row {
+                    key: "Ctrl+S",
+                    action: "Full screen → file",
+                },
+                Row {
+                    key: "Ctrl+Shift+C",
+                    action: "Region → clipboard",
+                },
+                Row {
+                    key: "Ctrl+Shift+S",
+                    action: "Region → file",
+                },
+                Row {
+                    key: "Ctrl+Shift+O",
+                    action: "Active window (Hyprland)",
+                },
+                Row {
+                    key: "Ctrl+Shift+I",
+                    action: "Selection (capture defaults)",
+                },
+            ],
+            badges: Vec::new(),
         },
     ];
 
@@ -416,7 +428,7 @@ pub fn render_help_overlay(
     let heading_line_height = heading_font_size + 6.0;
     let row_gap_after_heading = 6.0;
     let key_desc_gap = 20.0;
-    let section_gap = 28.0;
+    let row_gap = 28.0;
     let column_gap = 48.0;
     let badge_font_size = (body_font_size - 2.0).max(12.0);
     let badge_padding_x = 12.0;
@@ -458,101 +470,130 @@ pub fn render_help_overlay(
     ];
     let note_color = [subtitle_color[0], subtitle_color[1], subtitle_color[2], 0.9];
 
-    let mut column_widths = Vec::with_capacity(columns.len());
-    let mut column_heights = Vec::with_capacity(columns.len());
-    let mut key_column_widths = Vec::with_capacity(columns.len());
-
-    for column in &columns {
+    let mut measured_sections = Vec::with_capacity(sections.len());
+    for section in sections {
         let mut key_max_width: f64 = 0.0;
-        for section in &column.sections {
-            for row in &section.rows {
-                if row.key.is_empty() {
-                    continue;
-                }
-                let key_extents = text_extents_for(
-                    ctx,
-                    "Sans",
-                    cairo::FontSlant::Normal,
-                    cairo::FontWeight::Bold,
-                    body_font_size,
-                    row.key,
-                );
-                key_max_width = key_max_width.max(key_extents.width());
+        for row in &section.rows {
+            if row.key.is_empty() {
+                continue;
             }
-        }
-        key_column_widths.push(key_max_width);
-
-        let mut column_width: f64 = 0.0;
-        let mut column_height: f64 = 0.0;
-        let mut first_section = true;
-
-        for section in &column.sections {
-            if !first_section {
-                column_height += section_gap;
-            }
-            first_section = false;
-
-            let heading_extents = text_extents_for(
+            let key_extents = text_extents_for(
                 ctx,
                 "Sans",
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Bold,
-                heading_font_size,
-                section.title,
+                body_font_size,
+                row.key,
             );
-            column_width = column_width.max(heading_extents.width());
-            column_height += heading_line_height;
+            key_max_width = key_max_width.max(key_extents.width());
+        }
 
-            if !section.rows.is_empty() {
-                column_height += row_gap_after_heading;
-                for row in &section.rows {
-                    let desc_extents = text_extents_for(
-                        ctx,
-                        "Sans",
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Normal,
-                        body_font_size,
-                        row.action,
-                    );
-                    let row_width = key_max_width + key_desc_gap + desc_extents.width();
-                    column_width = column_width.max(row_width);
-                    column_height += row_line_height;
-                }
-            }
+        let mut section_width: f64 = 0.0;
+        let mut section_height: f64 = 0.0;
 
-            if !section.badges.is_empty() {
-                column_height += badge_top_gap;
-                let mut badges_width = 0.0;
+        let heading_extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Bold,
+            heading_font_size,
+            section.title,
+        );
+        section_width = section_width.max(heading_extents.width());
+        section_height += heading_line_height;
 
-                for (index, badge) in section.badges.iter().enumerate() {
-                    let badge_extents = text_extents_for(
-                        ctx,
-                        "Sans",
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Bold,
-                        badge_font_size,
-                        badge.label,
-                    );
-                    let badge_width = badge_extents.width() + badge_padding_x * 2.0;
-                    if index > 0 {
-                        badges_width += badge_gap;
-                    }
-                    badges_width += badge_width;
-                }
-
-                column_width = column_width.max(badges_width);
-                column_height += badge_height;
+        if !section.rows.is_empty() {
+            section_height += row_gap_after_heading;
+            for row in &section.rows {
+                let desc_extents = text_extents_for(
+                    ctx,
+                    "Sans",
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Normal,
+                    body_font_size,
+                    row.action,
+                );
+                let row_width = key_max_width + key_desc_gap + desc_extents.width();
+                section_width = section_width.max(row_width);
+                section_height += row_line_height;
             }
         }
 
-        column_widths.push(column_width);
-        column_heights.push(column_height);
+        if !section.badges.is_empty() {
+            section_height += badge_top_gap;
+            let mut badges_width = 0.0;
+
+            for (index, badge) in section.badges.iter().enumerate() {
+                let badge_extents = text_extents_for(
+                    ctx,
+                    "Sans",
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                    badge_font_size,
+                    badge.label,
+                );
+                let badge_width = badge_extents.width() + badge_padding_x * 2.0;
+                if index > 0 {
+                    badges_width += badge_gap;
+                }
+                badges_width += badge_width;
+            }
+
+            section_width = section_width.max(badges_width);
+            section_height += badge_height;
+        }
+
+        measured_sections.push(MeasuredSection {
+            section,
+            width: section_width,
+            height: section_height,
+            key_column_width: key_max_width,
+        });
     }
 
-    let columns_height = column_heights.iter().copied().fold(0.0, f64::max);
-    let mut columns_width_total = column_widths.iter().sum::<f64>();
-    if columns.len() > 1 {
-        columns_width_total += column_gap * (columns.len() - 1) as f64;
+    let mut rows: Vec<Vec<MeasuredSection>> = Vec::new();
+    if measured_sections.is_empty() {
+        rows.push(Vec::new());
+    } else if measured_sections.len() <= 2 {
+        rows.push(measured_sections);
+    } else {
+        let mut split = measured_sections;
+        let first_row_len = (split.len() + 1) / 2;
+        let second_row = split.split_off(first_row_len);
+        rows.push(split);
+        rows.push(second_row);
+    }
+
+    let mut row_widths: Vec<f64> = Vec::with_capacity(rows.len());
+    let mut row_heights: Vec<f64> = Vec::with_capacity(rows.len());
+    let mut grid_width: f64 = 0.0;
+    for row in &rows {
+        if row.is_empty() {
+            row_widths.push(0.0);
+            row_heights.push(0.0);
+            continue;
+        }
+
+        let mut width: f64 = 0.0;
+        let mut height: f64 = 0.0;
+        for (index, section) in row.iter().enumerate() {
+            if index > 0 {
+                width += column_gap;
+            }
+            width += section.width;
+            height = height.max(section.height);
+        }
+        grid_width = grid_width.max(width);
+        row_widths.push(width);
+        row_heights.push(height);
+    }
+
+    let mut grid_height: f64 = 0.0;
+    for (index, height) in row_heights.iter().enumerate() {
+        grid_height += *height;
+        if index + 1 < row_heights.len() {
+            grid_height += row_gap;
+        }
     }
 
     let title_extents = text_extents_for(
@@ -581,11 +622,11 @@ pub fn render_help_overlay(
         note_text,
     );
 
-    let mut content_width = columns_width_total
+    let mut content_width = grid_width
         .max(title_extents.width())
         .max(subtitle_extents.width())
         .max(note_extents.width());
-    if columns.is_empty() {
+    if rows.is_empty() {
         content_width = content_width
             .max(title_extents.width())
             .max(subtitle_extents.width());
@@ -598,7 +639,7 @@ pub fn render_help_overlay(
         + title_bottom_spacing
         + subtitle_font_size
         + subtitle_bottom_spacing
-        + columns_height
+        + grid_height
         + columns_bottom_spacing
         + note_font_size;
     let box_height = content_height + style.padding * 2.0;
@@ -680,22 +721,29 @@ pub fn render_help_overlay(
     let _ = ctx.show_text(&version_line);
     cursor_y += subtitle_font_size + subtitle_bottom_spacing;
 
-    let columns_start_y = cursor_y;
+    let grid_start_y = cursor_y;
 
-    // Columns
-    let mut column_x = inner_x;
-    for (idx, column) in columns.iter().enumerate() {
-        let mut column_y = columns_start_y;
-        let key_width = key_column_widths[idx];
-        let column_width = column_widths[idx];
-        let desc_x = column_x + key_width + key_desc_gap;
-
-        let mut first_section = true;
-        for section in &column.sections {
-            if !first_section {
-                column_y += section_gap;
+    let mut row_y = grid_start_y;
+    for (row_index, row) in rows.iter().enumerate() {
+        let row_height = *row_heights.get(row_index).unwrap_or(&0.0);
+        let row_width = *row_widths.get(row_index).unwrap_or(&inner_width);
+        if row.is_empty() {
+            row_y += row_height;
+            if row_index + 1 < rows.len() {
+                row_y += row_gap;
             }
-            first_section = false;
+            continue;
+        }
+
+        let mut section_x = inner_x + (inner_width - row_width) / 2.0;
+        for (section_index, measured) in row.iter().enumerate() {
+            if section_index > 0 {
+                section_x += column_gap;
+            }
+
+            let mut section_y = row_y;
+            let desc_x = section_x + measured.key_column_width + key_desc_gap;
+            let section = &measured.section;
 
             ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
             ctx.set_font_size(heading_font_size);
@@ -705,21 +753,21 @@ pub fn render_help_overlay(
                 accent_color[2],
                 accent_color[3],
             );
-            let heading_baseline = column_y + heading_font_size;
-            ctx.move_to(column_x, heading_baseline);
+            let heading_baseline = section_y + heading_font_size;
+            ctx.move_to(section_x, heading_baseline);
             let _ = ctx.show_text(section.title);
-            column_y += heading_line_height;
+            section_y += heading_line_height;
 
             if !section.rows.is_empty() {
-                column_y += row_gap_after_heading;
-                for row in &section.rows {
-                    let baseline = column_y + body_font_size;
+                section_y += row_gap_after_heading;
+                for row_data in &section.rows {
+                    let baseline = section_y + body_font_size;
 
                     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
                     ctx.set_font_size(body_font_size);
                     ctx.set_source_rgba(accent_color[0], accent_color[1], accent_color[2], 0.95);
-                    ctx.move_to(column_x, baseline);
-                    let _ = ctx.show_text(row.key);
+                    ctx.move_to(section_x, baseline);
+                    let _ = ctx.show_text(row_data.key);
 
                     ctx.select_font_face(
                         "Sans",
@@ -734,15 +782,15 @@ pub fn render_help_overlay(
                         description_color[3],
                     );
                     ctx.move_to(desc_x, baseline);
-                    let _ = ctx.show_text(row.action);
+                    let _ = ctx.show_text(row_data.action);
 
-                    column_y += row_line_height;
+                    section_y += row_line_height;
                 }
             }
 
             if !section.badges.is_empty() {
-                column_y += badge_top_gap;
-                let mut badge_x = column_x;
+                section_y += badge_top_gap;
+                let mut badge_x = section_x;
 
                 for (badge_index, badge) in section.badges.iter().enumerate() {
                     if badge_index > 0 {
@@ -763,7 +811,7 @@ pub fn render_help_overlay(
                     draw_rounded_rect(
                         ctx,
                         badge_x,
-                        column_y,
+                        section_y,
                         badge_width,
                         badge_height,
                         badge_corner_radius,
@@ -779,7 +827,7 @@ pub fn render_help_overlay(
                     ctx.set_font_size(badge_font_size);
                     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
                     let text_x = badge_x + badge_padding_x;
-                    let text_y = column_y + (badge_height - badge_text_extents.height()) / 2.0
+                    let text_y = section_y + (badge_height - badge_text_extents.height()) / 2.0
                         - badge_text_extents.y_bearing();
                     ctx.move_to(text_x, text_y);
                     let _ = ctx.show_text(badge.label);
@@ -787,14 +835,18 @@ pub fn render_help_overlay(
                     badge_x += badge_width;
                 }
 
-                column_y += badge_height;
             }
+
+            section_x += measured.width;
         }
 
-        column_x += column_width + column_gap;
+        row_y += row_height;
+        if row_index + 1 < rows.len() {
+            row_y += row_gap;
+        }
     }
 
-    cursor_y = columns_start_y + columns_height + columns_bottom_spacing;
+    cursor_y = grid_start_y + grid_height + columns_bottom_spacing;
 
     // Note
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
