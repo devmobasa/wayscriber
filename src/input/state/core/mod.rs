@@ -10,7 +10,7 @@ mod selection;
 mod selection_actions;
 mod utility;
 
-pub use base::{DrawingState, InputState};
+pub use base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 #[allow(unused_imports)]
 pub use menus::{ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand};
 pub use selection::SelectionState;

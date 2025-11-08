@@ -32,7 +32,7 @@ Controls the default appearance of annotations.
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
-# Default pen thickness in pixels (1.0 - 20.0)
+# Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
 # Default font size for text mode (8.0 - 72.0)
@@ -45,7 +45,7 @@ default_font_size = 32.0
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
 
 **Runtime Adjustments:**
-- **Pen thickness**: Use `+`/`-` keys or scroll wheel (range: 1-20px)
+- **Pen thickness**: Use `+`/`-` keys or scroll wheel (range: 1-40px)
 - **Font size**: Use `Ctrl+Shift+`/`-` or `Shift+Scroll` (range: 8-72px)
 
 **Defaults:**

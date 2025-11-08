@@ -1,6 +1,6 @@
 use super::options::{CompressionMode, SessionOptions};
 use crate::draw::{Color, Frame};
-use crate::input::{InputState, board_mode::BoardMode};
+use crate::input::{InputState, board_mode::BoardMode, state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS}};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use flate2::{Compression, bufread::GzDecoder, write::GzEncoder};
@@ -409,7 +409,9 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
             input.current_color = tool_state.current_color;
-            input.current_thickness = tool_state.current_thickness.clamp(1.0, 20.0);
+            input.current_thickness = tool_state
+                .current_thickness
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
             input.current_font_size = tool_state.current_font_size.clamp(8.0, 72.0);
             input.text_background_enabled = tool_state.text_background_enabled;
             input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);

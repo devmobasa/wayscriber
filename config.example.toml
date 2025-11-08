@@ -14,7 +14,7 @@
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
-# Default pen thickness in pixels (1.0 - 20.0)
+# Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
 # Default font size for text mode (8.0 - 72.0)
