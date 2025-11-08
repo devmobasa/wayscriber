@@ -95,6 +95,7 @@ impl Frame {
     }
 
     /// Clears all shapes and history from the frame.
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.shapes.clear();
         self.undo_stack.clear();

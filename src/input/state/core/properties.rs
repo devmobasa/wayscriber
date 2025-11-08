@@ -1,5 +1,4 @@
 use super::base::InputState;
-use crate::draw::Shape;
 use chrono::{DateTime, Local, Utc};
 
 #[derive(Debug, Clone)]
@@ -85,7 +84,7 @@ impl InputState {
 
         let mut lines = Vec::new();
         lines.push(format!("Shape ID: {shape_id}"));
-        lines.push(format!("Type: {}", kind_name(&drawn.shape)));
+        lines.push(format!("Type: {}", drawn.shape.kind_name()));
         lines.push(format!("Layer: {} of {}", index + 1, frame.shapes.len()));
         lines.push(format!(
             "Locked: {}",
@@ -105,17 +104,6 @@ impl InputState {
             multiple_selection: false,
         });
         true
-    }
-}
-
-fn kind_name(shape: &Shape) -> &'static str {
-    match shape {
-        Shape::Freehand { .. } => "Freehand",
-        Shape::Line { .. } => "Line",
-        Shape::Rect { .. } => "Rectangle",
-        Shape::Ellipse { .. } => "Ellipse",
-        Shape::Arrow { .. } => "Arrow",
-        Shape::Text { .. } => "Text",
     }
 }
 
