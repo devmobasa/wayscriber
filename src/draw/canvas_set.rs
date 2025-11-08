@@ -73,6 +73,7 @@ impl CanvasSet {
     }
 
     /// Clears only the active frame.
+    #[allow(dead_code)]
     pub fn clear_active(&mut self) {
         self.active_frame_mut().clear();
     }
