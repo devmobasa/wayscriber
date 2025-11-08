@@ -1,5 +1,8 @@
 //! Drawing state machine and input state management.
 
+pub const MIN_STROKE_THICKNESS: f64 = 1.0;
+pub const MAX_STROKE_THICKNESS: f64 = 40.0;
+
 use super::{
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},

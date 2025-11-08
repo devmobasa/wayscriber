@@ -7,10 +7,9 @@ use log::{info, warn};
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
-use super::{DrawingState, InputState};
+use super::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
-
 impl InputState {
     /// Processes a key press event.
     ///
@@ -374,12 +373,14 @@ impl InputState {
                 }
             }
             Action::IncreaseThickness => {
-                self.current_thickness = (self.current_thickness + 1.0).min(20.0);
+                self.current_thickness = (self.current_thickness + 1.0)
+                                            .min(MAX_STROKE_THICKNESS);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::DecreaseThickness => {
-                self.current_thickness = (self.current_thickness - 1.0).max(1.0);
+                self.current_thickness = (self.current_thickness - 1.0)
+                    .max(MIN_STROKE_THICKNESS);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
