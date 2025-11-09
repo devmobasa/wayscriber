@@ -16,12 +16,14 @@ impl InputState {
 
     pub fn close_properties_panel(&mut self) {
         if self.shape_properties_panel.take().is_some() {
+            self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
     }
 
     pub(super) fn set_properties_panel(&mut self, panel: ShapePropertiesPanel) {
         self.shape_properties_panel = Some(panel);
+        self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
