@@ -201,6 +201,29 @@ impl ColorInput {
             }
         }
     }
+
+    pub fn summary(&self) -> String {
+        match self.mode {
+            ColorMode::Named => {
+                if self.selected_named_is_custom() {
+                    let trimmed = self.name.trim();
+                    if trimmed.is_empty() {
+                        "Custom name".to_string()
+                    } else {
+                        trimmed.to_string()
+                    }
+                } else {
+                    self.selected_named.label().to_string()
+                }
+            }
+            ColorMode::Rgb => format!(
+                "{}, {}, {}",
+                self.rgb[0].trim(),
+                self.rgb[1].trim(),
+                self.rgb[2].trim()
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -230,6 +253,15 @@ impl ColorTripletInput {
         }
         Ok(out)
     }
+
+    pub fn summary(&self) -> String {
+        [
+            self.components[0].trim(),
+            self.components[1].trim(),
+            self.components[2].trim(),
+        ]
+        .join(", ")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -258,5 +290,15 @@ impl ColorQuadInput {
             out[index] = parsed;
         }
         Ok(out)
+    }
+
+    pub fn summary(&self) -> String {
+        [
+            self.components[0].trim(),
+            self.components[1].trim(),
+            self.components[2].trim(),
+            self.components[3].trim(),
+        ]
+        .join(", ")
     }
 }

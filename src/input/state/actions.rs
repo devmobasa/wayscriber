@@ -327,6 +327,16 @@ impl InputState {
                     info!("Duplicated selection");
                 }
             }
+            Action::MoveSelectionToFront => {
+                if self.move_selection_to_front() {
+                    info!("Moved selection to front");
+                }
+            }
+            Action::MoveSelectionToBack => {
+                if self.move_selection_to_back() {
+                    info!("Moved selection to back");
+                }
+            }
             Action::NudgeSelectionUp => {
                 let step = if self.modifiers.shift {
                     KEYBOARD_NUDGE_LARGE
@@ -373,14 +383,12 @@ impl InputState {
                 }
             }
             Action::IncreaseThickness => {
-                self.current_thickness = (self.current_thickness + 1.0)
-                                            .min(MAX_STROKE_THICKNESS);
+                self.current_thickness = (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::DecreaseThickness => {
-                self.current_thickness = (self.current_thickness - 1.0)
-                    .max(MIN_STROKE_THICKNESS);
+                self.current_thickness = (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }

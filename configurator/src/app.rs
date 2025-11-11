@@ -31,6 +31,7 @@ pub fn run() -> iced::Result {
 pub struct ConfiguratorApp {
     draft: ConfigDraft,
     baseline: ConfigDraft,
+    defaults: ConfigDraft,
     status: StatusMessage,
     active_tab: TabId,
     is_loading: bool,
@@ -74,12 +75,14 @@ impl Application for ConfiguratorApp {
 
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let default_config = Config::default();
-        let baseline = ConfigDraft::from_config(&default_config);
+        let defaults = ConfigDraft::from_config(&default_config);
+        let baseline = defaults.clone();
         let config_path = Config::get_config_path().ok();
 
         let app = Self {
             draft: baseline.clone(),
             baseline,
+            defaults,
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Drawing,
             is_loading: true,
@@ -132,8 +135,7 @@ impl Application for ConfiguratorApp {
             }
             Message::ResetToDefaults => {
                 if !self.is_loading {
-                    let defaults = Config::default();
-                    self.draft = ConfigDraft::from_config(&defaults);
+                    self.draft = self.defaults.clone();
                     self.status = StatusMessage::info("Loaded default configuration (not saved).");
                     self.refresh_dirty_flag();
                 }
@@ -504,19 +506,35 @@ impl ConfiguratorApp {
             }
         };
 
+        let color_block = column![
+            row![
+                text("Pen color").size(14),
+                Space::with_width(Length::Fill),
+                default_value_text(
+                    self.defaults.drawing_color.summary(),
+                    self.draft.drawing_color != self.defaults.drawing_color,
+                ),
+            ]
+            .align_items(iced::Alignment::Center),
+            color_mode_picker,
+            color_section
+        ]
+        .spacing(8);
+
         let column = column![
             text("Drawing Defaults").size(20),
-            color_mode_picker,
-            color_section,
+            color_block,
             row![
                 labeled_input(
                     "Thickness (px)",
                     &self.draft.drawing_default_thickness,
+                    &self.defaults.drawing_default_thickness,
                     TextField::DrawingThickness,
                 ),
                 labeled_input(
                     "Font size (pt)",
                     &self.draft.drawing_default_font_size,
+                    &self.defaults.drawing_default_font_size,
                     TextField::DrawingFontSize,
                 )
             ]
@@ -525,24 +543,44 @@ impl ConfiguratorApp {
                 labeled_input(
                     "Font family",
                     &self.draft.drawing_font_family,
+                    &self.defaults.drawing_font_family,
                     TextField::DrawingFontFamily,
                 ),
                 column![
-                    text("Font weight").size(14),
+                    row![
+                        text("Font weight").size(14),
+                        Space::with_width(Length::Fill),
+                        default_value_text(
+                            self.defaults.drawing_font_weight.clone(),
+                            self.draft.drawing_font_weight != self.defaults.drawing_font_weight,
+                        )
+                    ]
+                    .align_items(iced::Alignment::Center),
                     pick_list(
                         FontWeightOption::list(),
                         Some(self.draft.drawing_font_weight_option),
                         Message::FontWeightOptionSelected,
                     )
                     .width(Length::Fill),
-                    text_input("Custom or numeric weight", &self.draft.drawing_font_weight)
-                        .on_input(|value| Message::TextChanged(TextField::DrawingFontWeight, value))
-                        .width(Length::Fill)
+                    labeled_input(
+                        "Custom or numeric weight",
+                        &self.draft.drawing_font_weight,
+                        &self.defaults.drawing_font_weight,
+                        TextField::DrawingFontWeight,
+                    )
                 ]
                 .spacing(6),
                 {
                     let mut column = column![
-                        text("Font style").size(14),
+                        row![
+                            text("Font style").size(14),
+                            Space::with_width(Length::Fill),
+                            default_value_text(
+                                self.defaults.drawing_font_style.clone(),
+                                self.draft.drawing_font_style != self.defaults.drawing_font_style,
+                            )
+                        ]
+                        .align_items(iced::Alignment::Center),
                         pick_list(
                             FontStyleOption::list(),
                             Some(self.draft.drawing_font_style_option),
@@ -553,24 +591,24 @@ impl ConfiguratorApp {
                     .spacing(6);
 
                     if self.draft.drawing_font_style_option == FontStyleOption::Custom {
-                        column = column.push(
-                            text_input("Custom style", &self.draft.drawing_font_style)
-                                .on_input(|value| {
-                                    Message::TextChanged(TextField::DrawingFontStyle, value)
-                                })
-                                .width(Length::Fill),
-                        );
+                        column = column.push(labeled_input(
+                            "Custom style",
+                            &self.draft.drawing_font_style,
+                            &self.defaults.drawing_font_style,
+                            TextField::DrawingFontStyle,
+                        ));
                     }
 
                     column
                 }
             ]
             .spacing(12),
-            checkbox(
+            toggle_row(
                 "Enable text background",
                 self.draft.drawing_text_background_enabled,
+                self.defaults.drawing_text_background_enabled,
+                ToggleField::DrawingTextBackground,
             )
-            .on_toggle(|value| Message::ToggleChanged(ToggleField::DrawingTextBackground, value))
         ]
         .spacing(12)
         .width(Length::Fill);
@@ -586,11 +624,13 @@ impl ConfiguratorApp {
                     labeled_input(
                         "Arrow length (px)",
                         &self.draft.arrow_length,
+                        &self.defaults.arrow_length,
                         TextField::ArrowLength,
                     ),
                     labeled_input(
                         "Arrow angle (deg)",
                         &self.draft.arrow_angle,
+                        &self.defaults.arrow_angle,
                         TextField::ArrowAngle,
                     )
                 ]
@@ -615,12 +655,21 @@ impl ConfiguratorApp {
                     text("Buffer count:"),
                     buffer_pick.width(Length::Fixed(120.0)),
                     text(self.draft.performance_buffer_count.to_string()),
+                    Space::with_width(Length::Fill),
+                    default_value_text(
+                        self.defaults.performance_buffer_count.to_string(),
+                        self.draft.performance_buffer_count
+                            != self.defaults.performance_buffer_count,
+                    )
                 ]
                 .spacing(12)
                 .align_items(iced::Alignment::Center),
-                checkbox("Enable VSync", self.draft.performance_enable_vsync).on_toggle(|value| {
-                    Message::ToggleChanged(ToggleField::PerformanceVsync, value)
-                })
+                toggle_row(
+                    "Enable VSync",
+                    self.draft.performance_enable_vsync,
+                    self.defaults.performance_enable_vsync,
+                    ToggleField::PerformanceVsync,
+                )
             ]
             .spacing(12),
         )
@@ -636,34 +685,53 @@ impl ConfiguratorApp {
 
         let column = column![
             text("UI Settings").size(20),
-            checkbox("Show status bar", self.draft.ui_show_status_bar)
-                .on_toggle(|value| Message::ToggleChanged(ToggleField::UiShowStatusBar, value)),
-            row![text("Status bar position:"), status_position].spacing(12),
+            toggle_row(
+                "Show status bar",
+                self.draft.ui_show_status_bar,
+                self.defaults.ui_show_status_bar,
+                ToggleField::UiShowStatusBar,
+            ),
+            row![
+                text("Status bar position:"),
+                status_position,
+                Space::with_width(Length::Fill),
+                default_value_text(
+                    self.defaults.ui_status_position.label().to_string(),
+                    self.draft.ui_status_position != self.defaults.ui_status_position,
+                )
+            ]
+            .spacing(12)
+            .align_items(iced::Alignment::Center),
             text("Status Bar Style").size(18),
             color_quad_editor(
                 "Background RGBA (0-1)",
                 &self.draft.status_bar_bg_color,
+                &self.defaults.status_bar_bg_color,
                 QuadField::StatusBarBg,
             ),
             color_quad_editor(
                 "Text RGBA (0-1)",
                 &self.draft.status_bar_text_color,
+                &self.defaults.status_bar_text_color,
                 QuadField::StatusBarText,
             ),
             row![
                 labeled_input(
                     "Font size",
                     &self.draft.status_font_size,
+                    &self.defaults.status_font_size,
                     TextField::StatusFontSize,
                 ),
                 labeled_input(
                     "Padding",
                     &self.draft.status_padding,
+                    &self.defaults.status_padding,
                     TextField::StatusPadding,
                 ),
                 labeled_input(
                     "Dot radius",
                     &self.draft.status_dot_radius,
+                    &self.defaults.status_dot_radius,
                     TextField::StatusDotRadius,
                 )
             ]
@@ -672,64 +740,78 @@ impl ConfiguratorApp {
             color_quad_editor(
                 "Background RGBA (0-1)",
                 &self.draft.help_bg_color,
+                &self.defaults.help_bg_color,
                 QuadField::HelpBg,
             ),
             color_quad_editor(
                 "Border RGBA (0-1)",
                 &self.draft.help_border_color,
+                &self.defaults.help_border_color,
                 QuadField::HelpBorder,
             ),
             color_quad_editor(
                 "Text RGBA (0-1)",
                 &self.draft.help_text_color,
+                &self.defaults.help_text_color,
                 QuadField::HelpText,
             ),
             row![
                 labeled_input(
                     "Font size",
                     &self.draft.help_font_size,
+                    &self.defaults.help_font_size,
                     TextField::HelpFontSize,
                 ),
                 labeled_input(
                     "Line height",
                     &self.draft.help_line_height,
+                    &self.defaults.help_line_height,
                     TextField::HelpLineHeight,
                 ),
-                labeled_input("Padding", &self.draft.help_padding, TextField::HelpPadding,),
+                labeled_input(
+                    "Padding",
+                    &self.draft.help_padding,
+                    &self.defaults.help_padding,
+                    TextField::HelpPadding,
+                ),
                 labeled_input(
                     "Border width",
                     &self.draft.help_border_width,
+                    &self.defaults.help_border_width,
                     TextField::HelpBorderWidth,
                 )
             ]
             .spacing(12),
             text("Click Highlight").size(18),
-            checkbox(
+            toggle_row(
                 "Enable click highlight",
                 self.draft.click_highlight_enabled,
-            )
-            .on_toggle(|value| Message::ToggleChanged(ToggleField::UiClickHighlightEnabled, value)),
-            checkbox(
+                self.defaults.click_highlight_enabled,
+                ToggleField::UiClickHighlightEnabled,
+            ),
+            toggle_row(
                 "Link highlight color to current pen",
                 self.draft.click_highlight_use_pen_color,
-            )
-            .on_toggle(|value| {
-                Message::ToggleChanged(ToggleField::UiClickHighlightUsePenColor, value)
-            }),
+                self.defaults.click_highlight_use_pen_color,
+                ToggleField::UiClickHighlightUsePenColor,
+            ),
             row![
                 labeled_input(
                     "Radius",
                     &self.draft.click_highlight_radius,
+                    &self.defaults.click_highlight_radius,
                     TextField::HighlightRadius,
                 ),
                 labeled_input(
                     "Outline thickness",
                     &self.draft.click_highlight_outline_thickness,
+                    &self.defaults.click_highlight_outline_thickness,
                     TextField::HighlightOutlineThickness,
                 ),
                 labeled_input(
                     "Duration (ms)",
                     &self.draft.click_highlight_duration_ms,
+                    &self.defaults.click_highlight_duration_ms,
                     TextField::HighlightDurationMs,
                 )
             ]
@@ -737,11 +819,13 @@ impl ConfiguratorApp {
             color_quad_editor(
                 "Fill RGBA (0-1)",
                 &self.draft.click_highlight_fill_color,
+                &self.defaults.click_highlight_fill_color,
                 QuadField::HighlightFill,
             ),
             color_quad_editor(
                 "Outline RGBA (0-1)",
                 &self.draft.click_highlight_outline_color,
+                &self.defaults.click_highlight_outline_color,
                 QuadField::HighlightOutline,
             )
         ]
@@ -759,31 +843,53 @@ impl ConfiguratorApp {
 
         let column = column![
             text("Board Mode").size(20),
-            checkbox("Enable board mode", self.draft.board_enabled)
-                .on_toggle(|value| Message::ToggleChanged(ToggleField::BoardEnabled, value)),
-            row![text("Default mode:"), board_mode_pick].spacing(12),
+            toggle_row(
+                "Enable board mode",
+                self.draft.board_enabled,
+                self.defaults.board_enabled,
+                ToggleField::BoardEnabled,
+            ),
+            row![
+                text("Default mode:"),
+                board_mode_pick,
+                Space::with_width(Length::Fill),
+                default_value_text(
+                    self.defaults.board_default_mode.label().to_string(),
+                    self.draft.board_default_mode != self.defaults.board_default_mode,
+                )
+            ]
+            .spacing(12)
+            .align_items(iced::Alignment::Center),
             color_triplet_editor(
                 "Whiteboard color RGB (0-1)",
                 &self.draft.board_whiteboard_color,
+                &self.defaults.board_whiteboard_color,
                 TripletField::BoardWhiteboard,
             ),
             color_triplet_editor(
                 "Blackboard color RGB (0-1)",
                 &self.draft.board_blackboard_color,
+                &self.defaults.board_blackboard_color,
                 TripletField::BoardBlackboard,
             ),
             color_triplet_editor(
                 "Whiteboard pen RGB (0-1)",
                 &self.draft.board_whiteboard_pen,
+                &self.defaults.board_whiteboard_pen,
                 TripletField::BoardWhiteboardPen,
             ),
             color_triplet_editor(
                 "Blackboard pen RGB (0-1)",
                 &self.draft.board_blackboard_pen,
+                &self.defaults.board_blackboard_pen,
                 TripletField::BoardBlackboardPen,
             ),
-            checkbox("Auto-adjust pen color", self.draft.board_auto_adjust_pen)
-                .on_toggle(|value| Message::ToggleChanged(ToggleField::BoardAutoAdjust, value),)
+            toggle_row(
+                "Auto-adjust pen color",
+                self.draft.board_auto_adjust_pen,
+                self.defaults.board_auto_adjust_pen,
+                ToggleField::BoardAutoAdjust,
+            )
         ]
         .spacing(12);
 
@@ -794,25 +900,35 @@ impl ConfiguratorApp {
         scrollable(
             column![
                 text("Capture Settings").size(20),
-                checkbox("Enable capture shortcuts", self.draft.capture_enabled)
-                    .on_toggle(|value| Message::ToggleChanged(ToggleField::CaptureEnabled, value)),
+                toggle_row(
+                    "Enable capture shortcuts",
+                    self.draft.capture_enabled,
+                    self.defaults.capture_enabled,
+                    ToggleField::CaptureEnabled,
+                ),
                 labeled_input(
                     "Save directory",
                     &self.draft.capture_save_directory,
+                    &self.defaults.capture_save_directory,
                     TextField::CaptureSaveDirectory,
                 ),
                 labeled_input(
                     "Filename template",
                     &self.draft.capture_filename_template,
+                    &self.defaults.capture_filename_template,
                     TextField::CaptureFilename,
                 ),
                 labeled_input(
                     "Format (png, jpg, ...)",
                     &self.draft.capture_format,
+                    &self.defaults.capture_format,
                     TextField::CaptureFormat,
                 ),
-                checkbox("Copy to clipboard", self.draft.capture_copy_to_clipboard).on_toggle(
-                    |value| Message::ToggleChanged(ToggleField::CaptureCopyToClipboard, value),
+                toggle_row(
+                    "Copy to clipboard",
+                    self.draft.capture_copy_to_clipboard,
+                    self.defaults.capture_copy_to_clipboard,
+                    ToggleField::CaptureCopyToClipboard,
                 )
             ]
             .spacing(12),
@@ -834,29 +950,47 @@ impl ConfiguratorApp {
 
         let mut column = column![
             text("Session Persistence").size(20),
-            checkbox(
+            toggle_row(
                 "Persist transparent mode drawings",
                 self.draft.session_persist_transparent,
-            )
-            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPersistTransparent, value)),
-            checkbox(
+                self.defaults.session_persist_transparent,
+                ToggleField::SessionPersistTransparent,
+            ),
+            toggle_row(
                 "Persist whiteboard mode drawings",
                 self.draft.session_persist_whiteboard,
-            )
-            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPersistWhiteboard, value)),
-            checkbox(
+                self.defaults.session_persist_whiteboard,
+                ToggleField::SessionPersistWhiteboard,
+            ),
+            toggle_row(
                 "Persist blackboard mode drawings",
                 self.draft.session_persist_blackboard,
-            )
-            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPersistBlackboard, value)),
-            checkbox(
+                self.defaults.session_persist_blackboard,
+                ToggleField::SessionPersistBlackboard,
+            ),
+            toggle_row(
                 "Restore tool state on startup",
                 self.draft.session_restore_tool_state,
-            )
-            .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionRestoreToolState, value)),
-            checkbox("Per-output persistence", self.draft.session_per_output)
-                .on_toggle(|value| Message::ToggleChanged(ToggleField::SessionPerOutput, value)),
-            row![text("Storage mode:"), storage_pick].spacing(12),
+                self.defaults.session_restore_tool_state,
+                ToggleField::SessionRestoreToolState,
+            ),
+            toggle_row(
+                "Per-output persistence",
+                self.draft.session_per_output,
+                self.defaults.session_per_output,
+                ToggleField::SessionPerOutput,
+            ),
+            row![
+                text("Storage mode:"),
+                storage_pick,
+                Space::with_width(Length::Fill),
+                default_value_text(
+                    self.defaults.session_storage_mode.label().to_string(),
+                    self.draft.session_storage_mode != self.defaults.session_storage_mode,
+                )
+            ]
+            .spacing(12)
+            .align_items(iced::Alignment::Center),
         ]
         .spacing(12);
 
@@ -864,30 +998,47 @@ impl ConfiguratorApp {
             column = column.push(labeled_input(
                 "Custom directory",
                 &self.draft.session_custom_directory,
+                &self.defaults.session_custom_directory,
                 TextField::SessionCustomDirectory,
             ));
         }
 
         column = column
-            .push(row![text("Compression:"), compression_pick].spacing(12))
+            .push(
+                row![
+                    text("Compression:"),
+                    compression_pick,
+                    Space::with_width(Length::Fill),
+                    default_value_text(
+                        self.defaults.session_compression.label().to_string(),
+                        self.draft.session_compression != self.defaults.session_compression,
+                    )
+                ]
+                .spacing(12)
+                .align_items(iced::Alignment::Center),
+            )
             .push(labeled_input(
                 "Max shapes per frame",
                 &self.draft.session_max_shapes_per_frame,
+                &self.defaults.session_max_shapes_per_frame,
                 TextField::SessionMaxShapesPerFrame,
             ))
             .push(labeled_input(
                 "Max file size (MB)",
                 &self.draft.session_max_file_size_mb,
+                &self.defaults.session_max_file_size_mb,
                 TextField::SessionMaxFileSizeMb,
             ))
             .push(labeled_input(
                 "Auto-compress threshold (KB)",
                 &self.draft.session_auto_compress_threshold_kb,
+                &self.defaults.session_auto_compress_threshold_kb,
                 TextField::SessionAutoCompressThresholdKb,
             ))
             .push(labeled_input(
                 "Backup retention count",
                 &self.draft.session_backup_retention,
+                &self.defaults.session_backup_retention,
                 TextField::SessionBackupRetention,
             ));
 
@@ -900,17 +1051,32 @@ impl ConfiguratorApp {
             .push(text("Keybindings (comma-separated)").size(20));
 
         for entry in &self.draft.keybindings.entries {
+            let default_value = self
+                .defaults
+                .keybindings
+                .value_for(entry.field)
+                .unwrap_or("");
+            let changed = entry.value.trim() != default_value.trim();
             column = column.push(
                 row![
                     container(text(entry.field.label()).size(16))
                         .width(Length::Fixed(220.0))
                         .align_x(Horizontal::Right),
-                    text_input("Shortcut list", &entry.value)
-                        .on_input({
-                            let field = entry.field;
-                            move |value| Message::KeybindingChanged(field, value)
-                        })
-                        .width(Length::Fill)
+                    column![
+                        text_input("Shortcut list", &entry.value)
+                            .on_input({
+                                let field = entry.field;
+                                move |value| Message::KeybindingChanged(field, value)
+                            })
+                            .width(Length::Fill),
+                        row![
+                            Space::with_width(Length::Fill),
+                            default_value_text(default_value.to_string(), changed)
+                        ]
+                        .align_items(iced::Alignment::Center)
+                    ]
+                    .spacing(4)
+                    .width(Length::Fill)
                 ]
                 .spacing(12)
                 .align_items(iced::Alignment::Center),
@@ -939,10 +1105,17 @@ async fn save_config_to_disk(config: Config) -> Result<(Option<PathBuf>, Arc<Con
 fn labeled_input<'a>(
     label: &'static str,
     value: &'a str,
+    default: &'a str,
     field: TextField,
 ) -> Element<'a, Message> {
+    let changed = value.trim() != default.trim();
     column![
-        text(label).size(14),
+        row![
+            text(label).size(14),
+            Space::with_width(Length::Fill),
+            default_value_text(default, changed),
+        ]
+        .align_items(iced::Alignment::Center),
         text_input(label, value).on_input(move |val| Message::TextChanged(field, val))
     ]
     .spacing(4)
@@ -953,10 +1126,17 @@ fn labeled_input<'a>(
 fn color_triplet_editor<'a>(
     label: &'static str,
     colors: &'a ColorTripletInput,
+    default: &'a ColorTripletInput,
     field: TripletField,
 ) -> Element<'a, Message> {
+    let changed = colors != default;
     column![
-        text(label).size(14),
+        row![
+            text(label).size(14),
+            Space::with_width(Length::Fill),
+            default_value_text(default.summary(), changed),
+        ]
+        .align_items(iced::Alignment::Center),
         row![
             text_input("R", &colors.components[0])
                 .on_input(move |val| Message::TripletChanged(field, 0, val)),
@@ -974,10 +1154,17 @@ fn color_triplet_editor<'a>(
 fn color_quad_editor<'a>(
     label: &'static str,
     colors: &'a ColorQuadInput,
+    default: &'a ColorQuadInput,
     field: QuadField,
 ) -> Element<'a, Message> {
+    let changed = colors != default;
     column![
-        text(label).size(14),
+        row![
+            text(label).size(14),
+            Space::with_width(Length::Fill),
+            default_value_text(default.summary(), changed),
+        ]
+        .align_items(iced::Alignment::Center),
         row![
             text_input("R", &colors.components[0])
                 .on_input(move |val| Message::QuadChanged(field, 0, val)),
@@ -1008,6 +1195,40 @@ fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
             is_invalid: !is_valid,
         })))
         .into()
+}
+
+fn default_value_text<'a>(value: impl Into<String>, changed: bool) -> iced::widget::Text<'a> {
+    let label = format!("Default: {}", value.into());
+    let color = if changed {
+        iced::Color::from_rgb(0.95, 0.6, 0.2)
+    } else {
+        iced::Color::from_rgb(0.65, 0.74, 0.82)
+    };
+    text(label).size(12).style(theme::Text::Color(color))
+}
+
+fn bool_label(value: bool) -> &'static str {
+    if value {
+        "On"
+    } else {
+        "Off"
+    }
+}
+
+fn toggle_row<'a>(
+    label: &'static str,
+    value: bool,
+    default: bool,
+    field: ToggleField,
+) -> Element<'a, Message> {
+    let changed = value != default;
+    row![
+        checkbox(label, value).on_toggle(move |val| Message::ToggleChanged(field, val)),
+        Space::with_width(Length::Fill),
+        default_value_text(bool_label(default), changed),
+    ]
+    .align_items(iced::Alignment::Center)
+    .into()
 }
 
 #[derive(Clone, Copy)]

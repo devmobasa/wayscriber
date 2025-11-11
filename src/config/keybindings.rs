@@ -20,6 +20,8 @@ pub enum Action {
     Undo,
     Redo,
     DuplicateSelection,
+    MoveSelectionToFront,
+    MoveSelectionToBack,
     NudgeSelectionUp,
     NudgeSelectionDown,
     NudgeSelectionLeft,
@@ -182,6 +184,12 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_duplicate_selection")]
     pub duplicate_selection: Vec<String>,
 
+    #[serde(default = "default_move_selection_to_front")]
+    pub move_selection_to_front: Vec<String>,
+
+    #[serde(default = "default_move_selection_to_back")]
+    pub move_selection_to_back: Vec<String>,
+
     #[serde(default = "default_nudge_selection_up")]
     pub nudge_selection_up: Vec<String>,
 
@@ -293,6 +301,8 @@ impl Default for KeybindingsConfig {
             undo: default_undo(),
             redo: default_redo(),
             duplicate_selection: default_duplicate_selection(),
+            move_selection_to_front: default_move_selection_to_front(),
+            move_selection_to_back: default_move_selection_to_back(),
             nudge_selection_up: default_nudge_selection_up(),
             nudge_selection_down: default_nudge_selection_down(),
             nudge_selection_left: default_nudge_selection_left(),
@@ -372,6 +382,14 @@ impl KeybindingsConfig {
 
         for binding_str in &self.duplicate_selection {
             insert_binding(binding_str, Action::DuplicateSelection)?;
+        }
+
+        for binding_str in &self.move_selection_to_front {
+            insert_binding(binding_str, Action::MoveSelectionToFront)?;
+        }
+
+        for binding_str in &self.move_selection_to_back {
+            insert_binding(binding_str, Action::MoveSelectionToBack)?;
         }
 
         for binding_str in &self.nudge_selection_up {
@@ -544,6 +562,14 @@ fn default_redo() -> Vec<String> {
 
 fn default_duplicate_selection() -> Vec<String> {
     vec!["Ctrl+D".to_string()]
+}
+
+fn default_move_selection_to_front() -> Vec<String> {
+    vec!["]".to_string()]
+}
+
+fn default_move_selection_to_back() -> Vec<String> {
+    vec!["[".to_string()]
 }
 
 fn default_nudge_selection_up() -> Vec<String> {
@@ -793,6 +819,12 @@ mod tests {
 
         let ctrl_shift_z = KeyBinding::parse("Ctrl+Shift+Z").unwrap();
         assert_eq!(map.get(&ctrl_shift_z), Some(&Action::Redo));
+
+        let move_front = KeyBinding::parse("]").unwrap();
+        assert_eq!(map.get(&move_front), Some(&Action::MoveSelectionToFront));
+
+        let move_back = KeyBinding::parse("[").unwrap();
+        assert_eq!(map.get(&move_back), Some(&Action::MoveSelectionToBack));
 
         let toggle_highlight = KeyBinding::parse("Ctrl+Shift+H").unwrap();
         assert_eq!(
