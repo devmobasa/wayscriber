@@ -21,6 +21,7 @@ pub enum ContextMenuState {
         kind: ContextMenuKind,
         hover_index: Option<usize>,
         keyboard_focus: Option<usize>,
+        hovered_shape_id: Option<ShapeId>,
     },
 }
 
@@ -29,6 +30,7 @@ pub enum ContextMenuState {
 pub enum MenuCommand {
     Delete,
     Duplicate,
+    SelectHoveredShape,
     MoveToFront,
     MoveToBack,
     Lock,
@@ -93,10 +95,13 @@ impl InputState {
         match &self.context_menu_state {
             ContextMenuState::Hidden => Vec::new(),
             ContextMenuState::Open {
-                kind, shape_ids, ..
+                kind,
+                shape_ids,
+                hovered_shape_id,
+                ..
             } => match kind {
                 ContextMenuKind::Canvas => self.canvas_menu_entries(),
-                ContextMenuKind::Shape => self.shape_menu_entries(shape_ids),
+                ContextMenuKind::Shape => self.shape_menu_entries(shape_ids, *hovered_shape_id),
             },
         }
     }
@@ -109,6 +114,18 @@ impl InputState {
         } = &self.context_menu_state
         {
             hover_index.or(*keyboard_focus)
+        } else {
+            None
+        }
+    }
+
+    fn hovered_context_menu_shape(&self) -> Option<ShapeId> {
+        if let ContextMenuState::Open {
+            hovered_shape_id: Some(shape_id),
+            ..
+        } = &self.context_menu_state
+        {
+            Some(*shape_id)
         } else {
             None
         }
@@ -304,7 +321,11 @@ impl InputState {
         entries
     }
 
-    fn shape_menu_entries(&self, ids: &[ShapeId]) -> Vec<ContextMenuEntry> {
+    fn shape_menu_entries(
+        &self,
+        ids: &[ShapeId],
+        hovered_shape_id: Option<ShapeId>,
+    ) -> Vec<ContextMenuEntry> {
         let mut entries = Vec::new();
         let locked = ids.iter().any(|id| {
             self.canvas_set
@@ -313,6 +334,16 @@ impl InputState {
                 .map(|shape| shape.locked)
                 .unwrap_or(false)
         });
+
+        if hovered_shape_id.is_some() {
+            entries.push(ContextMenuEntry::new(
+                "Select This Shape",
+                Some("Alt+Click"),
+                false,
+                false,
+                Some(MenuCommand::SelectHoveredShape),
+            ));
+        }
 
         entries.push(ContextMenuEntry::new(
             "Delete",
@@ -589,6 +620,7 @@ impl InputState {
         anchor: (i32, i32),
         shape_ids: Vec<ShapeId>,
         kind: ContextMenuKind,
+        hovered_shape_id: Option<ShapeId>,
     ) {
         if !self.context_menu_enabled {
             return;
@@ -603,6 +635,7 @@ impl InputState {
             kind,
             hover_index: None,
             keyboard_focus: None,
+            hovered_shape_id,
         };
         self.pending_menu_hover_recalc = true;
     }
@@ -620,14 +653,14 @@ impl InputState {
         if selection.is_empty() {
             let anchor = self.keyboard_canvas_menu_anchor();
             self.update_pointer_position(anchor.0, anchor.1);
-            self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Canvas);
+            self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Canvas, None);
             self.pending_menu_hover_recalc = false;
             self.set_context_menu_focus(None);
             self.focus_first_context_menu_entry();
         } else {
             let anchor = self.keyboard_shape_menu_anchor(&selection);
             self.update_pointer_position(anchor.0, anchor.1);
-            self.open_context_menu(anchor, selection, ContextMenuKind::Shape);
+            self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
             self.pending_menu_hover_recalc = false;
             self.focus_first_context_menu_entry();
         }
@@ -665,6 +698,39 @@ impl InputState {
             MenuCommand::Duplicate => {
                 self.duplicate_selection();
                 self.close_context_menu();
+            }
+            MenuCommand::SelectHoveredShape => {
+                if let Some(hovered_shape) = self.hovered_context_menu_shape() {
+                    let previous_ids = self.selected_shape_ids().to_vec();
+                    let previous_bounds = {
+                        let frame = self.canvas_set.active_frame();
+                        previous_ids
+                            .iter()
+                            .filter_map(|id| {
+                                frame
+                                    .shape(*id)
+                                    .and_then(|shape| shape.shape.bounding_box())
+                            })
+                            .collect::<Vec<_>>()
+                    };
+
+                    self.set_selection(vec![hovered_shape]);
+
+                    for bounds in previous_bounds {
+                        self.mark_selection_dirty_region(Some(bounds));
+                    }
+                    let hovered_bounds = {
+                        let frame = self.canvas_set.active_frame();
+                        frame
+                            .shape(hovered_shape)
+                            .and_then(|shape| shape.shape.bounding_box())
+                    };
+                    self.mark_selection_dirty_region(hovered_bounds);
+
+                    self.close_context_menu();
+                } else {
+                    self.close_context_menu();
+                }
             }
             MenuCommand::MoveToFront => {
                 self.move_selection_to_front();

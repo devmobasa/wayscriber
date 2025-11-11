@@ -418,7 +418,7 @@ impl InputState {
         }
     }
 
-    fn mark_selection_dirty_region(&mut self, rect: Option<Rect>) {
+    pub(crate) fn mark_selection_dirty_region(&mut self, rect: Option<Rect>) {
         if let Some(rect) = rect {
             if let Some(inflated) = rect.inflated(SELECTION_HALO_PADDING) {
                 self.dirty_tracker.mark_rect(inflated);
