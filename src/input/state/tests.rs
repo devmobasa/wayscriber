@@ -1,4 +1,4 @@
-use super::core::MenuCommand;
+use super::core::{ContextMenuKind, ContextMenuState, MenuCommand};
 use super::*;
 use crate::config::{Action, BoardConfig};
 use crate::draw::{Color, FontDescriptor, Shape, frame::UndoAction};
@@ -615,6 +615,91 @@ fn context_menu_respects_enable_flag() {
     state.set_context_menu_enabled(true);
     state.toggle_context_menu_via_keyboard();
     assert!(state.is_context_menu_open());
+}
+
+#[test]
+fn shape_menu_includes_select_this_entry_whenever_hovered() {
+    let mut state = create_test_input_state();
+    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 40,
+        y: 40,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![first, second]);
+    state.open_context_menu(
+        (0, 0),
+        vec![first, second],
+        ContextMenuKind::Shape,
+        Some(first),
+    );
+
+    let entries = state.context_menu_entries();
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.label == "Select This Shape"),
+        "Expected Select This Shape entry to be present for multi-selection"
+    );
+
+    state.set_selection(vec![first]);
+    state.open_context_menu((0, 0), vec![first], ContextMenuKind::Shape, Some(first));
+
+    let entries_single = state.context_menu_entries();
+    assert!(
+        entries_single
+            .iter()
+            .any(|entry| entry.label == "Select This Shape"),
+        "Expected Select This Shape entry even for single selection"
+    );
+}
+
+#[test]
+fn select_this_shape_command_focuses_single_shape() {
+    let mut state = create_test_input_state();
+    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 40,
+        y: 40,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![first, second]);
+    state.open_context_menu(
+        (10, 10),
+        vec![first, second],
+        ContextMenuKind::Shape,
+        Some(second),
+    );
+
+    state.execute_menu_command(MenuCommand::SelectHoveredShape);
+    assert_eq!(state.selected_shape_ids(), &[second]);
+
+    assert!(
+        matches!(state.context_menu_state, ContextMenuState::Hidden),
+        "Context menu should close after selecting hovered shape"
+    );
 }
 
 #[test]

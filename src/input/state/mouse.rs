@@ -27,10 +27,10 @@ impl InputState {
                 self.set_selection(vec![id]);
             }
             let selection = self.selected_shape_ids().to_vec();
-            self.open_context_menu((x, y), selection, ContextMenuKind::Shape);
+            self.open_context_menu((x, y), selection, ContextMenuKind::Shape, hit_shape);
         } else {
             self.clear_selection();
-            self.open_context_menu((x, y), Vec::new(), ContextMenuKind::Canvas);
+            self.open_context_menu((x, y), Vec::new(), ContextMenuKind::Canvas, None);
         }
 
         self.update_context_menu_hover_from_pointer(x, y);
