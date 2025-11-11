@@ -324,6 +324,10 @@ redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
 # Duplicate currently selected annotations
 duplicate_selection = ["Ctrl+D"]
 
+# Reorder selected annotations within the stack
+move_selection_to_front = ["]"]
+move_selection_to_back = ["["]
+
 # Nudge selected annotations (hold Shift for a larger step)
 nudge_selection_up = ["ArrowUp"]
 nudge_selection_down = ["ArrowDown"]

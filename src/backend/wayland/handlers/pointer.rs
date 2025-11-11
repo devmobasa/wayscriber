@@ -5,7 +5,10 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
-use crate::input::{MouseButton, state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS}};
+use crate::input::{
+    MouseButton,
+    state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
+};
 
 use super::super::state::WaylandState;
 
@@ -102,8 +105,7 @@ impl PointerHandler for WaylandState {
                         }
                     } else if scroll_direction > 0 {
                         self.input_state.current_thickness =
-                            (self.input_state.current_thickness - 1.0)
-                                .max(MIN_STROKE_THICKNESS);
+                            (self.input_state.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
                         debug!(
                             "Thickness decreased: {:.0}px",
                             self.input_state.current_thickness
@@ -111,8 +113,7 @@ impl PointerHandler for WaylandState {
                         self.input_state.needs_redraw = true;
                     } else if scroll_direction < 0 {
                         self.input_state.current_thickness =
-                            (self.input_state.current_thickness + 1.0)
-                                .min(MAX_STROKE_THICKNESS);
+                            (self.input_state.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
                         debug!(
                             "Thickness increased: {:.0}px",
                             self.input_state.current_thickness

@@ -25,7 +25,10 @@ pub use types::{
 #[allow(unused_imports)]
 pub use enums::ColorSpec;
 
-use crate::{input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS}, legacy};
+use crate::{
+    input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
+    legacy,
+};
 use anyhow::{Context, Result, anyhow};
 use chrono::Local;
 use log::{debug, info, warn};
@@ -319,8 +322,7 @@ impl Config {
     /// - `buffer_count`: 2 - 4
     pub fn validate_and_clamp(&mut self) {
         // Thickness: 1.0 - 40.0
-        if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS)
-            .contains(&self.drawing.default_thickness)
+        if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(&self.drawing.default_thickness)
         {
             log::warn!(
                 "Invalid default_thickness {:.1}, clamping to {:.1}-{:.1} range",

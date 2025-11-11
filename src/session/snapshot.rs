@@ -1,6 +1,10 @@
 use super::options::{CompressionMode, SessionOptions};
 use crate::draw::{Color, Frame};
-use crate::input::{InputState, board_mode::BoardMode, state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS}};
+use crate::input::{
+    InputState,
+    board_mode::BoardMode,
+    state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
+};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use flate2::{Compression, bufread::GzDecoder, write::GzEncoder};

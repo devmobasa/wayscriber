@@ -85,6 +85,13 @@ impl KeybindingsDraft {
             Err(errors)
         }
     }
+
+    pub fn value_for(&self, field: KeybindingField) -> Option<&str> {
+        self.entries
+            .iter()
+            .find(|entry| entry.field == field)
+            .map(|entry| entry.value.as_str())
+    }
 }
 
 impl KeybindingField {

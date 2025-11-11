@@ -834,7 +834,6 @@ pub fn render_help_overlay(
 
                     badge_x += badge_width;
                 }
-
             }
 
             section_x += measured.width;
