@@ -109,11 +109,12 @@ fn main() -> anyhow::Result<()> {
         log::info!(
             "  - Colors: R (red), G (green), B (blue), Y (yellow), O (orange), P (pink), W (white), K (black)"
         );
-        log::info!("  - Undo: Ctrl+Z");
+        log::info!("  - Undo / Redo: Ctrl+Z / Ctrl+Shift+Z");
         log::info!("  - Clear all: E");
         log::info!("  - Increase thickness: + or = or scroll down");
         log::info!("  - Decrease thickness: - or _ or scroll up");
-        log::info!("  - Help: F10");
+        log::info!("  - Context menu: Right Click or Shift+F10");
+        log::info!("  - Help: F10   •   Status bar: F12   •   Configurator: F11");
         log::info!("  - Exit: Escape");
         log::info!("");
 
