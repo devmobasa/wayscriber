@@ -370,6 +370,52 @@ fn modify_delete_cycle_survives_restore() {
 }
 
 #[test]
+fn clear_all_can_be_undone_after_restore() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-clear-all");
+    options.persist_transparent = true;
+    options.persist_history = true;
+
+    let mut input = dummy_input_state();
+    let frame = input.canvas_set.active_frame_mut();
+    for i in 0..3 {
+        frame.add_shape(Shape::Rect {
+            x: i * 10,
+            y: i * 10,
+            w: 5,
+            h: 5,
+            color: Color {
+                r: 1.0,
+                g: 1.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 1.0,
+        });
+    }
+
+    assert_eq!(frame.shapes.len(), 3);
+    assert!(input.clear_all());
+    assert_eq!(input.canvas_set.active_frame().shapes.len(), 0);
+    assert!(input.canvas_set.active_frame().undo_stack_len() > 0);
+
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+    save_snapshot(&snapshot, &options).expect("save snapshot");
+    let loaded = load_snapshot(&options)
+        .expect("load snapshot result")
+        .expect("snapshot data");
+
+    let mut restored = dummy_input_state();
+    apply_snapshot(&mut restored, loaded, &options);
+    restored.canvas_set.switch_mode(BoardMode::Transparent);
+    let frame = restored.canvas_set.active_frame_mut();
+    assert_eq!(frame.shapes.len(), 0);
+    assert!(frame.undo_stack_len() > 0);
+    frame.undo_last();
+    assert_eq!(frame.shapes.len(), 3);
+}
+
+#[test]
 fn corrupted_history_is_dropped_but_shapes_load() {
     let temp = tempfile::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-corrupt");

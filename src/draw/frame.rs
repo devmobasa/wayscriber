@@ -440,7 +440,8 @@ impl Frame {
             }
             UndoAction::Delete { shapes } => {
                 for (offset, (index, shape)) in shapes.iter().enumerate() {
-                    self.insert_existing(index + offset, shape.clone());
+                    let insert_at = (index + offset).min(self.shapes.len());
+                    self.insert_existing(insert_at, shape.clone());
                 }
             }
             UndoAction::Modify {
