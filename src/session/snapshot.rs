@@ -1,18 +1,25 @@
 use super::options::{CompressionMode, SessionOptions};
+use crate::draw::frame::{MAX_COMPOUND_DEPTH, ShapeId};
 use crate::draw::{Color, Frame};
-use crate::input::{InputState, board_mode::BoardMode};
+use crate::input::{
+    InputState,
+    board_mode::BoardMode,
+    state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
+};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use flate2::{Compression, bufread::GzDecoder, write::GzEncoder};
 use fs2::FileExt;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-const CURRENT_VERSION: u32 = 1;
+const CURRENT_VERSION: u32 = 2;
 
 /// Captured state suitable for serialisation or restoration.
 #[derive(Debug, Clone)]
@@ -26,8 +33,11 @@ pub struct SessionSnapshot {
 
 impl SessionSnapshot {
     fn is_empty(&self) -> bool {
-        let empty_frame =
-            |frame: &Option<Frame>| frame.as_ref().map_or(true, |data| data.shapes.is_empty());
+        let empty_frame = |frame: &Option<Frame>| {
+            frame
+                .as_ref()
+                .map_or(true, |data| !data.has_persistable_data())
+        };
         empty_frame(&self.transparent)
             && empty_frame(&self.whiteboard)
             && empty_frame(&self.blackboard)
@@ -64,6 +74,7 @@ impl ToolStateSnapshot {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SessionFile {
+    #[serde(default = "default_file_version")]
     version: u32,
     last_modified: String,
     active_mode: String,
@@ -80,6 +91,7 @@ struct SessionFile {
 pub struct LoadedSnapshot {
     pub snapshot: SessionSnapshot,
     pub compressed: bool,
+    pub version: u32,
 }
 
 /// Capture a snapshot from the current input state if persistence is enabled.
@@ -87,7 +99,7 @@ pub fn snapshot_from_input(
     input: &InputState,
     options: &SessionOptions,
 ) -> Option<SessionSnapshot> {
-    if !options.any_enabled() && !options.restore_tool_state {
+    if !options.any_enabled() && !options.restore_tool_state && !options.persist_history {
         return None;
     }
 
@@ -99,28 +111,33 @@ pub fn snapshot_from_input(
         tool_state: None,
     };
 
-    if options.persist_transparent {
-        if let Some(frame) = input.canvas_set.frame(BoardMode::Transparent) {
-            if !frame.shapes.is_empty() {
-                snapshot.transparent = Some(frame.clone());
-            }
+    let history_limit = options.effective_history_limit(input.undo_stack_limit);
+
+    let capture_frame = |mode: BoardMode| -> Option<Frame> {
+        let frame = input.canvas_set.frame(mode)?;
+        let mut cloned = frame.clone();
+        if history_limit == 0 {
+            cloned.clamp_history_depth(0);
+        } else if history_limit < usize::MAX {
+            cloned.clamp_history_depth(history_limit);
         }
+        if cloned.has_persistable_data() {
+            Some(cloned)
+        } else {
+            None
+        }
+    };
+
+    if options.persist_transparent {
+        snapshot.transparent = capture_frame(BoardMode::Transparent);
     }
 
     if options.persist_whiteboard {
-        if let Some(frame) = input.canvas_set.frame(BoardMode::Whiteboard) {
-            if !frame.shapes.is_empty() {
-                snapshot.whiteboard = Some(frame.clone());
-            }
-        }
+        snapshot.whiteboard = capture_frame(BoardMode::Whiteboard);
     }
 
     if options.persist_blackboard {
-        if let Some(frame) = input.canvas_set.frame(BoardMode::Blackboard) {
-            if !frame.shapes.is_empty() {
-                snapshot.blackboard = Some(frame.clone());
-            }
-        }
+        snapshot.blackboard = capture_frame(BoardMode::Blackboard);
     }
 
     if options.restore_tool_state {
@@ -356,8 +373,40 @@ pub(crate) fn load_snapshot_inner(
         file_bytes
     };
 
-    let session_file: SessionFile =
+    let original_value: serde_json::Value =
         serde_json::from_slice(&decompressed).context("failed to parse session json")?;
+
+    let max_depth = max_history_depth(&original_value);
+    let mut working_value = original_value.clone();
+    if max_depth > MAX_COMPOUND_DEPTH {
+        warn!(
+            "Session history depth {} exceeds limit {}; dropping history",
+            max_depth, MAX_COMPOUND_DEPTH
+        );
+        strip_history_fields(&mut working_value);
+    }
+
+    let session_file: SessionFile = match serde_json::from_value(working_value.clone()) {
+        Ok(file) => file,
+        Err(err) => {
+            warn!(
+                "Failed to deserialize session ({}); retrying without history",
+                err
+            );
+            let mut stripped = original_value.clone();
+            strip_history_fields(&mut stripped);
+            serde_json::from_value(stripped)
+                .context("failed to parse session after stripping history")?
+        }
+    };
+
+    if session_file.version > CURRENT_VERSION {
+        warn!(
+            "Session file version {} is newer than supported version {}; skipping load",
+            session_file.version, CURRENT_VERSION
+        );
+        return Ok(None);
+    }
 
     let active_mode =
         BoardMode::from_str(&session_file.active_mode).unwrap_or(BoardMode::Transparent);
@@ -371,6 +420,14 @@ pub(crate) fn load_snapshot_inner(
     };
 
     enforce_shape_limits(&mut snapshot, options.max_shapes_per_frame);
+    let disk_history_limit = if options.persist_history {
+        options.max_persisted_undo_depth
+    } else {
+        Some(0)
+    };
+    apply_history_policies(&mut snapshot.transparent, "transparent", disk_history_limit);
+    apply_history_policies(&mut snapshot.whiteboard, "whiteboard", disk_history_limit);
+    apply_history_policies(&mut snapshot.blackboard, "blackboard", disk_history_limit);
 
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
         debug!(
@@ -383,25 +440,43 @@ pub(crate) fn load_snapshot_inner(
     Ok(Some(LoadedSnapshot {
         snapshot,
         compressed,
+        version: session_file.version,
     }))
 }
 
 /// Apply a session snapshot to the live [`InputState`].
 pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options: &SessionOptions) {
+    let runtime_history_limit = options.effective_history_limit(input.undo_stack_limit);
+
     if options.persist_transparent {
         input
             .canvas_set
             .set_frame(BoardMode::Transparent, snapshot.transparent);
+        clamp_runtime_history(
+            &mut input.canvas_set,
+            BoardMode::Transparent,
+            runtime_history_limit,
+        );
     }
     if options.persist_whiteboard {
         input
             .canvas_set
             .set_frame(BoardMode::Whiteboard, snapshot.whiteboard);
+        clamp_runtime_history(
+            &mut input.canvas_set,
+            BoardMode::Whiteboard,
+            runtime_history_limit,
+        );
     }
     if options.persist_blackboard {
         input
             .canvas_set
             .set_frame(BoardMode::Blackboard, snapshot.blackboard);
+        clamp_runtime_history(
+            &mut input.canvas_set,
+            BoardMode::Blackboard,
+            runtime_history_limit,
+        );
     }
 
     input.canvas_set.switch_mode(snapshot.active_mode);
@@ -409,7 +484,9 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
             input.current_color = tool_state.current_color;
-            input.current_thickness = tool_state.current_thickness.clamp(1.0, 20.0);
+            input.current_thickness = tool_state
+                .current_thickness
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
             input.current_font_size = tool_state.current_font_size.clamp(8.0, 72.0);
             input.text_background_enabled = tool_state.text_background_enabled;
             input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
@@ -422,17 +499,38 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
     input.needs_redraw = true;
 }
 
+fn clamp_runtime_history(canvas: &mut crate::draw::CanvasSet, mode: BoardMode, limit: usize) {
+    if let Some(frame) = canvas.frame_mut(mode) {
+        frame.clamp_history_depth(limit);
+    }
+}
+
 fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
+    if max_shapes == 0 {
+        return;
+    }
+
     let truncate = |frame: &mut Option<Frame>, mode: &str| {
         if let Some(frame_data) = frame {
             if frame_data.shapes.len() > max_shapes {
+                let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
                 warn!(
                     "Session frame '{}' contains {} shapes which exceeds the limit of {}; truncating",
                     mode,
-                    frame_data.shapes.len(),
+                    frame_data.shapes.len() + removed.len(),
                     max_shapes
                 );
-                frame_data.shapes.truncate(max_shapes);
+                let removed_ids: HashSet<ShapeId> =
+                    removed.into_iter().map(|shape| shape.id).collect();
+                if !removed_ids.is_empty() {
+                    let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
+                    if !stats.is_empty() {
+                        warn!(
+                            "Dropped {} undo and {} redo actions referencing trimmed shapes in '{}' history",
+                            stats.undo_removed, stats.redo_removed, mode
+                        );
+                    }
+                }
             }
         }
     };
@@ -442,12 +540,94 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
     truncate(&mut snapshot.blackboard, "blackboard");
 }
 
+fn apply_history_policies(frame: &mut Option<Frame>, mode: &str, depth_limit: Option<usize>) {
+    if let Some(frame_data) = frame {
+        let depth_trim = frame_data.validate_history(MAX_COMPOUND_DEPTH);
+        if !depth_trim.is_empty() {
+            warn!(
+                "Removed {} undo and {} redo actions with invalid structure in '{}' history",
+                depth_trim.undo_removed, depth_trim.redo_removed, mode
+            );
+        }
+        let shape_trim = frame_data.prune_history_against_shapes();
+        if !shape_trim.is_empty() {
+            warn!(
+                "Removed {} undo and {} redo actions referencing missing shapes in '{}' history",
+                shape_trim.undo_removed, shape_trim.redo_removed, mode
+            );
+        }
+        if let Some(limit) = depth_limit {
+            let trimmed = frame_data.clamp_history_depth(limit);
+            if !trimmed.is_empty() {
+                debug!(
+                    "Clamped '{}' history to {} entries (dropped {} undo / {} redo)",
+                    mode, limit, trimmed.undo_removed, trimmed.redo_removed
+                );
+            }
+        }
+    }
+}
+
+fn max_history_depth(doc: &Value) -> usize {
+    let mut max_depth = 0;
+    for key in ["transparent", "whiteboard", "blackboard"] {
+        if let Some(frame) = doc.get(key) {
+            if let Some(obj) = frame.as_object() {
+                for stack_key in ["undo_stack", "redo_stack"] {
+                    if let Some(Value::Array(arr)) = obj.get(stack_key) {
+                        max_depth = max_depth.max(depth_array(arr));
+                    }
+                }
+            }
+        }
+    }
+    max_depth
+}
+
+fn depth_array(arr: &[Value]) -> usize {
+    arr.iter().map(depth_action).max().unwrap_or(1)
+}
+
+fn depth_action(action: &Value) -> usize {
+    if let Some(obj) = action.as_object() {
+        let is_compound = obj
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .map_or(false, |k| k == "compound");
+        if is_compound {
+            let mut child_max = 0;
+            for value in obj.values() {
+                if let Value::Array(arr) = value {
+                    child_max = child_max.max(depth_array(arr));
+                }
+            }
+            return 1 + child_max;
+        }
+    }
+    1
+}
+
+fn strip_history_fields(doc: &mut Value) {
+    if let Some(obj) = doc.as_object_mut() {
+        for key in ["transparent", "whiteboard", "blackboard"] {
+            if let Some(Value::Object(frame)) = obj.get_mut(key) {
+                frame.remove("undo_stack");
+                frame.remove("redo_stack");
+            }
+        }
+    }
+}
+
 fn board_mode_to_str(mode: BoardMode) -> &'static str {
     match mode {
         BoardMode::Transparent => "transparent",
         BoardMode::Whiteboard => "whiteboard",
         BoardMode::Blackboard => "blackboard",
     }
+}
+
+fn default_file_version() -> u32 {
+    1
 }
 
 fn compress_bytes(data: &[u8]) -> Result<Vec<u8>> {

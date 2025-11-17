@@ -6,6 +6,7 @@ use log::warn;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use crate::draw::Frame;
 
 /// Result of clearing on-disk session data.
 #[derive(Debug, Clone, Copy)]
@@ -30,10 +31,15 @@ pub struct SessionInspection {
     pub persist_transparent: bool,
     pub persist_whiteboard: bool,
     pub persist_blackboard: bool,
+    pub persist_history: bool,
     pub restore_tool_state: bool,
+    pub history_limit: Option<usize>,
     pub frame_counts: Option<FrameCounts>,
+    pub history_counts: Option<HistoryCounts>,
+    pub history_present: bool,
     pub tool_state_present: bool,
     pub compressed: bool,
+    pub file_version: Option<u32>,
 }
 
 /// Frame counts for each board stored in the session.
@@ -42,6 +48,34 @@ pub struct FrameCounts {
     pub transparent: usize,
     pub whiteboard: usize,
     pub blackboard: usize,
+}
+
+/// Undo/redo counts for each board stored in the session.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HistoryCounts {
+    pub transparent: HistoryDepth,
+    pub whiteboard: HistoryDepth,
+    pub blackboard: HistoryDepth,
+}
+
+impl HistoryCounts {
+    fn has_history(&self) -> bool {
+        self.transparent.has_history()
+            || self.whiteboard.has_history()
+            || self.blackboard.has_history()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HistoryDepth {
+    pub undo: usize,
+    pub redo: usize,
+}
+
+impl HistoryDepth {
+    fn has_history(&self) -> bool {
+        self.undo > 0 || self.redo > 0
+    }
 }
 
 /// Remove persisted session files (session, backup, and lock).
@@ -113,6 +147,9 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let mut frame_counts = None;
     let mut tool_state_present = false;
     let mut compressed = false;
+    let mut history_counts = None;
+    let mut history_present = false;
+    let mut file_version = None;
 
     if exists {
         let lock_path = session_path.with_extension("lock");
@@ -136,25 +173,22 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         }
 
         if let Some(loaded) = loaded? {
+            let snapshot = loaded.snapshot;
             frame_counts = Some(FrameCounts {
-                transparent: loaded
-                    .snapshot
-                    .transparent
-                    .as_ref()
-                    .map_or(0, |f| f.shapes.len()),
-                whiteboard: loaded
-                    .snapshot
-                    .whiteboard
-                    .as_ref()
-                    .map_or(0, |f| f.shapes.len()),
-                blackboard: loaded
-                    .snapshot
-                    .blackboard
-                    .as_ref()
-                    .map_or(0, |f| f.shapes.len()),
+                transparent: snapshot.transparent.as_ref().map_or(0, |f| f.shapes.len()),
+                whiteboard: snapshot.whiteboard.as_ref().map_or(0, |f| f.shapes.len()),
+                blackboard: snapshot.blackboard.as_ref().map_or(0, |f| f.shapes.len()),
             });
-            tool_state_present = loaded.snapshot.tool_state.is_some();
+            let counts = HistoryCounts {
+                transparent: history_depth_from_frame(snapshot.transparent.as_ref()),
+                whiteboard: history_depth_from_frame(snapshot.whiteboard.as_ref()),
+                blackboard: history_depth_from_frame(snapshot.blackboard.as_ref()),
+            };
+            history_present = counts.has_history();
+            history_counts = Some(counts);
+            tool_state_present = snapshot.tool_state.is_some();
             compressed = loaded.compressed;
+            file_version = Some(loaded.version);
         }
     }
 
@@ -171,10 +205,15 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         persist_transparent: options.persist_transparent,
         persist_whiteboard: options.persist_whiteboard,
         persist_blackboard: options.persist_blackboard,
+        persist_history: options.persist_history,
         restore_tool_state: options.restore_tool_state,
+        history_limit: options.max_persisted_undo_depth,
         frame_counts,
+        history_counts,
+        history_present,
         tool_state_present,
         compressed,
+        file_version,
     })
 }
 
@@ -210,6 +249,17 @@ fn remove_matching_files(dir: &Path, prefix: &str, suffix: &str) -> Result<bool>
         }
     }
     Ok(removed)
+}
+
+fn history_depth_from_frame(frame: Option<&Frame>) -> HistoryDepth {
+    if let Some(frame) = frame {
+        HistoryDepth {
+            undo: frame.undo_stack_len(),
+            redo: frame.redo_stack_len(),
+        }
+    } else {
+        HistoryDepth::default()
+    }
 }
 
 fn find_existing_variant(

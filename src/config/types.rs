@@ -15,13 +15,25 @@ pub struct DrawingConfig {
     #[serde(default = "default_color")]
     pub default_color: ColorSpec,
 
-    /// Default pen thickness in pixels (valid range: 1.0 - 20.0)
+    /// Default pen thickness in pixels (valid range: 1.0 - 40.0)
     #[serde(default = "default_thickness")]
     pub default_thickness: f64,
 
     /// Default font size for text mode in points (valid range: 8.0 - 72.0)
     #[serde(default = "default_font_size")]
     pub default_font_size: f64,
+
+    /// Hit-test tolerance in pixels for selection (valid range: 1.0 - 20.0)
+    #[serde(default = "default_hit_test_tolerance")]
+    pub hit_test_tolerance: f64,
+
+    /// Number of shapes processed linearly before enabling spatial index
+    #[serde(default = "default_hit_test_threshold")]
+    pub hit_test_linear_threshold: usize,
+
+    /// Maximum undo actions retained (valid range: 10 - 1000)
+    #[serde(default = "default_undo_stack_limit")]
+    pub undo_stack_limit: usize,
 
     /// Font family name for text rendering (e.g., "Sans", "Monospace", "JetBrains Mono")
     /// Falls back to "Sans" if the specified font is not available
@@ -49,6 +61,9 @@ impl Default for DrawingConfig {
             default_color: default_color(),
             default_thickness: default_thickness(),
             default_font_size: default_font_size(),
+            hit_test_tolerance: default_hit_test_tolerance(),
+            hit_test_linear_threshold: default_hit_test_threshold(),
+            undo_stack_limit: default_undo_stack_limit(),
             font_family: default_font_family(),
             font_weight: default_font_weight(),
             font_style: default_font_style(),
@@ -133,6 +148,10 @@ pub struct UiConfig {
     /// Click highlight visual indicator settings
     #[serde(default)]
     pub click_highlight: ClickHighlightConfig,
+
+    /// Context menu preferences
+    #[serde(default)]
+    pub context_menu: ContextMenuUiConfig,
 }
 
 impl Default for UiConfig {
@@ -143,6 +162,7 @@ impl Default for UiConfig {
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
             click_highlight: ClickHighlightConfig::default(),
+            context_menu: ContextMenuUiConfig::default(),
         }
     }
 }
@@ -213,6 +233,21 @@ pub struct ClickHighlightConfig {
     /// Derive highlight color from current pen color
     #[serde(default = "default_click_highlight_use_pen_color")]
     pub use_pen_color: bool,
+}
+
+/// Context menu visibility configuration.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ContextMenuUiConfig {
+    #[serde(default = "default_context_menu_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for ContextMenuUiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_context_menu_enabled(),
+        }
+    }
 }
 
 impl Default for ClickHighlightConfig {
@@ -305,6 +340,18 @@ fn default_font_style() -> String {
 
 fn default_text_background() -> bool {
     false
+}
+
+fn default_hit_test_tolerance() -> f64 {
+    6.0
+}
+
+fn default_hit_test_threshold() -> usize {
+    400
+}
+
+fn default_undo_stack_limit() -> usize {
+    100
 }
 
 fn default_arrow_length() -> f64 {
@@ -407,6 +454,10 @@ fn default_click_highlight_outline_color() -> [f64; 4] {
 }
 
 fn default_click_highlight_use_pen_color() -> bool {
+    true
+}
+
+fn default_context_menu_enabled() -> bool {
     true
 }
 
@@ -563,6 +614,10 @@ pub struct SessionConfig {
     #[serde(default)]
     pub persist_blackboard: bool,
 
+    /// Persist undo/redo history between sessions.
+    #[serde(default = "default_persist_history")]
+    pub persist_history: bool,
+
     /// Restore tool state (color, thickness, font size, etc.) on next launch.
     #[serde(default = "default_restore_tool_state")]
     pub restore_tool_state: bool,
@@ -598,6 +653,10 @@ pub struct SessionConfig {
     /// Separate persistence per output instead of per display.
     #[serde(default = "default_session_per_output")]
     pub per_output: bool,
+
+    /// Maximum undo history depth persisted on disk (None = follow runtime limit).
+    #[serde(default)]
+    pub max_persisted_undo_depth: Option<usize>,
 }
 
 impl Default for SessionConfig {
@@ -606,6 +665,7 @@ impl Default for SessionConfig {
             persist_transparent: false,
             persist_whiteboard: false,
             persist_blackboard: false,
+            persist_history: default_persist_history(),
             restore_tool_state: default_restore_tool_state(),
             storage: default_session_storage_mode(),
             custom_directory: None,
@@ -615,6 +675,7 @@ impl Default for SessionConfig {
             auto_compress_threshold_kb: default_auto_compress_threshold_kb(),
             backup_retention: default_backup_retention(),
             per_output: default_session_per_output(),
+            max_persisted_undo_depth: None,
         }
     }
 }
@@ -666,5 +727,9 @@ fn default_backup_retention() -> usize {
 }
 
 fn default_session_per_output() -> bool {
+    true
+}
+
+fn default_persist_history() -> bool {
     true
 }

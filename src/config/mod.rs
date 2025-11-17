@@ -25,7 +25,10 @@ pub use types::{
 #[allow(unused_imports)]
 pub use enums::ColorSpec;
 
-use crate::legacy;
+use crate::{
+    input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
+    legacy,
+};
 use anyhow::{Context, Result, anyhow};
 use chrono::Local;
 use log::{debug, info, warn};
@@ -135,7 +138,7 @@ mod tests {
     #[test]
     fn validate_and_clamp_clamps_out_of_range_values() {
         let mut config = Config::default();
-        config.drawing.default_thickness = 40.0;
+        config.drawing.default_thickness = 80.0;
         config.drawing.default_font_size = 3.0;
         config.drawing.font_weight = "not-a-real-weight".to_string();
         config.drawing.font_style = "diagonal".to_string();
@@ -150,7 +153,7 @@ mod tests {
 
         config.validate_and_clamp();
 
-        assert_eq!(config.drawing.default_thickness, 20.0);
+        assert_eq!(config.drawing.default_thickness, MAX_STROKE_THICKNESS);
         assert_eq!(config.drawing.default_font_size, 8.0);
         assert_eq!(config.drawing.font_weight, "bold");
         assert_eq!(config.drawing.font_style, "normal");
@@ -312,19 +315,25 @@ impl Config {
     /// warning is logged.
     ///
     /// Validated ranges:
-    /// - `default_thickness`: 1.0 - 20.0
+    /// - `default_thickness`: 1.0 - 40.0
     /// - `default_font_size`: 8.0 - 72.0
     /// - `arrow.length`: 5.0 - 50.0
     /// - `arrow.angle_degrees`: 15.0 - 60.0
     /// - `buffer_count`: 2 - 4
     pub fn validate_and_clamp(&mut self) {
-        // Thickness: 1.0 - 20.0
-        if !(1.0..=20.0).contains(&self.drawing.default_thickness) {
+        // Thickness: 1.0 - 40.0
+        if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(&self.drawing.default_thickness)
+        {
             log::warn!(
-                "Invalid default_thickness {:.1}, clamping to 1.0-20.0 range",
-                self.drawing.default_thickness
+                "Invalid default_thickness {:.1}, clamping to {:.1}-{:.1} range",
+                self.drawing.default_thickness,
+                MIN_STROKE_THICKNESS,
+                MAX_STROKE_THICKNESS
             );
-            self.drawing.default_thickness = self.drawing.default_thickness.clamp(1.0, 20.0);
+            self.drawing.default_thickness = self
+                .drawing
+                .default_thickness
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         }
 
         // Font size: 8.0 - 72.0
@@ -334,6 +343,27 @@ impl Config {
                 self.drawing.default_font_size
             );
             self.drawing.default_font_size = self.drawing.default_font_size.clamp(8.0, 72.0);
+        }
+
+        if !(1.0..=20.0).contains(&self.drawing.hit_test_tolerance) {
+            log::warn!(
+                "Invalid hit_test_tolerance {:.1}, clamping to 1.0-20.0 range",
+                self.drawing.hit_test_tolerance
+            );
+            self.drawing.hit_test_tolerance = self.drawing.hit_test_tolerance.clamp(1.0, 20.0);
+        }
+
+        if self.drawing.hit_test_linear_threshold == 0 {
+            log::warn!("hit_test_linear_threshold must be at least 1; using default 400");
+            self.drawing.hit_test_linear_threshold = 400;
+        }
+
+        if !(10..=1000).contains(&self.drawing.undo_stack_limit) {
+            log::warn!(
+                "Invalid undo_stack_limit {}, clamping to 10-1000 range",
+                self.drawing.undo_stack_limit
+            );
+            self.drawing.undo_stack_limit = self.drawing.undo_stack_limit.clamp(10, 1000);
         }
 
         // Arrow length: 5.0 - 50.0

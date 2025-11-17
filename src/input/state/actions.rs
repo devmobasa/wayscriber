@@ -4,10 +4,12 @@ use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
 use log::{info, warn};
 
-use super::{DrawingState, InputState};
+const KEYBOARD_NUDGE_SMALL: i32 = 8;
+const KEYBOARD_NUDGE_LARGE: i32 = 32;
+
+use super::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
-
 impl InputState {
     /// Processes a key press event.
     ///
@@ -41,6 +43,29 @@ impl InputState {
             _ => {}
         }
 
+        if matches!(key, Key::Escape) && self.properties_panel().is_some() {
+            self.close_properties_panel();
+            return;
+        }
+
+        if self.is_context_menu_open() {
+            let handled = match key {
+                Key::Escape => {
+                    self.close_context_menu();
+                    true
+                }
+                Key::Up => self.focus_previous_context_menu_entry(),
+                Key::Down => self.focus_next_context_menu_entry(),
+                Key::Home => self.focus_first_context_menu_entry(),
+                Key::End => self.focus_last_context_menu_entry(),
+                Key::Return | Key::Space => self.activate_context_menu_selection(),
+                _ => false,
+            };
+            if handled {
+                return;
+            }
+        }
+
         // In text input mode, only check actions if modifiers are pressed or it's a special key
         // This allows plain letters to be typed without triggering color/tool actions
         if matches!(&self.state, DrawingState::TextInput { .. }) {
@@ -49,7 +74,16 @@ impl InputState {
             // 2. OR it's a special non-character key (Escape, F10, etc.)
             let should_check_actions = match key {
                 // Special keys always check for actions
-                Key::Escape | Key::F10 | Key::F11 | Key::F12 | Key::Return => true,
+                Key::Escape
+                | Key::F10
+                | Key::F11
+                | Key::F12
+                | Key::Return
+                | Key::Up
+                | Key::Down
+                | Key::Left
+                | Key::Right
+                | Key::Delete => true,
                 // Character keys only check if modifiers are held
                 Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
                 // Other keys can check as well
@@ -67,6 +101,12 @@ impl InputState {
                     Key::F10 => "F10".to_string(),
                     Key::F11 => "F11".to_string(),
                     Key::F12 => "F12".to_string(),
+                    Key::Menu => "Menu".to_string(),
+                    Key::Up => "ArrowUp".to_string(),
+                    Key::Down => "ArrowDown".to_string(),
+                    Key::Left => "ArrowLeft".to_string(),
+                    Key::Right => "ArrowRight".to_string(),
+                    Key::Delete => "Delete".to_string(),
                     _ => String::new(),
                 };
 
@@ -199,6 +239,12 @@ impl InputState {
             Key::F10 => "F10".to_string(),
             Key::F11 => "F11".to_string(),
             Key::F12 => "F12".to_string(),
+            Key::Menu => "Menu".to_string(),
+            Key::Up => "ArrowUp".to_string(),
+            Key::Down => "ArrowDown".to_string(),
+            Key::Left => "ArrowLeft".to_string(),
+            Key::Right => "ArrowRight".to_string(),
+            Key::Delete => "Delete".to_string(),
             _ => return,
         };
 
@@ -220,6 +266,9 @@ impl InputState {
 
     /// Handle an action triggered by a keybinding.
     pub(super) fn handle_action(&mut self, action: Action) {
+        if !matches!(action, Action::OpenContextMenu) {
+            self.close_properties_panel();
+        }
         match action {
             Action::Exit => {
                 // Exit drawing mode or cancel current action
@@ -235,6 +284,10 @@ impl InputState {
                         self.last_provisional_bounds = None;
                         self.state = DrawingState::Idle;
                         self.needs_redraw = true;
+                    }
+                    DrawingState::MovingSelection { snapshots, .. } => {
+                        self.restore_selection_from_snapshots(snapshots.clone());
+                        self.state = DrawingState::Idle;
                     }
                     DrawingState::Idle => {
                         // Exit application
@@ -255,29 +308,87 @@ impl InputState {
                 }
             }
             Action::ClearCanvas => {
-                self.canvas_set.clear_active();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                if self.clear_all() {
+                    info!("Cleared canvas via keybinding");
+                }
             }
             Action::Undo => {
-                if let Some(shape) = self.canvas_set.active_frame_mut().undo() {
-                    self.dirty_tracker.mark_shape(&shape);
-                    self.needs_redraw = true;
+                if let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
+                    self.apply_action_side_effects(&action);
                 }
             }
             Action::Redo => {
-                if let Some(shape) = self.canvas_set.active_frame_mut().redo() {
-                    self.dirty_tracker.mark_shape(&shape);
-                    self.needs_redraw = true;
+                if let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
+                    self.apply_action_side_effects(&action);
+                }
+            }
+            Action::DuplicateSelection => {
+                if self.duplicate_selection() {
+                    info!("Duplicated selection");
+                }
+            }
+            Action::MoveSelectionToFront => {
+                if self.move_selection_to_front() {
+                    info!("Moved selection to front");
+                }
+            }
+            Action::MoveSelectionToBack => {
+                if self.move_selection_to_back() {
+                    info!("Moved selection to back");
+                }
+            }
+            Action::NudgeSelectionUp => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(0, -step) {
+                    info!("Moved selection up by {} px", step);
+                }
+            }
+            Action::NudgeSelectionDown => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(0, step) {
+                    info!("Moved selection down by {} px", step);
+                }
+            }
+            Action::NudgeSelectionLeft => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(-step, 0) {
+                    info!("Moved selection left by {} px", step);
+                }
+            }
+            Action::NudgeSelectionRight => {
+                let step = if self.modifiers.shift {
+                    KEYBOARD_NUDGE_LARGE
+                } else {
+                    KEYBOARD_NUDGE_SMALL
+                };
+                if self.translate_selection_with_undo(step, 0) {
+                    info!("Moved selection right by {} px", step);
+                }
+            }
+            Action::DeleteSelection => {
+                if self.delete_selection() {
+                    info!("Deleted selection");
                 }
             }
             Action::IncreaseThickness => {
-                self.current_thickness = (self.current_thickness + 1.0).min(20.0);
+                self.current_thickness = (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             Action::DecreaseThickness => {
-                self.current_thickness = (self.current_thickness - 1.0).max(1.0);
+                self.current_thickness = (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
@@ -328,6 +439,9 @@ impl InputState {
                     "Highlight tool {}",
                     if enabled { "selected" } else { "released" }
                 );
+            }
+            Action::OpenContextMenu => {
+                self.toggle_context_menu_via_keyboard();
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();

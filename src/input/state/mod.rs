@@ -6,5 +6,9 @@ mod render;
 #[cfg(test)]
 mod tests;
 
-pub use core::{DrawingState, InputState};
+#[allow(unused_imports)]
+pub use core::{
+    ContextMenuEntry, ContextMenuKind, ContextMenuState, DrawingState, InputState,
+    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, SelectionState,
+};
 pub use highlight::ClickHighlightSettings;
