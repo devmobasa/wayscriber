@@ -87,6 +87,15 @@ impl CanvasSet {
         }
     }
 
+    /// Returns a mutable reference to the frame for the requested mode, if it exists.
+    pub fn frame_mut(&mut self, mode: BoardMode) -> Option<&mut Frame> {
+        match mode {
+            BoardMode::Transparent => Some(&mut self.transparent),
+            BoardMode::Whiteboard => self.whiteboard.as_mut(),
+            BoardMode::Blackboard => self.blackboard.as_mut(),
+        }
+    }
+
     /// Replaces the frame for the requested mode with the provided data.
     pub fn set_frame(&mut self, mode: BoardMode, frame: Option<Frame>) {
         match mode {

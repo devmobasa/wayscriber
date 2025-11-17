@@ -291,6 +291,7 @@ Optional on-disk persistence for your drawings. Disabled by default so each sess
 persist_transparent = false
 persist_whiteboard = false
 persist_blackboard = false
+persist_history = true
 restore_tool_state = true
 storage = "auto"
 # custom_directory = "/absolute/path"
@@ -300,9 +301,11 @@ max_file_size_mb = 10
 compress = "auto"
 auto_compress_threshold_kb = 100
 backup_retention = 1
+# max_persisted_undo_depth = 200
 ```
 
 - `persist_*` — choose which board modes (transparent/whiteboard/blackboard) survive restarts
+- `persist_history` — when `true`, persist undo/redo stacks so that history survives restarts; set to `false` to save only visible drawings
 - `restore_tool_state` — save pen colour, thickness, font size, arrow settings, and status bar visibility
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
@@ -312,6 +315,7 @@ backup_retention = 1
 - `compress` — `auto` (gzip files above the threshold), `on`, or `off`
 - `auto_compress_threshold_kb` — size threshold for `compress = "auto"`
 - `backup_retention` — how many rotated `.bak` files to keep (set to 0 to disable backups)
+- `max_persisted_undo_depth` — optional cap for serialized history; default follows the runtime undo limit (set `persist_history = false` to skip history entirely)
 
 > **Privacy note:** Session files are stored unencrypted. Clear the session directory or disable persistence when working with sensitive material.
 

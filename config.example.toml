@@ -269,6 +269,9 @@ persist_transparent = false
 persist_whiteboard = false
 persist_blackboard = false
 
+# Persist undo/redo history alongside shapes (set false to save only visible drawings)
+persist_history = true
+
 # Restore pen colour/thickness/font size between runs
 restore_tool_state = true
 
@@ -283,6 +286,9 @@ per_output = true
 
 # Clamp runaway files by limiting shapes per frame
 max_shapes_per_frame = 10000
+
+# Optional cap for serialized undo history (defaults to runtime undo limit)
+# max_persisted_undo_depth = 200
 
 # Maximum session file size (in megabytes); larger files are ignored
 max_file_size_mb = 10
