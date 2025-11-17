@@ -2,6 +2,7 @@
 
 use super::Frame;
 use crate::input::BoardMode;
+use std::sync::LazyLock;
 
 /// Manages multiple frames, one per board mode (with lazy initialization).
 ///
@@ -49,7 +50,7 @@ impl CanvasSet {
     /// For board modes that don't exist yet, returns a reference to a static empty frame
     /// instead of creating one (since we can't mutate in an immutable method).
     pub fn active_frame(&self) -> &Frame {
-        static EMPTY_FRAME: Frame = Frame::new();
+        static EMPTY_FRAME: LazyLock<Frame> = LazyLock::new(Frame::new);
 
         match self.active_mode {
             BoardMode::Transparent => &self.transparent,
@@ -72,6 +73,7 @@ impl CanvasSet {
     }
 
     /// Clears only the active frame.
+    #[allow(dead_code)]
     pub fn clear_active(&mut self) {
         self.active_frame_mut().clear();
     }
@@ -82,6 +84,15 @@ impl CanvasSet {
             BoardMode::Transparent => Some(&self.transparent),
             BoardMode::Whiteboard => self.whiteboard.as_ref(),
             BoardMode::Blackboard => self.blackboard.as_ref(),
+        }
+    }
+
+    /// Returns a mutable reference to the frame for the requested mode, if it exists.
+    pub fn frame_mut(&mut self, mode: BoardMode) -> Option<&mut Frame> {
+        match mode {
+            BoardMode::Transparent => Some(&mut self.transparent),
+            BoardMode::Whiteboard => self.whiteboard.as_mut(),
+            BoardMode::Blackboard => self.blackboard.as_mut(),
         }
     }
 
@@ -110,7 +121,7 @@ impl Default for CanvasSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::draw::{BLACK, RED, Shape};
+    use crate::draw::{BLACK, RED, Shape, frame::UndoAction};
 
     #[test]
     fn test_initial_mode_is_transparent() {
@@ -137,7 +148,8 @@ mod tests {
         let mut canvas_set = CanvasSet::new();
 
         // Add shape to transparent frame
-        canvas_set.active_frame_mut().add_shape(Shape::Line {
+        let frame = canvas_set.active_frame_mut();
+        let id = frame.add_shape(Shape::Line {
             x1: 0,
             y1: 0,
             x2: 100,
@@ -145,6 +157,13 @@ mod tests {
             color: RED,
             thick: 3.0,
         });
+        let index = frame.find_index(id).unwrap();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(index, frame.shape(id).unwrap().clone())],
+            },
+            10,
+        );
         assert_eq!(canvas_set.active_frame().shapes.len(), 1);
 
         // Switch to whiteboard
@@ -152,7 +171,8 @@ mod tests {
         assert_eq!(canvas_set.active_frame().shapes.len(), 0); // Empty frame
 
         // Add shape to whiteboard frame
-        canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        let frame = canvas_set.active_frame_mut();
+        let id = frame.add_shape(Shape::Rect {
             x: 10,
             y: 10,
             w: 50,
@@ -160,6 +180,13 @@ mod tests {
             color: BLACK,
             thick: 2.0,
         });
+        let index = frame.find_index(id).unwrap();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(index, frame.shape(id).unwrap().clone())],
+            },
+            10,
+        );
         assert_eq!(canvas_set.active_frame().shapes.len(), 1);
 
         // Switch back to transparent
@@ -176,7 +203,8 @@ mod tests {
         let mut canvas_set = CanvasSet::new();
 
         // Add and undo in transparent mode
-        canvas_set.active_frame_mut().add_shape(Shape::Line {
+        let frame = canvas_set.active_frame_mut();
+        let id = frame.add_shape(Shape::Line {
             x1: 0,
             y1: 0,
             x2: 100,
@@ -184,12 +212,20 @@ mod tests {
             color: RED,
             thick: 3.0,
         });
-        let _ = canvas_set.active_frame_mut().undo();
+        let index = frame.find_index(id).unwrap();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(index, frame.shape(id).unwrap().clone())],
+            },
+            10,
+        );
+        let _ = canvas_set.active_frame_mut().undo_last();
         assert_eq!(canvas_set.active_frame().shapes.len(), 0);
 
         // Switch to whiteboard and add shape
         canvas_set.switch_mode(BoardMode::Whiteboard);
-        canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        let frame = canvas_set.active_frame_mut();
+        let id = frame.add_shape(Shape::Rect {
             x: 10,
             y: 10,
             w: 50,
@@ -197,6 +233,13 @@ mod tests {
             color: BLACK,
             thick: 2.0,
         });
+        let index = frame.find_index(id).unwrap();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(index, frame.shape(id).unwrap().clone())],
+            },
+            10,
+        );
 
         // Undo should only affect whiteboard frame
         let _ = canvas_set.active_frame_mut().undo();

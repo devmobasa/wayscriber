@@ -1,6 +1,7 @@
+use super::core::{ContextMenuKind, ContextMenuState, MenuCommand};
 use super::*;
 use crate::config::{Action, BoardConfig};
-use crate::draw::{Color, FontDescriptor, Shape};
+use crate::draw::{Color, FontDescriptor, Shape, frame::UndoAction};
 use crate::input::{BoardMode, ClickHighlightSettings, Key, MouseButton, Tool};
 use crate::util;
 
@@ -108,6 +109,115 @@ fn test_adjust_font_size_multiple_adjustments() {
 }
 
 #[test]
+fn duplicate_selection_via_action_creates_offset_shape() {
+    let mut state = create_test_input_state();
+    let original_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::DuplicateSelection);
+
+    let frame = state.canvas_set.active_frame();
+    assert_eq!(frame.shapes.len(), 2);
+
+    let new_id = frame
+        .shapes
+        .iter()
+        .map(|shape| shape.id)
+        .find(|id| *id != original_id)
+        .expect("duplicate shape id");
+    let original = frame.shape(original_id).unwrap();
+    let duplicate = frame.shape(new_id).unwrap();
+
+    match (&original.shape, &duplicate.shape) {
+        (Shape::Rect { x: ox, y: oy, .. }, Shape::Rect { x: dx, y: dy, .. }) => {
+            assert_eq!(*dx, ox + 12);
+            assert_eq!(*dy, oy + 12);
+        }
+        _ => panic!("Expected rectangles"),
+    }
+}
+
+#[test]
+fn translate_selection_with_undo_moves_shape() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 50,
+        y2: 50,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.translate_selection_with_undo(10, -5));
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        match &shape.shape {
+            Shape::Line { x1, y1, x2, y2, .. } => {
+                assert_eq!((*x1, *y1, *x2, *y2), (10, -5, 60, 45));
+            }
+            _ => panic!("Expected line shape"),
+        }
+    }
+
+    // Undo and ensure shape returns to original coordinates
+    if let Some(action) = state.canvas_set.active_frame_mut().undo_last() {
+        state.apply_action_side_effects(&action);
+    }
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        match &shape.shape {
+            Shape::Line { x1, y1, x2, y2, .. } => {
+                assert_eq!((*x1, *y1, *x2, *y2), (0, 0, 50, 50));
+            }
+            _ => panic!("Expected line shape"),
+        }
+    }
+}
+
+#[test]
+fn restore_selection_snapshots_reverts_translation() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 100,
+        y: 100,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+    });
+
+    state.set_selection(vec![shape_id]);
+    let snapshots = state.capture_movable_selection_snapshots();
+    assert_eq!(snapshots.len(), 1);
+
+    assert!(state.apply_translation_to_selection(20, 30));
+    state.restore_selection_from_snapshots(snapshots);
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { x, y, .. } => {
+            assert_eq!((*x, *y), (100, 100));
+        }
+        _ => panic!("Expected text shape"),
+    }
+}
+
+#[test]
 fn test_text_mode_plain_letters_not_triggering_actions() {
     let mut state = create_test_input_state();
 
@@ -206,14 +316,26 @@ fn test_text_mode_ctrl_keys_trigger_actions() {
 fn test_redo_restores_shape_after_undo() {
     let mut state = create_test_input_state();
 
-    state.canvas_set.active_frame_mut().add_shape(Shape::Line {
-        x1: 0,
-        y1: 0,
-        x2: 10,
-        y2: 10,
-        color: state.current_color,
-        thick: state.current_thickness,
-    });
+    {
+        let frame = state.canvas_set.active_frame_mut();
+        let shape_id = frame.add_shape(Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 10,
+            y2: 10,
+            color: state.current_color,
+            thick: state.current_thickness,
+        });
+
+        let index = frame.find_index(shape_id).unwrap();
+        let snapshot = frame.shape(shape_id).unwrap().clone();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(index, snapshot)],
+            },
+            state.undo_stack_limit,
+        );
+    }
 
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
 
@@ -390,33 +512,37 @@ fn mouse_drag_creates_shapes_for_each_tool() {
     state.on_mouse_motion(10, 10);
     state.on_mouse_release(MouseButton::Left, 10, 10);
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+    state.clear_selection();
 
     // Line (Shift)
     state.modifiers.shift = true;
-    state.on_mouse_press(MouseButton::Left, 0, 0);
-    state.on_mouse_release(MouseButton::Left, 5, 5);
+    state.on_mouse_press(MouseButton::Left, 20, 20);
+    state.on_mouse_release(MouseButton::Left, 25, 25);
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 2);
+    state.clear_selection();
 
     // Rectangle (Ctrl)
     state.modifiers.shift = false;
     state.modifiers.ctrl = true;
-    state.on_mouse_press(MouseButton::Left, 0, 0);
-    state.on_mouse_release(MouseButton::Left, 5, 5);
+    state.on_mouse_press(MouseButton::Left, 40, 40);
+    state.on_mouse_release(MouseButton::Left, 45, 45);
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 3);
+    state.clear_selection();
 
     // Ellipse (Tab)
     state.modifiers.ctrl = false;
     state.modifiers.tab = true;
-    state.on_mouse_press(MouseButton::Left, 0, 0);
-    state.on_mouse_release(MouseButton::Left, 4, 4);
+    state.on_mouse_press(MouseButton::Left, 60, 60);
+    state.on_mouse_release(MouseButton::Left, 64, 64);
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 4);
+    state.clear_selection();
 
     // Arrow (Ctrl+Shift)
     state.modifiers.tab = false;
     state.modifiers.ctrl = true;
     state.modifiers.shift = true;
-    state.on_mouse_press(MouseButton::Left, 0, 0);
-    state.on_mouse_release(MouseButton::Left, 6, 6);
+    state.on_mouse_press(MouseButton::Left, 80, 80);
+    state.on_mouse_release(MouseButton::Left, 86, 86);
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 5);
 }
 
@@ -477,4 +603,139 @@ fn sync_highlight_color_marks_dirty_when_pen_color_changes() {
     };
     state.sync_highlight_color();
     assert!(state.needs_redraw);
+}
+
+#[test]
+fn context_menu_respects_enable_flag() {
+    let mut state = create_test_input_state();
+    state.set_context_menu_enabled(false);
+    state.toggle_context_menu_via_keyboard();
+    assert!(!state.is_context_menu_open());
+
+    state.set_context_menu_enabled(true);
+    state.toggle_context_menu_via_keyboard();
+    assert!(state.is_context_menu_open());
+}
+
+#[test]
+fn shape_menu_includes_select_this_entry_whenever_hovered() {
+    let mut state = create_test_input_state();
+    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 40,
+        y: 40,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![first, second]);
+    state.open_context_menu(
+        (0, 0),
+        vec![first, second],
+        ContextMenuKind::Shape,
+        Some(first),
+    );
+
+    let entries = state.context_menu_entries();
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.label == "Select This Shape"),
+        "Expected Select This Shape entry to be present for multi-selection"
+    );
+
+    state.set_selection(vec![first]);
+    state.open_context_menu((0, 0), vec![first], ContextMenuKind::Shape, Some(first));
+
+    let entries_single = state.context_menu_entries();
+    assert!(
+        entries_single
+            .iter()
+            .any(|entry| entry.label == "Select This Shape"),
+        "Expected Select This Shape entry even for single selection"
+    );
+}
+
+#[test]
+fn select_this_shape_command_focuses_single_shape() {
+    let mut state = create_test_input_state();
+    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 40,
+        y: 40,
+        w: 20,
+        h: 20,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![first, second]);
+    state.open_context_menu(
+        (10, 10),
+        vec![first, second],
+        ContextMenuKind::Shape,
+        Some(second),
+    );
+
+    state.execute_menu_command(MenuCommand::SelectHoveredShape);
+    assert_eq!(state.selected_shape_ids(), &[second]);
+
+    assert!(
+        matches!(state.context_menu_state, ContextMenuState::Hidden),
+        "Context menu should close after selecting hovered shape"
+    );
+}
+
+#[test]
+fn properties_command_opens_panel() {
+    let mut state = create_test_input_state();
+    let shape_id = {
+        let frame = state.canvas_set.active_frame_mut();
+        frame.add_shape(Shape::Rect {
+            x: 10,
+            y: 10,
+            w: 40,
+            h: 30,
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 2.0,
+        })
+    };
+
+    state.set_selection(vec![shape_id]);
+    state.execute_menu_command(MenuCommand::Properties);
+    assert!(state.properties_panel().is_some());
+    assert!(!state.is_context_menu_open());
+}
+
+#[test]
+fn keyboard_context_menu_sets_initial_focus() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+    match &state.context_menu_state {
+        ContextMenuState::Open { keyboard_focus, .. } => {
+            assert!(keyboard_focus.is_some());
+        }
+        ContextMenuState::Hidden => panic!("Context menu should be open"),
+    }
 }

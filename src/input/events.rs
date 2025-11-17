@@ -19,12 +19,28 @@ pub enum Key {
     Tab,
     /// Space bar
     Space,
+    /// Up arrow key
+    Up,
+    /// Down arrow key
+    Down,
+    /// Left arrow key
+    Left,
+    /// Right arrow key
+    Right,
+    /// Delete key
+    Delete,
+    /// Home key
+    Home,
+    /// End key
+    End,
     /// Shift modifier
     Shift,
     /// Ctrl modifier
     Ctrl,
     /// Alt modifier
     Alt,
+    /// Context menu/application key
+    Menu,
     /// F10 function key (toggle help)
     F10,
     /// F11 function key (open configurator)

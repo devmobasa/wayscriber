@@ -32,7 +32,7 @@ Controls the default appearance of annotations.
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
-# Default pen thickness in pixels (1.0 - 20.0)
+# Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
 # Default font size for text mode (8.0 - 72.0)
@@ -45,7 +45,7 @@ default_font_size = 32.0
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
 
 **Runtime Adjustments:**
-- **Pen thickness**: Use `+`/`-` keys or scroll wheel (range: 1-20px)
+- **Pen thickness**: Use `+`/`-` keys or scroll wheel (range: 1-40px)
 - **Font size**: Use `Ctrl+Shift+`/`-` or `Shift+Scroll` (range: 8-72px)
 
 **Defaults:**
@@ -291,6 +291,7 @@ Optional on-disk persistence for your drawings. Disabled by default so each sess
 persist_transparent = false
 persist_whiteboard = false
 persist_blackboard = false
+persist_history = true
 restore_tool_state = true
 storage = "auto"
 # custom_directory = "/absolute/path"
@@ -300,9 +301,11 @@ max_file_size_mb = 10
 compress = "auto"
 auto_compress_threshold_kb = 100
 backup_retention = 1
+# max_persisted_undo_depth = 200
 ```
 
 - `persist_*` — choose which board modes (transparent/whiteboard/blackboard) survive restarts
+- `persist_history` — when `true`, persist undo/redo stacks so that history survives restarts; set to `false` to save only visible drawings
 - `restore_tool_state` — save pen colour, thickness, font size, arrow settings, and status bar visibility
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
@@ -312,6 +315,7 @@ backup_retention = 1
 - `compress` — `auto` (gzip files above the threshold), `on`, or `off`
 - `auto_compress_threshold_kb` — size threshold for `compress = "auto"`
 - `backup_retention` — how many rotated `.bak` files to keep (set to 0 to disable backups)
+- `max_persisted_undo_depth` — optional cap for serialized history; default follows the runtime undo limit (set `persist_history = false` to skip history entirely)
 
 > **Privacy note:** Session files are stored unencrypted. Clear the session directory or disable persistence when working with sensitive material.
 
@@ -337,6 +341,21 @@ clear_canvas = ["E"]
 
 # Undo last annotation
 undo = ["Ctrl+Z"]
+
+# Redo last undone annotation
+redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
+
+# Duplicate current selection
+duplicate_selection = ["Ctrl+D"]
+
+# Nudge selection (hold Shift for a larger step)
+nudge_selection_up = ["ArrowUp"]
+nudge_selection_down = ["ArrowDown"]
+nudge_selection_left = ["ArrowLeft"]
+nudge_selection_right = ["ArrowRight"]
+
+# Delete selection
+delete_selection = ["Delete"]
 
 # Adjust pen thickness
 increase_thickness = ["+", "="]
@@ -397,7 +416,7 @@ capture_file_region = ["Ctrl+Shift+6"]
 Keybindings are specified as strings with modifiers and keys separated by `+`:
 - Simple keys: `"E"`, `"T"`, `"Escape"`, `"F10"`
 - With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`
-- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"+", `-`, `=`, `_`
+- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"+"`, `"-"`, `"="`, `"_"`
 
 **Supported Modifiers:**
 - `Ctrl` (or `Control`)

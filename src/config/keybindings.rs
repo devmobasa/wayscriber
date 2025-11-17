@@ -19,6 +19,14 @@ pub enum Action {
     ClearCanvas,
     Undo,
     Redo,
+    DuplicateSelection,
+    MoveSelectionToFront,
+    MoveSelectionToBack,
+    NudgeSelectionUp,
+    NudgeSelectionDown,
+    NudgeSelectionLeft,
+    NudgeSelectionRight,
+    DeleteSelection,
 
     // Thickness controls
     IncreaseThickness,
@@ -36,6 +44,7 @@ pub enum Action {
     ToggleStatusBar,
     ToggleClickHighlight,
     ToggleHighlightTool,
+    OpenContextMenu,
 
     // Configurator
     OpenConfigurator,
@@ -172,6 +181,30 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_redo")]
     pub redo: Vec<String>,
 
+    #[serde(default = "default_duplicate_selection")]
+    pub duplicate_selection: Vec<String>,
+
+    #[serde(default = "default_move_selection_to_front")]
+    pub move_selection_to_front: Vec<String>,
+
+    #[serde(default = "default_move_selection_to_back")]
+    pub move_selection_to_back: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_up")]
+    pub nudge_selection_up: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_down")]
+    pub nudge_selection_down: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_left")]
+    pub nudge_selection_left: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_right")]
+    pub nudge_selection_right: Vec<String>,
+
+    #[serde(default = "default_delete_selection")]
+    pub delete_selection: Vec<String>,
+
     #[serde(default = "default_increase_thickness")]
     pub increase_thickness: Vec<String>,
 
@@ -201,6 +234,8 @@ pub struct KeybindingsConfig {
     pub toggle_click_highlight: Vec<String>,
     #[serde(default = "default_toggle_highlight_tool")]
     pub toggle_highlight_tool: Vec<String>,
+    #[serde(default = "default_open_context_menu")]
+    pub open_context_menu: Vec<String>,
 
     #[serde(default = "default_open_configurator")]
     pub open_configurator: Vec<String>,
@@ -265,6 +300,14 @@ impl Default for KeybindingsConfig {
             clear_canvas: default_clear_canvas(),
             undo: default_undo(),
             redo: default_redo(),
+            duplicate_selection: default_duplicate_selection(),
+            move_selection_to_front: default_move_selection_to_front(),
+            move_selection_to_back: default_move_selection_to_back(),
+            nudge_selection_up: default_nudge_selection_up(),
+            nudge_selection_down: default_nudge_selection_down(),
+            nudge_selection_left: default_nudge_selection_left(),
+            nudge_selection_right: default_nudge_selection_right(),
+            delete_selection: default_delete_selection(),
             increase_thickness: default_increase_thickness(),
             decrease_thickness: default_decrease_thickness(),
             increase_font_size: default_increase_font_size(),
@@ -276,6 +319,7 @@ impl Default for KeybindingsConfig {
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
+            open_context_menu: default_open_context_menu(),
             open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
             set_color_green: default_set_color_green(),
@@ -336,6 +380,38 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::Redo)?;
         }
 
+        for binding_str in &self.duplicate_selection {
+            insert_binding(binding_str, Action::DuplicateSelection)?;
+        }
+
+        for binding_str in &self.move_selection_to_front {
+            insert_binding(binding_str, Action::MoveSelectionToFront)?;
+        }
+
+        for binding_str in &self.move_selection_to_back {
+            insert_binding(binding_str, Action::MoveSelectionToBack)?;
+        }
+
+        for binding_str in &self.nudge_selection_up {
+            insert_binding(binding_str, Action::NudgeSelectionUp)?;
+        }
+
+        for binding_str in &self.nudge_selection_down {
+            insert_binding(binding_str, Action::NudgeSelectionDown)?;
+        }
+
+        for binding_str in &self.nudge_selection_left {
+            insert_binding(binding_str, Action::NudgeSelectionLeft)?;
+        }
+
+        for binding_str in &self.nudge_selection_right {
+            insert_binding(binding_str, Action::NudgeSelectionRight)?;
+        }
+
+        for binding_str in &self.delete_selection {
+            insert_binding(binding_str, Action::DeleteSelection)?;
+        }
+
         for binding_str in &self.increase_thickness {
             insert_binding(binding_str, Action::IncreaseThickness)?;
         }
@@ -378,6 +454,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_highlight_tool {
             insert_binding(binding_str, Action::ToggleHighlightTool)?;
+        }
+
+        for binding_str in &self.open_context_menu {
+            insert_binding(binding_str, Action::OpenContextMenu)?;
         }
 
         for binding_str in &self.open_configurator {
@@ -480,6 +560,38 @@ fn default_redo() -> Vec<String> {
     vec!["Ctrl+Shift+Z".to_string(), "Ctrl+Y".to_string()]
 }
 
+fn default_duplicate_selection() -> Vec<String> {
+    vec!["Ctrl+D".to_string()]
+}
+
+fn default_move_selection_to_front() -> Vec<String> {
+    vec!["]".to_string()]
+}
+
+fn default_move_selection_to_back() -> Vec<String> {
+    vec!["[".to_string()]
+}
+
+fn default_nudge_selection_up() -> Vec<String> {
+    vec!["ArrowUp".to_string()]
+}
+
+fn default_nudge_selection_down() -> Vec<String> {
+    vec!["ArrowDown".to_string()]
+}
+
+fn default_nudge_selection_left() -> Vec<String> {
+    vec!["ArrowLeft".to_string()]
+}
+
+fn default_nudge_selection_right() -> Vec<String> {
+    vec!["ArrowRight".to_string()]
+}
+
+fn default_delete_selection() -> Vec<String> {
+    vec!["Delete".to_string()]
+}
+
 fn default_increase_thickness() -> Vec<String> {
     vec!["+".to_string(), "=".to_string()]
 }
@@ -522,6 +634,10 @@ fn default_toggle_click_highlight() -> Vec<String> {
 
 fn default_toggle_highlight_tool() -> Vec<String> {
     vec!["Ctrl+Alt+H".to_string()]
+}
+
+fn default_open_context_menu() -> Vec<String> {
+    vec!["Shift+F10".to_string(), "Menu".to_string()]
 }
 
 fn default_open_configurator() -> Vec<String> {
@@ -703,6 +819,12 @@ mod tests {
 
         let ctrl_shift_z = KeyBinding::parse("Ctrl+Shift+Z").unwrap();
         assert_eq!(map.get(&ctrl_shift_z), Some(&Action::Redo));
+
+        let move_front = KeyBinding::parse("]").unwrap();
+        assert_eq!(map.get(&move_front), Some(&Action::MoveSelectionToFront));
+
+        let move_back = KeyBinding::parse("[").unwrap();
+        assert_eq!(map.get(&move_back), Some(&Action::MoveSelectionToBack));
 
         let toggle_highlight = KeyBinding::parse("Ctrl+Shift+H").unwrap();
         assert_eq!(

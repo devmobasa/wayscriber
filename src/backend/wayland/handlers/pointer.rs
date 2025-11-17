@@ -5,7 +5,10 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
-use crate::input::MouseButton;
+use crate::input::{
+    MouseButton,
+    state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
+};
 
 use super::super::state::WaylandState;
 
@@ -26,6 +29,8 @@ impl PointerHandler for WaylandState {
                     );
                     self.current_mouse_x = event.position.0 as i32;
                     self.current_mouse_y = event.position.1 as i32;
+                    self.input_state
+                        .update_pointer_position(self.current_mouse_x, self.current_mouse_y);
                 }
                 PointerEventKind::Leave { .. } => {
                     debug!("Pointer left surface");
@@ -33,6 +38,8 @@ impl PointerHandler for WaylandState {
                 PointerEventKind::Motion { .. } => {
                     self.current_mouse_x = event.position.0 as i32;
                     self.current_mouse_y = event.position.1 as i32;
+                    self.input_state
+                        .update_pointer_position(self.current_mouse_x, self.current_mouse_y);
                     self.input_state
                         .on_mouse_motion(self.current_mouse_x, self.current_mouse_y);
                 }
@@ -98,7 +105,7 @@ impl PointerHandler for WaylandState {
                         }
                     } else if scroll_direction > 0 {
                         self.input_state.current_thickness =
-                            (self.input_state.current_thickness - 1.0).max(1.0);
+                            (self.input_state.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
                         debug!(
                             "Thickness decreased: {:.0}px",
                             self.input_state.current_thickness
@@ -106,7 +113,7 @@ impl PointerHandler for WaylandState {
                         self.input_state.needs_redraw = true;
                     } else if scroll_direction < 0 {
                         self.input_state.current_thickness =
-                            (self.input_state.current_thickness + 1.0).min(20.0);
+                            (self.input_state.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
                         debug!(
                             "Thickness increased: {:.0}px",
                             self.input_state.current_thickness

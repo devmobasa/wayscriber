@@ -1,0 +1,92 @@
+use super::base::InputState;
+use crate::config::Action;
+use crate::util::Rect;
+use std::process::{Command, Stdio};
+
+impl InputState {
+    /// Updates the cached pointer location.
+    pub fn update_pointer_position(&mut self, x: i32, y: i32) {
+        self.last_pointer_position = (x, y);
+    }
+
+    /// Updates the undo stack limit for subsequent actions.
+    pub fn set_undo_stack_limit(&mut self, limit: usize) {
+        self.undo_stack_limit = limit.max(1);
+    }
+
+    /// Updates screen dimensions after backend configuration.
+    ///
+    /// This should be called by the backend when it receives the actual
+    /// screen dimensions from the display server.
+    pub fn update_screen_dimensions(&mut self, width: u32, height: u32) {
+        self.screen_width = width;
+        self.screen_height = height;
+    }
+
+    /// Drains pending dirty rectangles for the current surface size.
+    pub fn take_dirty_regions(&mut self) -> Vec<Rect> {
+        let width = self.screen_width.min(i32::MAX as u32) as i32;
+        let height = self.screen_height.min(i32::MAX as u32) as i32;
+        self.dirty_tracker.take_regions(width, height)
+    }
+
+    /// Look up an action for the given key and modifiers.
+    pub(crate) fn find_action(&self, key_str: &str) -> Option<Action> {
+        for (binding, action) in &self.action_map {
+            if binding.matches(
+                key_str,
+                self.modifiers.ctrl,
+                self.modifiers.shift,
+                self.modifiers.alt,
+            ) {
+                return Some(*action);
+            }
+        }
+        None
+    }
+
+    /// Adjusts the current font size by a delta, clamping to valid range.
+    ///
+    /// Font size is clamped to 8.0-72.0px range (same as config validation).
+    pub fn adjust_font_size(&mut self, delta: f64) {
+        self.current_font_size = (self.current_font_size + delta).clamp(8.0, 72.0);
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        log::debug!("Font size adjusted to {:.1}px", self.current_font_size);
+    }
+
+    /// Takes and clears any pending capture action.
+    pub fn take_pending_capture_action(&mut self) -> Option<Action> {
+        self.pending_capture_action.take()
+    }
+
+    /// Stores a capture action for retrieval by the backend.
+    pub(crate) fn set_pending_capture_action(&mut self, action: Action) {
+        self.pending_capture_action = Some(action);
+    }
+
+    pub(crate) fn launch_configurator(&self) {
+        let binary = crate::legacy::configurator_override()
+            .unwrap_or_else(|| "wayscriber-configurator".to_string());
+
+        match Command::new(&binary)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => {
+                log::info!(
+                    "Launched wayscriber-configurator (binary: {binary}, pid: {})",
+                    child.id()
+                );
+            }
+            Err(err) => {
+                log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
+                log::error!(
+                    "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
+                );
+            }
+        }
+    }
+}

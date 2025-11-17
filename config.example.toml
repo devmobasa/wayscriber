@@ -14,11 +14,20 @@
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
-# Default pen thickness in pixels (1.0 - 20.0)
+# Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
 # Default font size for text mode (8.0 - 72.0)
 default_font_size = 32.0
+
+# Hit-test tolerance in pixels (1.0 - 20.0)
+hit_test_tolerance = 6.0
+
+# Number of shapes processed linearly before spatial indexing kicks in
+hit_test_linear_threshold = 400
+
+# Undo history size (10 - 1000)
+undo_stack_limit = 100
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Font Configuration (Pango-based text rendering)
@@ -148,6 +157,10 @@ outline_color = [1.0, 0.6, 0.0, 0.9]
 # Note: active highlights update immediately when the pen color changes
 use_pen_color = true
 
+[ui.context_menu]
+# Enable right-click / keyboard context menus
+enabled = true
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
 # ───────────────────────────────────────────────────────────────────────────────
@@ -256,6 +269,9 @@ persist_transparent = false
 persist_whiteboard = false
 persist_blackboard = false
 
+# Persist undo/redo history alongside shapes (set false to save only visible drawings)
+persist_history = true
+
 # Restore pen colour/thickness/font size between runs
 restore_tool_state = true
 
@@ -270,6 +286,9 @@ per_output = true
 
 # Clamp runaway files by limiting shapes per frame
 max_shapes_per_frame = 10000
+
+# Optional cap for serialized undo history (defaults to runtime undo limit)
+# max_persisted_undo_depth = 200
 
 # Maximum session file size (in megabytes); larger files are ignored
 max_file_size_mb = 10
@@ -308,6 +327,22 @@ undo = ["Ctrl+Z"]
 # Redo last undone annotation
 redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
 
+# Duplicate currently selected annotations
+duplicate_selection = ["Ctrl+D"]
+
+# Reorder selected annotations within the stack
+move_selection_to_front = ["]"]
+move_selection_to_back = ["["]
+
+# Nudge selected annotations (hold Shift for a larger step)
+nudge_selection_up = ["ArrowUp"]
+nudge_selection_down = ["ArrowDown"]
+nudge_selection_left = ["ArrowLeft"]
+nudge_selection_right = ["ArrowRight"]
+
+# Delete selected annotations
+delete_selection = ["Delete"]
+
 # Adjust pen thickness
 increase_thickness = ["+", "="]
 decrease_thickness = ["-", "_"]
@@ -326,6 +361,9 @@ toggle_help = ["F10"]
 
 # Toggle status bar
 toggle_status_bar = ["F12"]
+
+# Toggle context menu (keyboard alternative to right-click)
+open_context_menu = ["Shift+F10", "Menu"]
 
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]

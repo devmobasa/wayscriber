@@ -10,6 +10,7 @@ use smithay_client_toolkit::{
     shell::{WaylandSurface, wlr_layer::LayerShell},
     shm::Shm,
 };
+use std::collections::HashSet;
 use std::time::Instant;
 use wayland_client::{
     QueueHandle,
@@ -194,6 +195,22 @@ impl WaylandState {
         );
         crate::draw::render_shapes(&ctx, &self.input_state.canvas_set.active_frame().shapes);
 
+        // Render selection halo overlays
+        if self.input_state.has_selection() {
+            let selected: HashSet<_> = self
+                .input_state
+                .selected_shape_ids()
+                .iter()
+                .copied()
+                .collect();
+            let frame = self.input_state.canvas_set.active_frame();
+            for drawn in &frame.shapes {
+                if selected.contains(&drawn.id) {
+                    crate::draw::render_selection_halo(&ctx, drawn);
+                }
+            }
+        }
+
         // Render provisional shape if actively drawing
         // Use optimized method that avoids cloning for freehand
         if self.input_state.render_provisional_shape(
@@ -242,6 +259,18 @@ impl WaylandState {
         if self.input_state.show_help {
             crate::ui::render_help_overlay(&ctx, &self.config.ui.help_overlay_style, width, height);
         }
+
+        crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
+
+        if self.input_state.is_context_menu_open() {
+            self.input_state
+                .update_context_menu_layout(&ctx, width, height);
+        } else {
+            self.input_state.clear_context_menu_layout();
+        }
+
+        // Render context menu if open
+        crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
 
         // Flush Cairo
         debug!("Flushing Cairo surface");

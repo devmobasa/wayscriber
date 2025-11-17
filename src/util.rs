@@ -256,6 +256,23 @@ impl Rect {
     pub fn is_valid(&self) -> bool {
         self.width > 0 && self.height > 0
     }
+
+    /// Returns true if the point lies within the rectangle (inclusive of min, exclusive of max).
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
+    }
+
+    /// Returns a new rectangle inflated by `amount` in all directions.
+    pub fn inflated(&self, amount: i32) -> Option<Self> {
+        if amount == 0 {
+            return Some(*self);
+        }
+        let new_x = self.x - amount;
+        let new_y = self.y - amount;
+        let new_width = self.width + amount * 2;
+        let new_height = self.height + amount * 2;
+        Rect::new(new_x, new_y, new_width, new_height)
+    }
 }
 
 /// Calculates ellipse parameters from two corner points.
