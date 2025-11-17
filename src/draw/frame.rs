@@ -2,10 +2,14 @@
 
 use super::shape::Shape;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unique identifier for a drawn shape within a frame.
 pub type ShapeId = u64;
+
+/// Maximum allowed compound nesting depth in persisted history.
+pub const MAX_COMPOUND_DEPTH: usize = 16;
 
 /// A shape stored in a frame with additional metadata.
 #[derive(Clone, Debug)]
@@ -36,15 +40,60 @@ impl DrawnShape {
     }
 }
 
+impl Serialize for DrawnShape {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        PersistedDrawnShape::from(self).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for DrawnShape {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let helper = PersistedDrawnShape::deserialize(deserializer)?;
+        Ok(helper.into())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct PersistedDrawnShape {
+    id: ShapeId,
+    shape: Shape,
+    created_at: u64,
+    locked: bool,
+}
+
+impl From<&DrawnShape> for PersistedDrawnShape {
+    fn from(value: &DrawnShape) -> Self {
+        Self {
+            id: value.id,
+            shape: value.shape.clone(),
+            created_at: value.created_at,
+            locked: value.locked,
+        }
+    }
+}
+
+impl From<PersistedDrawnShape> for DrawnShape {
+    fn from(value: PersistedDrawnShape) -> Self {
+        Self::with_metadata(value.id, value.shape, value.created_at, value.locked)
+    }
+}
+
 /// Snapshot of a shape used for undo/redo of modifications.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShapeSnapshot {
     pub shape: Shape,
     pub locked: bool,
 }
 
 /// Undoable actions stored in the frame history.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum UndoAction {
     Create {
         shapes: Vec<(usize, DrawnShape)>,
@@ -65,13 +114,34 @@ pub enum UndoAction {
     Compound(Vec<UndoAction>),
 }
 
+/// Result of trimming or validating undo/redo history.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HistoryTrimStats {
+    pub undo_removed: usize,
+    pub redo_removed: usize,
+}
+
+impl HistoryTrimStats {
+    pub fn is_empty(&self) -> bool {
+        self.undo_removed == 0 && self.redo_removed == 0
+    }
+
+    fn add_undo(&mut self, count: usize) {
+        self.undo_removed = self.undo_removed.saturating_add(count);
+    }
+
+    fn add_redo(&mut self, count: usize) {
+        self.redo_removed = self.redo_removed.saturating_add(count);
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Frame {
     #[serde(with = "frame_storage")]
     pub shapes: Vec<DrawnShape>,
-    #[serde(skip)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     undo_stack: Vec<UndoAction>,
-    #[serde(skip)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     redo_stack: Vec<UndoAction>,
     #[serde(skip)]
     next_shape_id: ShapeId,
@@ -113,6 +183,11 @@ impl Frame {
     /// Returns true if the frame contains no shapes.
     pub fn is_empty(&self) -> bool {
         self.shapes.is_empty()
+    }
+
+    /// Returns true if shapes or history stacks contain data worth persisting.
+    pub fn has_persistable_data(&self) -> bool {
+        !self.shapes.is_empty() || !self.undo_stack.is_empty() || !self.redo_stack.is_empty()
     }
 
     /// Adds a shape at the end of the stack and returns its identifier.
@@ -197,6 +272,78 @@ impl Frame {
     /// Returns a reference to the redo stack length (for testing).
     pub fn redo_stack_len(&self) -> usize {
         self.redo_stack.len()
+    }
+
+    /// Truncates undo/redo stacks to the provided depth, returning counts of dropped actions.
+    pub fn clamp_history_depth(&mut self, limit: usize) -> HistoryTrimStats {
+        let mut stats = HistoryTrimStats::default();
+        if limit == 0 {
+            if !self.undo_stack.is_empty() {
+                stats.add_undo(self.undo_stack.len());
+                self.undo_stack.clear();
+            }
+            if !self.redo_stack.is_empty() {
+                stats.add_redo(self.redo_stack.len());
+                self.redo_stack.clear();
+            }
+            return stats;
+        }
+
+        stats.add_undo(Self::clamp_stack(&mut self.undo_stack, limit));
+        stats.add_redo(Self::clamp_stack(&mut self.redo_stack, limit));
+        stats
+    }
+
+    /// Removes history entries referencing the provided shape ids.
+    pub fn prune_history_for_removed_ids(
+        &mut self,
+        removed: &HashSet<ShapeId>,
+    ) -> HistoryTrimStats {
+        if removed.is_empty() {
+            return HistoryTrimStats::default();
+        }
+        let mut stats = HistoryTrimStats::default();
+        stats.add_undo(Self::prune_stack_for_removed_ids(
+            &mut self.undo_stack,
+            removed,
+        ));
+        stats.add_redo(Self::prune_stack_for_removed_ids(
+            &mut self.redo_stack,
+            removed,
+        ));
+        stats
+    }
+
+    /// Drops actions exceeding the allowed compound depth.
+    pub fn validate_history(&mut self, max_depth: usize) -> HistoryTrimStats {
+        if max_depth == 0 {
+            return self.clamp_history_depth(0);
+        }
+        let mut stats = HistoryTrimStats::default();
+        stats.add_undo(Self::prune_stack_by_depth(&mut self.undo_stack, max_depth));
+        stats.add_redo(Self::prune_stack_by_depth(&mut self.redo_stack, max_depth));
+        stats
+    }
+
+    /// Drops history actions that reference shape ids not present in the frame.
+    pub fn prune_history_against_shapes(&mut self) -> HistoryTrimStats {
+        let mut ids: HashSet<ShapeId> = self.shapes.iter().map(|s| s.id).collect();
+        if ids.is_empty() {
+            ids = self.history_shape_ids();
+        }
+        if ids.is_empty() {
+            return HistoryTrimStats::default();
+        }
+        let mut stats = HistoryTrimStats::default();
+        stats.add_undo(Self::prune_stack_for_missing_shapes(
+            &mut self.undo_stack,
+            &ids,
+        ));
+        stats.add_redo(Self::prune_stack_for_missing_shapes(
+            &mut self.redo_stack,
+            &ids,
+        ));
+        stats
     }
 
     /// Finds the index of a shape by id.
@@ -366,13 +513,63 @@ impl Frame {
     }
 
     fn rebuild_next_id(&mut self) {
-        self.next_shape_id = self
-            .shapes
+        let shapes_max = self.shapes.iter().map(|shape| shape.id).max().unwrap_or(0);
+        let history_max = self
+            .undo_stack
             .iter()
-            .map(|shape| shape.id)
+            .chain(self.redo_stack.iter())
+            .filter_map(|action| action.max_shape_id())
             .max()
-            .unwrap_or(0)
-            .saturating_add(1);
+            .unwrap_or(0);
+
+        self.next_shape_id = shapes_max.max(history_max).saturating_add(1);
+    }
+
+    fn clamp_stack(stack: &mut Vec<UndoAction>, limit: usize) -> usize {
+        if stack.len() <= limit {
+            return 0;
+        }
+        let overflow = stack.len() - limit;
+        stack.drain(0..overflow);
+        overflow
+    }
+
+    fn prune_stack_for_removed_ids(
+        stack: &mut Vec<UndoAction>,
+        removed: &HashSet<ShapeId>,
+    ) -> usize {
+        if stack.is_empty() {
+            return 0;
+        }
+        let before = stack.len();
+        stack.retain_mut(|action| action.prune_removed_shapes(removed));
+        before - stack.len()
+    }
+
+    fn prune_stack_by_depth(stack: &mut Vec<UndoAction>, limit: usize) -> usize {
+        if stack.is_empty() {
+            return 0;
+        }
+        let before = stack.len();
+        stack.retain(|action| action.depth() <= limit);
+        before - stack.len()
+    }
+
+    fn prune_stack_for_missing_shapes(stack: &mut Vec<UndoAction>, ids: &HashSet<ShapeId>) -> usize {
+        if stack.is_empty() {
+            return 0;
+        }
+        let before = stack.len();
+        stack.retain_mut(|action| action.validate_against_shapes(ids));
+        before - stack.len()
+    }
+
+    fn history_shape_ids(&self) -> HashSet<ShapeId> {
+        let mut ids = HashSet::new();
+        for action in self.undo_stack.iter().chain(self.redo_stack.iter()) {
+            action.collect_ids(&mut ids);
+        }
+        ids
     }
 }
 
@@ -385,13 +582,17 @@ impl<'de> Deserialize<'de> for Frame {
         struct FrameHelper {
             #[serde(with = "frame_storage")]
             shapes: Vec<DrawnShape>,
+            #[serde(default)]
+            undo_stack: Vec<UndoAction>,
+            #[serde(default)]
+            redo_stack: Vec<UndoAction>,
         }
 
         let helper = FrameHelper::deserialize(deserializer)?;
         let mut frame = Frame {
             shapes: helper.shapes,
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
+            undo_stack: helper.undo_stack,
+            redo_stack: helper.redo_stack,
             next_shape_id: 1,
         };
         frame.rebuild_next_id();
@@ -404,6 +605,82 @@ fn current_timestamp_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|dur| dur.as_millis() as u64)
         .unwrap_or(0)
+}
+
+impl UndoAction {
+    fn depth(&self) -> usize {
+        match self {
+            UndoAction::Compound(actions) => {
+                1 + actions
+                    .iter()
+                    .map(|action| action.depth())
+                    .max()
+                    .unwrap_or(0)
+            }
+            _ => 1,
+        }
+    }
+
+    fn max_shape_id(&self) -> Option<ShapeId> {
+        match self {
+            UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
+                shapes.iter().map(|(_, shape)| shape.id).max()
+            }
+            UndoAction::Modify { shape_id, .. } => Some(*shape_id),
+            UndoAction::Reorder { shape_id, .. } => Some(*shape_id),
+            UndoAction::Compound(actions) => actions
+                .iter()
+                .filter_map(|action| action.max_shape_id())
+                .max(),
+        }
+    }
+
+    fn prune_removed_shapes(&mut self, removed: &HashSet<ShapeId>) -> bool {
+        match self {
+            UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
+                shapes.retain(|(_, shape)| !removed.contains(&shape.id));
+                !shapes.is_empty()
+            }
+            UndoAction::Modify { shape_id, .. } | UndoAction::Reorder { shape_id, .. } => {
+                !removed.contains(shape_id)
+            }
+            UndoAction::Compound(actions) => {
+                actions.retain_mut(|action| action.prune_removed_shapes(removed));
+                !actions.is_empty()
+            }
+        }
+    }
+
+    fn validate_against_shapes(&mut self, ids: &HashSet<ShapeId>) -> bool {
+        match self {
+            UndoAction::Create { .. } | UndoAction::Delete { .. } => true,
+            UndoAction::Modify { shape_id, .. } | UndoAction::Reorder { shape_id, .. } => {
+                ids.contains(shape_id)
+            }
+            UndoAction::Compound(actions) => {
+                actions.retain_mut(|action| action.validate_against_shapes(ids));
+                !actions.is_empty()
+            }
+        }
+    }
+
+    fn collect_ids(&self, ids: &mut HashSet<ShapeId>) {
+        match self {
+            UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
+                for (_, shape) in shapes {
+                    ids.insert(shape.id);
+                }
+            }
+            UndoAction::Modify { shape_id, .. } | UndoAction::Reorder { shape_id, .. } => {
+                ids.insert(*shape_id);
+            }
+            UndoAction::Compound(actions) => {
+                for action in actions {
+                    action.collect_ids(ids);
+                }
+            }
+        }
+    }
 }
 
 mod frame_storage {
@@ -499,6 +776,88 @@ mod frame_storage {
 mod tests {
     use super::*;
     use crate::draw::{Shape, color::BLACK};
+
+    #[test]
+    fn frame_serializes_history() {
+        let mut frame = Frame::new();
+        let first = frame.add_shape(Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 10,
+            y2: 10,
+            color: BLACK,
+            thick: 2.0,
+        });
+        let first_index = frame.find_index(first).unwrap();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(first_index, frame.shape(first).unwrap().clone())],
+            },
+            100,
+        );
+
+        let second = frame.add_shape(Shape::Line {
+            x1: 1,
+            y1: 1,
+            x2: 5,
+            y2: 5,
+            color: BLACK,
+            thick: 2.0,
+        });
+        let second_index = frame.find_index(second).unwrap();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(second_index, frame.shape(second).unwrap().clone())],
+            },
+            100,
+        );
+        // Move the second action to the redo stack.
+        frame.undo_last();
+
+        assert_eq!(frame.undo_stack_len(), 1);
+        assert_eq!(frame.redo_stack_len(), 1);
+
+        let json = serde_json::to_string(&frame).expect("serialize frame");
+        let mut restored: Frame = serde_json::from_str(&json).expect("deserialize frame");
+        assert_eq!(restored.undo_stack_len(), 1);
+        assert_eq!(restored.redo_stack_len(), 1);
+
+        let new_id = restored.add_shape(Shape::Line {
+            x1: 2,
+            y1: 2,
+            x2: 6,
+            y2: 6,
+            color: BLACK,
+            thick: 1.0,
+        });
+        assert!(new_id > second);
+    }
+
+    #[test]
+    fn frame_with_history_is_persistable_even_without_shapes() {
+        let mut frame = Frame::new();
+        let id = frame.add_shape(Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 20,
+            y2: 20,
+            color: BLACK,
+            thick: 2.0,
+        });
+        let index = frame.find_index(id).unwrap();
+        frame.push_undo_action(
+            UndoAction::Create {
+                shapes: vec![(index, frame.shape(id).unwrap().clone())],
+            },
+            100,
+        );
+
+        // Undo to move the action into redo stack and clear the canvas.
+        frame.undo_last();
+
+        assert!(frame.shapes.is_empty());
+        assert!(frame.has_persistable_data());
+    }
 
     #[test]
     fn try_add_shape_respects_limit() {

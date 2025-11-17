@@ -614,6 +614,10 @@ pub struct SessionConfig {
     #[serde(default)]
     pub persist_blackboard: bool,
 
+    /// Persist undo/redo history between sessions.
+    #[serde(default = "default_persist_history")]
+    pub persist_history: bool,
+
     /// Restore tool state (color, thickness, font size, etc.) on next launch.
     #[serde(default = "default_restore_tool_state")]
     pub restore_tool_state: bool,
@@ -649,6 +653,10 @@ pub struct SessionConfig {
     /// Separate persistence per output instead of per display.
     #[serde(default = "default_session_per_output")]
     pub per_output: bool,
+
+    /// Maximum undo history depth persisted on disk (None = follow runtime limit).
+    #[serde(default)]
+    pub max_persisted_undo_depth: Option<usize>,
 }
 
 impl Default for SessionConfig {
@@ -657,6 +665,7 @@ impl Default for SessionConfig {
             persist_transparent: false,
             persist_whiteboard: false,
             persist_blackboard: false,
+            persist_history: default_persist_history(),
             restore_tool_state: default_restore_tool_state(),
             storage: default_session_storage_mode(),
             custom_directory: None,
@@ -666,6 +675,7 @@ impl Default for SessionConfig {
             auto_compress_threshold_kb: default_auto_compress_threshold_kb(),
             backup_retention: default_backup_retention(),
             per_output: default_session_per_output(),
+            max_persisted_undo_depth: None,
         }
     }
 }
@@ -717,5 +727,9 @@ fn default_backup_retention() -> usize {
 }
 
 fn default_session_per_output() -> bool {
+    true
+}
+
+fn default_persist_history() -> bool {
     true
 }

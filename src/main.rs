@@ -189,6 +189,15 @@ fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
         println!("  Persist transparent: {}", inspection.persist_transparent);
         println!("  Persist whiteboard : {}", inspection.persist_whiteboard);
         println!("  Persist blackboard : {}", inspection.persist_blackboard);
+        println!("  Persist history    : {}", inspection.persist_history);
+        if inspection.persist_history {
+            match inspection.history_limit {
+                Some(limit) => println!("    Max persisted undo depth: {}", limit),
+                None => println!("    Max persisted undo depth: follows runtime limit"),
+            }
+        } else {
+            println!("    (history disabled; only visible drawings are saved)");
+        }
         println!("  Restore tool state : {}", inspection.restore_tool_state);
         println!("  Per-output persistence: {}", inspection.per_output);
         println!(
@@ -207,10 +216,25 @@ fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
                 println!("    Modified : {}", dt.format("%Y-%m-%d %H:%M:%S"));
             }
             println!("    Compressed: {}", inspection.compressed);
+            if let Some(version) = inspection.file_version {
+                println!("    File version: {}", version);
+            }
             if let Some(counts) = inspection.frame_counts {
                 println!(
                     "    Shapes   : transparent {}, whiteboard {}, blackboard {}",
                     counts.transparent, counts.whiteboard, counts.blackboard
+                );
+            }
+            println!("    History present: {}", inspection.history_present);
+            if let Some(hist) = &inspection.history_counts {
+                println!(
+                    "    History (undo/redo): transparent {} / {}, whiteboard {} / {}, blackboard {} / {}",
+                    hist.transparent.undo,
+                    hist.transparent.redo,
+                    hist.whiteboard.undo,
+                    hist.whiteboard.redo,
+                    hist.blackboard.undo,
+                    hist.blackboard.redo
                 );
             }
             println!("    Tool state stored: {}", inspection.tool_state_present);
