@@ -1,7 +1,7 @@
 // Holds the live Wayland protocol state shared by the backend loop and the handler
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
 use anyhow::{Context, Result};
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
@@ -29,7 +29,7 @@ use crate::{
     util::Rect,
 };
 
-use super::{capture::CaptureState, session::SessionState, surface::SurfaceState};
+use super::{capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState};
 
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
@@ -54,6 +54,7 @@ pub(super) struct WaylandState {
 
     // Capture manager
     pub(super) capture: CaptureState,
+    pub(super) frozen: FrozenState,
 
     // Session persistence
     pub(super) session: SessionState,
@@ -76,6 +77,7 @@ impl WaylandState {
         capture_manager: CaptureManager,
         session_options: Option<SessionOptions>,
         tokio_handle: tokio::runtime::Handle,
+        screencopy_manager: Option<wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
     ) -> Self {
         Self {
             registry_state,
@@ -90,6 +92,7 @@ impl WaylandState {
             current_mouse_x: 0,
             current_mouse_y: 0,
             capture: CaptureState::new(capture_manager),
+            frozen: FrozenState::new(screencopy_manager),
             session: SessionState::new(session_options),
             tokio_handle,
         }
@@ -181,12 +184,28 @@ impl WaylandState {
         ctx.paint().context("Failed to clear background")?;
         ctx.set_operator(cairo::Operator::Over);
 
-        // Render board background if in board mode (whiteboard/blackboard)
-        crate::draw::render_board_background(
-            &ctx,
-            self.input_state.board_mode(),
-            &self.input_state.board_config,
-        );
+        if let Some(image) = self.frozen.image() {
+            let surface = cairo::ImageSurface::create_for_data(
+                image.data.clone(),
+                cairo::Format::ARgb32,
+                image.width as i32,
+                image.height as i32,
+                image.stride,
+            )
+            .context("Failed to create frozen image surface")?;
+            if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
+                warn!("Failed to set frozen background surface: {}", err);
+            } else if let Err(err) = ctx.paint() {
+                warn!("Failed to paint frozen background: {}", err);
+            }
+        } else {
+            // Render board background if in board mode (whiteboard/blackboard)
+            crate::draw::render_board_background(
+                &ctx,
+                self.input_state.board_mode(),
+                &self.input_state.board_config,
+            );
+        }
 
         // Render all completed shapes from active frame
         debug!(

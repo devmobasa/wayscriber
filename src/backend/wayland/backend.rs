@@ -28,6 +28,7 @@ use std::{
     },
 };
 use wayland_client::{Connection, globals::registry_queue_init};
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use super::state::WaylandState;
 use crate::{
@@ -100,6 +101,17 @@ impl WaylandBackend {
         debug!("Initialized seat state");
 
         let registry_state = RegistryState::new(&globals);
+
+        let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ()) {
+            Ok(manager) => {
+                debug!("Bound zwlr_screencopy_manager_v1");
+                Some(manager)
+            }
+            Err(err) => {
+                warn!("zwlr_screencopy_manager_v1 not available (frozen mode disabled): {}", err);
+                None
+            }
+        };
 
         // Load configuration
         let (config, config_source) = match Config::load() {
@@ -231,6 +243,7 @@ impl WaylandBackend {
             capture_manager,
             session_options,
             tokio_handle,
+            screencopy_manager,
         );
 
         // Gracefully exit the overlay when external signals request termination
@@ -321,6 +334,21 @@ impl WaylandBackend {
                     warn!("Event queue error: {}", e);
                     loop_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
                     break;
+                }
+            }
+
+            if state.input_state.take_pending_frozen_toggle() {
+                if state.frozen.is_in_progress() {
+                    warn!("Frozen capture already in progress; ignoring toggle");
+                } else if state.input_state.frozen_active() {
+                    state.frozen.unfreeze(&mut state.input_state);
+                } else if let Err(err) =
+                    state
+                        .frozen
+                        .start_capture(&state.shm, &mut state.surface, &qh)
+                {
+                    warn!("Frozen capture failed to start: {}", err);
+                    state.frozen.cancel(&mut state.surface, &mut state.input_state);
                 }
             }
 
