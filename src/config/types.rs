@@ -380,7 +380,7 @@ fn default_show_status() -> bool {
 }
 
 fn default_show_frozen_badge() -> bool {
-    true
+    false
 }
 
 fn default_status_position() -> StatusPosition {
