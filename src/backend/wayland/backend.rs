@@ -26,7 +26,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
 };
 use wayland_client::{Connection, globals::registry_queue_init};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
@@ -335,19 +334,6 @@ impl WaylandBackend {
             state
                 .frozen
                 .poll_portal_capture(&mut state.surface, &mut state.input_state);
-
-            // If portal capture is in progress, avoid blocking on the Wayland queue so the
-            // portal result can be polled promptly.
-            if state.frozen.portal_in_progress() {
-                if let Err(err) = event_queue.dispatch_pending(&mut state) {
-                    warn!("Event queue error during portal capture: {}", err);
-                    loop_error = Some(anyhow::anyhow!("Wayland event queue error: {}", err));
-                    break;
-                }
-                // Tight poll: no blocking dispatch, minimal sleep to keep UI responsive.
-                std::thread::sleep(Duration::from_millis(1));
-                continue;
-            }
 
             // Dispatch all pending events (blocking) but check should_exit after each batch
             match event_queue.blocking_dispatch(&mut state) {
