@@ -9,6 +9,28 @@ pub struct OutputGeometry {
 }
 
 impl OutputGeometry {
+    pub fn update_from(
+        logical_pos: Option<(i32, i32)>,
+        logical_size: Option<(i32, i32)>,
+        fallback_size: (u32, u32),
+        scale: i32,
+    ) -> Option<Self> {
+        let (lx, ly) = logical_pos.unwrap_or((0, 0));
+        let (lw, lh) = logical_size.unwrap_or((fallback_size.0 as i32, fallback_size.1 as i32));
+        if lw <= 0 || lh <= 0 || scale <= 0 {
+            return None;
+        }
+        Some(Self {
+            logical_x: lx,
+            logical_y: ly,
+            logical_width: lw as u32,
+            logical_height: lh as u32,
+            scale,
+        })
+    }
+}
+
+impl OutputGeometry {
     /// Returns physical pixel dimensions.
     pub fn physical_size(&self) -> (u32, u32) {
         (

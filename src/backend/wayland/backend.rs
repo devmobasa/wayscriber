@@ -363,6 +363,11 @@ impl WaylandBackend {
                 }
             }
 
+            // Poll async portal fallback completion
+            state
+                .frozen
+                .poll_portal_capture(&mut state.surface, &mut state.input_state);
+
             // Check for completed capture operations
             if state.capture.is_in_progress() {
                 if let Some(outcome) = state.capture.manager_mut().try_take_result() {

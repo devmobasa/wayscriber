@@ -26,6 +26,17 @@ impl OutputHandler for WaylandState {
         _output: wl_output::WlOutput,
     ) {
         debug!("Output updated");
+        // Refresh geometry for portal fallback cropping when output params change.
+        if let Some(info) = self.output_state.info(&_output) {
+            if let Some(geo) = crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
+                info.logical_position,
+                info.logical_size,
+                (self.surface.width(), self.surface.height()),
+                info.scale_factor.max(1),
+            ) {
+                self.frozen.set_active_geometry(Some(geo));
+            }
+        }
     }
 
     fn output_destroyed(

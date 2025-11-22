@@ -10,6 +10,7 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
     shm::{Shm, slot::{Buffer, SlotPool}},
 };
+use std::sync::mpsc;
 use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::{wl_output, wl_shm}};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{Event as FrameEvent, Flags, ZwlrScreencopyFrameV1};
@@ -91,6 +92,8 @@ pub struct FrozenState {
     capture: Option<CaptureSession>,
     image: Option<FrozenImage>,
     overlay_hidden: bool,
+    portal_rx: Option<mpsc::Receiver<Result<FrozenImage, String>>>,
+    portal_in_progress: bool,
 }
 
 impl FrozenState {
@@ -102,9 +105,12 @@ impl FrozenState {
             capture: None,
             image: None,
             overlay_hidden: false,
+            portal_rx: None,
+            portal_in_progress: false,
         }
     }
 
+    #[allow(dead_code)]
     pub fn manager_available(&self) -> bool {
         self.manager.is_some()
     }
@@ -122,7 +128,7 @@ impl FrozenState {
     }
 
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some()
+        self.capture.is_some() || self.portal_in_progress
     }
 
     /// Drop frozen image if the surface size no longer matches.
@@ -151,7 +157,7 @@ impl FrozenState {
         surface: &mut SurfaceState,
         qh: &QueueHandle<State>,
         use_fallback: bool,
-        input_state: &mut InputState,
+        _input_state: &mut InputState,
         tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()>
     where
@@ -164,7 +170,7 @@ impl FrozenState {
 
         if use_fallback || self.manager.is_none() {
             info!("Screencopy unavailable; using fallback portal capture for frozen mode");
-            return self.capture_via_portal(surface, input_state, tokio_handle);
+            return self.capture_via_portal(surface, tokio_handle);
         }
 
         let manager = self
@@ -377,49 +383,61 @@ impl FrozenState {
     fn capture_via_portal(
         &mut self,
         surface: &mut SurfaceState,
-        input_state: &mut InputState,
         tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
-        self.hide_overlay(surface);
-
-        let bytes = tokio_handle
-            .block_on(async { capture_via_portal_bytes(CaptureType::FullScreen).await })
-            .map_err(|e| anyhow::anyhow!("Portal capture failed: {}", e))?;
-
-        let (mut data, mut width, mut height) =
-            decode_image_to_argb(&bytes).map_err(|e| anyhow::anyhow!("Decode failed: {}", e))?;
-
-        if let Some(geo) = &self.active_geometry {
-            let (phys_w, phys_h) = geo.physical_size();
-            let (origin_x, origin_y) = geo.physical_origin();
-            if origin_x >= 0 && origin_y >= 0 && phys_w > 0 && phys_h > 0 {
-                if let Some(cropped) = crop_argb(
-                    &data,
-                    width,
-                    height,
-                    origin_x as u32,
-                    origin_y as u32,
-                    phys_w,
-                    phys_h,
-                ) {
-                    data = cropped;
-                    width = phys_w;
-                    height = phys_h;
-                }
-            }
+        if self.portal_in_progress {
+            warn!("Portal capture already running; ignoring new request");
+            return Ok(());
         }
 
-        self.image = Some(FrozenImage {
-            width,
-            height,
-            stride: (width * 4) as i32,
-            data,
+        self.hide_overlay(surface);
+        self.portal_in_progress = true;
+
+        let (tx, rx) = mpsc::channel();
+        self.portal_rx = Some(rx);
+
+        let geo = self.active_geometry.clone();
+        tokio_handle.spawn(async move {
+            let result = async {
+                let bytes = capture_via_portal_bytes(CaptureType::FullScreen)
+                    .await
+                    .map_err(|e| format!("Portal capture failed: {}", e))?;
+
+                let (mut data, mut width, mut height) =
+                    decode_image_to_argb(&bytes).map_err(|e| format!("Decode failed: {}", e))?;
+
+                if let Some(geo) = geo {
+                    let (phys_w, phys_h) = geo.physical_size();
+                    let (origin_x, origin_y) = geo.physical_origin();
+                    if origin_x >= 0 && origin_y >= 0 && phys_w > 0 && phys_h > 0 {
+                        if let Some(cropped) = crop_argb(
+                            &data,
+                            width,
+                            height,
+                            origin_x as u32,
+                            origin_y as u32,
+                            phys_w,
+                            phys_h,
+                        ) {
+                            data = cropped;
+                            width = phys_w;
+                            height = phys_h;
+                        }
+                    }
+                }
+
+                Ok(FrozenImage {
+                    width,
+                    height,
+                    stride: (width * 4) as i32,
+                    data,
+                })
+            }
+            .await;
+
+            let _ = tx.send(result);
         });
 
-        self.restore_overlay(surface);
-        input_state.set_frozen_active(true);
-        input_state.dirty_tracker.mark_full();
-        input_state.needs_redraw = true;
         Ok(())
     }
 
@@ -451,6 +469,46 @@ impl FrozenState {
         }
 
         self.overlay_hidden = false;
+    }
+
+    /// Check for completed portal capture and apply result if present.
+    pub fn poll_portal_capture(
+        &mut self,
+        surface: &mut SurfaceState,
+        input_state: &mut InputState,
+    ) {
+        if !self.portal_in_progress {
+            return;
+        }
+
+        if let Some(rx) = self.portal_rx.as_ref() {
+            match rx.try_recv() {
+                Ok(Ok(image)) => {
+                    self.image = Some(image);
+                    self.restore_overlay(surface);
+                    input_state.set_frozen_active(true);
+                    input_state.dirty_tracker.mark_full();
+                    input_state.needs_redraw = true;
+                    self.portal_in_progress = false;
+                    self.portal_rx = None;
+                }
+                Ok(Err(err)) => {
+                    warn!("Portal frozen capture failed: {}", err);
+                    self.restore_overlay(surface);
+                    input_state.set_frozen_active(false);
+                    self.portal_in_progress = false;
+                    self.portal_rx = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    warn!("Portal frozen capture channel disconnected");
+                    self.restore_overlay(surface);
+                    input_state.set_frozen_active(false);
+                    self.portal_in_progress = false;
+                    self.portal_rx = None;
+                }
+            }
+        }
     }
 }
 
