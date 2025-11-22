@@ -32,7 +32,6 @@ use crate::{
 use super::{
     capture::CaptureState,
     frozen::FrozenState,
-    frozen_geometry::OutputGeometry,
     session::SessionState,
     surface::SurfaceState,
 };

@@ -343,9 +343,11 @@ impl WaylandBackend {
                 } else if state.input_state.frozen_active() {
                     state.frozen.unfreeze(&mut state.input_state);
                 } else {
-                    let use_fallback = true; // TEMP: force portal fallback for local testing
+                    let use_fallback = !state.frozen.manager_available();
                     if use_fallback {
-                        warn!("Frozen mode: forcing portal fallback (debug/testing)");
+                        warn!("Frozen mode: screencopy unavailable, using portal fallback");
+                    } else {
+                        log::info!("Frozen mode: using screencopy fast path");
                     }
                     if let Err(err) = state.frozen.start_capture(
                         &state.shm,
