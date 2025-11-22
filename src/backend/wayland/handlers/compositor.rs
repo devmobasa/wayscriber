@@ -60,6 +60,37 @@ impl CompositorHandler for WaylandState {
     ) {
         debug!("Surface entered output");
 
+        if let Some(info) = self.output_state.info(output) {
+            let scale = info.scale_factor.max(1);
+            self.surface.set_scale(scale);
+            let (logical_w, logical_h) = info
+                .logical_size
+                .unwrap_or((self.surface.width() as i32, self.surface.height() as i32));
+            let (logical_x, logical_y) = info.logical_position.unwrap_or((0, 0));
+            self.frozen.set_active_geometry(Some(crate::backend::wayland::frozen_geometry::OutputGeometry {
+                logical_x,
+                logical_y,
+                logical_width: logical_w.max(0) as u32,
+                logical_height: logical_h.max(0) as u32,
+                scale,
+            }));
+            self.frozen
+                .set_active_output(Some(output.clone()), Some(info.id));
+        }
+        self.frozen.unfreeze(&mut self.input_state);
+
+        // Update frozen buffer dimensions in case this output's scale differs
+        let (phys_w, phys_h) = self.surface.physical_dimensions();
+        self.frozen
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
+
+        // If freeze-on-start was requested, trigger it once the surface is configured and active.
+        if self.pending_freeze_on_start {
+            info!("Applying freeze-on-start after initial configure");
+            self.pending_freeze_on_start = false;
+            self.input_state.request_frozen_toggle();
+        }
+
         let identity = self.output_identity_for(output);
 
         let mut load_result = None;
@@ -120,5 +151,8 @@ impl CompositorHandler for WaylandState {
         _output: &wl_output::WlOutput,
     ) {
         debug!("Surface left output");
+        self.frozen.set_active_output(None, None);
+        self.frozen.set_active_geometry(None);
+        self.frozen.unfreeze(&mut self.input_state);
     }
 }

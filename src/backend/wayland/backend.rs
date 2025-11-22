@@ -28,6 +28,7 @@ use std::{
     },
 };
 use wayland_client::{Connection, globals::registry_queue_init};
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use super::state::WaylandState;
 use crate::{
@@ -54,16 +55,18 @@ fn friendly_capture_error(error: &str) -> String {
 /// Wayland backend state
 pub struct WaylandBackend {
     initial_mode: Option<String>,
+    freeze_on_start: bool,
     /// Tokio runtime for async capture operations
     tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl WaylandBackend {
-    pub fn new(initial_mode: Option<String>) -> Result<Self> {
+    pub fn new(initial_mode: Option<String>, freeze_on_start: bool) -> Result<Self> {
         let tokio_runtime = tokio::runtime::Runtime::new()
             .context("Failed to create Tokio runtime for capture operations")?;
         Ok(Self {
             initial_mode,
+            freeze_on_start,
             tokio_runtime,
         })
     }
@@ -100,6 +103,17 @@ impl WaylandBackend {
         debug!("Initialized seat state");
 
         let registry_state = RegistryState::new(&globals);
+
+        let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ()) {
+            Ok(manager) => {
+                debug!("Bound zwlr_screencopy_manager_v1");
+                Some(manager)
+            }
+            Err(err) => {
+                warn!("zwlr_screencopy_manager_v1 not available (frozen mode disabled): {}", err);
+                None
+            }
+        };
 
         // Load configuration
         let (config, config_source) = match Config::load() {
@@ -231,6 +245,8 @@ impl WaylandBackend {
             capture_manager,
             session_options,
             tokio_handle,
+            self.freeze_on_start,
+            screencopy_manager,
         );
 
         // Gracefully exit the overlay when external signals request termination
@@ -287,6 +303,12 @@ impl WaylandBackend {
         state.surface.set_layer_surface(layer_surface);
         info!("Layer shell surface created");
 
+        // Freeze on start if requested
+        if self.freeze_on_start {
+            info!("Freeze-on-start enabled, requesting frozen capture");
+            state.input_state.request_frozen_toggle();
+        }
+
         // Track consecutive render failures for error recovery
         let mut consecutive_render_failures = 0u32;
         const MAX_RENDER_FAILURES: u32 = 10;
@@ -308,6 +330,11 @@ impl WaylandBackend {
                 break;
             }
 
+            // Apply any completed portal fallback captures without blocking.
+            state
+                .frozen
+                .poll_portal_capture(&mut state.surface, &mut state.input_state);
+
             // Dispatch all pending events (blocking) but check should_exit after each batch
             match event_queue.blocking_dispatch(&mut state) {
                 Ok(_) => {
@@ -321,6 +348,32 @@ impl WaylandBackend {
                     warn!("Event queue error: {}", e);
                     loop_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
                     break;
+                }
+            }
+
+            if state.input_state.take_pending_frozen_toggle() {
+                if state.frozen.is_in_progress() {
+                    warn!("Frozen capture already in progress; ignoring toggle");
+                } else if state.input_state.frozen_active() {
+                    state.frozen.unfreeze(&mut state.input_state);
+                } else {
+                    let use_fallback = !state.frozen.manager_available();
+                    if use_fallback {
+                        warn!("Frozen mode: screencopy unavailable, using portal fallback");
+                    } else {
+                        log::info!("Frozen mode: using screencopy fast path");
+                    }
+                    if let Err(err) = state.frozen.start_capture(
+                        &state.shm,
+                        &mut state.surface,
+                        &qh,
+                        use_fallback,
+                        &mut state.input_state,
+                        &state.tokio_handle,
+                    ) {
+                        warn!("Frozen capture failed to start: {}", err);
+                        state.frozen.cancel(&mut state.surface, &mut state.input_state);
+                    }
                 }
             }
 

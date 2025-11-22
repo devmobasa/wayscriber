@@ -145,6 +145,30 @@ fn duplicate_selection_via_action_creates_offset_shape() {
 }
 
 #[test]
+fn clear_all_removes_shapes_even_when_marked_frozen() {
+    let mut state = create_test_input_state();
+    state
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 10,
+            y2: 10,
+            color: state.current_color,
+            thick: state.current_thickness,
+        });
+
+    // Simulate frozen flag being on
+    state.set_frozen_active(true);
+    assert!(state.frozen_active());
+
+    assert!(state.clear_all());
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
+    assert!(state.needs_redraw);
+}
+
+#[test]
 fn translate_selection_with_undo_moves_shape() {
     let mut state = create_test_input_state();
     let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {

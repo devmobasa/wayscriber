@@ -10,12 +10,12 @@
 pub mod clipboard;
 pub mod file;
 pub mod portal;
+pub mod sources;
 pub mod types;
 
 mod dependencies;
 mod manager;
 mod pipeline;
-mod sources;
 #[cfg(test)]
 mod tests;
 

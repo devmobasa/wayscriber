@@ -69,6 +69,7 @@ pub enum Action {
     CaptureFileSelection,
     CaptureClipboardRegion,
     CaptureFileRegion,
+    ToggleFrozenMode,
 }
 
 /// A single keybinding: a key character with optional modifiers.
@@ -290,6 +291,9 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_capture_file_region")]
     pub capture_file_region: Vec<String>,
+
+    #[serde(default = "default_toggle_frozen_mode")]
+    pub toggle_frozen_mode: Vec<String>,
 }
 
 impl Default for KeybindingsConfig {
@@ -338,6 +342,7 @@ impl Default for KeybindingsConfig {
             capture_file_selection: default_capture_file_selection(),
             capture_clipboard_region: default_capture_clipboard_region(),
             capture_file_region: default_capture_file_region(),
+            toggle_frozen_mode: default_toggle_frozen_mode(),
         }
     }
 }
@@ -532,6 +537,10 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::CaptureFileRegion)?;
         }
 
+        for binding_str in &self.toggle_frozen_mode {
+            insert_binding(binding_str, Action::ToggleFrozenMode)?;
+        }
+
         Ok(map)
     }
 }
@@ -710,6 +719,10 @@ fn default_capture_clipboard_region() -> Vec<String> {
 
 fn default_capture_file_region() -> Vec<String> {
     vec!["Ctrl+Shift+6".to_string()]
+}
+
+fn default_toggle_frozen_mode() -> Vec<String> {
+    vec!["Ctrl+Shift+F".to_string()]
 }
 
 #[cfg(test)]

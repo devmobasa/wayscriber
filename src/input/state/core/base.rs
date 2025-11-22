@@ -134,6 +134,10 @@ pub struct InputState {
     pub(super) pending_menu_hover_recalc: bool,
     /// Optional properties panel describing the current selection
     pub(super) shape_properties_panel: Option<ShapePropertiesPanel>,
+    /// Whether frozen mode is currently active
+    pub(super) frozen_active: bool,
+    /// Pending toggle request for the backend (handled in the Wayland loop)
+    pub(super) pending_frozen_toggle: bool,
 }
 
 impl InputState {
@@ -207,6 +211,8 @@ impl InputState {
             last_pointer_position: (0, 0),
             pending_menu_hover_recalc: false,
             shape_properties_panel: None,
+            frozen_active: false,
+            pending_frozen_toggle: false,
         };
 
         if state.click_highlight.uses_pen_color() {
