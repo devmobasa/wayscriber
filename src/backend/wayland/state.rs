@@ -193,13 +193,17 @@ impl WaylandState {
         ctx.set_operator(cairo::Operator::Over);
 
         if let Some(image) = self.frozen.image() {
-            let surface = cairo::ImageSurface::create_for_data(
-                image.data.clone(),
-                cairo::Format::ARgb32,
-                image.width as i32,
-                image.height as i32,
-                image.stride,
-            )
+            // SAFETY: we create a Cairo surface borrowing our owned buffer; it is dropped
+            // before commit, and we hold the buffer alive via `image.data`.
+            let surface = unsafe {
+                cairo::ImageSurface::create_for_data_unsafe(
+                    image.data.as_ptr() as *mut u8,
+                    cairo::Format::ARgb32,
+                    image.width as i32,
+                    image.height as i32,
+                    image.stride,
+                )
+            }
             .context("Failed to create frozen image surface")?;
 
             let scale_x = if image.width > 0 {
@@ -223,6 +227,7 @@ impl WaylandState {
             } else if let Err(err) = ctx.paint() {
                 warn!("Failed to paint frozen background: {}", err);
             }
+            drop(surface);
             let _ = ctx.restore();
         } else {
             // Render board background if in board mode (whiteboard/blackboard)
