@@ -56,16 +56,18 @@ fn friendly_capture_error(error: &str) -> String {
 /// Wayland backend state
 pub struct WaylandBackend {
     initial_mode: Option<String>,
+    freeze_on_start: bool,
     /// Tokio runtime for async capture operations
     tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl WaylandBackend {
-    pub fn new(initial_mode: Option<String>) -> Result<Self> {
+    pub fn new(initial_mode: Option<String>, freeze_on_start: bool) -> Result<Self> {
         let tokio_runtime = tokio::runtime::Runtime::new()
             .context("Failed to create Tokio runtime for capture operations")?;
         Ok(Self {
             initial_mode,
+            freeze_on_start,
             tokio_runtime,
         })
     }
@@ -244,6 +246,7 @@ impl WaylandBackend {
             capture_manager,
             session_options,
             tokio_handle,
+            self.freeze_on_start,
             screencopy_manager,
         );
 
@@ -300,6 +303,12 @@ impl WaylandBackend {
 
         state.surface.set_layer_surface(layer_surface);
         info!("Layer shell surface created");
+
+        // Freeze on start if requested
+        if self.freeze_on_start {
+            info!("Freeze-on-start enabled, requesting frozen capture");
+            state.input_state.request_frozen_toggle();
+        }
 
         // Track consecutive render failures for error recovery
         let mut consecutive_render_failures = 0u32;

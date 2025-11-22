@@ -66,6 +66,9 @@ pub(super) struct WaylandState {
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,
+
+    // Pending flags
+    pub(super) pending_freeze_on_start: bool,
 }
 
 impl WaylandState {
@@ -82,6 +85,7 @@ impl WaylandState {
         capture_manager: CaptureManager,
         session_options: Option<SessionOptions>,
         tokio_handle: tokio::runtime::Handle,
+        pending_freeze_on_start: bool,
         screencopy_manager: Option<wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
     ) -> Self {
         Self {
@@ -100,6 +104,7 @@ impl WaylandState {
             frozen: FrozenState::new(screencopy_manager),
             session: SessionState::new(session_options),
             tokio_handle,
+            pending_freeze_on_start,
         }
     }
 

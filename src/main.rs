@@ -64,6 +64,14 @@ struct Cli {
         ]
     )]
     session_info: bool,
+
+    /// Start with frozen mode active (freeze the screen immediately)
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = ["daemon", "clear_session", "session_info", "migrate_config", "migrate_config_dry_run"]
+    )]
+    freeze: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -95,7 +103,7 @@ fn main() -> anyhow::Result<()> {
         log::info!("Starting in daemon mode");
         let mut daemon = daemon::Daemon::new(cli.mode);
         daemon.run()?;
-    } else if cli.active {
+    } else if cli.active || cli.freeze {
         // One-shot mode: show overlay immediately and exit when done
         log::info!("Starting Wayland overlay...");
         log::info!("Starting annotation overlay...");
@@ -117,10 +125,13 @@ fn main() -> anyhow::Result<()> {
         log::info!("  - Context menu: Right Click or Shift+F10");
         log::info!("  - Help: F10   •   Status bar: F12   •   Configurator: F11");
         log::info!("  - Exit: Escape");
+        if cli.freeze {
+            log::info!("Starting frozen mode (freeze-on-start requested)");
+        }
         log::info!("");
 
         // Run Wayland backend
-        backend::run_wayland(cli.mode)?;
+        backend::run_wayland(cli.mode, cli.freeze)?;
 
         log::info!("Annotation overlay closed.");
     } else {
@@ -128,10 +139,9 @@ fn main() -> anyhow::Result<()> {
         println!("wayscriber: Screen annotation tool for Wayland compositors");
         println!();
         println!("Usage:");
-        println!(
-            "  wayscriber -d, --daemon    Run as background daemon (bind a toggle like Super+D)"
-        );
-        println!("  wayscriber -a, --active    Show overlay immediately (one-shot mode)");
+        println!("  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)");
+        println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
+        println!("  wayscriber --freeze          Start overlay already frozen");
         println!("  wayscriber -h, --help      Show help");
         println!();
         println!("Daemon mode (recommended). Example Hyprland setup:");
