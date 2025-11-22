@@ -65,7 +65,7 @@ Or bind to a key in `~/.config/hypr/hyprland.conf`:
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press `F10` for help, `F11` for configurator, `Escape`/`Ctrl+Q` to exit, and `F12` to toggle the status bar.
+Press `F10` for help, `F11` for configurator, `Escape`/`Ctrl+Q` to exit, and `F12` to toggle the status bar. Use `Ctrl+Shift+F` to freeze/unfreeze the screen while keeping your drawings, or start already frozen with `wayscriber --freeze`.
 
 ### Option 2: Daemon Mode (Background Service)
 Run wayscriber in the background and toggle it with a keybind:
@@ -275,7 +275,7 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 | Rectangle | Hold `Ctrl` + drag |
 | Ellipse/Circle | Hold `Tab` + drag |
 | Arrow | Hold `Ctrl+Shift` + drag |
-| Toggle highlight-only tool | `Ctrl+Alt+H` |
+| Highlight brush (highlight-only) | `Ctrl+Alt+H` |
 | Text mode | Press `T`, click to position, type, `Shift+Enter` for new line, `Enter` to finish |
 | **Board Modes** |
 | Toggle Whiteboard | `Ctrl+W` (press again to exit) |
@@ -305,6 +305,8 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 | Toggle help overlay | `F10` |
 | Launch configurator | `F11` |
 | Toggle click highlight | `Ctrl+Shift+H` |
+| Toggle freeze | `Ctrl+Shift+F` |
+| Highlight brush (highlight-only) | `Ctrl+Alt+H` |
 | Exit overlay | `Escape` or `Ctrl+Q` |
 
 ## Configuration
@@ -486,7 +488,8 @@ Then install Wayscriber and enable `wayscriber.service` if you want the daemon o
 - [x] Board mode configuration (colors, auto-adjust)
 - [x] CLI `--mode` flag for initial board selection
 - [ ] Multi-monitor support with per-monitor surfaces
-- [ ] Additional shapes (filled shapes, highlighter)
+- [ ] Additional shapes (filled shapes)
+- [x] Highlighter/Highlight brush
 - [ ] Save annotations to image file
 - [ ] Eraser tool
 - [ ] Color picker
