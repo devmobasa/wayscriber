@@ -142,10 +142,6 @@ impl FrozenState {
         self.capture.is_some() || self.portal_in_progress
     }
 
-    pub fn portal_in_progress(&self) -> bool {
-        self.portal_in_progress
-    }
-
     /// Drop frozen image if the surface size no longer matches.
     pub fn handle_resize(&mut self, phys_width: u32, phys_height: u32, input_state: &mut InputState) {
         if let Some(img) = &self.image {
