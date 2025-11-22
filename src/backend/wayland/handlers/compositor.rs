@@ -60,7 +60,6 @@ impl CompositorHandler for WaylandState {
     ) {
         debug!("Surface entered output");
 
-        self.frozen.set_active_output(Some(output.clone()));
         if let Some(info) = self.output_state.info(output) {
             let scale = info.scale_factor.max(1);
             self.surface.set_scale(scale);
@@ -75,6 +74,8 @@ impl CompositorHandler for WaylandState {
                 logical_height: logical_h.max(0) as u32,
                 scale,
             }));
+            self.frozen
+                .set_active_output(Some(output.clone()), Some(info.id));
         }
         self.frozen.unfreeze(&mut self.input_state);
 
@@ -143,7 +144,8 @@ impl CompositorHandler for WaylandState {
         _output: &wl_output::WlOutput,
     ) {
         debug!("Surface left output");
-        self.frozen.set_active_output(None);
+        self.frozen.set_active_output(None, None);
+        self.frozen.set_active_geometry(None);
         self.frozen.unfreeze(&mut self.input_state);
     }
 }

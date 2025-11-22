@@ -321,6 +321,11 @@ impl WaylandBackend {
                 break;
             }
 
+            // Apply any completed portal fallback captures without blocking.
+            state
+                .frozen
+                .poll_portal_capture(&mut state.surface, &mut state.input_state);
+
             // Dispatch all pending events (blocking) but check should_exit after each batch
             match event_queue.blocking_dispatch(&mut state) {
                 Ok(_) => {
@@ -362,11 +367,6 @@ impl WaylandBackend {
                     }
                 }
             }
-
-            // Poll async portal fallback completion
-            state
-                .frozen
-                .poll_portal_capture(&mut state.surface, &mut state.input_state);
 
             // Check for completed capture operations
             if state.capture.is_in_progress() {
