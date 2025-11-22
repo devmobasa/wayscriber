@@ -103,23 +103,22 @@ pub fn render_status_bar(
 
     // Build status text with mode badge and font size
     let font_size = input_state.current_font_size;
-    let highlight_badge = if input_state.click_highlight_enabled() {
-        " [HL]"
-    } else {
-        ""
-    };
+    let highlight_badge = if input_state.click_highlight_enabled() { " [Click HL]" } else { "" };
+    let highlight_tool_badge =
+        if input_state.highlight_tool_active() { " [Highlight pen]" } else { "" };
 
     let frozen_badge = if input_state.frozen_active() { "[FROZEN] " } else { "" };
 
     let status_text = format!(
-        "{}{}[{}] [{}px] [{}] [Text {}px]{}  F10=Help",
+        "{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F10=Help",
         frozen_badge,
         mode_badge,
         color_name,
         thickness as i32,
         tool_name,
         font_size as i32,
-        highlight_badge
+        highlight_badge,
+        highlight_tool_badge
     );
 
     // Set font

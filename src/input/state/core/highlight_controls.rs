@@ -76,6 +76,11 @@ impl InputState {
         let enable = !self.highlight_tool_active();
 
         if enable {
+            // Ensure click highlight visuals are on while using the highlight pen
+            if !self.click_highlight_enabled() {
+                self.toggle_click_highlight();
+            }
+
             self.tool_override = Some(Tool::Highlight);
             // Ensure we are not mid-drawing with another tool
             if !matches!(
