@@ -133,6 +133,10 @@ pub struct UiConfig {
     #[serde(default = "default_show_status")]
     pub show_status_bar: bool,
 
+    /// Show the frozen-mode badge when frozen is active
+    #[serde(default = "default_show_frozen_badge")]
+    pub show_frozen_badge: bool,
+
     /// Status bar screen position (top-left, top-right, bottom-left, bottom-right)
     #[serde(default = "default_status_position")]
     pub status_bar_position: StatusPosition,
@@ -158,6 +162,7 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             show_status_bar: default_show_status(),
+            show_frozen_badge: default_show_frozen_badge(),
             status_bar_position: default_status_position(),
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
@@ -371,6 +376,10 @@ fn default_enable_vsync() -> bool {
 }
 
 fn default_show_status() -> bool {
+    true
+}
+
+fn default_show_frozen_badge() -> bool {
     true
 }
 

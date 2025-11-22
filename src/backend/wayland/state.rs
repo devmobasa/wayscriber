@@ -289,7 +289,7 @@ impl WaylandState {
         self.input_state.render_click_highlights(&ctx, now);
 
         // Render frozen badge even if status bar is hidden
-        if self.input_state.frozen_active() {
+        if self.input_state.frozen_active() && self.config.ui.show_frozen_badge {
             crate::ui::render_frozen_badge(&ctx, width, height);
         }
 

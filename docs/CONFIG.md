@@ -110,6 +110,9 @@ Controls visual indicators, overlays, and UI styling.
 # Show status bar with current color/thickness/tool
 show_status_bar = true
 
+# Show a small "FROZEN" badge when frozen mode is active
+show_frozen_badge = true
+
 # Status bar position
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"
