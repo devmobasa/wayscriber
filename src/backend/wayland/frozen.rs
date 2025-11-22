@@ -119,9 +119,9 @@ impl FrozenState {
     }
 
     /// Drop frozen image if the surface size no longer matches.
-    pub fn handle_resize(&mut self, width: u32, height: u32, input_state: &mut InputState) {
+    pub fn handle_resize(&mut self, phys_width: u32, phys_height: u32, input_state: &mut InputState) {
         if let Some(img) = &self.image {
-            if img.width != width || img.height != height {
+            if img.width != phys_width || img.height != phys_height {
                 info!("Surface resized; clearing frozen image");
                 self.image = None;
                 input_state.set_frozen_active(false);

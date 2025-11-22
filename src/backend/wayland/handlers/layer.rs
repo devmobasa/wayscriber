@@ -43,5 +43,9 @@ impl LayerShellHandler for WaylandState {
 
         self.surface.set_configured(true);
         self.input_state.needs_redraw = true;
+
+        let (phys_w, phys_h) = self.surface.physical_dimensions();
+        self.frozen
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
     }
 }
