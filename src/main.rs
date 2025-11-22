@@ -113,6 +113,7 @@ fn main() -> anyhow::Result<()> {
         log::info!("  - Clear all: E");
         log::info!("  - Increase thickness: + or = or scroll down");
         log::info!("  - Decrease thickness: - or _ or scroll up");
+        log::info!("  - Freeze screen: Ctrl+Shift+F (toggle frozen background)");
         log::info!("  - Context menu: Right Click or Shift+F10");
         log::info!("  - Help: F10   •   Status bar: F12   •   Configurator: F11");
         log::info!("  - Exit: Escape");

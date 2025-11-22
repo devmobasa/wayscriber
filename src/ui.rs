@@ -245,7 +245,7 @@ pub fn render_help_overlay(
                 },
                 Row {
                     key: "Ctrl+Shift+F",
-                    action: "Toggle Frozen Mode",
+                    action: "Freeze/unfreeze active monitor",
                 },
             ],
             badges: Vec::new(),
