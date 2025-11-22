@@ -134,8 +134,11 @@ impl WaylandState {
         debug!("=== RENDER START ===");
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
+        let scale = self.surface.scale().max(1);
         let width = self.surface.width();
         let height = self.surface.height();
+        let phys_width = width.saturating_mul(scale as u32);
+        let phys_height = height.saturating_mul(scale as u32);
         let now = Instant::now();
         let highlight_active = self.input_state.advance_click_highlights(now);
 
@@ -145,9 +148,9 @@ impl WaylandState {
             debug!("Requesting buffer from pool");
             let result = pool
                 .create_buffer(
-                    width as i32,
-                    height as i32,
-                    (width * 4) as i32,
+                    phys_width as i32,
+                    phys_height as i32,
+                    (phys_width * 4) as i32,
                     wl_shm::Format::Argb8888,
                 )
                 .context("Failed to create buffer")?;
@@ -168,9 +171,9 @@ impl WaylandState {
             cairo::ImageSurface::create_for_data_unsafe(
                 canvas.as_mut_ptr(),
                 cairo::Format::ARgb32,
-                width as i32,
-                height as i32,
-                (width * 4) as i32,
+                phys_width as i32,
+                phys_height as i32,
+                (phys_width * 4) as i32,
             )
             .context("Failed to create Cairo surface")?
         };
@@ -195,12 +198,12 @@ impl WaylandState {
             .context("Failed to create frozen image surface")?;
 
             let scale_x = if image.width > 0 {
-                width as f64 / image.width as f64
+                phys_width as f64 / image.width as f64
             } else {
                 1.0
             };
             let scale_y = if image.height > 0 {
-                height as f64 / image.height as f64
+                phys_height as f64 / image.height as f64
             } else {
                 1.0
             };
@@ -225,6 +228,11 @@ impl WaylandState {
             );
         }
 
+        // Scale subsequent drawing to logical coordinates
+        let _ = ctx.save();
+        if scale > 1 {
+            ctx.scale(scale as f64, scale as f64);
+        }
         // Render all completed shapes from active frame
         debug!(
             "Rendering {} completed shapes",
@@ -309,6 +317,8 @@ impl WaylandState {
         // Render context menu if open
         crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
 
+        let _ = ctx.restore();
+
         // Flush Cairo
         debug!("Flushing Cairo surface");
         cairo_surface.flush();
@@ -322,15 +332,16 @@ impl WaylandState {
             .layer_surface()
             .context("Layer surface not created")?
             .wl_surface();
+        wl_surface.set_buffer_scale(scale);
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
-        let surface_width = width.min(i32::MAX as u32) as i32;
-        let surface_height = height.min(i32::MAX as u32) as i32;
-
-        let dirty_regions = resolve_damage_regions(
-            surface_width,
-            surface_height,
-            self.input_state.take_dirty_regions(),
+        let dirty_regions = scale_damage_regions(
+            resolve_damage_regions(
+                self.surface.width().min(i32::MAX as u32) as i32,
+                self.surface.height().min(i32::MAX as u32) as i32,
+                self.input_state.take_dirty_regions(),
+            ),
+            scale,
         );
 
         if dirty_regions.is_empty() {
@@ -498,6 +509,24 @@ fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Ve
     }
 
     regions
+}
+
+fn scale_damage_regions(regions: Vec<Rect>, scale: i32) -> Vec<Rect> {
+    if scale <= 1 {
+        return regions;
+    }
+
+    regions
+        .into_iter()
+        .filter_map(|r| {
+            let x = r.x.saturating_mul(scale);
+            let y = r.y.saturating_mul(scale);
+            let w = r.width.saturating_mul(scale);
+            let h = r.height.saturating_mul(scale);
+
+            Rect::new(x, y, w, h)
+        })
+        .collect()
 }
 
 #[cfg(test)]

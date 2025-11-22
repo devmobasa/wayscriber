@@ -61,7 +61,16 @@ impl CompositorHandler for WaylandState {
         debug!("Surface entered output");
 
         self.frozen.set_active_output(Some(output.clone()));
+        if let Some(info) = self.output_state.info(output) {
+            let scale = info.scale_factor.max(1);
+            self.surface.set_scale(scale);
+        }
         self.frozen.unfreeze(&mut self.input_state);
+
+        // Update frozen buffer dimensions in case this output's scale differs
+        let (phys_w, phys_h) = self.surface.physical_dimensions();
+        self.frozen
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
 
         let identity = self.output_identity_for(output);
 
