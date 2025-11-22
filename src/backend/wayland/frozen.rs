@@ -72,9 +72,13 @@ impl CaptureSession {
             return;
         }
         if let Some(buffer) = self.buffer.as_ref() {
-            debug!("Requesting screencopy copy");
-            self.frame.copy(buffer.wl_buffer());
-            self.copy_requested = true;
+            if self.ready_for_copy() {
+                debug!("Requesting screencopy copy");
+                self.frame.copy(buffer.wl_buffer());
+                self.copy_requested = true;
+            } else {
+                debug!("Screencopy copy requested before frame ready; skipping");
+            }
         }
     }
 }
@@ -105,10 +109,6 @@ impl FrozenState {
         self.manager.is_some()
     }
 
-    pub fn set_manager(&mut self, manager: Option<ZwlrScreencopyManagerV1>) {
-        self.manager = manager;
-    }
-
     pub fn set_active_output(&mut self, output: Option<wl_output::WlOutput>) {
         self.active_output = output;
     }
@@ -119,14 +119,6 @@ impl FrozenState {
 
     pub fn image(&self) -> Option<&FrozenImage> {
         self.image.as_ref()
-    }
-
-    pub fn clear_image(&mut self) {
-        self.image = None;
-    }
-
-    pub fn is_active(&self) -> bool {
-        self.image.is_some()
     }
 
     pub fn is_in_progress(&self) -> bool {
