@@ -29,7 +29,13 @@ use crate::{
     util::Rect,
 };
 
-use super::{capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState};
+use super::{
+    capture::CaptureState,
+    frozen::FrozenState,
+    frozen_geometry::OutputGeometry,
+    session::SessionState,
+    surface::SurfaceState,
+};
 
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {

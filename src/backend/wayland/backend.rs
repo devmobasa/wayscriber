@@ -342,13 +342,22 @@ impl WaylandBackend {
                     warn!("Frozen capture already in progress; ignoring toggle");
                 } else if state.input_state.frozen_active() {
                     state.frozen.unfreeze(&mut state.input_state);
-                } else if let Err(err) =
-                    state
-                        .frozen
-                        .start_capture(&state.shm, &mut state.surface, &qh)
-                {
-                    warn!("Frozen capture failed to start: {}", err);
-                    state.frozen.cancel(&mut state.surface, &mut state.input_state);
+                } else {
+                    let use_fallback = true; // TEMP: force portal fallback for local testing
+                    if use_fallback {
+                        warn!("Frozen mode: forcing portal fallback (debug/testing)");
+                    }
+                    if let Err(err) = state.frozen.start_capture(
+                        &state.shm,
+                        &mut state.surface,
+                        &qh,
+                        use_fallback,
+                        &mut state.input_state,
+                        &state.tokio_handle,
+                    ) {
+                        warn!("Frozen capture failed to start: {}", err);
+                        state.frozen.cancel(&mut state.surface, &mut state.input_state);
+                    }
                 }
             }
 
