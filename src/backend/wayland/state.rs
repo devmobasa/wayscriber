@@ -1,7 +1,7 @@
 // Holds the live Wayland protocol state shared by the backend loop and the handler
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
 use anyhow::{Context, Result};
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
@@ -29,7 +29,12 @@ use crate::{
     util::Rect,
 };
 
-use super::{capture::CaptureState, session::SessionState, surface::SurfaceState};
+use super::{
+    capture::CaptureState,
+    frozen::FrozenState,
+    session::SessionState,
+    surface::SurfaceState,
+};
 
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
@@ -54,12 +59,16 @@ pub(super) struct WaylandState {
 
     // Capture manager
     pub(super) capture: CaptureState,
+    pub(super) frozen: FrozenState,
 
     // Session persistence
     pub(super) session: SessionState,
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,
+
+    // Pending flags
+    pub(super) pending_freeze_on_start: bool,
 }
 
 impl WaylandState {
@@ -76,6 +85,8 @@ impl WaylandState {
         capture_manager: CaptureManager,
         session_options: Option<SessionOptions>,
         tokio_handle: tokio::runtime::Handle,
+        pending_freeze_on_start: bool,
+        screencopy_manager: Option<wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
     ) -> Self {
         Self {
             registry_state,
@@ -90,8 +101,10 @@ impl WaylandState {
             current_mouse_x: 0,
             current_mouse_y: 0,
             capture: CaptureState::new(capture_manager),
+            frozen: FrozenState::new(screencopy_manager),
             session: SessionState::new(session_options),
             tokio_handle,
+            pending_freeze_on_start,
         }
     }
 
@@ -131,8 +144,11 @@ impl WaylandState {
         debug!("=== RENDER START ===");
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
+        let scale = self.surface.scale().max(1);
         let width = self.surface.width();
         let height = self.surface.height();
+        let phys_width = width.saturating_mul(scale as u32);
+        let phys_height = height.saturating_mul(scale as u32);
         let now = Instant::now();
         let highlight_active = self.input_state.advance_click_highlights(now);
 
@@ -142,9 +158,9 @@ impl WaylandState {
             debug!("Requesting buffer from pool");
             let result = pool
                 .create_buffer(
-                    width as i32,
-                    height as i32,
-                    (width * 4) as i32,
+                    phys_width as i32,
+                    phys_height as i32,
+                    (phys_width * 4) as i32,
                     wl_shm::Format::Argb8888,
                 )
                 .context("Failed to create buffer")?;
@@ -165,9 +181,9 @@ impl WaylandState {
             cairo::ImageSurface::create_for_data_unsafe(
                 canvas.as_mut_ptr(),
                 cairo::Format::ARgb32,
-                width as i32,
-                height as i32,
-                (width * 4) as i32,
+                phys_width as i32,
+                phys_height as i32,
+                (phys_width * 4) as i32,
             )
             .context("Failed to create Cairo surface")?
         };
@@ -181,13 +197,57 @@ impl WaylandState {
         ctx.paint().context("Failed to clear background")?;
         ctx.set_operator(cairo::Operator::Over);
 
-        // Render board background if in board mode (whiteboard/blackboard)
-        crate::draw::render_board_background(
-            &ctx,
-            self.input_state.board_mode(),
-            &self.input_state.board_config,
-        );
+        if let Some(image) = self.frozen.image() {
+            // SAFETY: we create a Cairo surface borrowing our owned buffer; it is dropped
+            // before commit, and we hold the buffer alive via `image.data`.
+            let surface = unsafe {
+                cairo::ImageSurface::create_for_data_unsafe(
+                    image.data.as_ptr() as *mut u8,
+                    cairo::Format::ARgb32,
+                    image.width as i32,
+                    image.height as i32,
+                    image.stride,
+                )
+            }
+            .context("Failed to create frozen image surface")?;
 
+            let scale_x = if image.width > 0 {
+                phys_width as f64 / image.width as f64
+            } else {
+                1.0
+            };
+            let scale_y = if image.height > 0 {
+                phys_height as f64 / image.height as f64
+            } else {
+                1.0
+            };
+
+            let _ = ctx.save();
+            if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
+                ctx.scale(scale_x, scale_y);
+            }
+
+            if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
+                warn!("Failed to set frozen background surface: {}", err);
+            } else if let Err(err) = ctx.paint() {
+                warn!("Failed to paint frozen background: {}", err);
+            }
+            drop(surface);
+            let _ = ctx.restore();
+        } else {
+            // Render board background if in board mode (whiteboard/blackboard)
+            crate::draw::render_board_background(
+                &ctx,
+                self.input_state.board_mode(),
+                &self.input_state.board_config,
+            );
+        }
+
+        // Scale subsequent drawing to logical coordinates
+        let _ = ctx.save();
+        if scale > 1 {
+            ctx.scale(scale as f64, scale as f64);
+        }
         // Render all completed shapes from active frame
         debug!(
             "Rendering {} completed shapes",
@@ -243,6 +303,11 @@ impl WaylandState {
         // Render click highlight overlays before UI so status/help remain legible
         self.input_state.render_click_highlights(&ctx, now);
 
+        // Render frozen badge even if status bar is hidden
+        if self.input_state.frozen_active() && self.config.ui.show_frozen_badge {
+            crate::ui::render_frozen_badge(&ctx, width, height);
+        }
+
         // Render status bar if enabled
         if self.input_state.show_status_bar {
             crate::ui::render_status_bar(
@@ -272,6 +337,8 @@ impl WaylandState {
         // Render context menu if open
         crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
 
+        let _ = ctx.restore();
+
         // Flush Cairo
         debug!("Flushing Cairo surface");
         cairo_surface.flush();
@@ -285,15 +352,16 @@ impl WaylandState {
             .layer_surface()
             .context("Layer surface not created")?
             .wl_surface();
+        wl_surface.set_buffer_scale(scale);
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
-        let surface_width = width.min(i32::MAX as u32) as i32;
-        let surface_height = height.min(i32::MAX as u32) as i32;
-
-        let dirty_regions = resolve_damage_regions(
-            surface_width,
-            surface_height,
-            self.input_state.take_dirty_regions(),
+        let dirty_regions = scale_damage_regions(
+            resolve_damage_regions(
+                self.surface.width().min(i32::MAX as u32) as i32,
+                self.surface.height().min(i32::MAX as u32) as i32,
+                self.input_state.take_dirty_regions(),
+            ),
+            scale,
         );
 
         if dirty_regions.is_empty() {
@@ -461,6 +529,24 @@ fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Ve
     }
 
     regions
+}
+
+fn scale_damage_regions(regions: Vec<Rect>, scale: i32) -> Vec<Rect> {
+    if scale <= 1 {
+        return regions;
+    }
+
+    regions
+        .into_iter()
+        .filter_map(|r| {
+            let x = r.x.saturating_mul(scale);
+            let y = r.y.saturating_mul(scale);
+            let w = r.width.saturating_mul(scale);
+            let h = r.height.saturating_mul(scale);
+
+            Rect::new(x, y, w, h)
+        })
+        .collect()
 }
 
 #[cfg(test)]

@@ -28,6 +28,7 @@ pub struct ConfigDraft {
     pub performance_enable_vsync: bool,
 
     pub ui_show_status_bar: bool,
+    pub ui_show_frozen_badge: bool,
     pub ui_status_position: StatusPositionOption,
     pub status_font_size: String,
     pub status_padding: String,
@@ -104,6 +105,7 @@ impl ConfigDraft {
             performance_enable_vsync: config.performance.enable_vsync,
 
             ui_show_status_bar: config.ui.show_status_bar,
+            ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_status_position: StatusPositionOption::from_status_position(
                 config.ui.status_bar_position,
             ),
@@ -211,6 +213,7 @@ impl ConfigDraft {
         config.performance.enable_vsync = self.performance_enable_vsync;
 
         config.ui.show_status_bar = self.ui_show_status_bar;
+        config.ui.show_frozen_badge = self.ui_show_frozen_badge;
         config.ui.status_bar_position = self.ui_status_position.to_status_position();
         parse_field(
             &self.status_font_size,
@@ -421,6 +424,7 @@ impl ConfigDraft {
             }
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
+            ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
             ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
             ToggleField::UiClickHighlightUsePenColor => {
                 self.click_highlight_use_pen_color = value

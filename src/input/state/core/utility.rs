@@ -65,6 +65,32 @@ impl InputState {
         self.pending_capture_action = Some(action);
     }
 
+    /// Marks a frozen-mode toggle request for the backend.
+    pub(crate) fn request_frozen_toggle(&mut self) {
+        self.pending_frozen_toggle = true;
+    }
+
+    /// Returns and clears any pending frozen-mode toggle request.
+    pub fn take_pending_frozen_toggle(&mut self) -> bool {
+        let pending = self.pending_frozen_toggle;
+        self.pending_frozen_toggle = false;
+        pending
+    }
+
+    /// Updates the cached frozen-mode status and triggers a redraw when it changes.
+    pub fn set_frozen_active(&mut self, active: bool) {
+        if self.frozen_active != active {
+            self.frozen_active = active;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Returns whether frozen mode is active.
+    pub fn frozen_active(&self) -> bool {
+        self.frozen_active
+    }
+
     pub(crate) fn launch_configurator(&self) {
         let binary = crate::legacy::configurator_override()
             .unwrap_or_else(|| "wayscriber-configurator".to_string());

@@ -1,8 +1,9 @@
 use crate::capture::types::{CaptureError, CaptureType};
 
 mod hyprland;
-mod portal;
+pub mod portal;
 pub(crate) mod reader;
+pub(crate) mod frozen;
 
 pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
     match capture_type {

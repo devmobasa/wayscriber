@@ -515,6 +515,13 @@ impl InputState {
                 self.modifiers.shift = false;
                 self.modifiers.alt = false;
             }
+            Action::ToggleFrozenMode => {
+                log::info!("Toggle frozen mode requested");
+                self.request_frozen_toggle();
+                self.modifiers.ctrl = false;
+                self.modifiers.shift = false;
+                self.modifiers.alt = false;
+            }
         }
     }
 

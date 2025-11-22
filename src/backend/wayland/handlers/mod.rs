@@ -23,5 +23,6 @@ mod layer;
 mod output;
 mod pointer;
 mod registry;
+mod screencopy;
 mod seat;
 mod shm;

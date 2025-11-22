@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use log::info;
 use smithay_client_toolkit::{
-    shell::wlr_layer::LayerSurface,
+    shell::{WaylandSurface, wlr_layer::LayerSurface},
     shm::{Shm, slot::SlotPool},
 };
 
@@ -17,6 +17,7 @@ pub struct SurfaceState {
     pool: Option<SlotPool>,
     width: u32,
     height: u32,
+    scale: i32,
     configured: bool,
     frame_callback_pending: bool,
 }
@@ -29,6 +30,7 @@ impl SurfaceState {
             pool: None,
             width: 0,
             height: 0,
+            scale: 1,
             configured: false,
             frame_callback_pending: false,
         }
@@ -60,6 +62,31 @@ impl SurfaceState {
             self.pool = None;
         }
         changed
+    }
+
+    /// Updates the buffer scale (defaults to 1). Drops the pool when scale changes.
+    pub fn set_scale(&mut self, scale: i32) {
+        let scale = scale.max(1);
+        if self.scale != scale {
+            self.scale = scale;
+            self.pool = None;
+            if let Some(layer_surface) = self.layer_surface_mut() {
+                let _ = layer_surface.set_buffer_scale(scale as u32);
+            }
+        }
+    }
+
+    /// Returns current buffer scale.
+    pub fn scale(&self) -> i32 {
+        self.scale
+    }
+
+    /// Returns physical dimensions (logical * scale).
+    pub fn physical_dimensions(&self) -> (u32, u32) {
+        (
+            self.width.saturating_mul(self.scale as u32),
+            self.height.saturating_mul(self.scale as u32),
+        )
     }
 
     /// Current surface width in pixels.
@@ -95,11 +122,16 @@ impl SurfaceState {
     /// Ensures a shared memory pool of the appropriate size exists.
     pub fn ensure_pool(&mut self, shm: &Shm, buffer_count: usize) -> Result<&mut SlotPool> {
         if self.pool.is_none() {
-            let buffer_size = (self.width * self.height * 4) as usize;
+            let (phys_w, phys_h) = self.physical_dimensions();
+            let buffer_size = (phys_w * phys_h * 4) as usize;
             let pool_size = buffer_size * buffer_count;
             info!(
-                "Creating new SlotPool ({}x{}, {} bytes, {} buffers)",
-                self.width, self.height, pool_size, buffer_count
+                "Creating new SlotPool ({}x{} @ scale {}, {} bytes, {} buffers)",
+                phys_w,
+                phys_h,
+                self.scale,
+                pool_size,
+                buffer_count
             );
             let pool = SlotPool::new(pool_size, shm).context("Failed to create slot pool")?;
             self.pool = Some(pool);
