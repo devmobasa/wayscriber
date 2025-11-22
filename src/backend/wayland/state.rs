@@ -288,6 +288,11 @@ impl WaylandState {
         // Render click highlight overlays before UI so status/help remain legible
         self.input_state.render_click_highlights(&ctx, now);
 
+        // Render frozen badge even if status bar is hidden
+        if self.input_state.frozen_active() {
+            crate::ui::render_frozen_badge(&ctx, width, height);
+        }
+
         // Render status bar if enabled
         if self.input_state.show_status_bar {
             crate::ui::render_status_bar(
