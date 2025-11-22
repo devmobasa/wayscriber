@@ -37,6 +37,8 @@ impl LayerShellHandler for WaylandState {
 
             self.input_state
                 .update_screen_dimensions(self.surface.width(), self.surface.height());
+            self.frozen
+                .handle_resize(self.surface.width(), self.surface.height(), &mut self.input_state);
         }
 
         self.surface.set_configured(true);

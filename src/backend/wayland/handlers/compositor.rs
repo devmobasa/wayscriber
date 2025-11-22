@@ -60,6 +60,9 @@ impl CompositorHandler for WaylandState {
     ) {
         debug!("Surface entered output");
 
+        self.frozen.set_active_output(Some(output.clone()));
+        self.frozen.unfreeze(&mut self.input_state);
+
         let identity = self.output_identity_for(output);
 
         let mut load_result = None;
@@ -120,5 +123,7 @@ impl CompositorHandler for WaylandState {
         _output: &wl_output::WlOutput,
     ) {
         debug!("Surface left output");
+        self.frozen.set_active_output(None);
+        self.frozen.unfreeze(&mut self.input_state);
     }
 }

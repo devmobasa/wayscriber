@@ -109,9 +109,17 @@ pub fn render_status_bar(
         ""
     };
 
+    let frozen_badge = if input_state.frozen_active() { "[FROZEN] " } else { "" };
+
     let status_text = format!(
-        "{}[{}] [{}px] [{}] [Text {}px]{}  F10=Help",
-        mode_badge, color_name, thickness as i32, tool_name, font_size as i32, highlight_badge
+        "{}{}[{}] [{}px] [{}] [Text {}px]{}  F10=Help",
+        frozen_badge,
+        mode_badge,
+        color_name,
+        thickness as i32,
+        tool_name,
+        font_size as i32,
+        highlight_badge
     );
 
     // Set font
@@ -234,6 +242,10 @@ pub fn render_help_overlay(
                 Row {
                     key: "Ctrl+Shift+T",
                     action: "Return to Transparent",
+                },
+                Row {
+                    key: "Ctrl+Shift+F",
+                    action: "Toggle Frozen Mode",
                 },
             ],
             badges: Vec::new(),
