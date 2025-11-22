@@ -142,6 +142,10 @@ impl FrozenState {
         self.capture.is_some() || self.portal_in_progress
     }
 
+    pub fn portal_in_progress(&self) -> bool {
+        self.portal_in_progress
+    }
+
     /// Drop frozen image if the surface size no longer matches.
     pub fn handle_resize(&mut self, phys_width: u32, phys_height: u32, input_state: &mut InputState) {
         if let Some(img) = &self.image {
@@ -411,6 +415,13 @@ impl FrozenState {
 
         let geo = self.active_geometry.clone();
         let target_output_id = self.active_output_id;
+        // Notify user that portal fallback is in progress
+        crate::notification::send_notification_async(
+            tokio_handle,
+            "Freezing screen".to_string(),
+            "Taking screenshot via portal…".to_string(),
+            Some("camera-photo".to_string()),
+        );
         tokio_handle.spawn(async move {
             let result = async {
                 let bytes = capture_via_portal_bytes(CaptureType::FullScreen)
