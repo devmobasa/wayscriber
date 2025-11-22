@@ -428,17 +428,21 @@ impl InputState {
             }
             Action::ToggleClickHighlight => {
                 let enabled = self.toggle_click_highlight();
-                info!(
-                    "Click highlight {}",
-                    if enabled { "enabled" } else { "disabled" }
-                );
+                let message = if enabled {
+                    "Click highlight enabled"
+                } else {
+                    "Click highlight disabled"
+                };
+                info!("{}", message);
             }
             Action::ToggleHighlightTool => {
                 let enabled = self.toggle_highlight_tool();
-                info!(
-                    "Highlight tool {}",
-                    if enabled { "selected" } else { "released" }
-                );
+                let message = if enabled {
+                    "Highlight pen enabled"
+                } else {
+                    "Highlight pen disabled"
+                };
+                info!("{}", message);
             }
             Action::OpenContextMenu => {
                 self.toggle_context_menu_via_keyboard();
