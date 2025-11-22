@@ -64,6 +64,17 @@ impl CompositorHandler for WaylandState {
         if let Some(info) = self.output_state.info(output) {
             let scale = info.scale_factor.max(1);
             self.surface.set_scale(scale);
+            let (logical_w, logical_h) = info
+                .logical_size
+                .unwrap_or((self.surface.width() as i32, self.surface.height() as i32));
+            let (logical_x, logical_y) = info.logical_position.unwrap_or((0, 0));
+            self.frozen.set_active_geometry(Some(crate::backend::wayland::frozen_geometry::OutputGeometry {
+                logical_x,
+                logical_y,
+                logical_width: logical_w.max(0) as u32,
+                logical_height: logical_h.max(0) as u32,
+                scale,
+            }));
         }
         self.frozen.unfreeze(&mut self.input_state);
 

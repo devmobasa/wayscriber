@@ -14,6 +14,11 @@ use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::{wl_output, wl_shm}
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{Event as FrameEvent, Flags, ZwlrScreencopyFrameV1};
 
+use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::capture::{
+    sources::{frozen::decode_image_to_argb, portal::capture_via_portal_bytes},
+    types::CaptureType,
+};
 use crate::input::InputState;
 
 use super::surface::SurfaceState;
@@ -78,6 +83,7 @@ impl CaptureSession {
 pub struct FrozenState {
     manager: Option<ZwlrScreencopyManagerV1>,
     active_output: Option<wl_output::WlOutput>,
+    active_geometry: Option<OutputGeometry>,
     capture: Option<CaptureSession>,
     image: Option<FrozenImage>,
     overlay_hidden: bool,
@@ -88,10 +94,15 @@ impl FrozenState {
         Self {
             manager,
             active_output: None,
+            active_geometry: None,
             capture: None,
             image: None,
             overlay_hidden: false,
         }
+    }
+
+    pub fn manager_available(&self) -> bool {
+        self.manager.is_some()
     }
 
     pub fn set_manager(&mut self, manager: Option<ZwlrScreencopyManagerV1>) {
@@ -100,6 +111,10 @@ impl FrozenState {
 
     pub fn set_active_output(&mut self, output: Option<wl_output::WlOutput>) {
         self.active_output = output;
+    }
+
+    pub fn set_active_geometry(&mut self, geometry: Option<OutputGeometry>) {
+        self.active_geometry = geometry;
     }
 
     pub fn image(&self) -> Option<&FrozenImage> {
@@ -143,6 +158,9 @@ impl FrozenState {
         shm: &Shm,
         surface: &mut SurfaceState,
         qh: &QueueHandle<State>,
+        use_fallback: bool,
+        input_state: &mut InputState,
+        tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()>
     where
         State: Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
@@ -152,12 +170,15 @@ impl FrozenState {
             return Ok(());
         }
 
-        let manager = match self.manager.clone() {
-            Some(mgr) => mgr,
-            None => {
-                anyhow::bail!("zwlr_screencopy_manager_v1 not available");
-            }
-        };
+        if use_fallback || self.manager.is_none() {
+            info!("Screencopy unavailable; using fallback portal capture for frozen mode");
+            return self.capture_via_portal(surface, input_state, tokio_handle);
+        }
+
+        let manager = self
+            .manager
+            .clone()
+            .context("zwlr_screencopy_manager_v1 not available")?;
 
         let output = match self.active_output.clone() {
             Some(out) => out,
@@ -361,6 +382,55 @@ impl FrozenState {
         input_state.set_frozen_active(false);
     }
 
+    fn capture_via_portal(
+        &mut self,
+        surface: &mut SurfaceState,
+        input_state: &mut InputState,
+        tokio_handle: &tokio::runtime::Handle,
+    ) -> Result<()> {
+        self.hide_overlay(surface);
+
+        let bytes = tokio_handle
+            .block_on(async { capture_via_portal_bytes(CaptureType::FullScreen).await })
+            .map_err(|e| anyhow::anyhow!("Portal capture failed: {}", e))?;
+
+        let (mut data, mut width, mut height) =
+            decode_image_to_argb(&bytes).map_err(|e| anyhow::anyhow!("Decode failed: {}", e))?;
+
+        if let Some(geo) = &self.active_geometry {
+            let (phys_w, phys_h) = geo.physical_size();
+            let (origin_x, origin_y) = geo.physical_origin();
+            if origin_x >= 0 && origin_y >= 0 && phys_w > 0 && phys_h > 0 {
+                if let Some(cropped) = crop_argb(
+                    &data,
+                    width,
+                    height,
+                    origin_x as u32,
+                    origin_y as u32,
+                    phys_w,
+                    phys_h,
+                ) {
+                    data = cropped;
+                    width = phys_w;
+                    height = phys_h;
+                }
+            }
+        }
+
+        self.image = Some(FrozenImage {
+            width,
+            height,
+            stride: (width * 4) as i32,
+            data,
+        });
+
+        self.restore_overlay(surface);
+        input_state.set_frozen_active(true);
+        input_state.dirty_tracker.mark_full();
+        input_state.needs_redraw = true;
+        Ok(())
+    }
+
     fn hide_overlay(&mut self, surface: &mut SurfaceState) {
         if self.overlay_hidden {
             return;
@@ -390,4 +460,37 @@ impl FrozenState {
 
         self.overlay_hidden = false;
     }
+}
+
+fn crop_argb(
+    data: &[u8],
+    width: u32,
+    height: u32,
+    x: u32,
+    y: u32,
+    crop_w: u32,
+    crop_h: u32,
+) -> Option<Vec<u8>> {
+    if x >= width || y >= height {
+        return None;
+    }
+    let max_w = width.saturating_sub(x);
+    let max_h = height.saturating_sub(y);
+    let cw = crop_w.min(max_w);
+    let ch = crop_h.min(max_h);
+
+    let mut out = vec![0u8; (cw * ch * 4) as usize];
+    let src_stride = (width * 4) as usize;
+    let dst_stride = (cw * 4) as usize;
+    for row in 0..ch as usize {
+        let src_offset = ((y as usize + row) * src_stride) + (x as usize * 4);
+        let dst_offset = row * dst_stride;
+        let end = src_offset + dst_stride;
+        if end > data.len() || dst_offset + dst_stride > out.len() {
+            return None;
+        }
+        out[dst_offset..dst_offset + dst_stride]
+            .copy_from_slice(&data[src_offset..src_offset + dst_stride]);
+    }
+    Some(out)
 }

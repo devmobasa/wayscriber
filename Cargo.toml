@@ -51,6 +51,7 @@ chrono = "0.4"
 futures = "0.3"
 url = "2.5"
 serde_json = "1.0"
+png = "0.17"
 
 [dev-dependencies]
 tempfile = "3.10"
