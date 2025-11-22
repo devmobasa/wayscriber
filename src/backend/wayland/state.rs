@@ -193,11 +193,29 @@ impl WaylandState {
                 image.stride,
             )
             .context("Failed to create frozen image surface")?;
+
+            let scale_x = if image.width > 0 {
+                width as f64 / image.width as f64
+            } else {
+                1.0
+            };
+            let scale_y = if image.height > 0 {
+                height as f64 / image.height as f64
+            } else {
+                1.0
+            };
+
+            let _ = ctx.save();
+            if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
+                ctx.scale(scale_x, scale_y);
+            }
+
             if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
                 warn!("Failed to set frozen background surface: {}", err);
             } else if let Err(err) = ctx.paint() {
                 warn!("Failed to paint frozen background: {}", err);
             }
+            let _ = ctx.restore();
         } else {
             // Render board background if in board mode (whiteboard/blackboard)
             crate::draw::render_board_background(
