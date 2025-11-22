@@ -197,6 +197,37 @@ pub fn render_status_bar(
     let _ = ctx.show_text(&status_text);
 }
 
+/// Render a small badge indicating frozen mode (visible even when status bar is hidden).
+pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
+    let label = "FROZEN";
+    let padding = 12.0;
+    let radius = 8.0;
+    let font_size = 16.0;
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(font_size);
+
+    let extents = ctx
+        .text_extents(label)
+        .unwrap_or_else(|_| fallback_text_extents(font_size, label));
+
+    let width = extents.width() + padding * 1.4;
+    let height = extents.height() + padding;
+
+    let x = screen_width as f64 - width - padding;
+    let y = padding + height;
+
+    // Background with a vivid color to stand out
+    ctx.set_source_rgba(0.98, 0.55, 0.26, 0.92); // orange-ish
+    draw_rounded_rect(ctx, x, y - height, width, height, radius);
+    let _ = ctx.fill();
+
+    // Text
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
+    let _ = ctx.show_text(label);
+}
+
 /// Render help overlay showing all keybindings
 pub fn render_help_overlay(
     ctx: &cairo::Context,
