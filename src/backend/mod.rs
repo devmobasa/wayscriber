@@ -9,8 +9,8 @@ pub mod wayland;
 ///
 /// # Arguments
 /// * `initial_mode` - Optional board mode to start in (overrides config default)
-pub fn run_wayland(initial_mode: Option<String>) -> Result<()> {
-    let mut backend = wayland::WaylandBackend::new(initial_mode)?;
+pub fn run_wayland(initial_mode: Option<String>, freeze_on_start: bool) -> Result<()> {
+    let mut backend = wayland::WaylandBackend::new(initial_mode, freeze_on_start)?;
     backend.init()?;
     backend.show()?; // show() calls run() internally
     backend.hide()?;

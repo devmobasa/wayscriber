@@ -84,6 +84,13 @@ impl CompositorHandler for WaylandState {
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
 
+        // If freeze-on-start was requested, trigger it once the surface is configured and active.
+        if self.pending_freeze_on_start {
+            info!("Applying freeze-on-start after initial configure");
+            self.pending_freeze_on_start = false;
+            self.input_state.request_frozen_toggle();
+        }
+
         let identity = self.output_identity_for(output);
 
         let mut load_result = None;
