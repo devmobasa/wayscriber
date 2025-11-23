@@ -233,6 +233,7 @@ pub fn render_help_overlay(
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
+    frozen_enabled: bool,
 ) {
     struct Row {
         key: &'static str,
@@ -257,27 +258,32 @@ pub fn render_help_overlay(
         key_column_width: f64,
     }
 
+    let mut board_rows = vec![
+        Row {
+            key: "Ctrl+W",
+            action: "Toggle Whiteboard",
+        },
+        Row {
+            key: "Ctrl+B",
+            action: "Toggle Blackboard",
+        },
+        Row {
+            key: "Ctrl+Shift+T",
+            action: "Return to Transparent",
+        },
+    ];
+
+    if frozen_enabled {
+        board_rows.push(Row {
+            key: "Ctrl+Shift+F",
+            action: "Freeze/unfreeze active monitor",
+        });
+    }
+
     let sections = vec![
         Section {
             title: "Board Modes",
-            rows: vec![
-                Row {
-                    key: "Ctrl+W",
-                    action: "Toggle Whiteboard",
-                },
-                Row {
-                    key: "Ctrl+B",
-                    action: "Toggle Blackboard",
-                },
-                Row {
-                    key: "Ctrl+Shift+T",
-                    action: "Return to Transparent",
-                },
-                Row {
-                    key: "Ctrl+Shift+F",
-                    action: "Freeze/unfreeze active monitor",
-                },
-            ],
+            rows: board_rows,
             badges: Vec::new(),
         },
         Section {
