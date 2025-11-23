@@ -48,7 +48,7 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
   - Fedora 43 GNOME (xdg fallback)
   - Debian 13.2 KDE (Plasma, layer-shell)
   - Debian 13.2 GNOME (xdg fallback)
-  - CachyOS (KDE Plasma, layer-shell)
+  - CachyOS 2025-August KDE (Plasma, layer-shell)
   - Hyprland on Arch (layer-shell)
   - Niri on Arch (layer-shell)
 - Complements tools like [Satty](https://github.com/gabm/Satty): Satty excels at capture → annotate → save workflows, while wayscriber stays resident as an always-available drawing layer with instant mode switching.
@@ -56,13 +56,23 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 ## Quick Start
 
 **1. Install wayscriber**
-1. Arch Linux (AUR):  (build from source)
-	- `yay -S wayscriber` 
-	- `paru -S wayscriber` 
-2. Arch Linux (AUR, prebuilt): 
-	- `yay -S wayscriber-bin` 
-	- `paru -S wayscriber-bin`.
-3. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
+1. Debian/Ubuntu (latest release):
+   - Download & install:  
+     ```bash
+     wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
+     sudo apt install ./wayscriber-amd64.deb
+     ```
+     _Note: apt may print “Download is performed unsandboxed as root …” when installing a local file; this is expected._
+2. Fedora/RHEL (latest release):
+   - Download & install:  
+     ```bash
+     wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
+     sudo rpm -Uvh wayscriber-x86_64.rpm
+     ```
+3. Arch Linux (AUR):
+	- `yay -S wayscriber` (source) or `paru -S wayscriber`
+	- `yay -S wayscriber-bin` (prebuilt) or `paru -S wayscriber-bin`
+4. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
 
 **2. Choose how to run it:**
 
@@ -142,6 +152,21 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 ## Installation
 
 See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
+
+### GitHub release packages (Debian/Ubuntu & Fedora/RHEL)
+
+Use the stable filenames from the latest release:
+
+```bash
+# Debian/Ubuntu
+wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
+sudo apt install ./wayscriber-amd64.deb
+# Note: apt may print “Download is performed unsandboxed as root …” when installing a local file; this is expected.
+
+# Fedora/RHEL
+wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
+sudo rpm -Uvh wayscriber-x86_64.rpm
+```
 
 ### Arch Linux (AUR)
 
