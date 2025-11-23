@@ -66,6 +66,7 @@ pub(super) struct WaylandState {
     // Capture manager
     pub(super) capture: CaptureState,
     pub(super) frozen: FrozenState,
+    pub(super) frozen_enabled: bool,
 
     // Session persistence
     pub(super) session: SessionState,
@@ -95,6 +96,7 @@ impl WaylandState {
         capture_manager: CaptureManager,
         session_options: Option<SessionOptions>,
         tokio_handle: tokio::runtime::Handle,
+        frozen_enabled: bool,
         preferred_output_identity: Option<String>,
         xdg_fullscreen: bool,
         pending_freeze_on_start: bool,
@@ -122,6 +124,7 @@ impl WaylandState {
             last_activation_serial: None,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
+            frozen_enabled,
             session: SessionState::new(session_options),
             tokio_handle,
             pending_freeze_on_start,
