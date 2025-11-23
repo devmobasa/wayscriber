@@ -7,7 +7,7 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
-    seat::SeatState,
+    seat::{SeatState, pointer::{PointerData, ThemedPointer}},
     shell::{wlr_layer::LayerShell, xdg::XdgShell},
     shm::Shm,
 };
@@ -68,6 +68,9 @@ pub(super) struct WaylandState {
     pub(super) frozen: FrozenState,
     pub(super) frozen_enabled: bool,
 
+    // Pointer cursor
+    pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
+
     // Session persistence
     pub(super) session: SessionState,
 
@@ -125,6 +128,7 @@ impl WaylandState {
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
             frozen_enabled,
+            themed_pointer: None,
             session: SessionState::new(session_options),
             tokio_handle,
             pending_freeze_on_start,
