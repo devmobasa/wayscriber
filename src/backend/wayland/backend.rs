@@ -262,6 +262,12 @@ impl WaylandBackend {
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
 
+        // Initialize toolbar visibility from pinned config
+        input_state.init_toolbar_from_config(
+            config.ui.toolbar.top_pinned,
+            config.ui.toolbar.side_pinned,
+        );
+
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
         if config.board.enabled {
             let initial_mode_str = self

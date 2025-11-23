@@ -18,7 +18,7 @@ pub use migration::{MigrationActions, MigrationReport, migrate_config};
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
     PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
-    UiConfig,
+    ToolbarConfig, UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)

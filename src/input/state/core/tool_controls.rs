@@ -80,20 +80,45 @@ impl InputState {
         true
     }
 
-    /// Sets toolbar visibility flag. Returns true if toggled.
+    /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.
     pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
-        if self.toolbar_visible == visible {
+        let any_change = self.toolbar_visible != visible
+            || self.toolbar_top_visible != visible
+            || self.toolbar_side_visible != visible;
+
+        if !any_change {
             return false;
         }
 
         self.toolbar_visible = visible;
+        self.toolbar_top_visible = visible;
+        self.toolbar_side_visible = visible;
         self.needs_redraw = true;
         true
     }
 
-    /// Returns whether the toolbar is marked visible.
+    /// Returns whether any toolbar is marked visible.
     pub fn toolbar_visible(&self) -> bool {
-        self.toolbar_visible
+        self.toolbar_visible || self.toolbar_top_visible || self.toolbar_side_visible
+    }
+
+    /// Returns whether the top toolbar is visible.
+    pub fn toolbar_top_visible(&self) -> bool {
+        self.toolbar_top_visible || self.toolbar_visible
+    }
+
+    /// Returns whether the side toolbar is visible.
+    pub fn toolbar_side_visible(&self) -> bool {
+        self.toolbar_side_visible || self.toolbar_visible
+    }
+
+    /// Initialize toolbar visibility from config (called at startup).
+    pub fn init_toolbar_from_config(&mut self, top_pinned: bool, side_pinned: bool) {
+        self.toolbar_top_pinned = top_pinned;
+        self.toolbar_side_pinned = side_pinned;
+        self.toolbar_top_visible = top_pinned;
+        self.toolbar_side_visible = side_pinned;
+        self.toolbar_visible = top_pinned && side_pinned;
     }
 
     /// Wrapper for undo that preserves existing action plumbing.
