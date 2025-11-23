@@ -110,6 +110,7 @@ impl InputState {
                 true
             }
             ToolbarEvent::EnterTextMode => {
+                let _ = self.set_tool_override(None);
                 self.toolbar_enter_text_mode();
                 true
             }
