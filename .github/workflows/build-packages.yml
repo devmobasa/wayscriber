@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        format: [deb, rpm]
+        format: [deb, rpm, tar]
     permissions:
       contents: read
     steps:
@@ -74,20 +74,47 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           mkdir -p dist
-          nfpm pkg --packager ${{ matrix.format }} --config packaging/package.yaml --target dist/
-          if [ "${{ matrix.format }}" = "deb" ]; then
-            mv dist/*.deb dist/wayscriber-amd64.deb
-            # To restore versioned + stable artifacts, switch back to copying instead of moving.
+          if [ "${{ matrix.format }}" = "tar" ]; then
+            DIST_ROOT=dist
+            TAR_DIR="${DIST_ROOT}/wayscriber-v${VERSION}-linux-x86_64"
+            TAR_PATH="${DIST_ROOT}/wayscriber-v${VERSION}-linux-x86_64.tar.gz"
+            rm -rf "$TAR_DIR" "$TAR_PATH"
+            mkdir -p "$TAR_DIR/usr/bin" \
+                     "$TAR_DIR/usr/lib/systemd/user" \
+                     "$TAR_DIR/usr/share/doc/wayscriber"
+            cp target/release/wayscriber "$TAR_DIR/usr/bin/"
+            cp target/release/wayscriber-configurator "$TAR_DIR/usr/bin/"
+            cp packaging/wayscriber.service "$TAR_DIR/usr/lib/systemd/user/"
+            cp README.md config.example.toml "$TAR_DIR/usr/share/doc/wayscriber/"
+            [ -f LICENSE ] && cp LICENSE "$TAR_DIR/usr/share/doc/wayscriber/"
+            tar -C "$DIST_ROOT" -czf "$TAR_PATH" "$(basename "$TAR_DIR")"
           else
-            mv dist/*.rpm dist/wayscriber-x86_64.rpm
-            # To restore versioned + stable artifacts, switch back to copying instead of moving.
+            nfpm pkg --packager ${{ matrix.format }} --config packaging/package.yaml --target dist/
+            if [ "${{ matrix.format }}" = "deb" ]; then
+              mv dist/*.deb dist/wayscriber-amd64.deb
+              # To restore versioned + stable artifacts, switch back to copying instead of moving.
+            else
+              mv dist/*.rpm dist/wayscriber-x86_64.rpm
+              # To restore versioned + stable artifacts, switch back to copying instead of moving.
+            fi
+          fi
+
+      - name: Select artifact path
+        id: artifact
+        run: |
+          if [ "${{ matrix.format }}" = "tar" ]; then
+            echo "path=dist/*.tar.gz" >> "$GITHUB_OUTPUT"
+          elif [ "${{ matrix.format }}" = "deb" ]; then
+            echo "path=dist/*.deb" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=dist/*.rpm" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-${{ matrix.format }}
-          path: dist/*.${{ matrix.format }}
+          path: ${{ steps.artifact.outputs.path }}
 
   release:
     needs: package
