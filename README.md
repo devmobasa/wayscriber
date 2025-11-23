@@ -45,8 +45,10 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 - Real-hardware tests where it works:
   - Ubuntu 25.10 GNOME (xdg fallback)
   - Fedora 43 KDE (Plasma, layer-shell)
-  - Debian 13.2 KDE (Plasma, layer-shell)
   - Fedora 43 GNOME (xdg fallback)
+  - Debian 13.2 KDE (Plasma, layer-shell)
+  - Debian 13.2 GNOME (xdg fallback)
+  - CachyOS (KDE Plasma, layer-shell)
   - Hyprland on Arch (layer-shell)
   - Niri on Arch (layer-shell)
 - Complements tools like [Satty](https://github.com/gabm/Satty): Satty excels at capture → annotate → save workflows, while wayscriber stays resident as an always-available drawing layer with instant mode switching.
