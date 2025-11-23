@@ -2,7 +2,7 @@
 // wires them to `WaylandState` via the delegate macros.
 use smithay_client_toolkit::{
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat, delegate_shm,
+    delegate_registry, delegate_seat, delegate_shm, delegate_xdg_shell, delegate_xdg_window,
 };
 
 use super::state::WaylandState;
@@ -15,7 +15,10 @@ delegate_seat!(WaylandState);
 delegate_keyboard!(WaylandState);
 delegate_pointer!(WaylandState);
 delegate_registry!(WaylandState);
+delegate_xdg_shell!(WaylandState);
+delegate_xdg_window!(WaylandState);
 
+mod activation;
 mod buffer;
 mod compositor;
 mod keyboard;
@@ -26,3 +29,4 @@ mod registry;
 mod screencopy;
 mod seat;
 mod shm;
+mod xdg;

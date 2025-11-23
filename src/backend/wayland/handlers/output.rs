@@ -32,14 +32,12 @@ impl OutputHandler for WaylandState {
                 return;
             }
 
-            if let Some(geo) =
-                crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
-                    info.logical_position,
-                    info.logical_size,
-                    (self.surface.width(), self.surface.height()),
-                    info.scale_factor.max(1),
-                )
-            {
+            if let Some(geo) = crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
+                info.logical_position,
+                info.logical_size,
+                (self.surface.width(), self.surface.height()),
+                info.scale_factor.max(1),
+            ) {
                 self.frozen.set_active_geometry(Some(geo));
                 self.frozen
                     .set_active_output(Some(_output.clone()), Some(info.id));

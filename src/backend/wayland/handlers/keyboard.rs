@@ -1,5 +1,5 @@
 // Bridges Wayland key events into our `InputState`, including capture-action plumbing.
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::seat::keyboard::{
     KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers,
 };
@@ -8,7 +8,7 @@ use wayland_client::{
     protocol::{wl_keyboard, wl_surface},
 };
 
-use crate::input::Key;
+use crate::{input::Key, notification};
 
 use super::super::state::WaylandState;
 
@@ -16,14 +16,17 @@ impl KeyboardHandler for WaylandState {
     fn enter(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _surface: &wl_surface::WlSurface,
-        _serial: u32,
+        serial: u32,
         _raw: &[u32],
         _keysyms: &[Keysym],
     ) {
         debug!("Keyboard focus entered");
+        self.has_keyboard_focus = true;
+        self.last_activation_serial = Some(serial);
+        self.maybe_retry_activation(qh);
     }
 
     fn leave(
@@ -35,6 +38,17 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
     ) {
         debug!("Keyboard focus left");
+        self.has_keyboard_focus = false;
+        if self.surface.is_xdg_window() {
+            warn!("Keyboard focus lost in xdg fallback; exiting overlay");
+            notification::send_notification_async(
+                &self.tokio_handle,
+                "Wayscriber lost focus".to_string(),
+                "GNOME could not keep the overlay focused; closing fallback window.".to_string(),
+                Some("dialog-warning".to_string()),
+            );
+            self.input_state.should_exit = true;
+        }
     }
 
     fn press_key(

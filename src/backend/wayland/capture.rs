@@ -4,7 +4,7 @@
 //! main Wayland loop only coordinates events instead of tracking flags.
 
 use crate::capture::CaptureManager;
-use log::{info, warn};
+use log::{debug, info, warn};
 use smithay_client_toolkit::shell::WaylandSurface;
 
 use super::surface::SurfaceState;
@@ -46,6 +46,11 @@ impl CaptureState {
         self.in_progress = false;
     }
 
+    /// Returns whether the overlay is currently hidden.
+    pub fn is_overlay_hidden(&self) -> bool {
+        self.overlay_hidden
+    }
+
     /// Hides the overlay before capture.
     ///
     /// Returns `true` if the overlay was hidden, `false` if it was already hidden.
@@ -56,14 +61,25 @@ impl CaptureState {
         }
 
         info!("Hiding overlay for screenshot capture");
+        let mut hidden = false;
         if let Some(layer_surface) = surface.layer_surface_mut() {
             layer_surface.set_size(0, 0);
             let wl_surface = layer_surface.wl_surface();
             wl_surface.commit();
+            hidden = true;
+        } else if surface.is_xdg_window() {
+            if let Some(wl_surface) = surface.wl_surface() {
+                // Detach the buffer to unmap the xdg window during capture.
+                wl_surface.attach(None, 0, 0);
+                wl_surface.commit();
+                hidden = true;
+            } else {
+                warn!("xdg-shell surface missing wl_surface; cannot hide overlay");
+            }
         }
 
-        self.overlay_hidden = true;
-        true
+        self.overlay_hidden = hidden;
+        hidden
     }
 
     /// Restores the overlay after capture.
@@ -83,6 +99,8 @@ impl CaptureState {
             layer_surface.set_size(width, height);
             let wl_surface = layer_surface.wl_surface();
             wl_surface.commit();
+        } else if surface.is_xdg_window() {
+            debug!("xdg-shell overlay will be restored on next render");
         }
 
         self.overlay_hidden = false;

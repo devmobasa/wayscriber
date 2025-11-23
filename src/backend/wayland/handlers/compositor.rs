@@ -60,6 +60,8 @@ impl CompositorHandler for WaylandState {
     ) {
         debug!("Surface entered output");
 
+        self.surface.set_current_output(output.clone());
+
         if let Some(info) = self.output_state.info(output) {
             let scale = info.scale_factor.max(1);
             self.surface.set_scale(scale);
@@ -67,13 +69,15 @@ impl CompositorHandler for WaylandState {
                 .logical_size
                 .unwrap_or((self.surface.width() as i32, self.surface.height() as i32));
             let (logical_x, logical_y) = info.logical_position.unwrap_or((0, 0));
-            self.frozen.set_active_geometry(Some(crate::backend::wayland::frozen_geometry::OutputGeometry {
-                logical_x,
-                logical_y,
-                logical_width: logical_w.max(0) as u32,
-                logical_height: logical_h.max(0) as u32,
-                scale,
-            }));
+            self.frozen.set_active_geometry(Some(
+                crate::backend::wayland::frozen_geometry::OutputGeometry {
+                    logical_x,
+                    logical_y,
+                    logical_width: logical_w.max(0) as u32,
+                    logical_height: logical_h.max(0) as u32,
+                    scale,
+                },
+            ));
             self.frozen
                 .set_active_output(Some(output.clone()), Some(info.id));
         }
@@ -148,9 +152,10 @@ impl CompositorHandler for WaylandState {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
-        _output: &wl_output::WlOutput,
+        output: &wl_output::WlOutput,
     ) {
         debug!("Surface left output");
+        self.surface.clear_output(output);
         self.frozen.set_active_output(None, None);
         self.frozen.set_active_geometry(None);
         self.frozen.unfreeze(&mut self.input_state);
