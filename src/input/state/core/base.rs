@@ -92,6 +92,8 @@ pub struct InputState {
     pub toolbar_top_visible: bool,
     /// Whether the side toolbar panel is visible
     pub toolbar_side_visible: bool,
+    /// Whether fill is enabled for fill-capable shapes (rect, ellipse)
+    pub fill_enabled: bool,
     /// Whether the top toolbar is pinned (saved to config, opens at startup)
     pub toolbar_top_pinned: bool,
     /// Whether the side toolbar is pinned (saved to config, opens at startup)
@@ -200,6 +202,7 @@ impl InputState {
             toolbar_visible: false,
             toolbar_top_visible: false,
             toolbar_side_visible: false,
+            fill_enabled: false,
             toolbar_top_pinned: false,
             toolbar_side_pinned: false,
             screen_width: 0,
