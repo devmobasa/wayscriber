@@ -149,6 +149,16 @@ pub struct UiConfig {
     #[serde(default)]
     pub help_overlay_style: HelpOverlayStyle,
 
+    /// Preferred output name for the xdg-shell fallback overlay (GNOME).
+    /// Falls back to last entered output or first available.
+    #[serde(default)]
+    pub preferred_output: Option<String>,
+
+    /// Use fullscreen for the xdg-shell fallback (GNOME). Disable if fullscreen
+    /// produces an opaque background; maximized is used when false.
+    #[serde(default = "default_xdg_fullscreen")]
+    pub xdg_fullscreen: bool,
+
     /// Click highlight visual indicator settings
     #[serde(default)]
     pub click_highlight: ClickHighlightConfig,
@@ -166,6 +176,8 @@ impl Default for UiConfig {
             status_bar_position: default_status_position(),
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
+            preferred_output: None,
+            xdg_fullscreen: default_xdg_fullscreen(),
             click_highlight: ClickHighlightConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
         }
@@ -380,6 +392,10 @@ fn default_show_status() -> bool {
 }
 
 fn default_show_frozen_badge() -> bool {
+    false
+}
+
+fn default_xdg_fullscreen() -> bool {
     false
 }
 

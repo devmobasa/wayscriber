@@ -3,18 +3,19 @@
 use anyhow::{Context, Result};
 use log::{debug, warn};
 use smithay_client_toolkit::{
+    activation::{ActivationHandler, ActivationState, RequestData},
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
     seat::SeatState,
-    shell::{WaylandSurface, wlr_layer::LayerShell},
+    shell::{wlr_layer::LayerShell, xdg::XdgShell},
     shm::Shm,
 };
 use std::collections::HashSet;
 use std::time::Instant;
 use wayland_client::{
     QueueHandle,
-    protocol::{wl_output, wl_shm},
+    protocol::{wl_output, wl_seat, wl_shm},
 };
 
 use crate::{
@@ -30,10 +31,7 @@ use crate::{
 };
 
 use super::{
-    capture::CaptureState,
-    frozen::FrozenState,
-    session::SessionState,
-    surface::SurfaceState,
+    capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
 };
 
 /// Internal Wayland state shared across modules.
@@ -41,7 +39,9 @@ pub(super) struct WaylandState {
     // Wayland protocol objects
     pub(super) registry_state: RegistryState,
     pub(super) compositor_state: CompositorState,
-    pub(super) layer_shell: LayerShell,
+    pub(super) layer_shell: Option<LayerShell>,
+    pub(super) xdg_shell: Option<XdgShell>,
+    pub(super) activation: Option<ActivationState>,
     pub(super) shm: Shm,
     pub(super) output_state: OutputState,
     pub(super) seat_state: SeatState,
@@ -51,11 +51,17 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
+    pub(super) preferred_output_identity: Option<String>,
+    pub(super) xdg_fullscreen: bool,
 
     // Input state
     pub(super) input_state: InputState,
     pub(super) current_mouse_x: i32,
     pub(super) current_mouse_y: i32,
+    pub(super) has_keyboard_focus: bool,
+    pub(super) has_pointer_focus: bool,
+    pub(super) current_seat: Option<wl_seat::WlSeat>,
+    pub(super) last_activation_serial: Option<u32>,
 
     // Capture manager
     pub(super) capture: CaptureState,
@@ -69,6 +75,8 @@ pub(super) struct WaylandState {
 
     // Pending flags
     pub(super) pending_freeze_on_start: bool,
+    // Activation token for xdg-shell fallback
+    pending_activation_token: Option<String>,
 }
 
 impl WaylandState {
@@ -76,7 +84,9 @@ impl WaylandState {
     pub(super) fn new(
         registry_state: RegistryState,
         compositor_state: CompositorState,
-        layer_shell: LayerShell,
+        layer_shell: Option<LayerShell>,
+        xdg_shell: Option<XdgShell>,
+        activation: Option<ActivationState>,
         shm: Shm,
         output_state: OutputState,
         seat_state: SeatState,
@@ -85,6 +95,8 @@ impl WaylandState {
         capture_manager: CaptureManager,
         session_options: Option<SessionOptions>,
         tokio_handle: tokio::runtime::Handle,
+        preferred_output_identity: Option<String>,
+        xdg_fullscreen: bool,
         pending_freeze_on_start: bool,
         screencopy_manager: Option<wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
     ) -> Self {
@@ -92,19 +104,28 @@ impl WaylandState {
             registry_state,
             compositor_state,
             layer_shell,
+            xdg_shell,
+            activation,
             shm,
             output_state,
             seat_state,
             surface: SurfaceState::new(),
             config,
+            preferred_output_identity,
+            xdg_fullscreen,
             input_state,
             current_mouse_x: 0,
             current_mouse_y: 0,
+            has_keyboard_focus: false,
+            has_pointer_focus: false,
+            current_seat: None,
+            last_activation_serial: None,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
             session: SessionState::new(session_options),
             tokio_handle,
             pending_freeze_on_start,
+            pending_activation_token: None,
         }
     }
 
@@ -114,6 +135,84 @@ impl WaylandState {
 
     pub(super) fn session_options_mut(&mut self) -> Option<&mut SessionOptions> {
         self.session.options_mut()
+    }
+
+    pub(super) fn preferred_fullscreen_output(&self) -> Option<wl_output::WlOutput> {
+        if let Some(ref preferred) = self.preferred_output_identity {
+            if let Some(output) = self.output_state.outputs().find(|output| {
+                self.output_identity_for(output)
+                    .map(|id| id.eq_ignore_ascii_case(preferred))
+                    .unwrap_or(false)
+            }) {
+                return Some(output);
+            }
+        }
+
+        self.surface
+            .current_output()
+            .or_else(|| self.output_state.outputs().next())
+    }
+
+    pub(super) fn request_xdg_activation(&mut self, qh: &QueueHandle<Self>) {
+        if !self.surface.is_xdg_window() {
+            return;
+        }
+
+        let Some(activation) = self.activation.as_ref() else {
+            return;
+        };
+
+        let Some(wl_surface) = self.surface.wl_surface().cloned() else {
+            return;
+        };
+
+        if let Some(seat_serial) = self
+            .current_seat
+            .as_ref()
+            .cloned()
+            .zip(self.last_activation_serial)
+        {
+            activation.request_token::<Self>(
+                qh,
+                RequestData {
+                    app_id: Some("com.devmobasa.wayscriber".to_string()),
+                    seat_and_serial: Some(seat_serial),
+                    surface: Some(wl_surface),
+                },
+            );
+        } else {
+            // Defer until we have a keyboard enter serial.
+            self.pending_activation_token = Some(String::new()); // marker
+        }
+    }
+
+    fn activate_xdg_window_if_possible(&mut self) {
+        if !self.surface.is_xdg_window() {
+            return;
+        }
+
+        let Some(token) = self.pending_activation_token.clone() else {
+            return;
+        };
+
+        let Some(activation) = self.activation.as_ref() else {
+            return;
+        };
+
+        let Some(wl_surface) = self.surface.wl_surface().cloned() else {
+            return;
+        };
+
+        activation.activate::<WaylandState>(&wl_surface, token);
+        self.pending_activation_token = None;
+    }
+
+    pub(super) fn maybe_retry_activation(&mut self, qh: &QueueHandle<Self>) {
+        if self.pending_activation_token.is_some() && self.last_activation_serial.is_some() {
+            // Drop the placeholder and re-request with the new serial.
+            self.pending_activation_token = None;
+            self.request_xdg_activation(qh);
+        }
     }
 
     pub(super) fn output_identity_for(&self, output: &wl_output::WlOutput) -> Option<String> {
@@ -142,6 +241,12 @@ impl WaylandState {
 
     pub(super) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
         debug!("=== RENDER START ===");
+        if self.capture.is_overlay_hidden() {
+            debug!("Skipping render while overlay is hidden for capture");
+            self.input_state.needs_redraw = false;
+            return Ok(false);
+        }
+
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
         let scale = self.surface.scale().max(1);
@@ -349,9 +454,9 @@ impl WaylandState {
         debug!("Attaching buffer and committing surface");
         let wl_surface = self
             .surface
-            .layer_surface()
-            .context("Layer surface not created")?
-            .wl_surface();
+            .wl_surface()
+            .cloned()
+            .context("Surface not created")?;
         wl_surface.set_buffer_scale(scale);
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
@@ -547,6 +652,15 @@ fn scale_damage_regions(regions: Vec<Rect>, scale: i32) -> Vec<Rect> {
             Rect::new(x, y, w, h)
         })
         .collect()
+}
+
+impl ActivationHandler for WaylandState {
+    type RequestData = RequestData;
+
+    fn new_token(&mut self, token: String, _data: &Self::RequestData) {
+        self.pending_activation_token = Some(token);
+        self.activate_xdg_window_if_possible();
+    }
 }
 
 #[cfg(test)]
