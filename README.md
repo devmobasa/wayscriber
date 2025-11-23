@@ -1,7 +1,7 @@
 # wayscriber
 
-> TL;DR: wayscriber is a ZoomIt-like screen annotation tool for Wayland compositors, written in Rust.
-> Works on compositors with the wlr-layer-shell protocol (Hyprland, Sway, river, …); building from source requires Rust 1.85+.
+> TL;DR: wayscriber is a ZoomIt-like screen real-time annotation tool for Linux, written in Rust.
+> Building from source requires Rust 1.85+.
 > Quick start: [set it up in four steps](#quick-start).
 
 <details>
@@ -35,21 +35,44 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 - [Contributing & Credits](#contributing--credits)
 
 ## Why wayscriber?
-
-- Works across Wayland compositors (Sway, Wayfire, River, Hyprland, …) via wlr-layer-shell. Tested extensively on Hyprland and confirmed working on Niri; reports from other compositors welcome.
-- Built for live presentations, classroom sessions, and screenshares - toggle with a key and annotate your screen instantly without breaking flow.
+- Annotate live over any app/window on any monitor; the overlay floats above without rearranging your workspace.
+- Use shapes, arrows, and text to explain steps, give demos, or build quick guides.
+- Redact/hide parts of the screen and grab screenshots (region, active window, fullscreen) in one keypress.
+- Toggle instantly from a lightweight background daemon when you need it.
+- Persist per-monitor/per-board canvases and tool state so your setup comes back after restarts.
+- Presenter helpers: click highlights and “freeze screen” to pause what viewers see while apps keep running.
+- Works on wlr-layer-shell compositors (Plasma KDE/KWin, Hyprland, Sway, Wayfire, River, …) with an xdg fallback for GNOME.
+- Real-hardware tests where it works:
+  - Ubuntu 25.10 GNOME (xdg fallback)
+  - Fedora 43 KDE (Plasma, layer-shell)
+  - Fedora 43 GNOME (xdg fallback)
+  - Debian 13.2 KDE (Plasma, layer-shell)
+  - Debian 13.2 GNOME (xdg fallback)
+  - CachyOS 2025-August KDE (Plasma, layer-shell)
+  - Hyprland on Arch (layer-shell)
+  - Niri on Arch (layer-shell)
 - Complements tools like [Satty](https://github.com/gabm/Satty): Satty excels at capture → annotate → save workflows, while wayscriber stays resident as an always-available drawing layer with instant mode switching.
 
 ## Quick Start
 
 **1. Install wayscriber**
-1. Arch Linux (AUR):  (build from source)
-	- `yay -S wayscriber` 
-	- `paru -S wayscriber` 
-2. Arch Linux (AUR, prebuilt): 
-	- `yay -S wayscriber-bin` 
-	- `paru -S wayscriber-bin`.
-3. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
+1. Debian/Ubuntu (latest release):
+   - Download & install:  
+     ```bash
+     wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
+     sudo apt install ./wayscriber-amd64.deb
+     ```
+     _Note: apt may print “Download is performed unsandboxed as root …” when installing a local file; this is expected._
+2. Fedora/RHEL (latest release):
+   - Download & install:  
+     ```bash
+     wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
+     sudo rpm -Uvh wayscriber-x86_64.rpm
+     ```
+3. Arch Linux (AUR):
+	- `yay -S wayscriber` (source) or `paru -S wayscriber`
+	- `yay -S wayscriber-bin` (prebuilt) or `paru -S wayscriber-bin`
+4. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
 
 **2. Choose how to run it:**
 
@@ -99,6 +122,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 - **Board modes**: Whiteboard, blackboard, and transparent overlays, each with isolated frames and auto pen contrast; snap back to transparent with `Ctrl+Shift+T`.
 - **Capture shortcuts**: Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard` when available.
 - **Session persistence**: Opt-in per board/monitor storage that restores your canvas plus pen color & thickness; inspect with `wayscriber --session-info` or clear with `wayscriber --clear-session`.
+- **Freeze / pause view**: Toggle freeze to pause what viewers see while your apps keep running; hotkey `Ctrl+Shift+F` or start frozen with `wayscriber --freeze`.
 - **Workflow helpers**: Background daemon with SIGUSR1 toggle, tray icon, one-shot mode, live status bar, and in-app help overlay (`F10`).
 - **Context menus & selection**: Right-click or press `Shift+F10` for per-shape actions (delete, duplicate, layer order, lock/unlock, properties) with keyboard navigation and selection halos for clarity.
 - **Click highlights**: Presenter-style halo on mouse clicks with configurable colors, radius, and duration; follows your pen color by default, toggle the effect with `Ctrl+Shift+H` or swap to highlight-only mode with `Ctrl+Alt+H`.
@@ -130,6 +154,21 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 
 See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
 
+### GitHub release packages (Debian/Ubuntu & Fedora/RHEL)
+
+Use the stable filenames from the latest release:
+
+```bash
+# Debian/Ubuntu
+wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
+sudo apt install ./wayscriber-amd64.deb
+# Note: apt may print “Download is performed unsandboxed as root …” when installing a local file; this is expected.
+
+# Fedora/RHEL
+wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
+sudo rpm -Uvh wayscriber-x86_64.rpm
+```
+
 ### Arch Linux (AUR)
 
 ```bash
@@ -148,24 +187,19 @@ paru -S wayscriber-bin
 
 The package installs the user service at `/usr/lib/systemd/user/wayscriber.service`.
 
-> **Upgrading from the old `hyprmarker` packages?**  
-> Remove the legacy packages once and reinstall under the new name:
-> ```bash
-> sudo pacman -Rns hyprmarker hyprmarker-debug  # ignore if either package is already gone
-> yay -S wayscriber    # or yay -S wayscriber-bin
-> ```
-> After this one-time cleanup, future upgrades work exactly like any other AUR package.
 
 ### Other Distros
 
 **Install dependencies:**
 
+Ubuntu / Debian:
 ```bash
-# Ubuntu / Debian
 sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev
+```
 
-# Fedora
-sudo dnf install cairo-devel wayland-devel pango-devel
+Fedora:
+```bash
+sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel pango-devel libxkbcommon-devel cairo-gobject-devel
 ```
 
 Optional but recommended for screenshots:

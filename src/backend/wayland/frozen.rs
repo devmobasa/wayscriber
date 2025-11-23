@@ -8,12 +8,20 @@ use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
     shell::WaylandSurface,
-    shm::{Shm, slot::{Buffer, SlotPool}},
+    shm::{
+        Shm,
+        slot::{Buffer, SlotPool},
+    },
 };
 use std::sync::mpsc;
-use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::{wl_output, wl_shm}};
+use wayland_client::{
+    Dispatch, QueueHandle, WEnum,
+    protocol::{wl_output, wl_shm},
+};
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
+    Event as FrameEvent, Flags, ZwlrScreencopyFrameV1,
+};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
-use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{Event as FrameEvent, Flags, ZwlrScreencopyFrameV1};
 
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::capture::{
@@ -143,7 +151,12 @@ impl FrozenState {
     }
 
     /// Drop frozen image if the surface size no longer matches.
-    pub fn handle_resize(&mut self, phys_width: u32, phys_height: u32, input_state: &mut InputState) {
+    pub fn handle_resize(
+        &mut self,
+        phys_width: u32,
+        phys_height: u32,
+        input_state: &mut InputState,
+    ) {
         if let Some(img) = &self.image {
             if img.width != phys_width || img.height != phys_height {
                 info!("Surface resized; clearing frozen image");
@@ -172,7 +185,8 @@ impl FrozenState {
         tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()>
     where
-        State: Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
+        State:
+            Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
     {
         if self.capture.is_some() {
             warn!("Frozen-mode capture already in progress; ignoring toggle");
@@ -205,7 +219,8 @@ impl FrozenState {
         // Pre-allocate a pool to avoid repeated allocations; size adjusted on buffer event
         // (SlotPool resize is cheap, so start with minimal size).
         if let Some(capture) = self.capture.as_mut() {
-            capture.pool = Some(SlotPool::new(4, shm).context("Failed to create frozen capture pool")?);
+            capture.pool =
+                Some(SlotPool::new(4, shm).context("Failed to create frozen capture pool")?);
         }
 
         Ok(())
@@ -246,8 +261,9 @@ impl FrozenState {
                         WEnum::Value(v) => v.bits(),
                         WEnum::Unknown(raw) => raw,
                     };
-                    capture.y_invert =
-                        Flags::from_bits(raw_flags).map(|f| f.contains(Flags::YInvert)).unwrap_or(false);
+                    capture.y_invert = Flags::from_bits(raw_flags)
+                        .map(|f| f.contains(Flags::YInvert))
+                        .unwrap_or(false);
                 }
             }
             FrameEvent::Ready { .. } => {
@@ -295,21 +311,13 @@ impl FrozenState {
         capture.format = Some(format);
 
         // Resize pool and create buffer
-        let pool = capture
-            .pool
-            .as_mut()
-            .context("Capture pool missing")?;
+        let pool = capture.pool.as_mut().context("Capture pool missing")?;
         let total_size = (capture.stride as usize) * (height as usize);
         if total_size > pool.len() {
             pool.resize(total_size)?;
         }
         let (buffer, _) = pool
-            .create_buffer(
-                width as i32,
-                height as i32,
-                capture.stride,
-                format,
-            )
+            .create_buffer(width as i32, height as i32, capture.stride, format)
             .context("Failed to create capture buffer")?;
         capture.buffer = Some(buffer);
         capture.request_copy();
@@ -331,14 +339,8 @@ impl FrozenState {
             .take()
             .context("No capture session present for ready event")?;
 
-        let pool = capture
-            .pool
-            .as_mut()
-            .context("Capture pool missing")?;
-        let buffer = capture
-            .buffer
-            .as_ref()
-            .context("Capture buffer missing")?;
+        let pool = capture.pool.as_mut().context("Capture pool missing")?;
+        let buffer = capture.buffer.as_ref().context("Capture buffer missing")?;
 
         let canvas = buffer
             .canvas(pool)
@@ -474,6 +476,13 @@ impl FrozenState {
             layer_surface.set_size(0, 0);
             let wl_surface = layer_surface.wl_surface();
             wl_surface.commit();
+        } else if surface.is_xdg_window() {
+            if let Some(wl_surface) = surface.wl_surface() {
+                wl_surface.attach(None, 0, 0);
+                wl_surface.commit();
+            } else {
+                warn!("xdg-shell surface missing wl_surface; cannot hide frozen overlay");
+            }
         }
         self.overlay_hidden = true;
     }
@@ -490,6 +499,8 @@ impl FrozenState {
             layer_surface.set_size(width, height);
             let wl_surface = layer_surface.wl_surface();
             wl_surface.commit();
+        } else if surface.is_xdg_window() {
+            debug!("xdg-shell frozen overlay will be restored on next render");
         }
 
         self.overlay_hidden = false;
@@ -648,12 +659,15 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         frozen.portal_rx = Some(rx);
         frozen.portal_in_progress = true;
-        tx.send(Ok((None, FrozenImage {
-            width: 2,
-            height: 1,
-            stride: 8,
-            data: vec![0, 0, 0, 0, 0, 0, 0, 0],
-        })))
+        tx.send(Ok((
+            None,
+            FrozenImage {
+                width: 2,
+                height: 1,
+                stride: 8,
+                data: vec![0, 0, 0, 0, 0, 0, 0, 0],
+            },
+        )))
         .unwrap();
 
         frozen.hide_overlay(&mut surface);
