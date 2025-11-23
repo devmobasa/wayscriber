@@ -8,7 +8,10 @@ use smithay_client_toolkit::{
     output::OutputState,
     registry::RegistryState,
     seat::{SeatState, pointer::{PointerData, ThemedPointer}},
-    shell::{wlr_layer::LayerShell, xdg::XdgShell},
+    shell::{
+        wlr_layer::{KeyboardInteractivity, LayerShell},
+        xdg::XdgShell,
+    },
     shm::Shm,
 };
 use std::collections::HashSet;
@@ -27,11 +30,16 @@ use crate::{
     config::{Action, Config},
     input::{DrawingState, InputState},
     session::SessionOptions,
+    ui::toolbar::{ToolbarEvent, ToolbarSnapshot},
     util::Rect,
 };
 
 use super::{
-    capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
+    capture::CaptureState,
+    frozen::FrozenState,
+    session::SessionState,
+    surface::SurfaceState,
+    toolbar::ToolbarSurfaceManager,
 };
 
 /// Internal Wayland state shared across modules.
@@ -48,6 +56,13 @@ pub(super) struct WaylandState {
 
     // Surface and buffer management
     pub(super) surface: SurfaceState,
+    pub(super) toolbar: ToolbarSurfaceManager,
+    /// Tracks the current keyboard interactivity applied to the main layer surface
+    pub(super) current_keyboard_interactivity: Option<KeyboardInteractivity>,
+    /// Whether the pointer currently targets a toolbar surface
+    pub(super) pointer_over_toolbar: bool,
+    /// Whether we are actively dragging a toolbar control (e.g., thickness slider)
+    pub(super) toolbar_dragging: bool,
 
     // Configuration
     pub(super) config: Config,
@@ -115,6 +130,10 @@ impl WaylandState {
             output_state,
             seat_state,
             surface: SurfaceState::new(),
+            toolbar: ToolbarSurfaceManager::new(),
+            current_keyboard_interactivity: None,
+            pointer_over_toolbar: false,
+            toolbar_dragging: false,
             config,
             preferred_output_identity,
             xdg_fullscreen,
@@ -158,6 +177,60 @@ impl WaylandState {
         self.surface
             .current_output()
             .or_else(|| self.output_state.outputs().next())
+    }
+
+    /// Determines the desired keyboard interactivity for the main layer surface.
+    pub(super) fn desired_keyboard_interactivity(&self) -> KeyboardInteractivity {
+        if self.toolbar.is_visible() {
+            KeyboardInteractivity::OnDemand
+        } else {
+            KeyboardInteractivity::Exclusive
+        }
+    }
+
+    /// Applies keyboard interactivity based on toolbar visibility.
+    pub(super) fn refresh_keyboard_interactivity(&mut self) {
+        let desired = self.desired_keyboard_interactivity();
+
+        if let Some(layer) = self.surface.layer_surface_mut() {
+            if self.current_keyboard_interactivity != Some(desired) {
+                layer.set_keyboard_interactivity(desired);
+                self.current_keyboard_interactivity = Some(desired);
+            }
+        } else {
+            self.current_keyboard_interactivity = None;
+        }
+    }
+
+    /// Syncs toolbar visibility from the input state, ensures surfaces exist, and adjusts keyboard interactivity.
+    pub(super) fn sync_toolbar_visibility(&mut self, qh: &QueueHandle<Self>) {
+        let visible = self.input_state.toolbar_visible();
+        if visible != self.toolbar.is_visible() {
+            self.toolbar.set_visible(visible);
+            self.input_state.needs_redraw = true;
+            if !visible {
+                self.pointer_over_toolbar = false;
+            }
+        }
+
+        if visible {
+            if let Some(layer_shell) = self.layer_shell.as_ref() {
+                let scale = self.surface.scale();
+                self.toolbar
+                    .ensure_created(qh, &self.compositor_state, layer_shell, scale);
+            }
+        }
+
+        self.refresh_keyboard_interactivity();
+    }
+
+    pub(super) fn render_toolbars(&mut self, snapshot: &ToolbarSnapshot) {
+        if !self.toolbar.is_visible() {
+            return;
+        }
+
+        // No hover tracking yet; pass None. Can be updated when we record pointer positions per surface.
+        self.toolbar.render(&self.shm, snapshot, None);
     }
 
     pub(super) fn request_xdg_activation(&mut self, qh: &QueueHandle<Self>) {
@@ -504,7 +577,28 @@ impl WaylandState {
         wl_surface.commit();
         debug!("=== RENDER COMPLETE ===");
 
+        // Render toolbar overlays if visible.
+        if self.toolbar.is_visible() {
+            self.toolbar.mark_dirty();
+        }
+        let snapshot = self.toolbar_snapshot();
+        self.render_toolbars(&snapshot);
+
         Ok(highlight_active)
+    }
+
+    /// Returns a snapshot of the current input state for toolbar UI consumption.
+    pub(super) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
+        ToolbarSnapshot::from_input(&self.input_state)
+    }
+
+    /// Applies an incoming toolbar event and schedules redraws as needed.
+    pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
+        if self.input_state.apply_toolbar_event(event) {
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+        }
+        self.refresh_keyboard_interactivity();
     }
 
     /// Restore the overlay after screenshot capture completes.

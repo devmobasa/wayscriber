@@ -1,3 +1,5 @@
+pub mod toolbar;
+
 /// UI rendering: status bar, help overlay, visual indicators
 use crate::config::StatusPosition;
 use crate::input::{BoardMode, DrawingState, InputState, Tool, state::ContextMenuState};

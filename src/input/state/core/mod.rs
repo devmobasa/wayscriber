@@ -6,6 +6,7 @@ mod history;
 mod index;
 mod menus;
 mod properties;
+mod tool_controls;
 mod selection;
 mod selection_actions;
 mod utility;

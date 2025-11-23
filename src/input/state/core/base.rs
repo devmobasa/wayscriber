@@ -86,6 +86,8 @@ pub struct InputState {
     pub show_help: bool,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether the floating toolbar UI is visible
+    pub toolbar_visible: bool,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -187,6 +189,7 @@ impl InputState {
             needs_redraw: true,
             show_help: false,
             show_status_bar,
+            toolbar_visible: false,
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,

@@ -43,6 +43,7 @@ pub enum Action {
     ToggleHelp,
     ToggleStatusBar,
     ToggleClickHighlight,
+    ToggleToolbar,
     ToggleHighlightTool,
     OpenContextMenu,
 
@@ -233,6 +234,10 @@ pub struct KeybindingsConfig {
     pub toggle_status_bar: Vec<String>,
     #[serde(default = "default_toggle_click_highlight")]
     pub toggle_click_highlight: Vec<String>,
+
+    #[serde(default = "default_toggle_toolbar")]
+    pub toggle_toolbar: Vec<String>,
+
     #[serde(default = "default_toggle_highlight_tool")]
     pub toggle_highlight_tool: Vec<String>,
     #[serde(default = "default_open_context_menu")]
@@ -322,6 +327,7 @@ impl Default for KeybindingsConfig {
             toggle_help: default_toggle_help(),
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
+            toggle_toolbar: default_toggle_toolbar(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
             open_context_menu: default_open_context_menu(),
             open_configurator: default_open_configurator(),
@@ -455,6 +461,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_click_highlight {
             insert_binding(binding_str, Action::ToggleClickHighlight)?;
+        }
+
+        for binding_str in &self.toggle_toolbar {
+            insert_binding(binding_str, Action::ToggleToolbar)?;
         }
 
         for binding_str in &self.toggle_highlight_tool {
@@ -630,7 +640,7 @@ fn default_return_to_transparent() -> Vec<String> {
 }
 
 fn default_toggle_help() -> Vec<String> {
-    vec!["F10".to_string()]
+    vec!["F1".to_string(), "F10".to_string()]
 }
 
 fn default_toggle_status_bar() -> Vec<String> {
@@ -639,6 +649,10 @@ fn default_toggle_status_bar() -> Vec<String> {
 
 fn default_toggle_click_highlight() -> Vec<String> {
     vec!["Ctrl+Shift+H".to_string()]
+}
+
+fn default_toggle_toolbar() -> Vec<String> {
+    vec!["F2".to_string()]
 }
 
 fn default_toggle_highlight_tool() -> Vec<String> {

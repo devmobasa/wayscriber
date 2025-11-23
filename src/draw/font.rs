@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Describes which font to use, including family name, weight, and style.
 /// This descriptor is passed through the rendering pipeline to ensure
 /// consistent font usage across preview and finalized text.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FontDescriptor {
     /// Font family name (e.g., "Sans", "Monospace", "JetBrains Mono")
     /// Reference installed system fonts by name
