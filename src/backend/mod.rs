@@ -26,6 +26,6 @@ mod tests {
             eprintln!("WAYLAND_DISPLAY not set; skipping Wayland smoke test");
             return;
         }
-        super::run_wayland(None).expect("Wayland backend should start");
+        super::run_wayland(None, false).expect("Wayland backend should start");
     }
 }
