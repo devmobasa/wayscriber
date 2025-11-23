@@ -45,6 +45,8 @@ pub enum Shape {
         w: i32,
         /// Height in pixels
         h: i32,
+        /// Whether to fill the rectangle
+        fill: bool,
         /// Border color
         color: Color,
         /// Border thickness in pixels
@@ -60,6 +62,8 @@ pub enum Shape {
         rx: i32,
         /// Vertical radius
         ry: i32,
+        /// Whether to fill the ellipse
+        fill: bool,
         /// Border color
         color: Color,
         /// Border thickness in pixels

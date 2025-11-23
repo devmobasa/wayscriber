@@ -909,12 +909,13 @@ fn render_side_palette(
     y += font_card_h + section_gap;
 
     // ===== Actions Section =====
-    let actions_card_h = 100.0;
+    let actions_card_h = 140.0;
     draw_group_card(ctx, card_x, y, card_w, actions_card_h);
     draw_section_label(ctx, x, y + 14.0, "Actions");
 
-    let action_w = (width - 2.0 * x - 16.0) / 3.0;
-    let action_h = 28.0;
+    let action_gap = 10.0;
+    let action_w = ((width - 2.0 * x) - action_gap) / 2.0;
+    let action_h = 30.0;
     let actions_start_y = y + 28.0;
 
     let actions: &[(ToolbarEvent, &str, bool)] = &[
@@ -930,10 +931,10 @@ fn render_side_palette(
         (ToolbarEvent::OpenConfigFile, "Config file", true),
     ];
     for (idx, (evt, label, enabled)) in actions.iter().enumerate() {
-        let row = idx / 3;
-        let col = idx % 3;
-        let bx = x + (action_w + 8.0) * col as f64;
-        let by = actions_start_y + (action_h + 6.0) * row as f64;
+        let row = idx / 2;
+        let col = idx % 2;
+        let bx = x + (action_w + action_gap) * col as f64;
+        let by = actions_start_y + (action_h + 8.0) * row as f64;
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
             .unwrap_or(false);
@@ -948,7 +949,8 @@ fn render_side_palette(
         }
     }
 
-    y += actions_card_h + section_gap;
+    let action_rows = (actions.len() + 1) / 2;
+    y += actions_start_y - y + action_rows as f64 * (action_h + 8.0) + 12.0;
 
     // ===== Toggles Section =====
     let toggles_card_h = 90.0;
@@ -956,6 +958,11 @@ fn render_side_palette(
     draw_section_label(ctx, x, y + 14.0, "Toggles");
 
     let toggles: &[(ToolbarEvent, &str, bool)] = &[
+        (
+            ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+            "Fill shapes",
+            snapshot.fill_enabled,
+        ),
         (
             ToolbarEvent::ToggleHighlightTool(!snapshot.highlight_tool_active),
             "Highlight tool",

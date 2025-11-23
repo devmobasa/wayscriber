@@ -928,6 +928,7 @@ mod tests {
             y: 0,
             w: 10,
             h: 10,
+            fill: false,
             color: BLACK,
             thick: 2.0,
         };

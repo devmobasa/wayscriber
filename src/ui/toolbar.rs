@@ -10,6 +10,7 @@ pub enum ToolbarEvent {
     NudgeThickness(f64),
     SetFont(FontDescriptor),
     SetFontSize(f64),
+    ToggleFill(bool),
     Undo,
     Redo,
     ClearCanvas,
@@ -40,6 +41,7 @@ pub struct ToolbarSnapshot {
     pub font_size: f64,
     pub text_active: bool,
     pub frozen_active: bool,
+    pub fill_enabled: bool,
     pub undo_available: bool,
     pub redo_available: bool,
     pub click_highlight_enabled: bool,
@@ -62,6 +64,7 @@ impl ToolbarSnapshot {
             font_size: state.current_font_size,
             text_active: matches!(state.state, crate::input::DrawingState::TextInput { .. }),
             frozen_active: state.frozen_active(),
+            fill_enabled: state.fill_enabled,
             undo_available: frame.undo_stack_len() > 0,
             redo_available: frame.redo_stack_len() > 0,
             click_highlight_enabled: state.click_highlight_enabled(),
@@ -90,6 +93,7 @@ impl InputState {
             ToolbarEvent::SetThickness(value) => self.set_thickness(value),
             ToolbarEvent::SetFont(descriptor) => self.set_font_descriptor(descriptor),
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
+            ToolbarEvent::ToggleFill(enable) => self.set_fill_enabled(enable),
             ToolbarEvent::NudgeThickness(delta) => {
                 self.set_thickness(self.current_thickness + delta)
             }
