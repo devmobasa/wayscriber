@@ -1,0 +1,107 @@
+name: Build Linux Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        format: [deb, rpm]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libgtk-3-dev \
+            libssl-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxcb-render0-dev \
+            libxcb1-dev \
+            libx11-dev
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install nfpm
+        run: |
+          NFPM_VERSION=2.43.4
+          curl -sSfL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" \
+            | tar -xz nfpm
+          sudo mv nfpm /usr/local/bin/
+          nfpm --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            configurator
+
+      - name: Build release binaries
+        env:
+          CARGO_TARGET_DIR: target
+        run: |
+          cargo build --release --bins
+          cargo build --release --bins --manifest-path configurator/Cargo.toml
+          strip target/release/wayscriber
+          strip target/release/wayscriber-configurator
+
+      - name: Read crate version
+        id: meta
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wayscriber") | .version')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build ${{ matrix.format }} package
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          mkdir -p dist
+          nfpm pkg --packager ${{ matrix.format }} --config packaging/package.yaml --target dist/
+          if [ "${{ matrix.format }}" = "deb" ]; then
+            mv dist/*.deb dist/wayscriber-amd64.deb
+            # To restore versioned + stable artifacts, switch back to copying instead of moving.
+          else
+            mv dist/*.rpm dist/wayscriber-x86_64.rpm
+            # To restore versioned + stable artifacts, switch back to copying instead of moving.
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-${{ steps.meta.outputs.version }}-${{ matrix.format }}
+          path: dist/*.${{ matrix.format }}
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish GitHub release (auto notes)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true
