@@ -430,7 +430,13 @@ impl WaylandState {
 
         // Render help overlay if toggled
         if self.input_state.show_help {
-            crate::ui::render_help_overlay(&ctx, &self.config.ui.help_overlay_style, width, height);
+            crate::ui::render_help_overlay(
+                &ctx,
+                &self.config.ui.help_overlay_style,
+                width,
+                height,
+                self.frozen_enabled,
+            );
         }
 
         crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
