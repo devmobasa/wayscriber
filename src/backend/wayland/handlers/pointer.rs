@@ -1,7 +1,7 @@
 // Feeds pointer events (motion/buttons/scroll) into the drawing state to keep the canvas reactive.
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::seat::pointer::{
-    BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent, PointerEventKind, PointerHandler,
+    BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, CursorIcon, PointerEvent, PointerEventKind, PointerHandler,
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
@@ -15,7 +15,7 @@ use super::super::state::WaylandState;
 impl PointerHandler for WaylandState {
     fn pointer_frame(
         &mut self,
-        _conn: &Connection,
+        conn: &Connection,
         _qh: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
@@ -32,6 +32,11 @@ impl PointerHandler for WaylandState {
                     self.current_mouse_y = event.position.1 as i32;
                     self.input_state
                         .update_pointer_position(self.current_mouse_x, self.current_mouse_y);
+                    if let Some(pointer) = self.themed_pointer.as_ref() {
+                        if let Err(err) = pointer.set_cursor(conn, CursorIcon::Crosshair) {
+                            warn!("Failed to set cursor icon: {}", err);
+                        }
+                    }
                 }
                 PointerEventKind::Leave { .. } => {
                     debug!("Pointer left surface");

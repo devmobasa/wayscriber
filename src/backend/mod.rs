@@ -9,6 +9,7 @@ pub mod wayland;
 ///
 /// # Arguments
 /// * `initial_mode` - Optional board mode to start in (overrides config default)
+/// * `freeze_on_start` - Whether to start with the overlay frozen for immediate capture pause
 pub fn run_wayland(initial_mode: Option<String>, freeze_on_start: bool) -> Result<()> {
     let mut backend = wayland::WaylandBackend::new(initial_mode, freeze_on_start)?;
     backend.init()?;
