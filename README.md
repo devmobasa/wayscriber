@@ -122,6 +122,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 - **Board modes**: Whiteboard, blackboard, and transparent overlays, each with isolated frames and auto pen contrast; snap back to transparent with `Ctrl+Shift+T`.
 - **Capture shortcuts**: Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard` when available.
 - **Session persistence**: Opt-in per board/monitor storage that restores your canvas plus pen color & thickness; inspect with `wayscriber --session-info` or clear with `wayscriber --clear-session`.
+- **Freeze / pause view**: Toggle freeze to pause what viewers see while your apps keep running; hotkey `Ctrl+Shift+F` or start frozen with `wayscriber --freeze`.
 - **Workflow helpers**: Background daemon with SIGUSR1 toggle, tray icon, one-shot mode, live status bar, and in-app help overlay (`F10`).
 - **Context menus & selection**: Right-click or press `Shift+F10` for per-shape actions (delete, duplicate, layer order, lock/unlock, properties) with keyboard navigation and selection halos for clarity.
 - **Click highlights**: Presenter-style halo on mouse clicks with configurable colors, radius, and duration; follows your pen color by default, toggle the effect with `Ctrl+Shift+H` or swap to highlight-only mode with `Ctrl+Alt+H`.
