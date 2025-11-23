@@ -729,12 +729,16 @@ fn render_side_palette(
         kind: HitKind::Click,
     });
 
-    y += btn_size + 8.0;
+    y += btn_size + 6.0;
 
-    // Colors
-    draw_section_label(ctx, x, y, "Colors");
-    y += 16.0;
-    draw_group_card(ctx, x - 6.0, y - 10.0, width - 2.0 * x + 12.0, 90.0);
+    let card_x = x - 6.0;
+    let card_w = width - 2.0 * x + 12.0;
+    let section_gap = 12.0;
+
+    // ===== Colors Section =====
+    let colors_card_h = 90.0;
+    draw_group_card(ctx, card_x, y, card_w, colors_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Colors");
 
     let colors: &[(Color, &str)] = &[
         (RED, "Red"),
@@ -750,29 +754,30 @@ fn render_side_palette(
     let swatch = 26.0;
     let gap = 10.0;
     let mut cx = x;
-    let mut row_y = y;
+    let mut row_y = y + 28.0;
     for (color, _name) in colors {
         draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
-    hits.push(HitRegion {
-        rect: (cx, row_y, swatch, swatch),
-        event: ToolbarEvent::SetColor(*color),
-        kind: HitKind::Click,
-    });
+        hits.push(HitRegion {
+            rect: (cx, row_y, swatch, swatch),
+            event: ToolbarEvent::SetColor(*color),
+            kind: HitKind::Click,
+        });
         cx += swatch + gap;
-    if cx + swatch > width - 20.0 {
-        cx = x;
-        row_y += swatch + gap;
+        if cx + swatch > width - 20.0 {
+            cx = x;
+            row_y += swatch + gap;
+        }
     }
-}
-    y = row_y + swatch + gap + 14.0;
+    y += colors_card_h + section_gap;
 
-    // Thickness
-    draw_section_label(ctx, x, y, "Thickness");
-    y += 10.0;
-    draw_group_card(ctx, x - 6.0, y - 10.0, width - 2.0 * x + 12.0, 110.0);
+    // ===== Thickness Section =====
+    let thickness_card_h = 90.0;
+    draw_group_card(ctx, card_x, y, card_w, thickness_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Thickness");
+
     let track_w = width - (2.0 * x);
     let track_h = 10.0;
-    let track_y = y + 6.0;
+    let track_y = y + 28.0;
     let knob_r = 9.0;
     let min_thick = 1.0;
     let max_thick = 40.0;
@@ -791,7 +796,7 @@ fn render_side_palette(
     // Minus/Plus nudge buttons
     let btn_w = 30.0;
     let btn_h = 26.0;
-    let btn_y = track_y + track_h + 6.0;
+    let btn_y = track_y + track_h + 8.0;
     draw_button(ctx, x, btn_y, btn_w, btn_h, false, false);
     draw_label_center(ctx, x, btn_y, btn_w, btn_h, "-");
     hits.push(HitRegion {
@@ -810,24 +815,24 @@ fn render_side_palette(
 
     // Thickness readout
     let thickness_text = format!("{:.0}px", snapshot.thickness);
-    draw_label_center(
-        ctx,
-        x + btn_w * 2.0 + 30.0,
-        btn_y,
-        80.0,
-        btn_h,
-        &thickness_text,
-    );
+    draw_label_center(ctx, x + btn_w * 2.0 + 30.0, btn_y, 80.0, btn_h, &thickness_text);
 
-    y = btn_y + btn_h + 18.0;
+    hits.push(HitRegion {
+        rect: (x, track_y - 6.0, track_w, track_h + 12.0),
+        event: ToolbarEvent::SetThickness(snapshot.thickness),
+        kind: HitKind::DragSetThickness,
+    });
 
-    // Font size slider
-    draw_section_label(ctx, x, y, "Text size");
-    y += 10.0;
-    draw_group_card(ctx, x - 6.0, y - 10.0, width - 2.0 * x + 12.0, 110.0);
+    y += thickness_card_h + section_gap;
+
+    // ===== Text Size Section =====
+    let text_size_card_h = 90.0;
+    draw_group_card(ctx, card_x, y, card_w, text_size_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Text size");
+
     let fs_track_w = width - (2.0 * x);
     let fs_track_h = 10.0;
-    let fs_track_y = y + 6.0;
+    let fs_track_y = y + 28.0;
     let fs_knob_r = 9.0;
     let fs_min = 8.0;
     let fs_max = 72.0;
@@ -838,19 +843,13 @@ fn render_side_palette(
     ctx.rectangle(x, fs_track_y, fs_track_w, fs_track_h);
     let _ = ctx.fill();
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(
-        fs_knob_x,
-        fs_track_y + fs_track_h / 2.0,
-        fs_knob_r,
-        0.0,
-        std::f64::consts::PI * 2.0,
-    );
+    ctx.arc(fs_knob_x, fs_track_y + fs_track_h / 2.0, fs_knob_r, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.fill();
 
     // Font size nudges/readout
     let fs_btn_w = 30.0;
     let fs_btn_h = 26.0;
-    let fs_btn_y = fs_track_y + fs_track_h + 6.0;
+    let fs_btn_y = fs_track_y + fs_track_h + 8.0;
     draw_button(ctx, x, fs_btn_y, fs_btn_w, fs_btn_h, false, false);
     draw_label_center(ctx, x, fs_btn_y, fs_btn_w, fs_btn_h, "-");
     hits.push(HitRegion {
@@ -868,14 +867,7 @@ fn render_side_palette(
     });
 
     let fs_text = format!("{:.0}px", snapshot.font_size);
-    draw_label_center(
-        ctx,
-        x + fs_btn_w * 2.0 + 24.0,
-        fs_btn_y,
-        80.0,
-        fs_btn_h,
-        &fs_text,
-    );
+    draw_label_center(ctx, x + fs_btn_w * 2.0 + 24.0, fs_btn_y, 80.0, fs_btn_h, &fs_text);
 
     hits.push(HitRegion {
         rect: (x, fs_track_y - 8.0, fs_track_w, fs_track_h + 16.0),
@@ -883,13 +875,14 @@ fn render_side_palette(
         kind: HitKind::DragSetFontSize,
     });
 
-    y = fs_btn_y + fs_btn_h + 18.0;
+    y += text_size_card_h + section_gap;
 
-    // Font selection
-    draw_section_label(ctx, x, y, "Font");
-    y += 10.0;
-    draw_group_card(ctx, x - 6.0, y - 10.0, width - 2.0 * x + 12.0, 74.0);
-    let font_btn_h = 28.0;
+    // ===== Font Section =====
+    let font_card_h = 50.0;
+    draw_group_card(ctx, card_x, y, card_w, font_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Font");
+
+    let font_btn_h = 24.0;
     let font_gap = 8.0;
     let font_btn_w = (width - 2.0 * x - font_gap) / 2.0;
     let fonts = [
@@ -897,7 +890,7 @@ fn render_side_palette(
         FontDescriptor::new("Monospace".to_string(), "normal".to_string(), "normal".to_string()),
     ];
     let mut fx = x;
-    let fy = y;
+    let fy = y + 22.0;
     for font in fonts {
         let is_active = font.family == snapshot.font.family;
         let font_hover = hover
@@ -912,16 +905,17 @@ fn render_side_palette(
         });
         fx += font_btn_w + font_gap;
     }
-    y = fy + font_btn_h + 14.0;
 
-    // Actions row
-    draw_section_label(ctx, x, y, "Actions");
-    y += 18.0;
-    let action_w = (width - 2.0 * x - 16.0) / 3.0; // Fit 3 buttons with gaps
-    let action_h = 30.0;
-    let ax = x;
-    draw_group_card(ctx, x - 6.0, y, width - 2.0 * x + 12.0, 130.0);
-    y += 12.0;
+    y += font_card_h + section_gap;
+
+    // ===== Actions Section =====
+    let actions_card_h = 100.0;
+    draw_group_card(ctx, card_x, y, card_w, actions_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Actions");
+
+    let action_w = (width - 2.0 * x - 16.0) / 3.0;
+    let action_h = 28.0;
+    let actions_start_y = y + 28.0;
 
     let actions: &[(ToolbarEvent, &str, bool)] = &[
         (ToolbarEvent::Undo, "Undo", snapshot.undo_available),
@@ -938,8 +932,8 @@ fn render_side_palette(
     for (idx, (evt, label, enabled)) in actions.iter().enumerate() {
         let row = idx / 3;
         let col = idx % 3;
-        let bx = ax + (action_w + 8.0) * col as f64;
-        let by = y + (action_h + 10.0) * row as f64;
+        let bx = x + (action_w + 8.0) * col as f64;
+        let by = actions_start_y + (action_h + 6.0) * row as f64;
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
             .unwrap_or(false);
@@ -954,11 +948,13 @@ fn render_side_palette(
         }
     }
 
-    y += action_h * 2.0 + 24.0;
+    y += actions_card_h + section_gap;
 
-    // Toggles
-    draw_section_label(ctx, x, y, "Toggles");
-    y += 18.0;
+    // ===== Toggles Section =====
+    let toggles_card_h = 90.0;
+    draw_group_card(ctx, card_x, y, card_w, toggles_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Toggles");
+
     let toggles: &[(ToolbarEvent, &str, bool)] = &[
         (
             ToolbarEvent::ToggleHighlightTool(!snapshot.highlight_tool_active),
@@ -972,27 +968,21 @@ fn render_side_palette(
         ),
     ];
 
-    let toggle_h = 30.0;
+    let toggle_h = 28.0;
     let toggle_w = width - 2.0 * x;
-    for (evt, label, active) in toggles {
+    let toggles_start_y = y + 28.0;
+    for (idx, (evt, label, active)) in toggles.iter().enumerate() {
+        let ty = toggles_start_y + (toggle_h + 6.0) * idx as f64;
         let is_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, toggle_w, toggle_h))
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, ty, toggle_w, toggle_h))
             .unwrap_or(false);
-        draw_toggle_button(ctx, x, y, toggle_w, toggle_h, *active, is_hover, label);
+        draw_toggle_button(ctx, x, ty, toggle_w, toggle_h, *active, is_hover, label);
         hits.push(HitRegion {
-            rect: (x, y, toggle_w, toggle_h),
+            rect: (x, ty, toggle_w, toggle_h),
             event: evt.clone(),
             kind: HitKind::Click,
         });
-        y += toggle_h + 6.0;
     }
-
-    // Thickness track drag region
-    hits.push(HitRegion {
-        rect: (x, track_y - 6.0, track_w, track_h + 12.0),
-        event: ToolbarEvent::SetThickness(snapshot.thickness),
-        kind: HitKind::DragSetThickness,
-    });
 }
 
 fn draw_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, active: bool, hover: bool) {
