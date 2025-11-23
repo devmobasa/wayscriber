@@ -57,6 +57,7 @@ pub(super) struct WaylandState {
     // Surface and buffer management
     pub(super) surface: SurfaceState,
     pub(super) toolbar: ToolbarSurfaceManager,
+    pub(super) last_toolbar_snapshot: Option<ToolbarSnapshot>,
     /// Tracks the current keyboard interactivity applied to the main layer surface
     pub(super) current_keyboard_interactivity: Option<KeyboardInteractivity>,
     /// Whether the pointer currently targets a toolbar surface
@@ -131,6 +132,7 @@ impl WaylandState {
             seat_state,
             surface: SurfaceState::new(),
             toolbar: ToolbarSurfaceManager::new(),
+            last_toolbar_snapshot: None,
             current_keyboard_interactivity: None,
             pointer_over_toolbar: false,
             toolbar_dragging: false,
@@ -204,16 +206,26 @@ impl WaylandState {
 
     /// Syncs toolbar visibility from the input state, ensures surfaces exist, and adjusts keyboard interactivity.
     pub(super) fn sync_toolbar_visibility(&mut self, qh: &QueueHandle<Self>) {
-        let visible = self.input_state.toolbar_visible();
-        if visible != self.toolbar.is_visible() {
-            self.toolbar.set_visible(visible);
+        // Sync individual toolbar visibility
+        let top_visible = self.input_state.toolbar_top_visible();
+        let side_visible = self.input_state.toolbar_side_visible();
+
+        if top_visible != self.toolbar.is_top_visible() {
+            self.toolbar.set_top_visible(top_visible);
             self.input_state.needs_redraw = true;
-            if !visible {
-                self.pointer_over_toolbar = false;
-            }
         }
 
-        if visible {
+        if side_visible != self.toolbar.is_side_visible() {
+            self.toolbar.set_side_visible(side_visible);
+            self.input_state.needs_redraw = true;
+        }
+
+        let any_visible = self.toolbar.is_visible();
+        if !any_visible {
+            self.pointer_over_toolbar = false;
+        }
+
+        if any_visible {
             if let Some(layer_shell) = self.layer_shell.as_ref() {
                 let scale = self.surface.scale();
                 self.toolbar
@@ -577,12 +589,20 @@ impl WaylandState {
         wl_surface.commit();
         debug!("=== RENDER COMPLETE ===");
 
-        // Render toolbar overlays if visible.
+        // Render toolbar overlays if visible, only when state/hover changed.
         if self.toolbar.is_visible() {
-            self.toolbar.mark_dirty();
+            let snapshot = self.toolbar_snapshot();
+            if self
+                .last_toolbar_snapshot
+                .as_ref()
+                .map(|prev| prev != &snapshot)
+                .unwrap_or(true)
+            {
+                self.toolbar.mark_dirty();
+            }
+            self.last_toolbar_snapshot = Some(snapshot.clone());
+            self.render_toolbars(&snapshot);
         }
-        let snapshot = self.toolbar_snapshot();
-        self.render_toolbars(&snapshot);
 
         Ok(highlight_active)
     }
@@ -594,11 +614,38 @@ impl WaylandState {
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
     pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
+        // Check if this is a pin event that needs config save
+        let needs_config_save = matches!(
+            event,
+            ToolbarEvent::PinTopToolbar(_) | ToolbarEvent::PinSideToolbar(_)
+        );
+
         if self.input_state.apply_toolbar_event(event) {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
+
+            // Save config when pin state changes
+            if needs_config_save {
+                self.save_toolbar_pin_config();
+            }
         }
         self.refresh_keyboard_interactivity();
+    }
+
+    /// Saves the current toolbar pin configuration to disk.
+    fn save_toolbar_pin_config(&mut self) {
+        self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
+        self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to save toolbar pin config: {}", err);
+        } else {
+            log::info!(
+                "Saved toolbar pin config: top={}, side={}",
+                self.config.ui.toolbar.top_pinned,
+                self.config.ui.toolbar.side_pinned
+            );
+        }
     }
 
     /// Restore the overlay after screenshot capture completes.
