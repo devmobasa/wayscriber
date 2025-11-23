@@ -57,7 +57,7 @@ package() {
     # Install license if available
     [ -f LICENSE ] && install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" || true
 }
-# Maintainer: wayscriber maintainers <devmobasa+aur@proton.me>
+# Maintainer: wayscriber maintainers <hyprarcher@proton.me>
 pkgname=wayscriber
 pkgver=0.6.0
 pkgrel=2
