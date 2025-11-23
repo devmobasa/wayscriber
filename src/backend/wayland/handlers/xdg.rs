@@ -1,10 +1,11 @@
 // Handles xdg-shell window configure/close events for the fallback path when
 // layer-shell is unavailable (e.g., GNOME).
-use log::{debug, info};
+use log::{debug, info, warn};
 use smithay_client_toolkit::shell::xdg::window::{Window, WindowConfigure, WindowHandler};
 use wayland_client::{Connection, QueueHandle};
 
 use super::super::state::WaylandState;
+use crate::session;
 
 impl WindowHandler for WaylandState {
     fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window) {
@@ -93,5 +94,44 @@ impl WindowHandler for WaylandState {
         }
 
         self.input_state.needs_redraw = true;
+
+        // Fallback: xdg may not emit surface_enter before configure; attempt a session load once.
+        if !self.session.is_loaded() {
+            if let Some(options) = self.session_options_mut() {
+                let load_result = session::load_snapshot(options);
+                let mut load_succeeded = false;
+                let current_options = self.session_options().cloned();
+                match load_result {
+                    Ok(Some(snapshot)) => {
+                        load_succeeded = true;
+                        if let Some(ref opts) = current_options {
+                            debug!(
+                                "Restoring session (fallback) from {}",
+                                opts.session_file_path().display()
+                            );
+                            session::apply_snapshot(&mut self.input_state, snapshot, opts);
+                        }
+                    }
+                    Ok(None) => {
+                        load_succeeded = true;
+                        if let Some(ref opts) = current_options {
+                            debug!(
+                                "No session data found for {} (fallback load)",
+                                opts.session_file_path().display()
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        warn!("Fallback session load failed: {}", err);
+                    }
+                }
+                // Mark loaded to avoid repeated loads when load succeeded; compositor enter still
+                // reloads when it sets a new output identity.
+                if load_succeeded {
+                    self.session.mark_loaded();
+                }
+                self.input_state.needs_redraw = true;
+            }
+        }
     }
 }
