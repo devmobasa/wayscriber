@@ -19,10 +19,18 @@ pub enum ToolbarEvent {
     ToggleFreeze,
     OpenConfigurator,
     OpenConfigFile,
+    /// Close the top toolbar panel
+    CloseTopToolbar,
+    /// Close the side toolbar panel
+    CloseSideToolbar,
+    /// Pin/unpin the top toolbar (saves to config)
+    PinTopToolbar(bool),
+    /// Pin/unpin the side toolbar (saves to config)
+    PinSideToolbar(bool),
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ToolbarSnapshot {
     pub active_tool: Tool,
     pub tool_override: Option<Tool>,
@@ -36,6 +44,10 @@ pub struct ToolbarSnapshot {
     pub redo_available: bool,
     pub click_highlight_enabled: bool,
     pub highlight_tool_active: bool,
+    /// Whether the top toolbar is pinned (opens at startup)
+    pub top_pinned: bool,
+    /// Whether the side toolbar is pinned (opens at startup)
+    pub side_pinned: bool,
 }
 
 impl ToolbarSnapshot {
@@ -54,6 +66,8 @@ impl ToolbarSnapshot {
             redo_available: frame.redo_stack_len() > 0,
             click_highlight_enabled: state.click_highlight_enabled(),
             highlight_tool_active: state.highlight_tool_active(),
+            top_pinned: state.toolbar_top_pinned,
+            side_pinned: state.toolbar_side_pinned,
         }
     }
 }
@@ -125,6 +139,32 @@ impl InputState {
             ToolbarEvent::OpenConfigFile => {
                 self.open_config_file_default();
                 true
+            }
+            ToolbarEvent::CloseTopToolbar => {
+                self.toolbar_top_visible = false;
+                self.toolbar_visible = self.toolbar_top_visible && self.toolbar_side_visible;
+                true
+            }
+            ToolbarEvent::CloseSideToolbar => {
+                self.toolbar_side_visible = false;
+                self.toolbar_visible = self.toolbar_top_visible && self.toolbar_side_visible;
+                true
+            }
+            ToolbarEvent::PinTopToolbar(pin) => {
+                if self.toolbar_top_pinned != pin {
+                    self.toolbar_top_pinned = pin;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::PinSideToolbar(pin) => {
+                if self.toolbar_side_pinned != pin {
+                    self.toolbar_side_pinned = pin;
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
