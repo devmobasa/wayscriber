@@ -166,6 +166,10 @@ pub struct UiConfig {
     /// Context menu preferences
     #[serde(default)]
     pub context_menu: ContextMenuUiConfig,
+
+    /// Toolbar visibility and pinning options
+    #[serde(default)]
+    pub toolbar: ToolbarConfig,
 }
 
 impl Default for UiConfig {
@@ -180,6 +184,7 @@ impl Default for UiConfig {
             xdg_fullscreen: default_xdg_fullscreen(),
             click_highlight: ClickHighlightConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
+            toolbar: ToolbarConfig::default(),
         }
     }
 }
@@ -757,4 +762,36 @@ fn default_session_per_output() -> bool {
 
 fn default_persist_history() -> bool {
     true
+}
+
+/// Toolbar visibility and pinning configuration.
+///
+/// Controls which toolbar panels are visible on startup and whether they
+/// remain pinned (saved to config) when closed.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ToolbarConfig {
+    /// Show the top toolbar (tool selection) on startup
+    #[serde(default = "default_toolbar_top_pinned")]
+    pub top_pinned: bool,
+
+    /// Show the side toolbar (colors, settings) on startup
+    #[serde(default = "default_toolbar_side_pinned")]
+    pub side_pinned: bool,
+}
+
+impl Default for ToolbarConfig {
+    fn default() -> Self {
+        Self {
+            top_pinned: default_toolbar_top_pinned(),
+            side_pinned: default_toolbar_side_pinned(),
+        }
+    }
+}
+
+fn default_toolbar_top_pinned() -> bool {
+    false
+}
+
+fn default_toolbar_side_pinned() -> bool {
+    false
 }

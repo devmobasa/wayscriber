@@ -86,8 +86,16 @@ pub struct InputState {
     pub show_help: bool,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
-    /// Whether the floating toolbar UI is visible
+    /// Whether the floating toolbar UI is visible (legacy, use top/side specific)
     pub toolbar_visible: bool,
+    /// Whether the top toolbar panel is visible
+    pub toolbar_top_visible: bool,
+    /// Whether the side toolbar panel is visible
+    pub toolbar_side_visible: bool,
+    /// Whether the top toolbar is pinned (saved to config, opens at startup)
+    pub toolbar_top_pinned: bool,
+    /// Whether the side toolbar is pinned (saved to config, opens at startup)
+    pub toolbar_side_pinned: bool,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -190,6 +198,10 @@ impl InputState {
             show_help: false,
             show_status_bar,
             toolbar_visible: false,
+            toolbar_top_visible: false,
+            toolbar_side_visible: false,
+            toolbar_top_pinned: false,
+            toolbar_side_pinned: false,
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,

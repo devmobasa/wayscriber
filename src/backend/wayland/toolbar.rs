@@ -325,7 +325,12 @@ impl ToolbarSurface {
 /// Tracks the lifetime and visibility of the top + side toolbar surfaces.
 #[derive(Debug)]
 pub struct ToolbarSurfaceManager {
+    /// Legacy combined visibility (for backwards compatibility)
     visible: bool,
+    /// Whether the top toolbar is visible
+    top_visible: bool,
+    /// Whether the side toolbar is visible
+    side_visible: bool,
     top: ToolbarSurface,
     side: ToolbarSurface,
     top_hover: Option<(f64, f64)>,
@@ -336,6 +341,8 @@ impl Default for ToolbarSurfaceManager {
     fn default() -> Self {
         Self {
             visible: false,
+            top_visible: false,
+            side_visible: false,
             top: ToolbarSurface::new("wayscriber-toolbar-top", Anchor::TOP, (12, 12, 0, 12)),
             side: ToolbarSurface::new("wayscriber-toolbar-side", Anchor::LEFT, (24, 0, 24, 24)),
             top_hover: None,
@@ -349,18 +356,57 @@ impl ToolbarSurfaceManager {
         Self::default()
     }
 
+    /// Returns true if any toolbar is visible
     pub fn is_visible(&self) -> bool {
-        self.visible
+        self.visible || self.top_visible || self.side_visible
     }
 
+    /// Returns true if the top toolbar is visible
+    pub fn is_top_visible(&self) -> bool {
+        self.top_visible || self.visible
+    }
+
+    /// Returns true if the side toolbar is visible
+    pub fn is_side_visible(&self) -> bool {
+        self.side_visible || self.visible
+    }
+
+    /// Set legacy combined visibility (shows/hides both)
     pub fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
-        if !visible {
+        if visible {
+            self.top_visible = true;
+            self.side_visible = true;
+        } else {
+            self.top_visible = false;
+            self.side_visible = false;
             self.top.destroy();
             self.side.destroy();
             self.top_hover = None;
             self.side_hover = None;
         }
+    }
+
+    /// Set visibility of the top toolbar only
+    pub fn set_top_visible(&mut self, visible: bool) {
+        self.top_visible = visible;
+        if !visible {
+            self.top.destroy();
+            self.top_hover = None;
+        }
+        // Update legacy flag
+        self.visible = self.top_visible && self.side_visible;
+    }
+
+    /// Set visibility of the side toolbar only
+    pub fn set_side_visible(&mut self, visible: bool) {
+        self.side_visible = visible;
+        if !visible {
+            self.side.destroy();
+            self.side_hover = None;
+        }
+        // Update legacy flag
+        self.visible = self.top_visible && self.side_visible;
     }
 
     pub fn is_toolbar_surface(&self, surface: &wl_surface::WlSurface) -> bool {
@@ -381,18 +427,21 @@ impl ToolbarSurfaceManager {
         layer_shell: &LayerShell,
         scale: i32,
     ) {
-        if !self.visible {
-            return;
-        }
-        if self.top.logical_size == (0, 0) {
-            self.top.set_logical_size((620, 64));
-        }
-        if self.side.logical_size == (0, 0) {
-            self.side.set_logical_size((280, 540));
+        // Create top toolbar if visible
+        if self.is_top_visible() {
+            if self.top.logical_size == (0, 0) {
+                self.top.set_logical_size((720, 64));
+            }
+            self.top.ensure_created(qh, compositor, layer_shell, scale);
         }
 
-        self.top.ensure_created(qh, compositor, layer_shell, scale);
-        self.side.ensure_created(qh, compositor, layer_shell, scale);
+        // Create side toolbar if visible
+        if self.is_side_visible() {
+            if self.side.logical_size == (0, 0) {
+                self.side.set_logical_size((300, 620));
+            }
+            self.side.ensure_created(qh, compositor, layer_shell, scale);
+        }
     }
 
     pub fn handle_configure(
@@ -410,18 +459,20 @@ impl ToolbarSurfaceManager {
     }
 
     pub fn render(&mut self, shm: &Shm, snapshot: &ToolbarSnapshot, hover: Option<(f64, f64)>) {
-        if !self.visible {
-            return;
+        // Render top toolbar if visible
+        if self.is_top_visible() {
+            let top_hover = hover.or(self.top_hover);
+            if let Err(err) = self.top.render(shm, snapshot, top_hover) {
+                log::warn!("Failed to render top toolbar: {}", err);
+            }
         }
 
-        let top_hover = hover.or(self.top_hover);
-        let side_hover = hover.or(self.side_hover);
-
-        if let Err(err) = self.top.render(shm, snapshot, top_hover) {
-            log::warn!("Failed to render top toolbar: {}", err);
-        }
-        if let Err(err) = self.side.render(shm, snapshot, side_hover) {
-            log::warn!("Failed to render side toolbar: {}", err);
+        // Render side toolbar if visible
+        if self.is_side_visible() {
+            let side_hover = hover.or(self.side_hover);
+            if let Err(err) = self.side.render(shm, snapshot, side_hover) {
+                log::warn!("Failed to render side toolbar: {}", err);
+            }
         }
     }
 
@@ -496,7 +547,7 @@ fn draw_group_card(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
 
 fn render_top_strip(
     ctx: &cairo::Context,
-    _width: f64,
+    width: f64,
     height: f64,
     snapshot: &ToolbarSnapshot,
     hits: &mut Vec<HitRegion>,
@@ -545,10 +596,96 @@ fn render_top_strip(
         event: ToolbarEvent::EnterTextMode,
         kind: HitKind::Click,
     });
+
+    // Pin and Close buttons on the right side
+    let btn_size = 24.0;
+    let btn_gap = 6.0;
+
+    // Pin button
+    let pin_x = width - btn_size * 2.0 - btn_gap - 12.0;
+    let pin_y = (height - btn_size) / 2.0;
+    let pin_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, pin_y, btn_size, btn_size))
+        .unwrap_or(false);
+    draw_pin_button(ctx, pin_x, pin_y, btn_size, snapshot.top_pinned, pin_hover);
+    hits.push(HitRegion {
+        rect: (pin_x, pin_y, btn_size, btn_size),
+        event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
+        kind: HitKind::Click,
+    });
+
+    // Close button
+    let close_x = width - btn_size - 12.0;
+    let close_y = (height - btn_size) / 2.0;
+    let close_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, close_y, btn_size, btn_size))
+        .unwrap_or(false);
+    draw_close_button(ctx, close_x, close_y, btn_size, close_hover);
+    hits.push(HitRegion {
+        rect: (close_x, close_y, btn_size, btn_size),
+        event: ToolbarEvent::CloseTopToolbar,
+        kind: HitKind::Click,
+    });
 }
 
 fn point_in_rect(px: f64, py: f64, x: f64, y: f64, w: f64, h: f64) -> bool {
     px >= x && px <= x + w && py >= y && py <= y + h
+}
+
+fn draw_close_button(ctx: &cairo::Context, x: f64, y: f64, size: f64, hover: bool) {
+    // Background circle
+    let r = size / 2.0;
+    let cx = x + r;
+    let cy = y + r;
+
+    if hover {
+        ctx.set_source_rgba(0.8, 0.3, 0.3, 0.9);
+    } else {
+        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.7);
+    }
+    ctx.arc(cx, cy, r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+
+    // X mark
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    ctx.set_line_width(2.0);
+    let inset = size * 0.3;
+    ctx.move_to(x + inset, y + inset);
+    ctx.line_to(x + size - inset, y + size - inset);
+    let _ = ctx.stroke();
+    ctx.move_to(x + size - inset, y + inset);
+    ctx.line_to(x + inset, y + size - inset);
+    let _ = ctx.stroke();
+}
+
+fn draw_pin_button(ctx: &cairo::Context, x: f64, y: f64, size: f64, pinned: bool, hover: bool) {
+    // Background
+    let (r, g, b, a) = if pinned {
+        (0.25, 0.6, 0.35, 0.95) // Green when pinned
+    } else if hover {
+        (0.35, 0.35, 0.45, 0.85)
+    } else {
+        (0.3, 0.3, 0.35, 0.7)
+    };
+    ctx.set_source_rgba(r, g, b, a);
+    draw_round_rect(ctx, x, y, size, size, 4.0);
+    let _ = ctx.fill();
+
+    // Pin icon (simple circle with line)
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    let cx = x + size / 2.0;
+    let cy = y + size / 2.0;
+    let pin_r = size * 0.2;
+
+    // Pin head (circle)
+    ctx.arc(cx, cy - pin_r * 0.5, pin_r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+
+    // Pin needle (line)
+    ctx.set_line_width(2.0);
+    ctx.move_to(cx, cy + pin_r * 0.5);
+    ctx.line_to(cx, cy + pin_r * 2.0);
+    let _ = ctx.stroke();
 }
 
 fn render_side_palette(
@@ -559,10 +696,40 @@ fn render_side_palette(
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
 ) {
-    let mut y = 18.0;
+    let mut y = 12.0;
     let x = 16.0;
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(13.0);
+
+    // Header row with pin and close buttons
+    let btn_size = 22.0;
+    let header_y = y;
+
+    // Pin button (toggles pinned state)
+    let pin_x = width - btn_size * 2.0 - 20.0;
+    let pin_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, header_y, btn_size, btn_size))
+        .unwrap_or(false);
+    draw_pin_button(ctx, pin_x, header_y, btn_size, snapshot.side_pinned, pin_hover);
+    hits.push(HitRegion {
+        rect: (pin_x, header_y, btn_size, btn_size),
+        event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
+        kind: HitKind::Click,
+    });
+
+    // Close button
+    let close_x = width - btn_size - 12.0;
+    let close_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, header_y, btn_size, btn_size))
+        .unwrap_or(false);
+    draw_close_button(ctx, close_x, header_y, btn_size, close_hover);
+    hits.push(HitRegion {
+        rect: (close_x, header_y, btn_size, btn_size),
+        event: ToolbarEvent::CloseSideToolbar,
+        kind: HitKind::Click,
+    });
+
+    y += btn_size + 8.0;
 
     // Colors
     draw_section_label(ctx, x, y, "Colors");
@@ -718,38 +885,39 @@ fn render_side_palette(
 
     y = fs_btn_y + fs_btn_h + 18.0;
 
-    // Font stub
+    // Font selection
     draw_section_label(ctx, x, y, "Font");
     y += 10.0;
     draw_group_card(ctx, x - 6.0, y - 10.0, width - 2.0 * x + 12.0, 74.0);
     let font_btn_h = 28.0;
-    let font_btn_w = (width - 2.0 * x - 10.0) / 2.0;
+    let font_gap = 8.0;
+    let font_btn_w = (width - 2.0 * x - font_gap) / 2.0;
     let fonts = [
         FontDescriptor::new("Sans".to_string(), "bold".to_string(), "normal".to_string()),
         FontDescriptor::new("Monospace".to_string(), "normal".to_string(), "normal".to_string()),
-        FontDescriptor::new("Serif".to_string(), "normal".to_string(), "normal".to_string()),
     ];
     let mut fx = x;
+    let fy = y;
     for font in fonts {
         let is_active = font.family == snapshot.font.family;
         let font_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, fx, y, font_btn_w, font_btn_h))
+            .map(|(hx, hy)| point_in_rect(hx, hy, fx, fy, font_btn_w, font_btn_h))
             .unwrap_or(false);
-        draw_button(ctx, fx, y, font_btn_w, font_btn_h, is_active, font_hover);
-        draw_label_left(ctx, fx + 8.0, y, font_btn_w, font_btn_h, &font.family);
+        draw_button(ctx, fx, fy, font_btn_w, font_btn_h, is_active, font_hover);
+        draw_label_left(ctx, fx + 8.0, fy, font_btn_w, font_btn_h, &font.family);
         hits.push(HitRegion {
-            rect: (fx, y, font_btn_w, font_btn_h),
+            rect: (fx, fy, font_btn_w, font_btn_h),
             event: ToolbarEvent::SetFont(font.clone()),
             kind: HitKind::Click,
         });
-        fx += font_btn_w + 10.0;
+        fx += font_btn_w + font_gap;
     }
-    y += font_btn_h + 14.0;
+    y = fy + font_btn_h + 14.0;
 
     // Actions row
     draw_section_label(ctx, x, y, "Actions");
     y += 18.0;
-    let action_w = 90.0;
+    let action_w = (width - 2.0 * x - 16.0) / 3.0; // Fit 3 buttons with gaps
     let action_h = 30.0;
     let ax = x;
     draw_group_card(ctx, x - 6.0, y, width - 2.0 * x + 12.0, 130.0);
@@ -805,14 +973,14 @@ fn render_side_palette(
     ];
 
     let toggle_h = 30.0;
+    let toggle_w = width - 2.0 * x;
     for (evt, label, active) in toggles {
         let is_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, width - 2.0 * x, toggle_h))
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, toggle_w, toggle_h))
             .unwrap_or(false);
-        draw_button(ctx, x, y, width - 2.0 * x, toggle_h, *active, is_hover);
-        draw_label_left(ctx, x + 10.0, y, width - 2.0 * x, toggle_h, label);
+        draw_toggle_button(ctx, x, y, toggle_w, toggle_h, *active, is_hover, label);
         hits.push(HitRegion {
-            rect: (x, y, width - 2.0 * x, toggle_h),
+            rect: (x, y, toggle_w, toggle_h),
             event: evt.clone(),
             kind: HitKind::Click,
         });
@@ -838,6 +1006,49 @@ fn draw_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, active: boo
     ctx.set_source_rgba(r, g, b, a);
     draw_round_rect(ctx, x, y, w, h, 6.0);
     let _ = ctx.fill();
+}
+
+fn draw_toggle_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, active: bool, hover: bool, label: &str) {
+    // Draw button background
+    let (r, g, b, a) = if hover {
+        (0.35, 0.35, 0.45, 0.85)
+    } else {
+        (0.2, 0.22, 0.26, 0.75)
+    };
+    ctx.set_source_rgba(r, g, b, a);
+    draw_round_rect(ctx, x, y, w, h, 6.0);
+    let _ = ctx.fill();
+
+    // Draw switch on right side
+    let switch_w = 36.0;
+    let switch_h = 18.0;
+    let switch_x = x + w - switch_w - 10.0;
+    let switch_y = y + (h - switch_h) / 2.0;
+    let switch_r = switch_h / 2.0;
+
+    // Switch track
+    if active {
+        ctx.set_source_rgba(0.25, 0.6, 0.35, 0.95);
+    } else {
+        ctx.set_source_rgba(0.3, 0.3, 0.35, 0.8);
+    }
+    draw_round_rect(ctx, switch_x, switch_y, switch_w, switch_h, switch_r);
+    let _ = ctx.fill();
+
+    // Switch knob
+    let knob_r = switch_h / 2.0 - 2.0;
+    let knob_x = if active {
+        switch_x + switch_w - switch_r
+    } else {
+        switch_x + switch_r
+    };
+    let knob_y = switch_y + switch_h / 2.0;
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    ctx.arc(knob_x, knob_y, knob_r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+
+    // Draw label
+    draw_label_left(ctx, x + 10.0, y, w - switch_w - 20.0, h, label);
 }
 
 fn draw_label_center(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, text: &str) {
@@ -869,6 +1080,15 @@ fn draw_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color, ac
     ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
     draw_round_rect(ctx, x, y, size, size, 4.0);
     let _ = ctx.fill();
+
+    // Add border to dark colors for visibility on dark background
+    let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+    if luminance < 0.3 {
+        ctx.set_source_rgba(0.5, 0.5, 0.5, 0.8);
+        ctx.set_line_width(1.5);
+        draw_round_rect(ctx, x, y, size, size, 4.0);
+        let _ = ctx.stroke();
+    }
 
     if active {
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
