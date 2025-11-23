@@ -1,7 +1,7 @@
 # wayscriber
 
-> TL;DR: wayscriber is a ZoomIt-like screen annotation tool for Wayland compositors, written in Rust.
-> Works on compositors with the wlr-layer-shell protocol (Hyprland, Sway, river, …); building from source requires Rust 1.85+.
+> TL;DR: wayscriber is a ZoomIt-like screen real-time annotation tool for Linux, written in Rust.
+> Building from source requires Rust 1.85+.
 > Quick start: [set it up in four steps](#quick-start).
 
 <details>
@@ -35,9 +35,20 @@ https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 - [Contributing & Credits](#contributing--credits)
 
 ## Why wayscriber?
-
-- Works across Wayland compositors (Sway, Wayfire, River, Hyprland, …) via wlr-layer-shell. Tested extensively on Hyprland and confirmed working on Niri; reports from other compositors welcome.
-- Built for live presentations, classroom sessions, and screenshares - toggle with a key and annotate your screen instantly without breaking flow.
+- Annotate live over any app/window on any monitor; the overlay floats above without rearranging your workspace.
+- Use shapes, arrows, and text to explain steps, give demos, or build quick guides.
+- Redact/hide parts of the screen and grab screenshots (region, active window, fullscreen) in one keypress.
+- Toggle instantly from a lightweight background daemon when you need it.
+- Persist per-monitor/per-board canvases and tool state so your setup comes back after restarts.
+- Presenter helpers: click highlights and “freeze screen” to pause what viewers see while apps keep running.
+- Works on wlr-layer-shell compositors (Plasma KDE/KWin, Hyprland, Sway, Wayfire, River, …) with an xdg fallback for GNOME.
+- Real-hardware tests where it works:
+  - Ubuntu 25.10 GNOME (xdg fallback)
+  - Fedora 43 KDE (Plasma, layer-shell)
+  - Debian 13.2 KDE (Plasma, layer-shell)
+  - Fedora 43 GNOME (xdg fallback)
+  - Hyprland on Arch (layer-shell)
+  - Niri on Arch (layer-shell)
 - Complements tools like [Satty](https://github.com/gabm/Satty): Satty excels at capture → annotate → save workflows, while wayscriber stays resident as an always-available drawing layer with instant mode switching.
 
 ## Quick Start
@@ -148,24 +159,19 @@ paru -S wayscriber-bin
 
 The package installs the user service at `/usr/lib/systemd/user/wayscriber.service`.
 
-> **Upgrading from the old `hyprmarker` packages?**  
-> Remove the legacy packages once and reinstall under the new name:
-> ```bash
-> sudo pacman -Rns hyprmarker hyprmarker-debug  # ignore if either package is already gone
-> yay -S wayscriber    # or yay -S wayscriber-bin
-> ```
-> After this one-time cleanup, future upgrades work exactly like any other AUR package.
 
 ### Other Distros
 
 **Install dependencies:**
 
+Ubuntu / Debian:
 ```bash
-# Ubuntu / Debian
 sudo apt-get install libcairo2-dev libwayland-dev libpango1.0-dev
+```
 
-# Fedora
-sudo dnf install cairo-devel wayland-devel pango-devel
+Fedora:
+```bash
+sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel pango-devel libxkbcommon-devel cairo-gobject-devel
 ```
 
 Optional but recommended for screenshots:
