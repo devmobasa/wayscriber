@@ -297,6 +297,15 @@ impl WaylandBackend {
         // Clone runtime handle for state
         let tokio_handle = self.tokio_runtime.handle().clone();
 
+        let frozen_supported = layer_shell.is_some();
+
+        let freeze_on_start = if self.freeze_on_start && !frozen_supported {
+            warn!("Frozen mode is not supported on GNOME xdg fallback; ignoring --freeze");
+            false
+        } else {
+            self.freeze_on_start
+        };
+
         // Create application state
         let mut state = WaylandState::new(
             registry_state,
@@ -312,9 +321,10 @@ impl WaylandBackend {
             capture_manager,
             session_options,
             tokio_handle,
+            frozen_supported,
             preferred_output_identity,
             xdg_fullscreen,
-            self.freeze_on_start,
+            freeze_on_start,
             screencopy_manager,
         );
 
@@ -447,7 +457,9 @@ impl WaylandBackend {
             }
 
             if state.input_state.take_pending_frozen_toggle() {
-                if state.frozen.is_in_progress() {
+                if !state.frozen_enabled {
+                    warn!("Frozen mode disabled on this compositor (xdg fallback); ignoring toggle");
+                } else if state.frozen.is_in_progress() {
                     warn!("Frozen capture already in progress; ignoring toggle");
                 } else if state.input_state.frozen_active() {
                     state.frozen.unfreeze(&mut state.input_state);
