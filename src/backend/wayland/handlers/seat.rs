@@ -1,6 +1,6 @@
 // Manages seat capabilities (keyboard/pointer availability) and requests the matching devices.
-use log::{debug, info};
-use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
+use log::{debug, info, warn};
+use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState, pointer::ThemeSpec};
 use wayland_client::{Connection, QueueHandle, protocol::wl_seat};
 
 use super::super::state::WaylandState;
@@ -30,8 +30,23 @@ impl SeatHandler for WaylandState {
 
         if capability == Capability::Pointer {
             info!("Pointer capability available");
-            if self.seat_state.get_pointer(qh, &seat).is_ok() {
-                debug!("Pointer initialized");
+            match self.seat_state.get_pointer_with_theme(
+                qh,
+                &seat,
+                self.shm.wl_shm(),
+                self.compositor_state.create_surface(qh),
+                ThemeSpec::default(),
+            ) {
+                Ok(pointer) => {
+                    debug!("Pointer initialized with theme");
+                    self.themed_pointer = Some(pointer);
+                }
+                Err(err) => {
+                    warn!("Pointer initialized without theme: {}", err);
+                    if self.seat_state.get_pointer(qh, &seat).is_ok() {
+                        debug!("Pointer initialized without theme fallback");
+                    }
+                }
             }
         }
     }
@@ -48,6 +63,7 @@ impl SeatHandler for WaylandState {
         }
         if capability == Capability::Pointer {
             info!("Pointer capability removed");
+            self.themed_pointer = None;
         }
     }
 
