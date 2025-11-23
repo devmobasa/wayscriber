@@ -1,0 +1,118 @@
+use super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::config::Action;
+use crate::draw::{Color, FontDescriptor};
+use crate::input::tool::Tool;
+
+impl InputState {
+    /// Sets or clears an explicit tool override. Returns true if the tool changed.
+    pub fn set_tool_override(&mut self, tool: Option<Tool>) -> bool {
+        if self.tool_override == tool {
+            return false;
+        }
+
+        self.tool_override = tool;
+
+        // Ensure we are not mid-drawing with a stale tool
+        if !matches!(self.state, DrawingState::Idle | DrawingState::TextInput { .. }) {
+            self.state = DrawingState::Idle;
+        }
+
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Returns the current explicit tool override (if any).
+    pub fn tool_override(&self) -> Option<Tool> {
+        self.tool_override
+    }
+
+    /// Updates the current drawing color to an arbitrary value. Returns true if changed.
+    pub fn set_color(&mut self, color: Color) -> bool {
+        if self.current_color == color {
+            return false;
+        }
+
+        self.current_color = color;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.sync_highlight_color();
+        true
+    }
+
+    /// Sets the absolute thickness (px), clamped to valid bounds. Returns true if changed.
+    pub fn set_thickness(&mut self, thickness: f64) -> bool {
+        let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        if (clamped - self.current_thickness).abs() < f64::EPSILON {
+            return false;
+        }
+
+        self.current_thickness = clamped;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Sets the font descriptor used for text rendering. Returns true if changed.
+    #[allow(dead_code)]
+    pub fn set_font_descriptor(&mut self, descriptor: FontDescriptor) -> bool {
+        if self.font_descriptor == descriptor {
+            return false;
+        }
+
+        self.font_descriptor = descriptor;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Sets the absolute font size (px), clamped to the same range as config validation.
+    #[allow(dead_code)]
+    pub fn set_font_size(&mut self, size: f64) -> bool {
+        let clamped = size.clamp(8.0, 72.0);
+        if (clamped - self.current_font_size).abs() < f64::EPSILON {
+            return false;
+        }
+
+        self.current_font_size = clamped;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Sets toolbar visibility flag. Returns true if toggled.
+    pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
+        if self.toolbar_visible == visible {
+            return false;
+        }
+
+        self.toolbar_visible = visible;
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Returns whether the toolbar is marked visible.
+    pub fn toolbar_visible(&self) -> bool {
+        self.toolbar_visible
+    }
+
+    /// Wrapper for undo that preserves existing action plumbing.
+    pub fn toolbar_undo(&mut self) {
+        self.handle_action(Action::Undo);
+    }
+
+    /// Wrapper for redo that preserves existing action plumbing.
+    pub fn toolbar_redo(&mut self) {
+        self.handle_action(Action::Redo);
+    }
+
+    /// Wrapper for clear that preserves existing action plumbing.
+    pub fn toolbar_clear(&mut self) {
+        self.handle_action(Action::ClearCanvas);
+    }
+
+    /// Wrapper for entering text mode.
+    pub fn toolbar_enter_text_mode(&mut self) {
+        self.handle_action(Action::EnterTextMode);
+    }
+}

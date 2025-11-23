@@ -15,7 +15,7 @@ use smithay_client_toolkit::{
     seat::SeatState,
     shell::{
         WaylandSurface,
-        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
+        wlr_layer::{Anchor, Layer, LayerShell},
         xdg::{XdgShell, window::WindowDecorations},
     },
     shm::Shm,
@@ -370,10 +370,8 @@ impl WaylandBackend {
 
             // Configure the layer surface for fullscreen overlay
             layer_surface.set_anchor(Anchor::all());
-            // NOTE: Using Exclusive keyboard interactivity for complete input capture
-            // If clipboard operations are interrupted during overlay toggle, consider switching
-            // to KeyboardInteractivity::OnDemand which cooperates better with other applications
-            layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+            let desired_keyboard_mode = state.desired_keyboard_interactivity();
+            layer_surface.set_keyboard_interactivity(desired_keyboard_mode);
             layer_surface.set_size(0, 0); // Use full screen size
             layer_surface.set_exclusive_zone(-1);
 
@@ -381,6 +379,7 @@ impl WaylandBackend {
             layer_surface.commit();
 
             state.surface.set_layer_surface(layer_surface);
+            state.current_keyboard_interactivity = Some(desired_keyboard_mode);
             info!("Layer shell surface created");
         } else if let Some(xdg_shell) = state.xdg_shell.as_ref() {
             info!("Layer shell missing; creating xdg-shell window");
@@ -406,12 +405,6 @@ impl WaylandBackend {
             return Err(anyhow::anyhow!(
                 "No supported Wayland shell protocol available"
             ));
-        }
-
-        // Freeze on start if requested
-        if self.freeze_on_start {
-            info!("Freeze-on-start enabled, requesting frozen capture");
-            state.input_state.request_frozen_toggle();
         }
 
         // Track consecutive render failures for error recovery
@@ -448,6 +441,8 @@ impl WaylandBackend {
                         info!("Exit requested after dispatch, breaking event loop");
                         break;
                     }
+                    // Adjust keyboard interactivity if toolbar visibility changed.
+                    state.sync_toolbar_visibility(&qh);
                 }
                 Err(e) => {
                     warn!("Event queue error: {}", e);

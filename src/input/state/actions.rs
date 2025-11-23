@@ -95,14 +95,17 @@ impl InputState {
                 let key_str = match key {
                     Key::Char(c) => c.to_string(),
                     Key::Escape => "Escape".to_string(),
-                    Key::Return => "Return".to_string(),
-                    Key::Backspace => "Backspace".to_string(),
-                    Key::Space => "Space".to_string(),
-                    Key::F10 => "F10".to_string(),
-                    Key::F11 => "F11".to_string(),
-                    Key::F12 => "F12".to_string(),
-                    Key::Menu => "Menu".to_string(),
-                    Key::Up => "ArrowUp".to_string(),
+                Key::Return => "Return".to_string(),
+                Key::Backspace => "Backspace".to_string(),
+                Key::Space => "Space".to_string(),
+                Key::F1 => "F1".to_string(),
+                Key::F2 => "F2".to_string(),
+                Key::F9 => "F9".to_string(),
+                Key::F10 => "F10".to_string(),
+                Key::F11 => "F11".to_string(),
+                Key::F12 => "F12".to_string(),
+                Key::Menu => "Menu".to_string(),
+                Key::Up => "ArrowUp".to_string(),
                     Key::Down => "ArrowDown".to_string(),
                     Key::Left => "ArrowLeft".to_string(),
                     Key::Right => "ArrowRight".to_string(),
@@ -236,6 +239,9 @@ impl InputState {
             Key::Return => "Return".to_string(),
             Key::Backspace => "Backspace".to_string(),
             Key::Space => "Space".to_string(),
+            Key::F1 => "F1".to_string(),
+            Key::F2 => "F2".to_string(),
+            Key::F9 => "F9".to_string(),
             Key::F10 => "F10".to_string(),
             Key::F11 => "F11".to_string(),
             Key::F12 => "F12".to_string(),
@@ -435,6 +441,16 @@ impl InputState {
                 };
                 info!("{}", message);
             }
+            Action::ToggleToolbar => {
+                let now_visible = !self.toolbar_visible();
+                let changed = self.set_toolbar_visible(now_visible);
+                if changed {
+                    info!(
+                        "Toolbar visibility {}",
+                        if now_visible { "enabled" } else { "disabled" }
+                    );
+                }
+            }
             Action::ToggleHighlightTool => {
                 let enabled = self.toggle_highlight_tool();
                 let message = if enabled {
@@ -451,52 +467,28 @@ impl InputState {
                 self.launch_configurator();
             }
             Action::SetColorRed => {
-                self.current_color = util::key_to_color('r').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('r').unwrap());
             }
             Action::SetColorGreen => {
-                self.current_color = util::key_to_color('g').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('g').unwrap());
             }
             Action::SetColorBlue => {
-                self.current_color = util::key_to_color('b').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('b').unwrap());
             }
             Action::SetColorYellow => {
-                self.current_color = util::key_to_color('y').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('y').unwrap());
             }
             Action::SetColorOrange => {
-                self.current_color = util::key_to_color('o').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('o').unwrap());
             }
             Action::SetColorPink => {
-                self.current_color = util::key_to_color('p').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('p').unwrap());
             }
             Action::SetColorWhite => {
-                self.current_color = util::key_to_color('w').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('w').unwrap());
             }
             Action::SetColorBlack => {
-                self.current_color = util::key_to_color('k').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('k').unwrap());
             }
             Action::CaptureFullScreen
             | Action::CaptureActiveWindow

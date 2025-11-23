@@ -51,12 +51,25 @@ impl InputState {
     /// Returns the active tool considering overrides and drawing state.
     pub fn active_tool(&self) -> Tool {
         if let DrawingState::Drawing { tool, .. } = &self.state {
-            *tool
-        } else if let Some(tool) = self.tool_override {
-            tool
-        } else {
-            self.modifiers.current_tool()
+            return *tool;
         }
+
+        let modifier_tool = self.modifiers.current_tool();
+
+        if let Some(override_tool) = self.tool_override {
+            if override_tool == Tool::Highlight {
+                return Tool::Highlight;
+            }
+
+            // Allow temporary modifier-based tools when the override is a drawing tool
+            if modifier_tool != Tool::Pen && modifier_tool != override_tool {
+                return modifier_tool;
+            }
+
+            return override_tool;
+        }
+
+        modifier_tool
     }
 
     /// Returns whether the highlight tool is currently selected.
@@ -81,20 +94,11 @@ impl InputState {
                 self.toggle_click_highlight();
             }
 
-            self.tool_override = Some(Tool::Highlight);
-            // Ensure we are not mid-drawing with another tool
-            if !matches!(
-                self.state,
-                DrawingState::Idle | DrawingState::TextInput { .. }
-            ) {
-                self.state = DrawingState::Idle;
-            }
+            self.set_tool_override(Some(Tool::Highlight));
         } else {
-            self.tool_override = None;
+            self.set_tool_override(None);
         }
 
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
         enable
     }
 }

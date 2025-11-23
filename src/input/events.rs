@@ -41,6 +41,12 @@ pub enum Key {
     Alt,
     /// Context menu/application key
     Menu,
+    /// F1 function key (help)
+    F1,
+    /// F2 function key (toolbar toggle)
+    F2,
+    /// F9 function key (toggle toolbar)
+    F9,
     /// F10 function key (toggle help)
     F10,
     /// F11 function key (open configurator)
