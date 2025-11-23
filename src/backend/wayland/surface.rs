@@ -7,14 +7,26 @@
 use anyhow::{Context, Result};
 use log::info;
 use smithay_client_toolkit::{
-    shell::{WaylandSurface, wlr_layer::LayerSurface},
+    shell::{WaylandSurface, wlr_layer::LayerSurface, xdg::window::Window},
     shm::{Shm, slot::SlotPool},
 };
+use wayland_client::protocol::{wl_output, wl_surface};
+
+/// The active shell role for the surface.
+pub enum SurfaceKind {
+    Layer(LayerSurface),
+    Xdg {
+        #[allow(dead_code)]
+        window: Window,
+    },
+}
 
 /// Tracks the active layer surface, buffer pool, and associated sizing state.
 pub struct SurfaceState {
-    layer_surface: Option<LayerSurface>,
+    kind: Option<SurfaceKind>,
+    wl_surface: Option<wl_surface::WlSurface>,
     pool: Option<SlotPool>,
+    current_output: Option<wl_output::WlOutput>,
     width: u32,
     height: u32,
     scale: i32,
@@ -26,8 +38,10 @@ impl SurfaceState {
     /// Creates a new, unconfigured surface state.
     pub fn new() -> Self {
         Self {
-            layer_surface: None,
+            kind: None,
+            wl_surface: None,
             pool: None,
+            current_output: None,
             width: 0,
             height: 0,
             scale: 1,
@@ -38,17 +52,49 @@ impl SurfaceState {
 
     /// Assigns the layer surface produced during startup.
     pub fn set_layer_surface(&mut self, surface: LayerSurface) {
-        self.layer_surface = Some(surface);
+        self.wl_surface = Some(surface.wl_surface().clone());
+        self.kind = Some(SurfaceKind::Layer(surface));
     }
 
-    /// Returns the current layer surface, if initialized.
-    pub fn layer_surface(&self) -> Option<&LayerSurface> {
-        self.layer_surface.as_ref()
+    /// Assigns an xdg-shell window produced during startup.
+    pub fn set_xdg_window(&mut self, window: Window) {
+        self.wl_surface = Some(window.wl_surface().clone());
+        self.kind = Some(SurfaceKind::Xdg { window });
+    }
+
+    /// Returns the active wl_surface, if initialized.
+    pub fn wl_surface(&self) -> Option<&wl_surface::WlSurface> {
+        self.wl_surface.as_ref()
     }
 
     /// Returns the mutable layer surface, if initialized.
     pub fn layer_surface_mut(&mut self) -> Option<&mut LayerSurface> {
-        self.layer_surface.as_mut()
+        match &mut self.kind {
+            Some(SurfaceKind::Layer(layer)) => Some(layer),
+            _ => None,
+        }
+    }
+
+    /// Returns true if the active surface is an xdg-shell window.
+    pub fn is_xdg_window(&self) -> bool {
+        matches!(self.kind, Some(SurfaceKind::Xdg { .. }))
+    }
+
+    /// Records the most recent output the surface entered.
+    pub fn set_current_output(&mut self, output: wl_output::WlOutput) {
+        self.current_output = Some(output);
+    }
+
+    /// Clears the current output if it matches the provided handle.
+    pub fn clear_output(&mut self, output: &wl_output::WlOutput) {
+        if self.current_output.as_ref() == Some(output) {
+            self.current_output = None;
+        }
+    }
+
+    /// Returns the last known output for this surface, if any.
+    pub fn current_output(&self) -> Option<wl_output::WlOutput> {
+        self.current_output.clone()
     }
 
     /// Updates the surface dimensions, returning `true` if the size changed.
@@ -72,6 +118,8 @@ impl SurfaceState {
             self.pool = None;
             if let Some(layer_surface) = self.layer_surface_mut() {
                 let _ = layer_surface.set_buffer_scale(scale as u32);
+            } else if let Some(wl_surface) = self.wl_surface() {
+                wl_surface.set_buffer_scale(scale);
             }
         }
     }
@@ -127,11 +175,7 @@ impl SurfaceState {
             let pool_size = buffer_size * buffer_count;
             info!(
                 "Creating new SlotPool ({}x{} @ scale {}, {} bytes, {} buffers)",
-                phys_w,
-                phys_h,
-                self.scale,
-                pool_size,
-                buffer_count
+                phys_w, phys_h, self.scale, pool_size, buffer_count
             );
             let pool = SlotPool::new(pool_size, shm).context("Failed to create slot pool")?;
             self.pool = Some(pool);

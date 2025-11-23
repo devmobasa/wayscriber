@@ -108,6 +108,13 @@ show_status_bar = true
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"
 
+# Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
+# against monitor identity; leave empty to use the current/first monitor.
+#preferred_output = "eDP-1"
+
+# Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
+#xdg_fullscreen = false
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Status Bar Styling
 # ───────────────────────────────────────────────────────────────────────────────

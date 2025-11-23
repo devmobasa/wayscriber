@@ -8,6 +8,7 @@ use signal_hook::{
     iterator::Signals,
 };
 use smithay_client_toolkit::{
+    activation::ActivationState,
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
@@ -15,6 +16,7 @@ use smithay_client_toolkit::{
     shell::{
         WaylandSurface,
         wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
+        xdg::{XdgShell, window::WindowDecorations},
     },
     shm::Shm,
 };
@@ -89,9 +91,44 @@ impl WaylandBackend {
             CompositorState::bind(&globals, &qh).context("wl_compositor not available")?;
         debug!("Bound compositor");
 
-        let layer_shell =
-            LayerShell::bind(&globals, &qh).context("zwlr_layer_shell_v1 not available")?;
-        debug!("Bound layer shell");
+        let layer_shell = match LayerShell::bind(&globals, &qh) {
+            Ok(shell) => {
+                debug!("Bound layer shell");
+                Some(shell)
+            }
+            Err(err) => {
+                warn!("Layer shell not available: {}", err);
+                None
+            }
+        };
+
+        let xdg_shell = match XdgShell::bind(&globals, &qh) {
+            Ok(shell) => {
+                debug!("Bound xdg-shell");
+                Some(shell)
+            }
+            Err(err) => {
+                warn!("xdg-shell not available: {}", err);
+                None
+            }
+        };
+
+        let activation = match ActivationState::bind(&globals, &qh) {
+            Ok(state) => {
+                debug!("Bound xdg-activation");
+                Some(state)
+            }
+            Err(err) => {
+                debug!("xdg-activation not available: {}", err);
+                None
+            }
+        };
+
+        if layer_shell.is_none() && xdg_shell.is_none() {
+            return Err(anyhow::anyhow!(
+                "Wayland compositor does not expose layer-shell or xdg-shell protocols"
+            ));
+        }
 
         let shm = Shm::bind(&globals, &qh).context("wl_shm not available")?;
         debug!("Bound shared memory");
@@ -104,13 +141,17 @@ impl WaylandBackend {
 
         let registry_state = RegistryState::new(&globals);
 
-        let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ()) {
+        let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ())
+        {
             Ok(manager) => {
                 debug!("Bound zwlr_screencopy_manager_v1");
                 Some(manager)
             }
             Err(err) => {
-                warn!("zwlr_screencopy_manager_v1 not available (frozen mode disabled): {}", err);
+                warn!(
+                    "zwlr_screencopy_manager_v1 not available (frozen mode disabled): {}",
+                    err
+                );
                 None
             }
         };
@@ -162,6 +203,30 @@ impl WaylandBackend {
                 None
             }
         };
+
+        let preferred_output_identity = env::var("WAYSCRIBER_XDG_OUTPUT")
+            .ok()
+            .or_else(|| config.ui.preferred_output.clone());
+        if let Some(ref output) = preferred_output_identity {
+            info!(
+                "Preferring xdg fullscreen on output '{}' (env or config override)",
+                output
+            );
+        }
+        let mut xdg_fullscreen = env::var("WAYSCRIBER_XDG_FULLSCREEN")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(config.ui.xdg_fullscreen);
+        let desktop_env = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+        let force_fullscreen = env::var("WAYSCRIBER_XDG_FULLSCREEN_FORCE")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if xdg_fullscreen && desktop_env.to_uppercase().contains("GNOME") && !force_fullscreen {
+            warn!(
+                "GNOME fullscreen xdg fallback is opaque; falling back to maximized. Set WAYSCRIBER_XDG_FULLSCREEN_FORCE=1 to force fullscreen anyway."
+            );
+            xdg_fullscreen = false;
+        }
 
         // Create font descriptor from config
         let font_descriptor = crate::draw::FontDescriptor::new(
@@ -232,11 +297,22 @@ impl WaylandBackend {
         // Clone runtime handle for state
         let tokio_handle = self.tokio_runtime.handle().clone();
 
+        let frozen_supported = layer_shell.is_some();
+
+        let freeze_on_start = if self.freeze_on_start && !frozen_supported {
+            warn!("Frozen mode is not supported on GNOME xdg fallback; ignoring --freeze");
+            false
+        } else {
+            self.freeze_on_start
+        };
+
         // Create application state
         let mut state = WaylandState::new(
             registry_state,
             compositor_state,
             layer_shell,
+            xdg_shell,
+            activation,
             shm,
             output_state,
             seat_state,
@@ -245,7 +321,10 @@ impl WaylandBackend {
             capture_manager,
             session_options,
             tokio_handle,
-            self.freeze_on_start,
+            frozen_supported,
+            preferred_output_identity,
+            xdg_fullscreen,
+            freeze_on_start,
             screencopy_manager,
         );
 
@@ -277,31 +356,57 @@ impl WaylandBackend {
         #[cfg(not(unix))]
         let exit_flag: Option<Arc<AtomicBool>> = None;
 
-        // Create layer shell surface
-        info!("Creating layer shell surface");
+        // Create surface using layer-shell when available, otherwise fall back to xdg-shell
         let wl_surface = state.compositor_state.create_surface(&qh);
-        let layer_surface = state.layer_shell.create_layer_surface(
-            &qh,
-            wl_surface,
-            Layer::Overlay,
-            Some("wayscriber"),
-            None, // Default output
-        );
+        if let Some(layer_shell) = state.layer_shell.as_ref() {
+            info!("Creating layer shell surface");
+            let layer_surface = layer_shell.create_layer_surface(
+                &qh,
+                wl_surface,
+                Layer::Overlay,
+                Some("wayscriber"),
+                None, // Default output
+            );
 
-        // Configure the layer surface for fullscreen overlay
-        layer_surface.set_anchor(Anchor::all());
-        // NOTE: Using Exclusive keyboard interactivity for complete input capture
-        // If clipboard operations are interrupted during overlay toggle, consider switching
-        // to KeyboardInteractivity::OnDemand which cooperates better with other applications
-        layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
-        layer_surface.set_size(0, 0); // Use full screen size
-        layer_surface.set_exclusive_zone(-1);
+            // Configure the layer surface for fullscreen overlay
+            layer_surface.set_anchor(Anchor::all());
+            // NOTE: Using Exclusive keyboard interactivity for complete input capture
+            // If clipboard operations are interrupted during overlay toggle, consider switching
+            // to KeyboardInteractivity::OnDemand which cooperates better with other applications
+            layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+            layer_surface.set_size(0, 0); // Use full screen size
+            layer_surface.set_exclusive_zone(-1);
 
-        // Commit the surface
-        layer_surface.commit();
+            // Commit the surface
+            layer_surface.commit();
 
-        state.surface.set_layer_surface(layer_surface);
-        info!("Layer shell surface created");
+            state.surface.set_layer_surface(layer_surface);
+            info!("Layer shell surface created");
+        } else if let Some(xdg_shell) = state.xdg_shell.as_ref() {
+            info!("Layer shell missing; creating xdg-shell window");
+            let window = xdg_shell.create_window(wl_surface, WindowDecorations::None, &qh);
+            window.set_title("wayscriber overlay");
+            window.set_app_id("com.devmobasa.wayscriber");
+            if state.xdg_fullscreen {
+                if let Some(output) = state.preferred_fullscreen_output() {
+                    info!("Requesting fullscreen on preferred output");
+                    window.set_fullscreen(Some(&output));
+                } else {
+                    info!("Preferred output unknown; requesting compositor-chosen fullscreen");
+                    window.set_fullscreen(None);
+                }
+            } else {
+                window.set_maximized();
+            }
+            window.commit();
+            state.surface.set_xdg_window(window);
+            state.request_xdg_activation(&qh);
+            info!("xdg-shell window created");
+        } else {
+            return Err(anyhow::anyhow!(
+                "No supported Wayland shell protocol available"
+            ));
+        }
 
         // Freeze on start if requested
         if self.freeze_on_start {
@@ -352,7 +457,9 @@ impl WaylandBackend {
             }
 
             if state.input_state.take_pending_frozen_toggle() {
-                if state.frozen.is_in_progress() {
+                if !state.frozen_enabled {
+                    warn!("Frozen mode disabled on this compositor (xdg fallback); ignoring toggle");
+                } else if state.frozen.is_in_progress() {
                     warn!("Frozen capture already in progress; ignoring toggle");
                 } else if state.input_state.frozen_active() {
                     state.frozen.unfreeze(&mut state.input_state);
@@ -372,7 +479,9 @@ impl WaylandBackend {
                         &state.tokio_handle,
                     ) {
                         warn!("Frozen capture failed to start: {}", err);
-                        state.frozen.cancel(&mut state.surface, &mut state.input_state);
+                        state
+                            .frozen
+                            .cancel(&mut state.surface, &mut state.input_state);
                     }
                 }
             }

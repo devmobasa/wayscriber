@@ -68,7 +68,7 @@ fn render_status_bar_draws_for_all_positions() {
 fn render_help_overlay_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
-    wayscriber::ui::render_help_overlay(&ctx, &style, 800, 600);
+    wayscriber::ui::render_help_overlay(&ctx, &style, 800, 600, true);
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }
