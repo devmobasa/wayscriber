@@ -61,29 +61,28 @@ impl PointerHandler for WaylandState {
                 PointerEventKind::Motion { .. } => {
                     if on_toolbar {
                         self.pointer_over_toolbar = true;
-                        if self.toolbar_dragging {
-                            if let Some(evt) =
-                                self.toolbar.pointer_motion(&event.surface, event.position)
-                            {
-                                self.handle_toolbar_event(evt);
-                                self.toolbar.mark_dirty();
-                                self.input_state.needs_redraw = true;
-                                self.refresh_keyboard_interactivity();
-                            }
+                        if let Some(evt) =
+                            self.toolbar.pointer_motion(&event.surface, event.position)
+                        {
+                            self.handle_toolbar_event(evt);
+                        } else if !self.toolbar_dragging {
+                            // Hover only
+                            self.toolbar.mark_dirty();
                         }
+                        self.input_state.needs_redraw = true;
+                        self.refresh_keyboard_interactivity();
                         continue;
                     }
                     if self.pointer_over_toolbar {
-                        if self.toolbar_dragging {
-                            if let Some(evt) =
-                                self.toolbar.pointer_motion(&event.surface, event.position)
-                            {
-                                self.handle_toolbar_event(evt);
-                                self.toolbar.mark_dirty();
-                                self.input_state.needs_redraw = true;
-                                self.refresh_keyboard_interactivity();
-                            }
+                        if let Some(evt) =
+                            self.toolbar.pointer_motion(&event.surface, event.position)
+                        {
+                            self.handle_toolbar_event(evt);
+                        } else if !self.toolbar_dragging {
+                            self.toolbar.mark_dirty();
                         }
+                        self.input_state.needs_redraw = true;
+                        self.refresh_keyboard_interactivity();
                         continue;
                     }
                     self.current_mouse_x = event.position.0 as i32;
