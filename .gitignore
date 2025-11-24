@@ -24,7 +24,6 @@ packaging/**
 !packaging/wayscriber.service
 !packaging/PKGBUILD
 !packaging/package.yaml
-!packaging/PKGBUILD.hyprmarker-meta
 
 docs/board
 
