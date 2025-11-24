@@ -75,6 +75,7 @@ pub fn render_status_bar(
     let tool_name = match &input_state.state {
         DrawingState::TextInput { .. } => "Text",
         DrawingState::Drawing { tool, .. } => match tool {
+            Tool::Select => "Select",
             Tool::Pen => "Pen",
             Tool::Line => "Line",
             Tool::Rect => "Rectangle",
@@ -84,6 +85,7 @@ pub fn render_status_bar(
         },
         DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Idle => match tool {
+            Tool::Select => "Select",
             Tool::Pen => "Pen",
             Tool::Line => "Line",
             Tool::Rect => "Rectangle",

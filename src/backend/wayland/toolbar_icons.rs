@@ -5,6 +5,34 @@
 use cairo::Context;
 use std::f64::consts::PI;
 
+/// Draw a cursor/select icon (arrow pointer)
+pub fn draw_icon_select(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.08).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Classic cursor arrow shape
+    let start_x = x + s * 0.2;
+    let start_y = y + s * 0.15;
+    let height = s * 0.65;
+    let mid_y = start_y + height * 0.6;
+
+    // Outer path (filled)
+    ctx.move_to(start_x, start_y);
+    ctx.line_to(start_x, start_y + height);
+    ctx.line_to(start_x + s * 0.2, mid_y);
+    ctx.line_to(start_x + s * 0.35, start_y + height * 0.85);
+    ctx.line_to(start_x + s * 0.45, start_y + height * 0.75);
+    ctx.line_to(start_x + s * 0.3, mid_y - s * 0.1);
+    ctx.line_to(start_x + s * 0.5, start_y + s * 0.1);
+    ctx.close_path();
+
+    let _ = ctx.fill_preserve();
+    let _ = ctx.stroke();
+}
+
 /// Draw a pen/freehand icon (pencil with wavy stroke)
 pub fn draw_icon_pen(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;

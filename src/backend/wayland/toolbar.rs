@@ -511,10 +511,10 @@ impl ToolbarSurfaceManager {
         // Create top toolbar if visible
         if self.is_top_visible() {
             // Dynamic size based on mode:
-            // - Icon mode: 580px wide (5 tools + text + clear + highlight + icons checkbox + pin/close)
+            // - Icon mode: 610px wide (6 tools + text + clear + highlight + icons checkbox + pin/close)
             //              80px tall (42px buttons at y=6, fill toggle below, tooltip space)
-            // - Text mode: 680px wide (text labels need more space), 56px tall (no tooltips)
-            let target_size = if use_icons { (580, 80) } else { (680, 56) };
+            // - Text mode: 720px wide (text labels need more space), 56px tall (no tooltips)
+            let target_size = if use_icons { (610, 80) } else { (720, 56) };
 
             // Recreate if size changed
             if self.top.logical_size != (0, 0) && self.top.logical_size != target_size {
@@ -692,6 +692,7 @@ fn render_top_strip(
     // Tool definitions with icons and labels
     type IconFn = fn(&cairo::Context, f64, f64, f64);
     let buttons: &[(Tool, IconFn, &str)] = &[
+        (Tool::Select, toolbar_icons::draw_icon_select as IconFn, "Select"),
         (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
         (Tool::Line, toolbar_icons::draw_icon_line as IconFn, "Line"),
         (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn, "Rect"),

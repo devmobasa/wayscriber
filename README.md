@@ -4,24 +4,20 @@
 > Building from source requires Rust 1.85+.
 > Quick start: [set it up in four steps](#quick-start).
 
-<details>
-<summary>📹 Demo Video (Click to expand)</summary>
+## Gallery
+
+![Demo Poster](https://wayscriber.com/demo-poster-4.png)
+
+![Demo Poster](https://wayscriber.com/demo-poster-2.png)
+
+## Demo
 
 <video controls width="720" poster="https://wayscriber.com/demo-poster-4.png">
   <source src="https://wayscriber.com/demo.mp4" type="video/mp4">
   Your browser does not support the video tag. Watch here: https://wayscriber.com/demo.mp4
 </video>
 
-</details>
-
-<details>
-<summary>🖼️ Demo GIF (Click to expand)</summary>
-
 ![Demo GIF](https://wayscriber.com/demo.gif)
-
-<img src="https://wayscriber.com/demo-poster-2.png" alt="Demo Poster" width="720" />
-
-</details>
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)

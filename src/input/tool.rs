@@ -6,6 +6,8 @@
 /// Tools are selected by holding modifier keys (Shift, Ctrl, Tab) while dragging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
+    /// Select/cursor tool - interact with UI without drawing
+    Select,
     /// Freehand drawing - follows mouse path (default, no modifiers)
     Pen,
     /// Straight line - between start and end points (Shift)
