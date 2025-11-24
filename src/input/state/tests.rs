@@ -805,6 +805,7 @@ fn redo_all_with_delay_replays_history() {
 }
 
 #[test]
+#[test]
 fn select_this_shape_command_focuses_single_shape() {
     let mut state = create_test_input_state();
     let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
