@@ -146,6 +146,7 @@ wayscriber --clear-session    # Remove stored boards
 ```
 
 Grab a walk-through in `docs/CONFIG.md` if you want to edit the TOML by hand.
+See the `[ui.toolbar]` section there to pin toolbars, switch icon/text mode, and show/hide colors/actions/delay sliders.
 
 ## Demo
 
