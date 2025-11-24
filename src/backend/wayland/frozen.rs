@@ -661,7 +661,6 @@ mod tests {
             0,
             5,
             5,
-            false,
         );
 
         // Simulate an in-flight portal capture

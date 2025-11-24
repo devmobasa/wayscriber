@@ -263,7 +263,6 @@ impl WaylandBackend {
             config.history.custom_redo_delay_ms,
             config.history.custom_undo_steps,
             config.history.custom_redo_steps,
-            config.history.custom_use_icons,
         );
 
         input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);

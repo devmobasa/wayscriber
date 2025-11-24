@@ -32,7 +32,6 @@ fn make_input_state() -> InputState {
         0,
         5,
         5,
-        false,
     )
 }
 
