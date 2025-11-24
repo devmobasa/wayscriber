@@ -488,9 +488,11 @@ impl ToolbarSurfaceManager {
     ) {
         // Create top toolbar if visible
         if self.is_top_visible() {
-            // Dynamic width based on mode: icons mode is more compact
-            let target_width = if use_icons { 520 } else { 680 };
-            let target_size = (target_width, 56);
+            // Dynamic size based on mode:
+            // - Icon mode: 530px wide (5 tools + text + clear + icons checkbox + pin/close)
+            //              80px tall (42px buttons at y=6, fill toggle below, tooltip space)
+            // - Text mode: 680px wide (text labels need more space), 56px tall (no tooltips)
+            let target_size = if use_icons { (530, 80) } else { (680, 56) };
 
             // Recreate if size changed
             if self.top.logical_size != (0, 0) && self.top.logical_size != target_size {
@@ -505,8 +507,15 @@ impl ToolbarSurfaceManager {
 
         // Create side toolbar if visible
         if self.is_side_visible() {
-            if self.side.logical_size == (0, 0) {
-                self.side.set_logical_size((300, 740));
+            // Dynamic height: text mode needs more space (~780px) than icon mode (~740px)
+            let target_size = if use_icons { (300, 740) } else { (300, 800) };
+
+            if self.side.logical_size != (0, 0) && self.side.logical_size != target_size {
+                self.side.destroy();
+            }
+
+            if self.side.logical_size == (0, 0) || self.side.logical_size != target_size {
+                self.side.set_logical_size(target_size);
             }
             self.side.ensure_created(qh, compositor, layer_shell, scale);
         }
@@ -640,11 +649,24 @@ fn render_top_strip(
 
     if use_icons {
         // Icon mode: square buttons with icons
+        // Position buttons near top (y=6) to leave room for fill toggle and tooltips below
         let btn_size = 42.0;
-        let y = (height - btn_size) / 2.0;
+        let y = 6.0;
         let icon_size = 26.0;
 
+        // Track Rect and Circle button positions for fill toggle placement
+        let mut rect_x = 0.0;
+        let mut circle_end_x = 0.0;
+
         for (tool, icon_fn, label) in buttons {
+            // Track positions for Rect and Circle/Ellipse
+            if *tool == Tool::Rect {
+                rect_x = x;
+            }
+            if *tool == Tool::Ellipse {
+                circle_end_x = x + btn_size;
+            }
+
             let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
             let is_hover = hover
                 .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
@@ -665,20 +687,20 @@ fn render_top_strip(
             x += btn_size + gap;
         }
 
-        // Fill toggle checkbox
-        let fill_w = 64.0;
-        let fill_h = btn_size;
+        // Small fill toggle below Rect and Circle buttons
+        let fill_y = y + btn_size + 2.0;
+        let fill_w = circle_end_x - rect_x;
+        let fill_h = 18.0;
         let fill_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, fill_w, fill_h))
+            .map(|(hx, hy)| point_in_rect(hx, hy, rect_x, fill_y, fill_w, fill_h))
             .unwrap_or(false);
-        draw_checkbox(ctx, x, y, fill_w, fill_h, snapshot.fill_enabled, fill_hover, "Fill");
+        draw_mini_checkbox(ctx, rect_x, fill_y, fill_w, fill_h, snapshot.fill_enabled, fill_hover, "Fill");
         hits.push(HitRegion {
-            rect: (x, y, fill_w, fill_h),
+            rect: (rect_x, fill_y, fill_w, fill_h),
             event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             kind: HitKind::Click,
             tooltip: None,
         });
-        x += fill_w + gap;
 
         // Text mode button with icon
         let is_hover = hover
@@ -692,6 +714,21 @@ fn render_top_strip(
             event: ToolbarEvent::EnterTextMode,
             kind: HitKind::Click,
             tooltip: Some("Text"),
+        });
+        x += btn_size + gap;
+
+        // Clear button with icon
+        let clear_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+            .unwrap_or(false);
+        draw_button(ctx, x, y, btn_size, btn_size, false, clear_hover);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_clear(ctx, x + (btn_size - icon_size) / 2.0, y + (btn_size - icon_size) / 2.0, icon_size);
+        hits.push(HitRegion {
+            rect: (x, y, btn_size, btn_size),
+            event: ToolbarEvent::ClearCanvas,
+            kind: HitKind::Click,
+            tooltip: Some("Clear"),
         });
         x += btn_size + gap;
 
@@ -772,37 +809,42 @@ fn render_top_strip(
     }
 
     // Pin and Close buttons on the right side
+    // Align vertically with tool buttons: y=6 for icon mode (42px buttons), centered for text mode
     let btn_size = 24.0;
     let btn_gap = 6.0;
+    let btn_y = if use_icons {
+        // Center with 42px tool buttons at y=6: (6 + 42/2) - 24/2 = 27 - 12 = 15
+        15.0
+    } else {
+        (height - btn_size) / 2.0
+    };
 
     let pin_x = width - btn_size * 2.0 - btn_gap - 12.0;
-    let pin_y = (height - btn_size) / 2.0;
     let pin_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, pin_y, btn_size, btn_size))
+        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_pin_button(ctx, pin_x, pin_y, btn_size, snapshot.top_pinned, pin_hover);
+    draw_pin_button(ctx, pin_x, btn_y, btn_size, snapshot.top_pinned, pin_hover);
     hits.push(HitRegion {
-        rect: (pin_x, pin_y, btn_size, btn_size),
+        rect: (pin_x, btn_y, btn_size, btn_size),
         event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
         kind: HitKind::Click,
-            tooltip: None,
+        tooltip: None,
     });
 
     let close_x = width - btn_size - 12.0;
-    let close_y = (height - btn_size) / 2.0;
     let close_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, close_y, btn_size, btn_size))
+        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_close_button(ctx, close_x, close_y, btn_size, close_hover);
+    draw_close_button(ctx, close_x, btn_y, btn_size, close_hover);
     hits.push(HitRegion {
-        rect: (close_x, close_y, btn_size, btn_size),
+        rect: (close_x, btn_y, btn_size, btn_size),
         event: ToolbarEvent::CloseTopToolbar,
         kind: HitKind::Click,
         tooltip: None,
     });
 
-    // Draw tooltip for hovered icon button (above for top toolbar)
-    draw_tooltip(ctx, hits, hover, width, true);
+    // Draw tooltip for hovered icon button (below buttons, toolbar is tall enough)
+    draw_tooltip(ctx, hits, hover, width, false);
 }
 
 fn point_in_rect(px: f64, py: f64, x: f64, y: f64, w: f64, h: f64) -> bool {
@@ -1672,6 +1714,56 @@ fn draw_checkbox(
 
     let label_x = box_x + box_size + 8.0;
     draw_label_left(ctx, label_x, y, w - (label_x - x), h, label);
+}
+
+/// Draw a compact mini checkbox (used for fill toggle under shape buttons)
+fn draw_mini_checkbox(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    checked: bool,
+    hover: bool,
+    label: &str,
+) {
+    let (r, g, b, a) = if checked {
+        (0.25, 0.5, 0.35, 0.9) // Green tint when checked
+    } else if hover {
+        (0.32, 0.34, 0.4, 0.85)
+    } else {
+        (0.2, 0.22, 0.26, 0.7)
+    };
+    ctx.set_source_rgba(r, g, b, a);
+    draw_round_rect(ctx, x, y, w, h, 3.0);
+    let _ = ctx.fill();
+
+    // Small checkbox square
+    let box_size = h * 0.6;
+    let box_x = x + 4.0;
+    let box_y = y + (h - box_size) / 2.0;
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.85);
+    ctx.rectangle(box_x, box_y, box_size, box_size);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    if checked {
+        ctx.move_to(box_x + 2.0, box_y + box_size / 2.0);
+        ctx.line_to(box_x + box_size / 2.0, box_y + box_size - 2.0);
+        ctx.line_to(box_x + box_size - 2.0, box_y + 2.0);
+        let _ = ctx.stroke();
+    }
+
+    // Centered label
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(10.0);
+    if let Ok(ext) = ctx.text_extents(label) {
+        let label_x = x + box_size + 8.0 + (w - box_size - 12.0 - ext.width()) / 2.0;
+        let label_y = y + (h + ext.height()) / 2.0;
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+        ctx.move_to(label_x, label_y);
+        let _ = ctx.show_text(label);
+    }
 }
 
 fn draw_color_picker(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {

@@ -815,6 +815,10 @@ pub struct ToolbarConfig {
     /// Show the side toolbar (colors, settings) on startup
     #[serde(default = "default_toolbar_side_pinned")]
     pub side_pinned: bool,
+
+    /// Use icons instead of text labels in toolbars
+    #[serde(default = "default_toolbar_use_icons")]
+    pub use_icons: bool,
 }
 
 impl Default for ToolbarConfig {
@@ -822,6 +826,7 @@ impl Default for ToolbarConfig {
         Self {
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
+            use_icons: default_toolbar_use_icons(),
         }
     }
 }
@@ -832,4 +837,8 @@ fn default_toolbar_top_pinned() -> bool {
 
 fn default_toolbar_side_pinned() -> bool {
     false
+}
+
+fn default_toolbar_use_icons() -> bool {
+    true
 }

@@ -615,10 +615,12 @@ impl WaylandState {
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
     pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
-        // Check if this is a pin event that needs config save
+        // Check if this is a toolbar config event that needs saving
         let needs_config_save = matches!(
             event,
-            ToolbarEvent::PinTopToolbar(_) | ToolbarEvent::PinSideToolbar(_)
+            ToolbarEvent::PinTopToolbar(_)
+                | ToolbarEvent::PinSideToolbar(_)
+                | ToolbarEvent::ToggleIconMode(_)
         );
 
         let persist_drawing = matches!(
@@ -646,18 +648,20 @@ impl WaylandState {
         self.refresh_keyboard_interactivity();
     }
 
-    /// Saves the current toolbar pin configuration to disk.
+    /// Saves the current toolbar configuration to disk (pinned state and icon mode).
     fn save_toolbar_pin_config(&mut self) {
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
+        self.config.ui.toolbar.use_icons = self.input_state.toolbar_use_icons;
 
         if let Err(err) = self.config.save() {
-            log::warn!("Failed to save toolbar pin config: {}", err);
+            log::warn!("Failed to save toolbar config: {}", err);
         } else {
             log::info!(
-                "Saved toolbar pin config: top={}, side={}",
+                "Saved toolbar config: top={}, side={}, icons={}",
                 self.config.ui.toolbar.top_pinned,
-                self.config.ui.toolbar.side_pinned
+                self.config.ui.toolbar.side_pinned,
+                self.config.ui.toolbar.use_icons
             );
         }
     }

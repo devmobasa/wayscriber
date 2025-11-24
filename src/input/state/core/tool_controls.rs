@@ -126,12 +126,13 @@ impl InputState {
     }
 
     /// Initialize toolbar visibility from config (called at startup).
-    pub fn init_toolbar_from_config(&mut self, top_pinned: bool, side_pinned: bool) {
+    pub fn init_toolbar_from_config(&mut self, top_pinned: bool, side_pinned: bool, use_icons: bool) {
         self.toolbar_top_pinned = top_pinned;
         self.toolbar_side_pinned = side_pinned;
         self.toolbar_top_visible = top_pinned;
         self.toolbar_side_visible = side_pinned;
         self.toolbar_visible = top_pinned && side_pinned;
+        self.toolbar_use_icons = use_icons;
     }
 
     /// Wrapper for undo that preserves existing action plumbing.
