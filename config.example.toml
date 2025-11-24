@@ -169,6 +169,33 @@ use_pen_color = true
 enabled = true
 
 # ───────────────────────────────────────────────────────────────────────────────
+# Floating Toolbars (Press F2/F9 to toggle)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.toolbar]
+# Show top toolbar on startup (pinned)
+top_pinned = true
+
+# Show side toolbar on startup (pinned)
+side_pinned = true
+
+# Use icons instead of text labels in toolbars
+# Icons are more compact; text labels are more explicit
+use_icons = true
+
+# Show extended color palette in top toolbar
+# When enabled, displays additional color options beyond the basic 8
+show_more_colors = false
+
+# Show undo all / redo all action buttons in side toolbar
+# Provides quick access to clear undo/redo history
+show_actions_section = true
+
+# Show timing delay sliders in side toolbar
+# Allows configuring delayed undo/redo all timing
+show_delay_sliders = false
+
+# ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
 # ───────────────────────────────────────────────────────────────────────────────
 

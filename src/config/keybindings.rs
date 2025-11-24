@@ -676,7 +676,7 @@ fn default_return_to_transparent() -> Vec<String> {
 }
 
 fn default_toggle_help() -> Vec<String> {
-    vec!["F1".to_string(), "F10".to_string()]
+    vec!["F10".to_string()]
 }
 
 fn default_toggle_status_bar() -> Vec<String> {
