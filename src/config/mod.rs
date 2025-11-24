@@ -195,6 +195,12 @@ mod tests {
     #[test]
     fn validate_clamps_history_delays() {
         let mut config = Config::default();
+        config.history.undo_all_delay_ms = 0;
+        config.history.redo_all_delay_ms = 1;
+        config.validate_and_clamp();
+        assert_eq!(config.history.undo_all_delay_ms, 50);
+        assert_eq!(config.history.redo_all_delay_ms, 50);
+
         config.history.undo_all_delay_ms = 20_000;
         config.history.redo_all_delay_ms = 10_000;
         config.validate_and_clamp();
@@ -381,8 +387,17 @@ impl Config {
             self.drawing.undo_stack_limit = self.drawing.undo_stack_limit.clamp(10, 1000);
         }
 
-        // History delays: clamp to a reasonable ceiling (5s) to avoid long freezes.
+        // History delays: clamp to a reasonable range to avoid long freezes or instant drains.
         const MAX_DELAY_MS: u64 = 5_000;
+        const MIN_DELAY_MS: u64 = 50;
+        if self.history.undo_all_delay_ms < MIN_DELAY_MS {
+            log::warn!(
+                "undo_all_delay_ms {}ms too small; clamping to {}ms",
+                self.history.undo_all_delay_ms,
+                MIN_DELAY_MS
+            );
+            self.history.undo_all_delay_ms = MIN_DELAY_MS;
+        }
         if self.history.undo_all_delay_ms > MAX_DELAY_MS {
             log::warn!(
                 "undo_all_delay_ms {}ms too large; clamping to {}ms",
@@ -390,6 +405,14 @@ impl Config {
                 MAX_DELAY_MS
             );
             self.history.undo_all_delay_ms = MAX_DELAY_MS;
+        }
+        if self.history.redo_all_delay_ms < MIN_DELAY_MS {
+            log::warn!(
+                "redo_all_delay_ms {}ms too small; clamping to {}ms",
+                self.history.redo_all_delay_ms,
+                MIN_DELAY_MS
+            );
+            self.history.redo_all_delay_ms = MIN_DELAY_MS;
         }
         if self.history.redo_all_delay_ms > MAX_DELAY_MS {
             log::warn!(
