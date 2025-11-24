@@ -74,6 +74,9 @@ impl InputState {
             let should_check_actions = match key {
                 // Special keys always check for actions
                 Key::Escape
+                | Key::F1
+                | Key::F2
+                | Key::F9
                 | Key::F10
                 | Key::F11
                 | Key::F12

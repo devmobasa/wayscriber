@@ -37,7 +37,7 @@ use crate::{
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
     input::{BoardMode, ClickHighlightSettings, InputState},
-    legacy, notification, session,
+    notification, session,
 };
 
 fn friendly_capture_error(error: &str) -> String {
@@ -165,11 +165,6 @@ impl WaylandBackend {
             }
         };
 
-        if matches!(config_source, ConfigSource::Legacy(_)) && !legacy::warnings_suppressed() {
-            warn!(
-                "Continuing with settings from legacy hyprmarker config. Run `wayscriber --migrate-config` when convenient."
-            );
-        }
         info!("Configuration loaded");
         debug!("  Color: {:?}", config.drawing.default_color);
         debug!("  Thickness: {:.1}px", config.drawing.default_thickness);
