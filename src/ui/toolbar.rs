@@ -34,6 +34,8 @@ pub enum ToolbarEvent {
     PinTopToolbar(bool),
     /// Pin/unpin the side toolbar (saves to config)
     PinSideToolbar(bool),
+    /// Toggle between icon mode and text mode
+    ToggleIconMode(bool),
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -58,6 +60,8 @@ pub struct ToolbarSnapshot {
     pub top_pinned: bool,
     /// Whether the side toolbar is pinned (opens at startup)
     pub side_pinned: bool,
+    /// Whether to use icons instead of text labels
+    pub use_icons: bool,
 }
 
 impl ToolbarSnapshot {
@@ -81,6 +85,7 @@ impl ToolbarSnapshot {
             redo_all_delay_ms: state.redo_all_delay_ms,
             top_pinned: state.toolbar_top_pinned,
             side_pinned: state.toolbar_side_pinned,
+            use_icons: state.toolbar_use_icons,
         }
     }
 }
@@ -204,6 +209,14 @@ impl InputState {
             ToolbarEvent::PinSideToolbar(pin) => {
                 if self.toolbar_side_pinned != pin {
                     self.toolbar_side_pinned = pin;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleIconMode(use_icons) => {
+                if self.toolbar_use_icons != use_icons {
+                    self.toolbar_use_icons = use_icons;
                     true
                 } else {
                     false
