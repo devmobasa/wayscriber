@@ -4236,7 +4236,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4276,7 +4276,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber-configurator"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "iced",
  "wayscriber",
@@ -5171,18 +5171,18 @@ checksum = "dd15f8e0dbb966fd9245e7498c7e9e5055d9e5c8b676b95bd67091cd11a1e697"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.28"
+version = "0.8.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43fa6694ed34d6e57407afbccdeecfa268c470a7d2a5b0cf49ce9fcc345afb90"
+checksum = "b7a46b351402ada3508ec7d8b210e5643085b30692a09e921b07c902f8aded21"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.28"
+version = "0.8.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c640b22cd9817fae95be82f0d2f90b11f7605f6c319d16705c459b27ac2cbc26"
+checksum = "4e999748819ddfe1ad621c3c277f9e4814321defdc0e6a7dd31772eb31ad3d2b"
 dependencies = [
  "proc-macro2",
  "quote",
