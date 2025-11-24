@@ -84,21 +84,29 @@ impl InputState {
             )
     }
 
+    /// Sets highlight-only tool mode on/off and keeps click highlight in sync.
+    pub fn set_highlight_tool(&mut self, enable: bool) {
+        let currently_on = self.highlight_tool_active();
+        if enable != currently_on {
+            if enable {
+                self.set_tool_override(Some(Tool::Highlight));
+            } else {
+                self.set_tool_override(None);
+            }
+        }
+
+        // Keep click highlight visuals aligned with highlight mode
+        if enable && !self.click_highlight_enabled() {
+            self.toggle_click_highlight();
+        } else if !enable && self.click_highlight_enabled() {
+            self.toggle_click_highlight();
+        }
+    }
+
     /// Toggles highlight-only tool mode.
     pub fn toggle_highlight_tool(&mut self) -> bool {
         let enable = !self.highlight_tool_active();
-
-        if enable {
-            // Ensure click highlight visuals are on while using the highlight pen
-            if !self.click_highlight_enabled() {
-                self.toggle_click_highlight();
-            }
-
-            self.set_tool_override(Some(Tool::Highlight));
-        } else {
-            self.set_tool_override(None);
-        }
-
+        self.set_highlight_tool(enable);
         enable
     }
 }
