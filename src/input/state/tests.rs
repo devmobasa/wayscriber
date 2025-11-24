@@ -767,7 +767,8 @@ fn undo_all_with_delay_respects_history() {
         state.undo_stack_limit,
     );
 
-    state.undo_all_with_delay(0);
+    state.start_undo_all_delayed(0);
+    state.tick_delayed_history(std::time::Instant::now());
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
     assert_eq!(state.canvas_set.active_frame().redo_stack_len(), 1);
 }
@@ -797,7 +798,8 @@ fn redo_all_with_delay_replays_history() {
     state.undo_all_immediate();
     assert_eq!(state.canvas_set.active_frame().redo_stack_len(), 1);
 
-    state.redo_all_with_delay(0);
+    state.start_redo_all_delayed(0);
+    state.tick_delayed_history(std::time::Instant::now());
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
     assert_eq!(state.canvas_set.active_frame().undo_stack_len(), 1);
 }

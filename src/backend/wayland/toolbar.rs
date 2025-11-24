@@ -40,6 +40,8 @@ enum HitKind {
     DragSetThickness,
     DragSetFontSize,
     PickColor { x: f64, y: f64, w: f64, h: f64 },
+    DragUndoDelay,
+    DragRedoDelay,
 }
 
 #[derive(Debug)]
@@ -293,6 +295,8 @@ impl ToolbarSurface {
                     HitKind::DragSetThickness
                         | HitKind::DragSetFontSize
                         | HitKind::PickColor { .. }
+                        | HitKind::DragUndoDelay
+                        | HitKind::DragRedoDelay
                 );
                 let event = match hit.kind {
                     HitKind::DragSetThickness => {
@@ -309,6 +313,16 @@ impl ToolbarSurface {
                         let hue = ((x - px) / w).clamp(0.0, 1.0);
                         let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
                         ToolbarEvent::SetColor(hsv_to_rgb(hue, 1.0, value))
+                    }
+                    HitKind::DragUndoDelay => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let delay = t * 2000.0;
+                        ToolbarEvent::SetUndoDelay(delay)
+                    }
+                    HitKind::DragRedoDelay => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let delay = t * 2000.0;
+                        ToolbarEvent::SetRedoDelay(delay)
                     }
                     HitKind::Click => hit.event.clone(),
                 };
@@ -336,6 +350,16 @@ impl ToolbarSurface {
                         let hue = ((x - px) / w).clamp(0.0, 1.0);
                         let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
                         return Some(ToolbarEvent::SetColor(hsv_to_rgb(hue, 1.0, value)));
+                    }
+                    HitKind::DragUndoDelay => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let delay = t * 2000.0;
+                        return Some(ToolbarEvent::SetUndoDelay(delay));
+                    }
+                    HitKind::DragRedoDelay => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let delay = t * 2000.0;
+                        return Some(ToolbarEvent::SetRedoDelay(delay));
                     }
                     _ => {}
                 }
@@ -461,7 +485,7 @@ impl ToolbarSurfaceManager {
         // Create side toolbar if visible
         if self.is_side_visible() {
             if self.side.logical_size == (0, 0) {
-                self.side.set_logical_size((300, 620));
+                self.side.set_logical_size((300, 880));
             }
             self.side.ensure_created(qh, compositor, layer_shell, scale);
         }
@@ -582,7 +606,6 @@ fn render_top_strip(
         (Tool::Rect, "Rect"),
         (Tool::Ellipse, "Circle"),
         (Tool::Arrow, "Arrow"),
-        (Tool::Highlight, "Highlight"),
     ];
 
     let btn_w = 70.0;
@@ -608,6 +631,27 @@ fn render_top_strip(
         });
         x += btn_w + gap;
     }
+
+    // Highlight toggle (syncs highlight pen + click highlight)
+    let highlight_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+        .unwrap_or(false);
+    draw_button(
+        ctx,
+        x,
+        y,
+        btn_w,
+        btn_h,
+        snapshot.highlight_tool_active,
+        highlight_hover,
+    );
+    draw_label_center(ctx, x, y, btn_w, btn_h, "Highlight");
+    hits.push(HitRegion {
+        rect: (x, y, btn_w, btn_h),
+        event: ToolbarEvent::ToggleHighlightTool(!snapshot.highlight_tool_active),
+        kind: HitKind::Click,
+    });
+    x += btn_w + gap;
 
     // Fill toggle
     let fill_w = 64.0;
@@ -790,27 +834,6 @@ fn render_side_palette(
     let section_gap = 12.0;
 
     // ===== Colors Section =====
-    let colors_card_h = 130.0;
-    draw_group_card(ctx, card_x, y, card_w, colors_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Colors");
-
-    // Inline color picker (hue/value)
-    let picker_w = card_w - 12.0;
-    let picker_h = 26.0;
-    let picker_x = x;
-    let picker_y = y + 24.0;
-    draw_color_picker(ctx, picker_x, picker_y, picker_w, picker_h);
-    hits.push(HitRegion {
-        rect: (picker_x, picker_y, picker_w, picker_h),
-        event: ToolbarEvent::SetColor(snapshot.color),
-        kind: HitKind::PickColor {
-            x: picker_x,
-            y: picker_y,
-            w: picker_w,
-            h: picker_h,
-        },
-    });
-
     let colors: &[(Color, &str)] = &[
         (RED, "Red"),
         (GREEN, "Green"),
@@ -820,48 +843,35 @@ fn render_side_palette(
         (PINK, "Pink"),
         (WHITE, "White"),
         (BLACK, "Black"),
-        (
-            Color {
-                r: 0.0,
-                g: 1.0,
-                b: 1.0,
-                a: 1.0,
-            },
-            "Cyan",
-        ),
-        (
-            Color {
-                r: 0.6,
-                g: 0.4,
-                b: 0.8,
-                a: 1.0,
-            },
-            "Purple",
-        ),
-        (
-            Color {
-                r: 1.0,
-                g: 0.84,
-                b: 0.0,
-                a: 1.0,
-            },
-            "Gold",
-        ),
-        (
-            Color {
-                r: 0.25,
-                g: 0.25,
-                b: 0.25,
-                a: 1.0,
-            },
-            "Gray",
-        ),
+        (Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }, "Cyan"),
+        (Color { r: 0.6, g: 0.4, b: 0.8, a: 1.0 }, "Purple"),
+        (Color { r: 1.0, g: 0.84, b: 0.0, a: 1.0 }, "Gold"),
+        (Color { r: 0.4, g: 0.4, b: 0.4, a: 1.0 }, "Gray"),
     ];
 
-    let swatch = 26.0;
-    let gap = 10.0;
+    let swatch = 24.0;
+    let swatch_gap = 6.0;
+    let swatches_per_row = 6;
+    let num_rows = (colors.len() + swatches_per_row - 1) / swatches_per_row;
+    // Color picker + swatches
+    let picker_h = 24.0;
+    let colors_card_h = 28.0 + picker_h + 8.0 + (swatch + swatch_gap) * num_rows as f64;
+
+    draw_group_card(ctx, card_x, y, card_w, colors_card_h);
+    draw_section_label(ctx, x, y + 12.0, "Colors");
+
+    // Color picker gradient
+    let picker_y = y + 24.0;
+    let picker_w = card_w - 12.0;
+    draw_color_picker(ctx, x, picker_y, picker_w, picker_h);
+    hits.push(HitRegion {
+        rect: (x, picker_y, picker_w, picker_h),
+        event: ToolbarEvent::SetColor(snapshot.color),
+        kind: HitKind::PickColor { x, y: picker_y, w: picker_w, h: picker_h },
+    });
+
     let mut cx = x;
-    let mut row_y = picker_y + picker_h + 10.0;
+    let mut row_y = picker_y + picker_h + 8.0;
     for (color, _name) in colors {
         draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
         hits.push(HitRegion {
@@ -869,23 +879,23 @@ fn render_side_palette(
             event: ToolbarEvent::SetColor(*color),
             kind: HitKind::Click,
         });
-        cx += swatch + gap;
-        if cx + swatch > width - 20.0 {
+        cx += swatch + swatch_gap;
+        if cx + swatch > width - 16.0 {
             cx = x;
-            row_y += swatch + gap;
+            row_y += swatch + swatch_gap;
         }
     }
     y += colors_card_h + section_gap;
 
     // ===== Thickness Section =====
-    let thickness_card_h = 90.0;
-    draw_group_card(ctx, card_x, y, card_w, thickness_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Thickness");
+    let slider_card_h = 80.0;
+    draw_group_card(ctx, card_x, y, card_w, slider_card_h);
+    draw_section_label(ctx, x, y + 12.0, "Thickness");
 
     let track_w = width - (2.0 * x);
-    let track_h = 10.0;
-    let track_y = y + 28.0;
-    let knob_r = 9.0;
+    let track_h = 8.0;
+    let track_y = y + 30.0;
+    let knob_r = 8.0;
     let min_thick = 1.0;
     let max_thick = 40.0;
     let t = ((snapshot.thickness - min_thick) / (max_thick - min_thick)).clamp(0.0, 1.0);
@@ -893,49 +903,35 @@ fn render_side_palette(
 
     // Track
     ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
-    ctx.rectangle(x, track_y, track_w, track_h);
+    draw_round_rect(ctx, x, track_y, track_w, track_h, 4.0);
     let _ = ctx.fill();
     // Knob
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(
-        knob_x,
-        track_y + track_h / 2.0,
-        knob_r,
-        0.0,
-        std::f64::consts::PI * 2.0,
-    );
+    ctx.arc(knob_x, track_y + track_h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.fill();
 
-    // Minus/Plus nudge buttons
-    let btn_w = 30.0;
-    let btn_h = 26.0;
-    let btn_y = track_y + track_h + 8.0;
+    // Minus/Plus nudge buttons and readout
+    let btn_w = 28.0;
+    let btn_h = 24.0;
+    let btn_y = track_y + track_h + 10.0;
     draw_button(ctx, x, btn_y, btn_w, btn_h, false, false);
-    draw_label_center(ctx, x, btn_y, btn_w, btn_h, "-");
+    draw_label_center(ctx, x, btn_y, btn_w, btn_h, "−");
     hits.push(HitRegion {
         rect: (x, btn_y, btn_w, btn_h),
         event: ToolbarEvent::NudgeThickness(-1.0),
         kind: HitKind::Click,
     });
 
-    draw_button(ctx, x + btn_w + 8.0, btn_y, btn_w, btn_h, false, false);
-    draw_label_center(ctx, x + btn_w + 8.0, btn_y, btn_w, btn_h, "+");
+    draw_button(ctx, x + btn_w + 6.0, btn_y, btn_w, btn_h, false, false);
+    draw_label_center(ctx, x + btn_w + 6.0, btn_y, btn_w, btn_h, "+");
     hits.push(HitRegion {
-        rect: (x + btn_w + 8.0, btn_y, btn_w, btn_h),
+        rect: (x + btn_w + 6.0, btn_y, btn_w, btn_h),
         event: ToolbarEvent::NudgeThickness(1.0),
         kind: HitKind::Click,
     });
 
-    // Thickness readout
     let thickness_text = format!("{:.0}px", snapshot.thickness);
-    draw_label_center(
-        ctx,
-        x + btn_w * 2.0 + 30.0,
-        btn_y,
-        80.0,
-        btn_h,
-        &thickness_text,
-    );
+    draw_label_center(ctx, x + btn_w * 2.0 + 20.0, btn_y, 60.0, btn_h, &thickness_text);
 
     hits.push(HitRegion {
         rect: (x, track_y - 6.0, track_w, track_h + 12.0),
@@ -943,80 +939,57 @@ fn render_side_palette(
         kind: HitKind::DragSetThickness,
     });
 
-    y += thickness_card_h + section_gap;
+    y += slider_card_h + section_gap;
 
     // ===== Text Size Section =====
-    let text_size_card_h = 90.0;
-    draw_group_card(ctx, card_x, y, card_w, text_size_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Text size");
+    draw_group_card(ctx, card_x, y, card_w, slider_card_h);
+    draw_section_label(ctx, x, y + 12.0, "Text size");
 
     let fs_track_w = width - (2.0 * x);
-    let fs_track_h = 10.0;
-    let fs_track_y = y + 28.0;
-    let fs_knob_r = 9.0;
+    let fs_track_h = 8.0;
+    let fs_track_y = y + 30.0;
+    let fs_knob_r = 8.0;
     let fs_min = 8.0;
     let fs_max = 72.0;
     let fs_t = ((snapshot.font_size - fs_min) / (fs_max - fs_min)).clamp(0.0, 1.0);
     let fs_knob_x = x + fs_t * (fs_track_w - fs_knob_r * 2.0) + fs_knob_r;
 
     ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
-    ctx.rectangle(x, fs_track_y, fs_track_w, fs_track_h);
+    draw_round_rect(ctx, x, fs_track_y, fs_track_w, fs_track_h, 4.0);
     let _ = ctx.fill();
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(
-        fs_knob_x,
-        fs_track_y + fs_track_h / 2.0,
-        fs_knob_r,
-        0.0,
-        std::f64::consts::PI * 2.0,
-    );
+    ctx.arc(fs_knob_x, fs_track_y + fs_track_h / 2.0, fs_knob_r, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.fill();
 
-    // Font size nudges/readout
-    let fs_btn_w = 30.0;
-    let fs_btn_h = 26.0;
-    let fs_btn_y = fs_track_y + fs_track_h + 8.0;
+    let fs_btn_w = 28.0;
+    let fs_btn_h = 24.0;
+    let fs_btn_y = fs_track_y + fs_track_h + 10.0;
     draw_button(ctx, x, fs_btn_y, fs_btn_w, fs_btn_h, false, false);
-    draw_label_center(ctx, x, fs_btn_y, fs_btn_w, fs_btn_h, "-");
+    draw_label_center(ctx, x, fs_btn_y, fs_btn_w, fs_btn_h, "−");
     hits.push(HitRegion {
         rect: (x, fs_btn_y, fs_btn_w, fs_btn_h),
         event: ToolbarEvent::SetFontSize((snapshot.font_size - 2.0).max(fs_min)),
         kind: HitKind::Click,
     });
 
-    draw_button(
-        ctx,
-        x + fs_btn_w + 8.0,
-        fs_btn_y,
-        fs_btn_w,
-        fs_btn_h,
-        false,
-        false,
-    );
-    draw_label_center(ctx, x + fs_btn_w + 8.0, fs_btn_y, fs_btn_w, fs_btn_h, "+");
+    draw_button(ctx, x + fs_btn_w + 6.0, fs_btn_y, fs_btn_w, fs_btn_h, false, false);
+    draw_label_center(ctx, x + fs_btn_w + 6.0, fs_btn_y, fs_btn_w, fs_btn_h, "+");
     hits.push(HitRegion {
-        rect: (x + fs_btn_w + 8.0, fs_btn_y, fs_btn_w, fs_btn_h),
+        rect: (x + fs_btn_w + 6.0, fs_btn_y, fs_btn_w, fs_btn_h),
         event: ToolbarEvent::SetFontSize((snapshot.font_size + 2.0).min(fs_max)),
         kind: HitKind::Click,
     });
 
-    let fs_text = format!("{:.0}px", snapshot.font_size);
-    draw_label_center(
-        ctx,
-        x + fs_btn_w * 2.0 + 24.0,
-        fs_btn_y,
-        80.0,
-        fs_btn_h,
-        &fs_text,
-    );
+    let fs_text = format!("{:.0}pt", snapshot.font_size);
+    draw_label_center(ctx, x + fs_btn_w * 2.0 + 20.0, fs_btn_y, 60.0, fs_btn_h, &fs_text);
 
     hits.push(HitRegion {
-        rect: (x, fs_track_y - 8.0, fs_track_w, fs_track_h + 16.0),
+        rect: (x, fs_track_y - 6.0, fs_track_w, fs_track_h + 12.0),
         event: ToolbarEvent::SetFontSize(snapshot.font_size),
         kind: HitKind::DragSetFontSize,
     });
 
-    y += text_size_card_h + section_gap;
+    y += slider_card_h + section_gap;
 
     // ===== Font Section =====
     let font_card_h = 50.0;
@@ -1054,48 +1027,37 @@ fn render_side_palette(
     y += font_card_h + section_gap;
 
     // ===== Actions Section =====
-    let actions_card_h = 220.0;
-    draw_group_card(ctx, card_x, y, card_w, actions_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Actions");
-
-    let action_gap = 10.0;
-    let action_w = ((width - 2.0 * x) - action_gap) / 2.0;
-    let action_h = 30.0;
-    let actions_start_y = y + 28.0;
-
+    let action_h = 24.0;
+    let action_gap = 5.0;
     let actions: &[(ToolbarEvent, &str, bool)] = &[
         (ToolbarEvent::Undo, "Undo", snapshot.undo_available),
         (ToolbarEvent::Redo, "Redo", snapshot.redo_available),
         (ToolbarEvent::UndoAll, "Undo All", snapshot.undo_available),
         (ToolbarEvent::RedoAll, "Redo All", snapshot.redo_available),
-        (
-            ToolbarEvent::UndoAllDelayed,
-            "Undo All (delay)",
-            snapshot.undo_available,
-        ),
-        (
-            ToolbarEvent::RedoAllDelayed,
-            "Redo All (delay)",
-            snapshot.redo_available,
-        ),
+        (ToolbarEvent::UndoAllDelayed, "Undo All Delay", snapshot.undo_available),
+        (ToolbarEvent::RedoAllDelayed, "Redo All Delay", snapshot.redo_available),
         (ToolbarEvent::ClearCanvas, "Clear", true),
-        (
-            ToolbarEvent::ToggleFreeze,
-            if snapshot.frozen_active {
-                "Unfreeze"
-            } else {
-                "Freeze"
-            },
-            true,
-        ),
+        (ToolbarEvent::ToggleFreeze, if snapshot.frozen_active { "Unfreeze" } else { "Freeze" }, true),
         (ToolbarEvent::OpenConfigurator, "Config UI", true),
         (ToolbarEvent::OpenConfigFile, "Config file", true),
     ];
+    let action_rows = (actions.len() + 1) / 2;
+    // Actions buttons + delay sliders section
+    let delay_section_h = 70.0;
+    let actions_card_h = 24.0 + (action_h + action_gap) * action_rows as f64 + delay_section_h;
+
+    draw_group_card(ctx, card_x, y, card_w, actions_card_h);
+    draw_section_label(ctx, x, y + 12.0, "Actions");
+
+    let action_col_gap = 6.0;
+    let action_w = ((width - 2.0 * x) - action_col_gap) / 2.0;
+    let actions_start_y = y + 24.0;
+
     for (idx, (evt, label, enabled)) in actions.iter().enumerate() {
         let row = idx / 2;
         let col = idx % 2;
-        let bx = x + (action_w + action_gap) * col as f64;
-        let by = actions_start_y + (action_h + 8.0) * row as f64;
+        let bx = x + (action_w + action_col_gap) * col as f64;
+        let by = actions_start_y + (action_h + action_gap) * row as f64;
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
             .unwrap_or(false);
@@ -1110,14 +1072,61 @@ fn render_side_palette(
         }
     }
 
-    let action_rows = (actions.len() + 1) / 2;
-    y += actions_start_y - y + action_rows as f64 * (action_h + 8.0) + 12.0;
+    // Delay sliders
+    let delay_y = actions_start_y + (action_h + action_gap) * action_rows as f64 + 8.0;
+    let sliders_w = width - 2.0 * x;
+    let slider_h = 6.0;
+    let slider_knob_r = 6.0;
+    let max_delay_s = 5.0;
+
+    // Undo delay label and slider
+    let undo_label = format!("Undo delay: {:.1}s", snapshot.undo_all_delay_ms as f64 / 1000.0);
+    ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
+    ctx.set_font_size(11.0);
+    ctx.move_to(x, delay_y + 10.0);
+    let _ = ctx.show_text(&undo_label);
+
+    let undo_slider_y = delay_y + 16.0;
+    ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
+    draw_round_rect(ctx, x, undo_slider_y, sliders_w, slider_h, 3.0);
+    let _ = ctx.fill();
+    let undo_t = (snapshot.undo_all_delay_ms as f64 / 1000.0 / max_delay_s).clamp(0.0, 1.0);
+    let undo_knob_x = x + undo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
+    ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+    ctx.arc(undo_knob_x, undo_slider_y + slider_h / 2.0, slider_knob_r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+    hits.push(HitRegion {
+        rect: (x, undo_slider_y - 4.0, sliders_w, slider_h + 8.0),
+        event: ToolbarEvent::SetUndoDelay(undo_t * max_delay_s),
+        kind: HitKind::DragUndoDelay,
+    });
+
+    // Redo delay label and slider
+    let redo_label = format!("Redo delay: {:.1}s", snapshot.redo_all_delay_ms as f64 / 1000.0);
+    ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
+    ctx.move_to(x + sliders_w / 2.0 + 10.0, delay_y + 10.0);
+    let _ = ctx.show_text(&redo_label);
+
+    let redo_slider_y = delay_y + 32.0;
+    ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
+    draw_round_rect(ctx, x, redo_slider_y, sliders_w, slider_h, 3.0);
+    let _ = ctx.fill();
+    let redo_t = (snapshot.redo_all_delay_ms as f64 / 1000.0 / max_delay_s).clamp(0.0, 1.0);
+    let redo_knob_x = x + redo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
+    ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+    ctx.arc(redo_knob_x, redo_slider_y + slider_h / 2.0, slider_knob_r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+    hits.push(HitRegion {
+        rect: (x, redo_slider_y - 4.0, sliders_w, slider_h + 8.0),
+        event: ToolbarEvent::SetRedoDelay(redo_t * max_delay_s),
+        kind: HitKind::DragRedoDelay,
+    });
+
+    y += actions_card_h + section_gap;
 
     // ===== Toggles Section =====
-    let toggles_card_h = 90.0;
-    draw_group_card(ctx, card_x, y, card_w, toggles_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Toggles");
-
+    let toggle_h = 28.0;
+    let toggle_gap = 6.0;
     let toggles: &[(ToolbarEvent, &str, bool)] = &[
         (
             ToolbarEvent::ToggleHighlightTool(!snapshot.highlight_tool_active),
@@ -1130,12 +1139,15 @@ fn render_side_palette(
             snapshot.click_highlight_enabled,
         ),
     ];
+    let toggles_card_h = 24.0 + (toggle_h + toggle_gap) * toggles.len() as f64;
 
-    let toggle_h = 28.0;
+    draw_group_card(ctx, card_x, y, card_w, toggles_card_h);
+    draw_section_label(ctx, x, y + 12.0, "Toggles");
+
     let toggle_w = width - 2.0 * x;
-    let toggles_start_y = y + 28.0;
+    let toggles_start_y = y + 26.0;
     for (idx, (evt, label, active)) in toggles.iter().enumerate() {
-        let ty = toggles_start_y + (toggle_h + 6.0) * idx as f64;
+        let ty = toggles_start_y + (toggle_h + toggle_gap) * idx as f64;
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, ty, toggle_w, toggle_h))
             .unwrap_or(false);
@@ -1269,37 +1281,27 @@ fn draw_checkbox(
     hover: bool,
     label: &str,
 ) {
-    let (r, g, b, a) = if hover {
-        (0.35, 0.35, 0.45, 0.85)
-    } else {
-        (0.2, 0.22, 0.26, 0.75)
-    };
+    let (r, g, b, a) = if hover { (0.32, 0.34, 0.4, 0.9) } else { (0.22, 0.24, 0.28, 0.75) };
     ctx.set_source_rgba(r, g, b, a);
-    draw_round_rect(ctx, x, y, w, h, 6.0);
+    draw_round_rect(ctx, x, y, w, h, 4.0);
     let _ = ctx.fill();
 
-    let box_size = h - 10.0;
+    let box_size = h * 0.55;
     let box_x = x + 8.0;
     let box_y = y + (h - box_size) / 2.0;
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
     ctx.rectangle(box_x, box_y, box_size, box_size);
-    ctx.set_line_width(2.0);
+    ctx.set_line_width(1.5);
     let _ = ctx.stroke();
     if checked {
-        ctx.move_to(box_x + 4.0, box_y + box_size / 2.0);
-        ctx.line_to(box_x + box_size / 2.0, box_y + box_size - 4.0);
-        ctx.line_to(box_x + box_size - 4.0, box_y + 4.0);
+        ctx.move_to(box_x + 3.0, box_y + box_size / 2.0);
+        ctx.line_to(box_x + box_size / 2.0, box_y + box_size - 3.0);
+        ctx.line_to(box_x + box_size - 3.0, box_y + 3.0);
         let _ = ctx.stroke();
     }
 
-    draw_label_left(
-        ctx,
-        box_x + box_size + 8.0,
-        y,
-        w - box_size - 16.0,
-        h,
-        label,
-    );
+    let label_x = box_x + box_size + 8.0;
+    draw_label_left(ctx, label_x, y, w - (label_x - x), h, label);
 }
 
 fn draw_color_picker(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {

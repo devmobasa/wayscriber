@@ -3,9 +3,6 @@ use crate::draw::Shape;
 use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
 use log::{info, warn};
-use std::thread;
-use std::time::Duration;
-
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
@@ -337,10 +334,10 @@ impl InputState {
                 self.redo_all_immediate();
             }
             Action::UndoAllDelayed => {
-                self.undo_all_with_delay(self.undo_all_delay_ms);
+                self.start_undo_all_delayed(self.undo_all_delay_ms);
             }
             Action::RedoAllDelayed => {
-                self.redo_all_with_delay(self.redo_all_delay_ms);
+                self.start_redo_all_delayed(self.redo_all_delay_ms);
             }
             Action::DuplicateSelection => {
                 if self.duplicate_selection() {
@@ -560,23 +557,4 @@ impl InputState {
         }
     }
 
-    pub(crate) fn undo_all_with_delay(&mut self, delay_ms: u64) {
-        let delay = Duration::from_millis(delay_ms);
-        while let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
-            self.apply_action_side_effects(&action);
-            if delay_ms > 0 {
-                thread::sleep(delay);
-            }
-        }
-    }
-
-    pub(crate) fn redo_all_with_delay(&mut self, delay_ms: u64) {
-        let delay = Duration::from_millis(delay_ms);
-        while let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
-            self.apply_action_side_effects(&action);
-            if delay_ms > 0 {
-                thread::sleep(delay);
-            }
-        }
-    }
 }
