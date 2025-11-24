@@ -543,11 +543,7 @@ impl ToolbarSurfaceManager {
             // Font section
             let font_h: u32 = 50;
 
-            // Step Undo/Redo section (includes delay sliders if enabled)
-            let delay_h = if snapshot.show_delay_sliders { 55 } else { 0 };
-            let step_h: u32 = 20 + 24 + if snapshot.custom_section_enabled { 120 } else { 0 } + delay_h;
-
-            // Actions section
+            // Actions section (now before Step Undo/Redo)
             let actions_h: u32 = if snapshot.show_actions_section {
                 if use_icons {
                     20 + 24 + 6 + 36 * 2 + 6 * 2 // 2 rows of icons
@@ -558,7 +554,11 @@ impl ToolbarSurfaceManager {
                 20 + 24 // Just checkbox
             };
 
-            let total_height = base_height + colors_h + thickness_h + text_size_h + font_h + step_h + actions_h + section_gap * 6 + 20;
+            // Step Undo/Redo section (includes delay sliders if enabled)
+            let delay_h = if snapshot.show_delay_sliders { 55 } else { 0 };
+            let step_h: u32 = 20 + 24 + if snapshot.custom_section_enabled { 120 } else { 0 } + delay_h;
+
+            let total_height = base_height + colors_h + thickness_h + text_size_h + font_h + actions_h + step_h + section_gap * 6 + 20;
             let target_size = (260, total_height);
 
             if self.side.logical_size != (0, 0) && self.side.logical_size != target_size {
@@ -1381,6 +1381,147 @@ fn render_side_palette(
 
     y += font_card_h + section_gap;
 
+    // ===== Actions Section =====
+    // Checkbox to toggle visibility + content when enabled
+    let actions_checkbox_h = 24.0;
+    let actions_content_h = if snapshot.show_actions_section {
+        if use_icons {
+            // 10 icon buttons (5 per row = 2 rows)
+            let icon_btn_size = 36.0;
+            let icon_gap = 6.0;
+            let icon_rows = 2;
+            (icon_btn_size + icon_gap) * icon_rows as f64
+        } else {
+            let action_h = 24.0;
+            let action_gap = 5.0;
+            let action_rows = 5; // 10 items / 2 cols = 5 rows
+            (action_h + action_gap) * action_rows as f64
+        }
+    } else {
+        0.0
+    };
+    let actions_card_h = 20.0 + actions_checkbox_h + actions_content_h;
+
+    draw_group_card(ctx, card_x, y, card_w, actions_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Actions");
+
+    // Actions toggle checkbox
+    let actions_toggle_y = y + 22.0;
+    let actions_toggle_w = card_w - 12.0;
+    let actions_toggle_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, actions_toggle_y, actions_toggle_w, actions_checkbox_h))
+        .unwrap_or(false);
+    draw_checkbox(ctx, x, actions_toggle_y, actions_toggle_w, actions_checkbox_h,
+        snapshot.show_actions_section, actions_toggle_hover, "Show actions");
+    hits.push(HitRegion {
+        rect: (x, actions_toggle_y, actions_toggle_w, actions_checkbox_h),
+        event: ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+
+    if snapshot.show_actions_section {
+        let actions_start_y = actions_toggle_y + actions_checkbox_h + 6.0;
+
+        // Action definitions with icons and labels (now includes delay actions as icons)
+        // Row 1: Undo, Redo, UndoAll, RedoAll, UndoAllDelay
+        // Row 2: Clear, Freeze, ConfigUI, ConfigFile, RedoAllDelay
+        type IconFn = fn(&cairo::Context, f64, f64, f64);
+        let all_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
+            // Row 1
+            (ToolbarEvent::Undo, toolbar_icons::draw_icon_undo as IconFn, "Undo", snapshot.undo_available),
+            (ToolbarEvent::Redo, toolbar_icons::draw_icon_redo as IconFn, "Redo", snapshot.redo_available),
+            (ToolbarEvent::UndoAll, toolbar_icons::draw_icon_undo_all as IconFn, "Undo All", snapshot.undo_available),
+            (ToolbarEvent::RedoAll, toolbar_icons::draw_icon_redo_all as IconFn, "Redo All", snapshot.redo_available),
+            (ToolbarEvent::UndoAllDelayed, toolbar_icons::draw_icon_undo_all_delay as IconFn, "Undo All Delay", snapshot.undo_available),
+            // Row 2
+            (ToolbarEvent::ClearCanvas, toolbar_icons::draw_icon_clear as IconFn, "Clear", true),
+            (
+                ToolbarEvent::ToggleFreeze,
+                if snapshot.frozen_active {
+                    toolbar_icons::draw_icon_unfreeze as IconFn
+                } else {
+                    toolbar_icons::draw_icon_freeze as IconFn
+                },
+                if snapshot.frozen_active { "Unfreeze" } else { "Freeze" },
+                true,
+            ),
+            (ToolbarEvent::OpenConfigurator, toolbar_icons::draw_icon_settings as IconFn, "Config UI", true),
+            (ToolbarEvent::OpenConfigFile, toolbar_icons::draw_icon_file as IconFn, "Config file", true),
+            (ToolbarEvent::RedoAllDelayed, toolbar_icons::draw_icon_redo_all_delay as IconFn, "Redo All Delay", snapshot.redo_available),
+        ];
+
+        if use_icons {
+            // Icon mode: render icon buttons in a grid (5 per row, 2 rows)
+            let icon_btn_size = 36.0;
+            let icon_gap = 6.0;
+            let icons_per_row = 5;
+            let _icon_rows = (all_actions.len() + icons_per_row - 1) / icons_per_row;
+            let icon_size = 22.0;
+            let total_icons_w = icons_per_row as f64 * icon_btn_size + (icons_per_row - 1) as f64 * icon_gap;
+            let icons_start_x = x + (card_w - 12.0 - total_icons_w) / 2.0;
+
+            for (idx, (evt, icon_fn, label, enabled)) in all_actions.iter().enumerate() {
+                let row = idx / icons_per_row;
+                let col = idx % icons_per_row;
+                let bx = icons_start_x + (icon_btn_size + icon_gap) * col as f64;
+                let by = actions_start_y + (icon_btn_size + icon_gap) * row as f64;
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
+                    .unwrap_or(false);
+
+                if *enabled {
+                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                } else {
+                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
+                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
+                }
+
+                let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
+                let icon_y = by + (icon_btn_size - icon_size) / 2.0;
+                icon_fn(ctx, icon_x, icon_y, icon_size);
+
+                if *enabled {
+                    hits.push(HitRegion {
+                        rect: (bx, by, icon_btn_size, icon_btn_size),
+                        event: evt.clone(),
+                        kind: HitKind::Click,
+                        tooltip: Some(*label),
+                    });
+                }
+            }
+        } else {
+            // Text mode: render text buttons in a 2-column grid
+            let action_h = 24.0;
+            let action_gap = 5.0;
+            let action_col_gap = 6.0;
+            let action_w = ((width - 2.0 * x) - action_col_gap) / 2.0;
+
+            for (idx, (evt, _icon, label, enabled)) in all_actions.iter().enumerate() {
+                let row = idx / 2;
+                let col = idx % 2;
+                let bx = x + (action_w + action_col_gap) * col as f64;
+                let by = actions_start_y + (action_h + action_gap) * row as f64;
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
+                    .unwrap_or(false);
+                draw_button(ctx, bx, by, action_w, action_h, *enabled, is_hover);
+                draw_label_center(ctx, bx, by, action_w, action_h, label);
+                if *enabled {
+                    hits.push(HitRegion {
+                        rect: (bx, by, action_w, action_h),
+                        event: evt.clone(),
+                        kind: HitKind::Click,
+                        tooltip: None,
+                    });
+                }
+            }
+        }
+    }
+
+    y += actions_card_h + section_gap;
+
     // ===== Step Undo/Redo Section =====
     let custom_toggle_h = 24.0;
     let custom_content_h = if snapshot.custom_section_enabled { 120.0 } else { 0.0 };
@@ -1650,147 +1791,6 @@ fn render_side_palette(
         });
     }
 
-    y += custom_card_h + section_gap;
-
-    // ===== Actions Section =====
-    // Checkbox to toggle visibility + content when enabled
-    let actions_checkbox_h = 24.0;
-    let actions_content_h = if snapshot.show_actions_section {
-        if use_icons {
-            // 10 icon buttons (5 per row = 2 rows)
-            let icon_btn_size = 36.0;
-            let icon_gap = 6.0;
-            let icon_rows = 2;
-            (icon_btn_size + icon_gap) * icon_rows as f64
-        } else {
-            let action_h = 24.0;
-            let action_gap = 5.0;
-            let action_rows = 5; // 10 items / 2 cols = 5 rows
-            (action_h + action_gap) * action_rows as f64
-        }
-    } else {
-        0.0
-    };
-    let actions_card_h = 20.0 + actions_checkbox_h + actions_content_h;
-
-    draw_group_card(ctx, card_x, y, card_w, actions_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Actions");
-
-    // Actions toggle checkbox
-    let actions_toggle_y = y + 22.0;
-    let actions_toggle_w = card_w - 12.0;
-    let actions_toggle_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, actions_toggle_y, actions_toggle_w, actions_checkbox_h))
-        .unwrap_or(false);
-    draw_checkbox(ctx, x, actions_toggle_y, actions_toggle_w, actions_checkbox_h,
-        snapshot.show_actions_section, actions_toggle_hover, "Show actions");
-    hits.push(HitRegion {
-        rect: (x, actions_toggle_y, actions_toggle_w, actions_checkbox_h),
-        event: ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
-
-    if snapshot.show_actions_section {
-        let actions_start_y = actions_toggle_y + actions_checkbox_h + 6.0;
-
-        // Action definitions with icons and labels (now includes delay actions as icons)
-        // Row 1: Undo, Redo, UndoAll, RedoAll, UndoAllDelay
-        // Row 2: Clear, Freeze, ConfigUI, ConfigFile, RedoAllDelay
-        type IconFn = fn(&cairo::Context, f64, f64, f64);
-        let all_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
-            // Row 1
-            (ToolbarEvent::Undo, toolbar_icons::draw_icon_undo as IconFn, "Undo", snapshot.undo_available),
-            (ToolbarEvent::Redo, toolbar_icons::draw_icon_redo as IconFn, "Redo", snapshot.redo_available),
-            (ToolbarEvent::UndoAll, toolbar_icons::draw_icon_undo_all as IconFn, "Undo All", snapshot.undo_available),
-            (ToolbarEvent::RedoAll, toolbar_icons::draw_icon_redo_all as IconFn, "Redo All", snapshot.redo_available),
-            (ToolbarEvent::UndoAllDelayed, toolbar_icons::draw_icon_undo_all_delay as IconFn, "Undo All Delay", snapshot.undo_available),
-            // Row 2
-            (ToolbarEvent::ClearCanvas, toolbar_icons::draw_icon_clear as IconFn, "Clear", true),
-            (
-                ToolbarEvent::ToggleFreeze,
-                if snapshot.frozen_active {
-                    toolbar_icons::draw_icon_unfreeze as IconFn
-                } else {
-                    toolbar_icons::draw_icon_freeze as IconFn
-                },
-                if snapshot.frozen_active { "Unfreeze" } else { "Freeze" },
-                true,
-            ),
-            (ToolbarEvent::OpenConfigurator, toolbar_icons::draw_icon_settings as IconFn, "Config UI", true),
-            (ToolbarEvent::OpenConfigFile, toolbar_icons::draw_icon_file as IconFn, "Config file", true),
-            (ToolbarEvent::RedoAllDelayed, toolbar_icons::draw_icon_redo_all_delay as IconFn, "Redo All Delay", snapshot.redo_available),
-        ];
-
-        if use_icons {
-            // Icon mode: render icon buttons in a grid (5 per row, 2 rows)
-            let icon_btn_size = 36.0;
-            let icon_gap = 6.0;
-            let icons_per_row = 5;
-            let _icon_rows = (all_actions.len() + icons_per_row - 1) / icons_per_row;
-            let icon_size = 22.0;
-            let total_icons_w = icons_per_row as f64 * icon_btn_size + (icons_per_row - 1) as f64 * icon_gap;
-            let icons_start_x = x + (card_w - 12.0 - total_icons_w) / 2.0;
-
-            for (idx, (evt, icon_fn, label, enabled)) in all_actions.iter().enumerate() {
-                let row = idx / icons_per_row;
-                let col = idx % icons_per_row;
-                let bx = icons_start_x + (icon_btn_size + icon_gap) * col as f64;
-                let by = actions_start_y + (icon_btn_size + icon_gap) * row as f64;
-                let is_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
-                    .unwrap_or(false);
-
-                if *enabled {
-                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                } else {
-                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
-                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
-                }
-
-                let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
-                let icon_y = by + (icon_btn_size - icon_size) / 2.0;
-                icon_fn(ctx, icon_x, icon_y, icon_size);
-
-                if *enabled {
-                    hits.push(HitRegion {
-                        rect: (bx, by, icon_btn_size, icon_btn_size),
-                        event: evt.clone(),
-                        kind: HitKind::Click,
-                        tooltip: Some(*label),
-                    });
-                }
-            }
-        } else {
-            // Text mode: render text buttons in a 2-column grid
-            let action_h = 24.0;
-            let action_gap = 5.0;
-            let action_col_gap = 6.0;
-            let action_w = ((width - 2.0 * x) - action_col_gap) / 2.0;
-
-            for (idx, (evt, _icon, label, enabled)) in all_actions.iter().enumerate() {
-                let row = idx / 2;
-                let col = idx % 2;
-                let bx = x + (action_w + action_col_gap) * col as f64;
-                let by = actions_start_y + (action_h + action_gap) * row as f64;
-                let is_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
-                    .unwrap_or(false);
-                draw_button(ctx, bx, by, action_w, action_h, *enabled, is_hover);
-                draw_label_center(ctx, bx, by, action_w, action_h, label);
-                if *enabled {
-                    hits.push(HitRegion {
-                        rect: (bx, by, action_w, action_h),
-                        event: evt.clone(),
-                        kind: HitKind::Click,
-                        tooltip: None,
-                    });
-                }
-            }
-        }
-    }
-
     // Draw tooltip for hovered icon button (below for side toolbar)
     draw_tooltip(ctx, hits, hover, width, false);
 }
@@ -1806,58 +1806,6 @@ fn draw_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, active: boo
     ctx.set_source_rgba(r, g, b, a);
     draw_round_rect(ctx, x, y, w, h, 6.0);
     let _ = ctx.fill();
-}
-
-fn draw_toggle_button(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    active: bool,
-    hover: bool,
-    label: &str,
-) {
-    // Draw button background
-    let (r, g, b, a) = if hover {
-        (0.35, 0.35, 0.45, 0.85)
-    } else {
-        (0.2, 0.22, 0.26, 0.75)
-    };
-    ctx.set_source_rgba(r, g, b, a);
-    draw_round_rect(ctx, x, y, w, h, 6.0);
-    let _ = ctx.fill();
-
-    // Draw switch on right side
-    let switch_w = 36.0;
-    let switch_h = 18.0;
-    let switch_x = x + w - switch_w - 10.0;
-    let switch_y = y + (h - switch_h) / 2.0;
-    let switch_r = switch_h / 2.0;
-
-    // Switch track
-    if active {
-        ctx.set_source_rgba(0.25, 0.6, 0.35, 0.95);
-    } else {
-        ctx.set_source_rgba(0.3, 0.3, 0.35, 0.8);
-    }
-    draw_round_rect(ctx, switch_x, switch_y, switch_w, switch_h, switch_r);
-    let _ = ctx.fill();
-
-    // Switch knob
-    let knob_r = switch_h / 2.0 - 2.0;
-    let knob_x = if active {
-        switch_x + switch_w - switch_r
-    } else {
-        switch_x + switch_r
-    };
-    let knob_y = switch_y + switch_h / 2.0;
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-    ctx.arc(knob_x, knob_y, knob_r, 0.0, std::f64::consts::PI * 2.0);
-    let _ = ctx.fill();
-
-    // Draw label
-    draw_label_left(ctx, x + 10.0, y, w - switch_w - 20.0, h, label);
 }
 
 fn draw_label_center(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, text: &str) {

@@ -21,15 +21,12 @@ pub enum ToolbarEvent {
     Redo,
     ClearCanvas,
     EnterTextMode,
-    ToggleHighlightTool(bool),
-    ToggleClickHighlight(bool),
     /// Toggle both highlight tool and click highlight together
     ToggleAllHighlight(bool),
     ToggleFreeze,
     OpenConfigurator,
     OpenConfigFile,
     ToggleCustomSection(bool),
-    ToggleCustomIcons(bool),
     ToggleDelaySliders(bool),
     SetCustomUndoDelay(f64),
     SetCustomRedoDelay(f64),
@@ -74,7 +71,6 @@ pub struct ToolbarSnapshot {
     pub undo_all_delay_ms: u64,
     pub redo_all_delay_ms: u64,
     pub custom_section_enabled: bool,
-    pub custom_use_icons: bool,
     pub show_delay_sliders: bool,
     pub custom_undo_delay_ms: u64,
     pub custom_redo_delay_ms: u64,
@@ -113,7 +109,6 @@ impl ToolbarSnapshot {
             undo_all_delay_ms: state.undo_all_delay_ms,
             redo_all_delay_ms: state.redo_all_delay_ms,
             custom_section_enabled: state.custom_section_enabled,
-            custom_use_icons: state.custom_use_icons,
             show_delay_sliders: state.show_delay_sliders,
             custom_undo_delay_ms: state.custom_undo_delay_ms,
             custom_redo_delay_ms: state.custom_redo_delay_ms,
@@ -233,24 +228,6 @@ impl InputState {
                 self.toolbar_enter_text_mode();
                 true
             }
-            ToolbarEvent::ToggleHighlightTool(enable) => {
-                let active = self.highlight_tool_active();
-                if active == enable {
-                    false
-                } else {
-                    self.set_highlight_tool(enable);
-                    true
-                }
-            }
-            ToolbarEvent::ToggleClickHighlight(enable) => {
-                let active = self.click_highlight_enabled();
-                if active == enable {
-                    false
-                } else {
-                    self.toggle_click_highlight();
-                    true
-                }
-            }
             ToolbarEvent::ToggleAllHighlight(enable) => {
                 // set_highlight_tool already handles both highlight tool and click highlight
                 let currently_active = self.highlight_tool_active() || self.click_highlight_enabled();
@@ -270,14 +247,6 @@ impl InputState {
             ToolbarEvent::ToggleCustomSection(enable) => {
                 if self.custom_section_enabled != enable {
                     self.custom_section_enabled = enable;
-                    true
-                } else {
-                    false
-                }
-            }
-            ToolbarEvent::ToggleCustomIcons(use_icons) => {
-                if self.custom_use_icons != use_icons {
-                    self.custom_use_icons = use_icons;
                     true
                 } else {
                     false

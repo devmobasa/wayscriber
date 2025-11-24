@@ -131,10 +131,6 @@ pub struct HistoryConfig {
     /// Number of steps to play when running custom redo
     #[serde(default = "default_custom_redo_steps")]
     pub custom_redo_steps: usize,
-
-    /// Render custom undo/redo controls as icons instead of text
-    #[serde(default = "default_custom_use_icons")]
-    pub custom_use_icons: bool,
 }
 
 impl Default for HistoryConfig {
@@ -147,7 +143,6 @@ impl Default for HistoryConfig {
             custom_redo_delay_ms: default_custom_redo_delay_ms(),
             custom_undo_steps: default_custom_undo_steps(),
             custom_redo_steps: default_custom_redo_steps(),
-            custom_use_icons: default_custom_use_icons(),
         }
     }
 }
@@ -470,10 +465,6 @@ fn default_custom_undo_steps() -> usize {
 
 fn default_custom_redo_steps() -> usize {
     5
-}
-
-fn default_custom_use_icons() -> bool {
-    false
 }
 
 fn default_buffer_count() -> u32 {
@@ -901,11 +892,11 @@ impl Default for ToolbarConfig {
 }
 
 fn default_toolbar_top_pinned() -> bool {
-    false
+    true
 }
 
 fn default_toolbar_side_pinned() -> bool {
-    false
+    true
 }
 
 fn default_toolbar_use_icons() -> bool {

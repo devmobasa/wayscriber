@@ -153,8 +153,6 @@ pub struct InputState {
     pub custom_redo_steps: usize,
     /// Whether the custom undo/redo section is visible
     pub custom_section_enabled: bool,
-    /// Whether to render custom undo/redo controls as icons
-    pub custom_use_icons: bool,
     /// Whether to show the delay sliders in Actions section
     pub show_delay_sliders: bool,
     /// Pending delayed history playback state
@@ -232,7 +230,6 @@ impl InputState {
         custom_redo_delay_ms: u64,
         custom_undo_steps: usize,
         custom_redo_steps: usize,
-        custom_use_icons: bool,
     ) -> Self {
         let mut state = Self {
             canvas_set: CanvasSet::new(),
@@ -282,7 +279,6 @@ impl InputState {
             custom_undo_steps,
             custom_redo_steps,
             custom_section_enabled,
-            custom_use_icons,
             show_delay_sliders: false, // Default to hidden
             pending_history: None,
             context_menu_layout: None,
