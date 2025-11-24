@@ -120,6 +120,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 
 - **Drawing & editing**: Freehand pen, straight lines, rectangles, ellipses, arrows, and multiline text with smoothing; undo & redo; quick line-width and color changes via hotkeys or scroll.
 - **Board modes**: Whiteboard, blackboard, and transparent overlays, each with isolated frames and auto pen contrast; snap back to transparent with `Ctrl+Shift+T`.
+- **Floating toolbars**: Pin/unpin top and side toolbars (`F2`/`F9`) with icon or text display modes, extended color palettes, undo/redo actions, and optional delay sliders; hover for tooltips even when frozen.
 - **Capture shortcuts**: Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard` when available.
 - **Session persistence**: Opt-in per board/monitor storage that restores your canvas plus pen color & thickness; inspect with `wayscriber --session-info` or clear with `wayscriber --clear-session`.
 - **Freeze / pause view**: Toggle freeze to pause what viewers see while your apps keep running; hotkey `Ctrl+Shift+F` or start frozen with `wayscriber --freeze`.
@@ -335,12 +336,15 @@ Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
 | Redo last undo | `Ctrl+Shift+Z` or `Ctrl+Y` |
 | Clear all | `E` |
 | Cancel action | Right-click or `Escape` |
-| **Help & Exit** |
+| **Toolbars & UI** |
+| Toggle toolbars | `F2` or `F9` |
 | Toggle help overlay | `F10` |
 | Launch configurator | `F11` |
+| Toggle status bar | `F12` |
 | Toggle click highlight | `Ctrl+Shift+H` |
 | Toggle freeze | `Ctrl+Shift+F` |
 | Highlight brush (highlight-only) | `Ctrl+Alt+H` |
+| **Exit** |
 | Exit overlay | `Escape` or `Ctrl+Q` |
 
 ## Configuration
