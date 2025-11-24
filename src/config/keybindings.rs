@@ -688,7 +688,7 @@ fn default_toggle_click_highlight() -> Vec<String> {
 }
 
 fn default_toggle_toolbar() -> Vec<String> {
-    vec!["F2".to_string()]
+    vec!["F2".to_string(), "F9".to_string()]
 }
 
 fn default_toggle_highlight_tool() -> Vec<String> {
