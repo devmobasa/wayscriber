@@ -139,7 +139,9 @@ fn main() -> anyhow::Result<()> {
         println!("wayscriber: Screen annotation tool for Wayland compositors");
         println!();
         println!("Usage:");
-        println!("  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)");
+        println!(
+            "  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)"
+        );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
         println!("  wayscriber --freeze          Start overlay already frozen");
         println!("  wayscriber -h, --help      Show help");

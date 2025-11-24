@@ -13,7 +13,10 @@ impl InputState {
         self.tool_override = tool;
 
         // Ensure we are not mid-drawing with a stale tool
-        if !matches!(self.state, DrawingState::Idle | DrawingState::TextInput { .. }) {
+        if !matches!(
+            self.state,
+            DrawingState::Idle | DrawingState::TextInput { .. }
+        ) {
             self.state = DrawingState::Idle;
         }
 

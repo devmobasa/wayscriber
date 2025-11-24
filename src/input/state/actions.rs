@@ -3,6 +3,8 @@ use crate::draw::Shape;
 use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
 use log::{info, warn};
+use std::thread;
+use std::time::Duration;
 
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
@@ -95,17 +97,17 @@ impl InputState {
                 let key_str = match key {
                     Key::Char(c) => c.to_string(),
                     Key::Escape => "Escape".to_string(),
-                Key::Return => "Return".to_string(),
-                Key::Backspace => "Backspace".to_string(),
-                Key::Space => "Space".to_string(),
-                Key::F1 => "F1".to_string(),
-                Key::F2 => "F2".to_string(),
-                Key::F9 => "F9".to_string(),
-                Key::F10 => "F10".to_string(),
-                Key::F11 => "F11".to_string(),
-                Key::F12 => "F12".to_string(),
-                Key::Menu => "Menu".to_string(),
-                Key::Up => "ArrowUp".to_string(),
+                    Key::Return => "Return".to_string(),
+                    Key::Backspace => "Backspace".to_string(),
+                    Key::Space => "Space".to_string(),
+                    Key::F1 => "F1".to_string(),
+                    Key::F2 => "F2".to_string(),
+                    Key::F9 => "F9".to_string(),
+                    Key::F10 => "F10".to_string(),
+                    Key::F11 => "F11".to_string(),
+                    Key::F12 => "F12".to_string(),
+                    Key::Menu => "Menu".to_string(),
+                    Key::Up => "ArrowUp".to_string(),
                     Key::Down => "ArrowDown".to_string(),
                     Key::Left => "ArrowLeft".to_string(),
                     Key::Right => "ArrowRight".to_string(),
@@ -328,6 +330,18 @@ impl InputState {
                     self.apply_action_side_effects(&action);
                 }
             }
+            Action::UndoAll => {
+                self.undo_all_immediate();
+            }
+            Action::RedoAll => {
+                self.redo_all_immediate();
+            }
+            Action::UndoAllDelayed => {
+                self.undo_all_with_delay(self.undo_all_delay_ms);
+            }
+            Action::RedoAllDelayed => {
+                self.redo_all_with_delay(self.redo_all_delay_ms);
+            }
             Action::DuplicateSelection => {
                 if self.duplicate_selection() {
                     info!("Duplicated selection");
@@ -531,6 +545,38 @@ impl InputState {
             Key::Alt => self.modifiers.alt = false,
             Key::Tab => self.modifiers.tab = false,
             _ => {}
+        }
+    }
+
+    pub(crate) fn undo_all_immediate(&mut self) {
+        while let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
+            self.apply_action_side_effects(&action);
+        }
+    }
+
+    pub(crate) fn redo_all_immediate(&mut self) {
+        while let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
+            self.apply_action_side_effects(&action);
+        }
+    }
+
+    pub(crate) fn undo_all_with_delay(&mut self, delay_ms: u64) {
+        let delay = Duration::from_millis(delay_ms);
+        while let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
+            self.apply_action_side_effects(&action);
+            if delay_ms > 0 {
+                thread::sleep(delay);
+            }
+        }
+    }
+
+    pub(crate) fn redo_all_with_delay(&mut self, delay_ms: u64) {
+        let delay = Duration::from_millis(delay_ms);
+        while let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
+            self.apply_action_side_effects(&action);
+            if delay_ms > 0 {
+                thread::sleep(delay);
+            }
         }
     }
 }

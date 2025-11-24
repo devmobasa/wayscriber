@@ -61,3 +61,33 @@ impl ColorSpec {
         }
     }
 }
+
+impl From<Color> for ColorSpec {
+    fn from(color: Color) -> Self {
+        let clamp = |v: f64| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round().min(255.0) as u8 };
+        ColorSpec::Rgb([clamp(color.r), clamp(color.g), clamp(color.b)])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn color_spec_from_color_clamps_components() {
+        let spec = ColorSpec::from(Color {
+            r: 1.2,
+            g: -0.1,
+            b: 0.5,
+            a: 1.0,
+        });
+        match spec {
+            ColorSpec::Rgb([r, g, b]) => {
+                assert_eq!(r, 255);
+                assert_eq!(g, 0);
+                assert_eq!(b, 128);
+            }
+            _ => panic!("expected rgb variant"),
+        }
+    }
+}

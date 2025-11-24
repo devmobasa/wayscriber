@@ -22,6 +22,7 @@ fn dummy_input_state() -> InputState {
             a: 1.0,
         },
         3.0,
+        false,
         32.0,
         FontDescriptor::default(),
         false,
@@ -32,6 +33,8 @@ fn dummy_input_state() -> InputState {
         action_map,
         usize::MAX,
         ClickHighlightSettings::disabled(),
+        0,
+        0,
     )
 }
 
@@ -197,6 +200,7 @@ fn session_roundtrip_preserves_shapes_across_frames() {
             cy: 10,
             rx: 4,
             ry: 8,
+            fill: false,
             color: Color {
                 r: 1.0,
                 g: 1.0,
@@ -337,9 +341,11 @@ fn modify_delete_cycle_survives_restore() {
     );
 
     // Delete it (pushes a Delete with embedded shape data).
-    let delete_action = frame.remove_shape_by_id(id).map(|(idx, shape)| UndoAction::Delete {
-        shapes: vec![(idx, shape)],
-    });
+    let delete_action = frame
+        .remove_shape_by_id(id)
+        .map(|(idx, shape)| UndoAction::Delete {
+            shapes: vec![(idx, shape)],
+        });
     frame.push_undo_action(delete_action.unwrap(), input.undo_stack_limit);
 
     assert!(frame.shapes.is_empty());

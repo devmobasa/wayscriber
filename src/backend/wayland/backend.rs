@@ -245,6 +245,7 @@ impl WaylandBackend {
         let mut input_state = InputState::with_defaults(
             config.drawing.default_color.to_color(),
             config.drawing.default_thickness,
+            config.drawing.default_fill_enabled,
             config.drawing.default_font_size,
             font_descriptor,
             config.drawing.text_background_enabled,
@@ -255,6 +256,8 @@ impl WaylandBackend {
             action_map,
             config.session.max_shapes_per_frame,
             ClickHighlightSettings::from(&config.ui.click_highlight),
+            config.history.undo_all_delay_ms,
+            config.history.redo_all_delay_ms,
         );
 
         input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
@@ -263,10 +266,8 @@ impl WaylandBackend {
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
 
         // Initialize toolbar visibility from pinned config
-        input_state.init_toolbar_from_config(
-            config.ui.toolbar.top_pinned,
-            config.ui.toolbar.side_pinned,
-        );
+        input_state
+            .init_toolbar_from_config(config.ui.toolbar.top_pinned, config.ui.toolbar.side_pinned);
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
         if config.board.enabled {
@@ -459,7 +460,9 @@ impl WaylandBackend {
 
             if state.input_state.take_pending_frozen_toggle() {
                 if !state.frozen_enabled {
-                    warn!("Frozen mode disabled on this compositor (xdg fallback); ignoring toggle");
+                    warn!(
+                        "Frozen mode disabled on this compositor (xdg fallback); ignoring toggle"
+                    );
                 } else if state.frozen.is_in_progress() {
                     warn!("Frozen capture already in progress; ignoring toggle");
                 } else if state.input_state.frozen_active() {

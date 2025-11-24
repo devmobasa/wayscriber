@@ -61,12 +61,12 @@ impl PointerHandler for WaylandState {
                 PointerEventKind::Motion { .. } => {
                     if on_toolbar {
                         self.pointer_over_toolbar = true;
-                        if let Some(evt) =
-                            self.toolbar.pointer_motion(&event.surface, event.position)
-                        {
-                            self.handle_toolbar_event(evt);
-                        } else if !self.toolbar_dragging {
-                            // Hover only
+                        let evt = self.toolbar.pointer_motion(&event.surface, event.position);
+                        if self.toolbar_dragging {
+                            if let Some(evt) = evt {
+                                self.handle_toolbar_event(evt);
+                            }
+                        } else {
                             self.toolbar.mark_dirty();
                         }
                         self.input_state.needs_redraw = true;
@@ -74,11 +74,12 @@ impl PointerHandler for WaylandState {
                         continue;
                     }
                     if self.pointer_over_toolbar {
-                        if let Some(evt) =
-                            self.toolbar.pointer_motion(&event.surface, event.position)
-                        {
-                            self.handle_toolbar_event(evt);
-                        } else if !self.toolbar_dragging {
+                        let evt = self.toolbar.pointer_motion(&event.surface, event.position);
+                        if self.toolbar_dragging {
+                            if let Some(evt) = evt {
+                                self.handle_toolbar_event(evt);
+                            }
+                        } else {
                             self.toolbar.mark_dirty();
                         }
                         self.input_state.needs_redraw = true;

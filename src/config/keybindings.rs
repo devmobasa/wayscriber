@@ -19,6 +19,10 @@ pub enum Action {
     ClearCanvas,
     Undo,
     Redo,
+    UndoAll,
+    RedoAll,
+    UndoAllDelayed,
+    RedoAllDelayed,
     DuplicateSelection,
     MoveSelectionToFront,
     MoveSelectionToBack,
@@ -183,6 +187,18 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_redo")]
     pub redo: Vec<String>,
 
+    #[serde(default)]
+    pub undo_all: Vec<String>,
+
+    #[serde(default)]
+    pub redo_all: Vec<String>,
+
+    #[serde(default)]
+    pub undo_all_delayed: Vec<String>,
+
+    #[serde(default)]
+    pub redo_all_delayed: Vec<String>,
+
     #[serde(default = "default_duplicate_selection")]
     pub duplicate_selection: Vec<String>,
 
@@ -309,6 +325,10 @@ impl Default for KeybindingsConfig {
             clear_canvas: default_clear_canvas(),
             undo: default_undo(),
             redo: default_redo(),
+            undo_all: Vec::new(),
+            redo_all: Vec::new(),
+            undo_all_delayed: Vec::new(),
+            redo_all_delayed: Vec::new(),
             duplicate_selection: default_duplicate_selection(),
             move_selection_to_front: default_move_selection_to_front(),
             move_selection_to_back: default_move_selection_to_back(),
@@ -389,6 +409,22 @@ impl KeybindingsConfig {
 
         for binding_str in &self.redo {
             insert_binding(binding_str, Action::Redo)?;
+        }
+
+        for binding_str in &self.undo_all {
+            insert_binding(binding_str, Action::UndoAll)?;
+        }
+
+        for binding_str in &self.redo_all {
+            insert_binding(binding_str, Action::RedoAll)?;
+        }
+
+        for binding_str in &self.undo_all_delayed {
+            insert_binding(binding_str, Action::UndoAllDelayed)?;
+        }
+
+        for binding_str in &self.redo_all_delayed {
+            insert_binding(binding_str, Action::RedoAllDelayed)?;
         }
 
         for binding_str in &self.duplicate_selection {

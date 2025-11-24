@@ -11,6 +11,10 @@ pub enum ToolbarEvent {
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
+    UndoAll,
+    RedoAll,
+    UndoAllDelayed,
+    RedoAllDelayed,
     Undo,
     Redo,
     ClearCanvas,
@@ -103,6 +107,22 @@ impl InputState {
             }
             ToolbarEvent::Redo => {
                 self.toolbar_redo();
+                true
+            }
+            ToolbarEvent::UndoAll => {
+                self.undo_all_immediate();
+                true
+            }
+            ToolbarEvent::RedoAll => {
+                self.redo_all_immediate();
+                true
+            }
+            ToolbarEvent::UndoAllDelayed => {
+                self.undo_all_with_delay(self.undo_all_delay_ms);
+                true
+            }
+            ToolbarEvent::RedoAllDelayed => {
+                self.redo_all_with_delay(self.redo_all_delay_ms);
                 true
             }
             ToolbarEvent::ClearCanvas => {
