@@ -7,7 +7,10 @@
 <details>
 <summary>📹 Demo Video (Click to expand)</summary>
 
-https://wayscriber.com/demo.mp4
+<video controls width="720" poster="https://wayscriber.com/demo-poster-4.png">
+  <source src="https://wayscriber.com/demo.mp4" type="video/mp4">
+  Your browser does not support the video tag. Watch here: https://wayscriber.com/demo.mp4
+</video>
 
 </details>
 
@@ -15,6 +18,8 @@ https://wayscriber.com/demo.mp4
 <summary>🖼️ Demo GIF (Click to expand)</summary>
 
 ![Demo GIF](https://wayscriber.com/demo.gif)
+
+<img src="https://wayscriber.com/demo-poster-2.png" alt="Demo Poster" width="720" />
 
 </details>
 
