@@ -87,7 +87,7 @@ pub struct InputState {
     pub show_help: bool,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
-    /// Whether the floating toolbar UI is visible (legacy, use top/side specific)
+    /// Whether both toolbars are visible (combined flag, prefer top/side specific)
     pub toolbar_visible: bool,
     /// Whether the top toolbar panel is visible
     pub toolbar_top_visible: bool,

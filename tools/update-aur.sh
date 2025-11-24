@@ -13,28 +13,13 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-PACKAGE_NAME="${1:-wayscriber}"
-case "$PACKAGE_NAME" in
-    wayscriber)
-        SOURCE_FILE="$PROJECT_ROOT/packaging/PKGBUILD"
-        AUR_REPO="wayscriber"
-        PACKAGE_URL="https://aur.archlinux.org/packages/wayscriber"
-        ;;
-    hyprmarker|hyprmarker-meta)
-        SOURCE_FILE="$PROJECT_ROOT/packaging/PKGBUILD.hyprmarker-meta"
-        AUR_REPO="hyprmarker"
-        PACKAGE_URL="https://aur.archlinux.org/packages/hyprmarker"
-        ;;
-    *)
-        echo -e "${RED}Unknown package '$PACKAGE_NAME'. Supported: wayscriber, hyprmarker${NC}"
-        exit 1
-        ;;
-esac
-
-AUR_DIR="$HOME/aur-packages/$PACKAGE_NAME"
+SOURCE_FILE="$PROJECT_ROOT/packaging/PKGBUILD"
+AUR_REPO="wayscriber"
+PACKAGE_URL="https://aur.archlinux.org/packages/wayscriber"
+AUR_DIR="$HOME/aur-packages/wayscriber"
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "  WAYSCRIBER - AUR UPDATE AUTOMATION ($PACKAGE_NAME)"
+echo "  WAYSCRIBER - AUR UPDATE AUTOMATION"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
@@ -157,7 +142,6 @@ echo ""
 read -p "Push to AUR? (y/n) " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Check if git is initialized
     # Add and commit
     git add PKGBUILD .SRCINFO .gitignore 2>/dev/null || git add PKGBUILD .SRCINFO
     git commit -m "Update to v$CARGO_VERSION"

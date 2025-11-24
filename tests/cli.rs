@@ -52,33 +52,6 @@ fn active_mode_requires_wayland_env() {
 }
 
 #[test]
-fn dry_run_requires_migrate_flag() {
-    wayscriber_cmd()
-        .arg("--dry-run")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "required arguments were not provided",
-        ));
-}
-
-#[test]
-fn migrate_dry_run_uses_temp_config_home() {
-    let temp = TempDir::new().unwrap();
-    let hypr_dir = temp.path().join("hyprmarker");
-    std::fs::create_dir_all(&hypr_dir).unwrap();
-    std::fs::write(hypr_dir.join("config.toml"), "legacy = true").unwrap();
-
-    wayscriber_cmd()
-        .env_remove("WAYLAND_DISPLAY")
-        .env("XDG_CONFIG_HOME", temp.path())
-        .args(["--migrate-config", "--dry-run"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Dry-run: would copy 1 file"));
-}
-
-#[test]
 fn session_clear_command_succeeds_without_files() {
     let temp = TempDir::new().unwrap();
     let session_dir = temp.path().join("sessions");

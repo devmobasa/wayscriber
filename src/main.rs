@@ -1,14 +1,11 @@
 use clap::{ArgAction, Parser};
 
-use crate::config::{MigrationActions, MigrationReport};
-
 mod backend;
 mod capture;
 mod config;
 mod daemon;
 mod draw;
 mod input;
-mod legacy;
 mod notification;
 mod session;
 mod ui;
@@ -30,14 +27,6 @@ struct Cli {
     #[arg(long, short = 'm', value_name = "MODE")]
     mode: Option<String>,
 
-    /// Copy configuration files from ~/.config/hyprmarker to ~/.config/wayscriber
-    #[arg(long, action = ArgAction::SetTrue)]
-    migrate_config: bool,
-
-    /// Preview the migration without copying files (requires --migrate-config)
-    #[arg(long = "dry-run", action = ArgAction::SetTrue, requires = "migrate_config")]
-    migrate_config_dry_run: bool,
-
     /// Delete persisted session data and backups
     #[arg(
         long,
@@ -45,8 +34,6 @@ struct Cli {
         conflicts_with_all = [
             "daemon",
             "active",
-            "migrate_config",
-            "migrate_config_dry_run"
         ]
     )]
     clear_session: bool,
@@ -58,8 +45,6 @@ struct Cli {
         conflicts_with_all = [
             "daemon",
             "active",
-            "migrate_config",
-            "migrate_config_dry_run",
             "clear_session"
         ]
     )]
@@ -69,7 +54,7 @@ struct Cli {
     #[arg(
         long,
         action = ArgAction::SetTrue,
-        conflicts_with_all = ["daemon", "clear_session", "session_info", "migrate_config", "migrate_config_dry_run"]
+        conflicts_with_all = ["daemon", "clear_session", "session_info"]
     )]
     freeze: bool,
 }
@@ -79,15 +64,8 @@ fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    maybe_print_alias_notice();
-
     if cli.clear_session || cli.session_info {
         run_session_cli_commands(&cli)?;
-        return Ok(());
-    }
-
-    if cli.migrate_config {
-        run_config_migration(cli.migrate_config_dry_run)?;
         return Ok(());
     }
 
@@ -123,7 +101,7 @@ fn main() -> anyhow::Result<()> {
         log::info!("  - Decrease thickness: - or _ or scroll up");
         log::info!("  - Freeze screen: Ctrl+Shift+F (toggle frozen background)");
         log::info!("  - Context menu: Right Click or Shift+F10");
-        log::info!("  - Help: F1/F10   •   Toolbar: F9   •   Configurator: F11   •   Status bar: F12");
+        log::info!("  - Help: F1/F10   •   Toolbar: F2/F9   •   Configurator: F11   •   Status bar: F12");
         log::info!("  - Exit: Escape");
         if cli.freeze {
             log::info!("Starting frozen mode (freeze-on-start requested)");
@@ -144,7 +122,7 @@ fn main() -> anyhow::Result<()> {
         );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
         println!("  wayscriber --freeze          Start overlay already frozen");
-        println!("  wayscriber -h, --help      Show help");
+        println!("  wayscriber -h, --help        Show help");
         println!();
         println!("Daemon mode (recommended). Example Hyprland setup:");
         println!("  1. Run: wayscriber --daemon");
@@ -158,12 +136,6 @@ fn main() -> anyhow::Result<()> {
         println!("  - wlr-layer-shell protocol support");
     }
 
-    Ok(())
-}
-
-fn run_config_migration(dry_run: bool) -> anyhow::Result<()> {
-    let report = config::migrate_config(dry_run)?;
-    print_migration_report(&report);
     Ok(())
 }
 
@@ -273,99 +245,10 @@ fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_migration_report(report: &MigrationReport) {
-    match &report.actions {
-        MigrationActions::NoLegacyConfig => {
-            println!(
-                "No legacy hyprmarker configuration found at {}. Nothing to migrate.",
-                report.legacy_dir.display()
-            );
-        }
-        MigrationActions::DryRun {
-            target_exists,
-            files_to_copy,
-        } => {
-            println!(
-                "Dry-run: would copy {} {} from {} to {}.",
-                files_to_copy,
-                pluralize(*files_to_copy, "file", "files"),
-                report.legacy_dir.display(),
-                report.target_dir.display()
-            );
-
-            if *target_exists {
-                println!("An existing Wayscriber config would be backed up before copying.");
-            }
-
-            println!(
-                "Run without --dry-run to perform the migration. See docs/MIGRATION.md for the full checklist."
-            );
-        }
-        MigrationActions::Migrated {
-            target_existed,
-            files_copied,
-            backup_path,
-        } => {
-            println!(
-                "Copied {} {} from {} to {}.",
-                files_copied,
-                pluralize(*files_copied, "file", "files"),
-                report.legacy_dir.display(),
-                report.target_dir.display()
-            );
-
-            if let Some(path) = backup_path {
-                println!(
-                    "Existing Wayscriber config was moved to {} before copying.",
-                    path.display()
-                );
-            } else if *target_existed {
-                println!("Existing Wayscriber config was overwritten after creating a backup.");
-            }
-
-            println!(
-                "Legacy files remain at {}. Remove them when you are comfortable.",
-                report.legacy_dir.display()
-            );
-            println!("See docs/MIGRATION.md for next steps.");
-        }
-    }
-}
-
-fn maybe_print_alias_notice() {
-    if let Some(alias) = legacy::alias_invocation() {
-        if legacy::warnings_suppressed() {
-            return;
-        }
-
-        eprintln!("{alias} has been renamed to wayscriber.");
-        eprintln!("Update your shortcuts and scripts to invoke `wayscriber` directly.");
-        eprintln!("Run `wayscriber --migrate-config` to copy existing settings.");
-        eprintln!("Set HYPRMARKER_SILENCE_RENAME=1 to silence this warning during scripted runs.");
-    }
-}
-
-fn pluralize<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
-    if count == 1 { singular } else { plural }
-}
-
 #[cfg(test)]
 mod tests {
     use super::Cli;
     use clap::Parser;
-
-    #[test]
-    fn dry_run_requires_migrate_flag() {
-        let result = Cli::try_parse_from(["wayscriber", "--dry-run"]);
-        assert!(result.is_err(), "dry-run without migrate should fail");
-    }
-
-    #[test]
-    fn migrate_with_dry_run_parses_successfully() {
-        let cli = Cli::try_parse_from(["wayscriber", "--migrate-config", "--dry-run"]).unwrap();
-        assert!(cli.migrate_config);
-        assert!(cli.migrate_config_dry_run);
-    }
 
     #[test]
     fn active_mode_with_explicit_board_mode() {

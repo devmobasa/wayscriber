@@ -16,7 +16,6 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use libc;
 
-use crate::legacy;
 
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,7 +86,7 @@ impl WayscriberTray {
                     self.configurator_binary, err
                 );
                 error!(
-                    "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
+                    "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
                 );
             }
         }
@@ -392,8 +391,8 @@ fn start_system_tray(
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
 ) -> Result<JoinHandle<()>> {
-    let configurator_binary =
-        legacy::configurator_override().unwrap_or_else(|| "wayscriber-configurator".to_string());
+    let configurator_binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
+        .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
     let tray_quit_flag = quit_flag.clone();
     let tray = WayscriberTray::new(toggle_flag, tray_quit_flag.clone(), configurator_binary);
