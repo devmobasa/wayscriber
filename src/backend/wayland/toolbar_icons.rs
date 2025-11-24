@@ -298,47 +298,70 @@ fn draw_curved_arrow(ctx: &Context, x: f64, y: f64, size: f64, offset_y: bool) {
 }
 
 /// Helper to draw the "undo all / redo all" double curved arrow.
+///
+/// Front arrow = same geometry as the single undo/redo.
+/// Back arrow   = smaller radius, shifted slightly, shorter arc so the heads
+///                are clearly separated.
 fn draw_double_curved_arrow(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
-    let stroke = (s * 0.10).max(1.5);
-    ctx.set_line_width(stroke);
+
+    // Base stroke for the front arrow
+    let base_stroke = (s * 0.10).max(1.5);
     ctx.set_line_cap(cairo::LineCap::Round);
     ctx.set_line_join(cairo::LineJoin::Round);
 
+    // Center of the icon
     let cx = x + s * 0.5;
     let cy = y + s * 0.5;
 
-    // Front (main) arrow
-    let r_front = s * 0.36;
-    let start_front = -PI * 0.85;
-    let end_front = PI * 0.9;
+    // Same angles as the single curved arrow
+    let start_angle = -PI * 0.9;
+    let end_angle = PI * 0.9;
 
-    // Back arrow: smaller radius, shifted slightly down/right, and slightly
-    // shorter arc so the two heads don't sit on top of each other.
-    let r_back = s * 0.27;
-    let back_dx = s * 0.10;
-    let back_dy = s * 0.05;
-    let start_back = -PI * 0.7;
-    let end_back = PI * 0.75;
+    // Front (main) arrow
+    let r_front = s * 0.38;
+    let head_front = s * 0.18;
+
+    // Back arrow: slightly smaller radius, shifted down/right,
+    // and with an earlier end angle so the heads don't overlap.
+    let r_back = s * 0.30;
+    let head_back = s * 0.15;
+    let back_dx = s * 0.05;
+    let back_dy = s * 0.03;
+
+    // Angular separation between the two heads (~63°)
+    let head_separation = PI * 0.35;
+    let end_back = end_angle - head_separation;
 
     ctx.save().ok();
+    // Same slight clockwise tilt as the single undo/redo
     ctx.translate(cx, cy);
     ctx.rotate(-10f64.to_radians());
     ctx.translate(-cx, -cy);
 
-    // Draw back arrow first so it visually sits underneath.
+    // Draw back arrow first (thinner, so it visually sits behind)
+    ctx.set_line_width(base_stroke * 0.85);
     draw_arc_with_head(
         ctx,
         cx + back_dx,
         cy + back_dy,
         r_back,
-        start_back,
+        start_angle,
         end_back,
-        s * 0.16,
+        head_back,
     );
 
-    // Then front arrow on top.
-    draw_arc_with_head(ctx, cx, cy, r_front, start_front, end_front, s * 0.20);
+    // Draw front arrow on top
+    ctx.set_line_width(base_stroke);
+    draw_arc_with_head(
+        ctx,
+        cx,
+        cy,
+        r_front,
+        start_angle,
+        end_angle,
+        head_front,
+    );
 
     ctx.restore().ok();
 }
@@ -391,7 +414,6 @@ fn draw_arc_with_head(
     ctx.line_to(base2_x, base2_y);
     let _ = ctx.stroke();
 }
-
 
 /// Draw a step undo icon (curved arrow with number)
 pub fn draw_icon_step_undo(ctx: &Context, x: f64, y: f64, size: f64) {
