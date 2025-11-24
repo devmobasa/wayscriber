@@ -11,8 +11,6 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALL_DIR="${WAYSCRIBER_INSTALL_DIR:-/usr/bin}"
 BINARY_NAME="wayscriber"
 CONFIGURATOR_BINARY_NAME="wayscriber-configurator"
-LEGACY_BINARY_NAME="hyprmarker"
-LEGACY_CONFIGURATOR_BINARY_NAME="hyprmarker-configurator"
 CONFIG_DIR="$HOME/.config/wayscriber"
 HYPR_CONFIG="$HOME/.config/hypr/hyprland.conf"
 
@@ -79,19 +77,8 @@ ${SUDO:-} install -d "$INSTALL_DIR"
 echo "Installing binary to $INSTALL_DIR/$BINARY_NAME"
 ${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
 
-if [ -f "$PROJECT_ROOT/target/release/$LEGACY_BINARY_NAME" ]; then
-    echo "Installing legacy compatibility alias to $INSTALL_DIR/$LEGACY_BINARY_NAME"
-    ${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$LEGACY_BINARY_NAME" "$INSTALL_DIR/$LEGACY_BINARY_NAME"
-else
-    echo "Creating legacy compatibility copy at $INSTALL_DIR/$LEGACY_BINARY_NAME"
-    ${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/$LEGACY_BINARY_NAME"
-fi
-
 echo "Installing configurator to $INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
 ${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
-
-echo "Installing configurator alias to $INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
-${SUDO:-} ln -sf "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/$LEGACY_CONFIGURATOR_BINARY_NAME"
 
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
@@ -160,7 +147,7 @@ case $REPLY in
         echo "Setting up systemd user service..."
 
         if [ -f "$USER_SERVICE_FILE" ]; then
-            echo "Removing legacy service override at $USER_SERVICE_FILE"
+            echo "Removing old service override at $USER_SERVICE_FILE"
             rm -f "$USER_SERVICE_FILE"
         fi
 
@@ -287,7 +274,8 @@ echo "  - Arrow: Ctrl+Shift + drag"
 echo "  - Text: Press T"
 echo "  - Colors: R/G/B/Y/O/P/W/K"
 echo "  - Thickness: +/- or scroll wheel"
-echo "  - Help: F10"
+echo "  - Help: F1/F10"
+echo "  - Toolbar: F2/F9"
 echo "  - Launch configurator: F11"
 echo "  - Undo: Ctrl+Z"
 echo "  - Clear: E"
@@ -299,7 +287,6 @@ echo ""
 echo "Documentation:"
 echo "  docs/SETUP.md"
 echo "  docs/CONFIG.md"
-echo "  docs/QUICKSTART.md"
 echo ""
 echo "Happy annotating! 🎨"
 echo ""

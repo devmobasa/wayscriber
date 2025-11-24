@@ -6,5 +6,7 @@ mod handlers;
 mod session;
 mod state;
 mod surface;
+mod toolbar;
+mod toolbar_icons;
 
 pub use backend::WaylandBackend;

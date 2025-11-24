@@ -103,6 +103,7 @@ mod tests {
             y: 5,
             w: 10,
             h: 10,
+            fill: false,
             color: Color {
                 r: 1.0,
                 g: 0.0,
@@ -117,6 +118,7 @@ mod tests {
             y: 20,
             w: 15,
             h: 15,
+            fill: false,
             color: Color {
                 r: 0.0,
                 g: 1.0,

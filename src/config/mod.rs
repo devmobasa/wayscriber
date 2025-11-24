@@ -8,41 +8,33 @@
 
 pub mod enums;
 pub mod keybindings;
-pub mod migration;
 pub mod types;
 
 // Re-export commonly used types at module level
 pub use enums::StatusPosition;
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
-pub use migration::{MigrationActions, MigrationReport, migrate_config};
+#[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
-    PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
-    UiConfig,
+    HistoryConfig, PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode,
+    StatusBarStyle, ToolbarConfig, UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]
 pub use enums::ColorSpec;
 
-use crate::{
-    input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
-    legacy,
-};
+use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use anyhow::{Context, Result, anyhow};
 use chrono::Local;
-use log::{debug, info, warn};
+use log::{debug, info};
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 const PRIMARY_CONFIG_DIR: &str = "wayscriber";
-const LEGACY_CONFIG_DIR: &str = "hyprmarker";
-
-static USING_LEGACY_CONFIG: AtomicBool = AtomicBool::new(false);
 
 #[cfg(test)]
 pub(crate) mod test_helpers {
@@ -77,10 +69,8 @@ pub(crate) mod test_helpers {
 /// Represents the source used to load configuration data.
 #[derive(Debug, Clone)]
 pub enum ConfigSource {
-    /// Configuration file loaded from the current Wayscriber path.
+    /// Configuration file loaded from the Wayscriber config path.
     Primary,
-    /// Configuration file loaded from the legacy hyprmarker path.
-    Legacy(PathBuf),
     /// Defaults were used because no configuration file was found.
     Default,
 }
@@ -112,26 +102,6 @@ mod tests {
 
             let loaded = Config::load().expect("load succeeds");
             assert!(matches!(loaded.source, ConfigSource::Primary));
-        });
-    }
-
-    #[test]
-    fn load_falls_back_to_legacy_directory() {
-        with_temp_config_home(|config_root| {
-            let legacy_dir = config_root.join(LEGACY_CONFIG_DIR);
-            fs::create_dir_all(&legacy_dir).unwrap();
-            fs::write(
-                legacy_dir.join("config.toml"),
-                "[drawing]\ndefault_color = 'blue'\n",
-            )
-            .unwrap();
-
-            let loaded = Config::load().expect("load succeeds");
-            assert!(matches!(loaded.source, ConfigSource::Legacy(_)));
-            assert!(matches!(
-                loaded.config.drawing.default_color,
-                ColorSpec::Name(ref color) if color == "blue"
-            ));
         });
     }
 
@@ -192,12 +162,44 @@ mod tests {
     }
 
     #[test]
+    fn validate_clamps_history_delays() {
+        let mut config = Config::default();
+        config.history.undo_all_delay_ms = 0;
+        config.history.redo_all_delay_ms = 1;
+        config.history.custom_undo_delay_ms = 0;
+        config.history.custom_redo_delay_ms = 10_000;
+        config.history.custom_undo_steps = 0;
+        config.history.custom_redo_steps = 1_000;
+        config.validate_and_clamp();
+        assert_eq!(config.history.undo_all_delay_ms, 50);
+        assert_eq!(config.history.redo_all_delay_ms, 50);
+        assert_eq!(config.history.custom_undo_delay_ms, 50);
+        assert_eq!(config.history.custom_redo_delay_ms, 5_000);
+        assert_eq!(config.history.custom_undo_steps, 1);
+        assert_eq!(config.history.custom_redo_steps, 500);
+
+        config.history.undo_all_delay_ms = 20_000;
+        config.history.redo_all_delay_ms = 10_000;
+        config.history.custom_undo_delay_ms = 20_000;
+        config.history.custom_redo_delay_ms = 10_000;
+        config.history.custom_undo_steps = 9999;
+        config.history.custom_redo_steps = 9999;
+        config.validate_and_clamp();
+        assert_eq!(config.history.undo_all_delay_ms, 5_000);
+        assert_eq!(config.history.redo_all_delay_ms, 5_000);
+        assert_eq!(config.history.custom_undo_delay_ms, 5_000);
+        assert_eq!(config.history.custom_redo_delay_ms, 5_000);
+        assert_eq!(config.history.custom_undo_steps, 500);
+        assert_eq!(config.history.custom_redo_steps, 500);
+    }
+
+    #[test]
     fn save_with_backup_creates_timestamped_file() {
         with_temp_config_home(|config_root| {
             let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
             fs::create_dir_all(&config_dir).unwrap();
             let config_file = config_dir.join("config.toml");
-            fs::write(&config_file, "legacy = true").unwrap();
+            fs::write(&config_file, "old_content = true").unwrap();
 
             let config = Config::default();
             let backup_path = config
@@ -214,7 +216,7 @@ mod tests {
                     .contains("config.toml."),
                 "backup file should include timestamp suffix"
             );
-            assert_eq!(fs::read_to_string(&backup_path).unwrap(), "legacy = true");
+            assert_eq!(fs::read_to_string(&backup_path).unwrap(), "old_content = true");
 
             let new_contents = fs::read_to_string(&config_file).unwrap();
             assert!(
@@ -231,10 +233,6 @@ pub(super) fn config_home_dir() -> Result<PathBuf> {
 
 pub(super) fn primary_config_dir() -> Result<PathBuf> {
     config_home_dir().map(|dir| dir.join(PRIMARY_CONFIG_DIR))
-}
-
-pub(super) fn legacy_config_dir() -> Result<PathBuf> {
-    config_home_dir().map(|dir| dir.join(LEGACY_CONFIG_DIR))
 }
 
 /// Main configuration structure containing all user settings.
@@ -270,6 +268,10 @@ pub struct Config {
     /// Drawing tool defaults (color, thickness, font size)
     #[serde(default)]
     pub drawing: DrawingConfig,
+
+    /// History playback settings
+    #[serde(default)]
+    pub history: HistoryConfig,
 
     /// Arrow appearance settings
     #[serde(default)]
@@ -365,6 +367,40 @@ impl Config {
             );
             self.drawing.undo_stack_limit = self.drawing.undo_stack_limit.clamp(10, 1000);
         }
+
+        // History delays: clamp to a reasonable range to avoid long freezes or instant drains.
+        const MAX_DELAY_MS: u64 = 5_000;
+        const MIN_DELAY_MS: u64 = 50;
+        let clamp_delay = |label: &str, value: &mut u64| {
+            if *value < MIN_DELAY_MS {
+                log::warn!("{} {}ms too small; clamping to {}ms", label, *value, MIN_DELAY_MS);
+                *value = MIN_DELAY_MS;
+            }
+            if *value > MAX_DELAY_MS {
+                log::warn!("{} {}ms too large; clamping to {}ms", label, *value, MAX_DELAY_MS);
+                *value = MAX_DELAY_MS;
+            }
+        };
+        clamp_delay("undo_all_delay_ms", &mut self.history.undo_all_delay_ms);
+        clamp_delay("redo_all_delay_ms", &mut self.history.redo_all_delay_ms);
+        clamp_delay("custom_undo_delay_ms", &mut self.history.custom_undo_delay_ms);
+        clamp_delay("custom_redo_delay_ms", &mut self.history.custom_redo_delay_ms);
+
+        // Custom history step counts: clamp to sane bounds.
+        const MIN_STEPS: usize = 1;
+        const MAX_STEPS: usize = 500;
+        let clamp_steps = |label: &str, value: &mut usize| {
+            if *value < MIN_STEPS {
+                log::warn!("{} {} too small; clamping to {}", label, *value, MIN_STEPS);
+                *value = MIN_STEPS;
+            }
+            if *value > MAX_STEPS {
+                log::warn!("{} {} too large; clamping to {}", label, *value, MAX_STEPS);
+                *value = MAX_STEPS;
+            }
+        };
+        clamp_steps("custom_undo_steps", &mut self.history.custom_undo_steps);
+        clamp_steps("custom_redo_steps", &mut self.history.custom_redo_steps);
 
         // Arrow length: 5.0 - 50.0
         if !(5.0..=50.0).contains(&self.arrow.length) {
@@ -576,21 +612,11 @@ impl Config {
     }
 
     /// Determines the directory containing the active configuration file based on the source.
-    pub fn config_directory_from_source(source: &ConfigSource) -> Result<PathBuf> {
-        match source {
-            ConfigSource::Primary | ConfigSource::Default => {
-                let path = Self::get_config_path()?;
-                path.parent().map(PathBuf::from).ok_or_else(|| {
-                    anyhow!("Config path {} has no parent directory", path.display())
-                })
-            }
-            ConfigSource::Legacy(path) => path.parent().map(PathBuf::from).ok_or_else(|| {
-                anyhow!(
-                    "Legacy config path {} has no parent directory",
-                    path.display()
-                )
-            }),
-        }
+    pub fn config_directory_from_source(_source: &ConfigSource) -> Result<PathBuf> {
+        let path = Self::get_config_path()?;
+        path.parent().map(PathBuf::from).ok_or_else(|| {
+            anyhow!("Config path {} has no parent directory", path.display())
+        })
     }
 
     /// Loads configuration from file, or returns defaults if not found.
@@ -606,20 +632,12 @@ impl Config {
     /// - The file exists but contains invalid TOML syntax
     pub fn load() -> Result<LoadedConfig> {
         let primary_path = primary_config_dir()?.join("config.toml");
-        let legacy_path = legacy_config_dir()?.join("config.toml");
 
         let (config_path, source) = if primary_path.exists() {
             (primary_path.clone(), ConfigSource::Primary)
-        } else if legacy_path.exists() {
-            (
-                legacy_path.clone(),
-                ConfigSource::Legacy(legacy_path.clone()),
-            )
         } else {
-            USING_LEGACY_CONFIG.store(false, Ordering::Relaxed);
             info!("Config file not found, using defaults");
             debug!("Expected config at: {}", primary_path.display());
-            debug!("Checked legacy config at: {}", legacy_path.display());
             return Ok(LoadedConfig {
                 config: Config::default(),
                 source: ConfigSource::Default,
@@ -634,27 +652,6 @@ impl Config {
 
         // Validate and clamp values to acceptable ranges
         config.validate_and_clamp();
-
-        match &source {
-            ConfigSource::Legacy(path) => {
-                USING_LEGACY_CONFIG.store(true, Ordering::Relaxed);
-                if !legacy::warnings_suppressed() {
-                    warn!(
-                        "Loading configuration from legacy hyprmarker path: {}",
-                        path.display()
-                    );
-                    warn!(
-                        "Run `wayscriber --migrate-config` to copy settings to ~/.config/wayscriber/."
-                    );
-                }
-            }
-            ConfigSource::Primary => {
-                USING_LEGACY_CONFIG.store(false, Ordering::Relaxed);
-            }
-            ConfigSource::Default => {
-                USING_LEGACY_CONFIG.store(false, Ordering::Relaxed);
-            }
-        }
 
         info!("Loaded config from {}", config_path.display());
         debug!("Config: {:?}", config);

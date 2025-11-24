@@ -15,7 +15,7 @@ use smithay_client_toolkit::{
     seat::SeatState,
     shell::{
         WaylandSurface,
-        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
+        wlr_layer::{Anchor, Layer, LayerShell},
         xdg::{XdgShell, window::WindowDecorations},
     },
     shm::Shm,
@@ -37,7 +37,7 @@ use crate::{
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
     input::{BoardMode, ClickHighlightSettings, InputState},
-    legacy, notification, session,
+    notification, session,
 };
 
 fn friendly_capture_error(error: &str) -> String {
@@ -165,11 +165,6 @@ impl WaylandBackend {
             }
         };
 
-        if matches!(config_source, ConfigSource::Legacy(_)) && !legacy::warnings_suppressed() {
-            warn!(
-                "Continuing with settings from legacy hyprmarker config. Run `wayscriber --migrate-config` when convenient."
-            );
-        }
         info!("Configuration loaded");
         debug!("  Color: {:?}", config.drawing.default_color);
         debug!("  Thickness: {:.1}px", config.drawing.default_thickness);
@@ -245,6 +240,7 @@ impl WaylandBackend {
         let mut input_state = InputState::with_defaults(
             config.drawing.default_color.to_color(),
             config.drawing.default_thickness,
+            config.drawing.default_fill_enabled,
             config.drawing.default_font_size,
             font_descriptor,
             config.drawing.text_background_enabled,
@@ -255,12 +251,29 @@ impl WaylandBackend {
             action_map,
             config.session.max_shapes_per_frame,
             ClickHighlightSettings::from(&config.ui.click_highlight),
+            config.history.undo_all_delay_ms,
+            config.history.redo_all_delay_ms,
+            config.history.custom_section_enabled,
+            config.history.custom_undo_delay_ms,
+            config.history.custom_redo_delay_ms,
+            config.history.custom_undo_steps,
+            config.history.custom_redo_steps,
         );
 
         input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
+
+        // Initialize toolbar visibility from pinned config
+        input_state.init_toolbar_from_config(
+            config.ui.toolbar.top_pinned,
+            config.ui.toolbar.side_pinned,
+            config.ui.toolbar.use_icons,
+            config.ui.toolbar.show_more_colors,
+            config.ui.toolbar.show_actions_section,
+            config.ui.toolbar.show_delay_sliders,
+        );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
         if config.board.enabled {
@@ -370,10 +383,8 @@ impl WaylandBackend {
 
             // Configure the layer surface for fullscreen overlay
             layer_surface.set_anchor(Anchor::all());
-            // NOTE: Using Exclusive keyboard interactivity for complete input capture
-            // If clipboard operations are interrupted during overlay toggle, consider switching
-            // to KeyboardInteractivity::OnDemand which cooperates better with other applications
-            layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+            let desired_keyboard_mode = state.desired_keyboard_interactivity();
+            layer_surface.set_keyboard_interactivity(desired_keyboard_mode);
             layer_surface.set_size(0, 0); // Use full screen size
             layer_surface.set_exclusive_zone(-1);
 
@@ -381,6 +392,7 @@ impl WaylandBackend {
             layer_surface.commit();
 
             state.surface.set_layer_surface(layer_surface);
+            state.current_keyboard_interactivity = Some(desired_keyboard_mode);
             info!("Layer shell surface created");
         } else if let Some(xdg_shell) = state.xdg_shell.as_ref() {
             info!("Layer shell missing; creating xdg-shell window");
@@ -406,12 +418,6 @@ impl WaylandBackend {
             return Err(anyhow::anyhow!(
                 "No supported Wayland shell protocol available"
             ));
-        }
-
-        // Freeze on start if requested
-        if self.freeze_on_start {
-            info!("Freeze-on-start enabled, requesting frozen capture");
-            state.input_state.request_frozen_toggle();
         }
 
         // Track consecutive render failures for error recovery
@@ -448,6 +454,20 @@ impl WaylandBackend {
                         info!("Exit requested after dispatch, breaking event loop");
                         break;
                     }
+                    // Adjust keyboard interactivity if toolbar visibility changed.
+                    state.sync_toolbar_visibility(&qh);
+
+                    // Advance any delayed history playback (undo/redo with delay).
+                    if state
+                        .input_state
+                        .tick_delayed_history(std::time::Instant::now())
+                    {
+                        state.toolbar.mark_dirty();
+                        state.input_state.needs_redraw = true;
+                    }
+                    if state.input_state.has_pending_history() {
+                        state.input_state.needs_redraw = true;
+                    }
                 }
                 Err(e) => {
                     warn!("Event queue error: {}", e);
@@ -458,7 +478,9 @@ impl WaylandBackend {
 
             if state.input_state.take_pending_frozen_toggle() {
                 if !state.frozen_enabled {
-                    warn!("Frozen mode disabled on this compositor (xdg fallback); ignoring toggle");
+                    warn!(
+                        "Frozen mode disabled on this compositor (xdg fallback); ignoring toggle"
+                    );
                 } else if state.frozen.is_in_progress() {
                     warn!("Frozen capture already in progress; ignoring toggle");
                 } else if state.input_state.frozen_active() {
@@ -562,7 +584,8 @@ impl WaylandBackend {
                     Ok(keep_rendering) => {
                         // Reset failure counter on successful render
                         consecutive_render_failures = 0;
-                        state.input_state.needs_redraw = keep_rendering;
+                        state.input_state.needs_redraw =
+                            keep_rendering || state.input_state.has_pending_history();
                         // Only set frame_callback_pending if vsync is enabled
                         if state.config.performance.enable_vsync {
                             state.surface.set_frame_callback_pending(true);

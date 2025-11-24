@@ -3,7 +3,6 @@ use crate::draw::Shape;
 use crate::input::{board_mode::BoardMode, events::Key};
 use crate::util;
 use log::{info, warn};
-
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
@@ -75,6 +74,9 @@ impl InputState {
             let should_check_actions = match key {
                 // Special keys always check for actions
                 Key::Escape
+                | Key::F1
+                | Key::F2
+                | Key::F9
                 | Key::F10
                 | Key::F11
                 | Key::F12
@@ -98,6 +100,9 @@ impl InputState {
                     Key::Return => "Return".to_string(),
                     Key::Backspace => "Backspace".to_string(),
                     Key::Space => "Space".to_string(),
+                    Key::F1 => "F1".to_string(),
+                    Key::F2 => "F2".to_string(),
+                    Key::F9 => "F9".to_string(),
                     Key::F10 => "F10".to_string(),
                     Key::F11 => "F11".to_string(),
                     Key::F12 => "F12".to_string(),
@@ -236,6 +241,9 @@ impl InputState {
             Key::Return => "Return".to_string(),
             Key::Backspace => "Backspace".to_string(),
             Key::Space => "Space".to_string(),
+            Key::F1 => "F1".to_string(),
+            Key::F2 => "F2".to_string(),
+            Key::F9 => "F9".to_string(),
             Key::F10 => "F10".to_string(),
             Key::F11 => "F11".to_string(),
             Key::F12 => "F12".to_string(),
@@ -321,6 +329,18 @@ impl InputState {
                 if let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
                     self.apply_action_side_effects(&action);
                 }
+            }
+            Action::UndoAll => {
+                self.undo_all_immediate();
+            }
+            Action::RedoAll => {
+                self.redo_all_immediate();
+            }
+            Action::UndoAllDelayed => {
+                self.start_undo_all_delayed(self.undo_all_delay_ms);
+            }
+            Action::RedoAllDelayed => {
+                self.start_redo_all_delayed(self.redo_all_delay_ms);
             }
             Action::DuplicateSelection => {
                 if self.duplicate_selection() {
@@ -435,6 +455,16 @@ impl InputState {
                 };
                 info!("{}", message);
             }
+            Action::ToggleToolbar => {
+                let now_visible = !self.toolbar_visible();
+                let changed = self.set_toolbar_visible(now_visible);
+                if changed {
+                    info!(
+                        "Toolbar visibility {}",
+                        if now_visible { "enabled" } else { "disabled" }
+                    );
+                }
+            }
             Action::ToggleHighlightTool => {
                 let enabled = self.toggle_highlight_tool();
                 let message = if enabled {
@@ -451,52 +481,28 @@ impl InputState {
                 self.launch_configurator();
             }
             Action::SetColorRed => {
-                self.current_color = util::key_to_color('r').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('r').unwrap());
             }
             Action::SetColorGreen => {
-                self.current_color = util::key_to_color('g').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('g').unwrap());
             }
             Action::SetColorBlue => {
-                self.current_color = util::key_to_color('b').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('b').unwrap());
             }
             Action::SetColorYellow => {
-                self.current_color = util::key_to_color('y').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('y').unwrap());
             }
             Action::SetColorOrange => {
-                self.current_color = util::key_to_color('o').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('o').unwrap());
             }
             Action::SetColorPink => {
-                self.current_color = util::key_to_color('p').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('p').unwrap());
             }
             Action::SetColorWhite => {
-                self.current_color = util::key_to_color('w').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('w').unwrap());
             }
             Action::SetColorBlack => {
-                self.current_color = util::key_to_color('k').unwrap();
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.sync_highlight_color();
+                let _ = self.set_color(util::key_to_color('k').unwrap());
             }
             Action::CaptureFullScreen
             | Action::CaptureActiveWindow
@@ -539,6 +545,18 @@ impl InputState {
             Key::Alt => self.modifiers.alt = false,
             Key::Tab => self.modifiers.tab = false,
             _ => {}
+        }
+    }
+
+    pub(crate) fn undo_all_immediate(&mut self) {
+        while let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
+            self.apply_action_side_effects(&action);
+        }
+    }
+
+    pub(crate) fn redo_all_immediate(&mut self) {
+        while let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
+            self.apply_action_side_effects(&action);
         }
     }
 }
