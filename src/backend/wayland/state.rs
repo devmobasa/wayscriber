@@ -228,8 +228,9 @@ impl WaylandState {
         if any_visible {
             if let Some(layer_shell) = self.layer_shell.as_ref() {
                 let scale = self.surface.scale();
+                let use_icons = self.input_state.toolbar_use_icons;
                 self.toolbar
-                    .ensure_created(qh, &self.compositor_state, layer_shell, scale);
+                    .ensure_created(qh, &self.compositor_state, layer_shell, scale, use_icons);
             }
         }
 

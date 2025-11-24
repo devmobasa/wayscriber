@@ -99,6 +99,8 @@ pub struct InputState {
     pub toolbar_top_pinned: bool,
     /// Whether the side toolbar is pinned (saved to config, opens at startup)
     pub toolbar_side_pinned: bool,
+    /// Whether to use icons instead of text labels in toolbars
+    pub toolbar_use_icons: bool,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -229,6 +231,7 @@ impl InputState {
             fill_enabled,
             toolbar_top_pinned: false,
             toolbar_side_pinned: false,
+            toolbar_use_icons: true, // Default to icon mode
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,
