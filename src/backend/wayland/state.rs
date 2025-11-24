@@ -228,9 +228,9 @@ impl WaylandState {
         if any_visible {
             if let Some(layer_shell) = self.layer_shell.as_ref() {
                 let scale = self.surface.scale();
-                let use_icons = self.input_state.toolbar_use_icons;
+                let snapshot = self.toolbar_snapshot();
                 self.toolbar
-                    .ensure_created(qh, &self.compositor_state, layer_shell, scale, use_icons);
+                    .ensure_created(qh, &self.compositor_state, layer_shell, scale, &snapshot);
             }
         }
 
@@ -621,6 +621,10 @@ impl WaylandState {
             ToolbarEvent::PinTopToolbar(_)
                 | ToolbarEvent::PinSideToolbar(_)
                 | ToolbarEvent::ToggleIconMode(_)
+                | ToolbarEvent::ToggleMoreColors(_)
+                | ToolbarEvent::ToggleActionsSection(_)
+                | ToolbarEvent::ToggleDelaySliders(_)
+                | ToolbarEvent::ToggleCustomSection(_)
         );
 
         let persist_drawing = matches!(
@@ -648,21 +652,21 @@ impl WaylandState {
         self.refresh_keyboard_interactivity();
     }
 
-    /// Saves the current toolbar configuration to disk (pinned state and icon mode).
+    /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).
     fn save_toolbar_pin_config(&mut self) {
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
         self.config.ui.toolbar.use_icons = self.input_state.toolbar_use_icons;
+        self.config.ui.toolbar.show_more_colors = self.input_state.show_more_colors;
+        self.config.ui.toolbar.show_actions_section = self.input_state.show_actions_section;
+        self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
+        // Step controls toggle is in history config
+        self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
 
         if let Err(err) = self.config.save() {
             log::warn!("Failed to save toolbar config: {}", err);
         } else {
-            log::info!(
-                "Saved toolbar config: top={}, side={}, icons={}",
-                self.config.ui.toolbar.top_pinned,
-                self.config.ui.toolbar.side_pinned,
-                self.config.ui.toolbar.use_icons
-            );
+            log::debug!("Saved toolbar config");
         }
     }
 

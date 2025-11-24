@@ -656,6 +656,12 @@ mod tests {
             crate::input::ClickHighlightSettings::disabled(),
             0,
             0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            false,
         );
 
         // Simulate an in-flight portal capture

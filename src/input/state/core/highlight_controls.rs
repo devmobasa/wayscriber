@@ -148,6 +148,46 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    /// Begin custom undo playback with a step budget.
+    pub fn start_custom_undo(&mut self, delay_ms: u64, steps: usize) {
+        const MIN_DELAY_MS: u64 = 50;
+        if steps == 0 {
+            return;
+        }
+        let available = self.canvas_set.active_frame().undo_stack_len();
+        let remaining = available.min(steps);
+        if remaining == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Undo,
+            remaining,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
+            next_due: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Begin custom redo playback with a step budget.
+    pub fn start_custom_redo(&mut self, delay_ms: u64, steps: usize) {
+        const MIN_DELAY_MS: u64 = 50;
+        if steps == 0 {
+            return;
+        }
+        let available = self.canvas_set.active_frame().redo_stack_len();
+        let remaining = available.min(steps);
+        if remaining == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Redo,
+            remaining,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
+            next_due: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
     /// Advance delayed history playback; returns true if a step was applied.
     pub fn tick_delayed_history(&mut self, now: Instant) -> bool {
         let mut did_step = false;

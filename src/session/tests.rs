@@ -35,6 +35,12 @@ fn dummy_input_state() -> InputState {
         ClickHighlightSettings::disabled(),
         0,
         0,
+        true,
+        0,
+        0,
+        5,
+        5,
+        false,
     )
 }
 

@@ -23,9 +23,20 @@ pub enum ToolbarEvent {
     EnterTextMode,
     ToggleHighlightTool(bool),
     ToggleClickHighlight(bool),
+    /// Toggle both highlight tool and click highlight together
+    ToggleAllHighlight(bool),
     ToggleFreeze,
     OpenConfigurator,
     OpenConfigFile,
+    ToggleCustomSection(bool),
+    ToggleCustomIcons(bool),
+    ToggleDelaySliders(bool),
+    SetCustomUndoDelay(f64),
+    SetCustomRedoDelay(f64),
+    SetCustomUndoSteps(usize),
+    SetCustomRedoSteps(usize),
+    CustomUndo,
+    CustomRedo,
     /// Close the top toolbar panel
     CloseTopToolbar,
     /// Close the side toolbar panel
@@ -36,6 +47,10 @@ pub enum ToolbarEvent {
     PinSideToolbar(bool),
     /// Toggle between icon mode and text mode
     ToggleIconMode(bool),
+    /// Toggle extended color palette
+    ToggleMoreColors(bool),
+    /// Toggle Actions section visibility (undo all, redo all, etc.)
+    ToggleActionsSection(bool),
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -54,14 +69,27 @@ pub struct ToolbarSnapshot {
     pub redo_available: bool,
     pub click_highlight_enabled: bool,
     pub highlight_tool_active: bool,
+    /// Whether any highlight feature is active (tool or click)
+    pub any_highlight_active: bool,
     pub undo_all_delay_ms: u64,
     pub redo_all_delay_ms: u64,
+    pub custom_section_enabled: bool,
+    pub custom_use_icons: bool,
+    pub show_delay_sliders: bool,
+    pub custom_undo_delay_ms: u64,
+    pub custom_redo_delay_ms: u64,
+    pub custom_undo_steps: usize,
+    pub custom_redo_steps: usize,
     /// Whether the top toolbar is pinned (opens at startup)
     pub top_pinned: bool,
     /// Whether the side toolbar is pinned (opens at startup)
     pub side_pinned: bool,
     /// Whether to use icons instead of text labels
     pub use_icons: bool,
+    /// Whether to show extended color palette
+    pub show_more_colors: bool,
+    /// Whether to show the Actions section
+    pub show_actions_section: bool,
 }
 
 impl ToolbarSnapshot {
@@ -81,11 +109,21 @@ impl ToolbarSnapshot {
             redo_available: frame.redo_stack_len() > 0,
             click_highlight_enabled: state.click_highlight_enabled(),
             highlight_tool_active: state.highlight_tool_active(),
+            any_highlight_active: state.click_highlight_enabled() || state.highlight_tool_active(),
             undo_all_delay_ms: state.undo_all_delay_ms,
             redo_all_delay_ms: state.redo_all_delay_ms,
+            custom_section_enabled: state.custom_section_enabled,
+            custom_use_icons: state.custom_use_icons,
+            show_delay_sliders: state.show_delay_sliders,
+            custom_undo_delay_ms: state.custom_undo_delay_ms,
+            custom_redo_delay_ms: state.custom_redo_delay_ms,
+            custom_undo_steps: state.custom_undo_steps,
+            custom_redo_steps: state.custom_redo_steps,
             top_pinned: state.toolbar_top_pinned,
             side_pinned: state.toolbar_side_pinned,
             use_icons: state.toolbar_use_icons,
+            show_more_colors: state.show_more_colors,
+            show_actions_section: state.show_actions_section,
         }
     }
 }
@@ -121,6 +159,36 @@ impl InputState {
                 self.redo_all_delay_ms = clamped_ms as u64;
                 true
             }
+            ToolbarEvent::SetCustomUndoDelay(delay_secs) => {
+                let min_delay_s = 0.05;
+                let clamped_ms = (delay_secs.clamp(min_delay_s, 5.0) * 1000.0).round();
+                self.custom_undo_delay_ms = clamped_ms as u64;
+                true
+            }
+            ToolbarEvent::SetCustomRedoDelay(delay_secs) => {
+                let min_delay_s = 0.05;
+                let clamped_ms = (delay_secs.clamp(min_delay_s, 5.0) * 1000.0).round();
+                self.custom_redo_delay_ms = clamped_ms as u64;
+                true
+            }
+            ToolbarEvent::SetCustomUndoSteps(steps) => {
+                let clamped = steps.clamp(1, 500);
+                if self.custom_undo_steps != clamped {
+                    self.custom_undo_steps = clamped;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::SetCustomRedoSteps(steps) => {
+                let clamped = steps.clamp(1, 500);
+                if self.custom_redo_steps != clamped {
+                    self.custom_redo_steps = clamped;
+                    true
+                } else {
+                    false
+                }
+            }
             ToolbarEvent::NudgeThickness(delta) => {
                 self.set_thickness(self.current_thickness + delta)
             }
@@ -146,6 +214,14 @@ impl InputState {
             }
             ToolbarEvent::RedoAllDelayed => {
                 self.start_redo_all_delayed(self.redo_all_delay_ms);
+                true
+            }
+            ToolbarEvent::CustomUndo => {
+                self.start_custom_undo(self.custom_undo_delay_ms, self.custom_undo_steps);
+                true
+            }
+            ToolbarEvent::CustomRedo => {
+                self.start_custom_redo(self.custom_redo_delay_ms, self.custom_redo_steps);
                 true
             }
             ToolbarEvent::ClearCanvas => {
@@ -175,10 +251,45 @@ impl InputState {
                     true
                 }
             }
+            ToolbarEvent::ToggleAllHighlight(enable) => {
+                // set_highlight_tool already handles both highlight tool and click highlight
+                let currently_active = self.highlight_tool_active() || self.click_highlight_enabled();
+                if currently_active != enable {
+                    self.set_highlight_tool(enable);
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
             ToolbarEvent::ToggleFreeze => {
                 self.request_frozen_toggle();
                 self.needs_redraw = true;
                 true
+            }
+            ToolbarEvent::ToggleCustomSection(enable) => {
+                if self.custom_section_enabled != enable {
+                    self.custom_section_enabled = enable;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleCustomIcons(use_icons) => {
+                if self.custom_use_icons != use_icons {
+                    self.custom_use_icons = use_icons;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleDelaySliders(show) => {
+                if self.show_delay_sliders != show {
+                    self.show_delay_sliders = show;
+                    true
+                } else {
+                    false
+                }
             }
             ToolbarEvent::OpenConfigurator => {
                 self.launch_configurator();
@@ -217,6 +328,22 @@ impl InputState {
             ToolbarEvent::ToggleIconMode(use_icons) => {
                 if self.toolbar_use_icons != use_icons {
                     self.toolbar_use_icons = use_icons;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleMoreColors(show) => {
+                if self.show_more_colors != show {
+                    self.show_more_colors = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleActionsSection(show) => {
+                if self.show_actions_section != show {
+                    self.show_actions_section = show;
                     true
                 } else {
                     false

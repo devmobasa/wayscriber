@@ -258,6 +258,12 @@ impl WaylandBackend {
             ClickHighlightSettings::from(&config.ui.click_highlight),
             config.history.undo_all_delay_ms,
             config.history.redo_all_delay_ms,
+            config.history.custom_section_enabled,
+            config.history.custom_undo_delay_ms,
+            config.history.custom_redo_delay_ms,
+            config.history.custom_undo_steps,
+            config.history.custom_redo_steps,
+            config.history.custom_use_icons,
         );
 
         input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
@@ -270,6 +276,9 @@ impl WaylandBackend {
             config.ui.toolbar.top_pinned,
             config.ui.toolbar.side_pinned,
             config.ui.toolbar.use_icons,
+            config.ui.toolbar.show_more_colors,
+            config.ui.toolbar.show_actions_section,
+            config.ui.toolbar.show_delay_sliders,
         );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)

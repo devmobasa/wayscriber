@@ -143,6 +143,20 @@ pub struct InputState {
     pub undo_all_delay_ms: u64,
     /// Delay between steps when running redo-all via delay (ms)
     pub redo_all_delay_ms: u64,
+    /// Delay between steps for custom undo (ms)
+    pub custom_undo_delay_ms: u64,
+    /// Delay between steps for custom redo (ms)
+    pub custom_redo_delay_ms: u64,
+    /// Number of steps to perform for custom undo
+    pub custom_undo_steps: usize,
+    /// Number of steps to perform for custom redo
+    pub custom_redo_steps: usize,
+    /// Whether the custom undo/redo section is visible
+    pub custom_section_enabled: bool,
+    /// Whether to render custom undo/redo controls as icons
+    pub custom_use_icons: bool,
+    /// Whether to show the delay sliders in Actions section
+    pub show_delay_sliders: bool,
     /// Pending delayed history playback state
     pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
@@ -159,6 +173,10 @@ pub struct InputState {
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
     pub(super) pending_frozen_toggle: bool,
+    /// Whether to show extended color palette
+    pub show_more_colors: bool,
+    /// Whether to show the Actions section (undo all, redo all, etc.)
+    pub show_actions_section: bool,
 }
 
 /// Tracks in-progress delayed undo/redo playback.
@@ -209,6 +227,12 @@ impl InputState {
         click_highlight_settings: ClickHighlightSettings,
         undo_all_delay_ms: u64,
         redo_all_delay_ms: u64,
+        custom_section_enabled: bool,
+        custom_undo_delay_ms: u64,
+        custom_redo_delay_ms: u64,
+        custom_undo_steps: usize,
+        custom_redo_steps: usize,
+        custom_use_icons: bool,
     ) -> Self {
         let mut state = Self {
             canvas_set: CanvasSet::new(),
@@ -253,6 +277,13 @@ impl InputState {
             undo_stack_limit: 100,
             undo_all_delay_ms,
             redo_all_delay_ms,
+            custom_undo_delay_ms,
+            custom_redo_delay_ms,
+            custom_undo_steps,
+            custom_redo_steps,
+            custom_section_enabled,
+            custom_use_icons,
+            show_delay_sliders: false, // Default to hidden
             pending_history: None,
             context_menu_layout: None,
             spatial_index: None,
@@ -261,6 +292,8 @@ impl InputState {
             shape_properties_panel: None,
             frozen_active: false,
             pending_frozen_toggle: false,
+            show_more_colors: false,
+            show_actions_section: true, // Show by default
         };
 
         if state.click_highlight.uses_pen_color() {
