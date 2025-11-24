@@ -266,8 +266,11 @@ impl WaylandBackend {
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
 
         // Initialize toolbar visibility from pinned config
-        input_state
-            .init_toolbar_from_config(config.ui.toolbar.top_pinned, config.ui.toolbar.side_pinned);
+        input_state.init_toolbar_from_config(
+            config.ui.toolbar.top_pinned,
+            config.ui.toolbar.side_pinned,
+            config.ui.toolbar.use_icons,
+        );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
         if config.board.enabled {
