@@ -1,7 +1,8 @@
 use super::base::{DrawingState, InputState};
+use super::base::{HistoryMode, DelayedHistory};
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 impl InputState {
     /// Returns whether the click highlight feature is currently enabled.
@@ -108,5 +109,61 @@ impl InputState {
         let enable = !self.highlight_tool_active();
         self.set_highlight_tool(enable);
         enable
+    }
+
+    /// Begin delayed undo playback.
+    pub fn start_undo_all_delayed(&mut self, delay_ms: u64) {
+        let count = self.canvas_set.active_frame().undo_stack_len();
+        if count == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Undo,
+            remaining: count,
+            delay_ms,
+            next_due: Instant::now(),
+        });
+    }
+
+    /// Begin delayed redo playback.
+    pub fn start_redo_all_delayed(&mut self, delay_ms: u64) {
+        let count = self.canvas_set.active_frame().redo_stack_len();
+        if count == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Redo,
+            remaining: count,
+            delay_ms,
+            next_due: Instant::now(),
+        });
+    }
+
+    /// Advance delayed history playback; returns true if a step was applied.
+    pub fn tick_delayed_history(&mut self, now: Instant) -> bool {
+        let mut did_step = false;
+        if let Some(mut pending) = self.pending_history.take() {
+            while pending.remaining > 0 && now >= pending.next_due {
+                let action = match pending.mode {
+                    HistoryMode::Undo => self.canvas_set.active_frame_mut().undo_last(),
+                    HistoryMode::Redo => self.canvas_set.active_frame_mut().redo_last(),
+                };
+
+                if let Some(action) = action {
+                    self.apply_action_side_effects(&action);
+                    pending.remaining = pending.remaining.saturating_sub(1);
+                    let delay = Duration::from_millis(pending.delay_ms);
+                    pending.next_due = now + delay;
+                    did_step = true;
+                } else {
+                    pending.remaining = 0;
+                }
+            }
+
+            if pending.remaining > 0 {
+                self.pending_history = Some(pending);
+            }
+        }
+        did_step
     }
 }

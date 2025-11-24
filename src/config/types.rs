@@ -415,11 +415,11 @@ fn default_arrow_angle() -> f64 {
 }
 
 fn default_undo_all_delay_ms() -> u64 {
-    0
+    1000
 }
 
 fn default_redo_all_delay_ms() -> u64 {
-    0
+    1000
 }
 
 fn default_buffer_count() -> u32 {

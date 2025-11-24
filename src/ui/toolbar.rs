@@ -11,6 +11,8 @@ pub enum ToolbarEvent {
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
+    SetUndoDelay(f64),
+    SetRedoDelay(f64),
     UndoAll,
     RedoAll,
     UndoAllDelayed,
@@ -50,6 +52,8 @@ pub struct ToolbarSnapshot {
     pub redo_available: bool,
     pub click_highlight_enabled: bool,
     pub highlight_tool_active: bool,
+    pub undo_all_delay_ms: u64,
+    pub redo_all_delay_ms: u64,
     /// Whether the top toolbar is pinned (opens at startup)
     pub top_pinned: bool,
     /// Whether the side toolbar is pinned (opens at startup)
@@ -73,6 +77,8 @@ impl ToolbarSnapshot {
             redo_available: frame.redo_stack_len() > 0,
             click_highlight_enabled: state.click_highlight_enabled(),
             highlight_tool_active: state.highlight_tool_active(),
+            undo_all_delay_ms: state.undo_all_delay_ms,
+            redo_all_delay_ms: state.redo_all_delay_ms,
             top_pinned: state.toolbar_top_pinned,
             side_pinned: state.toolbar_side_pinned,
         }
@@ -98,6 +104,16 @@ impl InputState {
             ToolbarEvent::SetFont(descriptor) => self.set_font_descriptor(descriptor),
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
             ToolbarEvent::ToggleFill(enable) => self.set_fill_enabled(enable),
+            ToolbarEvent::SetUndoDelay(delay_secs) => {
+                let clamped_ms = (delay_secs.clamp(0.0, 5.0) * 1000.0).round();
+                self.undo_all_delay_ms = clamped_ms as u64;
+                true
+            }
+            ToolbarEvent::SetRedoDelay(delay_secs) => {
+                let clamped_ms = (delay_secs.clamp(0.0, 5.0) * 1000.0).round();
+                self.redo_all_delay_ms = clamped_ms as u64;
+                true
+            }
             ToolbarEvent::NudgeThickness(delta) => {
                 self.set_thickness(self.current_thickness + delta)
             }
@@ -118,11 +134,11 @@ impl InputState {
                 true
             }
             ToolbarEvent::UndoAllDelayed => {
-                self.undo_all_with_delay(self.undo_all_delay_ms);
+                self.start_undo_all_delayed(self.undo_all_delay_ms);
                 true
             }
             ToolbarEvent::RedoAllDelayed => {
-                self.redo_all_with_delay(self.redo_all_delay_ms);
+                self.start_redo_all_delayed(self.redo_all_delay_ms);
                 true
             }
             ToolbarEvent::ClearCanvas => {
@@ -139,7 +155,7 @@ impl InputState {
                 if active == enable {
                     false
                 } else {
-                    self.toggle_highlight_tool();
+                    self.set_highlight_tool(enable);
                     true
                 }
             }

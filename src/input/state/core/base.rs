@@ -16,6 +16,7 @@ use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState
 use crate::input::{modifiers::Modifiers, tool::Tool};
 use crate::util::Rect;
 use std::collections::HashMap;
+use std::time::Instant;
 /// Current drawing mode state machine.
 ///
 /// Tracks whether the user is idle, actively drawing a shape, or entering text.
@@ -140,6 +141,8 @@ pub struct InputState {
     pub undo_all_delay_ms: u64,
     /// Delay between steps when running redo-all via delay (ms)
     pub redo_all_delay_ms: u64,
+    /// Pending delayed history playback state
+    pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
     pub context_menu_layout: Option<ContextMenuLayout>,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
@@ -154,6 +157,20 @@ pub struct InputState {
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
     pub(super) pending_frozen_toggle: bool,
+}
+
+/// Tracks in-progress delayed undo/redo playback.
+pub(super) struct DelayedHistory {
+    pub mode: HistoryMode,
+    pub remaining: usize,
+    pub delay_ms: u64,
+    pub next_due: Instant,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum HistoryMode {
+    Undo,
+    Redo,
 }
 
 impl InputState {
@@ -233,6 +250,7 @@ impl InputState {
             undo_stack_limit: 100,
             undo_all_delay_ms,
             redo_all_delay_ms,
+            pending_history: None,
             context_menu_layout: None,
             spatial_index: None,
             last_pointer_position: (0, 0),

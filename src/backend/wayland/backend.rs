@@ -450,6 +450,15 @@ impl WaylandBackend {
                     }
                     // Adjust keyboard interactivity if toolbar visibility changed.
                     state.sync_toolbar_visibility(&qh);
+
+                    // Advance any delayed history playback (undo/redo with delay).
+                    if state
+                        .input_state
+                        .tick_delayed_history(std::time::Instant::now())
+                    {
+                        state.toolbar.mark_dirty();
+                        state.input_state.needs_redraw = true;
+                    }
                 }
                 Err(e) => {
                     warn!("Event queue error: {}", e);
