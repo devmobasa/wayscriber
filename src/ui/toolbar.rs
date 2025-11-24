@@ -105,12 +105,14 @@ impl InputState {
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
             ToolbarEvent::ToggleFill(enable) => self.set_fill_enabled(enable),
             ToolbarEvent::SetUndoDelay(delay_secs) => {
-                let clamped_ms = (delay_secs.clamp(0.0, 5.0) * 1000.0).round();
+                let min_delay_s = 0.05;
+                let clamped_ms = (delay_secs.clamp(min_delay_s, 5.0) * 1000.0).round();
                 self.undo_all_delay_ms = clamped_ms as u64;
                 true
             }
             ToolbarEvent::SetRedoDelay(delay_secs) => {
-                let clamped_ms = (delay_secs.clamp(0.0, 5.0) * 1000.0).round();
+                let min_delay_s = 0.05;
+                let clamped_ms = (delay_secs.clamp(min_delay_s, 5.0) * 1000.0).round();
                 self.redo_all_delay_ms = clamped_ms as u64;
                 true
             }

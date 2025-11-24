@@ -44,6 +44,19 @@ enum HitKind {
     DragRedoDelay,
 }
 
+fn delay_secs_from_t(t: f64) -> f64 {
+    const MIN_DELAY_S: f64 = 0.05;
+    const MAX_DELAY_S: f64 = 5.0;
+    MIN_DELAY_S + t.clamp(0.0, 1.0) * (MAX_DELAY_S - MIN_DELAY_S)
+}
+
+fn delay_t_from_ms(delay_ms: u64) -> f64 {
+    const MIN_DELAY_S: f64 = 0.05;
+    const MAX_DELAY_S: f64 = 5.0;
+    let delay_s = (delay_ms as f64 / 1000.0).clamp(MIN_DELAY_S, MAX_DELAY_S);
+    (delay_s - MIN_DELAY_S) / (MAX_DELAY_S - MIN_DELAY_S)
+}
+
 #[derive(Debug)]
 struct ToolbarSurface {
     name: &'static str,
@@ -316,13 +329,11 @@ impl ToolbarSurface {
                     }
                     HitKind::DragUndoDelay => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let delay = t * 2000.0;
-                        ToolbarEvent::SetUndoDelay(delay)
+                        ToolbarEvent::SetUndoDelay(delay_secs_from_t(t))
                     }
                     HitKind::DragRedoDelay => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let delay = t * 2000.0;
-                        ToolbarEvent::SetRedoDelay(delay)
+                        ToolbarEvent::SetRedoDelay(delay_secs_from_t(t))
                     }
                     HitKind::Click => hit.event.clone(),
                 };
@@ -353,13 +364,11 @@ impl ToolbarSurface {
                     }
                     HitKind::DragUndoDelay => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let delay = t * 2000.0;
-                        return Some(ToolbarEvent::SetUndoDelay(delay));
+                        return Some(ToolbarEvent::SetUndoDelay(delay_secs_from_t(t)));
                     }
                     HitKind::DragRedoDelay => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let delay = t * 2000.0;
-                        return Some(ToolbarEvent::SetRedoDelay(delay));
+                        return Some(ToolbarEvent::SetRedoDelay(delay_secs_from_t(t)));
                     }
                     _ => {}
                 }
@@ -1077,7 +1086,6 @@ fn render_side_palette(
     let sliders_w = width - 2.0 * x;
     let slider_h = 6.0;
     let slider_knob_r = 6.0;
-    let max_delay_s = 5.0;
 
     // Undo delay label and slider
     let undo_label = format!("Undo delay: {:.1}s", snapshot.undo_all_delay_ms as f64 / 1000.0);
@@ -1090,14 +1098,14 @@ fn render_side_palette(
     ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
     draw_round_rect(ctx, x, undo_slider_y, sliders_w, slider_h, 3.0);
     let _ = ctx.fill();
-    let undo_t = (snapshot.undo_all_delay_ms as f64 / 1000.0 / max_delay_s).clamp(0.0, 1.0);
+    let undo_t = delay_t_from_ms(snapshot.undo_all_delay_ms);
     let undo_knob_x = x + undo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
     ctx.arc(undo_knob_x, undo_slider_y + slider_h / 2.0, slider_knob_r, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.fill();
     hits.push(HitRegion {
         rect: (x, undo_slider_y - 4.0, sliders_w, slider_h + 8.0),
-        event: ToolbarEvent::SetUndoDelay(undo_t * max_delay_s),
+        event: ToolbarEvent::SetUndoDelay(delay_secs_from_t(undo_t)),
         kind: HitKind::DragUndoDelay,
     });
 
@@ -1111,14 +1119,14 @@ fn render_side_palette(
     ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
     draw_round_rect(ctx, x, redo_slider_y, sliders_w, slider_h, 3.0);
     let _ = ctx.fill();
-    let redo_t = (snapshot.redo_all_delay_ms as f64 / 1000.0 / max_delay_s).clamp(0.0, 1.0);
+    let redo_t = delay_t_from_ms(snapshot.redo_all_delay_ms);
     let redo_knob_x = x + redo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
     ctx.arc(redo_knob_x, redo_slider_y + slider_h / 2.0, slider_knob_r, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.fill();
     hits.push(HitRegion {
         rect: (x, redo_slider_y - 4.0, sliders_w, slider_h + 8.0),
-        event: ToolbarEvent::SetRedoDelay(redo_t * max_delay_s),
+        event: ToolbarEvent::SetRedoDelay(delay_secs_from_t(redo_t)),
         kind: HitKind::DragRedoDelay,
     });
 

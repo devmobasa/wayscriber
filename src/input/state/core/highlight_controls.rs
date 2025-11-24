@@ -111,8 +111,14 @@ impl InputState {
         enable
     }
 
+    /// Returns true when undo/redo playback is queued.
+    pub fn has_pending_history(&self) -> bool {
+        self.pending_history.is_some()
+    }
+
     /// Begin delayed undo playback.
     pub fn start_undo_all_delayed(&mut self, delay_ms: u64) {
+        const MIN_DELAY_MS: u64 = 50;
         let count = self.canvas_set.active_frame().undo_stack_len();
         if count == 0 {
             return;
@@ -120,13 +126,15 @@ impl InputState {
         self.pending_history = Some(DelayedHistory {
             mode: HistoryMode::Undo,
             remaining: count,
-            delay_ms,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
             next_due: Instant::now(),
         });
+        self.needs_redraw = true;
     }
 
     /// Begin delayed redo playback.
     pub fn start_redo_all_delayed(&mut self, delay_ms: u64) {
+        const MIN_DELAY_MS: u64 = 50;
         let count = self.canvas_set.active_frame().redo_stack_len();
         if count == 0 {
             return;
@@ -134,9 +142,10 @@ impl InputState {
         self.pending_history = Some(DelayedHistory {
             mode: HistoryMode::Redo,
             remaining: count,
-            delay_ms,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
             next_due: Instant::now(),
         });
+        self.needs_redraw = true;
     }
 
     /// Advance delayed history playback; returns true if a step was applied.
@@ -162,6 +171,8 @@ impl InputState {
 
             if pending.remaining > 0 {
                 self.pending_history = Some(pending);
+                // Keep rendering/ticking while history remains.
+                self.needs_redraw = true;
             }
         }
         did_step

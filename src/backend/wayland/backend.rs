@@ -452,11 +452,11 @@ impl WaylandBackend {
                     state.sync_toolbar_visibility(&qh);
 
                     // Advance any delayed history playback (undo/redo with delay).
-                    if state
-                        .input_state
-                        .tick_delayed_history(std::time::Instant::now())
-                    {
+                    if state.input_state.tick_delayed_history(std::time::Instant::now()) {
                         state.toolbar.mark_dirty();
+                        state.input_state.needs_redraw = true;
+                    }
+                    if state.input_state.has_pending_history() {
                         state.input_state.needs_redraw = true;
                     }
                 }
@@ -575,7 +575,8 @@ impl WaylandBackend {
                     Ok(keep_rendering) => {
                         // Reset failure counter on successful render
                         consecutive_render_failures = 0;
-                        state.input_state.needs_redraw = keep_rendering;
+                        state.input_state.needs_redraw =
+                            keep_rendering || state.input_state.has_pending_history();
                         // Only set frame_callback_pending if vsync is enabled
                         if state.config.performance.enable_vsync {
                             state.surface.set_frame_callback_pending(true);
