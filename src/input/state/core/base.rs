@@ -16,6 +16,7 @@ use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState
 use crate::input::{modifiers::Modifiers, tool::Tool};
 use crate::util::Rect;
 use std::collections::HashMap;
+use std::time::Instant;
 /// Current drawing mode state machine.
 ///
 /// Tracks whether the user is idle, actively drawing a shape, or entering text.
@@ -86,6 +87,20 @@ pub struct InputState {
     pub show_help: bool,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether both toolbars are visible (combined flag, prefer top/side specific)
+    pub toolbar_visible: bool,
+    /// Whether the top toolbar panel is visible
+    pub toolbar_top_visible: bool,
+    /// Whether the side toolbar panel is visible
+    pub toolbar_side_visible: bool,
+    /// Whether fill is enabled for fill-capable shapes (rect, ellipse)
+    pub fill_enabled: bool,
+    /// Whether the top toolbar is pinned (saved to config, opens at startup)
+    pub toolbar_top_pinned: bool,
+    /// Whether the side toolbar is pinned (saved to config, opens at startup)
+    pub toolbar_side_pinned: bool,
+    /// Whether to use icons instead of text labels in toolbars
+    pub toolbar_use_icons: bool,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -124,6 +139,24 @@ pub struct InputState {
     pub max_linear_hit_test: usize,
     /// Maximum number of undo actions retained in history
     pub undo_stack_limit: usize,
+    /// Delay between steps when running undo-all via delay (ms)
+    pub undo_all_delay_ms: u64,
+    /// Delay between steps when running redo-all via delay (ms)
+    pub redo_all_delay_ms: u64,
+    /// Delay between steps for custom undo (ms)
+    pub custom_undo_delay_ms: u64,
+    /// Delay between steps for custom redo (ms)
+    pub custom_redo_delay_ms: u64,
+    /// Number of steps to perform for custom undo
+    pub custom_undo_steps: usize,
+    /// Number of steps to perform for custom redo
+    pub custom_redo_steps: usize,
+    /// Whether the custom undo/redo section is visible
+    pub custom_section_enabled: bool,
+    /// Whether to show the delay sliders in Actions section
+    pub show_delay_sliders: bool,
+    /// Pending delayed history playback state
+    pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
     pub context_menu_layout: Option<ContextMenuLayout>,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
@@ -138,6 +171,24 @@ pub struct InputState {
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
     pub(super) pending_frozen_toggle: bool,
+    /// Whether to show extended color palette
+    pub show_more_colors: bool,
+    /// Whether to show the Actions section (undo all, redo all, etc.)
+    pub show_actions_section: bool,
+}
+
+/// Tracks in-progress delayed undo/redo playback.
+pub(super) struct DelayedHistory {
+    pub mode: HistoryMode,
+    pub remaining: usize,
+    pub delay_ms: u64,
+    pub next_due: Instant,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum HistoryMode {
+    Undo,
+    Redo,
 }
 
 impl InputState {
@@ -161,6 +212,7 @@ impl InputState {
     pub fn with_defaults(
         color: Color,
         thickness: f64,
+        fill_enabled: bool,
         font_size: f64,
         font_descriptor: FontDescriptor,
         text_background_enabled: bool,
@@ -171,6 +223,13 @@ impl InputState {
         action_map: HashMap<KeyBinding, Action>,
         max_shapes_per_frame: usize,
         click_highlight_settings: ClickHighlightSettings,
+        undo_all_delay_ms: u64,
+        redo_all_delay_ms: u64,
+        custom_section_enabled: bool,
+        custom_undo_delay_ms: u64,
+        custom_redo_delay_ms: u64,
+        custom_undo_steps: usize,
+        custom_redo_steps: usize,
     ) -> Self {
         let mut state = Self {
             canvas_set: CanvasSet::new(),
@@ -187,6 +246,13 @@ impl InputState {
             needs_redraw: true,
             show_help: false,
             show_status_bar,
+            toolbar_visible: false,
+            toolbar_top_visible: false,
+            toolbar_side_visible: false,
+            fill_enabled,
+            toolbar_top_pinned: false,
+            toolbar_side_pinned: false,
+            toolbar_use_icons: true, // Default to icon mode
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,
@@ -206,6 +272,15 @@ impl InputState {
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,
             undo_stack_limit: 100,
+            undo_all_delay_ms,
+            redo_all_delay_ms,
+            custom_undo_delay_ms,
+            custom_redo_delay_ms,
+            custom_undo_steps,
+            custom_redo_steps,
+            custom_section_enabled,
+            show_delay_sliders: false, // Default to hidden
+            pending_history: None,
             context_menu_layout: None,
             spatial_index: None,
             last_pointer_position: (0, 0),
@@ -213,6 +288,8 @@ impl InputState {
             shape_properties_panel: None,
             frozen_active: false,
             pending_frozen_toggle: false,
+            show_more_colors: false,
+            show_actions_section: true, // Show by default
         };
 
         if state.click_highlight.uses_pen_color() {

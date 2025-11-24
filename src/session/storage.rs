@@ -1,12 +1,12 @@
 use super::options::SessionOptions;
 use super::snapshot;
+use crate::draw::Frame;
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use log::warn;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use crate::draw::Frame;
 
 /// Result of clearing on-disk session data.
 #[derive(Debug, Clone, Copy)]

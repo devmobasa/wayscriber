@@ -177,6 +177,7 @@ mod tests {
             y: 10,
             w: 50,
             h: 50,
+            fill: false,
             color: BLACK,
             thick: 2.0,
         });
@@ -230,6 +231,7 @@ mod tests {
             y: 10,
             w: 50,
             h: 50,
+            fill: false,
             color: BLACK,
             thick: 2.0,
         });
@@ -271,6 +273,7 @@ mod tests {
             y: 10,
             w: 50,
             h: 50,
+            fill: false,
             color: BLACK,
             thick: 2.0,
         });

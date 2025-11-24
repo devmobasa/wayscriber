@@ -1,7 +1,8 @@
+use super::base::{DelayedHistory, HistoryMode};
 use super::base::{DrawingState, InputState};
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 impl InputState {
     /// Returns whether the click highlight feature is currently enabled.
@@ -51,12 +52,25 @@ impl InputState {
     /// Returns the active tool considering overrides and drawing state.
     pub fn active_tool(&self) -> Tool {
         if let DrawingState::Drawing { tool, .. } = &self.state {
-            *tool
-        } else if let Some(tool) = self.tool_override {
-            tool
-        } else {
-            self.modifiers.current_tool()
+            return *tool;
         }
+
+        let modifier_tool = self.modifiers.current_tool();
+
+        if let Some(override_tool) = self.tool_override {
+            if override_tool == Tool::Highlight {
+                return Tool::Highlight;
+            }
+
+            // Allow temporary modifier-based tools when the override is a drawing tool
+            if modifier_tool != Tool::Pen && modifier_tool != override_tool {
+                return modifier_tool;
+            }
+
+            return override_tool;
+        }
+
+        modifier_tool
     }
 
     /// Returns whether the highlight tool is currently selected.
@@ -71,30 +85,136 @@ impl InputState {
             )
     }
 
+    /// Sets highlight-only tool mode on/off and keeps click highlight in sync.
+    pub fn set_highlight_tool(&mut self, enable: bool) {
+        let currently_on = self.highlight_tool_active();
+        if enable != currently_on {
+            if enable {
+                self.set_tool_override(Some(Tool::Highlight));
+            } else {
+                self.set_tool_override(None);
+            }
+        }
+
+        // Keep click highlight visuals aligned with highlight mode
+        if enable && !self.click_highlight_enabled() {
+            self.toggle_click_highlight();
+        } else if !enable && self.click_highlight_enabled() {
+            self.toggle_click_highlight();
+        }
+    }
+
     /// Toggles highlight-only tool mode.
     pub fn toggle_highlight_tool(&mut self) -> bool {
         let enable = !self.highlight_tool_active();
-
-        if enable {
-            // Ensure click highlight visuals are on while using the highlight pen
-            if !self.click_highlight_enabled() {
-                self.toggle_click_highlight();
-            }
-
-            self.tool_override = Some(Tool::Highlight);
-            // Ensure we are not mid-drawing with another tool
-            if !matches!(
-                self.state,
-                DrawingState::Idle | DrawingState::TextInput { .. }
-            ) {
-                self.state = DrawingState::Idle;
-            }
-        } else {
-            self.tool_override = None;
-        }
-
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
+        self.set_highlight_tool(enable);
         enable
+    }
+
+    /// Returns true when undo/redo playback is queued.
+    pub fn has_pending_history(&self) -> bool {
+        self.pending_history.is_some()
+    }
+
+    /// Begin delayed undo playback.
+    pub fn start_undo_all_delayed(&mut self, delay_ms: u64) {
+        const MIN_DELAY_MS: u64 = 50;
+        let count = self.canvas_set.active_frame().undo_stack_len();
+        if count == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Undo,
+            remaining: count,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
+            next_due: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Begin delayed redo playback.
+    pub fn start_redo_all_delayed(&mut self, delay_ms: u64) {
+        const MIN_DELAY_MS: u64 = 50;
+        let count = self.canvas_set.active_frame().redo_stack_len();
+        if count == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Redo,
+            remaining: count,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
+            next_due: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Begin custom undo playback with a step budget.
+    pub fn start_custom_undo(&mut self, delay_ms: u64, steps: usize) {
+        const MIN_DELAY_MS: u64 = 50;
+        if steps == 0 {
+            return;
+        }
+        let available = self.canvas_set.active_frame().undo_stack_len();
+        let remaining = available.min(steps);
+        if remaining == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Undo,
+            remaining,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
+            next_due: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Begin custom redo playback with a step budget.
+    pub fn start_custom_redo(&mut self, delay_ms: u64, steps: usize) {
+        const MIN_DELAY_MS: u64 = 50;
+        if steps == 0 {
+            return;
+        }
+        let available = self.canvas_set.active_frame().redo_stack_len();
+        let remaining = available.min(steps);
+        if remaining == 0 {
+            return;
+        }
+        self.pending_history = Some(DelayedHistory {
+            mode: HistoryMode::Redo,
+            remaining,
+            delay_ms: delay_ms.max(MIN_DELAY_MS),
+            next_due: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Advance delayed history playback; returns true if a step was applied.
+    pub fn tick_delayed_history(&mut self, now: Instant) -> bool {
+        let mut did_step = false;
+        if let Some(mut pending) = self.pending_history.take() {
+            while pending.remaining > 0 && now >= pending.next_due {
+                let action = match pending.mode {
+                    HistoryMode::Undo => self.canvas_set.active_frame_mut().undo_last(),
+                    HistoryMode::Redo => self.canvas_set.active_frame_mut().redo_last(),
+                };
+
+                if let Some(action) = action {
+                    self.apply_action_side_effects(&action);
+                    pending.remaining = pending.remaining.saturating_sub(1);
+                    let delay = Duration::from_millis(pending.delay_ms);
+                    pending.next_due = now + delay;
+                    did_step = true;
+                } else {
+                    pending.remaining = 0;
+                }
+            }
+
+            if pending.remaining > 0 {
+                self.pending_history = Some(pending);
+                // Keep rendering/ticking while history remains.
+                self.needs_redraw = true;
+            }
+        }
+        did_step
     }
 }

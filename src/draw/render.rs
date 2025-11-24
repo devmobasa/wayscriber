@@ -68,19 +68,26 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             render_line(ctx, *x1, *y1, *x2, *y2, glow, thick + outline_width);
         }
         Shape::Rect {
-            x, y, w, h, thick, ..
+            x,
+            y,
+            w,
+            h,
+            thick,
+            fill,
+            ..
         } => {
-            render_rect(ctx, *x, *y, *w, *h, glow, thick + outline_width);
+            render_rect(ctx, *x, *y, *w, *h, *fill, glow, thick + outline_width);
         }
         Shape::Ellipse {
             cx,
             cy,
             rx,
             ry,
+            fill,
             thick,
             ..
         } => {
-            render_ellipse(ctx, *cx, *cy, *rx, *ry, glow, thick + outline_width);
+            render_ellipse(ctx, *cx, *cy, *rx, *ry, *fill, glow, thick + outline_width);
         }
         Shape::Arrow {
             x1,
@@ -156,20 +163,22 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             y,
             w,
             h,
+            fill,
             color,
             thick,
         } => {
-            render_rect(ctx, *x, *y, *w, *h, *color, *thick);
+            render_rect(ctx, *x, *y, *w, *h, *fill, *color, *thick);
         }
         Shape::Ellipse {
             cx,
             cy,
             rx,
             ry,
+            fill,
             color,
             thick,
         } => {
-            render_ellipse(ctx, *cx, *cy, *rx, *ry, *color, *thick);
+            render_ellipse(ctx, *cx, *cy, *rx, *ry, *fill, *color, *thick);
         }
         Shape::Arrow {
             x1,
@@ -304,7 +313,16 @@ fn render_line(ctx: &cairo::Context, x1: i32, y1: i32, x2: i32, y2: i32, color: 
 }
 
 /// Render a rectangle (outline)
-fn render_rect(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32, color: Color, thick: f64) {
+fn render_rect(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    fill: bool,
+    color: Color,
+    thick: f64,
+) {
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
     ctx.set_line_width(thick);
     ctx.set_line_join(cairo::LineJoin::Miter);
@@ -323,6 +341,12 @@ fn render_rect(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32, color: Colo
     };
 
     ctx.rectangle(norm_x, norm_y, norm_w, norm_h);
+    if fill {
+        let _ = ctx.save();
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+        let _ = ctx.fill_preserve();
+        let _ = ctx.restore();
+    }
     let _ = ctx.stroke();
 }
 
@@ -333,6 +357,7 @@ fn render_ellipse(
     cy: i32,
     rx: i32,
     ry: i32,
+    fill: bool,
     color: Color,
     thick: f64,
 ) {
@@ -347,6 +372,12 @@ fn render_ellipse(
     ctx.translate(cx as f64, cy as f64);
     ctx.scale(rx as f64, ry as f64);
     ctx.arc(0.0, 0.0, 1.0, 0.0, 2.0 * std::f64::consts::PI);
+    if fill {
+        let _ = ctx.save();
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+        let _ = ctx.fill_preserve();
+        ctx.restore().ok();
+    }
     ctx.restore().ok();
 
     let _ = ctx.stroke();

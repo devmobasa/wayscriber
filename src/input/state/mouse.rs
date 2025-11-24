@@ -269,6 +269,7 @@ impl InputState {
                             y: top,
                             w: width,
                             h: height,
+                            fill: self.fill_enabled,
                             color: self.current_color,
                             thick: self.current_thickness,
                         }
@@ -280,6 +281,7 @@ impl InputState {
                             cy,
                             rx,
                             ry,
+                            fill: self.fill_enabled,
                             color: self.current_color,
                             thick: self.current_thickness,
                         }

@@ -7,8 +7,14 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
-    seat::{SeatState, pointer::{PointerData, ThemedPointer}},
-    shell::{wlr_layer::LayerShell, xdg::XdgShell},
+    seat::{
+        SeatState,
+        pointer::{PointerData, ThemedPointer},
+    },
+    shell::{
+        wlr_layer::{KeyboardInteractivity, LayerShell},
+        xdg::XdgShell,
+    },
     shm::Shm,
 };
 use std::collections::HashSet;
@@ -24,14 +30,16 @@ use crate::{
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },
-    config::{Action, Config},
+    config::{Action, ColorSpec, Config},
     input::{DrawingState, InputState},
     session::SessionOptions,
+    ui::toolbar::{ToolbarEvent, ToolbarSnapshot},
     util::Rect,
 };
 
 use super::{
     capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
+    toolbar::ToolbarSurfaceManager,
 };
 
 /// Internal Wayland state shared across modules.
@@ -48,6 +56,14 @@ pub(super) struct WaylandState {
 
     // Surface and buffer management
     pub(super) surface: SurfaceState,
+    pub(super) toolbar: ToolbarSurfaceManager,
+    pub(super) last_toolbar_snapshot: Option<ToolbarSnapshot>,
+    /// Tracks the current keyboard interactivity applied to the main layer surface
+    pub(super) current_keyboard_interactivity: Option<KeyboardInteractivity>,
+    /// Whether the pointer currently targets a toolbar surface
+    pub(super) pointer_over_toolbar: bool,
+    /// Whether we are actively dragging a toolbar control (e.g., thickness slider)
+    pub(super) toolbar_dragging: bool,
 
     // Configuration
     pub(super) config: Config,
@@ -115,6 +131,11 @@ impl WaylandState {
             output_state,
             seat_state,
             surface: SurfaceState::new(),
+            toolbar: ToolbarSurfaceManager::new(),
+            last_toolbar_snapshot: None,
+            current_keyboard_interactivity: None,
+            pointer_over_toolbar: false,
+            toolbar_dragging: false,
             config,
             preferred_output_identity,
             xdg_fullscreen,
@@ -158,6 +179,71 @@ impl WaylandState {
         self.surface
             .current_output()
             .or_else(|| self.output_state.outputs().next())
+    }
+
+    /// Determines the desired keyboard interactivity for the main layer surface.
+    pub(super) fn desired_keyboard_interactivity(&self) -> KeyboardInteractivity {
+        if self.toolbar.is_visible() {
+            KeyboardInteractivity::OnDemand
+        } else {
+            KeyboardInteractivity::Exclusive
+        }
+    }
+
+    /// Applies keyboard interactivity based on toolbar visibility.
+    pub(super) fn refresh_keyboard_interactivity(&mut self) {
+        let desired = self.desired_keyboard_interactivity();
+
+        if let Some(layer) = self.surface.layer_surface_mut() {
+            if self.current_keyboard_interactivity != Some(desired) {
+                layer.set_keyboard_interactivity(desired);
+                self.current_keyboard_interactivity = Some(desired);
+            }
+        } else {
+            self.current_keyboard_interactivity = None;
+        }
+    }
+
+    /// Syncs toolbar visibility from the input state, ensures surfaces exist, and adjusts keyboard interactivity.
+    pub(super) fn sync_toolbar_visibility(&mut self, qh: &QueueHandle<Self>) {
+        // Sync individual toolbar visibility
+        let top_visible = self.input_state.toolbar_top_visible();
+        let side_visible = self.input_state.toolbar_side_visible();
+
+        if top_visible != self.toolbar.is_top_visible() {
+            self.toolbar.set_top_visible(top_visible);
+            self.input_state.needs_redraw = true;
+        }
+
+        if side_visible != self.toolbar.is_side_visible() {
+            self.toolbar.set_side_visible(side_visible);
+            self.input_state.needs_redraw = true;
+        }
+
+        let any_visible = self.toolbar.is_visible();
+        if !any_visible {
+            self.pointer_over_toolbar = false;
+        }
+
+        if any_visible {
+            if let Some(layer_shell) = self.layer_shell.as_ref() {
+                let scale = self.surface.scale();
+                let snapshot = self.toolbar_snapshot();
+                self.toolbar
+                    .ensure_created(qh, &self.compositor_state, layer_shell, scale, &snapshot);
+            }
+        }
+
+        self.refresh_keyboard_interactivity();
+    }
+
+    pub(super) fn render_toolbars(&mut self, snapshot: &ToolbarSnapshot) {
+        if !self.toolbar.is_visible() {
+            return;
+        }
+
+        // No hover tracking yet; pass None. Can be updated when we record pointer positions per surface.
+        self.toolbar.render(&self.shm, snapshot, None);
     }
 
     pub(super) fn request_xdg_activation(&mut self, qh: &QueueHandle<Self>) {
@@ -504,7 +590,98 @@ impl WaylandState {
         wl_surface.commit();
         debug!("=== RENDER COMPLETE ===");
 
+        // Render toolbar overlays if visible, only when state/hover changed.
+        if self.toolbar.is_visible() {
+            let snapshot = self.toolbar_snapshot();
+            if self
+                .last_toolbar_snapshot
+                .as_ref()
+                .map(|prev| prev != &snapshot)
+                .unwrap_or(true)
+            {
+                self.toolbar.mark_dirty();
+            }
+            self.last_toolbar_snapshot = Some(snapshot.clone());
+            self.render_toolbars(&snapshot);
+        }
+
         Ok(highlight_active)
+    }
+
+    /// Returns a snapshot of the current input state for toolbar UI consumption.
+    pub(super) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
+        ToolbarSnapshot::from_input(&self.input_state)
+    }
+
+    /// Applies an incoming toolbar event and schedules redraws as needed.
+    pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
+        // Check if this is a toolbar config event that needs saving
+        let needs_config_save = matches!(
+            event,
+            ToolbarEvent::PinTopToolbar(_)
+                | ToolbarEvent::PinSideToolbar(_)
+                | ToolbarEvent::ToggleIconMode(_)
+                | ToolbarEvent::ToggleMoreColors(_)
+                | ToolbarEvent::ToggleActionsSection(_)
+                | ToolbarEvent::ToggleDelaySliders(_)
+                | ToolbarEvent::ToggleCustomSection(_)
+        );
+
+        let persist_drawing = matches!(
+            event,
+            ToolbarEvent::SetColor(_)
+                | ToolbarEvent::SetThickness(_)
+                | ToolbarEvent::SetFont(_)
+                | ToolbarEvent::SetFontSize(_)
+                | ToolbarEvent::ToggleFill(_)
+        );
+
+        if self.input_state.apply_toolbar_event(event) {
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+
+            // Save config when pin state changes
+            if needs_config_save {
+                self.save_toolbar_pin_config();
+            }
+
+            if persist_drawing {
+                self.save_drawing_preferences();
+            }
+        }
+        self.refresh_keyboard_interactivity();
+    }
+
+    /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).
+    fn save_toolbar_pin_config(&mut self) {
+        self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
+        self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
+        self.config.ui.toolbar.use_icons = self.input_state.toolbar_use_icons;
+        self.config.ui.toolbar.show_more_colors = self.input_state.show_more_colors;
+        self.config.ui.toolbar.show_actions_section = self.input_state.show_actions_section;
+        self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
+        // Step controls toggle is in history config
+        self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to save toolbar config: {}", err);
+        } else {
+            log::debug!("Saved toolbar config");
+        }
+    }
+
+    fn save_drawing_preferences(&mut self) {
+        self.config.drawing.default_color = ColorSpec::from(self.input_state.current_color);
+        self.config.drawing.default_thickness = self.input_state.current_thickness;
+        self.config.drawing.default_fill_enabled = self.input_state.fill_enabled;
+        self.config.drawing.default_font_size = self.input_state.current_font_size;
+        self.config.drawing.font_family = self.input_state.font_descriptor.family.clone();
+        self.config.drawing.font_weight = self.input_state.font_descriptor.weight.clone();
+        self.config.drawing.font_style = self.input_state.font_descriptor.style.clone();
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to persist drawing preferences: {}", err);
+        }
     }
 
     /// Restore the overlay after screenshot capture completes.

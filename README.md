@@ -464,23 +464,10 @@ wayscriber/
 └── config.example.toml   # Example configuration
 ```
 
-### Project History
-
-Wayscriber shipped under the name **hyprmarker** through the v0.4 release line. The rename in v0.5.0 reflects the broader compositor support that has been built since the original Hyprland-only prototype. Use `wayscriber --migrate-config` to copy existing settings, and see **[docs/MIGRATION.md](docs/MIGRATION.md)** for the full compatibility checklist.
-
-**Coming from hyprmarker?** Uninstall the old package (`paru -R hyprmarker`, etc.) and disable the legacy user service before installing Wayscriber:
-
-```bash
-systemctl --user disable --now hyprmarker.service 2>/dev/null || true
-```
-
-Then install Wayscriber and enable `wayscriber.service` if you want the daemon on login.
-
 ### Documentation
 
 - **[docs/SETUP.md](docs/SETUP.md)** – system setup and installation details
 - **[docs/CONFIG.md](docs/CONFIG.md)** – configuration reference
-- **[docs/MIGRATION.md](docs/MIGRATION.md)** – guidance for migrating from hyprmarker
 
 ### Comparison with ZoomIt
 

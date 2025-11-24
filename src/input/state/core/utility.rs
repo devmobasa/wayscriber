@@ -1,5 +1,6 @@
 use super::base::InputState;
 use crate::config::Action;
+use crate::config::Config;
 use crate::util::Rect;
 use std::process::{Command, Stdio};
 
@@ -92,8 +93,8 @@ impl InputState {
     }
 
     pub(crate) fn launch_configurator(&self) {
-        let binary = crate::legacy::configurator_override()
-            .unwrap_or_else(|| "wayscriber-configurator".to_string());
+        let binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
+            .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
         match Command::new(&binary)
             .stdin(Stdio::null())
@@ -110,8 +111,47 @@ impl InputState {
             Err(err) => {
                 log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
                 log::error!(
-                    "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
+                    "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
                 );
+            }
+        }
+    }
+
+    /// Opens the primary config file using the desktop default application.
+    pub(crate) fn open_config_file_default(&self) {
+        let path = match Config::get_config_path() {
+            Ok(p) => p,
+            Err(err) => {
+                log::error!("Unable to resolve config path: {}", err);
+                return;
+            }
+        };
+
+        let opener = if cfg!(target_os = "macos") {
+            "open"
+        } else if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "xdg-open"
+        };
+
+        let mut cmd = Command::new(opener);
+        if cfg!(target_os = "windows") {
+            cmd.args(["/C", "start", ""]).arg(&path);
+        } else {
+            cmd.arg(&path);
+        }
+
+        match cmd.spawn() {
+            Ok(child) => {
+                log::info!(
+                    "Opened config file at {} (pid {})",
+                    path.display(),
+                    child.id()
+                );
+            }
+            Err(err) => {
+                log::error!("Failed to open config file at {}: {}", path.display(), err);
             }
         }
     }

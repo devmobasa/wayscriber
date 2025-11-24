@@ -16,9 +16,18 @@ impl CompositorHandler for WaylandState {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
-        _new_factor: i32,
+        new_factor: i32,
     ) {
-        debug!("Scale factor changed");
+        let scale = new_factor.max(1);
+        debug!("Scale factor changed to {}", scale);
+        self.surface.set_scale(scale);
+        let (phys_w, phys_h) = self.surface.physical_dimensions();
+        self.frozen
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
+        self.toolbar
+            .maybe_update_scale(self.surface.current_output().as_ref(), scale);
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
     }
 
     fn transform_changed(
@@ -65,6 +74,8 @@ impl CompositorHandler for WaylandState {
         if let Some(info) = self.output_state.info(output) {
             let scale = info.scale_factor.max(1);
             self.surface.set_scale(scale);
+            self.toolbar.maybe_update_scale(Some(output), scale);
+            self.toolbar.mark_dirty();
             let (logical_w, logical_h) = info
                 .logical_size
                 .unwrap_or((self.surface.width() as i32, self.surface.height() as i32));

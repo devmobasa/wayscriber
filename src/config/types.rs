@@ -19,6 +19,10 @@ pub struct DrawingConfig {
     #[serde(default = "default_thickness")]
     pub default_thickness: f64,
 
+    /// Whether shapes start filled when applicable
+    #[serde(default = "default_fill_enabled")]
+    pub default_fill_enabled: bool,
+
     /// Default font size for text mode in points (valid range: 8.0 - 72.0)
     #[serde(default = "default_font_size")]
     pub default_font_size: f64,
@@ -60,6 +64,7 @@ impl Default for DrawingConfig {
         Self {
             default_color: default_color(),
             default_thickness: default_thickness(),
+            default_fill_enabled: default_fill_enabled(),
             default_font_size: default_font_size(),
             hit_test_tolerance: default_hit_test_tolerance(),
             hit_test_linear_threshold: default_hit_test_threshold(),
@@ -92,6 +97,52 @@ impl Default for ArrowConfig {
         Self {
             length: default_arrow_length(),
             angle_degrees: default_arrow_angle(),
+        }
+    }
+}
+
+/// Undo/redo playback configuration.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct HistoryConfig {
+    /// Delay in milliseconds between steps when running "undo all by delay"
+    #[serde(default = "default_undo_all_delay_ms")]
+    pub undo_all_delay_ms: u64,
+
+    /// Delay in milliseconds between steps when running "redo all by delay"
+    #[serde(default = "default_redo_all_delay_ms")]
+    pub redo_all_delay_ms: u64,
+
+    /// Enable the custom undo/redo section in the toolbar
+    #[serde(default = "default_custom_section_enabled")]
+    pub custom_section_enabled: bool,
+
+    /// Delay in milliseconds between steps for custom undo
+    #[serde(default = "default_custom_undo_delay_ms")]
+    pub custom_undo_delay_ms: u64,
+
+    /// Delay in milliseconds between steps for custom redo
+    #[serde(default = "default_custom_redo_delay_ms")]
+    pub custom_redo_delay_ms: u64,
+
+    /// Number of steps to play when running custom undo
+    #[serde(default = "default_custom_undo_steps")]
+    pub custom_undo_steps: usize,
+
+    /// Number of steps to play when running custom redo
+    #[serde(default = "default_custom_redo_steps")]
+    pub custom_redo_steps: usize,
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            undo_all_delay_ms: default_undo_all_delay_ms(),
+            redo_all_delay_ms: default_redo_all_delay_ms(),
+            custom_section_enabled: default_custom_section_enabled(),
+            custom_undo_delay_ms: default_custom_undo_delay_ms(),
+            custom_redo_delay_ms: default_custom_redo_delay_ms(),
+            custom_undo_steps: default_custom_undo_steps(),
+            custom_redo_steps: default_custom_redo_steps(),
         }
     }
 }
@@ -166,6 +217,10 @@ pub struct UiConfig {
     /// Context menu preferences
     #[serde(default)]
     pub context_menu: ContextMenuUiConfig,
+
+    /// Toolbar visibility and pinning options
+    #[serde(default)]
+    pub toolbar: ToolbarConfig,
 }
 
 impl Default for UiConfig {
@@ -180,6 +235,7 @@ impl Default for UiConfig {
             xdg_fullscreen: default_xdg_fullscreen(),
             click_highlight: ClickHighlightConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
+            toolbar: ToolbarConfig::default(),
         }
     }
 }
@@ -339,6 +395,10 @@ fn default_thickness() -> f64 {
     3.0
 }
 
+fn default_fill_enabled() -> bool {
+    false
+}
+
 fn default_font_size() -> f64 {
     32.0
 }
@@ -377,6 +437,34 @@ fn default_arrow_length() -> f64 {
 
 fn default_arrow_angle() -> f64 {
     30.0
+}
+
+fn default_undo_all_delay_ms() -> u64 {
+    1000
+}
+
+fn default_redo_all_delay_ms() -> u64 {
+    1000
+}
+
+fn default_custom_section_enabled() -> bool {
+    false
+}
+
+fn default_custom_undo_delay_ms() -> u64 {
+    1000
+}
+
+fn default_custom_redo_delay_ms() -> u64 {
+    1000
+}
+
+fn default_custom_undo_steps() -> usize {
+    5
+}
+
+fn default_custom_redo_steps() -> usize {
+    5
 }
 
 fn default_buffer_count() -> u32 {
@@ -757,4 +845,72 @@ fn default_session_per_output() -> bool {
 
 fn default_persist_history() -> bool {
     true
+}
+
+/// Toolbar visibility and pinning configuration.
+///
+/// Controls which toolbar panels are visible on startup and whether they
+/// remain pinned (saved to config) when closed.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ToolbarConfig {
+    /// Show the top toolbar (tool selection) on startup
+    #[serde(default = "default_toolbar_top_pinned")]
+    pub top_pinned: bool,
+
+    /// Show the side toolbar (colors, settings) on startup
+    #[serde(default = "default_toolbar_side_pinned")]
+    pub side_pinned: bool,
+
+    /// Use icons instead of text labels in toolbars
+    #[serde(default = "default_toolbar_use_icons")]
+    pub use_icons: bool,
+
+    /// Show extended color palette
+    #[serde(default = "default_show_more_colors")]
+    pub show_more_colors: bool,
+
+    /// Show the Actions section (undo all, redo all, etc.)
+    #[serde(default = "default_show_actions_section")]
+    pub show_actions_section: bool,
+
+    /// Show delay sliders in Step Undo/Redo section
+    #[serde(default = "default_show_delay_sliders")]
+    pub show_delay_sliders: bool,
+}
+
+impl Default for ToolbarConfig {
+    fn default() -> Self {
+        Self {
+            top_pinned: default_toolbar_top_pinned(),
+            side_pinned: default_toolbar_side_pinned(),
+            use_icons: default_toolbar_use_icons(),
+            show_more_colors: default_show_more_colors(),
+            show_actions_section: default_show_actions_section(),
+            show_delay_sliders: default_show_delay_sliders(),
+        }
+    }
+}
+
+fn default_toolbar_top_pinned() -> bool {
+    true
+}
+
+fn default_toolbar_side_pinned() -> bool {
+    true
+}
+
+fn default_toolbar_use_icons() -> bool {
+    true
+}
+
+fn default_show_more_colors() -> bool {
+    false
+}
+
+fn default_show_actions_section() -> bool {
+    true
+}
+
+fn default_show_delay_sliders() -> bool {
+    false
 }

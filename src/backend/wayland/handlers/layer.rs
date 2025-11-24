@@ -9,7 +9,15 @@ use super::super::state::WaylandState;
 use crate::session;
 
 impl LayerShellHandler for WaylandState {
-    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        if self.toolbar.is_toolbar_layer(layer) {
+            info!("Toolbar surface closed by compositor; hiding toolbar");
+            let _ = self.input_state.set_toolbar_visible(false);
+            self.toolbar.set_visible(false);
+            self.refresh_keyboard_interactivity();
+            return;
+        }
+
         info!("Layer surface closed by compositor");
         self.input_state.should_exit = true;
     }
@@ -18,14 +26,14 @@ impl LayerShellHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _layer: &LayerSurface,
+        layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        info!(
-            "Layer surface configured: {}x{}",
-            configure.new_size.0, configure.new_size.1
-        );
+        if self.toolbar.handle_configure(&configure, layer) {
+            self.input_state.needs_redraw = true;
+            return;
+        }
 
         if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
             let size_changed = self

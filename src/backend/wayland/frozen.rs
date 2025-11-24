@@ -643,6 +643,7 @@ mod tests {
         let mut input = InputState::with_defaults(
             crate::draw::color::RED,
             1.0,
+            false,
             12.0,
             crate::draw::FontDescriptor::default(),
             false,
@@ -653,6 +654,13 @@ mod tests {
             std::collections::HashMap::new(),
             usize::MAX,
             crate::input::ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
         );
 
         // Simulate an in-flight portal capture
