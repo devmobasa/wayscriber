@@ -7,14 +7,14 @@
 <details>
 <summary>📹 Demo Video (Click to expand)</summary>
 
-https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
+https://wayscriber.com/demo.mp4
 
 </details>
 
 <details>
 <summary>🖼️ Demo GIF (Click to expand)</summary>
 
-![Demo GIF](https://github.com/user-attachments/assets/e99eb161-c603-4133-926b-79de7a8fb567)
+![Demo GIF](https://wayscriber.com/demo.gif)
 
 </details>
 
