@@ -93,8 +93,8 @@ impl InputState {
     }
 
     pub(crate) fn launch_configurator(&self) {
-        let binary = crate::legacy::configurator_override()
-            .unwrap_or_else(|| "wayscriber-configurator".to_string());
+        let binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
+            .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
         match Command::new(&binary)
             .stdin(Stdio::null())
@@ -111,7 +111,7 @@ impl InputState {
             Err(err) => {
                 log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
                 log::error!(
-                    "Set WAYSCRIBER_CONFIGURATOR (or legacy HYPRMARKER_CONFIGURATOR) to override the executable path if needed."
+                    "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
                 );
             }
         }

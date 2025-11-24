@@ -7,8 +7,7 @@ This document explains how the application boots, how user input travels through
 ## 1. Execution Flow From `main.rs`
 
 1. **CLI parsing (`src/main.rs`)**
-   - Uses `clap` to parse `--daemon`, `--active`, `--mode`, and migration flags.
-   - Immediately handles `--migrate-config` via `config::migrate_config` and exits.
+   - Uses `clap` to parse `--daemon`, `--active`, `--mode`, and session management flags.
    - Verifies `WAYLAND_DISPLAY` when a Wayland session is required.
 
 2. **Mode selection**
@@ -18,7 +17,6 @@ This document explains how the application boots, how user input travels through
 
 3. **Shared subsystems automatically pulled in**
    - `config`: loads user settings, key bindings, and drawing defaults.
-   - `legacy`: prints notices for old binary names and handles hyprmarker compatibility.
 
 ---
 
@@ -126,10 +124,9 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ---
 
-## 6. Configuration & Legacy Support
+## 6. Configuration
 
-- **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map. It also houses migration helpers shared with `main.rs`.
-- **`src/legacy.rs`** contains helpers to detect old binary names, environment overrides, and configurator paths. The daemon tray relies on it to launch the correct configurator binary.
+- **`src/config/`** handles loading `config.toml`, validating fields, and building the keybinding map.
 
 ---
 
@@ -147,15 +144,14 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 | Path | Role |
 |------|------|
-| `src/main.rs` | CLI entry point, mode selection, migration trigger. |
+| `src/main.rs` | CLI entry point, mode selection. |
 | `src/daemon.rs` | Background daemon, tray menu, signal handling, overlay toggling. |
 | `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
 | `src/input/` | Event/state machine for drawing tools, board modes, and capture triggers. |
 | `src/draw/` | Vector drawing primitives, canvases, fonts. |
 | `src/ui.rs` | Status/help overlays. |
 | `src/capture/` | Screenshot pipeline (manager, dependencies, sources, clipboard/file helpers). |
-| `src/config/` | Config parsing, defaults, migration helpers. |
-| `src/legacy.rs` | Compatibility notices and configurator path helpers. |
+| `src/config/` | Config parsing, defaults, keybinding map. |
 | `src/notification.rs` | Desktop notifications for capture results. |
 | `src/util.rs` | Shared math/color utilities. |
 | `tests/` | CLI + rendering integration tests. |
@@ -169,6 +165,6 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 3. **Backend** sets up Wayland surfaces and loops, forwarding input to `InputState`.
 4. **InputState + draw/ui** update the overlay contents and request renders.
 5. **Capture** subsystem handles screenshot actions asynchronously and notifies the user.
-6. **Config/legacy** modules ensure user preferences and backward compatibility are honored everywhere.
+6. **Config** module ensures user preferences are honored everywhere.
 
 Use this document to trace any feature: locate the entry point (CLI, tray, keybinding), follow it through the backend/input/capture stacks, and consult the relevant modules listed above for details.

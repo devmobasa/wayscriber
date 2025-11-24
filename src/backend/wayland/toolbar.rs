@@ -403,7 +403,7 @@ impl ToolbarSurface {
 /// Tracks the lifetime and visibility of the top + side toolbar surfaces.
 #[derive(Debug)]
 pub struct ToolbarSurfaceManager {
-    /// Legacy combined visibility (for backwards compatibility)
+    /// Combined visibility flag (true when both toolbars visible)
     visible: bool,
     /// Whether the top toolbar is visible
     top_visible: bool,
@@ -449,7 +449,7 @@ impl ToolbarSurfaceManager {
         self.side_visible || self.visible
     }
 
-    /// Set legacy combined visibility (shows/hides both)
+    /// Set combined visibility (shows/hides both toolbars)
     pub fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
         if visible {
@@ -472,7 +472,7 @@ impl ToolbarSurfaceManager {
             self.top.destroy();
             self.top_hover = None;
         }
-        // Update legacy flag
+        // Update combined flag
         self.visible = self.top_visible && self.side_visible;
     }
 
@@ -483,7 +483,7 @@ impl ToolbarSurfaceManager {
             self.side.destroy();
             self.side_hover = None;
         }
-        // Update legacy flag
+        // Update combined flag
         self.visible = self.top_visible && self.side_visible;
     }
 
@@ -546,7 +546,7 @@ impl ToolbarSurfaceManager {
             // Actions section (now before Step Undo/Redo)
             let actions_h: u32 = if snapshot.show_actions_section {
                 if use_icons {
-                    20 + 24 + 6 + 36 * 2 + 6 * 2 // 2 rows of icons
+                    20 + 24 + 6 + 42 * 2 + 6 * 2 // 2 rows of 42px icons (unified with top toolbar)
                 } else {
                     20 + 24 + 6 + 24 * 5 + 5 * 5 // 5 rows of text buttons
                 }
@@ -662,7 +662,8 @@ impl ToolbarSurfaceManager {
 }
 
 fn draw_panel_background(ctx: &cairo::Context, width: f64, height: f64) {
-    ctx.set_source_rgba(0.05, 0.05, 0.08, 0.78);
+    // High contrast semi-opaque dark background for readability on any content
+    ctx.set_source_rgba(0.05, 0.05, 0.08, 0.92);  // Increased opacity from 0.78 for better contrast
     draw_round_rect(ctx, 0.0, 0.0, width, height, 14.0);
     let _ = ctx.fill();
 }
@@ -724,7 +725,7 @@ fn render_top_strip(
                 .unwrap_or(false);
             draw_button(ctx, x, y, btn_size, btn_size, is_active, is_hover);
 
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+            set_icon_color(ctx, is_hover);
             let icon_x = x + (btn_size - icon_size) / 2.0;
             let icon_y = y + (btn_size - icon_size) / 2.0;
             icon_fn(ctx, icon_x, icon_y, icon_size);
@@ -758,7 +759,7 @@ fn render_top_strip(
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_size, btn_size, snapshot.text_active, is_hover);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        set_icon_color(ctx, is_hover);
         toolbar_icons::draw_icon_text(ctx, x + (btn_size - icon_size) / 2.0, y + (btn_size - icon_size) / 2.0, icon_size);
         hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
@@ -773,7 +774,7 @@ fn render_top_strip(
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_size, btn_size, false, clear_hover);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        set_icon_color(ctx, clear_hover);
         toolbar_icons::draw_icon_clear(ctx, x + (btn_size - icon_size) / 2.0, y + (btn_size - icon_size) / 2.0, icon_size);
         hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
@@ -788,7 +789,7 @@ fn render_top_strip(
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_size, btn_size, snapshot.any_highlight_active, highlight_hover);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        set_icon_color(ctx, highlight_hover);
         toolbar_icons::draw_icon_highlight(ctx, x + (btn_size - icon_size) / 2.0, y + (btn_size - icon_size) / 2.0, icon_size);
         hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
@@ -917,6 +918,15 @@ fn point_in_rect(px: f64, py: f64, x: f64, y: f64, w: f64, h: f64) -> bool {
     px >= x && px <= x + w && py >= y && py <= y + h
 }
 
+/// Set icon glyph color based on hover state for better visual feedback
+fn set_icon_color(ctx: &cairo::Context, hover: bool) {
+    if hover {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);  // Bright white when hovered
+    } else {
+        ctx.set_source_rgba(0.95, 0.95, 0.95, 0.9);  // Slightly dimmed when not hovered
+    }
+}
+
 /// Draw tooltip near the hovered element
 /// If `above` is true, tooltip appears above the button (for top toolbar)
 fn draw_tooltip(ctx: &cairo::Context, hits: &[HitRegion], hover: Option<(f64, f64)>, panel_width: f64, above: bool) {
@@ -938,11 +948,12 @@ fn draw_tooltip(ctx: &cairo::Context, hits: &[HitRegion], hover: Option<(f64, f6
                     let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
                     let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
 
-                    // Position above or below based on parameter
+                    // Position above or below based on parameter (with increased gap)
+                    let gap = 6.0;  // Increased from 4.0 for better spacing
                     let tooltip_y = if above {
-                        hit.rect.1 - tooltip_h - 4.0
+                        hit.rect.1 - tooltip_h - gap
                     } else {
-                        hit.rect.1 + hit.rect.3 + 4.0
+                        hit.rect.1 + hit.rect.3 + gap
                     };
 
                     // Clamp to panel bounds
@@ -952,6 +963,19 @@ fn draw_tooltip(ctx: &cairo::Context, hits: &[HitRegion], hover: Option<(f64, f6
                     if tooltip_x + tooltip_w > panel_width - 4.0 {
                         tooltip_x = panel_width - tooltip_w - 4.0;
                     }
+
+                    // Draw subtle drop shadow (offset darker rounded rect)
+                    let shadow_offset = 2.0;
+                    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+                    draw_round_rect(
+                        ctx,
+                        tooltip_x + shadow_offset,
+                        tooltip_y + shadow_offset,
+                        tooltip_w,
+                        tooltip_h,
+                        4.0
+                    );
+                    let _ = ctx.fill();
 
                     // Draw tooltip background
                     ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
@@ -1177,7 +1201,7 @@ fn render_side_palette(
             .map(|(hx, hy)| point_in_rect(hx, hy, cx, row_y, swatch, swatch))
             .unwrap_or(false);
         draw_button(ctx, cx, row_y, swatch, swatch, false, plus_btn_hover);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+        set_icon_color(ctx, plus_btn_hover);
         toolbar_icons::draw_icon_plus(ctx, cx + (swatch - 14.0) / 2.0, row_y + (swatch - 14.0) / 2.0, 14.0);
         hits.push(HitRegion {
             rect: (cx, row_y, swatch, swatch),
@@ -1207,7 +1231,7 @@ fn render_side_palette(
             .map(|(hx, hy)| point_in_rect(hx, hy, cx, row_y, swatch, swatch))
             .unwrap_or(false);
         draw_button(ctx, cx, row_y, swatch, swatch, false, minus_btn_hover);
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+        set_icon_color(ctx, minus_btn_hover);
         toolbar_icons::draw_icon_minus(ctx, cx + (swatch - 14.0) / 2.0, row_y + (swatch - 14.0) / 2.0, 14.0);
         hits.push(HitRegion {
             rect: (cx, row_y, swatch, swatch),
@@ -1387,7 +1411,7 @@ fn render_side_palette(
     let actions_content_h = if snapshot.show_actions_section {
         if use_icons {
             // 10 icon buttons (5 per row = 2 rows)
-            let icon_btn_size = 36.0;
+            let icon_btn_size = 42.0;  // Unified with top toolbar
             let icon_gap = 6.0;
             let icon_rows = 2;
             (icon_btn_size + icon_gap) * icon_rows as f64
@@ -1453,7 +1477,7 @@ fn render_side_palette(
 
         if use_icons {
             // Icon mode: render icon buttons in a grid (5 per row, 2 rows)
-            let icon_btn_size = 36.0;
+            let icon_btn_size = 42.0;  // Unified with top toolbar
             let icon_gap = 6.0;
             let icons_per_row = 5;
             let _icon_rows = (all_actions.len() + icons_per_row - 1) / icons_per_row;
@@ -1472,7 +1496,7 @@ fn render_side_palette(
 
                 if *enabled {
                     draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                    set_icon_color(ctx, is_hover);
                 } else {
                     draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
                     ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
@@ -1586,7 +1610,7 @@ fn render_side_palette(
                                  is_undo: bool,
                                  hover: Option<(f64, f64)>| {
             let row_h = 26.0;
-            let btn_w = if snapshot.use_icons { 36.0 } else { 90.0 };
+            let btn_w = if snapshot.use_icons { 42.0 } else { 90.0 };  // Unified with top toolbar
             let steps_btn_w = 26.0;
             let gap = 6.0;
             let label = if is_undo { "Step Undo" } else { "Step Redo" };
@@ -1609,7 +1633,7 @@ fn render_side_palette(
                 // Icon mode: square button with step icon
                 let icon_size = 20.0;
                 draw_button(ctx, x, y, btn_w, row_h, false, btn_hover);
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                set_icon_color(ctx, btn_hover);
                 if is_undo {
                     toolbar_icons::draw_icon_step_undo(ctx, x + (btn_w - icon_size) / 2.0, y + (row_h - icon_size) / 2.0, icon_size);
                 } else {
@@ -1640,7 +1664,7 @@ fn render_side_palette(
                 .map(|(hx, hy)| point_in_rect(hx, hy, steps_x, y, steps_btn_w, row_h))
                 .unwrap_or(false);
             draw_button(ctx, steps_x, y, steps_btn_w, row_h, false, minus_hover);
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+            set_icon_color(ctx, minus_hover);
             toolbar_icons::draw_icon_minus(
                 ctx,
                 steps_x + (steps_btn_w - 14.0) / 2.0,
@@ -1666,7 +1690,7 @@ fn render_side_palette(
                 .map(|(hx, hy)| point_in_rect(hx, hy, steps_plus_x, y, steps_btn_w, row_h))
                 .unwrap_or(false);
             draw_button(ctx, steps_plus_x, y, steps_btn_w, row_h, false, plus_hover);
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+            set_icon_color(ctx, plus_hover);
             toolbar_icons::draw_icon_plus(
                 ctx,
                 steps_plus_x + (steps_btn_w - 14.0) / 2.0,
