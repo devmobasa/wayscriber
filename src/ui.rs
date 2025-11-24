@@ -123,7 +123,7 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F10=Help",
+        "{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
         frozen_badge,
         mode_badge,
         color_name,
@@ -430,8 +430,16 @@ pub fn render_help_overlay(
                     action: "Exit",
                 },
                 Row {
-                    key: "F10",
+                    key: "F1 / F10",
                     action: "Toggle help",
+                },
+                Row {
+                    key: "F2 / F9",
+                    action: "Toggle toolbar",
+                },
+                Row {
+                    key: "F11",
+                    action: "Open configurator",
                 },
                 Row {
                     key: "F12",
