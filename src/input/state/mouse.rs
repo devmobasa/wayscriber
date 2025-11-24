@@ -108,7 +108,7 @@ impl InputState {
                         }
 
                         let tool = self.active_tool();
-                        if tool != Tool::Highlight {
+                        if tool != Tool::Highlight && tool != Tool::Select {
                             self.state = DrawingState::Drawing {
                                 tool,
                                 start_x: x,
@@ -297,6 +297,10 @@ impl InputState {
                         arrow_angle: self.arrow_angle,
                     },
                     Tool::Highlight => {
+                        self.clear_provisional_dirty();
+                        return;
+                    }
+                    Tool::Select => {
                         self.clear_provisional_dirty();
                         return;
                     }

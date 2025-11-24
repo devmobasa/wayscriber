@@ -90,6 +90,7 @@ impl InputState {
                     arrow_angle: self.arrow_angle,
                 }),
                 Tool::Highlight => None,
+                Tool::Select => None,
                 // No provisional shape for other tools
             }
         } else {

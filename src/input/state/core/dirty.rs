@@ -78,6 +78,7 @@ impl InputState {
                     self.arrow_angle,
                 ),
                 Tool::Highlight => None,
+                Tool::Select => None,
             }
         } else {
             None
