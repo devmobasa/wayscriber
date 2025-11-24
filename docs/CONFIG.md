@@ -171,6 +171,40 @@ use_pen_color = true  # Existing highlights update immediately when you change p
 - Semi-transparent dark backgrounds
 - Light blue help overlay border
 
+### `[ui.toolbar]` - Floating Toolbars
+
+Controls the top and side toolbars (toggle with `F2`/`F9`).
+
+```toml
+[ui.toolbar]
+# Show top toolbar on startup (pinned)
+top_pinned = true
+
+# Show side toolbar on startup (pinned)
+side_pinned = true
+
+# Use icons instead of text labels in toolbars
+use_icons = true
+
+# Show extended color palette in the top toolbar
+show_more_colors = false
+
+# Show undo all / redo all actions in the side toolbar
+show_actions_section = true
+
+# Show delayed undo/redo sliders in the side toolbar
+show_delay_sliders = false
+```
+
+**Behavior:**
+- **Icon/text mode**: `use_icons` switches between compact icons and labeled buttons.
+- **Colors**: `show_more_colors` toggles the extended palette row.
+- **Actions**: `show_actions_section` hides/shows the undo/redo action buttons.
+- **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
+- **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
+
+**Defaults:** all set as above.
+
 ### `[board]` - Board Modes (Whiteboard/Blackboard)
 
 Controls whiteboard and blackboard mode settings.
