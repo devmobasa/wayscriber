@@ -556,5 +556,4 @@ impl InputState {
             self.apply_action_side_effects(&action);
         }
     }
-
 }

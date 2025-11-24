@@ -327,7 +327,7 @@ impl Config {
     pub fn json_schema() -> Value {
         serde_json::to_value(schema_for!(Config))
             .expect("serializing configuration schema should succeed")
-}
+    }
 
     /// Validates and clamps all configuration values to acceptable ranges.
     ///

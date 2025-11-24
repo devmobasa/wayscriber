@@ -842,6 +842,10 @@ fn render_side_palette(
     let card_w = width - 2.0 * x + 12.0;
     let section_gap = 12.0;
 
+    let card_x = x - 6.0;
+    let card_w = width - 2.0 * x + 12.0;
+    let section_gap = 12.0;
+
     // ===== Colors Section =====
     let colors: &[(Color, &str)] = &[
         (RED, "Red"),
@@ -852,10 +856,42 @@ fn render_side_palette(
         (PINK, "Pink"),
         (WHITE, "White"),
         (BLACK, "Black"),
-        (Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }, "Cyan"),
-        (Color { r: 0.6, g: 0.4, b: 0.8, a: 1.0 }, "Purple"),
-        (Color { r: 1.0, g: 0.84, b: 0.0, a: 1.0 }, "Gold"),
-        (Color { r: 0.4, g: 0.4, b: 0.4, a: 1.0 }, "Gray"),
+        (
+            Color {
+                r: 0.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            "Cyan",
+        ),
+        (
+            Color {
+                r: 0.6,
+                g: 0.4,
+                b: 0.8,
+                a: 1.0,
+            },
+            "Purple",
+        ),
+        (
+            Color {
+                r: 1.0,
+                g: 0.84,
+                b: 0.0,
+                a: 1.0,
+            },
+            "Gold",
+        ),
+        (
+            Color {
+                r: 0.4,
+                g: 0.4,
+                b: 0.4,
+                a: 1.0,
+            },
+            "Gray",
+        ),
     ];
 
     let swatch = 24.0;
@@ -876,7 +912,12 @@ fn render_side_palette(
     hits.push(HitRegion {
         rect: (x, picker_y, picker_w, picker_h),
         event: ToolbarEvent::SetColor(snapshot.color),
-        kind: HitKind::PickColor { x, y: picker_y, w: picker_w, h: picker_h },
+        kind: HitKind::PickColor {
+            x,
+            y: picker_y,
+            w: picker_w,
+            h: picker_h,
+        },
     });
 
     let mut cx = x;
@@ -916,7 +957,13 @@ fn render_side_palette(
     let _ = ctx.fill();
     // Knob
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(knob_x, track_y + track_h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(
+        knob_x,
+        track_y + track_h / 2.0,
+        knob_r,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
     let _ = ctx.fill();
 
     // Minus/Plus nudge buttons and readout
@@ -940,7 +987,14 @@ fn render_side_palette(
     });
 
     let thickness_text = format!("{:.0}px", snapshot.thickness);
-    draw_label_center(ctx, x + btn_w * 2.0 + 20.0, btn_y, 60.0, btn_h, &thickness_text);
+    draw_label_center(
+        ctx,
+        x + btn_w * 2.0 + 20.0,
+        btn_y,
+        60.0,
+        btn_h,
+        &thickness_text,
+    );
 
     hits.push(HitRegion {
         rect: (x, track_y - 6.0, track_w, track_h + 12.0),
@@ -967,7 +1021,13 @@ fn render_side_palette(
     draw_round_rect(ctx, x, fs_track_y, fs_track_w, fs_track_h, 4.0);
     let _ = ctx.fill();
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(fs_knob_x, fs_track_y + fs_track_h / 2.0, fs_knob_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(
+        fs_knob_x,
+        fs_track_y + fs_track_h / 2.0,
+        fs_knob_r,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
     let _ = ctx.fill();
 
     let fs_btn_w = 28.0;
@@ -981,7 +1041,15 @@ fn render_side_palette(
         kind: HitKind::Click,
     });
 
-    draw_button(ctx, x + fs_btn_w + 6.0, fs_btn_y, fs_btn_w, fs_btn_h, false, false);
+    draw_button(
+        ctx,
+        x + fs_btn_w + 6.0,
+        fs_btn_y,
+        fs_btn_w,
+        fs_btn_h,
+        false,
+        false,
+    );
     draw_label_center(ctx, x + fs_btn_w + 6.0, fs_btn_y, fs_btn_w, fs_btn_h, "+");
     hits.push(HitRegion {
         rect: (x + fs_btn_w + 6.0, fs_btn_y, fs_btn_w, fs_btn_h),
@@ -990,7 +1058,14 @@ fn render_side_palette(
     });
 
     let fs_text = format!("{:.0}pt", snapshot.font_size);
-    draw_label_center(ctx, x + fs_btn_w * 2.0 + 20.0, fs_btn_y, 60.0, fs_btn_h, &fs_text);
+    draw_label_center(
+        ctx,
+        x + fs_btn_w * 2.0 + 20.0,
+        fs_btn_y,
+        60.0,
+        fs_btn_h,
+        &fs_text,
+    );
 
     hits.push(HitRegion {
         rect: (x, fs_track_y - 6.0, fs_track_w, fs_track_h + 12.0),
@@ -1043,10 +1118,26 @@ fn render_side_palette(
         (ToolbarEvent::Redo, "Redo", snapshot.redo_available),
         (ToolbarEvent::UndoAll, "Undo All", snapshot.undo_available),
         (ToolbarEvent::RedoAll, "Redo All", snapshot.redo_available),
-        (ToolbarEvent::UndoAllDelayed, "Undo All Delay", snapshot.undo_available),
-        (ToolbarEvent::RedoAllDelayed, "Redo All Delay", snapshot.redo_available),
+        (
+            ToolbarEvent::UndoAllDelayed,
+            "Undo All Delay",
+            snapshot.undo_available,
+        ),
+        (
+            ToolbarEvent::RedoAllDelayed,
+            "Redo All Delay",
+            snapshot.redo_available,
+        ),
         (ToolbarEvent::ClearCanvas, "Clear", true),
-        (ToolbarEvent::ToggleFreeze, if snapshot.frozen_active { "Unfreeze" } else { "Freeze" }, true),
+        (
+            ToolbarEvent::ToggleFreeze,
+            if snapshot.frozen_active {
+                "Unfreeze"
+            } else {
+                "Freeze"
+            },
+            true,
+        ),
         (ToolbarEvent::OpenConfigurator, "Config UI", true),
         (ToolbarEvent::OpenConfigFile, "Config file", true),
     ];
@@ -1088,7 +1179,10 @@ fn render_side_palette(
     let slider_knob_r = 6.0;
 
     // Undo delay label and slider
-    let undo_label = format!("Undo delay: {:.1}s", snapshot.undo_all_delay_ms as f64 / 1000.0);
+    let undo_label = format!(
+        "Undo delay: {:.1}s",
+        snapshot.undo_all_delay_ms as f64 / 1000.0
+    );
     ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
     ctx.set_font_size(11.0);
     ctx.move_to(x, delay_y + 10.0);
@@ -1101,7 +1195,13 @@ fn render_side_palette(
     let undo_t = delay_t_from_ms(snapshot.undo_all_delay_ms);
     let undo_knob_x = x + undo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(undo_knob_x, undo_slider_y + slider_h / 2.0, slider_knob_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(
+        undo_knob_x,
+        undo_slider_y + slider_h / 2.0,
+        slider_knob_r,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
     let _ = ctx.fill();
     hits.push(HitRegion {
         rect: (x, undo_slider_y - 4.0, sliders_w, slider_h + 8.0),
@@ -1110,7 +1210,10 @@ fn render_side_palette(
     });
 
     // Redo delay label and slider
-    let redo_label = format!("Redo delay: {:.1}s", snapshot.redo_all_delay_ms as f64 / 1000.0);
+    let redo_label = format!(
+        "Redo delay: {:.1}s",
+        snapshot.redo_all_delay_ms as f64 / 1000.0
+    );
     ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
     ctx.move_to(x + sliders_w / 2.0 + 10.0, delay_y + 10.0);
     let _ = ctx.show_text(&redo_label);
@@ -1122,7 +1225,13 @@ fn render_side_palette(
     let redo_t = delay_t_from_ms(snapshot.redo_all_delay_ms);
     let redo_knob_x = x + redo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(redo_knob_x, redo_slider_y + slider_h / 2.0, slider_knob_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(
+        redo_knob_x,
+        redo_slider_y + slider_h / 2.0,
+        slider_knob_r,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
     let _ = ctx.fill();
     hits.push(HitRegion {
         rect: (x, redo_slider_y - 4.0, sliders_w, slider_h + 8.0),
@@ -1289,7 +1398,11 @@ fn draw_checkbox(
     hover: bool,
     label: &str,
 ) {
-    let (r, g, b, a) = if hover { (0.32, 0.34, 0.4, 0.9) } else { (0.22, 0.24, 0.28, 0.75) };
+    let (r, g, b, a) = if hover {
+        (0.32, 0.34, 0.4, 0.9)
+    } else {
+        (0.22, 0.24, 0.28, 0.75)
+    };
     ctx.set_source_rgba(r, g, b, a);
     draw_round_rect(ctx, x, y, w, h, 4.0);
     let _ = ctx.fill();
