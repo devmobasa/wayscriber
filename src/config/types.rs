@@ -111,6 +111,30 @@ pub struct HistoryConfig {
     /// Delay in milliseconds between steps when running "redo all by delay"
     #[serde(default = "default_redo_all_delay_ms")]
     pub redo_all_delay_ms: u64,
+
+    /// Enable the custom undo/redo section in the toolbar
+    #[serde(default = "default_custom_section_enabled")]
+    pub custom_section_enabled: bool,
+
+    /// Delay in milliseconds between steps for custom undo
+    #[serde(default = "default_custom_undo_delay_ms")]
+    pub custom_undo_delay_ms: u64,
+
+    /// Delay in milliseconds between steps for custom redo
+    #[serde(default = "default_custom_redo_delay_ms")]
+    pub custom_redo_delay_ms: u64,
+
+    /// Number of steps to play when running custom undo
+    #[serde(default = "default_custom_undo_steps")]
+    pub custom_undo_steps: usize,
+
+    /// Number of steps to play when running custom redo
+    #[serde(default = "default_custom_redo_steps")]
+    pub custom_redo_steps: usize,
+
+    /// Render custom undo/redo controls as icons instead of text
+    #[serde(default = "default_custom_use_icons")]
+    pub custom_use_icons: bool,
 }
 
 impl Default for HistoryConfig {
@@ -118,6 +142,12 @@ impl Default for HistoryConfig {
         Self {
             undo_all_delay_ms: default_undo_all_delay_ms(),
             redo_all_delay_ms: default_redo_all_delay_ms(),
+            custom_section_enabled: default_custom_section_enabled(),
+            custom_undo_delay_ms: default_custom_undo_delay_ms(),
+            custom_redo_delay_ms: default_custom_redo_delay_ms(),
+            custom_undo_steps: default_custom_undo_steps(),
+            custom_redo_steps: default_custom_redo_steps(),
+            custom_use_icons: default_custom_use_icons(),
         }
     }
 }
@@ -420,6 +450,30 @@ fn default_undo_all_delay_ms() -> u64 {
 
 fn default_redo_all_delay_ms() -> u64 {
     1000
+}
+
+fn default_custom_section_enabled() -> bool {
+    false
+}
+
+fn default_custom_undo_delay_ms() -> u64 {
+    1000
+}
+
+fn default_custom_redo_delay_ms() -> u64 {
+    1000
+}
+
+fn default_custom_undo_steps() -> usize {
+    5
+}
+
+fn default_custom_redo_steps() -> usize {
+    5
+}
+
+fn default_custom_use_icons() -> bool {
+    false
 }
 
 fn default_buffer_count() -> u32 {
@@ -819,6 +873,18 @@ pub struct ToolbarConfig {
     /// Use icons instead of text labels in toolbars
     #[serde(default = "default_toolbar_use_icons")]
     pub use_icons: bool,
+
+    /// Show extended color palette
+    #[serde(default = "default_show_more_colors")]
+    pub show_more_colors: bool,
+
+    /// Show the Actions section (undo all, redo all, etc.)
+    #[serde(default = "default_show_actions_section")]
+    pub show_actions_section: bool,
+
+    /// Show delay sliders in Step Undo/Redo section
+    #[serde(default = "default_show_delay_sliders")]
+    pub show_delay_sliders: bool,
 }
 
 impl Default for ToolbarConfig {
@@ -827,6 +893,9 @@ impl Default for ToolbarConfig {
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
             use_icons: default_toolbar_use_icons(),
+            show_more_colors: default_show_more_colors(),
+            show_actions_section: default_show_actions_section(),
+            show_delay_sliders: default_show_delay_sliders(),
         }
     }
 }
@@ -841,4 +910,16 @@ fn default_toolbar_side_pinned() -> bool {
 
 fn default_toolbar_use_icons() -> bool {
     true
+}
+
+fn default_show_more_colors() -> bool {
+    false
+}
+
+fn default_show_actions_section() -> bool {
+    true
+}
+
+fn default_show_delay_sliders() -> bool {
+    false
 }

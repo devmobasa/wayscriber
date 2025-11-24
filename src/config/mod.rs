@@ -197,15 +197,31 @@ mod tests {
         let mut config = Config::default();
         config.history.undo_all_delay_ms = 0;
         config.history.redo_all_delay_ms = 1;
+        config.history.custom_undo_delay_ms = 0;
+        config.history.custom_redo_delay_ms = 10_000;
+        config.history.custom_undo_steps = 0;
+        config.history.custom_redo_steps = 1_000;
         config.validate_and_clamp();
         assert_eq!(config.history.undo_all_delay_ms, 50);
         assert_eq!(config.history.redo_all_delay_ms, 50);
+        assert_eq!(config.history.custom_undo_delay_ms, 50);
+        assert_eq!(config.history.custom_redo_delay_ms, 5_000);
+        assert_eq!(config.history.custom_undo_steps, 1);
+        assert_eq!(config.history.custom_redo_steps, 500);
 
         config.history.undo_all_delay_ms = 20_000;
         config.history.redo_all_delay_ms = 10_000;
+        config.history.custom_undo_delay_ms = 20_000;
+        config.history.custom_redo_delay_ms = 10_000;
+        config.history.custom_undo_steps = 9999;
+        config.history.custom_redo_steps = 9999;
         config.validate_and_clamp();
         assert_eq!(config.history.undo_all_delay_ms, 5_000);
         assert_eq!(config.history.redo_all_delay_ms, 5_000);
+        assert_eq!(config.history.custom_undo_delay_ms, 5_000);
+        assert_eq!(config.history.custom_redo_delay_ms, 5_000);
+        assert_eq!(config.history.custom_undo_steps, 500);
+        assert_eq!(config.history.custom_redo_steps, 500);
     }
 
     #[test]
@@ -390,38 +406,36 @@ impl Config {
         // History delays: clamp to a reasonable range to avoid long freezes or instant drains.
         const MAX_DELAY_MS: u64 = 5_000;
         const MIN_DELAY_MS: u64 = 50;
-        if self.history.undo_all_delay_ms < MIN_DELAY_MS {
-            log::warn!(
-                "undo_all_delay_ms {}ms too small; clamping to {}ms",
-                self.history.undo_all_delay_ms,
-                MIN_DELAY_MS
-            );
-            self.history.undo_all_delay_ms = MIN_DELAY_MS;
-        }
-        if self.history.undo_all_delay_ms > MAX_DELAY_MS {
-            log::warn!(
-                "undo_all_delay_ms {}ms too large; clamping to {}ms",
-                self.history.undo_all_delay_ms,
-                MAX_DELAY_MS
-            );
-            self.history.undo_all_delay_ms = MAX_DELAY_MS;
-        }
-        if self.history.redo_all_delay_ms < MIN_DELAY_MS {
-            log::warn!(
-                "redo_all_delay_ms {}ms too small; clamping to {}ms",
-                self.history.redo_all_delay_ms,
-                MIN_DELAY_MS
-            );
-            self.history.redo_all_delay_ms = MIN_DELAY_MS;
-        }
-        if self.history.redo_all_delay_ms > MAX_DELAY_MS {
-            log::warn!(
-                "redo_all_delay_ms {}ms too large; clamping to {}ms",
-                self.history.redo_all_delay_ms,
-                MAX_DELAY_MS
-            );
-            self.history.redo_all_delay_ms = MAX_DELAY_MS;
-        }
+        let clamp_delay = |label: &str, value: &mut u64| {
+            if *value < MIN_DELAY_MS {
+                log::warn!("{} {}ms too small; clamping to {}ms", label, *value, MIN_DELAY_MS);
+                *value = MIN_DELAY_MS;
+            }
+            if *value > MAX_DELAY_MS {
+                log::warn!("{} {}ms too large; clamping to {}ms", label, *value, MAX_DELAY_MS);
+                *value = MAX_DELAY_MS;
+            }
+        };
+        clamp_delay("undo_all_delay_ms", &mut self.history.undo_all_delay_ms);
+        clamp_delay("redo_all_delay_ms", &mut self.history.redo_all_delay_ms);
+        clamp_delay("custom_undo_delay_ms", &mut self.history.custom_undo_delay_ms);
+        clamp_delay("custom_redo_delay_ms", &mut self.history.custom_redo_delay_ms);
+
+        // Custom history step counts: clamp to sane bounds.
+        const MIN_STEPS: usize = 1;
+        const MAX_STEPS: usize = 500;
+        let clamp_steps = |label: &str, value: &mut usize| {
+            if *value < MIN_STEPS {
+                log::warn!("{} {} too small; clamping to {}", label, *value, MIN_STEPS);
+                *value = MIN_STEPS;
+            }
+            if *value > MAX_STEPS {
+                log::warn!("{} {} too large; clamping to {}", label, *value, MAX_STEPS);
+                *value = MAX_STEPS;
+            }
+        };
+        clamp_steps("custom_undo_steps", &mut self.history.custom_undo_steps);
+        clamp_steps("custom_redo_steps", &mut self.history.custom_redo_steps);
 
         // Arrow length: 5.0 - 50.0
         if !(5.0..=50.0).contains(&self.arrow.length) {

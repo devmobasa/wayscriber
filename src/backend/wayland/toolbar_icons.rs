@@ -153,26 +153,33 @@ pub fn draw_icon_text(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
-/// Draw a highlighter tool icon
+/// Draw a highlighter tool icon (cursor with click ripple effect)
 #[allow(dead_code)]
 pub fn draw_icon_highlight(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
-    let stroke = (s * 0.15).max(2.0);
+    let stroke = (s * 0.1).max(1.5);
     ctx.set_line_width(stroke);
     ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
 
-    // Thick highlight stroke
-    ctx.move_to(x + s * 0.15, y + s * 0.7);
-    ctx.line_to(x + s * 0.85, y + s * 0.7);
-    let _ = ctx.stroke();
-
-    // Marker body outline
-    ctx.set_line_width((s * 0.08).max(1.0));
-    ctx.move_to(x + s * 0.25, y + s * 0.55);
-    ctx.line_to(x + s * 0.75, y + s * 0.55);
-    ctx.line_to(x + s * 0.75, y + s * 0.3);
-    ctx.line_to(x + s * 0.25, y + s * 0.3);
+    // Pointer/cursor arrow
+    ctx.move_to(x + s * 0.2, y + s * 0.15);
+    ctx.line_to(x + s * 0.2, y + s * 0.65);
+    ctx.line_to(x + s * 0.35, y + s * 0.52);
+    ctx.line_to(x + s * 0.5, y + s * 0.75);
+    ctx.line_to(x + s * 0.58, y + s * 0.7);
+    ctx.line_to(x + s * 0.43, y + s * 0.47);
+    ctx.line_to(x + s * 0.58, y + s * 0.4);
     ctx.close_path();
+    let _ = ctx.fill();
+
+    // Ripple circles around click point
+    ctx.set_line_width((s * 0.08).max(1.0));
+    // Inner ripple
+    ctx.arc(x + s * 0.7, y + s * 0.55, s * 0.12, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+    // Outer ripple
+    ctx.arc(x + s * 0.7, y + s * 0.55, s * 0.22, 0.0, PI * 2.0);
     let _ = ctx.stroke();
 }
 
@@ -263,6 +270,150 @@ pub fn draw_icon_redo_all(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
     ctx.move_to(x + s * 0.77, y + s * 0.5);
     ctx.line_to(x + s * 0.62, y + s * 0.54);
+    let _ = ctx.stroke();
+}
+
+/// Draw an undo all delay icon (double curved arrow left with clock)
+pub fn draw_icon_undo_all_delay(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    // First arrow (slightly smaller and higher)
+    ctx.arc_negative(x + s * 0.4, y + s * 0.4, s * 0.18, PI * 0.2, PI * 1.0);
+    let _ = ctx.stroke();
+
+    // Second arrow (behind)
+    ctx.arc_negative(x + s * 0.52, y + s * 0.4, s * 0.18, PI * 0.2, PI * 1.0);
+    let _ = ctx.stroke();
+
+    // Arrow head
+    ctx.move_to(x + s * 0.22, y + s * 0.4);
+    ctx.line_to(x + s * 0.30, y + s * 0.30);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.22, y + s * 0.4);
+    ctx.line_to(x + s * 0.34, y + s * 0.44);
+    let _ = ctx.stroke();
+
+    // Small clock indicator at bottom right
+    let clock_r = s * 0.14;
+    let clock_x = x + s * 0.72;
+    let clock_y = y + s * 0.72;
+    ctx.arc(clock_x, clock_y, clock_r, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+    // Clock hands
+    ctx.move_to(clock_x, clock_y);
+    ctx.line_to(clock_x, clock_y - clock_r * 0.6);
+    let _ = ctx.stroke();
+    ctx.move_to(clock_x, clock_y);
+    ctx.line_to(clock_x + clock_r * 0.5, clock_y);
+    let _ = ctx.stroke();
+}
+
+/// Draw a redo all delay icon (double curved arrow right with clock)
+pub fn draw_icon_redo_all_delay(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    // First arrow (slightly smaller and higher)
+    ctx.arc(x + s * 0.6, y + s * 0.4, s * 0.18, PI * 0.8, PI * 0.0);
+    let _ = ctx.stroke();
+
+    // Second arrow (behind)
+    ctx.arc(x + s * 0.48, y + s * 0.4, s * 0.18, PI * 0.8, PI * 0.0);
+    let _ = ctx.stroke();
+
+    // Arrow head
+    ctx.move_to(x + s * 0.78, y + s * 0.4);
+    ctx.line_to(x + s * 0.70, y + s * 0.30);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.78, y + s * 0.4);
+    ctx.line_to(x + s * 0.66, y + s * 0.44);
+    let _ = ctx.stroke();
+
+    // Small clock indicator at bottom left
+    let clock_r = s * 0.14;
+    let clock_x = x + s * 0.28;
+    let clock_y = y + s * 0.72;
+    ctx.arc(clock_x, clock_y, clock_r, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+    // Clock hands
+    ctx.move_to(clock_x, clock_y);
+    ctx.line_to(clock_x, clock_y - clock_r * 0.6);
+    let _ = ctx.stroke();
+    ctx.move_to(clock_x, clock_y);
+    ctx.line_to(clock_x + clock_r * 0.5, clock_y);
+    let _ = ctx.stroke();
+}
+
+/// Draw a step undo icon (curved arrow with step indicator)
+pub fn draw_icon_step_undo(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Curved arrow (positioned higher to make room for step bar)
+    ctx.arc_negative(x + s * 0.5, y + s * 0.4, s * 0.25, PI * 0.2, PI * 1.0);
+    let _ = ctx.stroke();
+
+    // Arrow head
+    ctx.move_to(x + s * 0.25, y + s * 0.4);
+    ctx.line_to(x + s * 0.35, y + s * 0.28);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.25, y + s * 0.4);
+    ctx.line_to(x + s * 0.4, y + s * 0.45);
+    let _ = ctx.stroke();
+
+    // Step indicator bars at bottom
+    ctx.set_line_width((s * 0.08).max(1.5));
+    let bar_y = y + s * 0.78;
+    ctx.move_to(x + s * 0.25, bar_y);
+    ctx.line_to(x + s * 0.4, bar_y);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.45, bar_y);
+    ctx.line_to(x + s * 0.6, bar_y);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.65, bar_y);
+    ctx.line_to(x + s * 0.75, bar_y);
+    let _ = ctx.stroke();
+}
+
+/// Draw a step redo icon (curved arrow with step indicator)
+pub fn draw_icon_step_redo(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Curved arrow (positioned higher to make room for step bar)
+    ctx.arc(x + s * 0.5, y + s * 0.4, s * 0.25, PI * 0.8, PI * 0.0);
+    let _ = ctx.stroke();
+
+    // Arrow head
+    ctx.move_to(x + s * 0.75, y + s * 0.4);
+    ctx.line_to(x + s * 0.65, y + s * 0.28);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.75, y + s * 0.4);
+    ctx.line_to(x + s * 0.6, y + s * 0.45);
+    let _ = ctx.stroke();
+
+    // Step indicator bars at bottom
+    ctx.set_line_width((s * 0.08).max(1.5));
+    let bar_y = y + s * 0.78;
+    ctx.move_to(x + s * 0.25, bar_y);
+    ctx.line_to(x + s * 0.4, bar_y);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.45, bar_y);
+    ctx.line_to(x + s * 0.6, bar_y);
+    let _ = ctx.stroke();
+    ctx.move_to(x + s * 0.65, bar_y);
+    ctx.line_to(x + s * 0.75, bar_y);
     let _ = ctx.stroke();
 }
 
