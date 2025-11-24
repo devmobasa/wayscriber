@@ -1506,14 +1506,13 @@ fn render_side_palette(
                 let icon_y = by + (icon_btn_size - icon_size) / 2.0;
                 icon_fn(ctx, icon_x, icon_y, icon_size);
 
-                if *enabled {
-                    hits.push(HitRegion {
-                        rect: (bx, by, icon_btn_size, icon_btn_size),
-                        event: evt.clone(),
-                        kind: HitKind::Click,
-                        tooltip: Some(*label),
-                    });
-                }
+                // Always add hit region for tooltip, even when disabled
+                hits.push(HitRegion {
+                    rect: (bx, by, icon_btn_size, icon_btn_size),
+                    event: evt.clone(),
+                    kind: HitKind::Click,
+                    tooltip: Some(*label),
+                });
             }
         } else {
             // Text mode: render text buttons in a 2-column grid
