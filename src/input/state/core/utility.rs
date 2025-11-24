@@ -1,7 +1,7 @@
 use super::base::InputState;
 use crate::config::Action;
-use crate::util::Rect;
 use crate::config::Config;
+use crate::util::Rect;
 use std::process::{Command, Stdio};
 
 impl InputState {
@@ -144,14 +144,14 @@ impl InputState {
 
         match cmd.spawn() {
             Ok(child) => {
-                log::info!("Opened config file at {} (pid {})", path.display(), child.id());
+                log::info!(
+                    "Opened config file at {} (pid {})",
+                    path.display(),
+                    child.id()
+                );
             }
             Err(err) => {
-                log::error!(
-                    "Failed to open config file at {}: {}",
-                    path.display(),
-                    err
-                );
+                log::error!("Failed to open config file at {}: {}", path.display(), err);
             }
         }
     }

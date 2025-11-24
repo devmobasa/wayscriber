@@ -8,11 +8,11 @@ use smithay_client_toolkit::{
     shm::{Shm, slot::SlotPool},
 };
 use wayland_client::{
-    QueueHandle, Proxy,
+    Proxy, QueueHandle,
     protocol::{wl_output, wl_surface},
 };
 
-use crate::draw::{Color, FontDescriptor, BLACK, BLUE, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
+use crate::draw::{BLACK, BLUE, Color, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::Tool;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
@@ -34,11 +34,12 @@ impl HitRegion {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 enum HitKind {
     Click,
     DragSetThickness,
     DragSetFontSize,
+    PickColor { x: f64, y: f64, w: f64, h: f64 },
 }
 
 #[derive(Debug)]
@@ -182,7 +183,12 @@ impl ToolbarSurface {
         }
     }
 
-    fn render(&mut self, shm: &Shm, snapshot: &ToolbarSnapshot, hover: Option<(f64, f64)>) -> Result<()> {
+    fn render(
+        &mut self,
+        shm: &Shm,
+        snapshot: &ToolbarSnapshot,
+        hover: Option<(f64, f64)>,
+    ) -> Result<()> {
         if !self.configured || !self.dirty || self.width == 0 || self.height == 0 {
             return Ok(());
         }
@@ -194,7 +200,8 @@ impl ToolbarSurface {
 
         if self.pool.is_none() {
             let buffer_size = (phys_w * phys_h * 4) as usize;
-            let pool = SlotPool::new(buffer_size, shm).context("Failed to create toolbar SlotPool")?;
+            let pool =
+                SlotPool::new(buffer_size, shm).context("Failed to create toolbar SlotPool")?;
             self.pool = Some(pool);
         }
 
@@ -218,7 +225,8 @@ impl ToolbarSurface {
             )
         }
         .context("Failed to create cairo surface for toolbar")?;
-        let ctx = cairo::Context::new(&surface).context("Failed to create cairo context for toolbar")?;
+        let ctx =
+            cairo::Context::new(&surface).context("Failed to create cairo context for toolbar")?;
 
         ctx.set_operator(cairo::Operator::Clear);
         ctx.paint()?;
@@ -280,7 +288,12 @@ impl ToolbarSurface {
     fn hit_at(&self, x: f64, y: f64) -> Option<(ToolbarEvent, bool)> {
         for hit in &self.hit_regions {
             if hit.contains(x, y) {
-                let start_drag = matches!(hit.kind, HitKind::DragSetThickness | HitKind::DragSetFontSize);
+                let start_drag = matches!(
+                    hit.kind,
+                    HitKind::DragSetThickness
+                        | HitKind::DragSetFontSize
+                        | HitKind::PickColor { .. }
+                );
                 let event = match hit.kind {
                     HitKind::DragSetThickness => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
@@ -291,6 +304,11 @@ impl ToolbarSurface {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
                         let value = 8.0 + t * (72.0 - 8.0);
                         ToolbarEvent::SetFontSize(value)
+                    }
+                    HitKind::PickColor { x: px, y: py, w, h } => {
+                        let hue = ((x - px) / w).clamp(0.0, 1.0);
+                        let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
+                        ToolbarEvent::SetColor(hsv_to_rgb(hue, 1.0, value))
                     }
                     HitKind::Click => hit.event.clone(),
                 };
@@ -313,6 +331,11 @@ impl ToolbarSurface {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
                         let value = 8.0 + t * (72.0 - 8.0);
                         return Some(ToolbarEvent::SetFontSize(value));
+                    }
+                    HitKind::PickColor { x: px, y: py, w, h } => {
+                        let hue = ((x - px) / w).clamp(0.0, 1.0);
+                        let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
+                        return Some(ToolbarEvent::SetColor(hsv_to_rgb(hue, 1.0, value)));
                     }
                     _ => {}
                 }
@@ -573,21 +596,45 @@ fn render_top_strip(
 
     for (tool, label) in buttons {
         let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
-        let is_hover =
-            hover.map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h)).unwrap_or(false);
+        let is_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+            .unwrap_or(false);
         draw_button(ctx, x, y, btn_w, btn_h, is_active, is_hover);
         draw_label_center(ctx, x, y, btn_w, btn_h, label);
-            hits.push(HitRegion {
-                rect: (x, y, btn_w, btn_h),
-                event: ToolbarEvent::SelectTool(*tool),
-                kind: HitKind::Click,
-            });
-            x += btn_w + gap;
-        }
+        hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::SelectTool(*tool),
+            kind: HitKind::Click,
+        });
+        x += btn_w + gap;
+    }
+
+    // Fill toggle
+    let fill_w = 64.0;
+    let fill_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, fill_w, btn_h))
+        .unwrap_or(false);
+    draw_checkbox(
+        ctx,
+        x,
+        y,
+        fill_w,
+        btn_h,
+        snapshot.fill_enabled,
+        fill_hover,
+        "Fill",
+    );
+    hits.push(HitRegion {
+        rect: (x, y, fill_w, btn_h),
+        event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+        kind: HitKind::Click,
+    });
+    x += fill_w + gap;
 
     // Text mode button
-    let is_hover =
-        hover.map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h)).unwrap_or(false);
+    let is_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+        .unwrap_or(false);
     let text_active = snapshot.text_active;
     draw_button(ctx, x, y, btn_w, btn_h, text_active, is_hover);
     draw_label_center(ctx, x, y, btn_w, btn_h, "Text");
@@ -710,7 +757,14 @@ fn render_side_palette(
     let pin_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, header_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_pin_button(ctx, pin_x, header_y, btn_size, snapshot.side_pinned, pin_hover);
+    draw_pin_button(
+        ctx,
+        pin_x,
+        header_y,
+        btn_size,
+        snapshot.side_pinned,
+        pin_hover,
+    );
     hits.push(HitRegion {
         rect: (pin_x, header_y, btn_size, btn_size),
         event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
@@ -736,9 +790,26 @@ fn render_side_palette(
     let section_gap = 12.0;
 
     // ===== Colors Section =====
-    let colors_card_h = 90.0;
+    let colors_card_h = 130.0;
     draw_group_card(ctx, card_x, y, card_w, colors_card_h);
     draw_section_label(ctx, x, y + 14.0, "Colors");
+
+    // Inline color picker (hue/value)
+    let picker_w = card_w - 12.0;
+    let picker_h = 26.0;
+    let picker_x = x;
+    let picker_y = y + 24.0;
+    draw_color_picker(ctx, picker_x, picker_y, picker_w, picker_h);
+    hits.push(HitRegion {
+        rect: (picker_x, picker_y, picker_w, picker_h),
+        event: ToolbarEvent::SetColor(snapshot.color),
+        kind: HitKind::PickColor {
+            x: picker_x,
+            y: picker_y,
+            w: picker_w,
+            h: picker_h,
+        },
+    });
 
     let colors: &[(Color, &str)] = &[
         (RED, "Red"),
@@ -749,12 +820,48 @@ fn render_side_palette(
         (PINK, "Pink"),
         (WHITE, "White"),
         (BLACK, "Black"),
+        (
+            Color {
+                r: 0.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            "Cyan",
+        ),
+        (
+            Color {
+                r: 0.6,
+                g: 0.4,
+                b: 0.8,
+                a: 1.0,
+            },
+            "Purple",
+        ),
+        (
+            Color {
+                r: 1.0,
+                g: 0.84,
+                b: 0.0,
+                a: 1.0,
+            },
+            "Gold",
+        ),
+        (
+            Color {
+                r: 0.25,
+                g: 0.25,
+                b: 0.25,
+                a: 1.0,
+            },
+            "Gray",
+        ),
     ];
 
     let swatch = 26.0;
     let gap = 10.0;
     let mut cx = x;
-    let mut row_y = y + 28.0;
+    let mut row_y = picker_y + picker_h + 10.0;
     for (color, _name) in colors {
         draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
         hits.push(HitRegion {
@@ -790,7 +897,13 @@ fn render_side_palette(
     let _ = ctx.fill();
     // Knob
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(knob_x, track_y + track_h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(
+        knob_x,
+        track_y + track_h / 2.0,
+        knob_r,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
     let _ = ctx.fill();
 
     // Minus/Plus nudge buttons
@@ -815,7 +928,14 @@ fn render_side_palette(
 
     // Thickness readout
     let thickness_text = format!("{:.0}px", snapshot.thickness);
-    draw_label_center(ctx, x + btn_w * 2.0 + 30.0, btn_y, 80.0, btn_h, &thickness_text);
+    draw_label_center(
+        ctx,
+        x + btn_w * 2.0 + 30.0,
+        btn_y,
+        80.0,
+        btn_h,
+        &thickness_text,
+    );
 
     hits.push(HitRegion {
         rect: (x, track_y - 6.0, track_w, track_h + 12.0),
@@ -843,7 +963,13 @@ fn render_side_palette(
     ctx.rectangle(x, fs_track_y, fs_track_w, fs_track_h);
     let _ = ctx.fill();
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(fs_knob_x, fs_track_y + fs_track_h / 2.0, fs_knob_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(
+        fs_knob_x,
+        fs_track_y + fs_track_h / 2.0,
+        fs_knob_r,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
     let _ = ctx.fill();
 
     // Font size nudges/readout
@@ -858,7 +984,15 @@ fn render_side_palette(
         kind: HitKind::Click,
     });
 
-    draw_button(ctx, x + fs_btn_w + 8.0, fs_btn_y, fs_btn_w, fs_btn_h, false, false);
+    draw_button(
+        ctx,
+        x + fs_btn_w + 8.0,
+        fs_btn_y,
+        fs_btn_w,
+        fs_btn_h,
+        false,
+        false,
+    );
     draw_label_center(ctx, x + fs_btn_w + 8.0, fs_btn_y, fs_btn_w, fs_btn_h, "+");
     hits.push(HitRegion {
         rect: (x + fs_btn_w + 8.0, fs_btn_y, fs_btn_w, fs_btn_h),
@@ -867,7 +1001,14 @@ fn render_side_palette(
     });
 
     let fs_text = format!("{:.0}px", snapshot.font_size);
-    draw_label_center(ctx, x + fs_btn_w * 2.0 + 24.0, fs_btn_y, 80.0, fs_btn_h, &fs_text);
+    draw_label_center(
+        ctx,
+        x + fs_btn_w * 2.0 + 24.0,
+        fs_btn_y,
+        80.0,
+        fs_btn_h,
+        &fs_text,
+    );
 
     hits.push(HitRegion {
         rect: (x, fs_track_y - 8.0, fs_track_w, fs_track_h + 16.0),
@@ -887,7 +1028,11 @@ fn render_side_palette(
     let font_btn_w = (width - 2.0 * x - font_gap) / 2.0;
     let fonts = [
         FontDescriptor::new("Sans".to_string(), "bold".to_string(), "normal".to_string()),
-        FontDescriptor::new("Monospace".to_string(), "normal".to_string(), "normal".to_string()),
+        FontDescriptor::new(
+            "Monospace".to_string(),
+            "normal".to_string(),
+            "normal".to_string(),
+        ),
     ];
     let mut fx = x;
     let fy = y + 22.0;
@@ -909,7 +1054,7 @@ fn render_side_palette(
     y += font_card_h + section_gap;
 
     // ===== Actions Section =====
-    let actions_card_h = 140.0;
+    let actions_card_h = 220.0;
     draw_group_card(ctx, card_x, y, card_w, actions_card_h);
     draw_section_label(ctx, x, y + 14.0, "Actions");
 
@@ -921,10 +1066,26 @@ fn render_side_palette(
     let actions: &[(ToolbarEvent, &str, bool)] = &[
         (ToolbarEvent::Undo, "Undo", snapshot.undo_available),
         (ToolbarEvent::Redo, "Redo", snapshot.redo_available),
+        (ToolbarEvent::UndoAll, "Undo All", snapshot.undo_available),
+        (ToolbarEvent::RedoAll, "Redo All", snapshot.redo_available),
+        (
+            ToolbarEvent::UndoAllDelayed,
+            "Undo All (delay)",
+            snapshot.undo_available,
+        ),
+        (
+            ToolbarEvent::RedoAllDelayed,
+            "Redo All (delay)",
+            snapshot.redo_available,
+        ),
         (ToolbarEvent::ClearCanvas, "Clear", true),
         (
             ToolbarEvent::ToggleFreeze,
-            if snapshot.frozen_active { "Unfreeze" } else { "Freeze" },
+            if snapshot.frozen_active {
+                "Unfreeze"
+            } else {
+                "Freeze"
+            },
             true,
         ),
         (ToolbarEvent::OpenConfigurator, "Config UI", true),
@@ -958,11 +1119,6 @@ fn render_side_palette(
     draw_section_label(ctx, x, y + 14.0, "Toggles");
 
     let toggles: &[(ToolbarEvent, &str, bool)] = &[
-        (
-            ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-            "Fill shapes",
-            snapshot.fill_enabled,
-        ),
         (
             ToolbarEvent::ToggleHighlightTool(!snapshot.highlight_tool_active),
             "Highlight tool",
@@ -1005,7 +1161,16 @@ fn draw_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, active: boo
     let _ = ctx.fill();
 }
 
-fn draw_toggle_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, active: bool, hover: bool, label: &str) {
+fn draw_toggle_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    active: bool,
+    hover: bool,
+    label: &str,
+) {
     // Draw button background
     let (r, g, b, a) = if hover {
         (0.35, 0.35, 0.45, 0.85)
@@ -1078,7 +1243,6 @@ fn draw_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color, ac
     draw_round_rect(ctx, x, y, size, size, 4.0);
     let _ = ctx.fill();
 
-    // Add border to dark colors for visibility on dark background
     let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
     if luminance < 0.3 {
         ctx.set_source_rgba(0.5, 0.5, 0.5, 0.8);
@@ -1095,12 +1259,178 @@ fn draw_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color, ac
     }
 }
 
+fn draw_checkbox(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    checked: bool,
+    hover: bool,
+    label: &str,
+) {
+    let (r, g, b, a) = if hover {
+        (0.35, 0.35, 0.45, 0.85)
+    } else {
+        (0.2, 0.22, 0.26, 0.75)
+    };
+    ctx.set_source_rgba(r, g, b, a);
+    draw_round_rect(ctx, x, y, w, h, 6.0);
+    let _ = ctx.fill();
+
+    let box_size = h - 10.0;
+    let box_x = x + 8.0;
+    let box_y = y + (h - box_size) / 2.0;
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    ctx.rectangle(box_x, box_y, box_size, box_size);
+    ctx.set_line_width(2.0);
+    let _ = ctx.stroke();
+    if checked {
+        ctx.move_to(box_x + 4.0, box_y + box_size / 2.0);
+        ctx.line_to(box_x + box_size / 2.0, box_y + box_size - 4.0);
+        ctx.line_to(box_x + box_size - 4.0, box_y + 4.0);
+        let _ = ctx.stroke();
+    }
+
+    draw_label_left(
+        ctx,
+        box_x + box_size + 8.0,
+        y,
+        w - box_size - 16.0,
+        h,
+        label,
+    );
+}
+
+fn draw_color_picker(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
+    let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
+    hue_grad.add_color_stop_rgba(0.0, 1.0, 0.0, 0.0, 1.0);
+    hue_grad.add_color_stop_rgba(0.17, 1.0, 1.0, 0.0, 1.0);
+    hue_grad.add_color_stop_rgba(0.33, 0.0, 1.0, 0.0, 1.0);
+    hue_grad.add_color_stop_rgba(0.5, 0.0, 1.0, 1.0, 1.0);
+    hue_grad.add_color_stop_rgba(0.66, 0.0, 0.0, 1.0, 1.0);
+    hue_grad.add_color_stop_rgba(0.83, 1.0, 0.0, 1.0, 1.0);
+    hue_grad.add_color_stop_rgba(1.0, 1.0, 0.0, 0.0, 1.0);
+
+    ctx.rectangle(x, y, w, h);
+    let _ = ctx.set_source(&hue_grad);
+    let _ = ctx.fill();
+
+    let val_grad = cairo::LinearGradient::new(x, y, x, y + h);
+    val_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 0.0);
+    val_grad.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.65);
+    ctx.rectangle(x, y, w, h);
+    let _ = ctx.set_source(&val_grad);
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.4);
+    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+fn hsv_to_rgb(h: f64, s: f64, v: f64) -> Color {
+    let h = (h - h.floor()).clamp(0.0, 1.0) * 6.0;
+    let i = h.floor();
+    let f = h - i;
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - s * f);
+    let t = v * (1.0 - s * (1.0 - f));
+    let (r, g, b) = match i as i32 {
+        0 => (v, t, p),
+        1 => (q, v, p),
+        2 => (p, v, t),
+        3 => (p, q, v),
+        4 => (t, p, v),
+        _ => (v, p, q),
+    };
+    Color { r, g, b, a: 1.0 }
+}
+
 fn draw_round_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, radius: f64) {
     let r = radius.min(w / 2.0).min(h / 2.0);
     ctx.new_sub_path();
     ctx.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
     ctx.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
-    ctx.arc(x + r, y + h - r, r, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
-    ctx.arc(x + r, y + r, r, std::f64::consts::PI, std::f64::consts::PI * 1.5);
+    ctx.arc(
+        x + r,
+        y + h - r,
+        r,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
+    ctx.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        std::f64::consts::PI * 1.5,
+    );
     ctx.close_path();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hsv_to_rgb_matches_primary_points() {
+        let red = hsv_to_rgb(0.0, 1.0, 1.0);
+        assert!((red.r - 1.0).abs() < 1e-6 && red.g.abs() < 1e-6 && red.b.abs() < 1e-6);
+
+        let green = hsv_to_rgb(1.0 / 3.0, 1.0, 1.0);
+        assert!((green.g - 1.0).abs() < 1e-6 && green.r.abs() < 1e-6 && green.b.abs() < 1e-6);
+
+        let blue = hsv_to_rgb(2.0 / 3.0, 1.0, 1.0);
+        assert!((blue.b - 1.0).abs() < 1e-6 && blue.r.abs() < 1e-6 && blue.g.abs() < 1e-6);
+    }
+
+    #[test]
+    fn thickness_drag_maps_to_expected_value() {
+        let mut surface = ToolbarSurface::new("test", Anchor::TOP, (0, 0, 0, 0));
+        surface.hit_regions.push(HitRegion {
+            rect: (0.0, 0.0, 100.0, 10.0),
+            event: ToolbarEvent::SetThickness(1.0),
+            kind: HitKind::DragSetThickness,
+        });
+
+        let (evt, drag) = surface.hit_at(50.0, 5.0).expect("hit expected");
+        assert!(drag, "drag flag should be true for thickness slider");
+        match evt {
+            ToolbarEvent::SetThickness(value) => {
+                assert!((value - 20.5).abs() < 0.01, "expected mid-range thickness");
+            }
+            other => panic!("unexpected event from drag: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn color_picker_drag_emits_color_event() {
+        let mut surface = ToolbarSurface::new("test", Anchor::TOP, (0, 0, 0, 0));
+        surface.hit_regions.push(HitRegion {
+            rect: (0.0, 0.0, 100.0, 100.0),
+            event: ToolbarEvent::SetColor(Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            }),
+            kind: HitKind::PickColor {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 100.0,
+            },
+        });
+
+        let (evt, drag) = surface.hit_at(50.0, 50.0).expect("hit expected");
+        assert!(drag, "color picker should initiate drag");
+        match evt {
+            ToolbarEvent::SetColor(c) => {
+                // Hue at midpoint with value 0.5 should yield equal green/blue components
+                assert!((c.g - 0.5).abs() < 0.05 && (c.b - 0.5).abs() < 0.05);
+            }
+            other => panic!("unexpected event from color picker: {:?}", other),
+        }
+    }
 }

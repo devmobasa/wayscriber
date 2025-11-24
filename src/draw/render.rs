@@ -343,7 +343,7 @@ fn render_rect(
     ctx.rectangle(norm_x, norm_y, norm_w, norm_h);
     if fill {
         let _ = ctx.save();
-        ctx.set_source_rgba(color.r, color.g, color.b, (color.a * 0.35).min(1.0));
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
         let _ = ctx.fill_preserve();
         let _ = ctx.restore();
     }
@@ -374,7 +374,7 @@ fn render_ellipse(
     ctx.arc(0.0, 0.0, 1.0, 0.0, 2.0 * std::f64::consts::PI);
     if fill {
         let _ = ctx.save();
-        ctx.set_source_rgba(color.r, color.g, color.b, (color.a * 0.35).min(1.0));
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
         let _ = ctx.fill_preserve();
         ctx.restore().ok();
     }

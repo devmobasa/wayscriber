@@ -14,6 +14,7 @@ fn make_input_state() -> InputState {
             a: 1.0,
         },
         4.0,
+        false,
         32.0,
         wayscriber::draw::FontDescriptor::default(),
         false,
@@ -24,6 +25,8 @@ fn make_input_state() -> InputState {
         action_map,
         usize::MAX,
         ClickHighlightSettings::disabled(),
+        0,
+        0,
     )
 }
 

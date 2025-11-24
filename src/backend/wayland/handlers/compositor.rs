@@ -22,7 +22,8 @@ impl CompositorHandler for WaylandState {
         debug!("Scale factor changed to {}", scale);
         self.surface.set_scale(scale);
         let (phys_w, phys_h) = self.surface.physical_dimensions();
-        self.frozen.handle_resize(phys_w, phys_h, &mut self.input_state);
+        self.frozen
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.toolbar
             .maybe_update_scale(self.surface.current_output().as_ref(), scale);
         self.toolbar.mark_dirty();

@@ -6,9 +6,9 @@ mod history;
 mod index;
 mod menus;
 mod properties;
-mod tool_controls;
 mod selection;
 mod selection_actions;
+mod tool_controls;
 mod utility;
 
 pub use base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};

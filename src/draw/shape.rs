@@ -450,6 +450,7 @@ mod tests {
             cy: 150,
             rx: 40,
             ry: 20,
+            fill: false,
             color: WHITE,
             thick: 2.0,
         };

@@ -15,10 +15,11 @@ pub mod types;
 pub use enums::StatusPosition;
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
 pub use migration::{MigrationActions, MigrationReport, migrate_config};
+#[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
-    PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
-    ToolbarConfig, UiConfig,
+    HistoryConfig, PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode,
+    StatusBarStyle, ToolbarConfig, UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)
@@ -192,6 +193,16 @@ mod tests {
     }
 
     #[test]
+    fn validate_clamps_history_delays() {
+        let mut config = Config::default();
+        config.history.undo_all_delay_ms = 20_000;
+        config.history.redo_all_delay_ms = 10_000;
+        config.validate_and_clamp();
+        assert_eq!(config.history.undo_all_delay_ms, 5_000);
+        assert_eq!(config.history.redo_all_delay_ms, 5_000);
+    }
+
+    #[test]
     fn save_with_backup_creates_timestamped_file() {
         with_temp_config_home(|config_root| {
             let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
@@ -271,6 +282,10 @@ pub struct Config {
     #[serde(default)]
     pub drawing: DrawingConfig,
 
+    /// History playback settings
+    #[serde(default)]
+    pub history: HistoryConfig,
+
     /// Arrow appearance settings
     #[serde(default)]
     pub arrow: ArrowConfig,
@@ -306,7 +321,7 @@ impl Config {
     pub fn json_schema() -> Value {
         serde_json::to_value(schema_for!(Config))
             .expect("serializing configuration schema should succeed")
-    }
+}
 
     /// Validates and clamps all configuration values to acceptable ranges.
     ///
@@ -364,6 +379,25 @@ impl Config {
                 self.drawing.undo_stack_limit
             );
             self.drawing.undo_stack_limit = self.drawing.undo_stack_limit.clamp(10, 1000);
+        }
+
+        // History delays: clamp to a reasonable ceiling (5s) to avoid long freezes.
+        const MAX_DELAY_MS: u64 = 5_000;
+        if self.history.undo_all_delay_ms > MAX_DELAY_MS {
+            log::warn!(
+                "undo_all_delay_ms {}ms too large; clamping to {}ms",
+                self.history.undo_all_delay_ms,
+                MAX_DELAY_MS
+            );
+            self.history.undo_all_delay_ms = MAX_DELAY_MS;
+        }
+        if self.history.redo_all_delay_ms > MAX_DELAY_MS {
+            log::warn!(
+                "redo_all_delay_ms {}ms too large; clamping to {}ms",
+                self.history.redo_all_delay_ms,
+                MAX_DELAY_MS
+            );
+            self.history.redo_all_delay_ms = MAX_DELAY_MS;
         }
 
         // Arrow length: 5.0 - 50.0

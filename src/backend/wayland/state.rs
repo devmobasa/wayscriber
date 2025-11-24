@@ -7,7 +7,10 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
-    seat::{SeatState, pointer::{PointerData, ThemedPointer}},
+    seat::{
+        SeatState,
+        pointer::{PointerData, ThemedPointer},
+    },
     shell::{
         wlr_layer::{KeyboardInteractivity, LayerShell},
         xdg::XdgShell,
@@ -27,7 +30,7 @@ use crate::{
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },
-    config::{Action, Config},
+    config::{Action, ColorSpec, Config},
     input::{DrawingState, InputState},
     session::SessionOptions,
     ui::toolbar::{ToolbarEvent, ToolbarSnapshot},
@@ -35,10 +38,7 @@ use crate::{
 };
 
 use super::{
-    capture::CaptureState,
-    frozen::FrozenState,
-    session::SessionState,
-    surface::SurfaceState,
+    capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
     toolbar::ToolbarSurfaceManager,
 };
 
@@ -620,6 +620,15 @@ impl WaylandState {
             ToolbarEvent::PinTopToolbar(_) | ToolbarEvent::PinSideToolbar(_)
         );
 
+        let persist_drawing = matches!(
+            event,
+            ToolbarEvent::SetColor(_)
+                | ToolbarEvent::SetThickness(_)
+                | ToolbarEvent::SetFont(_)
+                | ToolbarEvent::SetFontSize(_)
+                | ToolbarEvent::ToggleFill(_)
+        );
+
         if self.input_state.apply_toolbar_event(event) {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
@@ -627,6 +636,10 @@ impl WaylandState {
             // Save config when pin state changes
             if needs_config_save {
                 self.save_toolbar_pin_config();
+            }
+
+            if persist_drawing {
+                self.save_drawing_preferences();
             }
         }
         self.refresh_keyboard_interactivity();
@@ -645,6 +658,20 @@ impl WaylandState {
                 self.config.ui.toolbar.top_pinned,
                 self.config.ui.toolbar.side_pinned
             );
+        }
+    }
+
+    fn save_drawing_preferences(&mut self) {
+        self.config.drawing.default_color = ColorSpec::from(self.input_state.current_color);
+        self.config.drawing.default_thickness = self.input_state.current_thickness;
+        self.config.drawing.default_fill_enabled = self.input_state.fill_enabled;
+        self.config.drawing.default_font_size = self.input_state.current_font_size;
+        self.config.drawing.font_family = self.input_state.font_descriptor.family.clone();
+        self.config.drawing.font_weight = self.input_state.font_descriptor.weight.clone();
+        self.config.drawing.font_style = self.input_state.font_descriptor.style.clone();
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to persist drawing preferences: {}", err);
         }
     }
 

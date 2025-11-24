@@ -556,7 +556,10 @@ impl Frame {
         before - stack.len()
     }
 
-    fn prune_stack_for_missing_shapes(stack: &mut Vec<UndoAction>, ids: &HashSet<ShapeId>) -> usize {
+    fn prune_stack_for_missing_shapes(
+        stack: &mut Vec<UndoAction>,
+        ids: &HashSet<ShapeId>,
+    ) -> usize {
         if stack.is_empty() {
             return 0;
         }
@@ -950,6 +953,7 @@ mod tests {
             y: 10,
             w: 15,
             h: 15,
+            fill: false,
             color: BLACK,
             thick: 2.0,
         };

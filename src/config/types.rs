@@ -19,6 +19,10 @@ pub struct DrawingConfig {
     #[serde(default = "default_thickness")]
     pub default_thickness: f64,
 
+    /// Whether shapes start filled when applicable
+    #[serde(default = "default_fill_enabled")]
+    pub default_fill_enabled: bool,
+
     /// Default font size for text mode in points (valid range: 8.0 - 72.0)
     #[serde(default = "default_font_size")]
     pub default_font_size: f64,
@@ -60,6 +64,7 @@ impl Default for DrawingConfig {
         Self {
             default_color: default_color(),
             default_thickness: default_thickness(),
+            default_fill_enabled: default_fill_enabled(),
             default_font_size: default_font_size(),
             hit_test_tolerance: default_hit_test_tolerance(),
             hit_test_linear_threshold: default_hit_test_threshold(),
@@ -92,6 +97,27 @@ impl Default for ArrowConfig {
         Self {
             length: default_arrow_length(),
             angle_degrees: default_arrow_angle(),
+        }
+    }
+}
+
+/// Undo/redo playback configuration.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct HistoryConfig {
+    /// Delay in milliseconds between steps when running "undo all by delay"
+    #[serde(default = "default_undo_all_delay_ms")]
+    pub undo_all_delay_ms: u64,
+
+    /// Delay in milliseconds between steps when running "redo all by delay"
+    #[serde(default = "default_redo_all_delay_ms")]
+    pub redo_all_delay_ms: u64,
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            undo_all_delay_ms: default_undo_all_delay_ms(),
+            redo_all_delay_ms: default_redo_all_delay_ms(),
         }
     }
 }
@@ -344,6 +370,10 @@ fn default_thickness() -> f64 {
     3.0
 }
 
+fn default_fill_enabled() -> bool {
+    false
+}
+
 fn default_font_size() -> f64 {
     32.0
 }
@@ -382,6 +412,14 @@ fn default_arrow_length() -> f64 {
 
 fn default_arrow_angle() -> f64 {
     30.0
+}
+
+fn default_undo_all_delay_ms() -> u64 {
+    0
+}
+
+fn default_redo_all_delay_ms() -> u64 {
+    0
 }
 
 fn default_buffer_count() -> u32 {
