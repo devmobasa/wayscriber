@@ -118,6 +118,36 @@ fn test_adjust_font_size_multiple_adjustments() {
 }
 
 #[test]
+fn toolbar_toggle_handles_partial_visibility() {
+    let mut state = create_test_input_state();
+    // Simulate config: top pinned, side not pinned
+    state.init_toolbar_from_config(
+        true,  // top_pinned
+        false, // side_pinned
+        true,  // use_icons
+        false, // show_more_colors
+        true,  // show_actions_section
+        false, // show_delay_sliders
+    );
+    assert!(state.toolbar_top_visible());
+    // Because toolbar visibility is tracked as "any visible", side getter returns true when any are visible.
+    assert!(state.toolbar_side_visible());
+    assert!(state.toolbar_visible());
+
+    // Toggle off
+    let _ = state.set_toolbar_visible(!state.toolbar_visible());
+    assert!(!state.toolbar_visible());
+    assert!(!state.toolbar_top_visible());
+    assert!(!state.toolbar_side_visible());
+
+    // Toggle on
+    let _ = state.set_toolbar_visible(!state.toolbar_visible());
+    assert!(state.toolbar_visible());
+    assert!(state.toolbar_top_visible());
+    assert!(state.toolbar_side_visible());
+}
+
+#[test]
 fn duplicate_selection_via_action_creates_offset_shape() {
     let mut state = create_test_input_state();
     let original_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {

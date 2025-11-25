@@ -1,9 +1,15 @@
+use cfg_aliases::cfg_aliases;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
+    cfg_aliases! {
+        // Single source of truth for feature aliases used in cfg attributes
+        tablet: { feature = "tablet-input" },
+    }
+
     let hash = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()

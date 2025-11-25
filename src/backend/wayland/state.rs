@@ -23,6 +23,15 @@ use wayland_client::{
     QueueHandle,
     protocol::{wl_output, wl_seat, wl_shm},
 };
+#[cfg(tablet)]
+use wayland_client::protocol::wl_surface;
+#[cfg(tablet)]
+use wayland_protocols::wp::tablet::zv2::client::{
+    zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
+    zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2, zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2,
+    zwp_tablet_pad_v2::ZwpTabletPadV2, zwp_tablet_seat_v2::ZwpTabletSeatV2,
+    zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
+};
 
 use crate::{
     capture::{
@@ -36,6 +45,8 @@ use crate::{
     ui::toolbar::{ToolbarEvent, ToolbarSnapshot},
     util::Rect,
 };
+#[cfg(tablet)]
+use crate::input::tablet::TabletSettings;
 
 use super::{
     capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
@@ -64,6 +75,8 @@ pub(super) struct WaylandState {
     pub(super) pointer_over_toolbar: bool,
     /// Whether we are actively dragging a toolbar control (e.g., thickness slider)
     pub(super) toolbar_dragging: bool,
+    /// Force toolbar surfaces to be recreated on first sync (ensures stacking above main overlay).
+    pub(super) toolbar_needs_recreate: bool,
 
     // Configuration
     pub(super) config: Config,
@@ -86,6 +99,44 @@ pub(super) struct WaylandState {
 
     // Pointer cursor
     pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
+
+    // Tablet / stylus (feature-gated)
+    #[cfg(tablet)]
+    pub(super) tablet_manager: Option<ZwpTabletManagerV2>,
+    #[cfg(tablet)]
+    pub(super) tablet_seats: Vec<ZwpTabletSeatV2>,
+    #[cfg(tablet)]
+    pub(super) tablets: Vec<ZwpTabletV2>,
+    #[cfg(tablet)]
+    pub(super) tablet_tools: Vec<ZwpTabletToolV2>,
+    #[cfg(tablet)]
+    pub(super) tablet_pads: Vec<ZwpTabletPadV2>,
+    #[cfg(tablet)]
+    pub(super) tablet_pad_groups: Vec<ZwpTabletPadGroupV2>,
+    #[cfg(tablet)]
+    pub(super) tablet_pad_rings: Vec<ZwpTabletPadRingV2>,
+    #[cfg(tablet)]
+    pub(super) tablet_pad_strips: Vec<ZwpTabletPadStripV2>,
+    #[cfg(tablet)]
+    pub(super) tablet_settings: TabletSettings,
+    #[cfg(tablet)]
+    pub(super) tablet_found_logged: bool,
+    #[cfg(tablet)]
+    pub(super) stylus_tip_down: bool,
+    #[cfg(tablet)]
+    pub(super) stylus_on_overlay: bool,
+    #[cfg(tablet)]
+    pub(super) stylus_on_toolbar: bool,
+    #[cfg(tablet)]
+    pub(super) stylus_base_thickness: Option<f64>,
+    #[cfg(tablet)]
+    pub(super) stylus_pressure_thickness: Option<f64>,
+    #[cfg(tablet)]
+    pub(super) stylus_surface: Option<wl_surface::WlSurface>,
+    #[cfg(tablet)]
+    pub(super) stylus_last_pos: Option<(f64, f64)>,
+    #[cfg(tablet)]
+    pub(super) stylus_peak_thickness: Option<f64>,
 
     // Session persistence
     pub(super) session: SessionState,
@@ -120,7 +171,18 @@ impl WaylandState {
         xdg_fullscreen: bool,
         pending_freeze_on_start: bool,
         screencopy_manager: Option<wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
+        #[cfg(tablet)] tablet_manager: Option<ZwpTabletManagerV2>,
     ) -> Self {
+        #[cfg(tablet)]
+        let tablet_settings = {
+            let mut settings = TabletSettings::default();
+            settings.enabled = config.tablet.enabled;
+            settings.pressure_enabled = config.tablet.pressure_enabled;
+            settings.min_thickness = config.tablet.min_thickness;
+            settings.max_thickness = config.tablet.max_thickness;
+            settings
+        };
+
         Self {
             registry_state,
             compositor_state,
@@ -136,6 +198,7 @@ impl WaylandState {
             current_keyboard_interactivity: None,
             pointer_over_toolbar: false,
             toolbar_dragging: false,
+            toolbar_needs_recreate: true,
             config,
             preferred_output_identity,
             xdg_fullscreen,
@@ -150,6 +213,42 @@ impl WaylandState {
             frozen: FrozenState::new(screencopy_manager),
             frozen_enabled,
             themed_pointer: None,
+            #[cfg(tablet)]
+            tablet_manager,
+            #[cfg(tablet)]
+            tablet_seats: Vec::new(),
+            #[cfg(tablet)]
+            tablets: Vec::new(),
+            #[cfg(tablet)]
+            tablet_tools: Vec::new(),
+            #[cfg(tablet)]
+            tablet_pads: Vec::new(),
+            #[cfg(tablet)]
+            tablet_pad_groups: Vec::new(),
+            #[cfg(tablet)]
+            tablet_pad_rings: Vec::new(),
+            #[cfg(tablet)]
+            tablet_pad_strips: Vec::new(),
+            #[cfg(tablet)]
+            tablet_settings,
+            #[cfg(tablet)]
+            tablet_found_logged: false,
+            #[cfg(tablet)]
+            stylus_tip_down: false,
+            #[cfg(tablet)]
+            stylus_on_overlay: false,
+            #[cfg(tablet)]
+            stylus_on_toolbar: false,
+            #[cfg(tablet)]
+            stylus_base_thickness: None,
+            #[cfg(tablet)]
+            stylus_pressure_thickness: None,
+            #[cfg(tablet)]
+            stylus_surface: None,
+            #[cfg(tablet)]
+            stylus_last_pos: None,
+            #[cfg(tablet)]
+            stylus_peak_thickness: None,
             session: SessionState::new(session_options),
             tokio_handle,
             pending_freeze_on_start,
@@ -227,6 +326,10 @@ impl WaylandState {
 
         if any_visible {
             if let Some(layer_shell) = self.layer_shell.as_ref() {
+                if self.toolbar_needs_recreate {
+                    self.toolbar.destroy_all();
+                    self.toolbar_needs_recreate = false;
+                }
                 let scale = self.surface.scale();
                 let snapshot = self.toolbar_snapshot();
                 self.toolbar
@@ -615,6 +718,12 @@ impl WaylandState {
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
     pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
+        #[cfg(tablet)]
+        let prev_thickness = self.input_state.current_thickness;
+        #[cfg(tablet)]
+        let thickness_event =
+            matches!(event, ToolbarEvent::SetThickness(_) | ToolbarEvent::NudgeThickness(_));
+
         // Check if this is a toolbar config event that needs saving
         let needs_config_save = matches!(
             event,
@@ -640,6 +749,16 @@ impl WaylandState {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
 
+            #[cfg(tablet)]
+            if thickness_event {
+                self.sync_stylus_thickness_cache(prev_thickness);
+                if self.stylus_tip_down {
+                    self.record_stylus_peak(self.input_state.current_thickness);
+                } else {
+                    self.stylus_peak_thickness = None;
+                }
+            }
+
             // Save config when pin state changes
             if needs_config_save {
                 self.save_toolbar_pin_config();
@@ -650,6 +769,26 @@ impl WaylandState {
             }
         }
         self.refresh_keyboard_interactivity();
+    }
+
+    #[cfg(tablet)]
+    fn sync_stylus_thickness_cache(&mut self, prev: f64) {
+        let cur = self.input_state.current_thickness;
+        if (cur - prev).abs() > f64::EPSILON {
+            self.stylus_base_thickness = Some(cur);
+            if self.stylus_tip_down {
+                self.stylus_pressure_thickness = Some(cur);
+            } else {
+                self.stylus_pressure_thickness = None;
+            }
+        }
+    }
+
+    /// Records the maximum stylus thickness seen during the current stroke.
+    #[cfg(tablet)]
+    pub(super) fn record_stylus_peak(&mut self, thickness: f64) {
+        self.stylus_peak_thickness =
+            Some(self.stylus_peak_thickness.map_or(thickness, |p| p.max(thickness)));
     }
 
     /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).
