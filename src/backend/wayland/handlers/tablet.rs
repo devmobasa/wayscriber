@@ -329,10 +329,13 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     return;
                 }
                 state.stylus_tip_down = false;
-                if let Some(base) = state.stylus_base_thickness {
-                    state.input_state.current_thickness = base;
-                } else if let Some(pressure) = state.stylus_pressure_thickness {
+                if let Some(pressure) = state.stylus_pressure_thickness {
+                    // Keep the pressure-adjusted thickness for subsequent strokes
                     state.input_state.current_thickness = pressure;
+                    state.stylus_base_thickness = Some(pressure);
+                } else if let Some(base) = state.stylus_base_thickness {
+                    state.input_state.current_thickness = base;
+                    state.stylus_base_thickness = Some(base);
                 }
                 state.stylus_pressure_thickness = None;
                 info!(
