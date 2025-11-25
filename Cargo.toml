@@ -1,6 +1,6 @@
 [package]
 name = "wayscriber"
-version = "0.8.2"
+version = "0.8.3"
 edition = "2024"
 description = "Screen annotation tool for Wayland compositors"
 homepage = "https://wayscriber.com"
@@ -52,6 +52,14 @@ futures = "0.3"
 url = "2.5"
 serde_json = "1.0"
 png = "0.17"
+
+[build-dependencies]
+cfg_aliases = "0.2"
+
+[features]
+# Optional Wayland tablet/stylus input support (zwp_tablet_v2)
+tablet-input = []
+default = ["tablet-input"]
 
 [dev-dependencies]
 tempfile = "3.10"
