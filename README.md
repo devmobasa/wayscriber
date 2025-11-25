@@ -30,6 +30,7 @@
 - [Running wayscriber](#running-wayscriber)
 - [Controls Reference](#controls-reference)
 - [Configuration](#configuration)
+- [Tablet/Stylus Input](#tabletstylus-input)
 - [Troubleshooting](#troubleshooting)
 - [Additional Information](#additional-information)
 - [Project History](#project-history)
@@ -187,6 +188,23 @@ paru -S wayscriber
 # paru – prebuilt binaries
 paru -S wayscriber-bin
 ```
+
+## Tablet/Stylus Input
+
+Tablet support for Wayland (`zwp_tablet_v2`) is compiled in by default. Enable it in your config:
+
+```toml
+[tablet]
+enabled = true
+pressure_enabled = true
+min_thickness = 1.0
+max_thickness = 8.0
+```
+
+Notes:
+- Pressure sets a uniform thickness per stroke; the peak pressure is preserved on lift.
+- Stylus hover/tap/drag works on both the canvas and toolbars.
+- To build without tablet support, use `cargo build --no-default-features`.
 
 The package installs the user service at `/usr/lib/systemd/user/wayscriber.service`.
 
