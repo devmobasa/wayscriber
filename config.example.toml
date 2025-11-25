@@ -273,6 +273,22 @@ auto_adjust_pen = true
 #   whiteboard_pen_color = [0.29, 0.23, 0.18]
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TABLET / STYLUS INPUT (Wayland tablet-unstable-v2)
+# Build with `--features tablet-input` and enable below to use
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[tablet]
+# Enable tablet/stylus input at runtime
+enabled = false
+
+# Map pressure to thickness
+pressure_enabled = true
+
+# Thickness range for pressure mapping
+min_thickness = 1.0
+max_thickness = 8.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CAPTURE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 

@@ -19,6 +19,8 @@ pub use types::{
     HistoryConfig, PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode,
     StatusBarStyle, ToolbarConfig, UiConfig,
 };
+#[cfg(tablet)]
+pub use types::TabletInputConfig;
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]
@@ -297,6 +299,11 @@ pub struct Config {
     #[serde(default)]
     pub capture: CaptureConfig,
 
+    /// Tablet/stylus input settings (feature-gated)
+    #[cfg(tablet)]
+    #[serde(default)]
+    pub tablet: TabletInputConfig,
+
     /// Session persistence settings
     #[serde(default)]
     pub session: SessionConfig,
@@ -366,6 +373,17 @@ impl Config {
                 self.drawing.undo_stack_limit
             );
             self.drawing.undo_stack_limit = self.drawing.undo_stack_limit.clamp(10, 1000);
+        }
+
+        #[cfg(tablet)]
+        {
+            if self.tablet.min_thickness > self.tablet.max_thickness {
+                std::mem::swap(&mut self.tablet.min_thickness, &mut self.tablet.max_thickness);
+            }
+            self.tablet.min_thickness =
+                self.tablet.min_thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            self.tablet.max_thickness =
+                self.tablet.max_thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         }
 
         // History delays: clamp to a reasonable range to avoid long freezes or instant drains.

@@ -140,7 +140,7 @@ impl InputState {
         self.toolbar_side_pinned = side_pinned;
         self.toolbar_top_visible = top_pinned;
         self.toolbar_side_visible = side_pinned;
-        self.toolbar_visible = top_pinned && side_pinned;
+        self.toolbar_visible = top_pinned || side_pinned;
         self.toolbar_use_icons = use_icons;
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;

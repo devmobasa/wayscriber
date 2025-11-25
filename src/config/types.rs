@@ -383,6 +383,59 @@ impl Default for HelpOverlayStyle {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tablet Input (feature-gated)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(tablet)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TabletInputConfig {
+    /// Enable tablet/stylus events at runtime (feature must be compiled in).
+    #[serde(default = "default_tablet_enabled")]
+    pub enabled: bool,
+
+    /// Enable pressure-to-thickness mapping.
+    #[serde(default = "default_tablet_pressure_enabled")]
+    pub pressure_enabled: bool,
+
+    /// Minimum thickness when pressure is near 0.
+    #[serde(default = "default_tablet_min_thickness")]
+    pub min_thickness: f64,
+
+    /// Maximum thickness when pressure is 1.0.
+    #[serde(default = "default_tablet_max_thickness")]
+    pub max_thickness: f64,
+}
+
+#[cfg(tablet)]
+impl Default for TabletInputConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            pressure_enabled: true,
+            min_thickness: 1.0,
+            max_thickness: 8.0,
+        }
+    }
+}
+
+#[cfg(tablet)]
+fn default_tablet_enabled() -> bool {
+    false
+}
+#[cfg(tablet)]
+fn default_tablet_pressure_enabled() -> bool {
+    true
+}
+#[cfg(tablet)]
+fn default_tablet_min_thickness() -> f64 {
+    1.0
+}
+#[cfg(tablet)]
+fn default_tablet_max_thickness() -> f64 {
+    8.0
+}
+
 // =============================================================================
 // Default value functions
 // =============================================================================
