@@ -30,3 +30,5 @@ mod screencopy;
 mod seat;
 mod shm;
 mod xdg;
+#[cfg(tablet)]
+mod tablet;

@@ -59,10 +59,22 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
         event: KeyEvent,
     ) {
+        #[cfg(tablet)]
+        let prev_thickness = self.input_state.current_thickness;
         let key = keysym_to_key(event.keysym);
         debug!("Key pressed: {:?}", key);
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
+
+        #[cfg(tablet)]
+        if (self.input_state.current_thickness - prev_thickness).abs() > f64::EPSILON {
+            self.stylus_base_thickness = Some(self.input_state.current_thickness);
+            if self.stylus_tip_down {
+                self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
+            } else {
+                self.stylus_pressure_thickness = None;
+            }
+        }
 
         if let Some(action) = self.input_state.take_pending_capture_action() {
             self.handle_capture_action(action);
@@ -106,10 +118,22 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
         event: KeyEvent,
     ) {
+        #[cfg(tablet)]
+        let prev_thickness = self.input_state.current_thickness;
         let key = keysym_to_key(event.keysym);
         debug!("Key repeated: {:?}", key);
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
+
+        #[cfg(tablet)]
+        if (self.input_state.current_thickness - prev_thickness).abs() > f64::EPSILON {
+            self.stylus_base_thickness = Some(self.input_state.current_thickness);
+            if self.stylus_tip_down {
+                self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
+            } else {
+                self.stylus_pressure_thickness = None;
+            }
+        }
     }
 }
 

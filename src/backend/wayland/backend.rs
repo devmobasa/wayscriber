@@ -31,6 +31,8 @@ use std::{
 };
 use wayland_client::{Connection, globals::registry_queue_init};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+#[cfg(tablet)]
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 
 use super::state::WaylandState;
 use crate::{
@@ -183,6 +185,13 @@ impl WaylandBackend {
             "  Help overlay font size: {}",
             config.ui.help_overlay_style.font_size
         );
+        #[cfg(tablet)]
+        info!(
+            "Tablet feature: compiled=yes, runtime_enabled={}",
+            config.tablet.enabled
+        );
+        #[cfg(not(tablet))]
+        info!("Tablet feature: compiled=no");
 
         let config_dir = Config::config_directory_from_source(&config_source)?;
 
@@ -197,6 +206,27 @@ impl WaylandBackend {
                 warn!("Session persistence disabled: {}", err);
                 None
             }
+        };
+
+        #[cfg(tablet)]
+        let tablet_manager = if config.tablet.enabled {
+            match globals.bind::<ZwpTabletManagerV2, _, _>(
+                &qh,
+                1..=3,
+                (),
+            ) {
+                Ok(manager) => {
+                    info!("Bound zwp_tablet_manager_v2");
+                    Some(manager)
+                }
+                Err(err) => {
+                    warn!("Tablet protocol not available: {}", err);
+                    None
+                }
+            }
+        } else {
+            debug!("Tablet input disabled in config");
+            None
         };
 
         let preferred_output_identity = env::var("WAYSCRIBER_XDG_OUTPUT")
@@ -339,6 +369,8 @@ impl WaylandBackend {
             xdg_fullscreen,
             freeze_on_start,
             screencopy_manager,
+            #[cfg(tablet)]
+            tablet_manager,
         );
 
         // Gracefully exit the overlay when external signals request termination
