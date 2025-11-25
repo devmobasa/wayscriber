@@ -66,6 +66,23 @@ impl Dispatch<ZwpTabletSeatV2, ()> for WaylandState {
             _ => {}
         }
     }
+    fn event_created_child(
+        opcode: u16,
+        qhandle: &QueueHandle<Self>,
+    ) -> std::sync::Arc<dyn wayland_client::backend::ObjectData> {
+        use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_seat_v2::{
+            EVT_PAD_ADDED_OPCODE, EVT_TABLET_ADDED_OPCODE, EVT_TOOL_ADDED_OPCODE,
+        };
+        match opcode {
+            EVT_TABLET_ADDED_OPCODE => qhandle.make_data::<ZwpTabletV2, _>(()),
+            EVT_TOOL_ADDED_OPCODE => qhandle.make_data::<ZwpTabletToolV2, _>(()),
+            EVT_PAD_ADDED_OPCODE => qhandle.make_data::<ZwpTabletPadV2, _>(()),
+            _ => panic!(
+                "Missing tablet seat child specialization for opcode {}",
+                opcode
+            ),
+        }
+    }
 }
 
 impl Dispatch<ZwpTabletV2, ()> for WaylandState {
@@ -136,6 +153,19 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
             _ => {}
         }
     }
+    fn event_created_child(
+        opcode: u16,
+        qhandle: &QueueHandle<Self>,
+    ) -> std::sync::Arc<dyn wayland_client::backend::ObjectData> {
+        use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2::EVT_GROUP_OPCODE;
+        match opcode {
+            EVT_GROUP_OPCODE => qhandle.make_data::<ZwpTabletPadGroupV2, _>(()),
+            _ => panic!(
+                "Missing tablet pad child specialization for opcode {}",
+                opcode
+            ),
+        }
+    }
 }
 
 impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
@@ -173,6 +203,22 @@ impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
                 );
             }
             _ => {}
+        }
+    }
+    fn event_created_child(
+        opcode: u16,
+        qhandle: &QueueHandle<Self>,
+    ) -> std::sync::Arc<dyn wayland_client::backend::ObjectData> {
+        use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_group_v2::{
+            EVT_RING_OPCODE, EVT_STRIP_OPCODE,
+        };
+        match opcode {
+            EVT_RING_OPCODE => qhandle.make_data::<ZwpTabletPadRingV2, _>(()),
+            EVT_STRIP_OPCODE => qhandle.make_data::<ZwpTabletPadStripV2, _>(()),
+            _ => panic!(
+                "Missing tablet pad group child specialization for opcode {}",
+                opcode
+            ),
         }
     }
 }
