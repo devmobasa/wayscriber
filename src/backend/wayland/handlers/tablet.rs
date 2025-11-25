@@ -355,6 +355,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_tip_down = true;
                 state.stylus_base_thickness = Some(state.input_state.current_thickness);
                 state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
+                state.record_stylus_peak(state.input_state.current_thickness);
                 info!(
                     "✏️  Stylus DOWN at ({}, {})",
                     state.current_mouse_x, state.current_mouse_y
@@ -375,15 +376,17 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     return;
                 }
                 state.stylus_tip_down = false;
-                if let Some(pressure) = state.stylus_pressure_thickness {
-                    // Keep the pressure-adjusted thickness for subsequent strokes
-                    state.input_state.current_thickness = pressure;
-                    state.stylus_base_thickness = Some(pressure);
-                } else if let Some(base) = state.stylus_base_thickness {
-                    state.input_state.current_thickness = base;
-                    state.stylus_base_thickness = Some(base);
+                let final_thick = state
+                    .stylus_peak_thickness
+                    .or(state.stylus_pressure_thickness)
+                    .or(state.stylus_base_thickness);
+                if let Some(thick) = final_thick {
+                    // Keep the pressure-adjusted (peak) thickness for subsequent strokes
+                    state.input_state.current_thickness = thick;
+                    state.stylus_base_thickness = Some(thick);
                 }
                 state.stylus_pressure_thickness = None;
+                state.stylus_peak_thickness = None;
                 info!(
                     "✏️  Stylus UP at ({}, {})",
                     state.current_mouse_x, state.current_mouse_y
@@ -426,6 +429,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     .on_mouse_motion(state.current_mouse_x, state.current_mouse_y);
                 if state.stylus_tip_down {
                     state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
+                    state.record_stylus_peak(state.input_state.current_thickness);
                 }
             }
             Event::Pressure { pressure } => {
@@ -439,12 +443,14 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     if state.stylus_tip_down {
                         state.stylus_pressure_thickness =
                             Some(state.input_state.current_thickness);
+                        state.record_stylus_peak(state.input_state.current_thickness);
                     }
                 } else {
                     use crate::input::tablet::apply_pressure_to_state;
                     apply_pressure_to_state(p01, &mut state.input_state, state.tablet_settings);
                     state.stylus_pressure_thickness =
                         Some(state.input_state.current_thickness);
+                    state.record_stylus_peak(state.input_state.current_thickness);
                 }
             }
             Event::Frame { .. } => {

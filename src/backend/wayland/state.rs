@@ -133,6 +133,8 @@ pub(super) struct WaylandState {
     pub(super) stylus_surface: Option<wl_surface::WlSurface>,
     #[cfg(tablet)]
     pub(super) stylus_last_pos: Option<(f64, f64)>,
+    #[cfg(tablet)]
+    pub(super) stylus_peak_thickness: Option<f64>,
 
     // Session persistence
     pub(super) session: SessionState,
@@ -242,6 +244,8 @@ impl WaylandState {
             stylus_surface: None,
             #[cfg(tablet)]
             stylus_last_pos: None,
+            #[cfg(tablet)]
+            stylus_peak_thickness: None,
             session: SessionState::new(session_options),
             tokio_handle,
             pending_freeze_on_start,
@@ -741,6 +745,11 @@ impl WaylandState {
             #[cfg(tablet)]
             if thickness_event {
                 self.sync_stylus_thickness_cache(prev_thickness);
+                if self.stylus_tip_down {
+                    self.record_stylus_peak(self.input_state.current_thickness);
+                } else {
+                    self.stylus_peak_thickness = None;
+                }
             }
 
             // Save config when pin state changes
@@ -766,6 +775,13 @@ impl WaylandState {
                 self.stylus_pressure_thickness = None;
             }
         }
+    }
+
+    /// Records the maximum stylus thickness seen during the current stroke.
+    #[cfg(tablet)]
+    pub(super) fn record_stylus_peak(&mut self, thickness: f64) {
+        self.stylus_peak_thickness =
+            Some(self.stylus_peak_thickness.map_or(thickness, |p| p.max(thickness)));
     }
 
     /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).

@@ -206,8 +206,10 @@ impl PointerHandler for WaylandState {
                         if self.stylus_tip_down {
                             self.stylus_pressure_thickness =
                                 Some(self.input_state.current_thickness);
+                            self.record_stylus_peak(self.input_state.current_thickness);
                         } else {
                             self.stylus_pressure_thickness = None;
+                            self.stylus_peak_thickness = None;
                         }
                     }
                 }
