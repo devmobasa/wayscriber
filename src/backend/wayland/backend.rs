@@ -240,6 +240,7 @@ impl WaylandBackend {
         let mut input_state = InputState::with_defaults(
             config.drawing.default_color.to_color(),
             config.drawing.default_thickness,
+            config.drawing.marker_opacity,
             config.drawing.default_fill_enabled,
             config.drawing.default_font_size,
             font_descriptor,

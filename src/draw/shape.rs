@@ -105,6 +105,15 @@ pub enum Shape {
         /// Whether to draw background box behind text
         background_enabled: bool,
     },
+    /// Highlighter-style stroke with translucent ink
+    MarkerStroke {
+        /// Sequence of (x, y) coordinates traced by the marker
+        points: Vec<(i32, i32)>,
+        /// Stroke color (alpha controls ink intensity)
+        color: Color,
+        /// Stroke thickness in pixels
+        thick: f64,
+    },
 }
 
 impl Shape {
@@ -153,6 +162,14 @@ impl Shape {
                 background_enabled,
                 ..
             } => bounding_box_for_text(*x, *y, text, *size, font_descriptor, *background_enabled),
+            Shape::MarkerStroke {
+                points,
+                thick,
+                ..
+            } => {
+                let inflated = (*thick * 1.35).max(*thick + 1.0);
+                bounding_box_for_points(points, inflated)
+            }
         }
     }
 
@@ -165,6 +182,7 @@ impl Shape {
             Shape::Ellipse { .. } => "Ellipse",
             Shape::Arrow { .. } => "Arrow",
             Shape::Text { .. } => "Text",
+            Shape::MarkerStroke { .. } => "Marker",
         }
     }
 }

@@ -35,6 +35,9 @@ pub enum Action {
     // Thickness controls
     IncreaseThickness,
     DecreaseThickness,
+    IncreaseMarkerOpacity,
+    DecreaseMarkerOpacity,
+    SelectMarkerTool,
     IncreaseFontSize,
     DecreaseFontSize,
 
@@ -229,6 +232,15 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_decrease_thickness")]
     pub decrease_thickness: Vec<String>,
 
+    #[serde(default = "default_increase_marker_opacity")]
+    pub increase_marker_opacity: Vec<String>,
+
+    #[serde(default = "default_decrease_marker_opacity")]
+    pub decrease_marker_opacity: Vec<String>,
+
+    #[serde(default = "default_select_marker_tool")]
+    pub select_marker_tool: Vec<String>,
+
     #[serde(default = "default_increase_font_size")]
     pub increase_font_size: Vec<String>,
 
@@ -339,6 +351,9 @@ impl Default for KeybindingsConfig {
             delete_selection: default_delete_selection(),
             increase_thickness: default_increase_thickness(),
             decrease_thickness: default_decrease_thickness(),
+            increase_marker_opacity: default_increase_marker_opacity(),
+            decrease_marker_opacity: default_decrease_marker_opacity(),
+            select_marker_tool: default_select_marker_tool(),
             increase_font_size: default_increase_font_size(),
             decrease_font_size: default_decrease_font_size(),
             toggle_whiteboard: default_toggle_whiteboard(),
@@ -465,6 +480,18 @@ impl KeybindingsConfig {
 
         for binding_str in &self.decrease_thickness {
             insert_binding(binding_str, Action::DecreaseThickness)?;
+        }
+
+        for binding_str in &self.increase_marker_opacity {
+            insert_binding(binding_str, Action::IncreaseMarkerOpacity)?;
+        }
+
+        for binding_str in &self.decrease_marker_opacity {
+            insert_binding(binding_str, Action::DecreaseMarkerOpacity)?;
+        }
+
+        for binding_str in &self.select_marker_tool {
+            insert_binding(binding_str, Action::SelectMarkerTool)?;
         }
 
         for binding_str in &self.increase_font_size {
@@ -653,6 +680,18 @@ fn default_increase_thickness() -> Vec<String> {
 
 fn default_decrease_thickness() -> Vec<String> {
     vec!["-".to_string(), "_".to_string()]
+}
+
+fn default_increase_marker_opacity() -> Vec<String> {
+    vec!["Ctrl+Alt+ArrowUp".to_string()]
+}
+
+fn default_decrease_marker_opacity() -> Vec<String> {
+    vec!["Ctrl+Alt+ArrowDown".to_string()]
+}
+
+fn default_select_marker_tool() -> Vec<String> {
+    vec!["H".to_string()]
 }
 
 fn default_increase_font_size() -> Vec<String> {

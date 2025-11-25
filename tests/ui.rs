@@ -14,6 +14,7 @@ fn make_input_state() -> InputState {
             a: 1.0,
         },
         4.0,
+        0.32,
         false,
         32.0,
         wayscriber::draw::FontDescriptor::default(),

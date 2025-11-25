@@ -173,7 +173,7 @@ impl InputState {
 
         let mut drawing = false;
         if let DrawingState::Drawing { tool, points, .. } = &mut self.state {
-            if *tool == Tool::Pen {
+            if *tool == Tool::Pen || *tool == Tool::Marker {
                 points.push((x, y));
             }
             drawing = true;
@@ -295,6 +295,11 @@ impl InputState {
                         thick: self.current_thickness,
                         arrow_length: self.arrow_length,
                         arrow_angle: self.arrow_angle,
+                    },
+                    Tool::Marker => Shape::MarkerStroke {
+                        points,
+                        color: self.marker_color(),
+                        thick: self.current_thickness,
                     },
                     Tool::Highlight => {
                         self.clear_provisional_dirty();

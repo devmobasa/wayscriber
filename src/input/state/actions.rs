@@ -1,6 +1,6 @@
 use crate::config::Action;
 use crate::draw::Shape;
-use crate::input::{board_mode::BoardMode, events::Key};
+use crate::input::{board_mode::BoardMode, events::Key, tool::Tool};
 use crate::util;
 use log::{info, warn};
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
@@ -411,6 +411,15 @@ impl InputState {
                 self.current_thickness = (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+            }
+            Action::IncreaseMarkerOpacity => {
+                self.set_marker_opacity(self.marker_opacity + 0.05);
+            }
+            Action::DecreaseMarkerOpacity => {
+                self.set_marker_opacity(self.marker_opacity - 0.05);
+            }
+            Action::SelectMarkerTool => {
+                self.set_tool_override(Some(Tool::Marker));
             }
             Action::IncreaseFontSize => {
                 self.adjust_font_size(2.0);

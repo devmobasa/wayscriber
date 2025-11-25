@@ -119,7 +119,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 
 ## Features at a Glance
 
-- **Drawing & editing**: Freehand pen, straight lines, rectangles, ellipses, arrows, and multiline text with smoothing; undo & redo; quick line-width and color changes via hotkeys or scroll.
+- **Drawing & editing**: Freehand pen, translucent highlighter marker, straight lines, rectangles, ellipses, arrows, and multiline text with smoothing; undo & redo; quick line-width and color changes via hotkeys or scroll.
 - **Board modes**: Whiteboard, blackboard, and transparent overlays, each with isolated frames and auto pen contrast; snap back to transparent with `Ctrl+Shift+T`.
 - **Floating toolbars**: Pin/unpin top and side toolbars (`F2`/`F9`) with icon or text display modes, extended color palettes, undo/redo actions, and optional delay sliders; hover for tooltips even when frozen.
 - **Capture shortcuts**: Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard` when available.

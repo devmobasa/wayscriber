@@ -19,6 +19,10 @@ pub struct DrawingConfig {
     #[serde(default = "default_thickness")]
     pub default_thickness: f64,
 
+    /// Default marker opacity multiplier (0.05 - 0.9), applied to the current color alpha
+    #[serde(default = "default_marker_opacity")]
+    pub marker_opacity: f64,
+
     /// Whether shapes start filled when applicable
     #[serde(default = "default_fill_enabled")]
     pub default_fill_enabled: bool,
@@ -64,6 +68,7 @@ impl Default for DrawingConfig {
         Self {
             default_color: default_color(),
             default_thickness: default_thickness(),
+            marker_opacity: default_marker_opacity(),
             default_fill_enabled: default_fill_enabled(),
             default_font_size: default_font_size(),
             hit_test_tolerance: default_hit_test_tolerance(),
@@ -393,6 +398,10 @@ fn default_color() -> ColorSpec {
 
 fn default_thickness() -> f64 {
     3.0
+}
+
+fn default_marker_opacity() -> f64 {
+    0.32
 }
 
 fn default_fill_enabled() -> bool {
