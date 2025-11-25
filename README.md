@@ -189,7 +189,7 @@ paru -S wayscriber
 paru -S wayscriber-bin
 ```
 
-## Tablet/Stylus Input
+### Tablet/Stylus Input
 
 Tablet support for Wayland (`zwp_tablet_v2`) is compiled in by default. Enable it in your config:
 
@@ -247,6 +247,24 @@ cargo build --release
 ```
 
 The installer places the binary at `~/.local/bin/wayscriber`, creates `~/.config/wayscriber/`, and offers to configure Hyprland.
+
+### Tablet/Stylus Input
+
+Tablet support for Wayland (`zwp_tablet_v2`) is compiled in by default. Enable it in your config:
+
+```toml
+[tablet]
+enabled = true
+pressure_enabled = true
+min_thickness = 1.0
+max_thickness = 8.0
+```
+
+Notes:
+- Pressure sets a uniform thickness per stroke; the peak pressure is preserved on lift.
+- Stylus hover/tap/drag works on both the canvas and toolbars.
+- To build without tablet support, use `cargo build --no-default-features`.
+
 
 ## Running wayscriber
 
