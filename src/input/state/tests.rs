@@ -19,6 +19,7 @@ fn create_test_input_state() -> InputState {
             a: 1.0,
         }, // Red
         3.0,   // thickness
+        0.32,  // marker_opacity
         false, // fill_enabled
         32.0,  // font_size
         FontDescriptor {

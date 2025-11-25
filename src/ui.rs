@@ -81,6 +81,7 @@ pub fn render_status_bar(
             Tool::Rect => "Rectangle",
             Tool::Ellipse => "Circle",
             Tool::Arrow => "Arrow",
+            Tool::Marker => "Marker",
             Tool::Highlight => "Highlight",
         },
         DrawingState::MovingSelection { .. } => "Move",
@@ -91,6 +92,7 @@ pub fn render_status_bar(
             Tool::Rect => "Rectangle",
             Tool::Ellipse => "Circle",
             Tool::Arrow => "Arrow",
+            Tool::Marker => "Marker",
             Tool::Highlight => "Highlight",
         },
     };

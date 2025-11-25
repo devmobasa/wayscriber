@@ -65,6 +65,8 @@ pub struct InputState {
     pub current_color: Color,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
+    /// Opacity multiplier for marker tool strokes
+    pub marker_opacity: f64,
     /// Current font size for text mode (from config)
     pub current_font_size: f64,
     /// Font descriptor for text rendering (family, weight, style)
@@ -155,6 +157,8 @@ pub struct InputState {
     pub custom_section_enabled: bool,
     /// Whether to show the delay sliders in Actions section
     pub show_delay_sliders: bool,
+    /// Whether to show the marker opacity slider in the side toolbar
+    pub show_marker_opacity_section: bool,
     /// Pending delayed history playback state
     pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
@@ -212,6 +216,7 @@ impl InputState {
     pub fn with_defaults(
         color: Color,
         thickness: f64,
+        marker_opacity: f64,
         fill_enabled: bool,
         font_size: f64,
         font_descriptor: FontDescriptor,
@@ -235,6 +240,7 @@ impl InputState {
             canvas_set: CanvasSet::new(),
             current_color: color,
             current_thickness: thickness,
+            marker_opacity,
             current_font_size: font_size,
             font_descriptor,
             text_background_enabled,
@@ -280,6 +286,7 @@ impl InputState {
             custom_redo_steps,
             custom_section_enabled,
             show_delay_sliders: false, // Default to hidden
+            show_marker_opacity_section: false,
             pending_history: None,
             context_menu_layout: None,
             spatial_index: None,

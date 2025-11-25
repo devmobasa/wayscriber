@@ -18,6 +18,8 @@ pub enum Tool {
     Ellipse,
     /// Arrow with directional head (Ctrl+Shift)
     Arrow,
+    /// Semi-transparent marker stroke for highlighting text
+    Marker,
     /// Highlight-only tool (no drawing, emits click highlight)
     Highlight,
     // Note: Text mode uses DrawingState::TextInput instead of Tool::Text

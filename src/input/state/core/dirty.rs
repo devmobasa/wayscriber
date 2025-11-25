@@ -43,6 +43,10 @@ impl InputState {
         {
             match tool {
                 Tool::Pen => bounding_box_for_points(points, self.current_thickness),
+                Tool::Marker => {
+                    let inflated = (self.current_thickness * 1.35).max(self.current_thickness + 1.0);
+                    bounding_box_for_points(points, inflated)
+                }
                 Tool::Line => bounding_box_for_line(
                     *start_x,
                     *start_y,

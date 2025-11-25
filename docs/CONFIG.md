@@ -35,6 +35,9 @@ default_color = "red"
 # Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
+# Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
+marker_opacity = 0.32
+
 # Default font size for text mode (8.0 - 72.0)
 # Can be adjusted at runtime with Ctrl+Shift+/- or Shift+Scroll
 default_font_size = 32.0

@@ -40,6 +40,7 @@ impl HitRegion {
 enum HitKind {
     Click,
     DragSetThickness,
+    DragSetMarkerOpacity,
     DragSetFontSize,
     PickColor { x: f64, y: f64, w: f64, h: f64 },
     DragUndoDelay,
@@ -310,6 +311,7 @@ impl ToolbarSurface {
                 let start_drag = matches!(
                     hit.kind,
                     HitKind::DragSetThickness
+                        | HitKind::DragSetMarkerOpacity
                         | HitKind::DragSetFontSize
                         | HitKind::PickColor { .. }
                         | HitKind::DragUndoDelay
@@ -322,6 +324,11 @@ impl ToolbarSurface {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
                         let value = 1.0 + t * (40.0 - 1.0);
                         ToolbarEvent::SetThickness(value)
+                    }
+                    HitKind::DragSetMarkerOpacity => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let value = 0.05 + t * (0.9 - 0.05);
+                        ToolbarEvent::SetMarkerOpacity(value)
                     }
                     HitKind::DragSetFontSize => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
@@ -365,6 +372,11 @@ impl ToolbarSurface {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
                         let value = 1.0 + t * (40.0 - 1.0);
                         return Some(ToolbarEvent::SetThickness(value));
+                    }
+                    HitKind::DragSetMarkerOpacity => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let value = 0.05 + t * (0.9 - 0.05);
+                        return Some(ToolbarEvent::SetMarkerOpacity(value));
                     }
                     HitKind::DragSetFontSize => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
@@ -511,10 +523,10 @@ impl ToolbarSurfaceManager {
         // Create top toolbar if visible
         if self.is_top_visible() {
             // Dynamic size based on mode:
-            // - Icon mode: 610px wide (6 tools + text + clear + highlight + icons checkbox + pin/close)
+            // - Icon mode: 680px wide (7 tools + text + clear + highlight + icons checkbox + pin/close)
             //              80px tall (42px buttons at y=6, fill toggle below, tooltip space)
-            // - Text mode: 720px wide (text labels need more space), 56px tall (no tooltips)
-            let target_size = if use_icons { (610, 80) } else { (720, 56) };
+            // - Text mode: 820px wide (text labels need more space), 56px tall (no tooltips)
+            let target_size = if use_icons { (680, 80) } else { (820, 56) };
 
             // Recreate if size changed
             if self.top.logical_size != (0, 0) && self.top.logical_size != target_size {
@@ -538,6 +550,9 @@ impl ToolbarSurfaceManager {
 
             // Thickness + Text size sections (compact with sliders)
             let thickness_h: u32 = 52;
+            let marker_base_h: u32 = 20 + 24; // label + checkbox row
+            let marker_slider_h: u32 = if snapshot.show_marker_opacity_section { 52 } else { 0 };
+            let marker_h: u32 = marker_base_h + marker_slider_h;
             let text_size_h: u32 = 52;
 
             // Font section
@@ -558,7 +573,17 @@ impl ToolbarSurfaceManager {
             let delay_h = if snapshot.show_delay_sliders { 55 } else { 0 };
             let step_h: u32 = 20 + 24 + if snapshot.custom_section_enabled { 120 } else { 0 } + delay_h;
 
-            let total_height = base_height + colors_h + thickness_h + text_size_h + font_h + actions_h + step_h + section_gap * 6 + 20;
+            let total_gaps = 7; // section separators (colors, thickness, marker, text size, font, actions, step)
+            let total_height = base_height
+                + colors_h
+                + thickness_h
+                + marker_h
+                + text_size_h
+                + font_h
+                + actions_h
+                + step_h
+                + section_gap * total_gaps
+                + 20;
             let target_size = (260, total_height);
 
             if self.side.logical_size != (0, 0) && self.side.logical_size != target_size {
@@ -694,6 +719,7 @@ fn render_top_strip(
     let buttons: &[(Tool, IconFn, &str)] = &[
         (Tool::Select, toolbar_icons::draw_icon_select as IconFn, "Select"),
         (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
+        (Tool::Marker, toolbar_icons::draw_icon_marker as IconFn, "Marker"),
         (Tool::Line, toolbar_icons::draw_icon_line as IconFn, "Line"),
         (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn, "Rect"),
         (Tool::Ellipse, toolbar_icons::draw_icon_circle as IconFn, "Circle"),
@@ -796,7 +822,7 @@ fn render_top_strip(
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
             kind: HitKind::Click,
-            tooltip: Some("Highlight"),
+            tooltip: Some("Click highlight"),
         });
         x += btn_size + gap;
 
@@ -829,7 +855,7 @@ fn render_top_strip(
                 rect: (x, y, btn_w, btn_h),
                 event: ToolbarEvent::SelectTool(*tool),
                 kind: HitKind::Click,
-            tooltip: None,
+                tooltip: None,
             });
             x += btn_w + gap;
         }
@@ -1813,6 +1839,109 @@ fn render_side_palette(
             kind: HitKind::DragRedoDelay,
             tooltip: None,
         });
+    }
+
+    y += custom_card_h + section_gap;
+
+    // ===== Marker Opacity Section (bottom, toggle + slider) =====
+    let marker_toggle_h = 24.0;
+    let marker_slider_h = if snapshot.show_marker_opacity_section { 52.0 } else { 0.0 };
+    let marker_card_h = 20.0 + marker_toggle_h + marker_slider_h;
+
+    draw_group_card(ctx, card_x, y, card_w, marker_card_h);
+    draw_section_label(ctx, x, y + 14.0, "Marker opacity");
+
+    let marker_toggle_y = y + 22.0;
+    let marker_toggle_w = card_w - 12.0;
+    let marker_toggle_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, marker_toggle_y, marker_toggle_w, marker_toggle_h))
+        .unwrap_or(false);
+    draw_checkbox(
+        ctx,
+        x,
+        marker_toggle_y,
+        marker_toggle_w,
+        marker_toggle_h,
+        snapshot.show_marker_opacity_section,
+        marker_toggle_hover,
+        "Show marker opacity slider",
+    );
+    hits.push(HitRegion {
+        rect: (x, marker_toggle_y, marker_toggle_w, marker_toggle_h),
+        event: ToolbarEvent::ToggleMarkerOpacitySection(!snapshot.show_marker_opacity_section),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+
+    if snapshot.show_marker_opacity_section {
+        let btn_size = 24.0;
+        let icon_size = 14.0;
+        let value_w = 52.0;
+        let slider_row_y = marker_toggle_y + marker_toggle_h + 6.0;
+        let track_h = 8.0;
+        let knob_r = 7.0;
+
+        // Minus button
+        let minus_x = x;
+        draw_button(ctx, minus_x, slider_row_y, btn_size, btn_size, false, false);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_minus(
+            ctx,
+            minus_x + (btn_size - icon_size) / 2.0,
+            slider_row_y + (btn_size - icon_size) / 2.0,
+            icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (minus_x, slider_row_y, btn_size, btn_size),
+            event: ToolbarEvent::SetMarkerOpacity((snapshot.marker_opacity - 0.05).max(0.05)),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+
+        // Plus button
+        let plus_x = width - x - btn_size - value_w - 4.0;
+        draw_button(ctx, plus_x, slider_row_y, btn_size, btn_size, false, false);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_plus(
+            ctx,
+            plus_x + (btn_size - icon_size) / 2.0,
+            slider_row_y + (btn_size - icon_size) / 2.0,
+            icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (plus_x, slider_row_y, btn_size, btn_size),
+            event: ToolbarEvent::SetMarkerOpacity((snapshot.marker_opacity + 0.05).min(0.9)),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+
+        // Slider
+        let track_x = minus_x + btn_size + 6.0;
+        let track_w = plus_x - track_x - 6.0;
+        let track_y = slider_row_y + (btn_size - track_h) / 2.0;
+        let min_opacity = 0.05;
+        let max_opacity = 0.9;
+        let t = ((snapshot.marker_opacity - min_opacity) / (max_opacity - min_opacity)).clamp(0.0, 1.0);
+        let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
+
+        ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+        draw_round_rect(ctx, track_x, track_y, track_w, track_h, 4.0);
+        let _ = ctx.fill();
+        ctx.set_source_rgba(0.25, 0.8, 0.4, 0.9);
+        ctx.arc(knob_x, track_y + track_h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
+        let _ = ctx.fill();
+
+        hits.push(HitRegion {
+            rect: (track_x, track_y - 6.0, track_w, track_h + 12.0),
+            event: ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity),
+            kind: HitKind::DragSetMarkerOpacity,
+            tooltip: None,
+        });
+
+        // Value display
+        let pct = (snapshot.marker_opacity * 100.0).round();
+        let text = format!("{:.0}%", pct);
+        draw_label_center(ctx, width - x - value_w, slider_row_y, value_w, btn_size, &text);
     }
 
     // Draw tooltip for hovered icon button (below for side toolbar)

@@ -211,6 +211,44 @@ pub fn draw_icon_highlight(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw a marker/highlighter icon (tilted marker with translucent swatch)
+pub fn draw_icon_marker(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.08).max(1.4);
+    let swatch_color = (1.0, 0.92, 0.35, 0.4);
+
+    // Underlying swatch to imply transparent ink
+    ctx.set_source_rgba(swatch_color.0, swatch_color.1, swatch_color.2, swatch_color.3);
+    let swatch_h = s * 0.28;
+    ctx.rectangle(x + s * 0.08, y + s * 0.65, s * 0.84, swatch_h);
+    let _ = ctx.fill();
+
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Marker body (tilted)
+    ctx.save().ok();
+    ctx.translate(x + s * 0.55, y + s * 0.35);
+    ctx.rotate(-PI * 0.18);
+
+    // Body outline
+    ctx.set_source_rgba(0.95, 0.95, 0.98, 0.95);
+    ctx.rectangle(-s * 0.24, -s * 0.08, s * 0.38, s * 0.26);
+    let _ = ctx.fill_preserve();
+    ctx.set_source_rgba(0.25, 0.28, 0.35, 0.9);
+    let _ = ctx.stroke();
+
+    // Chisel tip with ink color
+    ctx.set_source_rgba(swatch_color.0, swatch_color.1, swatch_color.2, 0.85);
+    ctx.move_to(-s * 0.24, -s * 0.08);
+    ctx.line_to(-s * 0.32, 0.0);
+    ctx.line_to(-s * 0.24, s * 0.18);
+    ctx.close_path();
+    let _ = ctx.fill();
+    ctx.restore().ok();
+}
+
 /// Draw an undo icon (curved arrow left)
 pub fn draw_icon_undo(ctx: &Context, x: f64, y: f64, size: f64) {
     draw_curved_arrow(ctx, x, y, size, false);

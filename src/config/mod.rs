@@ -338,6 +338,15 @@ impl Config {
                 .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         }
 
+        // Marker opacity: 0.05 - 0.9
+        if !(0.05..=0.9).contains(&self.drawing.marker_opacity) {
+            log::warn!(
+                "Invalid marker_opacity {:.2}, clamping to 0.05-0.90 range",
+                self.drawing.marker_opacity
+            );
+            self.drawing.marker_opacity = self.drawing.marker_opacity.clamp(0.05, 0.9);
+        }
+
         // Font size: 8.0 - 72.0
         if !(8.0..=72.0).contains(&self.drawing.default_font_size) {
             log::warn!(

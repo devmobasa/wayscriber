@@ -71,6 +71,10 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
                 false
             }
         }
+        Shape::MarkerStroke { points, thick, .. } => {
+            let effective_thick = (*thick * 1.35).max(*thick + 1.0);
+            freehand_hit(points, point, effective_thick, tolerance)
+        }
     }
 }
 

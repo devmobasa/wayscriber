@@ -1,4 +1,4 @@
-use crate::draw::{Shape, render_freehand_borrowed, render_shape};
+use crate::draw::{Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape};
 use crate::input::tool::Tool;
 use crate::util;
 
@@ -89,6 +89,11 @@ impl InputState {
                     arrow_length: self.arrow_length,
                     arrow_angle: self.arrow_angle,
                 }),
+                Tool::Marker => Some(Shape::MarkerStroke {
+                    points: points.clone(),
+                    color: self.marker_color(),
+                    thick: self.current_thickness,
+                }),
                 Tool::Highlight => None,
                 Tool::Select => None,
                 // No provisional shape for other tools
@@ -135,6 +140,15 @@ impl InputState {
                     true
                 }
                 Tool::Highlight => false,
+                Tool::Marker => {
+                    render_marker_stroke_borrowed(
+                        ctx,
+                        points,
+                        self.marker_color(),
+                        self.current_thickness,
+                    );
+                    true
+                }
                 _ => {
                     // For other tools, use the normal path (no clone needed)
                     if let Some(shape) = self.get_provisional_shape(current_x, current_y) {
@@ -148,5 +162,11 @@ impl InputState {
         } else {
             false
         }
+    }
+
+    pub(crate) fn marker_color(&self) -> Color {
+        // Keep a minimum alpha so the marker remains visible even if a fully transparent color was set.
+        let alpha = (self.current_color.a * self.marker_opacity).clamp(0.05, 0.9);
+        Color { a: alpha, ..self.current_color }
     }
 }

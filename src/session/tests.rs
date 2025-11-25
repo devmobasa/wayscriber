@@ -22,6 +22,7 @@ fn dummy_input_state() -> InputState {
             a: 1.0,
         },
         3.0,
+        0.32,
         false,
         32.0,
         FontDescriptor::default(),
