@@ -157,6 +157,8 @@ impl PointerHandler for WaylandState {
                     if on_toolbar || self.pointer_over_toolbar {
                         continue;
                     }
+                    #[cfg(tablet)]
+                    let prev_thickness = self.input_state.current_thickness;
                     let scroll_direction = if vertical.discrete != 0 {
                         vertical.discrete
                     } else if vertical.absolute.abs() > 0.1 {
@@ -195,6 +197,20 @@ impl PointerHandler for WaylandState {
                             self.input_state.current_thickness
                         );
                         self.input_state.needs_redraw = true;
+                    }
+                    #[cfg(tablet)]
+                    if (self.input_state.current_thickness - prev_thickness).abs()
+                        > f64::EPSILON
+                    {
+                        self.stylus_base_thickness = Some(self.input_state.current_thickness);
+                        if self.stylus_tip_down {
+                            self.stylus_pressure_thickness =
+                                Some(self.input_state.current_thickness);
+                            self.record_stylus_peak(self.input_state.current_thickness);
+                        } else {
+                            self.stylus_pressure_thickness = None;
+                            self.stylus_peak_thickness = None;
+                        }
                     }
                 }
             }

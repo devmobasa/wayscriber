@@ -270,12 +270,12 @@ impl InputState {
             }
             ToolbarEvent::CloseTopToolbar => {
                 self.toolbar_top_visible = false;
-                self.toolbar_visible = self.toolbar_top_visible && self.toolbar_side_visible;
+                self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
                 true
             }
             ToolbarEvent::CloseSideToolbar => {
                 self.toolbar_side_visible = false;
-                self.toolbar_visible = self.toolbar_top_visible && self.toolbar_side_visible;
+                self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
                 true
             }
             ToolbarEvent::PinTopToolbar(pin) => {

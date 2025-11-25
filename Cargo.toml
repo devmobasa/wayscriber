@@ -53,6 +53,13 @@ url = "2.5"
 serde_json = "1.0"
 png = "0.17"
 
+[build-dependencies]
+cfg_aliases = "0.2"
+
+[features]
+# Optional Wayland tablet/stylus input support (zwp_tablet_v2)
+tablet-input = []
+
 [dev-dependencies]
 tempfile = "3.10"
 assert_cmd = "2.0"
