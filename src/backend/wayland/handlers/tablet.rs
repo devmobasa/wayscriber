@@ -441,8 +441,13 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 if pressure > 0 {
                     use crate::input::tablet::apply_pressure_to_state;
                     apply_pressure_to_state(p01, &mut state.input_state, state.tablet_settings);
-                    state.stylus_pressure_thickness =
-                        Some(state.input_state.current_thickness);
+                    // Keep thickness monotonic during a stroke to avoid dips near lift.
+                    let current = state.input_state.current_thickness;
+                    let peak = state.stylus_peak_thickness.unwrap_or(current);
+                    if current < peak {
+                        state.input_state.current_thickness = peak;
+                    }
+                    state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
                     state.record_stylus_peak(state.input_state.current_thickness);
                 } else {
                     // Ignore zero-pressure while tip is down to avoid flickers
