@@ -59,6 +59,7 @@ cfg_aliases = "0.2"
 [features]
 # Optional Wayland tablet/stylus input support (zwp_tablet_v2)
 tablet-input = []
+default = ["tablet-input"]
 
 [dev-dependencies]
 tempfile = "3.10"
