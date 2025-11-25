@@ -29,6 +29,8 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+#[cfg(tablet)]
+const TABLET_MANAGER_MAX_VERSION: u32 = 2;
 use wayland_client::{Connection, globals::registry_queue_init};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 #[cfg(tablet)]
@@ -212,7 +214,7 @@ impl WaylandBackend {
         let tablet_manager = if config.tablet.enabled {
             match globals.bind::<ZwpTabletManagerV2, _, _>(
                 &qh,
-                1..=3,
+                1..=TABLET_MANAGER_MAX_VERSION,
                 (),
             ) {
                 Ok(manager) => {
