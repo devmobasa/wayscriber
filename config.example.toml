@@ -195,6 +195,10 @@ show_actions_section = true
 # Allows configuring delayed undo/redo all timing
 show_delay_sliders = false
 
+# Show marker opacity slider in side toolbar
+# Enable to adjust marker transparency from the UI
+show_marker_opacity_section = false
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
 # ───────────────────────────────────────────────────────────────────────────────

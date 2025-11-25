@@ -147,6 +147,7 @@ impl InputState {
         show_more_colors: bool,
         show_actions_section: bool,
         show_delay_sliders: bool,
+        show_marker_opacity_section: bool,
     ) {
         self.toolbar_top_pinned = top_pinned;
         self.toolbar_side_pinned = side_pinned;
@@ -157,6 +158,7 @@ impl InputState {
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;
         self.show_delay_sliders = show_delay_sliders;
+        self.show_marker_opacity_section = show_marker_opacity_section;
     }
 
     /// Wrapper for undo that preserves existing action plumbing.
