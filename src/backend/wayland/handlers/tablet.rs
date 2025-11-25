@@ -438,19 +438,15 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
                 let p01 = (pressure as f64) / 65535.0;
                 debug!("Stylus pressure: {} (raw: {}/65535)", p01, pressure);
-                if pressure == 0 {
-                    debug!("Stylus pressure reported 0; keeping previous thickness");
-                    if state.stylus_tip_down {
-                        state.stylus_pressure_thickness =
-                            Some(state.input_state.current_thickness);
-                        state.record_stylus_peak(state.input_state.current_thickness);
-                    }
-                } else {
+                if pressure > 0 {
                     use crate::input::tablet::apply_pressure_to_state;
                     apply_pressure_to_state(p01, &mut state.input_state, state.tablet_settings);
                     state.stylus_pressure_thickness =
                         Some(state.input_state.current_thickness);
                     state.record_stylus_peak(state.input_state.current_thickness);
+                } else {
+                    // Ignore zero-pressure while tip is down to avoid flickers
+                    debug!("Stylus pressure reported 0; deferring to peak/base");
                 }
             }
             Event::Frame { .. } => {
