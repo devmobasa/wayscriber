@@ -75,6 +75,8 @@ pub(super) struct WaylandState {
     pub(super) pointer_over_toolbar: bool,
     /// Whether we are actively dragging a toolbar control (e.g., thickness slider)
     pub(super) toolbar_dragging: bool,
+    /// Force toolbar surfaces to be recreated on first sync (ensures stacking above main overlay).
+    pub(super) toolbar_needs_recreate: bool,
 
     // Configuration
     pub(super) config: Config,
@@ -196,6 +198,7 @@ impl WaylandState {
             current_keyboard_interactivity: None,
             pointer_over_toolbar: false,
             toolbar_dragging: false,
+            toolbar_needs_recreate: true,
             config,
             preferred_output_identity,
             xdg_fullscreen,
@@ -323,6 +326,10 @@ impl WaylandState {
 
         if any_visible {
             if let Some(layer_shell) = self.layer_shell.as_ref() {
+                if self.toolbar_needs_recreate {
+                    self.toolbar.destroy_all();
+                    self.toolbar_needs_recreate = false;
+                }
                 let scale = self.surface.scale();
                 let snapshot = self.toolbar_snapshot();
                 self.toolbar
