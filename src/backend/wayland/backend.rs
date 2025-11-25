@@ -413,7 +413,7 @@ impl WaylandBackend {
             let layer_surface = layer_shell.create_layer_surface(
                 &qh,
                 wl_surface,
-                Layer::Overlay,
+                Layer::Top,
                 Some("wayscriber"),
                 None, // Default output
             );

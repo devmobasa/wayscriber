@@ -128,7 +128,7 @@ impl ToolbarSurface {
         let layer_surface = layer_shell.create_layer_surface(
             qh,
             wl_surface.clone(),
-            Layer::Overlay,
+            Layer::Overlay, // map in overlay layer so toolbars can stack above main surface
             Some(self.name),
             None,
         );
@@ -489,6 +489,13 @@ impl ToolbarSurfaceManager {
 
     pub fn is_toolbar_surface(&self, surface: &wl_surface::WlSurface) -> bool {
         self.top.is_surface(surface) || self.side.is_surface(surface)
+    }
+
+    pub fn destroy_all(&mut self) {
+        self.top.destroy();
+        self.side.destroy();
+        self.top_hover = None;
+        self.side_hover = None;
     }
 
     pub fn is_toolbar_layer(
