@@ -306,6 +306,7 @@ impl WaylandBackend {
             config.ui.toolbar.show_more_colors,
             config.ui.toolbar.show_actions_section,
             config.ui.toolbar.show_delay_sliders,
+            config.ui.toolbar.show_marker_opacity_section,
         );
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)

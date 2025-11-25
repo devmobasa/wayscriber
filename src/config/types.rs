@@ -938,6 +938,10 @@ pub struct ToolbarConfig {
     /// Show delay sliders in Step Undo/Redo section
     #[serde(default = "default_show_delay_sliders")]
     pub show_delay_sliders: bool,
+
+    /// Show the marker opacity slider section in the side toolbar
+    #[serde(default = "default_show_marker_opacity_section")]
+    pub show_marker_opacity_section: bool,
 }
 
 impl Default for ToolbarConfig {
@@ -949,6 +953,7 @@ impl Default for ToolbarConfig {
             show_more_colors: default_show_more_colors(),
             show_actions_section: default_show_actions_section(),
             show_delay_sliders: default_show_delay_sliders(),
+            show_marker_opacity_section: default_show_marker_opacity_section(),
         }
     }
 }
@@ -974,5 +979,9 @@ fn default_show_actions_section() -> bool {
 }
 
 fn default_show_delay_sliders() -> bool {
+    false
+}
+
+fn default_show_marker_opacity_section() -> bool {
     false
 }

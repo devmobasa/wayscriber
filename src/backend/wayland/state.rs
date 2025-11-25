@@ -734,6 +734,7 @@ impl WaylandState {
                 | ToolbarEvent::ToggleActionsSection(_)
                 | ToolbarEvent::ToggleDelaySliders(_)
                 | ToolbarEvent::ToggleCustomSection(_)
+                | ToolbarEvent::ToggleMarkerOpacitySection(_)
         );
 
         let persist_drawing = matches!(
@@ -743,6 +744,7 @@ impl WaylandState {
                 | ToolbarEvent::SetFont(_)
                 | ToolbarEvent::SetFontSize(_)
                 | ToolbarEvent::ToggleFill(_)
+                | ToolbarEvent::SetMarkerOpacity(_)
         );
 
         if self.input_state.apply_toolbar_event(event) {
@@ -799,6 +801,8 @@ impl WaylandState {
         self.config.ui.toolbar.show_more_colors = self.input_state.show_more_colors;
         self.config.ui.toolbar.show_actions_section = self.input_state.show_actions_section;
         self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
+        self.config.ui.toolbar.show_marker_opacity_section =
+            self.input_state.show_marker_opacity_section;
         // Step controls toggle is in history config
         self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
 
@@ -817,6 +821,7 @@ impl WaylandState {
         self.config.drawing.font_family = self.input_state.font_descriptor.family.clone();
         self.config.drawing.font_weight = self.input_state.font_descriptor.weight.clone();
         self.config.drawing.font_style = self.input_state.font_descriptor.style.clone();
+        self.config.drawing.marker_opacity = self.input_state.marker_opacity;
 
         if let Err(err) = self.config.save() {
             log::warn!("Failed to persist drawing preferences: {}", err);
