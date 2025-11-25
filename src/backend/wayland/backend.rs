@@ -375,6 +375,9 @@ impl WaylandBackend {
             tablet_manager,
         );
 
+        // Ensure pinned toolbars are created immediately if visible on startup.
+        state.sync_toolbar_visibility(&qh);
+
         // Gracefully exit the overlay when external signals request termination
         #[cfg(unix)]
         let exit_flag: Option<Arc<AtomicBool>> = {
