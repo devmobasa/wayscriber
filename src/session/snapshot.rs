@@ -36,7 +36,7 @@ impl SessionSnapshot {
         let empty_frame = |frame: &Option<Frame>| {
             frame
                 .as_ref()
-                .map_or(true, |data| !data.has_persistable_data())
+                .is_none_or(|data| !data.has_persistable_data())
         };
         empty_frame(&self.transparent)
             && empty_frame(&self.whiteboard)
@@ -184,6 +184,7 @@ pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Re
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&lock_path)
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
     FileExt::lock_exclusive(&lock_file)
@@ -342,6 +343,7 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&lock_path)
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
     FileExt::lock_shared(&lock_file)
@@ -608,10 +610,8 @@ fn depth_array(arr: &[Value]) -> usize {
 
 fn depth_action(action: &Value) -> usize {
     if let Some(obj) = action.as_object() {
-        let is_compound = obj
-            .get("kind")
-            .and_then(|v| v.as_str())
-            .map_or(false, |k| k == "compound");
+        let is_compound =
+            obj.get("kind").and_then(|v| v.as_str()) == Some("compound");
         if is_compound {
             let mut child_max = 0;
             for value in obj.values() {

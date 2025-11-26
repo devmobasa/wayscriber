@@ -93,6 +93,7 @@ impl CaptureSession {
 }
 
 /// End-to-end controller for frozen mode capture and image storage.
+#[allow(clippy::type_complexity)]
 pub struct FrozenState {
     manager: Option<ZwlrScreencopyManagerV1>,
     active_output: Option<wl_output::WlOutput>,
@@ -139,7 +140,7 @@ impl FrozenState {
     }
 
     pub fn active_output_matches(&self, info_id: u32) -> bool {
-        self.active_output_id.map_or(false, |id| id == info_id)
+        self.active_output_id == Some(info_id)
     }
 
     pub fn image(&self) -> Option<&FrozenImage> {

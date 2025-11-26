@@ -97,9 +97,7 @@ impl InputState {
         }
 
         // Keep click highlight visuals aligned with highlight mode
-        if enable && !self.click_highlight_enabled() {
-            self.toggle_click_highlight();
-        } else if !enable && self.click_highlight_enabled() {
+        if enable != self.click_highlight_enabled() {
             self.toggle_click_highlight();
         }
     }

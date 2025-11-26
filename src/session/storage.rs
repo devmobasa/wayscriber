@@ -157,6 +157,7 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&lock_path)
             .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
         FileExt::lock_shared(&lock_file)

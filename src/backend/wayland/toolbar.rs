@@ -1,3 +1,6 @@
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
+
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
     compositor::CompositorState,
@@ -1773,7 +1776,7 @@ fn render_side_palette(
             let icon_btn_size = 42.0; // Unified with top toolbar
             let icon_gap = 6.0;
             let icons_per_row = 5;
-            let _icon_rows = (all_actions.len() + icons_per_row - 1) / icons_per_row;
+            let _icon_rows = all_actions.len().div_ceil(icons_per_row);
             let icon_size = 22.0;
             let total_icons_w =
                 icons_per_row as f64 * icon_btn_size + (icons_per_row - 1) as f64 * icon_gap;

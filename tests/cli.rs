@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::{cargo::cargo_bin_cmd, Command};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -27,7 +27,7 @@ backup_retention = 1
 }
 
 fn wayscriber_cmd() -> Command {
-    Command::cargo_bin("wayscriber").expect("binary exists")
+    cargo_bin_cmd!("wayscriber")
 }
 
 #[test]

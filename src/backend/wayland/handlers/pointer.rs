@@ -162,55 +162,59 @@ impl PointerHandler for WaylandState {
                         0
                     };
 
-                    if self.input_state.modifiers.shift {
-                        if scroll_direction > 0 {
+                    match scroll_direction.cmp(&0) {
+                        std::cmp::Ordering::Greater if self.input_state.modifiers.shift => {
                             self.input_state.adjust_font_size(-2.0);
                             debug!(
                                 "Font size decreased: {:.1}px",
                                 self.input_state.current_font_size
                             );
-                        } else if scroll_direction < 0 {
+                        }
+                        std::cmp::Ordering::Less if self.input_state.modifiers.shift => {
                             self.input_state.adjust_font_size(2.0);
                             debug!(
                                 "Font size increased: {:.1}px",
                                 self.input_state.current_font_size
                             );
                         }
-                    } else if scroll_direction != 0 {
-                        let delta = if scroll_direction > 0 { -1.0 } else { 1.0 };
-                        let eraser_active = self.input_state.active_tool() == Tool::Eraser;
-                        #[cfg(tablet)]
-                        let prev_thickness = self.input_state.current_thickness;
+                        std::cmp::Ordering::Greater | std::cmp::Ordering::Less => {
+                            let delta = if scroll_direction > 0 { -1.0 } else { 1.0 };
+                            let eraser_active = self.input_state.active_tool() == Tool::Eraser;
+                            #[cfg(tablet)]
+                            let prev_thickness = self.input_state.current_thickness;
 
-                        if self.input_state.nudge_thickness_for_active_tool(delta) {
-                            if eraser_active {
-                                debug!(
-                                    "Eraser size adjusted: {:.0}px",
-                                    self.input_state.eraser_size
-                                );
-                            } else {
-                                debug!(
-                                    "Thickness adjusted: {:.0}px",
-                                    self.input_state.current_thickness
-                                );
+                            if self.input_state.nudge_thickness_for_active_tool(delta) {
+                                if eraser_active {
+                                    debug!(
+                                        "Eraser size adjusted: {:.0}px",
+                                        self.input_state.eraser_size
+                                    );
+                                } else {
+                                    debug!(
+                                        "Thickness adjusted: {:.0}px",
+                                        self.input_state.current_thickness
+                                    );
+                                }
+                                self.input_state.needs_redraw = true;
                             }
-                            self.input_state.needs_redraw = true;
-                        }
-                        #[cfg(tablet)]
-                        if !eraser_active
-                            && (self.input_state.current_thickness - prev_thickness).abs()
-                                > f64::EPSILON
-                        {
-                            self.stylus_base_thickness = Some(self.input_state.current_thickness);
-                            if self.stylus_tip_down {
-                                self.stylus_pressure_thickness =
+                            #[cfg(tablet)]
+                            if !eraser_active
+                                && (self.input_state.current_thickness - prev_thickness).abs()
+                                    > f64::EPSILON
+                            {
+                                self.stylus_base_thickness =
                                     Some(self.input_state.current_thickness);
-                                self.record_stylus_peak(self.input_state.current_thickness);
-                            } else {
-                                self.stylus_pressure_thickness = None;
-                                self.stylus_peak_thickness = None;
+                                if self.stylus_tip_down {
+                                    self.stylus_pressure_thickness =
+                                        Some(self.input_state.current_thickness);
+                                    self.record_stylus_peak(self.input_state.current_thickness);
+                                } else {
+                                    self.stylus_pressure_thickness = None;
+                                    self.stylus_peak_thickness = None;
+                                }
                             }
                         }
+                        std::cmp::Ordering::Equal => {}
                     }
                 }
             }

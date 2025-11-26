@@ -263,6 +263,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
 }
 
 /// Renders a circular click highlight with configurable fill/outline colors.
+#[allow(clippy::too_many_arguments)]
 pub fn render_click_highlight(
     ctx: &cairo::Context,
     center_x: f64,
@@ -447,6 +448,7 @@ fn render_line(ctx: &cairo::Context, x1: i32, y1: i32, x2: i32, y2: i32, color: 
 }
 
 /// Render a rectangle (outline)
+#[allow(clippy::too_many_arguments)]
 fn render_rect(
     ctx: &cairo::Context,
     x: i32,
@@ -485,6 +487,7 @@ fn render_rect(
 }
 
 /// Render an ellipse using Cairo's arc with scaling
+#[allow(clippy::too_many_arguments)]
 fn render_ellipse(
     ctx: &cairo::Context,
     cx: i32,

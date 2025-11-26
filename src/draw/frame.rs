@@ -94,6 +94,7 @@ pub struct ShapeSnapshot {
 /// Undoable actions stored in the frame history.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum UndoAction {
     Create {
         shapes: Vec<(usize, DrawnShape)>,
@@ -692,8 +693,8 @@ mod frame_storage {
     use crate::draw::shape::Shape;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<S>(shapes: &Vec<DrawnShape>, serializer: S) -> Result<S::Ok, S::Error>
-    where
+pub fn serialize<S>(shapes: &[DrawnShape], serializer: S) -> Result<S::Ok, S::Error>
+where
         S: Serializer,
     {
         let helper: Vec<SerializedDrawnShape<'_>> = shapes

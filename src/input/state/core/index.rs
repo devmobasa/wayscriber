@@ -81,10 +81,7 @@ impl InputState {
         let threshold = self.max_linear_hit_test;
 
         if len > threshold {
-            let rebuild = match &self.spatial_index {
-                Some(grid) if grid.shape_count == len => false,
-                _ => true,
-            };
+            let rebuild = !matches!(&self.spatial_index, Some(grid) if grid.shape_count == len);
 
             if rebuild {
                 let frame = self.canvas_set.active_frame();
@@ -93,7 +90,7 @@ impl InputState {
 
             if let Some(grid) = &self.spatial_index {
                 let candidates = grid.query((x, y));
-                if let Some(hit) = self.hit_test_indices(candidates.into_iter(), x, y, tolerance) {
+                if let Some(hit) = self.hit_test_indices(candidates, x, y, tolerance) {
                     return Some(hit);
                 }
             }

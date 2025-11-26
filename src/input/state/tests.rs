@@ -454,7 +454,7 @@ fn test_escape_cancels_active_drawing_only() {
     state.on_key_press(Key::Escape);
 
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.should_exit == false);
+    assert!(!state.should_exit);
 }
 
 #[test]
@@ -842,7 +842,6 @@ fn redo_all_with_delay_replays_history() {
     assert_eq!(state.canvas_set.active_frame().undo_stack_len(), 1);
 }
 
-#[test]
 #[test]
 fn select_this_shape_command_focuses_single_shape() {
     let mut state = create_test_input_state();

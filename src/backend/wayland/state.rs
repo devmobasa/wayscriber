@@ -176,12 +176,12 @@ impl WaylandState {
     ) -> Self {
         #[cfg(tablet)]
         let tablet_settings = {
-            let mut settings = TabletSettings::default();
-            settings.enabled = config.tablet.enabled;
-            settings.pressure_enabled = config.tablet.pressure_enabled;
-            settings.min_thickness = config.tablet.min_thickness;
-            settings.max_thickness = config.tablet.max_thickness;
-            settings
+            TabletSettings {
+                enabled: config.tablet.enabled,
+                pressure_enabled: config.tablet.pressure_enabled,
+                min_thickness: config.tablet.min_thickness,
+                max_thickness: config.tablet.max_thickness,
+            }
         };
 
         Self {

@@ -1,7 +1,5 @@
 //! Wayland tablet/stylus protocol handling (zwp_tablet_v2).
 
-#![cfg(tablet)]
-
 use log::{debug, info};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::{
@@ -401,9 +399,11 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
             }
             Event::Motion { x, y } => {
                 if state.stylus_on_toolbar {
-                    state.stylus_last_pos = Some((x as f64, y as f64));
+                    let xf = x;
+                    let yf = y;
+                    state.stylus_last_pos = Some((xf, yf));
                     if let Some(surface) = state.stylus_surface.as_ref() {
-                        let evt = state.toolbar.pointer_motion(surface, (x as f64, y as f64));
+                        let evt = state.toolbar.pointer_motion(surface, (xf, yf));
                         if state.toolbar_dragging {
                             if let Some(evt) = evt {
                                 state.handle_toolbar_event(evt);
@@ -423,7 +423,9 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
                 state.current_mouse_x = x as i32;
                 state.current_mouse_y = y as i32;
-                state.stylus_last_pos = Some((x as f64, y as f64));
+                let xf = x;
+                let yf = y;
+                state.stylus_last_pos = Some((xf, yf));
                 state
                     .input_state
                     .on_mouse_motion(state.current_mouse_x, state.current_mouse_y);

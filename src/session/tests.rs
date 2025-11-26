@@ -89,10 +89,12 @@ fn options_from_config_custom_storage() {
     let temp = tempfile::tempdir().unwrap();
     let custom_dir = temp.path().join("sessions");
 
-    let mut cfg = SessionConfig::default();
-    cfg.persist_transparent = true;
-    cfg.storage = SessionStorageMode::Custom;
-    cfg.custom_directory = Some(custom_dir.to_string_lossy().to_string());
+    let cfg = SessionConfig {
+        persist_transparent: true,
+        storage: SessionStorageMode::Custom,
+        custom_directory: Some(custom_dir.to_string_lossy().to_string()),
+        ..SessionConfig::default()
+    };
 
     let mut options = options_from_config(&cfg, temp.path(), Some("display-1")).unwrap();
     assert_eq!(options.base_dir, custom_dir);
@@ -112,9 +114,11 @@ fn options_from_config_custom_storage() {
 fn options_from_config_config_storage_uses_config_dir() {
     let temp = tempfile::tempdir().unwrap();
 
-    let mut cfg = SessionConfig::default();
-    cfg.persist_whiteboard = true;
-    cfg.storage = SessionStorageMode::Config;
+    let cfg = SessionConfig {
+        persist_whiteboard: true,
+        storage: SessionStorageMode::Config,
+        ..SessionConfig::default()
+    };
 
     let original_display = std::env::var_os("WAYLAND_DISPLAY");
     unsafe {
@@ -122,10 +126,9 @@ fn options_from_config_config_storage_uses_config_dir() {
     }
 
     let mut options = options_from_config(&cfg, temp.path(), None).unwrap();
-    match original_display {
-        Some(value) => unsafe { std::env::set_var("WAYLAND_DISPLAY", value) },
-        None => {}
-    };
+    if let Some(value) = original_display {
+        unsafe { std::env::set_var("WAYLAND_DISPLAY", value) }
+    }
 
     assert_eq!(options.base_dir, temp.path());
     assert!(options.persist_whiteboard);

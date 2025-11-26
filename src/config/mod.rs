@@ -86,7 +86,6 @@ pub struct LoadedConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::ColorSpec;
     use super::*;
     use crate::config::test_helpers::with_temp_config_home;
     use std::fs;

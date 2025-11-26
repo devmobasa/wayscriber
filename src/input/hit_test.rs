@@ -83,6 +83,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::draw::{BLACK, DrawnShape, Shape};
@@ -239,6 +240,7 @@ fn ellipse_outline_hit(
     outer && !inner
 }
 
+#[allow(clippy::too_many_arguments)]
 fn arrowhead_hit(
     tip_x: i32,
     tip_y: i32,

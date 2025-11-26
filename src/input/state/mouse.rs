@@ -148,19 +148,17 @@ impl InputState {
         if let DrawingState::MovingSelection { last_x, last_y, .. } = &self.state {
             let dx = x - *last_x;
             let dy = y - *last_y;
-            if dx != 0 || dy != 0 {
-                if self.apply_translation_to_selection(dx, dy) {
-                    if let DrawingState::MovingSelection {
-                        last_x,
-                        last_y,
-                        moved,
-                        ..
-                    } = &mut self.state
-                    {
-                        *last_x = x;
-                        *last_y = y;
-                        *moved = true;
-                    }
+            if (dx != 0 || dy != 0) && self.apply_translation_to_selection(dx, dy) {
+                if let DrawingState::MovingSelection {
+                    last_x,
+                    last_y,
+                    moved,
+                    ..
+                } = &mut self.state
+                {
+                    *last_x = x;
+                    *last_y = y;
+                    *moved = true;
                 }
             }
             return;

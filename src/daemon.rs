@@ -13,9 +13,6 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-#[cfg(unix)]
-use libc;
-
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayState {
