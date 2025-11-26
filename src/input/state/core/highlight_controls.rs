@@ -58,8 +58,8 @@ impl InputState {
         let modifier_tool = self.modifiers.current_tool();
 
         if let Some(override_tool) = self.tool_override {
-            if override_tool == Tool::Highlight {
-                return Tool::Highlight;
+            if matches!(override_tool, Tool::Highlight | Tool::Eraser) {
+                return override_tool;
             }
 
             // Allow temporary modifier-based tools when the override is a drawing tool

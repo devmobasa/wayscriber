@@ -5,6 +5,22 @@ use super::font::FontDescriptor;
 use crate::util::{self, Rect};
 use serde::{Deserialize, Serialize};
 
+/// Brush options for eraser strokes.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EraserBrush {
+    /// Brush diameter in pixels (logical coordinates)
+    pub size: f64,
+    /// Brush shape
+    pub kind: EraserKind,
+}
+
+/// Shape of the eraser brush.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum EraserKind {
+    Circle,
+    Rect,
+}
+
 /// Represents a drawable shape or annotation on screen.
 ///
 /// Each variant represents a different drawing tool/primitive with its specific parameters.
@@ -114,6 +130,13 @@ pub enum Shape {
         /// Stroke thickness in pixels
         thick: f64,
     },
+    /// Eraser stroke that punches holes in the canvas
+    EraserStroke {
+        /// Sequence of (x, y) coordinates traced by the eraser
+        points: Vec<(i32, i32)>,
+        /// Brush options (shape + diameter)
+        brush: EraserBrush,
+    },
 }
 
 impl Shape {
@@ -162,14 +185,11 @@ impl Shape {
                 background_enabled,
                 ..
             } => bounding_box_for_text(*x, *y, text, *size, font_descriptor, *background_enabled),
-            Shape::MarkerStroke {
-                points,
-                thick,
-                ..
-            } => {
+            Shape::MarkerStroke { points, thick, .. } => {
                 let inflated = (*thick * 1.35).max(*thick + 1.0);
                 bounding_box_for_points(points, inflated)
             }
+            Shape::EraserStroke { points, brush } => bounding_box_for_eraser(points, brush.size),
         }
     }
 
@@ -183,6 +203,7 @@ impl Shape {
             Shape::Arrow { .. } => "Arrow",
             Shape::Text { .. } => "Text",
             Shape::MarkerStroke { .. } => "Marker",
+            Shape::EraserStroke { .. } => "Eraser",
         }
     }
 }
@@ -369,6 +390,31 @@ pub(crate) fn bounding_box_for_text(
     }
 
     ensure_positive_rect_f64(min_x, min_y, max_x, max_y)
+}
+
+pub(crate) fn bounding_box_for_eraser(points: &[(i32, i32)], diameter: f64) -> Option<Rect> {
+    if points.is_empty() {
+        return None;
+    }
+    let padding = stroke_padding(diameter.max(1.0));
+    let mut min_x = points[0].0;
+    let mut max_x = points[0].0;
+    let mut min_y = points[0].1;
+    let mut max_y = points[0].1;
+
+    for &(x, y) in &points[1..] {
+        min_x = min_x.min(x);
+        max_x = max_x.max(x);
+        min_y = min_y.min(y);
+        max_y = max_y.max(y);
+    }
+
+    min_x -= padding;
+    max_x += padding;
+    min_y -= padding;
+    max_y += padding;
+
+    ensure_positive_rect(min_x, min_y, max_x, max_y)
 }
 
 fn ensure_positive_rect(min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Option<Rect> {

@@ -32,9 +32,9 @@ use std::{
 #[cfg(tablet)]
 const TABLET_MANAGER_MAX_VERSION: u32 = 2;
 use wayland_client::{Connection, globals::registry_queue_init};
-use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 #[cfg(tablet)]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use super::state::WaylandState;
 use crate::{
@@ -212,11 +212,8 @@ impl WaylandBackend {
 
         #[cfg(tablet)]
         let tablet_manager = if config.tablet.enabled {
-            match globals.bind::<ZwpTabletManagerV2, _, _>(
-                &qh,
-                1..=TABLET_MANAGER_MAX_VERSION,
-                (),
-            ) {
+            match globals.bind::<ZwpTabletManagerV2, _, _>(&qh, 1..=TABLET_MANAGER_MAX_VERSION, ())
+            {
                 Ok(manager) => {
                     info!("Bound zwp_tablet_manager_v2");
                     Some(manager)
@@ -272,6 +269,7 @@ impl WaylandBackend {
         let mut input_state = InputState::with_defaults(
             config.drawing.default_color.to_color(),
             config.drawing.default_thickness,
+            config.drawing.default_eraser_size,
             config.drawing.marker_opacity,
             config.drawing.default_fill_enabled,
             config.drawing.default_font_size,

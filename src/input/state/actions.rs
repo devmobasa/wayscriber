@@ -403,14 +403,24 @@ impl InputState {
                 }
             }
             Action::IncreaseThickness => {
-                self.current_thickness = (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                if self.active_tool() == Tool::Eraser {
+                    self.set_eraser_size(self.eraser_size + 1.0);
+                } else {
+                    self.current_thickness =
+                        (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                }
             }
             Action::DecreaseThickness => {
-                self.current_thickness = (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                if self.active_tool() == Tool::Eraser {
+                    self.set_eraser_size(self.eraser_size - 1.0);
+                } else {
+                    self.current_thickness =
+                        (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                }
             }
             Action::IncreaseMarkerOpacity => {
                 self.set_marker_opacity(self.marker_opacity + 0.05);
