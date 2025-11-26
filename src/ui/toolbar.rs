@@ -1,4 +1,4 @@
-use crate::draw::{Color, FontDescriptor};
+use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::{InputState, Tool};
 
 /// Events emitted by the floating toolbar UI.
@@ -51,6 +51,8 @@ pub enum ToolbarEvent {
     ToggleActionsSection(bool),
     /// Toggle marker opacity UI visibility
     ToggleMarkerOpacitySection(bool),
+    /// Toggle eraser brush shape
+    ToggleEraserKind,
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -60,6 +62,9 @@ pub struct ToolbarSnapshot {
     pub tool_override: Option<Tool>,
     pub color: Color,
     pub thickness: f64,
+    pub eraser_size: f64,
+    pub thickness_targets_eraser: bool,
+    pub eraser_kind: EraserKind,
     pub marker_opacity: f64,
     pub font: FontDescriptor,
     pub font_size: f64,
@@ -97,11 +102,23 @@ pub struct ToolbarSnapshot {
 impl ToolbarSnapshot {
     pub fn from_input(state: &InputState) -> Self {
         let frame = state.canvas_set.active_frame();
+        let active_tool = state.active_tool();
+        let thickness_targets_eraser =
+            active_tool == Tool::Eraser || matches!(state.tool_override(), Some(Tool::Eraser));
+        let thickness_value = if thickness_targets_eraser {
+            state.eraser_size
+        } else {
+            state.current_thickness
+        };
+        let eraser_kind = state.eraser_kind;
         Self {
-            active_tool: state.active_tool(),
+            active_tool,
             tool_override: state.tool_override(),
             color: state.current_color,
-            thickness: state.current_thickness,
+            thickness: thickness_value,
+            eraser_size: state.eraser_size,
+            thickness_targets_eraser,
+            eraser_kind,
             marker_opacity: state.marker_opacity,
             font: state.font_descriptor.clone(),
             font_size: state.current_font_size,
@@ -146,7 +163,7 @@ impl InputState {
                 self.set_tool_override(Some(tool))
             }
             ToolbarEvent::SetColor(color) => self.set_color(color),
-            ToolbarEvent::SetThickness(value) => self.set_thickness(value),
+            ToolbarEvent::SetThickness(value) => self.set_thickness_for_active_tool(value),
             ToolbarEvent::SetFont(descriptor) => self.set_font_descriptor(descriptor),
             ToolbarEvent::SetMarkerOpacity(value) => self.set_marker_opacity(value),
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
@@ -193,9 +210,7 @@ impl InputState {
                     false
                 }
             }
-            ToolbarEvent::NudgeThickness(delta) => {
-                self.set_thickness(self.current_thickness + delta)
-            }
+            ToolbarEvent::NudgeThickness(delta) => self.nudge_thickness_for_active_tool(delta),
             ToolbarEvent::Undo => {
                 self.toolbar_undo();
                 true
@@ -239,7 +254,8 @@ impl InputState {
             }
             ToolbarEvent::ToggleAllHighlight(enable) => {
                 // set_highlight_tool already handles both highlight tool and click highlight
-                let currently_active = self.highlight_tool_active() || self.click_highlight_enabled();
+                let currently_active =
+                    self.highlight_tool_active() || self.click_highlight_enabled();
                 if currently_active != enable {
                     self.set_highlight_tool(enable);
                     self.needs_redraw = true;
@@ -334,6 +350,10 @@ impl InputState {
                 } else {
                     false
                 }
+            }
+            ToolbarEvent::ToggleEraserKind => {
+                self.toggle_eraser_kind();
+                true
             }
         }
     }

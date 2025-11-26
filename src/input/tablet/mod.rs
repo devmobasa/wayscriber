@@ -3,7 +3,7 @@
 //! These helpers map tablet tool events (position, pressure) into the existing
 //! `InputState` without changing the drawing logic.
 
-use crate::input::{state::MAX_STROKE_THICKNESS, InputState};
+use crate::input::{InputState, state::MAX_STROKE_THICKNESS};
 
 /// User-configurable settings for tablet input.
 #[derive(Debug, Clone, Copy)]

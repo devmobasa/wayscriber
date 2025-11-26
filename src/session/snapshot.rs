@@ -1,6 +1,6 @@
 use super::options::{CompressionMode, SessionOptions};
 use crate::draw::frame::{MAX_COMPOUND_DEPTH, ShapeId};
-use crate::draw::{Color, Frame};
+use crate::draw::{Color, EraserKind, Frame};
 use crate::input::{
     InputState,
     board_mode::BoardMode,
@@ -19,7 +19,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
 
 /// Captured state suitable for serialisation or restoration.
 #[derive(Debug, Clone)]
@@ -49,6 +49,10 @@ impl SessionSnapshot {
 pub struct ToolStateSnapshot {
     pub current_color: Color,
     pub current_thickness: f64,
+    #[serde(default = "default_eraser_size_for_snapshot")]
+    pub eraser_size: f64,
+    #[serde(default = "default_eraser_kind_for_snapshot")]
+    pub eraser_kind: EraserKind,
     pub current_font_size: f64,
     pub text_background_enabled: bool,
     pub arrow_length: f64,
@@ -62,6 +66,8 @@ impl ToolStateSnapshot {
         Self {
             current_color: input.current_color,
             current_thickness: input.current_thickness,
+            eraser_size: input.eraser_size,
+            eraser_kind: input.eraser_kind,
             current_font_size: input.current_font_size,
             text_background_enabled: input.text_background_enabled,
             arrow_length: input.arrow_length,
@@ -70,6 +76,14 @@ impl ToolStateSnapshot {
             show_status_bar: input.show_status_bar,
         }
     }
+}
+
+fn default_eraser_size_for_snapshot() -> f64 {
+    12.0
+}
+
+fn default_eraser_kind_for_snapshot() -> EraserKind {
+    EraserKind::Circle
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -487,6 +501,10 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
             input.current_thickness = tool_state
                 .current_thickness
                 .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            input.eraser_size = tool_state
+                .eraser_size
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            input.eraser_kind = tool_state.eraser_kind;
             input.current_font_size = tool_state.current_font_size.clamp(8.0, 72.0);
             input.text_background_enabled = tool_state.text_background_enabled;
             input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);

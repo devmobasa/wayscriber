@@ -5,14 +5,10 @@
 use log::{debug, info};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::{
-    zwp_tablet_manager_v2::ZwpTabletManagerV2,
-    zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
-    zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2,
-    zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2,
-    zwp_tablet_pad_v2::ZwpTabletPadV2,
-    zwp_tablet_seat_v2::ZwpTabletSeatV2,
-    zwp_tablet_tool_v2::ZwpTabletToolV2,
-    zwp_tablet_v2::ZwpTabletV2,
+    zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
+    zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2, zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2,
+    zwp_tablet_pad_v2::ZwpTabletPadV2, zwp_tablet_seat_v2::ZwpTabletSeatV2,
+    zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
 };
 
 use crate::input::MouseButton;
@@ -122,13 +118,21 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
             Event::Done => {
                 debug!("Tablet pad description complete");
             }
-            Event::Button { time, button, state } => {
+            Event::Button {
+                time,
+                button,
+                state,
+            } => {
                 debug!(
                     "Tablet pad button event: index {} -> {:?} @ {}",
                     button, state, time
                 );
             }
-            Event::Enter { serial, tablet, surface } => {
+            Event::Enter {
+                serial,
+                tablet,
+                surface,
+            } => {
                 debug!(
                     "Tablet pad entered surface {:?} (tablet {:?}) serial {}",
                     surface.id(),
@@ -336,10 +340,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.current_mouse_x = sx as i32;
                     state.current_mouse_y = sy as i32;
                     if let Some(surface) = state.stylus_surface.as_ref() {
-                        if let Some((evt, drag)) = state
-                            .toolbar
-                            .pointer_press(surface, (sx, sy))
-                        {
+                        if let Some((evt, drag)) = state.toolbar.pointer_press(surface, (sx, sy)) {
                             state.toolbar_dragging = drag;
                             state.handle_toolbar_event(evt);
                             state.toolbar.mark_dirty();
@@ -402,8 +403,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 if state.stylus_on_toolbar {
                     state.stylus_last_pos = Some((x as f64, y as f64));
                     if let Some(surface) = state.stylus_surface.as_ref() {
-                        let evt =
-                            state.toolbar.pointer_motion(surface, (x as f64, y as f64));
+                        let evt = state.toolbar.pointer_motion(surface, (x as f64, y as f64));
                         if state.toolbar_dragging {
                             if let Some(evt) = evt {
                                 state.handle_toolbar_event(evt);

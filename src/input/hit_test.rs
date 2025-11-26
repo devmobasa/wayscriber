@@ -8,6 +8,9 @@ const EPS: f64 = 1e-6;
 /// Computes a tolerance-aware bounding rectangle for the shape.
 pub fn compute_hit_bounds(shape: &DrawnShape, tolerance: f64) -> Option<Rect> {
     let base = shape.shape.bounding_box()?;
+    if matches!(shape.shape, Shape::EraserStroke { .. }) {
+        return None;
+    }
     let inflate = tolerance.ceil() as i32;
     if inflate == 0 {
         return Some(base);
@@ -75,6 +78,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             let effective_thick = (*thick * 1.35).max(*thick + 1.0);
             freehand_hit(points, point, effective_thick, tolerance)
         }
+        Shape::EraserStroke { .. } => false,
     }
 }
 

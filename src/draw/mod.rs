@@ -15,17 +15,18 @@ pub mod render;
 pub mod shape;
 
 // Re-export commonly used types at module level
+#[allow(unused_imports)]
 pub use canvas_set::CanvasSet;
 pub use color::Color;
 pub use dirty::DirtyTracker;
 pub use font::FontDescriptor;
 pub use frame::{DrawnShape, Frame, ShapeId};
 pub use render::{
-    render_board_background, render_click_highlight, render_freehand_borrowed,
-    render_marker_stroke_borrowed, render_selection_halo, render_shape, render_shapes,
-    render_text,
+    EraserReplayContext, render_board_background, render_click_highlight, render_freehand_borrowed,
+    render_marker_stroke_borrowed, render_selection_halo, render_shape, render_shapes, render_text,
 };
-pub use shape::Shape;
+#[allow(unused_imports)]
+pub use shape::{EraserBrush, EraserKind, Shape};
 
 // Re-export color constants for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

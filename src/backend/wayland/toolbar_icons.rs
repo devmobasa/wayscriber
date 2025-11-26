@@ -42,8 +42,8 @@ pub fn draw_icon_pen(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.set_line_join(cairo::LineJoin::Round);
 
     // Pencil body - angled rectangle
-    let px = x + s * 0.55;  // Pencil center x
-    let py = y + s * 0.35;  // Pencil center y
+    let px = x + s * 0.55; // Pencil center x
+    let py = y + s * 0.35; // Pencil center y
     let angle = PI * 0.75; // 135 degrees (diagonal down-left)
     let body_len = s * 0.4;
     let body_w = s * 0.12;
@@ -73,9 +73,12 @@ pub fn draw_icon_pen(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.set_line_width((s * 0.1).max(1.5));
     ctx.move_to(x + s * 0.15, y + s * 0.72);
     ctx.curve_to(
-        x + s * 0.3, y + s * 0.62,
-        x + s * 0.45, y + s * 0.82,
-        x + s * 0.65, y + s * 0.72,
+        x + s * 0.3,
+        y + s * 0.62,
+        x + s * 0.45,
+        y + s * 0.82,
+        x + s * 0.65,
+        y + s * 0.72,
     );
     let _ = ctx.stroke();
 }
@@ -218,7 +221,12 @@ pub fn draw_icon_marker(ctx: &Context, x: f64, y: f64, size: f64) {
     let swatch_color = (1.0, 0.92, 0.35, 0.4);
 
     // Underlying swatch to imply transparent ink
-    ctx.set_source_rgba(swatch_color.0, swatch_color.1, swatch_color.2, swatch_color.3);
+    ctx.set_source_rgba(
+        swatch_color.0,
+        swatch_color.1,
+        swatch_color.2,
+        swatch_color.3,
+    );
     let swatch_h = s * 0.28;
     ctx.rectangle(x + s * 0.08, y + s * 0.65, s * 0.84, swatch_h);
     let _ = ctx.fill();
@@ -419,15 +427,7 @@ fn draw_double_curved_arrow(ctx: &Context, x: f64, y: f64, size: f64) {
 
     // Draw front arrow on top
     ctx.set_line_width(base_stroke);
-    draw_arc_with_head(
-        ctx,
-        cx,
-        cy,
-        r_front,
-        start_angle,
-        end_angle,
-        head_front,
-    );
+    draw_arc_with_head(ctx, cx, cy, r_front, start_angle, end_angle, head_front);
 
     ctx.restore().ok();
 }

@@ -19,6 +19,10 @@ pub struct DrawingConfig {
     #[serde(default = "default_thickness")]
     pub default_thickness: f64,
 
+    /// Default eraser size in pixels (valid range: 1.0 - 40.0)
+    #[serde(default = "default_eraser_size")]
+    pub default_eraser_size: f64,
+
     /// Default marker opacity multiplier (0.05 - 0.9), applied to the current color alpha
     #[serde(default = "default_marker_opacity")]
     pub marker_opacity: f64,
@@ -68,6 +72,7 @@ impl Default for DrawingConfig {
         Self {
             default_color: default_color(),
             default_thickness: default_thickness(),
+            default_eraser_size: default_eraser_size(),
             marker_opacity: default_marker_opacity(),
             default_fill_enabled: default_fill_enabled(),
             default_font_size: default_font_size(),
@@ -451,6 +456,10 @@ fn default_color() -> ColorSpec {
 
 fn default_thickness() -> f64 {
     3.0
+}
+
+fn default_eraser_size() -> f64 {
+    12.0
 }
 
 fn default_marker_opacity() -> f64 {

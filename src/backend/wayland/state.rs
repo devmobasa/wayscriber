@@ -1,5 +1,6 @@
 // Holds the live Wayland protocol state shared by the backend loop and the handler
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
+use crate::draw::Color;
 use anyhow::{Context, Result};
 use log::{debug, warn};
 use smithay_client_toolkit::{
@@ -19,12 +20,12 @@ use smithay_client_toolkit::{
 };
 use std::collections::HashSet;
 use std::time::Instant;
+#[cfg(tablet)]
+use wayland_client::protocol::wl_surface;
 use wayland_client::{
     QueueHandle,
     protocol::{wl_output, wl_seat, wl_shm},
 };
-#[cfg(tablet)]
-use wayland_client::protocol::wl_surface;
 #[cfg(tablet)]
 use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
@@ -33,6 +34,8 @@ use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
 };
 
+#[cfg(tablet)]
+use crate::input::tablet::TabletSettings;
 use crate::{
     capture::{
         CaptureDestination, CaptureManager,
@@ -45,8 +48,6 @@ use crate::{
     ui::toolbar::{ToolbarEvent, ToolbarSnapshot},
     util::Rect,
 };
-#[cfg(tablet)]
-use crate::input::tablet::TabletSettings;
 
 use super::{
     capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
@@ -332,8 +333,13 @@ impl WaylandState {
                 }
                 let scale = self.surface.scale();
                 let snapshot = self.toolbar_snapshot();
-                self.toolbar
-                    .ensure_created(qh, &self.compositor_state, layer_shell, scale, &snapshot);
+                self.toolbar.ensure_created(
+                    qh,
+                    &self.compositor_state,
+                    layer_shell,
+                    scale,
+                    &snapshot,
+                );
             }
         }
 
@@ -452,6 +458,8 @@ impl WaylandState {
         let phys_height = height.saturating_mul(scale as u32);
         let now = Instant::now();
         let highlight_active = self.input_state.advance_click_highlights(now);
+        let mut eraser_pattern: Option<cairo::SurfacePattern> = None;
+        let mut eraser_bg_color: Option<Color> = None;
 
         // Get a buffer from the pool
         let (buffer, canvas) = {
@@ -522,7 +530,6 @@ impl WaylandState {
             } else {
                 1.0
             };
-
             let _ = ctx.save();
             if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
                 ctx.scale(scale_x, scale_y);
@@ -533,8 +540,16 @@ impl WaylandState {
             } else if let Err(err) = ctx.paint() {
                 warn!("Failed to paint frozen background: {}", err);
             }
-            drop(surface);
             let _ = ctx.restore();
+
+            let pattern = cairo::SurfacePattern::create(&surface);
+            pattern.set_extend(cairo::Extend::Pad);
+            let mut matrix = cairo::Matrix::identity();
+            let scale_x_inv = 1.0 / (scale as f64 * scale_x.max(f64::MIN_POSITIVE));
+            let scale_y_inv = 1.0 / (scale as f64 * scale_y.max(f64::MIN_POSITIVE));
+            matrix.scale(scale_x_inv, scale_y_inv);
+            pattern.set_matrix(matrix);
+            eraser_pattern = Some(pattern);
         } else {
             // Render board background if in board mode (whiteboard/blackboard)
             crate::draw::render_board_background(
@@ -542,6 +557,10 @@ impl WaylandState {
                 self.input_state.board_mode(),
                 &self.input_state.board_config,
             );
+            eraser_bg_color = self
+                .input_state
+                .board_mode()
+                .background_color(&self.input_state.board_config);
         }
 
         // Scale subsequent drawing to logical coordinates
@@ -554,7 +573,15 @@ impl WaylandState {
             "Rendering {} completed shapes",
             self.input_state.canvas_set.active_frame().shapes.len()
         );
-        crate::draw::render_shapes(&ctx, &self.input_state.canvas_set.active_frame().shapes);
+        let eraser_ctx = crate::draw::EraserReplayContext {
+            pattern: eraser_pattern.as_ref().map(|p| p as &cairo::Pattern),
+            bg_color: eraser_bg_color,
+        };
+        crate::draw::render_shapes(
+            &ctx,
+            &self.input_state.canvas_set.active_frame().shapes,
+            Some(&eraser_ctx),
+        );
 
         // Render selection halo overlays
         if self.input_state.has_selection() {
@@ -721,8 +748,10 @@ impl WaylandState {
         #[cfg(tablet)]
         let prev_thickness = self.input_state.current_thickness;
         #[cfg(tablet)]
-        let thickness_event =
-            matches!(event, ToolbarEvent::SetThickness(_) | ToolbarEvent::NudgeThickness(_));
+        let thickness_event = matches!(
+            event,
+            ToolbarEvent::SetThickness(_) | ToolbarEvent::NudgeThickness(_)
+        );
 
         // Check if this is a toolbar config event that needs saving
         let needs_config_save = matches!(
@@ -789,8 +818,10 @@ impl WaylandState {
     /// Records the maximum stylus thickness seen during the current stroke.
     #[cfg(tablet)]
     pub(super) fn record_stylus_peak(&mut self, thickness: f64) {
-        self.stylus_peak_thickness =
-            Some(self.stylus_peak_thickness.map_or(thickness, |p| p.max(thickness)));
+        self.stylus_peak_thickness = Some(
+            self.stylus_peak_thickness
+                .map_or(thickness, |p| p.max(thickness)),
+        );
     }
 
     /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).

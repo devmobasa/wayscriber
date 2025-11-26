@@ -17,6 +17,9 @@ default_color = "red"
 # Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
+# Default eraser size in pixels (1.0 - 40.0)
+default_eraser_size = 12.0
+
 # Default font size for text mode (8.0 - 72.0)
 default_font_size = 32.0
 

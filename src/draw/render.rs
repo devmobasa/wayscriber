@@ -2,10 +2,18 @@
 
 use super::color::Color;
 use super::frame::DrawnShape;
-use super::shape::Shape;
+use super::shape::{EraserBrush, EraserKind, Shape};
 use crate::config::BoardConfig;
 use crate::input::BoardMode;
 use crate::util;
+
+/// Background replay context for eraser strokes.
+pub struct EraserReplayContext<'a> {
+    /// Optional pattern representing the current background (e.g., frozen image) in device space.
+    pub pattern: Option<&'a cairo::Pattern>,
+    /// Solid background color (board modes) when no pattern is available.
+    pub bg_color: Option<Color>,
+}
 
 /// Renders board background for whiteboard/blackboard modes.
 ///
@@ -35,9 +43,21 @@ pub fn render_board_background(ctx: &cairo::Context, mode: BoardMode, config: &B
 /// # Arguments
 /// * `ctx` - Cairo drawing context to render to
 /// * `shapes` - Slice of shapes to render
-pub fn render_shapes(ctx: &cairo::Context, shapes: &[DrawnShape]) {
+/// * `eraser_ctx` - Optional eraser replay context (required to render eraser strokes)
+pub fn render_shapes(
+    ctx: &cairo::Context,
+    shapes: &[DrawnShape],
+    eraser_ctx: Option<&EraserReplayContext>,
+) {
     for drawn in shapes {
-        render_shape(ctx, &drawn.shape);
+        match &drawn.shape {
+            Shape::EraserStroke { points, brush } => {
+                if let Some(ctx_eraser) = eraser_ctx {
+                    render_eraser_stroke(ctx, points, brush, ctx_eraser);
+                }
+            }
+            other => render_shape(ctx, other),
+        }
     }
 }
 
@@ -113,6 +133,10 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
         }
         Shape::MarkerStroke { points, thick, .. } => {
             render_freehand_borrowed(ctx, points, glow, thick + outline_width);
+        }
+        Shape::EraserStroke { points, brush } => {
+            let outline = brush.size + outline_width;
+            render_freehand_borrowed(ctx, points, glow, outline);
         }
         Shape::Text { .. } => {
             if let Some(bounds) = drawn.shape.bounding_box() {
@@ -232,6 +256,9 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
         } => {
             render_marker_stroke_borrowed(ctx, points, *color, *thick);
         }
+        Shape::EraserStroke { .. } => {
+            // Eraser strokes require an eraser replay context; ignore in generic rendering.
+        }
     }
 }
 
@@ -309,6 +336,66 @@ pub fn render_freehand_borrowed(
     }
 
     let _ = ctx.stroke();
+}
+
+fn render_eraser_stroke(
+    ctx: &cairo::Context,
+    points: &[(i32, i32)],
+    brush: &EraserBrush,
+    eraser_ctx: &EraserReplayContext,
+) {
+    if points.is_empty() {
+        return;
+    }
+
+    let stroke_width = brush.size.max(1.0);
+    let (cap, join) = match brush.kind {
+        EraserKind::Circle => (cairo::LineCap::Round, cairo::LineJoin::Round),
+        EraserKind::Rect => (cairo::LineCap::Square, cairo::LineJoin::Miter),
+    };
+
+    let build_path = |ctx: &cairo::Context| {
+        if points.len() == 1 {
+            let (x, y) = (points[0].0 as f64, points[0].1 as f64);
+            let half = stroke_width / 2.0;
+            match brush.kind {
+                EraserKind::Circle => ctx.arc(x, y, half, 0.0, std::f64::consts::PI * 2.0),
+                EraserKind::Rect => ctx.rectangle(x - half, y - half, stroke_width, stroke_width),
+            }
+            return;
+        }
+
+        let (x0, y0) = points[0];
+        ctx.move_to(x0 as f64, y0 as f64);
+        for &(x, y) in &points[1..] {
+            ctx.line_to(x as f64, y as f64);
+        }
+    };
+
+    let _ = ctx.save();
+    ctx.set_line_width(stroke_width);
+    ctx.set_line_cap(cap);
+    ctx.set_line_join(join);
+
+    // Clear pass
+    build_path(ctx);
+    ctx.set_operator(cairo::Operator::Clear);
+    let _ = ctx.stroke();
+
+    // Paint background back into the cleared region, if available
+    if let Some(pattern) = eraser_ctx.pattern {
+        build_path(ctx);
+        ctx.set_operator(cairo::Operator::Over);
+        let _ = ctx.set_source(pattern);
+        let _ = ctx.stroke();
+    } else if let Some(color) = eraser_ctx.bg_color {
+        build_path(ctx);
+        ctx.set_operator(cairo::Operator::Over);
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+        let _ = ctx.stroke();
+    }
+
+    let _ = ctx.restore();
 }
 
 /// Render a marker stroke with soft edges and screen blending to mimic a physical highlighter.

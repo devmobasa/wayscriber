@@ -1,6 +1,6 @@
 use super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::config::Action;
-use crate::draw::{Color, FontDescriptor};
+use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::tool::Tool;
 
 impl InputState {
@@ -42,6 +42,43 @@ impl InputState {
         self.tool_override
     }
 
+    /// Sets thickness or eraser size depending on the active tool.
+    pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
+        if self.active_tool() == Tool::Eraser {
+            self.set_eraser_size(value)
+        } else {
+            self.set_thickness(value)
+        }
+    }
+
+    /// Nudges thickness or eraser size depending on the active tool.
+    pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
+        if self.active_tool() == Tool::Eraser {
+            self.set_eraser_size(self.eraser_size + delta)
+        } else {
+            self.set_thickness(self.current_thickness + delta)
+        }
+    }
+
+    /// Sets the eraser brush shape.
+    pub fn set_eraser_kind(&mut self, kind: EraserKind) -> bool {
+        if self.eraser_kind == kind {
+            return false;
+        }
+        self.eraser_kind = kind;
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Toggles between circle and rectangle eraser brushes.
+    pub fn toggle_eraser_kind(&mut self) -> bool {
+        let next = match self.eraser_kind {
+            EraserKind::Circle => EraserKind::Rect,
+            EraserKind::Rect => EraserKind::Circle,
+        };
+        self.set_eraser_kind(next)
+    }
+
     /// Updates the current drawing color to an arbitrary value. Returns true if changed.
     pub fn set_color(&mut self, color: Color) -> bool {
         if self.current_color == color {
@@ -63,6 +100,18 @@ impl InputState {
         }
 
         self.current_thickness = clamped;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Sets the absolute eraser size (px), clamped to valid bounds. Returns true if changed.
+    pub fn set_eraser_size(&mut self, size: f64) -> bool {
+        let clamped = size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        if (clamped - self.eraser_size).abs() < f64::EPSILON {
+            return false;
+        }
+        self.eraser_size = clamped;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true

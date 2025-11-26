@@ -1,4 +1,6 @@
-use crate::draw::{Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape};
+use crate::draw::{
+    Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape,
+};
 use crate::input::tool::Tool;
 use crate::util;
 
@@ -94,6 +96,7 @@ impl InputState {
                     color: self.marker_color(),
                     thick: self.current_thickness,
                 }),
+                Tool::Eraser => None, // Preview handled separately to avoid clearing the buffer
                 Tool::Highlight => None,
                 Tool::Select => None,
                 // No provisional shape for other tools
@@ -149,6 +152,17 @@ impl InputState {
                     );
                     true
                 }
+                Tool::Eraser => {
+                    // Visual preview without actually clearing
+                    let preview_color = Color {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 0.35,
+                    };
+                    render_freehand_borrowed(ctx, points, preview_color, self.eraser_size);
+                    true
+                }
                 _ => {
                     // For other tools, use the normal path (no clone needed)
                     if let Some(shape) = self.get_provisional_shape(current_x, current_y) {
@@ -167,6 +181,9 @@ impl InputState {
     pub(crate) fn marker_color(&self) -> Color {
         // Keep a minimum alpha so the marker remains visible even if a fully transparent color was set.
         let alpha = (self.current_color.a * self.marker_opacity).clamp(0.05, 0.9);
-        Color { a: alpha, ..self.current_color }
+        Color {
+            a: alpha,
+            ..self.current_color
+        }
     }
 }

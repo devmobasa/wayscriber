@@ -421,6 +421,12 @@ impl InputState {
                     point.1 += dy;
                 }
             }
+            Shape::EraserStroke { points, .. } => {
+                for point in points {
+                    point.0 += dx;
+                    point.1 += dy;
+                }
+            }
         }
     }
 

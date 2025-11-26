@@ -11,7 +11,7 @@ use super::{
 };
 use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{CanvasSet, Color, DirtyTracker, FontDescriptor, ShapeId};
+use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{modifiers::Modifiers, tool::Tool};
 use crate::util::Rect;
@@ -65,6 +65,10 @@ pub struct InputState {
     pub current_color: Color,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
+    /// Current eraser size in pixels
+    pub eraser_size: f64,
+    /// Current eraser brush shape
+    pub eraser_kind: EraserKind,
     /// Opacity multiplier for marker tool strokes
     pub marker_opacity: f64,
     /// Current font size for text mode (from config)
@@ -216,6 +220,7 @@ impl InputState {
     pub fn with_defaults(
         color: Color,
         thickness: f64,
+        eraser_size: f64,
         marker_opacity: f64,
         fill_enabled: bool,
         font_size: f64,
@@ -236,10 +241,13 @@ impl InputState {
         custom_undo_steps: usize,
         custom_redo_steps: usize,
     ) -> Self {
+        let clamped_eraser = eraser_size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let mut state = Self {
             canvas_set: CanvasSet::new(),
             current_color: color,
             current_thickness: thickness,
+            eraser_size: clamped_eraser,
+            eraser_kind: EraserKind::Circle,
             marker_opacity,
             current_font_size: font_size,
             font_descriptor,

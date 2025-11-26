@@ -22,5 +22,7 @@ pub enum Tool {
     Marker,
     /// Highlight-only tool (no drawing, emits click highlight)
     Highlight,
+    /// Eraser brush that removes content within its stroke
+    Eraser,
     // Note: Text mode uses DrawingState::TextInput instead of Tool::Text
 }

@@ -35,6 +35,9 @@ default_color = "red"
 # Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
+# Default eraser size in pixels (1.0 - 40.0)
+default_eraser_size = 12.0
+
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
@@ -49,11 +52,13 @@ default_font_size = 32.0
 
 **Runtime Adjustments:**
 - **Pen thickness**: Use `+`/`-` keys or scroll wheel (range: 1-40px)
+- **Eraser size**: Use `+`/`-` keys or scroll wheel when eraser tool is active (range: 1-40px)
 - **Font size**: Use `Ctrl+Shift+`/`-` or `Shift+Scroll` (range: 8-72px)
 
 **Defaults:**
 - Color: Red
 - Thickness: 3.0px
+- Eraser size: 12.0px
 - Font size: 32.0px
 
 ### `[arrow]` - Arrow Geometry

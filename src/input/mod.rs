@@ -9,18 +9,18 @@ pub mod events;
 pub mod hit_test;
 pub mod modifiers;
 pub mod state;
-pub mod tool;
 #[cfg(tablet)]
 pub mod tablet;
+pub mod tool;
 
 // Re-export commonly used types at module level
 pub use board_mode::BoardMode;
 pub use events::{Key, MouseButton};
 pub use state::{ClickHighlightSettings, DrawingState, InputState};
-pub use tool::Tool;
 #[cfg(tablet)]
 #[allow(unused_imports)]
 pub use tablet::TabletSettings;
+pub use tool::Tool;
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

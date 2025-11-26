@@ -13,14 +13,14 @@ pub mod types;
 // Re-export commonly used types at module level
 pub use enums::StatusPosition;
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
+#[cfg(tablet)]
+pub use types::TabletInputConfig;
 #[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
     HistoryConfig, PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode,
     StatusBarStyle, ToolbarConfig, UiConfig,
 };
-#[cfg(tablet)]
-pub use types::TabletInputConfig;
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]
@@ -218,7 +218,10 @@ mod tests {
                     .contains("config.toml."),
                 "backup file should include timestamp suffix"
             );
-            assert_eq!(fs::read_to_string(&backup_path).unwrap(), "old_content = true");
+            assert_eq!(
+                fs::read_to_string(&backup_path).unwrap(),
+                "old_content = true"
+            );
 
             let new_contents = fs::read_to_string(&config_file).unwrap();
             assert!(
@@ -345,6 +348,22 @@ impl Config {
                 .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         }
 
+        // Eraser size: 1.0 - 40.0
+        if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS)
+            .contains(&self.drawing.default_eraser_size)
+        {
+            log::warn!(
+                "Invalid default_eraser_size {:.1}, clamping to {:.1}-{:.1} range",
+                self.drawing.default_eraser_size,
+                MIN_STROKE_THICKNESS,
+                MAX_STROKE_THICKNESS
+            );
+            self.drawing.default_eraser_size = self
+                .drawing
+                .default_eraser_size
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        }
+
         // Marker opacity: 0.05 - 0.9
         if !(0.05..=0.9).contains(&self.drawing.marker_opacity) {
             log::warn!(
@@ -387,12 +406,19 @@ impl Config {
         #[cfg(tablet)]
         {
             if self.tablet.min_thickness > self.tablet.max_thickness {
-                std::mem::swap(&mut self.tablet.min_thickness, &mut self.tablet.max_thickness);
+                std::mem::swap(
+                    &mut self.tablet.min_thickness,
+                    &mut self.tablet.max_thickness,
+                );
             }
-            self.tablet.min_thickness =
-                self.tablet.min_thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-            self.tablet.max_thickness =
-                self.tablet.max_thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            self.tablet.min_thickness = self
+                .tablet
+                .min_thickness
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            self.tablet.max_thickness = self
+                .tablet
+                .max_thickness
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         }
 
         // History delays: clamp to a reasonable range to avoid long freezes or instant drains.
@@ -400,18 +426,34 @@ impl Config {
         const MIN_DELAY_MS: u64 = 50;
         let clamp_delay = |label: &str, value: &mut u64| {
             if *value < MIN_DELAY_MS {
-                log::warn!("{} {}ms too small; clamping to {}ms", label, *value, MIN_DELAY_MS);
+                log::warn!(
+                    "{} {}ms too small; clamping to {}ms",
+                    label,
+                    *value,
+                    MIN_DELAY_MS
+                );
                 *value = MIN_DELAY_MS;
             }
             if *value > MAX_DELAY_MS {
-                log::warn!("{} {}ms too large; clamping to {}ms", label, *value, MAX_DELAY_MS);
+                log::warn!(
+                    "{} {}ms too large; clamping to {}ms",
+                    label,
+                    *value,
+                    MAX_DELAY_MS
+                );
                 *value = MAX_DELAY_MS;
             }
         };
         clamp_delay("undo_all_delay_ms", &mut self.history.undo_all_delay_ms);
         clamp_delay("redo_all_delay_ms", &mut self.history.redo_all_delay_ms);
-        clamp_delay("custom_undo_delay_ms", &mut self.history.custom_undo_delay_ms);
-        clamp_delay("custom_redo_delay_ms", &mut self.history.custom_redo_delay_ms);
+        clamp_delay(
+            "custom_undo_delay_ms",
+            &mut self.history.custom_undo_delay_ms,
+        );
+        clamp_delay(
+            "custom_redo_delay_ms",
+            &mut self.history.custom_redo_delay_ms,
+        );
 
         // Custom history step counts: clamp to sane bounds.
         const MIN_STEPS: usize = 1;
@@ -641,9 +683,9 @@ impl Config {
     /// Determines the directory containing the active configuration file based on the source.
     pub fn config_directory_from_source(_source: &ConfigSource) -> Result<PathBuf> {
         let path = Self::get_config_path()?;
-        path.parent().map(PathBuf::from).ok_or_else(|| {
-            anyhow!("Config path {} has no parent directory", path.display())
-        })
+        path.parent()
+            .map(PathBuf::from)
+            .ok_or_else(|| anyhow!("Config path {} has no parent directory", path.display()))
     }
 
     /// Loads configuration from file, or returns defaults if not found.
