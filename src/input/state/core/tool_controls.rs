@@ -42,6 +42,24 @@ impl InputState {
         self.tool_override
     }
 
+    /// Sets thickness or eraser size depending on the active tool.
+    pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
+        if self.active_tool() == Tool::Eraser {
+            self.set_eraser_size(value)
+        } else {
+            self.set_thickness(value)
+        }
+    }
+
+    /// Nudges thickness or eraser size depending on the active tool.
+    pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
+        if self.active_tool() == Tool::Eraser {
+            self.set_eraser_size(self.eraser_size + delta)
+        } else {
+            self.set_thickness(self.current_thickness + delta)
+        }
+    }
+
     /// Updates the current drawing color to an arbitrary value. Returns true if changed.
     pub fn set_color(&mut self, color: Color) -> bool {
         if self.current_color == color {
@@ -63,6 +81,18 @@ impl InputState {
         }
 
         self.current_thickness = clamped;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Sets the absolute eraser size (px), clamped to valid bounds. Returns true if changed.
+    pub fn set_eraser_size(&mut self, size: f64) -> bool {
+        let clamped = size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        if (clamped - self.eraser_size).abs() < f64::EPSILON {
+            return false;
+        }
+        self.eraser_size = clamped;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true

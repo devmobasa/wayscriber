@@ -76,6 +76,7 @@ impl InputState {
                 Key::Escape
                 | Key::F1
                 | Key::F2
+                | Key::F4
                 | Key::F9
                 | Key::F10
                 | Key::F11
@@ -102,6 +103,7 @@ impl InputState {
                     Key::Space => "Space".to_string(),
                     Key::F1 => "F1".to_string(),
                     Key::F2 => "F2".to_string(),
+                    Key::F4 => "F4".to_string(),
                     Key::F9 => "F9".to_string(),
                     Key::F10 => "F10".to_string(),
                     Key::F11 => "F11".to_string(),
@@ -243,6 +245,7 @@ impl InputState {
             Key::Space => "Space".to_string(),
             Key::F1 => "F1".to_string(),
             Key::F2 => "F2".to_string(),
+            Key::F4 => "F4".to_string(),
             Key::F9 => "F9".to_string(),
             Key::F10 => "F10".to_string(),
             Key::F11 => "F11".to_string(),
@@ -403,14 +406,24 @@ impl InputState {
                 }
             }
             Action::IncreaseThickness => {
-                self.current_thickness = (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                if self.active_tool() == Tool::Eraser {
+                    self.set_eraser_size(self.eraser_size + 1.0);
+                } else {
+                    self.current_thickness =
+                        (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                }
             }
             Action::DecreaseThickness => {
-                self.current_thickness = (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                if self.active_tool() == Tool::Eraser {
+                    self.set_eraser_size(self.eraser_size - 1.0);
+                } else {
+                    self.current_thickness =
+                        (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                }
             }
             Action::IncreaseMarkerOpacity => {
                 self.set_marker_opacity(self.marker_opacity + 0.05);
@@ -420,6 +433,12 @@ impl InputState {
             }
             Action::SelectMarkerTool => {
                 self.set_tool_override(Some(Tool::Marker));
+            }
+            Action::SelectEraserTool => {
+                self.set_tool_override(Some(Tool::Eraser));
+            }
+            Action::SelectPenTool => {
+                self.set_tool_override(Some(Tool::Pen));
             }
             Action::IncreaseFontSize => {
                 self.adjust_font_size(2.0);

@@ -101,7 +101,9 @@ fn main() -> anyhow::Result<()> {
         log::info!("  - Decrease thickness: - or _ or scroll up");
         log::info!("  - Freeze screen: Ctrl+Shift+F (toggle frozen background)");
         log::info!("  - Context menu: Right Click or Shift+F10");
-        log::info!("  - Help: F1/F10   •   Toolbar: F2/F9   •   Configurator: F11   •   Status bar: F12");
+        log::info!(
+            "  - Help: F1/F10   •   Toolbar: F2/F9   •   Configurator: F11   •   Status bar: F4/F12"
+        );
         log::info!("  - Exit: Escape");
         if cli.freeze {
             log::info!("Starting frozen mode (freeze-on-start requested)");

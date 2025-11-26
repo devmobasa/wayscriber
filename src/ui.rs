@@ -68,8 +68,12 @@ pub fn render_status_bar(
     screen_height: u32,
 ) {
     let color = &input_state.current_color;
-    let thickness = input_state.current_thickness;
     let tool = input_state.active_tool();
+    let thickness = if tool == Tool::Eraser {
+        input_state.eraser_size
+    } else {
+        input_state.current_thickness
+    };
 
     // Determine tool name
     let tool_name = match &input_state.state {
@@ -83,6 +87,7 @@ pub fn render_status_bar(
             Tool::Arrow => "Arrow",
             Tool::Marker => "Marker",
             Tool::Highlight => "Highlight",
+            Tool::Eraser => "Eraser",
         },
         DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Idle => match tool {
@@ -94,6 +99,7 @@ pub fn render_status_bar(
             Tool::Arrow => "Arrow",
             Tool::Marker => "Marker",
             Tool::Highlight => "Highlight",
+            Tool::Eraser => "Eraser",
         },
     };
 
@@ -329,7 +335,7 @@ pub fn render_help_overlay(
             title: "Drawing Tools",
             rows: vec![
                 Row {
-                    key: "Drag",
+                    key: "F / Drag",
                     action: "Freehand pen",
                 },
                 Row {
@@ -356,6 +362,14 @@ pub fn render_help_overlay(
                     key: "T",
                     action: "Text mode",
                 },
+                Row {
+                    key: "D",
+                    action: "Eraser tool",
+                },
+                Row {
+                    key: "H",
+                    action: "Marker tool",
+                },
             ],
             badges: Vec::new(),
         },
@@ -364,7 +378,7 @@ pub fn render_help_overlay(
             rows: vec![
                 Row {
                     key: "+/- or Scroll",
-                    action: "Adjust pen thickness",
+                    action: "Adjust size (pen/eraser)",
                 },
                 Row {
                     key: "Ctrl+Shift+/-",
@@ -446,7 +460,7 @@ pub fn render_help_overlay(
                     action: "Open configurator",
                 },
                 Row {
-                    key: "F12",
+                    key: "F4 / F12",
                     action: "Toggle status bar",
                 },
             ],

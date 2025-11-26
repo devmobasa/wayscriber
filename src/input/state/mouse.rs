@@ -173,7 +173,7 @@ impl InputState {
 
         let mut drawing = false;
         if let DrawingState::Drawing { tool, points, .. } = &mut self.state {
-            if *tool == Tool::Pen || *tool == Tool::Marker {
+            if *tool == Tool::Pen || *tool == Tool::Marker || *tool == Tool::Eraser {
                 points.push((x, y));
             }
             drawing = true;
@@ -300,6 +300,13 @@ impl InputState {
                         points,
                         color: self.marker_color(),
                         thick: self.current_thickness,
+                    },
+                    Tool::Eraser => Shape::EraserStroke {
+                        points,
+                        brush: crate::draw::shape::EraserBrush {
+                            size: self.eraser_size,
+                            kind: self.eraser_kind,
+                        },
                     },
                     Tool::Highlight => {
                         self.clear_provisional_dirty();

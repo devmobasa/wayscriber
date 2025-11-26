@@ -16,7 +16,6 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use libc;
 
-
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayState {
@@ -85,9 +84,7 @@ impl WayscriberTray {
                     "Failed to launch wayscriber-configurator using '{}': {}",
                     self.configurator_binary, err
                 );
-                error!(
-                    "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
-                );
+                error!("Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed.");
             }
         }
     }

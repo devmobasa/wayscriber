@@ -5,10 +5,7 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
-use crate::input::{
-    MouseButton,
-    state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
-};
+use crate::input::{MouseButton, Tool};
 
 use super::super::state::WaylandState;
 
@@ -157,8 +154,6 @@ impl PointerHandler for WaylandState {
                     if on_toolbar || self.pointer_over_toolbar {
                         continue;
                     }
-                    #[cfg(tablet)]
-                    let prev_thickness = self.input_state.current_thickness;
                     let scroll_direction = if vertical.discrete != 0 {
                         vertical.discrete
                     } else if vertical.absolute.abs() > 0.1 {
@@ -181,35 +176,40 @@ impl PointerHandler for WaylandState {
                                 self.input_state.current_font_size
                             );
                         }
-                    } else if scroll_direction > 0 {
-                        self.input_state.current_thickness =
-                            (self.input_state.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
-                        debug!(
-                            "Thickness decreased: {:.0}px",
-                            self.input_state.current_thickness
-                        );
-                        self.input_state.needs_redraw = true;
-                    } else if scroll_direction < 0 {
-                        self.input_state.current_thickness =
-                            (self.input_state.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
-                        debug!(
-                            "Thickness increased: {:.0}px",
-                            self.input_state.current_thickness
-                        );
-                        self.input_state.needs_redraw = true;
-                    }
-                    #[cfg(tablet)]
-                    if (self.input_state.current_thickness - prev_thickness).abs()
-                        > f64::EPSILON
-                    {
-                        self.stylus_base_thickness = Some(self.input_state.current_thickness);
-                        if self.stylus_tip_down {
-                            self.stylus_pressure_thickness =
-                                Some(self.input_state.current_thickness);
-                            self.record_stylus_peak(self.input_state.current_thickness);
-                        } else {
-                            self.stylus_pressure_thickness = None;
-                            self.stylus_peak_thickness = None;
+                    } else if scroll_direction != 0 {
+                        let delta = if scroll_direction > 0 { -1.0 } else { 1.0 };
+                        let eraser_active = self.input_state.active_tool() == Tool::Eraser;
+                        #[cfg(tablet)]
+                        let prev_thickness = self.input_state.current_thickness;
+
+                        if self.input_state.nudge_thickness_for_active_tool(delta) {
+                            if eraser_active {
+                                debug!(
+                                    "Eraser size adjusted: {:.0}px",
+                                    self.input_state.eraser_size
+                                );
+                            } else {
+                                debug!(
+                                    "Thickness adjusted: {:.0}px",
+                                    self.input_state.current_thickness
+                                );
+                            }
+                            self.input_state.needs_redraw = true;
+                        }
+                        #[cfg(tablet)]
+                        if !eraser_active
+                            && (self.input_state.current_thickness - prev_thickness).abs()
+                                > f64::EPSILON
+                        {
+                            self.stylus_base_thickness = Some(self.input_state.current_thickness);
+                            if self.stylus_tip_down {
+                                self.stylus_pressure_thickness =
+                                    Some(self.input_state.current_thickness);
+                                self.record_stylus_peak(self.input_state.current_thickness);
+                            } else {
+                                self.stylus_pressure_thickness = None;
+                                self.stylus_peak_thickness = None;
+                            }
                         }
                     }
                 }

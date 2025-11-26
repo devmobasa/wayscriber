@@ -1,7 +1,7 @@
 use super::base::{DrawingState, InputState};
 use crate::draw::shape::{
-    bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_line,
-    bounding_box_for_points, bounding_box_for_rect, bounding_box_for_text,
+    bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_eraser,
+    bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect, bounding_box_for_text,
 };
 use crate::input::tool::Tool;
 use crate::util::{self, Rect};
@@ -44,9 +44,11 @@ impl InputState {
             match tool {
                 Tool::Pen => bounding_box_for_points(points, self.current_thickness),
                 Tool::Marker => {
-                    let inflated = (self.current_thickness * 1.35).max(self.current_thickness + 1.0);
+                    let inflated =
+                        (self.current_thickness * 1.35).max(self.current_thickness + 1.0);
                     bounding_box_for_points(points, inflated)
                 }
+                Tool::Eraser => bounding_box_for_eraser(points, self.eraser_size),
                 Tool::Line => bounding_box_for_line(
                     *start_x,
                     *start_y,

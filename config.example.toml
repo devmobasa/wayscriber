@@ -17,6 +17,9 @@ default_color = "red"
 # Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
+# Default eraser size in pixels (1.0 - 40.0)
+default_eraser_size = 12.0
+
 # Default font size for text mode (8.0 - 72.0)
 default_font_size = 32.0
 
@@ -411,10 +414,10 @@ toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
 
 # Toggle help overlay
-toggle_help = ["F10"]
+toggle_help = ["F10", "F1"]
 
 # Toggle status bar
-toggle_status_bar = ["F12"]
+toggle_status_bar = ["F12", "F4"]
 
 # Toggle context menu (keyboard alternative to right-click)
 open_context_menu = ["Shift+F10", "Menu"]
