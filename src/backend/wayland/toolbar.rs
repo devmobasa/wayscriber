@@ -12,9 +12,7 @@ use wayland_client::{
     protocol::{wl_output, wl_surface},
 };
 
-use crate::draw::{
-    BLACK, BLUE, Color, EraserKind, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW,
-};
+use crate::draw::{BLACK, BLUE, Color, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::Tool;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
@@ -1486,15 +1484,7 @@ fn render_side_palette(
     });
 
     // Value display on far right
-    let thickness_text = if snapshot.thickness_targets_eraser {
-        let brush = match snapshot.eraser_kind {
-            EraserKind::Rect => "[rect]",
-            EraserKind::Circle => "(circle)",
-        };
-        format!("{:.0}px {}", snapshot.thickness, brush)
-    } else {
-        format!("{:.0}px", snapshot.thickness)
-    };
+    let thickness_text = format!("{:.0}px", snapshot.thickness);
     let value_x = width - x - value_w;
     draw_label_center(
         ctx,
@@ -1504,15 +1494,7 @@ fn render_side_palette(
         btn_size,
         &thickness_text,
     );
-    if snapshot.thickness_targets_eraser {
-        hits.push(HitRegion {
-            rect: (value_x, slider_row_y, value_w, btn_size),
-            event: ToolbarEvent::ToggleEraserKind,
-            kind: HitKind::Click,
-            tooltip: Some("Toggle eraser brush shape"),
-        });
-    }
-
+    // Eraser brush shape toggle removed; default brush remains circle.
     y += slider_card_h + section_gap;
 
     // ===== Text Size Section =====
