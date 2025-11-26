@@ -414,7 +414,7 @@ toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
 
 # Toggle help overlay
-toggle_help = ["F10"]
+toggle_help = ["F10", "F1"]
 
 # Toggle status bar
 toggle_status_bar = ["F12"]

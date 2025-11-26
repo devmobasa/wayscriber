@@ -431,6 +431,9 @@ impl InputState {
             Action::SelectMarkerTool => {
                 self.set_tool_override(Some(Tool::Marker));
             }
+            Action::SelectEraserTool => {
+                self.set_tool_override(Some(Tool::Eraser));
+            }
             Action::IncreaseFontSize => {
                 self.adjust_font_size(2.0);
             }
