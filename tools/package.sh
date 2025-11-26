@@ -76,10 +76,10 @@ warn() { printf '\033[1;33m[WARN]\033[0m %s\n' "$*"; }
 
 build_binaries() {
     [[ "$SKIP_BUILD" == 1 ]] && { warn "Skipping cargo build (SKIP_BUILD=1)"; return; }
-    info "Building release binaries (locked, frozen)"
-    (cd "$REPO_ROOT" && cargo build --locked --frozen --release --bins)
+    info "Building release binaries (locked)"
+    (cd "$REPO_ROOT" && cargo build --locked --release --bins)
     if [[ -d "${REPO_ROOT}/configurator" ]]; then
-        (cd "$REPO_ROOT" && cargo build --locked --frozen --release --bins --manifest-path configurator/Cargo.toml)
+        (cd "$REPO_ROOT" && cargo build --locked --release --bins --manifest-path configurator/Cargo.toml)
     fi
 }
 
