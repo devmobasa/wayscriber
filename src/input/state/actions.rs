@@ -76,6 +76,7 @@ impl InputState {
                 Key::Escape
                 | Key::F1
                 | Key::F2
+                | Key::F4
                 | Key::F9
                 | Key::F10
                 | Key::F11
@@ -102,6 +103,7 @@ impl InputState {
                     Key::Space => "Space".to_string(),
                     Key::F1 => "F1".to_string(),
                     Key::F2 => "F2".to_string(),
+                    Key::F4 => "F4".to_string(),
                     Key::F9 => "F9".to_string(),
                     Key::F10 => "F10".to_string(),
                     Key::F11 => "F11".to_string(),
@@ -243,6 +245,7 @@ impl InputState {
             Key::Space => "Space".to_string(),
             Key::F1 => "F1".to_string(),
             Key::F2 => "F2".to_string(),
+            Key::F4 => "F4".to_string(),
             Key::F9 => "F9".to_string(),
             Key::F10 => "F10".to_string(),
             Key::F11 => "F11".to_string(),
@@ -433,6 +436,9 @@ impl InputState {
             }
             Action::SelectEraserTool => {
                 self.set_tool_override(Some(Tool::Eraser));
+            }
+            Action::SelectPenTool => {
+                self.set_tool_override(Some(Tool::Pen));
             }
             Action::IncreaseFontSize => {
                 self.adjust_font_size(2.0);

@@ -187,6 +187,7 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::Z => Key::Char('Z'),
         Keysym::F1 => Key::F1,
         Keysym::F2 => Key::F2,
+        Keysym::F4 => Key::F4,
         Keysym::F9 => Key::F9,
         Keysym::F10 => Key::F10,
         Keysym::F11 => Key::F11,

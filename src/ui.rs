@@ -335,7 +335,7 @@ pub fn render_help_overlay(
             title: "Drawing Tools",
             rows: vec![
                 Row {
-                    key: "Drag",
+                    key: "F / Drag",
                     action: "Freehand pen",
                 },
                 Row {
@@ -361,6 +361,14 @@ pub fn render_help_overlay(
                 Row {
                     key: "T",
                     action: "Text mode",
+                },
+                Row {
+                    key: "D",
+                    action: "Eraser tool",
+                },
+                Row {
+                    key: "H",
+                    action: "Marker tool",
                 },
             ],
             badges: Vec::new(),
@@ -452,7 +460,7 @@ pub fn render_help_overlay(
                     action: "Open configurator",
                 },
                 Row {
-                    key: "F12",
+                    key: "F4 / F12",
                     action: "Toggle status bar",
                 },
             ],

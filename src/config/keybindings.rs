@@ -39,6 +39,7 @@ pub enum Action {
     DecreaseMarkerOpacity,
     SelectMarkerTool,
     SelectEraserTool,
+    SelectPenTool,
     IncreaseFontSize,
     DecreaseFontSize,
 
@@ -245,6 +246,9 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_select_eraser_tool")]
     pub select_eraser_tool: Vec<String>,
 
+    #[serde(default = "default_select_pen_tool")]
+    pub select_pen_tool: Vec<String>,
+
     #[serde(default = "default_increase_font_size")]
     pub increase_font_size: Vec<String>,
 
@@ -359,6 +363,7 @@ impl Default for KeybindingsConfig {
             decrease_marker_opacity: default_decrease_marker_opacity(),
             select_marker_tool: default_select_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
+            select_pen_tool: default_select_pen_tool(),
             increase_font_size: default_increase_font_size(),
             decrease_font_size: default_decrease_font_size(),
             toggle_whiteboard: default_toggle_whiteboard(),
@@ -503,6 +508,10 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::SelectEraserTool)?;
         }
 
+        for binding_str in &self.select_pen_tool {
+            insert_binding(binding_str, Action::SelectPenTool)?;
+        }
+
         for binding_str in &self.increase_font_size {
             insert_binding(binding_str, Action::IncreaseFontSize)?;
         }
@@ -539,7 +548,17 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::ToggleHelp)?;
         }
 
-        for binding_str in &self.toggle_status_bar {
+        let mut status_bindings = if self.toggle_status_bar.is_empty() {
+            default_toggle_status_bar()
+        } else {
+            let mut v = self.toggle_status_bar.clone();
+            if !v.iter().any(|s| s.eq_ignore_ascii_case("F4")) {
+                v.push("F4".to_string());
+            }
+            v
+        };
+        status_bindings.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        for binding_str in &status_bindings {
             insert_binding(binding_str, Action::ToggleStatusBar)?;
         }
 
@@ -719,6 +738,10 @@ fn default_select_eraser_tool() -> Vec<String> {
     vec!["D".to_string()]
 }
 
+fn default_select_pen_tool() -> Vec<String> {
+    vec!["F".to_string()]
+}
+
 fn default_increase_font_size() -> Vec<String> {
     vec!["Ctrl+Shift++".to_string(), "Ctrl+Shift+=".to_string()]
 }
@@ -744,7 +767,7 @@ fn default_toggle_help() -> Vec<String> {
 }
 
 fn default_toggle_status_bar() -> Vec<String> {
-    vec!["F12".to_string()]
+    vec!["F12".to_string(), "F4".to_string()]
 }
 
 fn default_toggle_click_highlight() -> Vec<String> {
