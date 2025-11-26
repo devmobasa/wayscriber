@@ -1,6 +1,6 @@
 use super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::config::Action;
-use crate::draw::{Color, EraserKind, FontDescriptor};
+use crate::draw::{Color, FontDescriptor};
 use crate::input::tool::Tool;
 
 impl InputState {
@@ -58,25 +58,6 @@ impl InputState {
         } else {
             self.set_thickness(self.current_thickness + delta)
         }
-    }
-
-    /// Sets the eraser brush shape.
-    pub fn set_eraser_kind(&mut self, kind: EraserKind) -> bool {
-        if self.eraser_kind == kind {
-            return false;
-        }
-        self.eraser_kind = kind;
-        self.needs_redraw = true;
-        true
-    }
-
-    /// Toggles between circle and rectangle eraser brushes.
-    pub fn toggle_eraser_kind(&mut self) -> bool {
-        let next = match self.eraser_kind {
-            EraserKind::Circle => EraserKind::Rect,
-            EraserKind::Rect => EraserKind::Circle,
-        };
-        self.set_eraser_kind(next)
     }
 
     /// Updates the current drawing color to an arbitrary value. Returns true if changed.

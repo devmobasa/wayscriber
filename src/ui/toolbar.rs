@@ -51,8 +51,6 @@ pub enum ToolbarEvent {
     ToggleActionsSection(bool),
     /// Toggle marker opacity UI visibility
     ToggleMarkerOpacitySection(bool),
-    /// Toggle eraser brush shape
-    ToggleEraserKind,
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -105,12 +103,12 @@ impl ToolbarSnapshot {
         let active_tool = state.active_tool();
         let thickness_targets_eraser =
             active_tool == Tool::Eraser || matches!(state.tool_override(), Some(Tool::Eraser));
+        let eraser_kind = state.eraser_kind;
         let thickness_value = if thickness_targets_eraser {
             state.eraser_size
         } else {
             state.current_thickness
         };
-        let eraser_kind = state.eraser_kind;
         Self {
             active_tool,
             tool_override: state.tool_override(),
@@ -350,10 +348,6 @@ impl InputState {
                 } else {
                     false
                 }
-            }
-            ToolbarEvent::ToggleEraserKind => {
-                self.toggle_eraser_kind();
-                true
             }
         }
     }
