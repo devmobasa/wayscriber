@@ -417,7 +417,7 @@ return_to_transparent = ["Ctrl+Shift+T"]
 toggle_help = ["F10", "F1"]
 
 # Toggle status bar
-toggle_status_bar = ["F12"]
+toggle_status_bar = ["F12", "F4"]
 
 # Toggle context menu (keyboard alternative to right-click)
 open_context_menu = ["Shift+F10", "Menu"]
