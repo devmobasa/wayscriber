@@ -8,6 +8,7 @@ pub enum ToolbarEvent {
     SetColor(Color),
     SetThickness(f64),
     NudgeThickness(f64),
+    SetMarkerOpacity(f64),
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
@@ -48,6 +49,8 @@ pub enum ToolbarEvent {
     ToggleMoreColors(bool),
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
+    /// Toggle marker opacity UI visibility
+    ToggleMarkerOpacitySection(bool),
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -57,6 +60,7 @@ pub struct ToolbarSnapshot {
     pub tool_override: Option<Tool>,
     pub color: Color,
     pub thickness: f64,
+    pub marker_opacity: f64,
     pub font: FontDescriptor,
     pub font_size: f64,
     pub text_active: bool,
@@ -86,6 +90,8 @@ pub struct ToolbarSnapshot {
     pub show_more_colors: bool,
     /// Whether to show the Actions section
     pub show_actions_section: bool,
+    /// Whether to show the marker opacity slider in the side toolbar
+    pub show_marker_opacity_section: bool,
 }
 
 impl ToolbarSnapshot {
@@ -96,6 +102,7 @@ impl ToolbarSnapshot {
             tool_override: state.tool_override(),
             color: state.current_color,
             thickness: state.current_thickness,
+            marker_opacity: state.marker_opacity,
             font: state.font_descriptor.clone(),
             font_size: state.current_font_size,
             text_active: matches!(state.state, crate::input::DrawingState::TextInput { .. }),
@@ -119,6 +126,7 @@ impl ToolbarSnapshot {
             use_icons: state.toolbar_use_icons,
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
+            show_marker_opacity_section: state.show_marker_opacity_section,
         }
     }
 }
@@ -140,6 +148,7 @@ impl InputState {
             ToolbarEvent::SetColor(color) => self.set_color(color),
             ToolbarEvent::SetThickness(value) => self.set_thickness(value),
             ToolbarEvent::SetFont(descriptor) => self.set_font_descriptor(descriptor),
+            ToolbarEvent::SetMarkerOpacity(value) => self.set_marker_opacity(value),
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
             ToolbarEvent::ToggleFill(enable) => self.set_fill_enabled(enable),
             ToolbarEvent::SetUndoDelay(delay_secs) => {
@@ -313,6 +322,14 @@ impl InputState {
             ToolbarEvent::ToggleActionsSection(show) => {
                 if self.show_actions_section != show {
                     self.show_actions_section = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleMarkerOpacitySection(show) => {
+                if self.show_marker_opacity_section != show {
+                    self.show_marker_opacity_section = show;
                     true
                 } else {
                     false

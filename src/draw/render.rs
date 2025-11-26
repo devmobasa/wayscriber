@@ -111,6 +111,9 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
                 *arrow_angle,
             );
         }
+        Shape::MarkerStroke { points, thick, .. } => {
+            render_freehand_borrowed(ctx, points, glow, thick + outline_width);
+        }
         Shape::Text { .. } => {
             if let Some(bounds) = drawn.shape.bounding_box() {
                 let padding = 4.0;
@@ -222,6 +225,13 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 *background_enabled,
             );
         }
+        Shape::MarkerStroke {
+            points,
+            color,
+            thick,
+        } => {
+            render_marker_stroke_borrowed(ctx, points, *color, *thick);
+        }
     }
 }
 
@@ -299,6 +309,43 @@ pub fn render_freehand_borrowed(
     }
 
     let _ = ctx.stroke();
+}
+
+/// Render a marker stroke with soft edges and screen blending to mimic a physical highlighter.
+pub fn render_marker_stroke_borrowed(
+    ctx: &cairo::Context,
+    points: &[(i32, i32)],
+    color: Color,
+    thick: f64,
+) {
+    if points.is_empty() {
+        return;
+    }
+
+    // Reduce opacity to keep underlying text visible; clamp to avoid invisible strokes.
+    let base_alpha = (color.a * 0.32).clamp(0.05, 0.85);
+    let soft_width = (thick * 1.25).max(thick + 1.0);
+
+    let draw_pass = |ctx: &cairo::Context, width: f64, alpha: f64| {
+        ctx.set_source_rgba(color.r, color.g, color.b, alpha);
+        ctx.set_line_width(width);
+        ctx.set_line_cap(cairo::LineCap::Round);
+        ctx.set_line_join(cairo::LineJoin::Round);
+        let (x0, y0) = points[0];
+        ctx.move_to(x0 as f64, y0 as f64);
+        for &(x, y) in &points[1..] {
+            ctx.line_to(x as f64, y as f64);
+        }
+        let _ = ctx.stroke();
+    };
+
+    ctx.save().ok();
+    ctx.set_operator(cairo::Operator::Screen);
+    // Soft outer pass for feathered edges
+    draw_pass(ctx, soft_width, base_alpha * 0.7);
+    // Core pass for body of the marker
+    draw_pass(ctx, thick, base_alpha);
+    ctx.restore().ok();
 }
 
 /// Render a straight line

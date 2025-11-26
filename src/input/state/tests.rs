@@ -19,6 +19,7 @@ fn create_test_input_state() -> InputState {
             a: 1.0,
         }, // Red
         3.0,   // thickness
+        0.32,  // marker_opacity
         false, // fill_enabled
         32.0,  // font_size
         FontDescriptor {
@@ -127,6 +128,7 @@ fn toolbar_toggle_handles_partial_visibility() {
         false, // show_more_colors
         true,  // show_actions_section
         false, // show_delay_sliders
+        false, // show_marker_opacity_section
     );
     assert!(state.toolbar_top_visible());
     // Because toolbar visibility is tracked as "any visible", side getter returns true when any are visible.

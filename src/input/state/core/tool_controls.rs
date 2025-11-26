@@ -25,6 +25,18 @@ impl InputState {
         true
     }
 
+    /// Sets the marker opacity multiplier (0.05-0.9). Returns true if changed.
+    pub fn set_marker_opacity(&mut self, opacity: f64) -> bool {
+        let clamped = opacity.clamp(0.05, 0.9);
+        if (clamped - self.marker_opacity).abs() < f64::EPSILON {
+            return false;
+        }
+        self.marker_opacity = clamped;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
     /// Returns the current explicit tool override (if any).
     pub fn tool_override(&self) -> Option<Tool> {
         self.tool_override
@@ -135,6 +147,7 @@ impl InputState {
         show_more_colors: bool,
         show_actions_section: bool,
         show_delay_sliders: bool,
+        show_marker_opacity_section: bool,
     ) {
         self.toolbar_top_pinned = top_pinned;
         self.toolbar_side_pinned = side_pinned;
@@ -145,6 +158,7 @@ impl InputState {
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;
         self.show_delay_sliders = show_delay_sliders;
+        self.show_marker_opacity_section = show_marker_opacity_section;
     }
 
     /// Wrapper for undo that preserves existing action plumbing.

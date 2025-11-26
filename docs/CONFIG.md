@@ -35,6 +35,9 @@ default_color = "red"
 # Default pen thickness in pixels (1.0 - 40.0)
 default_thickness = 3.0
 
+# Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
+marker_opacity = 0.32
+
 # Default font size for text mode (8.0 - 72.0)
 # Can be adjusted at runtime with Ctrl+Shift+/- or Shift+Scroll
 default_font_size = 32.0
@@ -194,6 +197,9 @@ show_actions_section = true
 
 # Show delayed undo/redo sliders in the side toolbar
 show_delay_sliders = false
+
+# Show the marker opacity slider at the bottom of the side toolbar
+show_marker_opacity_section = false
 ```
 
 **Behavior:**
@@ -201,6 +207,7 @@ show_delay_sliders = false
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Actions**: `show_actions_section` hides/shows the undo/redo action buttons.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
+- **Marker opacity**: `show_marker_opacity_section` toggles the marker opacity slider section at the bottom of the side toolbar.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 
 **Defaults:** all set as above.

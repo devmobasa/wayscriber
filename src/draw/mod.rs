@@ -22,7 +22,8 @@ pub use font::FontDescriptor;
 pub use frame::{DrawnShape, Frame, ShapeId};
 pub use render::{
     render_board_background, render_click_highlight, render_freehand_borrowed,
-    render_selection_halo, render_shape, render_shapes, render_text,
+    render_marker_stroke_borrowed, render_selection_halo, render_shape, render_shapes,
+    render_text,
 };
 pub use shape::Shape;
 

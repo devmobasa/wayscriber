@@ -643,6 +643,7 @@ mod tests {
         let mut input = InputState::with_defaults(
             crate::draw::color::RED,
             1.0,
+            0.32,
             false,
             12.0,
             crate::draw::FontDescriptor::default(),
