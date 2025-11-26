@@ -3,15 +3,13 @@ name: Build Linux Packages
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags:
       - "v*"
 
 jobs:
   package:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        format: [deb, rpm, tar]
     permissions:
       contents: read
     steps:
@@ -54,71 +52,69 @@ jobs:
             .
             configurator
 
-      - name: Build release binaries
-        env:
-          CARGO_TARGET_DIR: target
-        run: |
-          cargo build --release --bins
-          cargo build --release --bins --manifest-path configurator/Cargo.toml
-          strip target/release/wayscriber
-          strip target/release/wayscriber-configurator
-
       - name: Read crate version
         id: meta
         run: |
           VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wayscriber") | .version')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Build ${{ matrix.format }} package
+      - name: Build & package (tar/deb/rpm)
         env:
           VERSION: ${{ steps.meta.outputs.version }}
+          FORMATS: tar,deb,rpm
+          ARTIFACT_ROOT: dist
+          CARGO_TARGET_DIR: target
         run: |
-          mkdir -p dist
-          if [ "${{ matrix.format }}" = "tar" ]; then
-            DIST_ROOT=dist
-            TAR_DIR="${DIST_ROOT}/wayscriber-v${VERSION}-linux-x86_64"
-            TAR_PATH="${DIST_ROOT}/wayscriber-v${VERSION}-linux-x86_64.tar.gz"
-            rm -rf "$TAR_DIR" "$TAR_PATH"
-            mkdir -p "$TAR_DIR/usr/bin" \
-                     "$TAR_DIR/usr/lib/systemd/user" \
-                     "$TAR_DIR/usr/share/doc/wayscriber"
-            cp target/release/wayscriber "$TAR_DIR/usr/bin/"
-            cp target/release/wayscriber-configurator "$TAR_DIR/usr/bin/"
-            cp packaging/wayscriber.service "$TAR_DIR/usr/lib/systemd/user/"
-            cp README.md config.example.toml "$TAR_DIR/usr/share/doc/wayscriber/"
-            [ -f LICENSE ] && cp LICENSE "$TAR_DIR/usr/share/doc/wayscriber/"
-            tar -C "$DIST_ROOT" -czf "$TAR_PATH" "$(basename "$TAR_DIR")"
-          else
-            nfpm pkg --packager ${{ matrix.format }} --config packaging/package.yaml --target dist/
-            if [ "${{ matrix.format }}" = "deb" ]; then
-              mv dist/*.deb dist/wayscriber-amd64.deb
-              # To restore versioned + stable artifacts, switch back to copying instead of moving.
-            else
-              mv dist/*.rpm dist/wayscriber-x86_64.rpm
-              # To restore versioned + stable artifacts, switch back to copying instead of moving.
-            fi
-          fi
+          ./tools/package.sh
 
-      - name: Select artifact path
-        id: artifact
-        run: |
-          if [ "${{ matrix.format }}" = "tar" ]; then
-            echo "path=dist/*.tar.gz" >> "$GITHUB_OUTPUT"
-          elif [ "${{ matrix.format }}" = "deb" ]; then
-            echo "path=dist/*.deb" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=dist/*.rpm" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload artifact
+      - name: Upload tarball
         uses: actions/upload-artifact@v4
         with:
-          name: wayscriber-${{ steps.meta.outputs.version }}-${{ matrix.format }}
-          path: ${{ steps.artifact.outputs.path }}
+          name: wayscriber-${{ steps.meta.outputs.version }}-tar
+          path: dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz
+
+      - name: Upload configurator tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-configurator-${{ steps.meta.outputs.version }}-tar
+          path: dist/wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-${{ steps.meta.outputs.version }}-deb
+          path: dist/wayscriber-amd64.deb
+
+      - name: Upload configurator deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-configurator-${{ steps.meta.outputs.version }}-deb
+          path: dist/wayscriber-configurator-amd64.deb
+
+      - name: Upload rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-${{ steps.meta.outputs.version }}-rpm
+          path: dist/wayscriber-x86_64.rpm
+
+      - name: Upload configurator rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-configurator-${{ steps.meta.outputs.version }}-rpm
+          path: dist/wayscriber-configurator-x86_64.rpm
+
+      - name: Upload manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayscriber-${{ steps.meta.outputs.version }}-manifest
+          path: |
+            dist/checksums.txt
+            dist/manifest.json
 
   release:
     needs: package
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     steps:
@@ -126,6 +122,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
+          merge-multiple: true
 
       - name: Publish GitHub release (auto notes)
         uses: softprops/action-gh-release@v2

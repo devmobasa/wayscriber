@@ -43,7 +43,7 @@
 - Toggle instantly from a lightweight background daemon when you need it.
 - Persist per-monitor/per-board canvases and tool state so your setup comes back after restarts.
 - Presenter helpers: click highlights and “freeze screen” to pause what viewers see while apps keep running.
-- Works on wlr-layer-shell compositors (Plasma KDE/KWin, Hyprland, Sway, Wayfire, River, …) with an xdg fallback for GNOME.
+- Works on layer-shell compositors (wlroots and Smithay-based like Niri/Cosmic, plus Plasma KDE/KWin, Hyprland, Sway, Wayfire, River, …) with an xdg fallback for GNOME.
 - Real-hardware tests where it works:
   - Ubuntu 25.10 GNOME (xdg fallback)
   - Fedora 43 KDE (Plasma, layer-shell)
@@ -74,7 +74,7 @@
 3. Arch Linux (AUR):
 	- `yay -S wayscriber` (source) or `paru -S wayscriber`
 	- `yay -S wayscriber-bin` (prebuilt) or `paru -S wayscriber-bin`
-4. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow.
+4. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow (optional; fallback capture still works without them).
 
 **2. Choose how to run it:**
 

@@ -1,4 +1,4 @@
-name: wayscriber
+name: wayscriber-configurator
 arch: amd64
 platform: linux
 version: ${VERSION}
@@ -7,31 +7,19 @@ maintainer: Wayscriber maintainers <hyprarcher@proton.me>
 vendor: Wayscriber
 homepage: https://wayscriber.com
 license: MIT
-description: Screen annotation tool for Wayland compositors with a daemon and GUI configurator
+description: GUI configurator for wayscriber (Iced)
 
 contents:
-  - src: target/release/wayscriber
-    dst: /usr/bin/wayscriber
-    file_info:
-      mode: 0755
   - src: target/release/wayscriber-configurator
     dst: /usr/bin/wayscriber-configurator
     file_info:
       mode: 0755
-  - src: packaging/wayscriber.service
-    dst: /usr/lib/systemd/user/wayscriber.service
-    file_info:
-      mode: 0644
-  - src: config.example.toml
-    dst: /usr/share/doc/wayscriber/config.example.toml
-    file_info:
-      mode: 0644
   - src: README.md
-    dst: /usr/share/doc/wayscriber/README.md
+    dst: /usr/share/doc/wayscriber-configurator/README.md
     file_info:
       mode: 0644
   - src: LICENSE
-    dst: /usr/share/licenses/wayscriber/LICENSE
+    dst: /usr/share/licenses/wayscriber-configurator/LICENSE
     file_info:
       mode: 0644
 

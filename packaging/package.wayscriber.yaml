@@ -1,0 +1,53 @@
+name: wayscriber
+arch: amd64
+platform: linux
+version: ${VERSION}
+release: "1"
+maintainer: Wayscriber maintainers <hyprarcher@proton.me>
+vendor: Wayscriber
+homepage: https://wayscriber.com
+license: MIT
+description: Screen annotation daemon/CLI for Wayland compositors
+
+contents:
+  - src: target/release/wayscriber
+    dst: /usr/bin/wayscriber
+    file_info:
+      mode: 0755
+  - src: packaging/wayscriber.service
+    dst: /usr/lib/systemd/user/wayscriber.service
+    file_info:
+      mode: 0644
+  - src: config.example.toml
+    dst: /usr/share/doc/wayscriber/config.example.toml
+    file_info:
+      mode: 0644
+  - src: README.md
+    dst: /usr/share/doc/wayscriber/README.md
+    file_info:
+      mode: 0644
+  - src: LICENSE
+    dst: /usr/share/licenses/wayscriber/LICENSE
+    file_info:
+      mode: 0644
+
+overrides:
+  deb:
+    depends:
+      - libc6
+      - libcairo2
+      - libwayland-client0
+      - libpango-1.0-0
+      - libpangocairo-1.0-0
+      - libxkbcommon0
+      - libstdc++6
+  rpm:
+    depends:
+      - glibc
+      - cairo
+      - wayland-devel
+      - pango
+      - libxkbcommon
+      - libstdc++
+    rpm:
+      arch: x86_64

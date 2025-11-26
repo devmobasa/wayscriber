@@ -23,7 +23,8 @@ run.sh
 packaging/**
 !packaging/wayscriber.service
 !packaging/PKGBUILD
-!packaging/package.yaml
+!packaging/package.wayscriber.yaml
+!packaging/package.configurator.yaml
 
 docs/board
 
