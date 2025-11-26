@@ -71,8 +71,8 @@ fi
 
 mkdir -p "${ARTIFACT_ROOT}"
 
-info() { printf '\033[0;32m[INFO]\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m[WARN]\033[0m %s\n' "$*"; }
+info() { printf '\033[0;32m[INFO]\033[0m %s\n' "$*" >&2; }
+warn() { printf '\033[1;33m[WARN]\033[0m %s\n' "$*" >&2; }
 
 build_binaries() {
     [[ "$SKIP_BUILD" == 1 ]] && { warn "Skipping cargo build (SKIP_BUILD=1)"; return; }
@@ -150,7 +150,7 @@ package_nfpm_main() {
     fi
     info "Building ${fmt} (wayscriber) via nfpm -> ${target}"
     rm -f "${target}"
-    nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_MAIN}" --target "${target}"
+    nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_MAIN}" --target "${target}" >/dev/null
     [[ -f "${target}" ]] && echo "${target}"
 }
 
@@ -167,14 +167,14 @@ package_nfpm_configurator() {
     fi
     info "Building ${fmt} (wayscriber-configurator) via nfpm -> ${target}"
     rm -f "${target}"
-    nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_CONFIG}" --target "${target}"
+    nfpm pkg --packager "${fmt}" --config "${NFPM_CONFIG_CONFIG}" --target "${target}" >/dev/null
     [[ -f "${target}" ]] && echo "${target}"
 }
 
 artifacts=()
 add_artifact() {
     local path="$1"
-    [[ -f "$path" ]] || return
+    [[ -f "$path" ]] || return 0
     artifacts+=("$path")
 }
 
