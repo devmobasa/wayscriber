@@ -530,10 +530,10 @@ impl ToolbarSurfaceManager {
         // Create top toolbar if visible
         if self.is_top_visible() {
             // Dynamic size based on mode:
-            // - Icon mode: 680px wide (7 tools + text + clear + highlight + icons checkbox + pin/close)
+            // - Icon mode: 705px wide (7 tools + text + clear + highlight + icons checkbox + pin/close)
             //              80px tall (42px buttons at y=6, fill toggle below, tooltip space)
-            // - Text mode: 820px wide (text labels need more space), 56px tall (no tooltips)
-            let target_size = if use_icons { (680, 80) } else { (820, 56) };
+            // - Text mode: 845px wide (text labels need more space), 56px tall (no tooltips)
+            let target_size = if use_icons { (705, 80) } else { (845, 56) };
 
             // Recreate if size changed
             if self.top.logical_size != (0, 0) && self.top.logical_size != target_size {
@@ -1010,7 +1010,7 @@ fn render_top_strip(
         rect: (pin_x, btn_y, btn_size, btn_size),
         event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some(if snapshot.top_pinned { "Unpin" } else { "Pin" }),
     });
 
     let close_x = width - btn_size - 12.0;
@@ -1022,7 +1022,7 @@ fn render_top_strip(
         rect: (close_x, btn_y, btn_size, btn_size),
         event: ToolbarEvent::CloseTopToolbar,
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Close"),
     });
 
     // Draw tooltip for hovered icon button (below buttons, toolbar is tall enough)
@@ -1237,7 +1237,7 @@ fn render_side_palette(
         rect: (pin_x, header_y, btn_size, btn_size),
         event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some(if snapshot.side_pinned { "Unpin" } else { "Pin" }),
     });
 
     // Close button
@@ -1250,7 +1250,7 @@ fn render_side_palette(
         rect: (close_x, header_y, btn_size, btn_size),
         event: ToolbarEvent::CloseSideToolbar,
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Close"),
     });
 
     y += btn_size + 6.0;
