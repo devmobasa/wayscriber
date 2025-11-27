@@ -40,6 +40,11 @@ pub enum Action {
     SelectMarkerTool,
     SelectEraserTool,
     SelectPenTool,
+    SelectLineTool,
+    SelectRectTool,
+    SelectEllipseTool,
+    SelectArrowTool,
+    SelectHighlightTool,
     IncreaseFontSize,
     DecreaseFontSize,
 
@@ -54,6 +59,7 @@ pub enum Action {
     ToggleClickHighlight,
     ToggleToolbar,
     ToggleHighlightTool,
+    ToggleFill,
     OpenContextMenu,
 
     // Configurator
@@ -249,6 +255,21 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_select_pen_tool")]
     pub select_pen_tool: Vec<String>,
 
+    #[serde(default = "default_select_line_tool")]
+    pub select_line_tool: Vec<String>,
+
+    #[serde(default = "default_select_rect_tool")]
+    pub select_rect_tool: Vec<String>,
+
+    #[serde(default = "default_select_ellipse_tool")]
+    pub select_ellipse_tool: Vec<String>,
+
+    #[serde(default = "default_select_arrow_tool")]
+    pub select_arrow_tool: Vec<String>,
+
+    #[serde(default = "default_select_highlight_tool")]
+    pub select_highlight_tool: Vec<String>,
+
     #[serde(default = "default_increase_font_size")]
     pub increase_font_size: Vec<String>,
 
@@ -273,6 +294,9 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_toggle_toolbar")]
     pub toggle_toolbar: Vec<String>,
+
+    #[serde(default = "default_toggle_fill")]
+    pub toggle_fill: Vec<String>,
 
     #[serde(default = "default_toggle_highlight_tool")]
     pub toggle_highlight_tool: Vec<String>,
@@ -364,6 +388,11 @@ impl Default for KeybindingsConfig {
             select_marker_tool: default_select_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
             select_pen_tool: default_select_pen_tool(),
+            select_line_tool: default_select_line_tool(),
+            select_rect_tool: default_select_rect_tool(),
+            select_ellipse_tool: default_select_ellipse_tool(),
+            select_arrow_tool: default_select_arrow_tool(),
+            select_highlight_tool: default_select_highlight_tool(),
             increase_font_size: default_increase_font_size(),
             decrease_font_size: default_decrease_font_size(),
             toggle_whiteboard: default_toggle_whiteboard(),
@@ -373,6 +402,7 @@ impl Default for KeybindingsConfig {
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
             toggle_toolbar: default_toggle_toolbar(),
+            toggle_fill: default_toggle_fill(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
             open_context_menu: default_open_context_menu(),
             open_configurator: default_open_configurator(),
@@ -512,6 +542,26 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::SelectPenTool)?;
         }
 
+        for binding_str in &self.select_line_tool {
+            insert_binding(binding_str, Action::SelectLineTool)?;
+        }
+
+        for binding_str in &self.select_rect_tool {
+            insert_binding(binding_str, Action::SelectRectTool)?;
+        }
+
+        for binding_str in &self.select_ellipse_tool {
+            insert_binding(binding_str, Action::SelectEllipseTool)?;
+        }
+
+        for binding_str in &self.select_arrow_tool {
+            insert_binding(binding_str, Action::SelectArrowTool)?;
+        }
+
+        for binding_str in &self.select_highlight_tool {
+            insert_binding(binding_str, Action::SelectHighlightTool)?;
+        }
+
         for binding_str in &self.increase_font_size {
             insert_binding(binding_str, Action::IncreaseFontSize)?;
         }
@@ -568,6 +618,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_toolbar {
             insert_binding(binding_str, Action::ToggleToolbar)?;
+        }
+
+        for binding_str in &self.toggle_fill {
+            insert_binding(binding_str, Action::ToggleFill)?;
         }
 
         for binding_str in &self.toggle_highlight_tool {
@@ -742,6 +796,26 @@ fn default_select_pen_tool() -> Vec<String> {
     vec!["F".to_string()]
 }
 
+fn default_select_line_tool() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_select_rect_tool() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_select_ellipse_tool() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_select_arrow_tool() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_select_highlight_tool() -> Vec<String> {
+    Vec::new()
+}
+
 fn default_increase_font_size() -> Vec<String> {
     vec!["Ctrl+Shift++".to_string(), "Ctrl+Shift+=".to_string()]
 }
@@ -776,6 +850,10 @@ fn default_toggle_click_highlight() -> Vec<String> {
 
 fn default_toggle_toolbar() -> Vec<String> {
     vec!["F2".to_string(), "F9".to_string()]
+}
+
+fn default_toggle_fill() -> Vec<String> {
+    Vec::new()
 }
 
 fn default_toggle_highlight_tool() -> Vec<String> {

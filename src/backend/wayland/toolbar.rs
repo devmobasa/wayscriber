@@ -27,7 +27,7 @@ struct HitRegion {
     rect: (f64, f64, f64, f64), // x, y, w, h
     event: ToolbarEvent,
     kind: HitKind,
-    tooltip: Option<&'static str>,
+    tooltip: Option<String>,
 }
 
 impl HitRegion {
@@ -62,6 +62,14 @@ fn delay_t_from_ms(delay_ms: u64) -> f64 {
     const MAX_DELAY_S: f64 = 5.0;
     let delay_s = (delay_ms as f64 / 1000.0).clamp(MIN_DELAY_S, MAX_DELAY_S);
     (delay_s - MIN_DELAY_S) / (MAX_DELAY_S - MIN_DELAY_S)
+}
+
+fn format_binding_label(label: &str, binding: Option<&str>) -> String {
+    if let Some(binding) = binding {
+        format!("{label} ({binding})")
+    } else {
+        label.to_string()
+    }
 }
 
 #[derive(Debug)]
@@ -779,11 +787,12 @@ fn render_top_strip(
             let icon_y = y + (btn_size - icon_size) / 2.0;
             icon_fn(ctx, icon_x, icon_y, icon_size);
 
+            let tooltip = format_binding_label(label, snapshot.binding_hints.for_tool(*tool));
             hits.push(HitRegion {
                 rect: (x, y, btn_size, btn_size),
                 event: ToolbarEvent::SelectTool(*tool),
                 kind: HitKind::Click,
-                tooltip: Some(*label),
+                tooltip: Some(tooltip),
             });
             x += btn_size + gap;
         }
@@ -809,7 +818,10 @@ fn render_top_strip(
             rect: (rect_x, fill_y, fill_w, fill_h),
             event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(format_binding_label(
+                "Fill",
+                snapshot.binding_hints.fill.as_deref(),
+            )),
         });
 
         // Text mode button with icon
@@ -836,7 +848,10 @@ fn render_top_strip(
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::EnterTextMode,
             kind: HitKind::Click,
-            tooltip: Some("Text"),
+            tooltip: Some(format_binding_label(
+                "Text",
+                snapshot.binding_hints.text.as_deref(),
+            )),
         });
         x += btn_size + gap;
 
@@ -856,7 +871,10 @@ fn render_top_strip(
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::ClearCanvas,
             kind: HitKind::Click,
-            tooltip: Some("Clear"),
+            tooltip: Some(format_binding_label(
+                "Clear",
+                snapshot.binding_hints.clear.as_deref(),
+            )),
         });
         x += btn_size + gap;
 
@@ -884,7 +902,10 @@ fn render_top_strip(
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
             kind: HitKind::Click,
-            tooltip: Some("Click highlight"),
+            tooltip: Some(format_binding_label(
+                "Click highlight",
+                snapshot.binding_hints.toggle_highlight.as_deref(),
+            )),
         });
         x += btn_size + gap;
 
@@ -913,11 +934,12 @@ fn render_top_strip(
                 .unwrap_or(false);
             draw_button(ctx, x, y, btn_w, btn_h, is_active, is_hover);
             draw_label_center(ctx, x, y, btn_w, btn_h, label);
+            let tooltip = format_binding_label(label, snapshot.binding_hints.for_tool(*tool));
             hits.push(HitRegion {
                 rect: (x, y, btn_w, btn_h),
                 event: ToolbarEvent::SelectTool(*tool),
                 kind: HitKind::Click,
-                tooltip: None,
+                tooltip: Some(tooltip),
             });
             x += btn_w + gap;
         }
@@ -941,7 +963,10 @@ fn render_top_strip(
             rect: (x, y, fill_w, btn_h),
             event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(format_binding_label(
+                "Fill",
+                snapshot.binding_hints.fill.as_deref(),
+            )),
         });
         x += fill_w + gap;
 
@@ -993,7 +1018,11 @@ fn render_top_strip(
         rect: (pin_x, btn_y, btn_size, btn_size),
         event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
         kind: HitKind::Click,
-        tooltip: Some(if snapshot.top_pinned { "Unpin" } else { "Pin" }),
+        tooltip: Some(if snapshot.top_pinned {
+            "Unpin".to_string()
+        } else {
+            "Pin".to_string()
+        }),
     });
 
     let close_x = width - btn_size - 12.0;
@@ -1005,7 +1034,7 @@ fn render_top_strip(
         rect: (close_x, btn_y, btn_size, btn_size),
         event: ToolbarEvent::CloseTopToolbar,
         kind: HitKind::Click,
-        tooltip: Some("Close"),
+        tooltip: Some("Close".to_string()),
     });
 
     // Draw tooltip for hovered icon button (below buttons, toolbar is tall enough)
@@ -1039,7 +1068,7 @@ fn draw_tooltip(
     // Find hovered region with tooltip
     for hit in hits {
         if hit.contains(hx, hy)
-            && let Some(text) = hit.tooltip
+            && let Some(text) = hit.tooltip.as_deref()
         {
             ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
             ctx.set_font_size(12.0);
@@ -1220,7 +1249,11 @@ fn render_side_palette(
         rect: (pin_x, header_y, btn_size, btn_size),
         event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
         kind: HitKind::Click,
-        tooltip: Some(if snapshot.side_pinned { "Unpin" } else { "Pin" }),
+        tooltip: Some(if snapshot.side_pinned {
+            "Unpin".to_string()
+        } else {
+            "Pin".to_string()
+        }),
     });
 
     // Close button
@@ -1233,7 +1266,7 @@ fn render_side_palette(
         rect: (close_x, header_y, btn_size, btn_size),
         event: ToolbarEvent::CloseSideToolbar,
         kind: HitKind::Click,
-        tooltip: Some("Close"),
+        tooltip: Some("Close".to_string()),
     });
 
     y += btn_size + 6.0;
@@ -1344,7 +1377,7 @@ fn render_side_palette(
             rect: (cx, row_y, swatch, swatch),
             event: ToolbarEvent::ToggleMoreColors(true),
             kind: HitKind::Click,
-            tooltip: Some("More colors"),
+            tooltip: Some("More colors".to_string()),
         });
     }
     row_y += swatch + swatch_gap;
@@ -1379,7 +1412,7 @@ fn render_side_palette(
             rect: (cx, row_y, swatch, swatch),
             event: ToolbarEvent::ToggleMoreColors(false),
             kind: HitKind::Click,
-            tooltip: Some("Hide colors"),
+            tooltip: Some("Hide colors".to_string()),
         });
     }
 
@@ -1800,7 +1833,7 @@ fn render_side_palette(
                     rect: (bx, by, icon_btn_size, icon_btn_size),
                     event: evt.clone(),
                     kind: HitKind::Click,
-                    tooltip: Some(*label),
+                    tooltip: Some((*label).to_string()),
                 });
             }
         } else {
@@ -1968,7 +2001,11 @@ fn render_side_palette(
                 },
                 kind: HitKind::Click,
                 tooltip: if snapshot.use_icons {
-                    Some(if is_undo { "Step Undo" } else { "Step Redo" })
+                    Some(if is_undo {
+                        "Step Undo".to_string()
+                    } else {
+                        "Step Redo".to_string()
+                    })
                 } else {
                     None
                 },

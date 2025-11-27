@@ -404,6 +404,20 @@ delete_selection = ["Delete"]
 increase_thickness = ["+", "="]
 decrease_thickness = ["-", "_"]
 
+# Adjust marker opacity (when using the marker tool)
+increase_marker_opacity = ["Ctrl+Alt+ArrowUp"]
+decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
+
+# Tool selection shortcuts (optional; keep empty to rely on modifiers)
+select_pen_tool = ["F"]
+select_marker_tool = ["H"]
+select_eraser_tool = ["D"]
+select_line_tool = []
+select_rect_tool = []
+select_ellipse_tool = []
+select_arrow_tool = []
+select_highlight_tool = []
+
 # Adjust font size
 increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
 decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
@@ -418,6 +432,9 @@ toggle_help = ["F10", "F1"]
 
 # Toggle status bar
 toggle_status_bar = ["F12", "F4"]
+
+# Toggle fill for rectangle/ellipse
+toggle_fill = []
 
 # Toggle context menu (keyboard alternative to right-click)
 open_context_menu = ["Shift+F10", "Menu"]

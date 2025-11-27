@@ -448,6 +448,22 @@ impl InputState {
             Action::SelectPenTool => {
                 self.set_tool_override(Some(Tool::Pen));
             }
+            Action::SelectLineTool => {
+                self.set_tool_override(Some(Tool::Line));
+            }
+            Action::SelectRectTool => {
+                self.set_tool_override(Some(Tool::Rect));
+            }
+            Action::SelectEllipseTool => {
+                self.set_tool_override(Some(Tool::Ellipse));
+            }
+            Action::SelectArrowTool => {
+                self.set_tool_override(Some(Tool::Arrow));
+            }
+            Action::SelectHighlightTool => {
+                self.set_highlight_tool(true);
+                self.set_tool_override(Some(Tool::Highlight));
+            }
             Action::IncreaseFontSize => {
                 self.adjust_font_size(2.0);
             }
@@ -499,6 +515,12 @@ impl InputState {
                         "Toolbar visibility {}",
                         if now_visible { "enabled" } else { "disabled" }
                     );
+                }
+            }
+            Action::ToggleFill => {
+                let enable = !self.fill_enabled;
+                if self.set_fill_enabled(enable) {
+                    info!("Fill {}", if enable { "enabled" } else { "disabled" });
                 }
             }
             Action::ToggleHighlightTool => {

@@ -1,3 +1,4 @@
+use crate::config::KeybindingsConfig;
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::{InputState, Tool};
 
@@ -91,10 +92,20 @@ pub struct ToolbarSnapshot {
     pub show_more_colors: bool,
     /// Whether to show the Actions section
     pub show_actions_section: bool,
+    /// Binding hints for tooltips
+    pub binding_hints: ToolbarBindingHints,
 }
 
 impl ToolbarSnapshot {
+    #[allow(dead_code)]
     pub fn from_input(state: &InputState) -> Self {
+        Self::from_input_with_bindings(state, ToolbarBindingHints::default())
+    }
+
+    pub fn from_input_with_bindings(
+        state: &InputState,
+        binding_hints: ToolbarBindingHints,
+    ) -> Self {
         let frame = state.canvas_set.active_frame();
         let active_tool = state.active_tool();
         let thickness_targets_eraser =
@@ -142,6 +153,57 @@ impl ToolbarSnapshot {
             use_icons: state.toolbar_use_icons,
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
+            binding_hints,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ToolbarBindingHints {
+    pub pen: Option<String>,
+    pub line: Option<String>,
+    pub rect: Option<String>,
+    pub ellipse: Option<String>,
+    pub arrow: Option<String>,
+    pub marker: Option<String>,
+    pub highlight: Option<String>,
+    pub eraser: Option<String>,
+    pub text: Option<String>,
+    pub clear: Option<String>,
+    pub fill: Option<String>,
+    pub toggle_highlight: Option<String>,
+}
+
+impl ToolbarBindingHints {
+    pub fn for_tool(&self, tool: Tool) -> Option<&str> {
+        match tool {
+            Tool::Pen => self.pen.as_deref(),
+            Tool::Line => self.line.as_deref(),
+            Tool::Rect => self.rect.as_deref(),
+            Tool::Ellipse => self.ellipse.as_deref(),
+            Tool::Arrow => self.arrow.as_deref(),
+            Tool::Marker => self.marker.as_deref(),
+            Tool::Highlight => self.highlight.as_deref(),
+            Tool::Eraser => self.eraser.as_deref(),
+            Tool::Select => None,
+        }
+    }
+
+    pub fn from_keybindings(kb: &KeybindingsConfig) -> Self {
+        let first = |v: &Vec<String>| v.first().cloned();
+        Self {
+            pen: first(&kb.select_pen_tool),
+            line: first(&kb.select_line_tool),
+            rect: first(&kb.select_rect_tool),
+            ellipse: first(&kb.select_ellipse_tool),
+            arrow: first(&kb.select_arrow_tool),
+            marker: first(&kb.select_marker_tool),
+            highlight: first(&kb.select_highlight_tool),
+            eraser: first(&kb.select_eraser_tool),
+            text: first(&kb.enter_text_mode),
+            clear: first(&kb.clear_canvas),
+            fill: first(&kb.toggle_fill),
+            toggle_highlight: first(&kb.toggle_highlight_tool),
         }
     }
 }

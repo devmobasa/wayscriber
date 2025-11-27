@@ -45,7 +45,7 @@ use crate::{
     config::{Action, ColorSpec, Config},
     input::{DrawingState, InputState},
     session::SessionOptions,
-    ui::toolbar::{ToolbarEvent, ToolbarSnapshot},
+    ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
     util::Rect,
 };
 
@@ -733,7 +733,8 @@ impl WaylandState {
 
     /// Returns a snapshot of the current input state for toolbar UI consumption.
     pub(super) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
-        ToolbarSnapshot::from_input(&self.input_state)
+        let hints = ToolbarBindingHints::from_keybindings(&self.config.keybindings);
+        ToolbarSnapshot::from_input_with_bindings(&self.input_state, hints)
     }
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
