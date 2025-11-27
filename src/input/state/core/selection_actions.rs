@@ -369,16 +369,16 @@ impl InputState {
         }
         let shape_id = self.selected_shape_ids()[0];
         let frame = self.canvas_set.active_frame();
-        if let Some(shape) = frame.shape(shape_id)
-            && let Shape::Text { x, y, text, .. } = &shape.shape
-        {
-            self.state = DrawingState::TextInput {
-                x: *x,
-                y: *y,
-                buffer: text.clone(),
-            };
-            self.update_text_preview_dirty();
-            return true;
+        if let Some(shape) = frame.shape(shape_id) {
+            if let Shape::Text { x, y, text, .. } = &shape.shape {
+                self.state = DrawingState::TextInput {
+                    x: *x,
+                    y: *y,
+                    buffer: text.clone(),
+                };
+                self.update_text_preview_dirty();
+                return true;
+            }
         }
         false
     }

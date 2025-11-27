@@ -460,10 +460,10 @@ impl InputState {
             if let Ok(extents) = ctx.text_extents(&entry.label) {
                 max_label_width = max_label_width.max(extents.width());
             }
-            if let Some(shortcut) = &entry.shortcut
-                && let Ok(extents) = ctx.text_extents(shortcut)
-            {
-                max_shortcut_width = max_shortcut_width.max(extents.width());
+            if let Some(shortcut) = &entry.shortcut {
+                if let Ok(extents) = ctx.text_extents(shortcut) {
+                    max_shortcut_width = max_shortcut_width.max(extents.width());
+                }
             }
         }
 
@@ -561,14 +561,15 @@ impl InputState {
             ref mut keyboard_focus,
             ..
         } = self.context_menu_state
-            && *hover_index != new_hover
         {
-            *hover_index = new_hover;
-            if new_hover.is_some() {
-                *keyboard_focus = None;
-            }
-            if trigger_redraw {
-                self.needs_redraw = true;
+            if *hover_index != new_hover {
+                *hover_index = new_hover;
+                if new_hover.is_some() {
+                    *keyboard_focus = None;
+                }
+                if trigger_redraw {
+                    self.needs_redraw = true;
+                }
             }
         }
     }

@@ -693,8 +693,8 @@ mod frame_storage {
     use crate::draw::shape::Shape;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<S>(shapes: &[DrawnShape], serializer: S) -> Result<S::Ok, S::Error>
-    where
+pub fn serialize<S>(shapes: &[DrawnShape], serializer: S) -> Result<S::Ok, S::Error>
+where
         S: Serializer,
     {
         let helper: Vec<SerializedDrawnShape<'_>> = shapes

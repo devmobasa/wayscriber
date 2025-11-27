@@ -1,4 +1,4 @@
-use assert_cmd::{Command, cargo::cargo_bin_cmd};
+use assert_cmd::{cargo::cargo_bin_cmd, Command};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
