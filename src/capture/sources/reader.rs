@@ -1,20 +1,17 @@
+#![cfg(feature = "portal")]
+use std::path::PathBuf;
 use std::{fs, thread, time::Duration};
 
 use crate::capture::types::CaptureError;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStringExt;
 
 /// Read image data from a file:// URI.
 ///
 /// This properly decodes percent-encoded URIs (spaces, non-ASCII characters, etc.)
 /// and cleans up the temporary file after reading.
 pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
-    // Parse URL to handle percent-encoding (spaces → %20, unicode, etc.)
-    let url = url::Url::parse(uri)
-        .map_err(|e| CaptureError::InvalidResponse(format!("Invalid file URI '{}': {}", uri, e)))?;
-
-    // Convert to file path (handles percent-decoding automatically)
-    let path = url.to_file_path().map_err(|_| {
-        CaptureError::InvalidResponse(format!("Cannot convert URI to path: {}", uri))
-    })?;
+    let path = decode_file_uri(uri)?;
 
     log::debug!("Reading screenshot from: {}", path.display());
 
@@ -88,7 +85,13 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("capture file.png");
         std::fs::write(&file_path, b"portal-bytes").unwrap();
-        let uri = url::Url::from_file_path(&file_path).unwrap().to_string();
+        let uri = format!(
+            "file://{}",
+            file_path
+                .to_string_lossy()
+                .replace('%', "%25")
+                .replace(' ', "%20")
+        );
 
         let data = read_image_from_uri(&uri).expect("read succeeds");
         assert_eq!(data, b"portal-bytes");
@@ -96,5 +99,74 @@ mod tests {
             !file_path.exists(),
             "read_image_from_uri should delete the portal temp file"
         );
+    }
+}
+
+fn decode_file_uri(uri: &str) -> Result<PathBuf, CaptureError> {
+    let raw = uri
+        .strip_prefix("file://")
+        .ok_or_else(|| CaptureError::InvalidResponse(format!("Invalid file URI '{}'", uri)))?;
+
+    // Allow optional host (empty or localhost)
+    let path_part = if raw.starts_with("localhost/") {
+        &raw["localhost".len()..]
+    } else if raw.starts_with('/') {
+        raw
+    } else {
+        return Err(CaptureError::InvalidResponse(format!(
+            "Unsupported file URI host in '{}'",
+            uri
+        )));
+    };
+
+    let decoded = percent_decode(path_part).map_err(|e| {
+        CaptureError::InvalidResponse(format!("Invalid percent-encoding in '{}': {}", uri, e))
+    })?;
+
+    #[cfg(unix)]
+    {
+        use std::ffi::OsString;
+        Ok(PathBuf::from(OsString::from_vec(decoded)))
+    }
+
+    #[cfg(not(unix))]
+    {
+        let path_str = String::from_utf8(decoded).map_err(|e| {
+            CaptureError::InvalidResponse(format!("Non-UTF8 path in URI '{}': {}", uri, e))
+        })?;
+        Ok(PathBuf::from(path_str))
+    }
+}
+
+fn percent_decode(input: &str) -> Result<Vec<u8>, &'static str> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' => {
+                if i + 2 >= bytes.len() {
+                    return Err("truncated percent escape");
+                }
+                let hi = hex_value(bytes[i + 1]).ok_or("invalid hex digit")?;
+                let lo = hex_value(bytes[i + 2]).ok_or("invalid hex digit")?;
+                out.push((hi << 4) | lo);
+                i += 3;
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn hex_value(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(10 + b - b'a'),
+        b'A'..=b'F' => Some(10 + b - b'A'),
+        _ => None,
     }
 }

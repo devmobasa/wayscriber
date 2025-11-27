@@ -737,7 +737,7 @@ pub struct CaptureConfig {
     #[serde(default = "default_capture_directory")]
     pub save_directory: String,
 
-    /// Filename template with chrono format specifiers (e.g., "%Y-%m-%d_%H%M%S")
+    /// Filename template (strftime-like subset: %Y, %m, %d, %H, %M, %S)
     #[serde(default = "default_capture_filename")]
     pub filename_template: String,
 

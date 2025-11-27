@@ -27,8 +27,9 @@ pub use types::{
 pub use enums::ColorSpec;
 
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::paths::config_dir;
+use crate::time_utils::{format_with_template, now_local};
 use anyhow::{Context, Result, anyhow};
-use chrono::Local;
 use log::{debug, info};
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
@@ -232,7 +233,7 @@ mod tests {
 }
 
 pub(super) fn config_home_dir() -> Result<PathBuf> {
-    dirs::config_dir().context("Could not find config directory")
+    config_dir().context("Could not find config directory")
 }
 
 pub(super) fn primary_config_dir() -> Result<PathBuf> {
@@ -773,7 +774,7 @@ impl Config {
     }
 
     fn create_backup(path: &Path) -> Result<PathBuf> {
-        let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+        let timestamp = format_with_template(now_local(), "%Y%m%d_%H%M%S");
         let filename = match path.file_name().and_then(|name| name.to_str()) {
             Some(name) => format!("{name}.{}.bak", timestamp),
             None => format!("config.toml.{}.bak", timestamp),

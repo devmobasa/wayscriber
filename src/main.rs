@@ -6,6 +6,8 @@ mod config;
 mod daemon;
 mod draw;
 mod input;
+mod paths;
+mod time_utils;
 mod notification;
 mod session;
 mod ui;
@@ -170,8 +172,6 @@ fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     }
 
     if cli.session_info {
-        use chrono::{DateTime, Local};
-
         let inspection = session::inspect_session(&options)?;
         println!("Session persistence status:");
         println!("  Persist transparent: {}", inspection.persist_transparent);
@@ -199,9 +199,11 @@ fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
             if let Some(size) = inspection.size_bytes {
                 println!("    Size     : {} bytes", size);
             }
-            if let Some(modified) = inspection.modified {
-                let dt: DateTime<Local> = modified.into();
-                println!("    Modified : {}", dt.format("%Y-%m-%d %H:%M:%S"));
+            if let Some(ts) = inspection
+                .modified
+                .and_then(|m| crate::time_utils::format_system_time(m, "%Y-%m-%d %H:%M:%S"))
+            {
+                println!("    Modified : {}", ts);
             }
             println!("    Compressed: {}", inspection.compressed);
             if let Some(version) = inspection.file_version {

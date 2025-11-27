@@ -57,9 +57,11 @@ pub enum CaptureError {
     #[allow(dead_code)] // Will be used in Phase 2 for capability checks
     PortalUnavailable,
 
+    #[cfg_attr(not(feature = "portal"), allow(dead_code))]
     #[error("Screenshot permission denied by user")]
     PermissionDenied,
 
+    #[cfg(feature = "dbus")]
     #[error("D-Bus communication error: {0}")]
     DBusError(#[from] zbus::Error),
 

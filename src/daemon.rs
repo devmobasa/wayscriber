@@ -1,13 +1,19 @@
+#![cfg_attr(not(feature = "tray"), allow(unused_imports))]
 /// Daemon mode implementation: background service with toggle activation
 use anyhow::{Context, Result, anyhow};
+#[cfg(feature = "tray")]
 use ksni::TrayMethods;
+#[cfg(feature = "tray")]
 use log::{debug, error, info, warn};
+#[cfg(not(feature = "tray"))]
+use log::{debug, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
 use std::env;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "tray")]
 use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
@@ -23,6 +29,7 @@ pub enum OverlayState {
 /// Daemon state manager
 type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
 
+#[cfg(feature = "tray")]
 const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct Daemon {
@@ -35,12 +42,14 @@ pub struct Daemon {
     overlay_child: Option<Child>,
 }
 
+#[cfg(feature = "tray")]
 pub(crate) struct WayscriberTray {
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
     configurator_binary: String,
 }
 
+#[cfg(feature = "tray")]
 impl WayscriberTray {
     fn new(
         toggle_flag: Arc<AtomicBool>,
@@ -60,6 +69,7 @@ impl WayscriberTray {
     }
 }
 
+#[cfg(feature = "tray")]
 impl WayscriberTray {
     fn launch_configurator(&self) {
         let mut command = Command::new(&self.configurator_binary);
@@ -87,6 +97,7 @@ impl WayscriberTray {
     }
 }
 
+#[cfg(feature = "tray")]
 impl ksni::Tray for WayscriberTray {
     fn id(&self) -> String {
         "wayscriber".into()
@@ -381,6 +392,7 @@ impl Daemon {
 }
 
 /// System tray implementation
+#[cfg(feature = "tray")]
 fn start_system_tray(
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
@@ -457,6 +469,15 @@ fn start_system_tray(
             ))
         }
     }
+}
+
+#[cfg(not(feature = "tray"))]
+fn start_system_tray(
+    _toggle_flag: Arc<AtomicBool>,
+    _quit_flag: Arc<AtomicBool>,
+) -> Result<JoinHandle<()>> {
+    info!("Tray feature disabled; skipping system tray startup");
+    Ok(thread::spawn(|| ()))
 }
 
 impl Daemon {
@@ -548,6 +569,7 @@ impl Daemon {
     }
 }
 
+#[cfg(feature = "tray")]
 fn report_tray_readiness(tx: &mpsc::Sender<Result<()>>, result: Result<()>) {
     if let Err(err) = tx.send(result) {
         debug!(
@@ -557,7 +579,7 @@ fn report_tray_readiness(tx: &mpsc::Sender<Result<()>>, result: Result<()>) {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "tray"))]
 mod tests {
     use super::*;
     use ksni::{Tray, menu::MenuItem};

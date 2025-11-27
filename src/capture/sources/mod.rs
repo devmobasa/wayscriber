@@ -2,6 +2,7 @@ use crate::capture::types::{CaptureError, CaptureType};
 
 pub(crate) mod frozen;
 mod hyprland;
+#[cfg(feature = "portal")]
 pub mod portal;
 pub(crate) mod reader;
 
@@ -14,7 +15,7 @@ pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, Capture
                     "Full screen capture via Hyprland failed: {}. Falling back to portal.",
                     e
                 );
-                portal::capture_via_portal_bytes(CaptureType::FullScreen).await
+                portal_fallback(CaptureType::FullScreen).await
             }
         },
         CaptureType::ActiveWindow => match hyprland::capture_active_window_hyprland().await {
@@ -24,7 +25,7 @@ pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, Capture
                     "Active window capture via Hyprland failed: {}. Falling back to portal.",
                     e
                 );
-                portal::capture_via_portal_bytes(CaptureType::ActiveWindow).await
+                portal_fallback(CaptureType::ActiveWindow).await
             }
         },
         CaptureType::Selection { .. } => match hyprland::capture_selection_hyprland().await {
@@ -34,7 +35,7 @@ pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, Capture
                     "Selection capture via Hyprland failed: {}. Falling back to portal.",
                     e
                 );
-                portal::capture_via_portal_bytes(CaptureType::Selection {
+                portal_fallback(CaptureType::Selection {
                     x: 0,
                     y: 0,
                     width: 0,
@@ -43,5 +44,17 @@ pub async fn capture_image(capture_type: CaptureType) -> Result<Vec<u8>, Capture
                 .await
             }
         },
+    }
+}
+
+async fn portal_fallback(capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
+    #[cfg(feature = "portal")]
+    {
+        portal::capture_via_portal_bytes(capture_type).await
+    }
+    #[cfg(not(feature = "portal"))]
+    {
+        let _ = capture_type;
+        Err(CaptureError::PortalUnavailable)
     }
 }

@@ -24,13 +24,25 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
-use crate::capture::{
-    sources::{frozen::decode_image_to_argb, portal::capture_via_portal_bytes},
-    types::CaptureType,
-};
+use crate::capture::sources::frozen::decode_image_to_argb;
+#[cfg(feature = "portal")]
+use crate::capture::types::CaptureType;
 use crate::input::InputState;
 
 use super::surface::SurfaceState;
+
+#[cfg(feature = "portal")]
+async fn portal_capture_bytes() -> Result<Vec<u8>, String> {
+    use crate::capture::sources::portal::capture_via_portal_bytes;
+    capture_via_portal_bytes(CaptureType::FullScreen)
+        .await
+        .map_err(|e| format!("Portal capture failed: {}", e))
+}
+
+#[cfg(not(feature = "portal"))]
+async fn portal_capture_bytes() -> Result<Vec<u8>, String> {
+    Err("Portal capture is disabled (feature flag)".to_string())
+}
 
 /// CPU-side frozen image ready for Cairo rendering.
 pub struct FrozenImage {
@@ -423,9 +435,7 @@ impl FrozenState {
         );
         tokio_handle.spawn(async move {
             let result = async {
-                let bytes = capture_via_portal_bytes(CaptureType::FullScreen)
-                    .await
-                    .map_err(|e| format!("Portal capture failed: {}", e))?;
+                let bytes = portal_capture_bytes().await?;
 
                 let (mut data, mut width, mut height) =
                     decode_image_to_argb(&bytes).map_err(|e| format!("Decode failed: {}", e))?;

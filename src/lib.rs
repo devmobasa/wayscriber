@@ -7,7 +7,9 @@
 pub mod config;
 pub mod draw;
 pub mod input;
+pub mod paths;
 pub mod session;
+pub mod time_utils;
 pub mod ui;
 pub mod util;
 

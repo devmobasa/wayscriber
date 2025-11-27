@@ -316,7 +316,7 @@ enabled = true
 # Directory for saved screenshots (supports ~ expansion)
 save_directory = "~/Pictures/Wayscriber"
 
-# Filename template (chrono format specifiers allowed)
+# Filename template (strftime-like subset: %Y, %m, %d, %H, %M, %S)
 filename_template = "screenshot_%Y-%m-%d_%H%M%S"
 
 # Image format (currently "png")

@@ -1,7 +1,8 @@
 //! File saving functionality for screenshots.
 
 use super::types::CaptureError;
-use chrono::Local;
+use crate::paths::{expand_tilde as expand_tilde_global, home_dir, pictures_dir};
+use crate::time_utils::{format_with_template, now_local};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -10,7 +11,7 @@ use std::path::{Path, PathBuf};
 pub struct FileSaveConfig {
     /// Directory to save screenshots to.
     pub save_directory: PathBuf,
-    /// Filename template (supports chrono format specifiers).
+    /// Filename template (strftime-like: %Y, %m, %d, %H, %M, %S).
     pub filename_template: String,
     /// Image format extension.
     pub format: String,
@@ -19,7 +20,8 @@ pub struct FileSaveConfig {
 impl Default for FileSaveConfig {
     fn default() -> Self {
         Self {
-            save_directory: dirs::picture_dir()
+            save_directory: pictures_dir()
+                .or_else(|| home_dir().map(|home| home.join("Pictures")))
                 .unwrap_or_else(|| PathBuf::from("~"))
                 .join("Wayscriber"),
             filename_template: "screenshot_%Y-%m-%d_%H%M%S".to_string(),
@@ -31,14 +33,14 @@ impl Default for FileSaveConfig {
 /// Generate a filename based on the template and current time.
 ///
 /// # Arguments
-/// * `template` - Template string with chrono format specifiers
+/// * `template` - Template string with `%Y`, `%m`, `%d`, `%H`, `%M`, `%S`, `%%`
 /// * `format` - File extension (e.g., "png")
 ///
 /// # Returns
 /// Generated filename with extension
 pub fn generate_filename(template: &str, format: &str) -> String {
-    let now = Local::now();
-    let filename = now.format(template).to_string();
+    let now = now_local();
+    let filename = format_with_template(now, template);
     format!("{}.{}", filename, format)
 }
 
@@ -110,12 +112,7 @@ pub fn save_screenshot(
 
 /// Expand tilde (~) in path strings.
 pub fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(stripped) = path.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
-    }
-    PathBuf::from(path)
+    expand_tilde_global(path)
 }
 
 #[cfg(test)]

@@ -6,10 +6,10 @@ use crate::input::{
     board_mode::BoardMode,
     state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
 };
+use crate::session::lock::{lock_exclusive, lock_shared, unlock};
+use crate::time_utils::now_rfc3339;
 use anyhow::{Context, Result};
-use chrono::Utc;
 use flate2::{Compression, bufread::GzDecoder, write::GzEncoder};
-use fs2::FileExt;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -187,12 +187,12 @@ pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Re
         .truncate(true)
         .open(&lock_path)
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-    FileExt::lock_exclusive(&lock_file)
+    lock_exclusive(&lock_file)
         .with_context(|| format!("failed to lock session file {}", lock_path.display()))?;
 
     let result = save_snapshot_inner(snapshot, options);
 
-    if let Err(err) = FileExt::unlock(&lock_file) {
+    if let Err(err) = unlock(&lock_file) {
         warn!(
             "failed to unlock session file {}: {}",
             lock_path.display(),
@@ -225,7 +225,7 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
 
     let file_payload = SessionFile {
         version: CURRENT_VERSION,
-        last_modified: Utc::now().to_rfc3339(),
+        last_modified: now_rfc3339(),
         active_mode: board_mode_to_str(snapshot.active_mode).to_string(),
         transparent: snapshot.transparent.clone(),
         whiteboard: snapshot.whiteboard.clone(),
@@ -346,12 +346,12 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
         .truncate(true)
         .open(&lock_path)
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-    FileExt::lock_shared(&lock_file)
+    lock_shared(&lock_file)
         .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
 
     let result = load_snapshot_inner(&session_path, options);
 
-    if let Err(err) = FileExt::unlock(&lock_file) {
+    if let Err(err) = unlock(&lock_file) {
         warn!(
             "failed to unlock session file {}: {}",
             lock_path.display(),

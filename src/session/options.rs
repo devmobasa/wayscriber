@@ -1,4 +1,5 @@
 use crate::config::{SessionCompression, SessionConfig, SessionStorageMode};
+use crate::paths::{data_dir, expand_tilde};
 use anyhow::{Result, anyhow};
 use std::{
     env,
@@ -133,7 +134,7 @@ pub fn options_from_config(
 ) -> Result<SessionOptions> {
     let base_dir = match session_cfg.storage {
         SessionStorageMode::Auto => {
-            let root = dirs::data_dir().unwrap_or_else(|| config_dir.to_path_buf());
+            let root = data_dir().unwrap_or_else(|| config_dir.to_path_buf());
             root.join("wayscriber")
         }
         SessionStorageMode::Config => config_dir.to_path_buf(),
@@ -199,13 +200,4 @@ fn resolve_display_id(display_id: Option<&str>) -> String {
         Ok(value) => sanitize_identifier(&value),
         Err(_) => "default".to_string(),
     }
-}
-
-fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(stripped) = path.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
-    }
-    PathBuf::from(path)
 }

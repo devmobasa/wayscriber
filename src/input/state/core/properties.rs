@@ -1,5 +1,5 @@
 use super::base::InputState;
-use chrono::{DateTime, Local, Utc};
+use crate::time_utils::format_unix_millis;
 
 #[derive(Debug, Clone)]
 pub struct ShapePropertiesPanel {
@@ -110,9 +110,5 @@ impl InputState {
 }
 
 fn format_timestamp(ms: u64) -> Option<String> {
-    let seconds = (ms / 1000) as i64;
-    let nanos = ((ms % 1000) * 1_000_000) as u32;
-    let utc_dt = DateTime::<Utc>::from_timestamp(seconds, nanos)?;
-    let local_dt = utc_dt.with_timezone(&Local);
-    Some(local_dt.format("%Y-%m-%d %H:%M:%S").to_string())
+    format_unix_millis(ms, "%Y-%m-%d %H:%M:%S")
 }

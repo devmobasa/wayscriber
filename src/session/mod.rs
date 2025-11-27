@@ -5,6 +5,7 @@
 //! the state on startup when requested.
 
 mod options;
+mod lock;
 mod snapshot;
 mod storage;
 

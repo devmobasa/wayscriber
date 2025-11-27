@@ -9,6 +9,7 @@
 
 pub mod clipboard;
 pub mod file;
+#[cfg(feature = "portal")]
 pub mod portal;
 pub mod sources;
 pub mod types;

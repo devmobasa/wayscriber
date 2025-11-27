@@ -1,8 +1,8 @@
 use super::options::SessionOptions;
 use super::snapshot;
 use crate::draw::Frame;
+use crate::session::lock::{lock_shared, unlock};
 use anyhow::{Context, Result};
-use fs2::FileExt;
 use log::warn;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -160,12 +160,12 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
             .truncate(true)
             .open(&lock_path)
             .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-        FileExt::lock_shared(&lock_file)
+        lock_shared(&lock_file)
             .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
 
         let loaded = snapshot::load_snapshot_inner(&session_path, options);
 
-        if let Err(err) = FileExt::unlock(&lock_file) {
+        if let Err(err) = unlock(&lock_file) {
             warn!(
                 "failed to unlock session file {}: {}",
                 lock_path.display(),

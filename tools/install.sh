@@ -10,7 +10,6 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 INSTALL_DIR="${WAYSCRIBER_INSTALL_DIR:-/usr/bin}"
 BINARY_NAME="wayscriber"
-CONFIGURATOR_BINARY_NAME="wayscriber-configurator"
 CONFIG_DIR="$HOME/.config/wayscriber"
 HYPR_CONFIG="$HOME/.config/hypr/hyprland.conf"
 
@@ -42,18 +41,8 @@ ensure_replacement() {
 }
 
 # Ensure required binaries are built
-echo "Building Wayscriber binaries (release)..."
+echo "Building Wayscriber binary (release)..."
 (cd "$PROJECT_ROOT" && cargo build --release --bins)
-
-echo "Building Wayscriber configurator binaries (release)..."
-(cd "$PROJECT_ROOT" && cargo build --release --bins --manifest-path configurator/Cargo.toml --target-dir target)
-
-if [ ! -f "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" ] \
-   && [ -f "$PROJECT_ROOT/configurator/target/release/$CONFIGURATOR_BINARY_NAME" ]; then
-    mkdir -p "$PROJECT_ROOT/target/release"
-    cp "$PROJECT_ROOT/configurator/target/release/$CONFIGURATOR_BINARY_NAME" \
-       "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME"
-fi
 
 if [ ! -d "$INSTALL_DIR" ] || [ ! -w "$INSTALL_DIR" ]; then
     if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then
@@ -76,9 +65,6 @@ ${SUDO:-} install -d "$INSTALL_DIR"
 # Copy binaries
 echo "Installing binary to $INSTALL_DIR/$BINARY_NAME"
 ${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-
-echo "Installing configurator to $INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
-${SUDO:-} install -Dm755 "$PROJECT_ROOT/target/release/$CONFIGURATOR_BINARY_NAME" "$INSTALL_DIR/$CONFIGURATOR_BINARY_NAME"
 
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
