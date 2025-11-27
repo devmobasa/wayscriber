@@ -320,12 +320,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
                 state.toolbar_dragging = false;
-                if let Some(surf) = state.stylus_surface.take()
-                    && state.toolbar.is_toolbar_surface(&surf)
-                {
-                    state.toolbar.pointer_leave(&surf);
-                    state.toolbar.mark_dirty();
-                    state.input_state.needs_redraw = true;
+                if let Some(surf) = state.stylus_surface.take() {
+                    if state.toolbar.is_toolbar_surface(&surf) {
+                        state.toolbar.pointer_leave(&surf);
+                        state.toolbar.mark_dirty();
+                        state.input_state.needs_redraw = true;
+                    }
                 }
                 state.stylus_pressure_thickness = None;
                 state.stylus_last_pos = None;
@@ -337,14 +337,14 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                         .unwrap_or((state.current_mouse_x as f64, state.current_mouse_y as f64));
                     state.current_mouse_x = sx as i32;
                     state.current_mouse_y = sy as i32;
-                    if let Some(surface) = state.stylus_surface.as_ref()
-                        && let Some((evt, drag)) = state.toolbar.pointer_press(surface, (sx, sy))
-                    {
-                        state.toolbar_dragging = drag;
-                        state.handle_toolbar_event(evt);
-                        state.toolbar.mark_dirty();
-                        state.input_state.needs_redraw = true;
-                        state.refresh_keyboard_interactivity();
+                    if let Some(surface) = state.stylus_surface.as_ref() {
+                        if let Some((evt, drag)) = state.toolbar.pointer_press(surface, (sx, sy)) {
+                            state.toolbar_dragging = drag;
+                            state.handle_toolbar_event(evt);
+                            state.toolbar.mark_dirty();
+                            state.input_state.needs_redraw = true;
+                            state.refresh_keyboard_interactivity();
+                        }
                     }
                     return;
                 }

@@ -98,17 +98,17 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         let monitor_id = json.get("monitor").and_then(|v| v.as_i64());
         let monitor_name = json.get("monitor").and_then(|v| v.as_str());
 
-        if let Some(scale) = hyprland_monitor_scale(monitor_id, monitor_name)?
-            && (scale - 1.0).abs() > f64::EPSILON
-        {
-            log::debug!(
-                "Applying monitor scale {:.2} to active window capture",
-                scale
-            );
-            x *= scale;
-            y *= scale;
-            width *= scale;
-            height *= scale;
+        if let Some(scale) = hyprland_monitor_scale(monitor_id, monitor_name)? {
+            if (scale - 1.0).abs() > f64::EPSILON {
+                log::debug!(
+                    "Applying monitor scale {:.2} to active window capture",
+                    scale
+                );
+                x *= scale;
+                y *= scale;
+                width *= scale;
+                height *= scale;
+            }
         }
 
         let geometry = format!(
