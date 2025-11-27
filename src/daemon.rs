@@ -88,7 +88,8 @@ impl WayscriberTray {
                 );
             }
             Err(err) => {
-                if err.kind() == ErrorKind::NotFound {
+                let not_found = err.kind() == ErrorKind::NotFound;
+                if not_found {
                     error!(
                         "Configurator not found (looked for '{}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path.",
                         self.configurator_binary
@@ -101,6 +102,31 @@ impl WayscriberTray {
                     error!(
                         "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
                     );
+                }
+                #[cfg(feature = "dbus")]
+                {
+                    let body = if not_found {
+                        "Install wayscriber-configurator or set WAYSCRIBER_CONFIGURATOR to its path."
+                    } else {
+                        "Failed to launch configurator; see logs for details."
+                    };
+                    match tokio::runtime::Handle::try_current() {
+                        Ok(handle) => crate::notification::send_notification_async(
+                            &handle,
+                            "Configurator unavailable".to_string(),
+                            body.to_string(),
+                            Some("dialog-error".to_string()),
+                        ),
+                        Err(_) => {
+                            if let Ok(rt) = tokio::runtime::Runtime::new() {
+                                let _ = rt.block_on(crate::notification::send_notification(
+                                    "Configurator unavailable",
+                                    body,
+                                    Some("dialog-error"),
+                                ));
+                            }
+                        }
+                    }
                 }
             }
         }

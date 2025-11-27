@@ -418,7 +418,7 @@ impl ToolbarSurface {
 /// Tracks the lifetime and visibility of the top + side toolbar surfaces.
 #[derive(Debug)]
 pub struct ToolbarSurfaceManager {
-    /// Combined visibility flag (true when both toolbars visible)
+    /// Combined visibility flag (true when any toolbar visible)
     visible: bool,
     /// Whether the top toolbar is visible
     top_visible: bool,
@@ -464,6 +464,16 @@ impl ToolbarSurfaceManager {
         self.side_visible || self.visible
     }
 
+    #[cfg(test)]
+    fn top_flag(&self) -> bool {
+        self.top_visible
+    }
+
+    #[cfg(test)]
+    fn side_flag(&self) -> bool {
+        self.side_visible
+    }
+
     /// Set combined visibility (shows/hides both toolbars)
     pub fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
@@ -487,8 +497,8 @@ impl ToolbarSurfaceManager {
             self.top.destroy();
             self.top_hover = None;
         }
-        // Update combined flag
-        self.visible = self.top_visible && self.side_visible;
+        // Update combined flag: any toolbar visible keeps overlays alive.
+        self.visible = self.top_visible || self.side_visible;
     }
 
     /// Set visibility of the side toolbar only
@@ -498,8 +508,8 @@ impl ToolbarSurfaceManager {
             self.side.destroy();
             self.side_hover = None;
         }
-        // Update combined flag
-        self.visible = self.top_visible && self.side_visible;
+        // Update combined flag: any toolbar visible keeps overlays alive.
+        self.visible = self.top_visible || self.side_visible;
     }
 
     pub fn is_toolbar_surface(&self, surface: &wl_surface::WlSurface) -> bool {
@@ -2492,6 +2502,39 @@ fn draw_round_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, radius:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn top_and_side_close_independently() {
+        let mut mgr = ToolbarSurfaceManager {
+            visible: true,
+            top_visible: true,
+            side_visible: true,
+            top: ToolbarSurface::new("test-top", Anchor::TOP, (0, 0, 0, 0)),
+            side: ToolbarSurface::new("test-side", Anchor::LEFT, (0, 0, 0, 0)),
+            top_hover: None,
+            side_hover: None,
+        };
+
+        // Close top only -> side stays visible, any-visible stays true
+        mgr.set_top_visible(false);
+        assert!(!mgr.top_flag());
+        assert!(mgr.is_side_visible());
+        assert!(mgr.is_visible());
+
+        // Close side only -> top stays visible, any-visible stays true
+        mgr.set_side_visible(false);
+        mgr.set_top_visible(true);
+        assert!(mgr.top_flag());
+        assert!(!mgr.side_flag());
+        assert!(mgr.is_visible());
+
+        // Close both -> everything hidden
+        mgr.set_top_visible(false);
+        mgr.set_side_visible(false);
+        assert!(!mgr.top_flag());
+        assert!(!mgr.side_flag());
+        assert!(!mgr.is_visible());
+    }
 
     #[test]
     fn hsv_to_rgb_matches_primary_points() {

@@ -149,12 +149,12 @@ impl InputState {
 
     /// Returns whether the top toolbar is visible.
     pub fn toolbar_top_visible(&self) -> bool {
-        self.toolbar_top_visible || self.toolbar_visible
+        self.toolbar_top_visible
     }
 
     /// Returns whether the side toolbar is visible.
     pub fn toolbar_side_visible(&self) -> bool {
-        self.toolbar_side_visible || self.toolbar_visible
+        self.toolbar_side_visible
     }
 
     /// Enables or disables fill for fill-capable shapes.
