@@ -137,3 +137,117 @@ jobs:
         with:
           files: dist/**/*
           generate_release_notes: true
+
+  aur:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    env:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      AUR_SSH_KNOWN_HOSTS: ${{ secrets.AUR_SSH_KNOWN_HOSTS }}
+      AUR_SSH_PASSPHRASE: ${{ secrets.AUR_SSH_PASSPHRASE }}
+    steps:
+      - name: Fail if AUR secret missing
+        if: env.AUR_SSH_PRIVATE_KEY == ''
+        run: |
+          echo "AUR secrets not set; failing AUR job."
+          exit 1
+
+      - name: Configure SSH for AUR (and test)
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          {
+            echo "Host aur.archlinux.org"
+            echo "  HostName aur.archlinux.org"
+            echo "  User aur"
+            echo "  IdentityFile ~/.ssh/aur"
+            echo "  StrictHostKeyChecking yes"
+          } >> ~/.ssh/config
+          if [ -n "$AUR_SSH_KNOWN_HOSTS" ]; then
+            echo "$AUR_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          fi
+          SSH_CMD="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes"
+          if [ -n "$AUR_SSH_PASSPHRASE" ]; then
+            cat <<'EOS' > /tmp/aur-askpass.sh
+          #!/usr/bin/env bash
+          printf '%s\n' "${AUR_SSH_PASSPHRASE:-}"
+          EOS
+            chmod +x /tmp/aur-askpass.sh
+            export SSH_ASKPASS=/tmp/aur-askpass.sh
+            export SSH_ASKPASS_REQUIRE=force
+            export DISPLAY=:0
+            eval "$(ssh-agent -s)"
+            if ! setsid -w env SSH_ASKPASS=$SSH_ASKPASS SSH_ASKPASS_REQUIRE=$SSH_ASKPASS_REQUIRE DISPLAY=$DISPLAY ssh-add ~/.ssh/aur </dev/null; then
+              echo "ssh-add failed; ensure AUR_SSH_PASSPHRASE is set correctly if the key is encrypted."
+              exit 1
+            fi
+            SSH_CMD="ssh -o StrictHostKeyChecking=yes"
+            {
+              echo "SSH_ASKPASS=$SSH_ASKPASS"
+              echo "SSH_ASKPASS_REQUIRE=$SSH_ASKPASS_REQUIRE"
+              echo "DISPLAY=$DISPLAY"
+              echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+              echo "SSH_AGENT_PID=$SSH_AGENT_PID"
+            } >> "$GITHUB_ENV"
+          else
+            echo "No AUR_SSH_PASSPHRASE provided; using key directly with -i."
+          fi
+          echo "GIT_SSH_COMMAND=$SSH_CMD" >> "$GITHUB_ENV"
+          ls -l ~/.ssh
+          echo "ssh config:"
+          cat ~/.ssh/config
+          ssh-add -l || true
+          echo "Key fingerprint:"
+          ssh-keygen -lf ~/.ssh/aur || true
+          echo "Testing SSH connectivity..."
+          GIT_SSH_COMMAND="$SSH_CMD" git ls-remote ssh://aur@aur.archlinux.org/wayscriber.git HEAD
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install helpers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Set git identity for AUR
+        env:
+          AUR_GIT_USERNAME: ${{ secrets.AUR_GIT_USERNAME }}
+          AUR_GIT_EMAIL: ${{ secrets.AUR_GIT_EMAIL }}
+        run: |
+          if [ -z "$AUR_GIT_USERNAME" ] || [ -z "$AUR_GIT_EMAIL" ]; then
+            echo "AUR_GIT_USERNAME and AUR_GIT_EMAIL secrets must be set."
+            exit 1
+          fi
+          git config --global user.name "$AUR_GIT_USERNAME"
+          git config --global user.email "$AUR_GIT_EMAIL"
+
+      - name: Clone AUR repos
+        run: |
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber.git aur-wayscriber
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-bin.git aur-wayscriber-bin
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator || true
+
+      - name: Update AUR from manifest
+        env:
+          PUSH: "1"
+        run: |
+          VERSION=$(jq -r '.version' dist/manifest.json)
+          chmod +x tools/update-aur-from-manifest.sh
+          ./tools/update-aur-from-manifest.sh \
+            --version "$VERSION" \
+            --manifest dist/manifest.json \
+            --source-dir aur-wayscriber \
+            --bin-dir aur-wayscriber-bin \
+            --config-dir aur-wayscriber-configurator \
+            --push
