@@ -1,4 +1,4 @@
-name: Build Linux Packages
+name: Release ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
