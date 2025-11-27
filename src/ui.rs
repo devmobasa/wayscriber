@@ -347,7 +347,7 @@ pub fn render_help_overlay(
                     action: "Rectangle",
                 },
                 Row {
-                    key: "Tab+Drag",
+                    key: "Tab+Drag / Ctrl+Alt+Drag",
                     action: "Circle",
                 },
                 Row {

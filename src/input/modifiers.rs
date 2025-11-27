@@ -44,14 +44,14 @@ impl Modifiers {
     /// 4. Tab → Ellipse
     /// 5. None → Pen (default)
     pub fn current_tool(&self) -> Tool {
-        if self.ctrl && self.shift {
+        if self.tab || (self.ctrl && self.alt) {
+            Tool::Ellipse
+        } else if self.ctrl && self.shift {
             Tool::Arrow
         } else if self.ctrl {
             Tool::Rect
         } else if self.shift {
             Tool::Line
-        } else if self.tab {
-            Tool::Ellipse
         } else {
             Tool::Pen
         }

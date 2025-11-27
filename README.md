@@ -74,7 +74,7 @@ Works on layer-shell compositors (wlroots, Smithay-based like Niri/Cosmic, Plasm
 Freehand pen, highlighter, eraser (circle/rect), straight lines, rectangles, ellipses, arrows, multiline text with smoothing. Undo/redo, quick size/color changes via hotkeys or scroll.
 
 ### Board Modes
-Whiteboard, blackboard, and transparent overlays with isolated frames and auto pen contrast. Snap back to transparent with `Ctrl+Shift+T`.
+Whiteboard, blackboard, and transparent overlays with isolated frames and auto pen contrast. Snap back to transparent with <kbd>Ctrl+Shift+T</kbd>.
 
 ### Capture & Screenshots
 Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard`.
@@ -83,10 +83,10 @@ Full-screen saves, active-window grabs, and region capture to file or clipboard 
 Opt-in per board/monitor storage that restores your canvas plus pen color & thickness.
 
 ### Toolbars & UI
-Floating toolbars (pin/unpin with `F2`/`F9`), icon or text modes, color palettes, status bar, and in-app help overlay (`F1`/`F10`).
+Floating toolbars (pin/unpin with <kbd>F2</kbd> / <kbd>F9</kbd>), icon or text modes, color palettes, status bar, and in-app help overlay (<kbd>F1</kbd> / <kbd>F10</kbd>).
 
 ### Presenter Helpers
-Click highlights with configurable colors/radius/duration. Screen freeze (`Ctrl+Shift+F`) to pause what viewers see while apps run.
+Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps run.
 
 ---
 
@@ -103,7 +103,7 @@ sudo apt install ./wayscriber-amd64.deb
 wayscriber --active
 ```
 
-**3. Draw** — use your mouse. Press `F1` or `F10` for help, `Escape` to exit.
+**3. Draw** — use your mouse. Press <kbd>F1</kbd> / <kbd>F10</kbd> for help, <kbd>Escape</kbd> to exit.
 
 For other distros or running as a daemon, see [Installation](#installation) and [Usage](#usage).
 
@@ -149,14 +149,15 @@ sudo dnf install gcc gcc-c++ make pkgconf-pkg-config cairo-devel wayland-devel p
 ```bash
 git clone https://github.com/devmobasa/wayscriber.git
 cd wayscriber
-cargo build --release
-# Binary: target/release/wayscriber
+cargo build --bins --release
+# Binaries: target/release/wayscriber, target/release/wayscriber-configurator
 ```
 
-**Optional install script:**
+Instead of `cargo build --bins --release`, you can run the following script:
 ```bash
 ./tools/install.sh
 ```
+It will build the binaries *and* place them into expected places.
 
 ### Optional Dependencies
 
@@ -188,7 +189,7 @@ Bind to a key (Hyprland example):
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press `F1`/`F10` for help, `F11` for configurator, `Escape` or `Ctrl+Q` to exit.
+Press <kbd>F1</kbd> / <kbd>F10</kbd> for help, <kbd>F11</kbd> for configurator, <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd> to exit.
 
 ### Daemon Mode
 
@@ -228,11 +229,11 @@ journalctl --user -u wayscriber.service -f
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+C` | Copy entire screen to clipboard |
-| `Ctrl+S` | Save entire screen as PNG |
-| `Ctrl+Shift+C` | Select region → clipboard |
-| `Ctrl+Shift+S` | Select region → save PNG |
-| `Ctrl+Shift+O` | Capture active window |
+| <kbd>Ctrl+C</kbd> | Copy entire screen to clipboard |
+| <kbd>Ctrl+S</kbd> | Save entire screen as PNG |
+| <kbd>Ctrl+Shift+C</kbd> | Select region → clipboard |
+| <kbd>Ctrl+Shift+S</kbd> | Select region → save PNG |
+| <kbd>Ctrl+Shift+O</kbd> | Capture active window |
 
 Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if missing.
 
@@ -240,66 +241,66 @@ Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if mi
 
 ## Controls Reference
 
-Press `F1` or `F10` at any time for the in-app cheat sheet.
+Press <kbd>F1</kbd> / <kbd>F10</kbd> at any time for the in-app cheat sheet.
 
 ### Drawing Tools
 
 | Action | Key/Mouse |
 |--------|-----------|
 | Freehand pen | Drag with left mouse button |
-| Straight line | `Shift` + drag |
-| Rectangle | `Ctrl` + drag |
-| Ellipse/Circle | `Tab` + drag |
-| Arrow | `Ctrl+Shift` + drag |
-| Highlight brush | `Ctrl+Alt+H` |
-| Text mode | `T`, click to position, type, `Enter` to finish |
+| Straight line | <kbd>Shift</kbd> + drag |
+| Rectangle | <kbd>Ctrl</kbd> + drag |
+| Ellipse/Circle | <kbd>Tab</kbd> + drag / <kbd>Ctrl+Alt</kbd> + drag |
+| Arrow | <kbd>Ctrl+Shift</kbd> + drag |
+| Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
+| Text mode | <kbd>T</kbd>, click to position, type, <kbd>Enter</kbd> to finish |
 
 ### Board Modes
 
 | Action | Key |
 |--------|-----|
-| Toggle Whiteboard | `Ctrl+W` |
-| Toggle Blackboard | `Ctrl+B` |
-| Return to Transparent | `Ctrl+Shift+T` |
+| Toggle Whiteboard | <kbd>Ctrl+W</kbd> |
+| Toggle Blackboard | <kbd>Ctrl+B</kbd> |
+| Return to Transparent | <kbd>Ctrl+Shift+T</kbd> |
 
 ### Colors
 
 | Color | Key |
 |-------|-----|
-| Red | `R` |
-| Green | `G` |
-| Blue | `B` |
-| Yellow | `Y` |
-| Orange | `O` |
-| Pink | `P` |
-| White | `W` |
-| Black | `K` |
+| Red    | <kbd>R</kbd> |
+| Green  | <kbd>G</kbd> |
+| Blue   | <kbd>B</kbd> |
+| Yellow | <kbd>Y</kbd> |
+| Orange | <kbd>O</kbd> |
+| Pink   | <kbd>P</kbd> |
+| White  | <kbd>W</kbd> |
+| Black  | <kbd>K</kbd> |
 
 ### Size Adjustments
 
 | Action | Key |
 |--------|-----|
-| Increase thickness | `+` / `=` / scroll down |
-| Decrease thickness | `-` / `_` / scroll up |
-| Increase font size | `Ctrl+Shift++` / `Shift` + scroll down |
-| Decrease font size | `Ctrl+Shift+-` / `Shift` + scroll up |
+| Increase thickness | <kbd>+</kbd> / <kbd>=</kbd> / scroll down |
+| Decrease thickness | <kbd>-</kbd> / <kbd>_</kbd> / scroll up |
+| Increase font size | <kbd>Ctrl+Shift++</kbd> / <kbd>Shift</kbd> + scroll down |
+| Decrease font size | <kbd>Ctrl+Shift+-</kbd> / <kbd>Shift</kbd> + scroll up |
 
 ### Editing & UI
 
 | Action | Key |
 |--------|-----|
-| Undo | `Ctrl+Z` |
-| Redo | `Ctrl+Shift+Z` / `Ctrl+Y` |
-| Eraser | `D` |
-| Clear all | `E` |
-| Cancel action | Right-click / `Escape` |
-| Toggle toolbars | `F2` / `F9` |
-| Help overlay | `F1` / `F10` |
-| Configurator | `F11` |
-| Status bar | `F4` / `F12` |
-| Toggle click highlight | `Ctrl+Shift+H` |
-| Toggle freeze | `Ctrl+Shift+F` |
-| Exit | `Escape` / `Ctrl+Q` |
+| Undo                   | <kbd>Ctrl+Z</kbd>                  |
+| Redo                   | <kbd>Ctrl+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> |
+| Eraser                 | <kbd>D</kbd>                       |
+| Clear all              | <kbd>E</kbd>                       |
+| Cancel action          | Right-click / <kbd>Escape</kbd>    |
+| Toggle toolbars        | <kbd>F2</kbd> / <kbd>F9</kbd>               |
+| Help overlay           | <kbd>F1</kbd> / <kbd>F10</kbd>              |
+| Configurator           | <kbd>F11</kbd>                     |
+| Status bar             | <kbd>F4</kbd> / <kbd>F12</kbd>              |
+| Toggle click highlight | <kbd>Ctrl+Shift+H</kbd>            |
+| Toggle freeze          | <kbd>Ctrl+Shift+F</kbd>            |
+| Exit                   | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd>       |
 
 ---
 
@@ -338,7 +339,7 @@ enable_vsync = true
 
 ### Session Persistence
 
-Enable via configurator (`F11 → Session` tab) or edit config directly.
+Enable via configurator (<kbd>F11</kbd> → “Session” tab) or edit config directly.
 
 ```bash
 wayscriber --session-info     # inspect saved sessions
@@ -421,7 +422,7 @@ Pull requests and bug reports welcome. Priority areas:
 cargo fmt
 cargo clippy
 cargo test
-cargo run -- --active
+cargo run --bin wayscriber -- --active
 ```
 
 Use `./tools/fetch-all-deps.sh` to prefetch crates before offline builds.

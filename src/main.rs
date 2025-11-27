@@ -89,7 +89,7 @@ fn main() -> anyhow::Result<()> {
         log::info!("  - Freehand: Just drag");
         log::info!("  - Line: Hold Shift + drag");
         log::info!("  - Rectangle: Hold Ctrl + drag");
-        log::info!("  - Ellipse: Hold Tab + drag");
+        log::info!("  - Ellipse: Hold Tab / Ctrl+Alt + drag");
         log::info!("  - Arrow: Hold Ctrl+Shift + drag");
         log::info!("  - Text: Press T, click to position, type, press Enter");
         log::info!(
