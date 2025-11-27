@@ -58,23 +58,39 @@
 ## Quick Start
 
 **1. Install wayscriber**
-1. Debian/Ubuntu (latest release):
-   - Download & install:  
-     ```bash
-     wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
-     sudo apt install ./wayscriber-amd64.deb
-     ```
-     _Note: apt may print “Download is performed unsandboxed as root …” when installing a local file; this is expected._
-2. Fedora/RHEL (latest release):
-   - Download & install:  
-     ```bash
-     wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
-     sudo rpm -Uvh wayscriber-x86_64.rpm
-     ```
-3. Arch Linux (AUR):
-	- `yay -S wayscriber` (source) or `paru -S wayscriber`
-	- `yay -S wayscriber-bin` (prebuilt) or `paru -S wayscriber-bin`
-4. Other distros: see [Installation](#installation), then install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow (optional; fallback capture still works without them).
+
+### Debian/Ubuntu (latest release)
+
+```bash
+wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
+sudo apt install ./wayscriber-amd64.deb
+```
+
+> [!NOTE]
+> `apt` may print “Download is performed unsandboxed as root …” when installing a local file; this is expected.
+
+### Fedora/RHEL (latest release)
+
+```bash
+wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
+sudo rpm -Uvh wayscriber-x86_64.rpm
+```
+
+### Arch Linux (AUR)
+
+- `yay -S wayscriber` or `paru -S wayscriber` (source)
+- `yay -S wayscriber-bin` or `paru -S wayscriber-bin` (prebuilt)
+
+### From source
+
+See [this section](#other-distros)
+
+---
+
+> [!IMPORTANT]
+> Install `wl-clipboard`, `grim`, and `slurp` for the fastest screenshot workflow (optional; fallback capture still works without them).
+
+See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
 
 **2. Choose how to run it:**
 
@@ -90,8 +106,8 @@ Or bind to a key in `~/.config/hypr/hyprland.conf`:
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press `F10` for help, `F11` for configurator, `Escape`/`Ctrl+Q` to exit, and `F12` to toggle the status bar. Use `Ctrl+Shift+F` to freeze/unfreeze the screen while keeping your drawings, or start already frozen with `wayscriber --freeze`.
-
+Press `F10` for help, `F11` for configurator, `Escape`/`Ctrl+Q` to exit, and `F12` to toggle the status bar. \
+Use `Ctrl+Shift+F` to freeze/unfreeze the screen while keeping your drawings, or start already frozen with `wayscriber --freeze`.
 ### Option 2: Daemon Mode (Background Service)
 Run wayscriber in the background and toggle it with a keybind:
 
@@ -154,41 +170,6 @@ See the `[ui.toolbar]` section there to pin toolbars, switch icon/text mode, and
 
 https://github.com/user-attachments/assets/7c4b36ec-0f6a-4aad-93fb-f9c966d43873
 
-## Installation
-
-See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
-
-### GitHub release packages (Debian/Ubuntu & Fedora/RHEL)
-
-Use the stable filenames from the latest release:
-
-```bash
-# Debian/Ubuntu
-wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
-sudo apt install ./wayscriber-amd64.deb
-# Note: apt may print “Download is performed unsandboxed as root …” when installing a local file; this is expected.
-
-# Fedora/RHEL
-wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
-sudo rpm -Uvh wayscriber-x86_64.rpm
-```
-
-### Arch Linux (AUR)
-
-```bash
-# yay – build from source
-yay -S wayscriber
-
-# yay – prebuilt binaries
-yay -S wayscriber-bin
-
-# paru – build from source
-paru -S wayscriber
-
-# paru – prebuilt binaries
-paru -S wayscriber-bin
-```
-
 ### Tablet/Stylus Input
 
 Tablet support for Wayland (`zwp_tablet_v2`) is compiled in by default. Enable it in your config:
@@ -204,10 +185,9 @@ max_thickness = 8.0
 Notes:
 - Pressure sets a uniform thickness per stroke; the peak pressure is preserved on lift.
 - Stylus hover/tap/drag works on both the canvas and toolbars.
-- To build without tablet support, use `cargo build --no-default-features`.
+- To build without tablet support, use `cargo build --release --no-default-features`.
 
 The package installs the user service at `/usr/lib/systemd/user/wayscriber.service`.
-
 
 ### Other Distros
 
@@ -242,29 +222,10 @@ The binary will be at `target/release/wayscriber`.
 ### Manual Install Script
 
 ```bash
-cargo build --release
 ./tools/install.sh
 ```
 
 The installer places the binary at `~/.local/bin/wayscriber`, creates `~/.config/wayscriber/`, and offers to configure Hyprland.
-
-### Tablet/Stylus Input
-
-Tablet support for Wayland (`zwp_tablet_v2`) is compiled in by default. Enable it in your config:
-
-```toml
-[tablet]
-enabled = true
-pressure_enabled = true
-min_thickness = 1.0
-max_thickness = 8.0
-```
-
-Notes:
-- Pressure sets a uniform thickness per stroke; the peak pressure is preserved on lift.
-- Stylus hover/tap/drag works on both the canvas and toolbars.
-- To build without tablet support, use `cargo build --no-default-features`.
-
 
 ## Running wayscriber
 
@@ -288,6 +249,9 @@ hyprctl reload
 ```
 
 The daemon shows a system tray icon (may be in Waybar drawer). Press `Super+D` to toggle overlay, right-click tray icon for options.
+
+> [!CAUTION]
+> You *must* have a system tray. If you don't have one, the daemon will fail to start.
 
 **Service commands:**
 ```bash
@@ -567,11 +531,10 @@ MIT License — see [LICENSE](LICENSE) for details.
 - Development basics:
 
   ```bash
-  cargo build
-  cargo run -- --active
-  cargo test
-  cargo clippy
   cargo fmt
+  cargo clippy
+  cargo test
+  cargo run -- --active
   ```
   - Use `./tools/fetch-all-deps.sh` to prefetch crates for the main binary and configurator before running frozen/offline builds.
 
