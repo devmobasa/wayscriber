@@ -8,8 +8,10 @@ use crate::draw::Color;
 /// Determines the background and visual style of the drawing canvas.
 /// Each mode maintains its own isolated frame of shapes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default)]
 pub enum BoardMode {
     /// Transparent overlay showing underlying screen (default)
+    #[default]
     Transparent,
     /// White/light background for drawing (whiteboard)
     Whiteboard,
@@ -17,11 +19,6 @@ pub enum BoardMode {
     Blackboard,
 }
 
-impl Default for BoardMode {
-    fn default() -> Self {
-        Self::Transparent
-    }
-}
 
 impl BoardMode {
     /// Returns the background color for this mode, if any.

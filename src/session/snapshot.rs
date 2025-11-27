@@ -497,8 +497,8 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
 
     input.canvas_set.switch_mode(snapshot.active_mode);
 
-    if options.restore_tool_state {
-        if let Some(tool_state) = snapshot.tool_state {
+    if options.restore_tool_state
+        && let Some(tool_state) = snapshot.tool_state {
             input.current_color = tool_state.current_color;
             input.current_thickness = tool_state
                 .current_thickness
@@ -514,7 +514,6 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
             input.board_previous_color = tool_state.board_previous_color;
             input.show_status_bar = tool_state.show_status_bar;
         }
-    }
 
     input.needs_redraw = true;
 }
@@ -531,8 +530,8 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
     }
 
     let truncate = |frame: &mut Option<Frame>, mode: &str| {
-        if let Some(frame_data) = frame {
-            if frame_data.shapes.len() > max_shapes {
+        if let Some(frame_data) = frame
+            && frame_data.shapes.len() > max_shapes {
                 let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
                 warn!(
                     "Session frame '{}' contains {} shapes which exceeds the limit of {}; truncating",
@@ -552,7 +551,6 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
                     }
                 }
             }
-        }
     };
 
     truncate(&mut snapshot.transparent, "transparent");
@@ -591,15 +589,14 @@ fn apply_history_policies(frame: &mut Option<Frame>, mode: &str, depth_limit: Op
 fn max_history_depth(doc: &Value) -> usize {
     let mut max_depth = 0;
     for key in ["transparent", "whiteboard", "blackboard"] {
-        if let Some(frame) = doc.get(key) {
-            if let Some(obj) = frame.as_object() {
+        if let Some(frame) = doc.get(key)
+            && let Some(obj) = frame.as_object() {
                 for stack_key in ["undo_stack", "redo_stack"] {
                     if let Some(Value::Array(arr)) = obj.get(stack_key) {
                         max_depth = max_depth.max(depth_array(arr));
                     }
                 }
             }
-        }
     }
     max_depth
 }

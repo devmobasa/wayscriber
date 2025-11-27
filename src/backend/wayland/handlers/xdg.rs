@@ -96,8 +96,8 @@ impl WindowHandler for WaylandState {
         self.input_state.needs_redraw = true;
 
         // Fallback: xdg may not emit surface_enter before configure; attempt a session load once.
-        if !self.session.is_loaded() {
-            if let Some(options) = self.session_options_mut() {
+        if !self.session.is_loaded()
+            && let Some(options) = self.session_options_mut() {
                 let load_result = session::load_snapshot(options);
                 let mut load_succeeded = false;
                 let current_options = self.session_options().cloned();
@@ -132,6 +132,5 @@ impl WindowHandler for WaylandState {
                 }
                 self.input_state.needs_redraw = true;
             }
-        }
     }
 }

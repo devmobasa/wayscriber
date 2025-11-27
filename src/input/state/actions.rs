@@ -118,21 +118,20 @@ impl InputState {
                 };
 
                 // Check if this key combination triggers an action
-                if !key_str.is_empty() {
-                    if let Some(action) = self.find_action(&key_str) {
+                if !key_str.is_empty()
+                    && let Some(action) = self.find_action(&key_str) {
                         // Actions work in text mode
                         // Note: Exit action has special logic in handle_action - it cancels
                         // text mode if in TextInput state, or exits app if in Idle state
                         self.handle_action(action);
                         return;
                     }
-                }
             }
 
             // No action triggered, handle as text input
             // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
-            if matches!(key, Key::Return) && !self.modifiers.shift {
-                if let DrawingState::TextInput { x, y, buffer } = &self.state {
+            if matches!(key, Key::Return) && !self.modifiers.shift
+                && let DrawingState::TextInput { x, y, buffer } = &self.state {
                     if !buffer.is_empty() {
                         let x = *x;
                         let y = *y;
@@ -169,7 +168,6 @@ impl InputState {
                     self.state = DrawingState::Idle;
                     return;
                 }
-            }
 
             // Regular text input - add character to buffer
             if let DrawingState::TextInput { buffer, .. } = &mut self.state {
@@ -226,15 +224,13 @@ impl InputState {
         }
 
         // Handle Escape in Drawing state for canceling
-        if matches!(key, Key::Escape) {
-            if let DrawingState::Drawing { .. } = &self.state {
-                if let Some(Action::Exit) = self.find_action("Escape") {
+        if matches!(key, Key::Escape)
+            && let DrawingState::Drawing { .. } = &self.state
+                && let Some(Action::Exit) = self.find_action("Escape") {
                     self.state = DrawingState::Idle;
                     self.needs_redraw = true;
                     return;
                 }
-            }
-        }
 
         // Convert key to string for action lookup
         let key_str = match key {

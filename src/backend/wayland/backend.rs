@@ -319,11 +319,10 @@ impl WaylandBackend {
                     info!("Starting in {} mode", initial_mode_str);
                     input_state.canvas_set.switch_mode(mode);
                     // Apply auto-color adjustment if enabled
-                    if config.board.auto_adjust_pen {
-                        if let Some(default_color) = mode.default_pen_color(&config.board) {
+                    if config.board.auto_adjust_pen
+                        && let Some(default_color) = mode.default_pen_color(&config.board) {
                             input_state.current_color = default_color;
                         }
-                    }
                 }
             } else if !initial_mode_str.is_empty() {
                 warn!(
@@ -546,8 +545,8 @@ impl WaylandBackend {
             }
 
             // Check for completed capture operations
-            if state.capture.is_in_progress() {
-                if let Some(outcome) = state.capture.manager_mut().try_take_result() {
+            if state.capture.is_in_progress()
+                && let Some(outcome) = state.capture.manager_mut().try_take_result() {
                     log::info!("Capture completed");
 
                     // Restore overlay
@@ -603,7 +602,6 @@ impl WaylandBackend {
                         }
                     }
                 }
-            }
 
             // Render if configured and needs redraw, but only if no frame callback pending
             // This throttles rendering to display refresh rate (when vsync is enabled)
@@ -661,9 +659,9 @@ impl WaylandBackend {
 
         info!("Wayland backend exiting");
 
-        if let Some(options) = state.session_options() {
-            if let Some(snapshot) = session::snapshot_from_input(&state.input_state, options) {
-                if let Err(err) = session::save_snapshot(&snapshot, options) {
+        if let Some(options) = state.session_options()
+            && let Some(snapshot) = session::snapshot_from_input(&state.input_state, options)
+                && let Err(err) = session::save_snapshot(&snapshot, options) {
                     warn!("Failed to save session state: {}", err);
                     notification::send_notification_async(
                         &state.tokio_handle,
@@ -672,8 +670,6 @@ impl WaylandBackend {
                         Some("dialog-error".to_string()),
                     );
                 }
-            }
-        }
 
         // Return error if loop exited due to error, otherwise success
         match loop_error {

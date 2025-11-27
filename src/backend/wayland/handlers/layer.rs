@@ -71,8 +71,8 @@ impl LayerShellHandler for WaylandState {
         // Fallback: on xdg-only environments we might never get surface_enter before configure.
         // Try to load a session snapshot once even without output identity; compositor handler
         // will still reload with a concrete identity if it arrives later.
-        if !self.session.is_loaded() {
-            if let Some(options) = self.session_options_mut() {
+        if !self.session.is_loaded()
+            && let Some(options) = self.session_options_mut() {
                 let load_result = session::load_snapshot(options);
                 let mut load_succeeded = false;
                 let current_options = self.session_options().cloned();
@@ -108,6 +108,5 @@ impl LayerShellHandler for WaylandState {
                 }
                 self.input_state.needs_redraw = true;
             }
-        }
     }
 }

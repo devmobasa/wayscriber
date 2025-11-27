@@ -158,13 +158,12 @@ impl FrozenState {
         phys_height: u32,
         input_state: &mut InputState,
     ) {
-        if let Some(img) = &self.image {
-            if img.width != phys_width || img.height != phys_height {
+        if let Some(img) = &self.image
+            && (img.width != phys_width || img.height != phys_height) {
                 info!("Surface resized; clearing frozen image");
                 self.image = None;
                 input_state.set_frozen_active(false);
             }
-        }
     }
 
     /// Toggle unfreeze: drop the image and mark redraw.
@@ -433,8 +432,8 @@ impl FrozenState {
                 if let Some(geo) = geo {
                     let (phys_w, phys_h) = geo.physical_size();
                     let (origin_x, origin_y) = geo.physical_origin();
-                    if origin_x >= 0 && origin_y >= 0 && phys_w > 0 && phys_h > 0 {
-                        if let Some(cropped) = crop_argb(
+                    if origin_x >= 0 && origin_y >= 0 && phys_w > 0 && phys_h > 0
+                        && let Some(cropped) = crop_argb(
                             &data,
                             width,
                             height,
@@ -447,7 +446,6 @@ impl FrozenState {
                             width = phys_w;
                             height = phys_h;
                         }
-                    }
                 }
 
                 Ok((
@@ -518,8 +516,8 @@ impl FrozenState {
         }
 
         // Timeout safeguard to avoid overlay staying hidden forever
-        if let Some(start) = self.portal_started_at {
-            if start.elapsed() > std::time::Duration::from_secs(10) {
+        if let Some(start) = self.portal_started_at
+            && start.elapsed() > std::time::Duration::from_secs(10) {
                 warn!("Portal frozen capture timed out; restoring overlay");
                 self.restore_overlay(surface);
                 input_state.set_frozen_active(false);
@@ -529,7 +527,6 @@ impl FrozenState {
                 self.portal_started_at = None;
                 return;
             }
-        }
 
         if let Some(rx) = self.portal_rx.as_ref() {
             match rx.try_recv() {

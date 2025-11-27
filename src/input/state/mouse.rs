@@ -84,8 +84,8 @@ impl InputState {
                 match &mut self.state {
                     DrawingState::Idle => {
                         let selection_click = self.modifiers.alt;
-                        if selection_click {
-                            if let Some(hit_id) = self.hit_test_at(x, y) {
+                        if selection_click
+                            && let Some(hit_id) = self.hit_test_at(x, y) {
                                 if !self.selected_shape_ids().contains(&hit_id) {
                                     if self.modifiers.shift {
                                         self.extend_selection([hit_id]);
@@ -105,7 +105,6 @@ impl InputState {
                                     return;
                                 }
                             }
-                        }
 
                         let tool = self.active_tool();
                         if tool != Tool::Highlight && tool != Tool::Select {
@@ -148,8 +147,8 @@ impl InputState {
         if let DrawingState::MovingSelection { last_x, last_y, .. } = &self.state {
             let dx = x - *last_x;
             let dy = y - *last_y;
-            if (dx != 0 || dy != 0) && self.apply_translation_to_selection(dx, dy) {
-                if let DrawingState::MovingSelection {
+            if (dx != 0 || dy != 0) && self.apply_translation_to_selection(dx, dy)
+                && let DrawingState::MovingSelection {
                     last_x,
                     last_y,
                     moved,
@@ -160,7 +159,6 @@ impl InputState {
                     *last_y = y;
                     *moved = true;
                 }
-            }
             return;
         }
 

@@ -266,15 +266,14 @@ impl WaylandState {
     }
 
     pub(super) fn preferred_fullscreen_output(&self) -> Option<wl_output::WlOutput> {
-        if let Some(ref preferred) = self.preferred_output_identity {
-            if let Some(output) = self.output_state.outputs().find(|output| {
+        if let Some(ref preferred) = self.preferred_output_identity
+            && let Some(output) = self.output_state.outputs().find(|output| {
                 self.output_identity_for(output)
                     .map(|id| id.eq_ignore_ascii_case(preferred))
                     .unwrap_or(false)
             }) {
                 return Some(output);
             }
-        }
 
         self.surface
             .current_output()
@@ -325,8 +324,8 @@ impl WaylandState {
             self.pointer_over_toolbar = false;
         }
 
-        if any_visible {
-            if let Some(layer_shell) = self.layer_shell.as_ref() {
+        if any_visible
+            && let Some(layer_shell) = self.layer_shell.as_ref() {
                 if self.toolbar_needs_recreate {
                     self.toolbar.destroy_all();
                     self.toolbar_needs_recreate = false;
@@ -341,7 +340,6 @@ impl WaylandState {
                     &snapshot,
                 );
             }
-        }
 
         self.refresh_keyboard_interactivity();
     }
@@ -992,11 +990,10 @@ impl WaylandState {
 fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Vec<Rect> {
     regions.retain(Rect::is_valid);
 
-    if regions.is_empty() && width > 0 && height > 0 {
-        if let Some(full) = Rect::new(0, 0, width, height) {
+    if regions.is_empty() && width > 0 && height > 0
+        && let Some(full) = Rect::new(0, 0, width, height) {
             regions.push(full);
         }
-    }
 
     regions
 }

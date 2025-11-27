@@ -202,10 +202,9 @@ fn resolve_display_id(display_id: Option<&str>) -> String {
 }
 
 fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(stripped) = path.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
+    if let Some(stripped) = path.strip_prefix("~/")
+        && let Some(home) = dirs::home_dir() {
             return home.join(stripped);
         }
-    }
     PathBuf::from(path)
 }

@@ -37,11 +37,10 @@ impl PointerHandler for WaylandState {
                         if let Err(err) = pointer.set_cursor(conn, CursorIcon::Crosshair) {
                             warn!("Failed to set cursor icon: {}", err);
                         }
-                        if on_toolbar {
-                            if let Err(err) = pointer.set_cursor(conn, CursorIcon::Default) {
+                        if on_toolbar
+                            && let Err(err) = pointer.set_cursor(conn, CursorIcon::Default) {
                                 warn!("Failed to set toolbar cursor icon: {}", err);
                             }
-                        }
                     }
                 }
                 PointerEventKind::Leave { .. } => {
@@ -92,8 +91,8 @@ impl PointerHandler for WaylandState {
                 }
                 PointerEventKind::Press { button, .. } => {
                     if on_toolbar {
-                        if button == BTN_LEFT {
-                            if let Some((evt, drag)) =
+                        if button == BTN_LEFT
+                            && let Some((evt, drag)) =
                                 self.toolbar.pointer_press(&event.surface, event.position)
                             {
                                 self.toolbar_dragging = drag;
@@ -102,7 +101,6 @@ impl PointerHandler for WaylandState {
                                 self.input_state.needs_redraw = true;
                                 self.refresh_keyboard_interactivity();
                             }
-                        }
                         continue;
                     } else if self.pointer_over_toolbar {
                         self.toolbar_dragging = false;

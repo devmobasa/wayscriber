@@ -1058,8 +1058,8 @@ fn draw_tooltip(
 
     // Find hovered region with tooltip
     for hit in hits {
-        if hit.contains(hx, hy) {
-            if let Some(text) = hit.tooltip {
+        if hit.contains(hx, hy)
+            && let Some(text) = hit.tooltip {
                 ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
                 ctx.set_font_size(12.0);
 
@@ -1122,7 +1122,6 @@ fn draw_tooltip(
                 }
                 break;
             }
-        }
     }
 }
 
