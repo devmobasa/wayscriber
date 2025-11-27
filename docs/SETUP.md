@@ -73,6 +73,8 @@ This starts a fresh overlay each time. Exit with Escape.
 4. **Press Escape or Ctrl+Q** → Overlay hides (daemon keeps running)
 5. **Press Super+D again** → Overlay reappears with previous drawings intact
 
+No system tray/StatusNotifier watcher? Start the daemon with `wayscriber --daemon --no-tray` (or set `WAYSCRIBER_NO_TRAY=1`) to skip the tray icon; the Super+D toggle still works.
+
 ### One-Shot Mode Workflow (Alternative)
 
 1. **Run command** → Fresh drawing overlay appears

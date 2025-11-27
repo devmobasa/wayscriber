@@ -38,6 +38,7 @@ pub struct Daemon {
     should_quit: Arc<AtomicBool>,
     toggle_requested: Arc<AtomicBool>,
     initial_mode: Option<String>,
+    tray_enabled: bool,
     backend_runner: Option<Arc<BackendRunner>>,
     tray_thread: Option<JoinHandle<()>>,
     overlay_child: Option<Child>,
@@ -235,12 +236,13 @@ impl ksni::Tray for WayscriberTray {
 }
 
 impl Daemon {
-    pub fn new(initial_mode: Option<String>) -> Self {
+    pub fn new(initial_mode: Option<String>, tray_enabled: bool) -> Self {
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            tray_enabled,
             backend_runner: None,
             tray_thread: None,
             overlay_child: None,
@@ -257,6 +259,7 @@ impl Daemon {
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            tray_enabled: true,
             backend_runner: Some(backend_runner),
             tray_thread: None,
             overlay_child: None,
@@ -318,12 +321,24 @@ impl Daemon {
             }
         });
 
-        // Start system tray
-        let tray_toggle = self.toggle_requested.clone();
-        let tray_quit = self.should_quit.clone();
-        let tray_handle =
-            start_system_tray(tray_toggle, tray_quit).context("Failed to start system tray")?;
-        self.tray_thread = Some(tray_handle);
+        // Start system tray (optional)
+        if self.tray_enabled {
+            let tray_toggle = self.toggle_requested.clone();
+            let tray_quit = self.should_quit.clone();
+            match start_system_tray(tray_toggle, tray_quit) {
+                Ok(tray_handle) => {
+                    self.tray_thread = Some(tray_handle);
+                }
+                Err(err) => {
+                    warn!("System tray unavailable: {}", err);
+                    warn!(
+                        "Continuing without system tray; use --no-tray or WAYSCRIBER_NO_TRAY=1 to silence this warning"
+                    );
+                }
+            }
+        } else {
+            info!("System tray disabled; running daemon without tray");
+        }
 
         info!("Daemon ready - waiting for toggle signal");
 

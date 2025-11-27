@@ -293,6 +293,8 @@ hyprctl reload
 
 The daemon shows a system tray icon (may be in Waybar drawer). Press `Super+D` to toggle overlay, right-click tray icon for options.
 
+No system tray or status notifier? Run headless: `wayscriber --daemon --no-tray` (or set `WAYSCRIBER_NO_TRAY=1`). The SIGUSR1 toggle still works without the tray.
+
 **Service commands:**
 ```bash
 systemctl --user status wayscriber.service

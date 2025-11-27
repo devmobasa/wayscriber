@@ -29,6 +29,10 @@ struct Cli {
     #[arg(long, short = 'm', value_name = "MODE")]
     mode: Option<String>,
 
+    /// Disable system tray (run daemon without a tray icon)
+    #[arg(long, action = ArgAction::SetTrue)]
+    no_tray: bool,
+
     /// Delete persisted session data and backups
     #[arg(
         long,
@@ -81,7 +85,11 @@ fn main() -> anyhow::Result<()> {
     if cli.daemon {
         // Daemon mode: background service with toggle activation
         log::info!("Starting in daemon mode");
-        let mut daemon = daemon::Daemon::new(cli.mode);
+        let tray_disabled = cli.no_tray || env_flag_enabled("WAYSCRIBER_NO_TRAY");
+        if tray_disabled {
+            log::info!("Tray disabled via --no-tray / WAYSCRIBER_NO_TRAY");
+        }
+        let mut daemon = daemon::Daemon::new(cli.mode, !tray_disabled);
         daemon.run()?;
     } else if cli.active || cli.freeze {
         // One-shot mode: show overlay immediately and exit when done
@@ -125,6 +133,7 @@ fn main() -> anyhow::Result<()> {
             "  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)"
         );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
+        println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
         println!("  wayscriber --freeze          Start overlay already frozen");
         println!("  wayscriber -h, --help        Show help");
         println!();
@@ -141,6 +150,17 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    if let Ok(val) = std::env::var(name) {
+        matches!(
+            val.to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    } else {
+        false
+    }
 }
 
 fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
