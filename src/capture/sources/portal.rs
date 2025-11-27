@@ -1,4 +1,3 @@
-#![cfg(feature = "portal")]
 use crate::capture::{
     portal,
     types::{CaptureError, CaptureType},

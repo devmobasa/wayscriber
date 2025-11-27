@@ -143,6 +143,7 @@ impl StatusPositionOption {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_status_position(&self) -> StatusPosition {
         match self {
             StatusPositionOption::TopLeft => StatusPosition::TopLeft,
@@ -305,6 +306,7 @@ impl SessionStorageModeOption {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_mode(&self) -> SessionStorageMode {
         match self {
             Self::Auto => SessionStorageMode::Auto,
@@ -348,6 +350,7 @@ impl SessionCompressionOption {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_compression(&self) -> SessionCompression {
         match self {
             Self::Auto => SessionCompression::Auto,

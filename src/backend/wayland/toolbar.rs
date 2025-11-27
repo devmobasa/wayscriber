@@ -1072,7 +1072,7 @@ fn draw_tooltip(
                 ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
                 ctx.set_font_size(12.0);
 
-                if let Ok(ext) = ctx.text_extents(&text) {
+                if let Ok(ext) = ctx.text_extents(text) {
                     let pad = 6.0;
                     let tooltip_w = ext.width() + pad * 2.0;
                     let tooltip_h = ext.height() + pad * 2.0;
@@ -1127,7 +1127,7 @@ fn draw_tooltip(
                         tooltip_x + pad - ext.x_bearing(),
                         tooltip_y + pad - ext.y_bearing(),
                     );
-                    let _ = ctx.show_text(&text);
+                    let _ = ctx.show_text(text);
                 }
                 break;
             }
@@ -2198,7 +2198,7 @@ fn draw_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, active: boo
 }
 
 fn draw_label_center(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, text: &str) {
-    if let Ok(ext) = ctx.text_extents(&text) {
+    if let Ok(ext) = ctx.text_extents(text) {
         let tx = x + (w - ext.width()) / 2.0 - ext.x_bearing();
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
@@ -2208,7 +2208,7 @@ fn draw_label_center(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, text:
 }
 
 fn draw_label_left(ctx: &cairo::Context, x: f64, y: f64, _w: f64, h: f64, text: &str) {
-    if let Ok(ext) = ctx.text_extents(&text) {
+    if let Ok(ext) = ctx.text_extents(text) {
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
         ctx.move_to(x, ty);

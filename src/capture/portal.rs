@@ -1,4 +1,3 @@
-#![cfg(feature = "portal")]
 //! xdg-desktop-portal integration for screenshot capture.
 
 use super::types::{CaptureError, CaptureType};
