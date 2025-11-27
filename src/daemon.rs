@@ -10,6 +10,7 @@ use log::{debug, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
 use std::env;
+use std::io::ErrorKind;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -87,11 +88,20 @@ impl WayscriberTray {
                 );
             }
             Err(err) => {
-                error!(
-                    "Failed to launch wayscriber-configurator using '{}': {}",
-                    self.configurator_binary, err
-                );
-                error!("Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed.");
+                if err.kind() == ErrorKind::NotFound {
+                    error!(
+                        "Configurator not found (looked for '{}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path.",
+                        self.configurator_binary
+                    );
+                } else {
+                    error!(
+                        "Failed to launch wayscriber-configurator using '{}': {}",
+                        self.configurator_binary, err
+                    );
+                    error!(
+                        "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
+                    );
+                }
             }
         }
     }

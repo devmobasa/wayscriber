@@ -2,6 +2,7 @@ use super::base::InputState;
 use crate::config::Action;
 use crate::config::Config;
 use crate::util::Rect;
+use std::io::ErrorKind;
 use std::process::{Command, Stdio};
 
 impl InputState {
@@ -109,10 +110,16 @@ impl InputState {
                 );
             }
             Err(err) => {
-                log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
-                log::error!(
-                    "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
-                );
+                if err.kind() == ErrorKind::NotFound {
+                    log::error!(
+                        "Configurator not found (looked for '{binary}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path."
+                    );
+                } else {
+                    log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
+                    log::error!(
+                        "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
+                    );
+                }
             }
         }
     }
