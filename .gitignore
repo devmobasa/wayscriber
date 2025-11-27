@@ -19,6 +19,9 @@
 test_run.sh
 run.sh
 
+# Local release helper
+tools/release.sh
+
 # Packaging (but keep the service file)
 packaging/**
 !packaging/wayscriber.service
