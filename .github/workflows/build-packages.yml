@@ -1,7 +1,7 @@
-name: Release ${{ github.ref_name }}
+name: Release
+run-name: Release ${{ github.ref_name }}
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
