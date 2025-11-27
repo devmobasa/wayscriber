@@ -456,12 +456,12 @@ impl ToolbarSurfaceManager {
 
     /// Returns true if the top toolbar is visible
     pub fn is_top_visible(&self) -> bool {
-        self.top_visible || self.visible
+        self.top_visible
     }
 
     /// Returns true if the side toolbar is visible
     pub fn is_side_visible(&self) -> bool {
-        self.side_visible || self.visible
+        self.side_visible
     }
 
     #[cfg(test)]
@@ -473,7 +473,6 @@ impl ToolbarSurfaceManager {
     fn side_flag(&self) -> bool {
         self.side_visible
     }
-
     /// Set combined visibility (shows/hides both toolbars)
     pub fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
@@ -2517,22 +2516,22 @@ mod tests {
 
         // Close top only -> side stays visible, any-visible stays true
         mgr.set_top_visible(false);
-        assert!(!mgr.top_flag());
+        assert!(!mgr.is_top_visible());
         assert!(mgr.is_side_visible());
         assert!(mgr.is_visible());
 
         // Close side only -> top stays visible, any-visible stays true
         mgr.set_side_visible(false);
         mgr.set_top_visible(true);
-        assert!(mgr.top_flag());
-        assert!(!mgr.side_flag());
+        assert!(mgr.is_top_visible());
+        assert!(!mgr.is_side_visible());
         assert!(mgr.is_visible());
 
         // Close both -> everything hidden
         mgr.set_top_visible(false);
         mgr.set_side_visible(false);
-        assert!(!mgr.top_flag());
-        assert!(!mgr.side_flag());
+        assert!(!mgr.is_top_visible());
+        assert!(!mgr.is_side_visible());
         assert!(!mgr.is_visible());
     }
 
