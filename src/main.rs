@@ -6,10 +6,10 @@ mod config;
 mod daemon;
 mod draw;
 mod input;
-mod paths;
-mod time_utils;
 mod notification;
+mod paths;
 mod session;
+mod time_utils;
 mod ui;
 mod util;
 

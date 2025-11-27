@@ -155,15 +155,15 @@ impl ConfigDraft {
             session_persist_blackboard: config.session.persist_blackboard,
             session_restore_tool_state: config.session.restore_tool_state,
             session_per_output: config.session.per_output,
-            session_storage_mode: SessionStorageModeOption::from_mode(config.session.storage.clone()),
-            session_custom_directory: config
-                .session
-                .custom_directory
-                .clone()
-                .unwrap_or_default(),
+            session_storage_mode: SessionStorageModeOption::from_mode(
+                config.session.storage.clone(),
+            ),
+            session_custom_directory: config.session.custom_directory.clone().unwrap_or_default(),
             session_max_shapes_per_frame: config.session.max_shapes_per_frame.to_string(),
             session_max_file_size_mb: config.session.max_file_size_mb.to_string(),
-            session_compression: SessionCompressionOption::from_compression(config.session.compress.clone()),
+            session_compression: SessionCompressionOption::from_compression(
+                config.session.compress.clone(),
+            ),
             session_auto_compress_threshold_kb: config
                 .session
                 .auto_compress_threshold_kb
@@ -426,9 +426,7 @@ impl ConfigDraft {
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
             ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
-            ToggleField::UiClickHighlightUsePenColor => {
-                self.click_highlight_use_pen_color = value
-            }
+            ToggleField::UiClickHighlightUsePenColor => self.click_highlight_use_pen_color = value,
             ToggleField::BoardEnabled => self.board_enabled = value,
             ToggleField::BoardAutoAdjust => self.board_auto_adjust_pen = value,
             ToggleField::CaptureEnabled => self.capture_enabled = value,
@@ -474,9 +472,7 @@ impl ConfigDraft {
             TextField::StatusPadding => self.status_padding = value,
             TextField::StatusDotRadius => self.status_dot_radius = value,
             TextField::HighlightRadius => self.click_highlight_radius = value,
-            TextField::HighlightOutlineThickness => {
-                self.click_highlight_outline_thickness = value
-            }
+            TextField::HighlightOutlineThickness => self.click_highlight_outline_thickness = value,
             TextField::HighlightDurationMs => self.click_highlight_duration_ms = value,
             TextField::HelpFontSize => self.help_font_size = value,
             TextField::HelpLineHeight => self.help_line_height = value,
@@ -525,9 +521,9 @@ impl ConfigDraft {
             QuadField::HelpBorder => self.help_border_color.set_component(index, value),
             QuadField::HelpText => self.help_text_color.set_component(index, value),
             QuadField::HighlightFill => self.click_highlight_fill_color.set_component(index, value),
-            QuadField::HighlightOutline => {
-                self.click_highlight_outline_color.set_component(index, value)
-            }
+            QuadField::HighlightOutline => self
+                .click_highlight_outline_color
+                .set_component(index, value),
         }
     }
 }

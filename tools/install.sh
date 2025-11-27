@@ -41,8 +41,31 @@ ensure_replacement() {
 }
 
 # Ensure required binaries are built
-echo "Building Wayscriber binary (release)..."
-(cd "$PROJECT_ROOT" && cargo build --release --bins)
+echo "Select build mode:"
+echo "  1) No default features (disables tablet-input/portal/tray)"
+echo "  2) With default features (tablet-input, portal, tray)"
+read -p "Enter choice [1-2]: " -r BUILD_CHOICE
+
+FEATURE_ARGS=()
+FEATURE_LABEL=""
+case "$BUILD_CHOICE" in
+    1)
+        FEATURE_ARGS=(--no-default-features)
+        FEATURE_LABEL="(no default features)"
+        ;;
+    2)
+        FEATURE_ARGS=()
+        FEATURE_LABEL="(default features)"
+        ;;
+    *)
+        echo "Invalid choice, defaulting to no default features."
+        FEATURE_ARGS=(--no-default-features)
+        FEATURE_LABEL="(no default features)"
+        ;;
+esac
+
+echo "Building Wayscriber binary (release) $FEATURE_LABEL..."
+(cd "$PROJECT_ROOT" && cargo build --release --bins "${FEATURE_ARGS[@]}")
 
 if [ ! -d "$INSTALL_DIR" ] || [ ! -w "$INSTALL_DIR" ]; then
     if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then

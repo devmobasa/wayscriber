@@ -8,7 +8,6 @@ pub enum ToolbarEvent {
     SetColor(Color),
     SetThickness(f64),
     NudgeThickness(f64),
-    SetMarkerOpacity(f64),
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
@@ -49,8 +48,6 @@ pub enum ToolbarEvent {
     ToggleMoreColors(bool),
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
-    /// Toggle marker opacity UI visibility
-    ToggleMarkerOpacitySection(bool),
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -62,6 +59,7 @@ pub struct ToolbarSnapshot {
     pub thickness: f64,
     pub eraser_size: f64,
     pub thickness_targets_eraser: bool,
+    pub thickness_targets_marker: bool,
     pub eraser_kind: EraserKind,
     pub marker_opacity: f64,
     pub font: FontDescriptor,
@@ -93,8 +91,6 @@ pub struct ToolbarSnapshot {
     pub show_more_colors: bool,
     /// Whether to show the Actions section
     pub show_actions_section: bool,
-    /// Whether to show the marker opacity slider in the side toolbar
-    pub show_marker_opacity_section: bool,
 }
 
 impl ToolbarSnapshot {
@@ -103,9 +99,13 @@ impl ToolbarSnapshot {
         let active_tool = state.active_tool();
         let thickness_targets_eraser =
             active_tool == Tool::Eraser || matches!(state.tool_override(), Some(Tool::Eraser));
+        let thickness_targets_marker =
+            active_tool == Tool::Marker || matches!(state.tool_override(), Some(Tool::Marker));
         let eraser_kind = state.eraser_kind;
         let thickness_value = if thickness_targets_eraser {
             state.eraser_size
+        } else if thickness_targets_marker {
+            state.marker_opacity
         } else {
             state.current_thickness
         };
@@ -116,6 +116,7 @@ impl ToolbarSnapshot {
             thickness: thickness_value,
             eraser_size: state.eraser_size,
             thickness_targets_eraser,
+            thickness_targets_marker,
             eraser_kind,
             marker_opacity: state.marker_opacity,
             font: state.font_descriptor.clone(),
@@ -141,7 +142,6 @@ impl ToolbarSnapshot {
             use_icons: state.toolbar_use_icons,
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
-            show_marker_opacity_section: state.show_marker_opacity_section,
         }
     }
 }
@@ -163,7 +163,6 @@ impl InputState {
             ToolbarEvent::SetColor(color) => self.set_color(color),
             ToolbarEvent::SetThickness(value) => self.set_thickness_for_active_tool(value),
             ToolbarEvent::SetFont(descriptor) => self.set_font_descriptor(descriptor),
-            ToolbarEvent::SetMarkerOpacity(value) => self.set_marker_opacity(value),
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
             ToolbarEvent::ToggleFill(enable) => self.set_fill_enabled(enable),
             ToolbarEvent::SetUndoDelay(delay_secs) => {
@@ -336,14 +335,6 @@ impl InputState {
             ToolbarEvent::ToggleActionsSection(show) => {
                 if self.show_actions_section != show {
                     self.show_actions_section = show;
-                    true
-                } else {
-                    false
-                }
-            }
-            ToolbarEvent::ToggleMarkerOpacitySection(show) => {
-                if self.show_marker_opacity_section != show {
-                    self.show_marker_opacity_section = show;
                     true
                 } else {
                     false

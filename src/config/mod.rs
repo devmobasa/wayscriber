@@ -327,13 +327,13 @@ impl Config {
     /// warning is logged.
     ///
     /// Validated ranges:
-    /// - `default_thickness`: 1.0 - 40.0
+    /// - `default_thickness`: 1.0 - 50.0
     /// - `default_font_size`: 8.0 - 72.0
     /// - `arrow.length`: 5.0 - 50.0
     /// - `arrow.angle_degrees`: 15.0 - 60.0
     /// - `buffer_count`: 2 - 4
     pub fn validate_and_clamp(&mut self) {
-        // Thickness: 1.0 - 40.0
+        // Thickness: 1.0 - 50.0
         if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(&self.drawing.default_thickness)
         {
             log::warn!(
@@ -348,7 +348,7 @@ impl Config {
                 .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         }
 
-        // Eraser size: 1.0 - 40.0
+        // Eraser size: 1.0 - 50.0
         if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS)
             .contains(&self.drawing.default_eraser_size)
         {

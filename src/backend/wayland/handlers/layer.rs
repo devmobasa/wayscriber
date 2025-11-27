@@ -71,43 +71,43 @@ impl LayerShellHandler for WaylandState {
         // Fallback: on xdg-only environments we might never get surface_enter before configure.
         // Try to load a session snapshot once even without output identity; compositor handler
         // will still reload with a concrete identity if it arrives later.
-        if !self.session.is_loaded() {
-            if let Some(options) = self.session_options_mut() {
-                let load_result = session::load_snapshot(options);
-                let mut load_succeeded = false;
-                let current_options = self.session_options().cloned();
-                match load_result {
-                    Ok(Some(snapshot)) => {
-                        load_succeeded = true;
-                        if let Some(ref opts) = current_options {
-                            debug!(
-                                "Restoring session (fallback) from {}",
-                                opts.session_file_path().display()
-                            );
-                            session::apply_snapshot(&mut self.input_state, snapshot, opts);
-                        }
-                    }
-                    Ok(None) => {
-                        load_succeeded = true;
-                        if let Some(ref opts) = current_options {
-                            debug!(
-                                "No session data found for {} (fallback load)",
-                                opts.session_file_path().display()
-                            );
-                        }
-                    }
-                    Err(err) => {
-                        warn!("Fallback session load failed: {}", err);
+        if !self.session.is_loaded()
+            && let Some(options) = self.session_options_mut()
+        {
+            let load_result = session::load_snapshot(options);
+            let mut load_succeeded = false;
+            let current_options = self.session_options().cloned();
+            match load_result {
+                Ok(Some(snapshot)) => {
+                    load_succeeded = true;
+                    if let Some(ref opts) = current_options {
+                        debug!(
+                            "Restoring session (fallback) from {}",
+                            opts.session_file_path().display()
+                        );
+                        session::apply_snapshot(&mut self.input_state, snapshot, opts);
                     }
                 }
-                // Mark loaded to avoid reapplying on every configure when load succeeded; compositor
-                // enter still reloads when a concrete output identity arrives because that changes
-                // the identity and triggers a fresh load.
-                if load_succeeded {
-                    self.session.mark_loaded();
+                Ok(None) => {
+                    load_succeeded = true;
+                    if let Some(ref opts) = current_options {
+                        debug!(
+                            "No session data found for {} (fallback load)",
+                            opts.session_file_path().display()
+                        );
+                    }
                 }
-                self.input_state.needs_redraw = true;
+                Err(err) => {
+                    warn!("Fallback session load failed: {}", err);
+                }
             }
+            // Mark loaded to avoid reapplying on every configure when load succeeded; compositor
+            // enter still reloads when a concrete output identity arrives because that changes
+            // the identity and triggers a fresh load.
+            if load_succeeded {
+                self.session.mark_loaded();
+            }
+            self.input_state.needs_redraw = true;
         }
     }
 }

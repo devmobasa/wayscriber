@@ -1,6 +1,5 @@
 use std::{path::PathBuf, sync::Arc};
 
-use wayscriber::config::Config;
 use iced::alignment::Horizontal;
 use iced::border::Radius;
 use iced::executor;
@@ -11,6 +10,7 @@ use iced::widget::{
     scrollable, text, text_input,
 };
 use iced::{Application, Background, Border, Command, Element, Length, Settings, Size};
+use wayscriber::config::Config;
 
 use crate::messages::Message;
 use crate::models::{
@@ -299,13 +299,9 @@ impl Application for ConfiguratorApp {
 
 impl ConfiguratorApp {
     fn header_view(&self) -> Element<'_, Message> {
-        let reload_button = button("Reload").style(theme::Button::Secondary).on_press(
-            if self.is_loading || self.is_saving {
-                Message::ReloadRequested
-            } else {
-                Message::ReloadRequested
-            },
-        );
+        let reload_button = button("Reload")
+            .style(theme::Button::Secondary)
+            .on_press(Message::ReloadRequested);
 
         let defaults_button = button("Defaults")
             .style(theme::Button::Secondary)
@@ -1214,11 +1210,7 @@ fn default_value_text<'a>(value: impl Into<String>, changed: bool) -> iced::widg
 }
 
 fn bool_label(value: bool) -> &'static str {
-    if value {
-        "On"
-    } else {
-        "Off"
-    }
+    if value { "On" } else { "Off" }
 }
 
 fn toggle_row<'a>(

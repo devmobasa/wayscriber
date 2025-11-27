@@ -497,23 +497,23 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
 
     input.canvas_set.switch_mode(snapshot.active_mode);
 
-    if options.restore_tool_state {
-        if let Some(tool_state) = snapshot.tool_state {
-            input.current_color = tool_state.current_color;
-            input.current_thickness = tool_state
-                .current_thickness
-                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-            input.eraser_size = tool_state
-                .eraser_size
-                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-            input.eraser_kind = tool_state.eraser_kind;
-            input.current_font_size = tool_state.current_font_size.clamp(8.0, 72.0);
-            input.text_background_enabled = tool_state.text_background_enabled;
-            input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
-            input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
-            input.board_previous_color = tool_state.board_previous_color;
-            input.show_status_bar = tool_state.show_status_bar;
-        }
+    if options.restore_tool_state
+        && let Some(tool_state) = snapshot.tool_state
+    {
+        input.current_color = tool_state.current_color;
+        input.current_thickness = tool_state
+            .current_thickness
+            .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        input.eraser_size = tool_state
+            .eraser_size
+            .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        input.eraser_kind = tool_state.eraser_kind;
+        input.current_font_size = tool_state.current_font_size.clamp(8.0, 72.0);
+        input.text_background_enabled = tool_state.text_background_enabled;
+        input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
+        input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
+        input.board_previous_color = tool_state.board_previous_color;
+        input.show_status_bar = tool_state.show_status_bar;
     }
 
     input.needs_redraw = true;
@@ -531,25 +531,24 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
     }
 
     let truncate = |frame: &mut Option<Frame>, mode: &str| {
-        if let Some(frame_data) = frame {
-            if frame_data.shapes.len() > max_shapes {
-                let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
-                warn!(
-                    "Session frame '{}' contains {} shapes which exceeds the limit of {}; truncating",
-                    mode,
-                    frame_data.shapes.len() + removed.len(),
-                    max_shapes
-                );
-                let removed_ids: HashSet<ShapeId> =
-                    removed.into_iter().map(|shape| shape.id).collect();
-                if !removed_ids.is_empty() {
-                    let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
-                    if !stats.is_empty() {
-                        warn!(
-                            "Dropped {} undo and {} redo actions referencing trimmed shapes in '{}' history",
-                            stats.undo_removed, stats.redo_removed, mode
-                        );
-                    }
+        if let Some(frame_data) = frame
+            && frame_data.shapes.len() > max_shapes
+        {
+            let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
+            warn!(
+                "Session frame '{}' contains {} shapes which exceeds the limit of {}; truncating",
+                mode,
+                frame_data.shapes.len() + removed.len(),
+                max_shapes
+            );
+            let removed_ids: HashSet<ShapeId> = removed.into_iter().map(|shape| shape.id).collect();
+            if !removed_ids.is_empty() {
+                let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
+                if !stats.is_empty() {
+                    warn!(
+                        "Dropped {} undo and {} redo actions referencing trimmed shapes in '{}' history",
+                        stats.undo_removed, stats.redo_removed, mode
+                    );
                 }
             }
         }
@@ -591,12 +590,12 @@ fn apply_history_policies(frame: &mut Option<Frame>, mode: &str, depth_limit: Op
 fn max_history_depth(doc: &Value) -> usize {
     let mut max_depth = 0;
     for key in ["transparent", "whiteboard", "blackboard"] {
-        if let Some(frame) = doc.get(key) {
-            if let Some(obj) = frame.as_object() {
-                for stack_key in ["undo_stack", "redo_stack"] {
-                    if let Some(Value::Array(arr)) = obj.get(stack_key) {
-                        max_depth = max_depth.max(depth_array(arr));
-                    }
+        if let Some(frame) = doc.get(key)
+            && let Some(obj) = frame.as_object()
+        {
+            for stack_key in ["undo_stack", "redo_stack"] {
+                if let Some(Value::Array(arr)) = obj.get(stack_key) {
+                    max_depth = max_depth.max(depth_array(arr));
                 }
             }
         }
@@ -610,8 +609,7 @@ fn depth_array(arr: &[Value]) -> usize {
 
 fn depth_action(action: &Value) -> usize {
     if let Some(obj) = action.as_object() {
-        let is_compound =
-            obj.get("kind").and_then(|v| v.as_str()) == Some("compound");
+        let is_compound = obj.get("kind").and_then(|v| v.as_str()) == Some("compound");
         if is_compound {
             let mut child_max = 0;
             for value in obj.values() {

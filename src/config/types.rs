@@ -15,11 +15,11 @@ pub struct DrawingConfig {
     #[serde(default = "default_color")]
     pub default_color: ColorSpec,
 
-    /// Default pen thickness in pixels (valid range: 1.0 - 40.0)
+    /// Default pen thickness in pixels (valid range: 1.0 - 50.0)
     #[serde(default = "default_thickness")]
     pub default_thickness: f64,
 
-    /// Default eraser size in pixels (valid range: 1.0 - 40.0)
+    /// Default eraser size in pixels (valid range: 1.0 - 50.0)
     #[serde(default = "default_eraser_size")]
     pub default_eraser_size: f64,
 

@@ -1,6 +1,6 @@
+use iced::Color;
 use wayscriber::config::enums::ColorSpec;
 use wayscriber::util::name_to_color;
-use iced::Color;
 
 use super::error::FormError;
 use super::util::{format_float, parse_f64};

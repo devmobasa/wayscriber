@@ -19,10 +19,10 @@ impl InputState {
         let new_bounds = self.compute_provisional_bounds(current_x, current_y);
         let previous = self.last_provisional_bounds;
 
-        if new_bounds != previous {
-            if let Some(prev) = previous {
-                self.dirty_tracker.mark_rect(prev);
-            }
+        if new_bounds != previous
+            && let Some(prev) = previous
+        {
+            self.dirty_tracker.mark_rect(prev);
         }
 
         if let Some(bounds) = new_bounds {
@@ -96,10 +96,10 @@ impl InputState {
         let new_bounds = self.compute_text_preview_bounds();
         let previous = self.last_text_preview_bounds;
 
-        if new_bounds != previous {
-            if let Some(prev) = previous {
-                self.dirty_tracker.mark_rect(prev);
-            }
+        if new_bounds != previous
+            && let Some(prev) = previous
+        {
+            self.dirty_tracker.mark_rect(prev);
         }
 
         if let Some(bounds) = new_bounds {

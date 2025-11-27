@@ -4,8 +4,8 @@
 //! to disk with locking, optional compression, and backup rotation, and restores
 //! the state on startup when requested.
 
-mod options;
 mod lock;
+mod options;
 mod snapshot;
 mod storage;
 

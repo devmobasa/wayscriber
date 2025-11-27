@@ -15,9 +15,7 @@ pub fn now_local() -> OffsetDateTime {
 pub fn format_with_template(dt: OffsetDateTime, template: &str) -> String {
     let desc = convert_strftime_to_time_fmt(template);
     match format_description::parse(&desc) {
-        Ok(parsed) => dt
-            .format(&parsed)
-            .unwrap_or_else(|_| fallback_rfc3339(dt)),
+        Ok(parsed) => dt.format(&parsed).unwrap_or_else(|_| fallback_rfc3339(dt)),
         Err(_) => fallback_rfc3339(dt),
     }
 }
