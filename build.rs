@@ -43,27 +43,26 @@ fn resolve_git_dir() -> Option<PathBuf> {
         return Some(dot_git);
     }
 
-    if dot_git.is_file() {
-        if let Ok(contents) = fs::read_to_string(&dot_git) {
-            if let Some(rest) = contents.strip_prefix("gitdir:") {
-                let mut resolved = PathBuf::from(rest.trim());
-                if resolved.is_relative() {
-                    if let Some(parent) = dot_git.parent() {
-                        resolved = parent.join(resolved);
-                    }
-                }
-                return Some(resolved);
-            }
+    if dot_git.is_file()
+        && let Ok(contents) = fs::read_to_string(&dot_git)
+        && let Some(rest) = contents.strip_prefix("gitdir:")
+    {
+        let mut resolved = PathBuf::from(rest.trim());
+        if resolved.is_relative()
+            && let Some(parent) = dot_git.parent()
+        {
+            resolved = parent.join(resolved);
         }
+        return Some(resolved);
     }
 
     None
 }
 
 fn emit_rerun(path: &Path) {
-    if path.exists() {
-        if let Some(display) = path.to_str() {
-            println!("cargo:rerun-if-changed={display}");
-        }
+    if path.exists()
+        && let Some(display) = path.to_str()
+    {
+        println!("cargo:rerun-if-changed={display}");
     }
 }
