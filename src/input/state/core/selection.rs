@@ -75,13 +75,14 @@ impl InputState {
 
         for id in ids {
             if let Some(shape) = frame.shape(*id)
-                && let Some(bounds) = shape.shape.bounding_box() {
-                    min_x = min_x.min(bounds.x);
-                    min_y = min_y.min(bounds.y);
-                    max_x = max_x.max(bounds.x + bounds.width);
-                    max_y = max_y.max(bounds.y + bounds.height);
-                    found = true;
-                }
+                && let Some(bounds) = shape.shape.bounding_box()
+            {
+                min_x = min_x.min(bounds.x);
+                min_y = min_y.min(bounds.y);
+                max_x = max_x.max(bounds.x + bounds.width);
+                max_y = max_y.max(bounds.y + bounds.height);
+                found = true;
+            }
         }
 
         if found {

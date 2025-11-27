@@ -53,11 +53,12 @@ impl SeatHandler for WaylandState {
 
         #[cfg(tablet)]
         if let Some(manager) = &self.tablet_manager
-            && self.tablet_seats.is_empty() {
-                let tseat = manager.get_tablet_seat(&seat, qh, ());
-                self.tablet_seats.push(tseat);
-                info!("Tablet seat initialized for seat");
-            }
+            && self.tablet_seats.is_empty()
+        {
+            let tseat = manager.get_tablet_seat(&seat, qh, ());
+            self.tablet_seats.push(tseat);
+            info!("Tablet seat initialized for seat");
+        }
     }
 
     fn remove_capability(

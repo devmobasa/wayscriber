@@ -271,9 +271,10 @@ impl WaylandState {
                 self.output_identity_for(output)
                     .map(|id| id.eq_ignore_ascii_case(preferred))
                     .unwrap_or(false)
-            }) {
-                return Some(output);
-            }
+            })
+        {
+            return Some(output);
+        }
 
         self.surface
             .current_output()
@@ -324,22 +325,16 @@ impl WaylandState {
             self.pointer_over_toolbar = false;
         }
 
-        if any_visible
-            && let Some(layer_shell) = self.layer_shell.as_ref() {
-                if self.toolbar_needs_recreate {
-                    self.toolbar.destroy_all();
-                    self.toolbar_needs_recreate = false;
-                }
-                let scale = self.surface.scale();
-                let snapshot = self.toolbar_snapshot();
-                self.toolbar.ensure_created(
-                    qh,
-                    &self.compositor_state,
-                    layer_shell,
-                    scale,
-                    &snapshot,
-                );
+        if any_visible && let Some(layer_shell) = self.layer_shell.as_ref() {
+            if self.toolbar_needs_recreate {
+                self.toolbar.destroy_all();
+                self.toolbar_needs_recreate = false;
             }
+            let scale = self.surface.scale();
+            let snapshot = self.toolbar_snapshot();
+            self.toolbar
+                .ensure_created(qh, &self.compositor_state, layer_shell, scale, &snapshot);
+        }
 
         self.refresh_keyboard_interactivity();
     }
@@ -990,10 +985,13 @@ impl WaylandState {
 fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Vec<Rect> {
     regions.retain(Rect::is_valid);
 
-    if regions.is_empty() && width > 0 && height > 0
-        && let Some(full) = Rect::new(0, 0, width, height) {
-            regions.push(full);
-        }
+    if regions.is_empty()
+        && width > 0
+        && height > 0
+        && let Some(full) = Rect::new(0, 0, width, height)
+    {
+        regions.push(full);
+    }
 
     regions
 }

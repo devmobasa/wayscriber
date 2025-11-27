@@ -1059,69 +1059,70 @@ fn draw_tooltip(
     // Find hovered region with tooltip
     for hit in hits {
         if hit.contains(hx, hy)
-            && let Some(text) = hit.tooltip {
-                ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-                ctx.set_font_size(12.0);
+            && let Some(text) = hit.tooltip
+        {
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            ctx.set_font_size(12.0);
 
-                if let Ok(ext) = ctx.text_extents(text) {
-                    let pad = 6.0;
-                    let tooltip_w = ext.width() + pad * 2.0;
-                    let tooltip_h = ext.height() + pad * 2.0;
+            if let Ok(ext) = ctx.text_extents(text) {
+                let pad = 6.0;
+                let tooltip_w = ext.width() + pad * 2.0;
+                let tooltip_h = ext.height() + pad * 2.0;
 
-                    // Position centered on button
-                    let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
-                    let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
+                // Position centered on button
+                let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
+                let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
 
-                    // Position above or below based on parameter (with increased gap)
-                    let gap = 6.0; // Increased from 4.0 for better spacing
-                    let tooltip_y = if above {
-                        hit.rect.1 - tooltip_h - gap
-                    } else {
-                        hit.rect.1 + hit.rect.3 + gap
-                    };
+                // Position above or below based on parameter (with increased gap)
+                let gap = 6.0; // Increased from 4.0 for better spacing
+                let tooltip_y = if above {
+                    hit.rect.1 - tooltip_h - gap
+                } else {
+                    hit.rect.1 + hit.rect.3 + gap
+                };
 
-                    // Clamp to panel bounds
-                    if tooltip_x < 4.0 {
-                        tooltip_x = 4.0;
-                    }
-                    if tooltip_x + tooltip_w > panel_width - 4.0 {
-                        tooltip_x = panel_width - tooltip_w - 4.0;
-                    }
-
-                    // Draw subtle drop shadow (offset darker rounded rect)
-                    let shadow_offset = 2.0;
-                    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
-                    draw_round_rect(
-                        ctx,
-                        tooltip_x + shadow_offset,
-                        tooltip_y + shadow_offset,
-                        tooltip_w,
-                        tooltip_h,
-                        4.0,
-                    );
-                    let _ = ctx.fill();
-
-                    // Draw tooltip background
-                    ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
-                    draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
-                    let _ = ctx.fill();
-
-                    // Draw border
-                    ctx.set_source_rgba(0.4, 0.4, 0.5, 0.8);
-                    ctx.set_line_width(1.0);
-                    draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
-                    let _ = ctx.stroke();
-
-                    // Draw text
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                    ctx.move_to(
-                        tooltip_x + pad - ext.x_bearing(),
-                        tooltip_y + pad - ext.y_bearing(),
-                    );
-                    let _ = ctx.show_text(text);
+                // Clamp to panel bounds
+                if tooltip_x < 4.0 {
+                    tooltip_x = 4.0;
                 }
-                break;
+                if tooltip_x + tooltip_w > panel_width - 4.0 {
+                    tooltip_x = panel_width - tooltip_w - 4.0;
+                }
+
+                // Draw subtle drop shadow (offset darker rounded rect)
+                let shadow_offset = 2.0;
+                ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+                draw_round_rect(
+                    ctx,
+                    tooltip_x + shadow_offset,
+                    tooltip_y + shadow_offset,
+                    tooltip_w,
+                    tooltip_h,
+                    4.0,
+                );
+                let _ = ctx.fill();
+
+                // Draw tooltip background
+                ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
+                draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+                let _ = ctx.fill();
+
+                // Draw border
+                ctx.set_source_rgba(0.4, 0.4, 0.5, 0.8);
+                ctx.set_line_width(1.0);
+                draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+                let _ = ctx.stroke();
+
+                // Draw text
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                ctx.move_to(
+                    tooltip_x + pad - ext.x_bearing(),
+                    tooltip_y + pad - ext.y_bearing(),
+                );
+                let _ = ctx.show_text(text);
             }
+            break;
+        }
     }
 }
 

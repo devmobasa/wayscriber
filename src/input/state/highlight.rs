@@ -144,9 +144,10 @@ impl ClickHighlightState {
 
         if self.highlights.len() >= MAX_ACTIVE_HIGHLIGHTS {
             if let Some(removed) = self.highlights.first()
-                && let Some(bounds) = removed.last_bounds {
-                    tracker.mark_rect(bounds);
-                }
+                && let Some(bounds) = removed.last_bounds
+            {
+                tracker.mark_rect(bounds);
+            }
             self.highlights.remove(0);
         }
 
