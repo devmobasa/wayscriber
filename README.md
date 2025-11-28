@@ -42,10 +42,10 @@ https://github.com/user-attachments/assets/75fe3e9b-b156-47e5-8434-318d7f25151d
 ## Why wayscriber?
 
 - **Annotate live** over any app/window on any monitor without rearranging your workspace
-- **Draw shapes, arrows, and text** to explain steps, give demos, or build quick guides
+- **Draw shapes, arrows, and text** (with fill toggle) to explain steps, give demos, or build quick guides
 - **Redact screen regions** and capture screenshots with one keypress
 - **Toggle instantly** from a lightweight background daemon
-- **Persist your work** — canvases and tool state restore after restarts
+- **Persist your work** — canvases and tool state restore after restarts (with CLI/tray overrides)
 - **Presenter helpers** — click highlights and screen freeze while apps keep running
 
 ### Supported Compositors
@@ -71,22 +71,22 @@ Works on layer-shell compositors (wlroots, Smithay-based like Niri/Cosmic, Plasm
 ## Features
 
 ### Drawing & Editing
-Freehand pen, highlighter, eraser (circle/rect), straight lines, rectangles, ellipses, arrows, multiline text with smoothing. Undo/redo, quick size/color changes via hotkeys or scroll.
+Freehand pen, translucent highlighter, eraser (circle/rect), straight lines, rectangles/ellipses with fill toggle, arrows, multiline text with smoothing; undo/redo; quick size/color changes via hotkeys or scroll; color picker + palettes.
 
 ### Board Modes
-Whiteboard, blackboard, and transparent overlays with isolated frames and auto pen contrast. Snap back to transparent with `Ctrl+Shift+T`.
+Whiteboard, blackboard, and transparent overlays with isolated frames and auto pen contrast. Snap back to transparent with <kbd>Ctrl+Shift+T</kbd>.
 
 ### Capture & Screenshots
-Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard`.
+Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard`. Falls back to xdg-desktop-portal if missing.
 
 ### Session Persistence
-Opt-in per board/monitor storage that restores your canvas plus pen color & thickness.
+Opt-in per board/monitor storage that restores your canvas plus pen color & thickness. One-off overrides via `--resume-session` / `--no-resume-session` or the tray toggle.
 
 ### Toolbars & UI
-Floating toolbars (pin/unpin with `F2`/`F9`), icon or text modes, color palettes, status bar, and in-app help overlay (`F1`/`F10`).
+Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), icon or text modes, color picker, extended palettes, status bar, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
 
 ### Presenter Helpers
-Click highlights with configurable colors/radius/duration. Screen freeze (`Ctrl+Shift+F`) to pause what viewers see while apps run.
+Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running.
 
 ---
 
@@ -103,7 +103,7 @@ sudo apt install ./wayscriber-amd64.deb
 wayscriber --active
 ```
 
-**3. Draw** — use your mouse. Press `F1` or `F10` for help, `Escape` to exit.
+**3. Draw** — use your mouse. Press <kbd>F1</kbd> or <kbd>F10</kbd> for help, <kbd>Escape</kbd> to exit.
 
 For other distros or running as a daemon, see [Installation](#installation) and [Usage](#usage).
 
@@ -188,7 +188,7 @@ Bind to a key (Hyprland example):
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press `F1`/`F10` for help, `F11` for configurator, `Escape` or `Ctrl+Q` to exit.
+Press <kbd>F1</kbd>/<kbd>F10</kbd> for help, <kbd>F11</kbd> for configurator, <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd> to exit.
 
 ### Daemon Mode
 
@@ -208,8 +208,7 @@ Reload your config:
 hyprctl reload
 ```
 
-> [!CAUTION]
-> Daemon mode requires a system tray. Without one, the daemon will fail to start.
+Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; otherwise right-click the tray icon for options (including session resume toggle).
 
 **Alternative** — use compositor autostart instead of systemd:
 ```conf
@@ -228,11 +227,11 @@ journalctl --user -u wayscriber.service -f
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+C` | Copy entire screen to clipboard |
-| `Ctrl+S` | Save entire screen as PNG |
-| `Ctrl+Shift+C` | Select region → clipboard |
-| `Ctrl+Shift+S` | Select region → save PNG |
-| `Ctrl+Shift+O` | Capture active window |
+| <kbd>Ctrl+C</kbd> | Copy entire screen to clipboard |
+| <kbd>Ctrl+S</kbd> | Save entire screen as PNG |
+| <kbd>Ctrl+Shift+C</kbd> | Select region → clipboard |
+| <kbd>Ctrl+Shift+S</kbd> | Select region → save PNG |
+| <kbd>Ctrl+Shift+O</kbd> | Capture active window |
 
 Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if missing.
 
@@ -240,66 +239,66 @@ Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if mi
 
 ## Controls Reference
 
-Press `F1` or `F10` at any time for the in-app cheat sheet.
+Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 
 ### Drawing Tools
 
 | Action | Key/Mouse |
 |--------|-----------|
 | Freehand pen | Drag with left mouse button |
-| Straight line | `Shift` + drag |
-| Rectangle | `Ctrl` + drag |
-| Ellipse/Circle | `Tab` + drag |
-| Arrow | `Ctrl+Shift` + drag |
-| Highlight brush | `Ctrl+Alt+H` |
-| Text mode | `T`, click to position, type, `Enter` to finish |
+| Straight line | <kbd>Shift</kbd> + drag |
+| Rectangle | <kbd>Ctrl</kbd> + drag |
+| Ellipse/Circle | <kbd>Tab</kbd> + drag |
+| Arrow | <kbd>Ctrl+Shift</kbd> + drag |
+| Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
+| Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
 
 ### Board Modes
 
 | Action | Key |
 |--------|-----|
-| Toggle Whiteboard | `Ctrl+W` |
-| Toggle Blackboard | `Ctrl+B` |
-| Return to Transparent | `Ctrl+Shift+T` |
+| Toggle Whiteboard | <kbd>Ctrl+W</kbd> |
+| Toggle Blackboard | <kbd>Ctrl+B</kbd> |
+| Return to Transparent | <kbd>Ctrl+Shift+T</kbd> |
 
 ### Colors
 
 | Color | Key |
 |-------|-----|
-| Red | `R` |
-| Green | `G` |
-| Blue | `B` |
-| Yellow | `Y` |
-| Orange | `O` |
-| Pink | `P` |
-| White | `W` |
-| Black | `K` |
+| Red | <kbd>R</kbd> |
+| Green | <kbd>G</kbd> |
+| Blue | <kbd>B</kbd> |
+| Yellow | <kbd>Y</kbd> |
+| Orange | <kbd>O</kbd> |
+| Pink | <kbd>P</kbd> |
+| White | <kbd>W</kbd> |
+| Black | <kbd>K</kbd> |
 
 ### Size Adjustments
 
 | Action | Key |
 |--------|-----|
-| Increase thickness | `+` / `=` / scroll down |
-| Decrease thickness | `-` / `_` / scroll up |
-| Increase font size | `Ctrl+Shift++` / `Shift` + scroll down |
-| Decrease font size | `Ctrl+Shift+-` / `Shift` + scroll up |
+| Increase thickness | <kbd>+</kbd> / <kbd>=</kbd> / scroll down |
+| Decrease thickness | <kbd>-</kbd> / <kbd>_</kbd> / scroll up |
+| Increase font size | <kbd>Ctrl+Shift++</kbd> / <kbd>Shift</kbd> + scroll down |
+| Decrease font size | <kbd>Ctrl+Shift+-</kbd> / <kbd>Shift</kbd> + scroll up |
 
 ### Editing & UI
 
 | Action | Key |
 |--------|-----|
-| Undo | `Ctrl+Z` |
-| Redo | `Ctrl+Shift+Z` / `Ctrl+Y` |
-| Eraser | `D` |
-| Clear all | `E` |
-| Cancel action | Right-click / `Escape` |
-| Toggle toolbars | `F2` / `F9` |
-| Help overlay | `F1` / `F10` |
-| Configurator | `F11` |
-| Status bar | `F4` / `F12` |
-| Toggle click highlight | `Ctrl+Shift+H` |
-| Toggle freeze | `Ctrl+Shift+F` |
-| Exit | `Escape` / `Ctrl+Q` |
+| Undo | <kbd>Ctrl+Z</kbd> |
+| Redo | <kbd>Ctrl+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> |
+| Eraser | <kbd>D</kbd> |
+| Clear all | <kbd>E</kbd> |
+| Cancel action | <kbd>Right-click</kbd> / <kbd>Escape</kbd> |
+| Toggle toolbars | <kbd>F2</kbd> / <kbd>F9</kbd> |
+| Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
+| Configurator | <kbd>F11</kbd> |
+| Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
+| Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
+| Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
+| Exit | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd> |
 
 ---
 
@@ -338,11 +337,13 @@ enable_vsync = true
 
 ### Session Persistence
 
-Enable via configurator (`F11 → Session` tab) or edit config directly.
+Enable via configurator (<kbd>F11</kbd> → Session tab), CLI flags, or the tray toggle.
 
 ```bash
-wayscriber --session-info     # inspect saved sessions
-wayscriber --clear-session    # remove stored boards
+wayscriber --resume-session      # force resume (persist/restore all boards + history/tool state)
+wayscriber --no-resume-session   # disable resume for this run
+wayscriber --session-info        # inspect saved sessions
+wayscriber --clear-session       # remove stored boards
 ```
 
 ### Tablet/Stylus Support
@@ -480,11 +481,13 @@ wayscriber/
 - [x] Native Wayland layer-shell
 - [x] Daemon mode with system tray
 - [x] Whiteboard/blackboard modes
-- [x] Session persistence
+- [x] Session persistence (with CLI/tray overrides)
 - [x] Highlighter & eraser tools
+- [x] Additional shapes (filled shapes)
+- [x] Color picker
 - [ ] Multi-monitor support
 - [ ] Save annotations to image
-- [ ] Color picker
+- [ ] Color picker integration with captures/export
 
 See [Satty](https://github.com/gabm/Satty) for capture → annotate → save workflows. wayscriber is designed as an always-available drawing layer.
 
