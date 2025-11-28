@@ -8,7 +8,7 @@ A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rus
 <details>
 <summary>Screenshots</summary>
 
-![Demo Poster](https://wayscriber.com/demo-poster-4.webp)
+![Demo Poster](https://wayscriber.com/demo-poster-6.webp)
 ![Demo Poster](https://wayscriber.com/demo-poster-2.webp)
 
 </details>
