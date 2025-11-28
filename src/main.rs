@@ -1,4 +1,36 @@
 use clap::{ArgAction, Parser};
+use std::sync::atomic::{AtomicU8, Ordering};
+
+pub const RESUME_SESSION_ENV: &str = "WAYSCRIBER_RESUME_SESSION";
+pub const SESSION_OVERRIDE_FOLLOW_CONFIG: u8 = 0;
+pub const SESSION_OVERRIDE_FORCE_ON: u8 = 1;
+pub const SESSION_OVERRIDE_FORCE_OFF: u8 = 2;
+
+pub static SESSION_RESUME_OVERRIDE: AtomicU8 = AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG);
+
+pub fn encode_session_override(value: Option<bool>) -> u8 {
+    match value {
+        Some(true) => SESSION_OVERRIDE_FORCE_ON,
+        Some(false) => SESSION_OVERRIDE_FORCE_OFF,
+        None => SESSION_OVERRIDE_FOLLOW_CONFIG,
+    }
+}
+
+pub fn decode_session_override(raw: u8) -> Option<bool> {
+    match raw {
+        SESSION_OVERRIDE_FORCE_ON => Some(true),
+        SESSION_OVERRIDE_FORCE_OFF => Some(false),
+        _ => None,
+    }
+}
+
+pub fn set_runtime_session_override(value: Option<bool>) {
+    SESSION_RESUME_OVERRIDE.store(encode_session_override(value), Ordering::Release);
+}
+
+pub fn runtime_session_override() -> Option<bool> {
+    decode_session_override(SESSION_RESUME_OVERRIDE.load(Ordering::Acquire))
+}
 
 mod backend;
 mod capture;
@@ -63,12 +95,27 @@ struct Cli {
         conflicts_with_all = ["daemon", "clear_session", "session_info"]
     )]
     freeze: bool,
+
+    /// Force session resume on (persist/restore all boards + history/tool state)
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_resume_session")]
+    resume_session: bool,
+
+    /// Force session resume off (ignore persisted session data for this run)
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "resume_session")]
+    no_resume_session: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let cli = Cli::parse();
+    let session_override = if cli.resume_session {
+        Some(true)
+    } else if cli.no_resume_session {
+        Some(false)
+    } else {
+        None
+    };
 
     if cli.clear_session || cli.session_info {
         run_session_cli_commands(&cli)?;
@@ -89,7 +136,7 @@ fn main() -> anyhow::Result<()> {
         if tray_disabled {
             log::info!("Tray disabled via --no-tray / WAYSCRIBER_NO_TRAY");
         }
-        let mut daemon = daemon::Daemon::new(cli.mode, !tray_disabled);
+        let mut daemon = daemon::Daemon::new(cli.mode, !tray_disabled, session_override);
         daemon.run()?;
     } else if cli.active || cli.freeze {
         // One-shot mode: show overlay immediately and exit when done
@@ -120,6 +167,8 @@ fn main() -> anyhow::Result<()> {
         }
         log::info!("");
 
+        set_runtime_session_override(session_override);
+
         // Run Wayland backend
         backend::run_wayland(cli.mode, cli.freeze)?;
 
@@ -134,6 +183,10 @@ fn main() -> anyhow::Result<()> {
         );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
         println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
+        println!(
+            "  wayscriber --resume-session  Force session resume on (all boards/history/tool state)"
+        );
+        println!("  wayscriber --no-resume-session  Disable session resume for this run");
         println!("  wayscriber --freeze          Start overlay already frozen");
         println!("  wayscriber -h, --help        Show help");
         println!();

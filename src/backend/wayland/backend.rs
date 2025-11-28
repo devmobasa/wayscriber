@@ -38,10 +38,11 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 
 use super::state::WaylandState;
 use crate::{
+    RESUME_SESSION_ENV,
     capture::{CaptureManager, CaptureOutcome},
     config::{Config, ConfigSource},
     input::{BoardMode, ClickHighlightSettings, InputState},
-    notification, session,
+    notification, paths, runtime_session_override, session,
 };
 
 fn friendly_capture_error(error: &str) -> String {
@@ -55,6 +56,29 @@ fn friendly_capture_error(error: &str) -> String {
         "Screen capture in progress. Try again in a moment.".to_string()
     } else {
         "Screen capture failed. Please try again.".to_string()
+    }
+}
+
+fn resume_override_from_env() -> Option<bool> {
+    if let Some(runtime) = runtime_session_override() {
+        return Some(runtime);
+    }
+    match env::var(RESUME_SESSION_ENV) {
+        Ok(raw) => {
+            let normalized = raw.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "1" | "true" | "yes" | "on" | "resume" | "enable" | "enabled" => Some(true),
+                "0" | "false" | "no" | "off" | "disable" | "disabled" => Some(false),
+                _ => {
+                    warn!(
+                        "Ignoring invalid {} value '{}'; expected on/off/true/false",
+                        RESUME_SESSION_ENV, raw
+                    );
+                    None
+                }
+            }
+        }
+        Err(_) => None,
     }
 }
 
@@ -198,7 +222,8 @@ impl WaylandBackend {
         let config_dir = Config::config_directory_from_source(&config_source)?;
 
         let display_env = env::var("WAYLAND_DISPLAY").ok();
-        let session_options = match session::options_from_config(
+        let resume_override = resume_override_from_env();
+        let mut session_options = match session::options_from_config(
             &config.session,
             &config_dir,
             display_env.as_deref(),
@@ -209,6 +234,35 @@ impl WaylandBackend {
                 None
             }
         };
+        match resume_override {
+            Some(true) => {
+                if session_options.is_none() {
+                    let default_base = paths::data_dir()
+                        .unwrap_or_else(|| config_dir.clone())
+                        .join("wayscriber");
+                    let display = display_env.clone().unwrap_or_else(|| "default".to_string());
+                    session_options = Some(session::SessionOptions::new(default_base, display));
+                }
+                if let Some(options) = session_options.as_mut() {
+                    options.persist_transparent = true;
+                    options.persist_whiteboard = true;
+                    options.persist_blackboard = true;
+                    options.persist_history = true;
+                    options.restore_tool_state = true;
+                    info!(
+                        "Session resume forced on via {} (persisting all boards, history, tool state)",
+                        RESUME_SESSION_ENV
+                    );
+                }
+            }
+            Some(false) => {
+                if session_options.is_some() {
+                    info!("Session resume disabled via {}=off", RESUME_SESSION_ENV);
+                }
+                session_options = None;
+            }
+            None => {}
+        }
 
         #[cfg(tablet)]
         let tablet_manager = if config.tablet.enabled {

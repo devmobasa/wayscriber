@@ -138,7 +138,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 
 ### Session Persistence
 
-Wayscriber can remember your boards between runs (per monitor and per board color) along with pen color/thickness. Persistence is opt-in. Toggle it from the configurator (<kbd>F11</kbd> → Session tab) or launch the GUI directly:
+Wayscriber can remember your boards between runs (per monitor and per board color) along with pen color/thickness. Persistence is opt-in. Toggle it from the configurator (<kbd>F11</kbd> → Session tab), via `--resume-session`/`--no-resume-session` for one-off overrides, from the tray session-resume toggle, or launch the GUI directly:
 
 ```bash
 wayscriber-configurator
@@ -557,11 +557,11 @@ wayscriber/
 - [x] Board mode configuration (colors, auto-adjust)
 - [x] CLI `--mode` flag for initial board selection
 - [ ] Multi-monitor support with per-monitor surfaces
-- [ ] Additional shapes (filled shapes)
+- [x] Additional shapes (filled shapes)
 - [x] Highlighter/Highlight brush
-- [ ] Save annotations to image file
-- [ ] Eraser tool
-- [ ] Color picker
+- [x] Save annotations to image file
+- [x] Eraser tool
+- [x] Color picker
 
 ### License
 

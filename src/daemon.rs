@@ -13,12 +13,18 @@ use std::env;
 use std::io::ErrorKind;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 #[cfg(feature = "tray")]
 use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+
+use crate::{
+    RESUME_SESSION_ENV, SESSION_OVERRIDE_FOLLOW_CONFIG, SESSION_OVERRIDE_FORCE_OFF,
+    SESSION_OVERRIDE_FORCE_ON, decode_session_override, encode_session_override,
+    runtime_session_override, set_runtime_session_override,
+};
 
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +48,7 @@ pub struct Daemon {
     backend_runner: Option<Arc<BackendRunner>>,
     tray_thread: Option<JoinHandle<()>>,
     overlay_child: Option<Child>,
+    session_resume_override: Arc<AtomicU8>,
 }
 
 #[cfg(feature = "tray")]
@@ -49,6 +56,7 @@ pub(crate) struct WayscriberTray {
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
     configurator_binary: String,
+    session_resume_override: Arc<AtomicU8>,
 }
 
 #[cfg(feature = "tray")]
@@ -57,17 +65,28 @@ impl WayscriberTray {
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
         configurator_binary: String,
+        session_resume_override: Arc<AtomicU8>,
     ) -> Self {
         Self {
             toggle_flag,
             quit_flag,
             configurator_binary,
+            session_resume_override,
         }
     }
 
     #[cfg(test)]
-    fn new_for_tests(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Self {
-        Self::new(toggle_flag, quit_flag, "true".into())
+    fn new_for_tests(
+        toggle_flag: Arc<AtomicBool>,
+        quit_flag: Arc<AtomicBool>,
+        session_resume_override: Arc<AtomicU8>,
+    ) -> Self {
+        Self::new(
+            toggle_flag,
+            quit_flag,
+            "true".into(),
+            session_resume_override,
+        )
     }
 }
 
@@ -153,7 +172,7 @@ impl ksni::Tray for WayscriberTray {
             icon_name: "applications-graphics".into(),
             icon_pixmap: vec![],
             title: format!("Wayscriber {}", env!("CARGO_PKG_VERSION")),
-            description: "Super+D toggles overlay • F11 opens configurator".into(),
+            description: "Toggle overlay, open configurator, or quit from the tray".into(),
         }
     }
 
@@ -204,7 +223,7 @@ impl ksni::Tray for WayscriberTray {
 
         vec![
             StandardItem {
-                label: "Toggle Overlay (Super+D)".to_string(),
+                label: "Toggle Overlay".to_string(),
                 icon_name: "tool-pointer".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.toggle_flag.store(true, Ordering::Release);
@@ -219,6 +238,36 @@ impl ksni::Tray for WayscriberTray {
                     this.launch_configurator();
                 }),
                 ..Default::default()
+            }
+            .into(),
+            RadioGroup {
+                selected: match self.session_resume_override.load(Ordering::Acquire) {
+                    SESSION_OVERRIDE_FORCE_ON => 1,
+                    SESSION_OVERRIDE_FORCE_OFF => 2,
+                    _ => 0,
+                },
+                select: Box::new(|this: &mut Self, choice| {
+                    let value = match choice {
+                        1 => SESSION_OVERRIDE_FORCE_ON,
+                        2 => SESSION_OVERRIDE_FORCE_OFF,
+                        _ => SESSION_OVERRIDE_FOLLOW_CONFIG,
+                    };
+                    this.session_resume_override.store(value, Ordering::Release);
+                }),
+                options: vec![
+                    RadioItem {
+                        label: "Session resume: follow config".to_string(),
+                        ..Default::default()
+                    },
+                    RadioItem {
+                        label: "Session resume: force on (persist/restore)".to_string(),
+                        ..Default::default()
+                    },
+                    RadioItem {
+                        label: "Session resume: force off (always fresh)".to_string(),
+                        ..Default::default()
+                    },
+                ],
             }
             .into(),
             MenuItem::Separator,
@@ -236,7 +285,14 @@ impl ksni::Tray for WayscriberTray {
 }
 
 impl Daemon {
-    pub fn new(initial_mode: Option<String>, tray_enabled: bool) -> Self {
+    pub fn new(
+        initial_mode: Option<String>,
+        tray_enabled: bool,
+        session_resume_override: Option<bool>,
+    ) -> Self {
+        let override_state = Arc::new(AtomicU8::new(encode_session_override(
+            session_resume_override,
+        )));
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
@@ -246,6 +302,7 @@ impl Daemon {
             backend_runner: None,
             tray_thread: None,
             overlay_child: None,
+            session_resume_override: override_state,
         }
     }
 
@@ -254,6 +311,7 @@ impl Daemon {
         initial_mode: Option<String>,
         backend_runner: Arc<BackendRunner>,
     ) -> Self {
+        let override_state = Arc::new(AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG));
         Self {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
@@ -263,6 +321,7 @@ impl Daemon {
             backend_runner: Some(backend_runner),
             tray_thread: None,
             overlay_child: None,
+            session_resume_override: override_state,
         }
     }
 
@@ -272,6 +331,24 @@ impl Daemon {
         backend_runner: Arc<BackendRunner>,
     ) -> Self {
         Self::with_backend_runner_internal(initial_mode, backend_runner)
+    }
+
+    fn session_resume_override(&self) -> Option<bool> {
+        decode_session_override(self.session_resume_override.load(Ordering::Acquire))
+    }
+
+    fn apply_session_override_env(&self, command: &mut Command) {
+        match self.session_resume_override() {
+            Some(true) => {
+                command.env(RESUME_SESSION_ENV, "on");
+            }
+            Some(false) => {
+                command.env(RESUME_SESSION_ENV, "off");
+            }
+            None => {
+                command.env_remove(RESUME_SESSION_ENV);
+            }
+        }
     }
 
     /// Run daemon with signal handling
@@ -325,7 +402,8 @@ impl Daemon {
         if self.tray_enabled {
             let tray_toggle = self.toggle_requested.clone();
             let tray_quit = self.should_quit.clone();
-            match start_system_tray(tray_toggle, tray_quit) {
+            let tray_session_override = self.session_resume_override.clone();
+            match start_system_tray(tray_toggle, tray_quit, tray_session_override) {
                 Ok(tray_handle) => {
                     self.tray_thread = Some(tray_handle);
                 }
@@ -405,7 +483,10 @@ impl Daemon {
         if let Some(runner) = &self.backend_runner {
             self.overlay_state = OverlayState::Visible;
             info!("Overlay state set to Visible");
+            let previous_override = runtime_session_override();
+            set_runtime_session_override(self.session_resume_override());
             let result = runner(self.initial_mode.clone());
+            set_runtime_session_override(previous_override);
             self.overlay_state = OverlayState::Hidden;
             info!("Overlay closed, back to daemon mode");
             return result;
@@ -447,12 +528,18 @@ impl Daemon {
 fn start_system_tray(
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
+    session_override: Arc<AtomicU8>,
 ) -> Result<JoinHandle<()>> {
     let configurator_binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
         .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
     let tray_quit_flag = quit_flag.clone();
-    let tray = WayscriberTray::new(toggle_flag, tray_quit_flag.clone(), configurator_binary);
+    let tray = WayscriberTray::new(
+        toggle_flag,
+        tray_quit_flag.clone(),
+        configurator_binary,
+        session_override,
+    );
     let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();
 
     info!("Creating tray service...");
@@ -526,6 +613,7 @@ fn start_system_tray(
 fn start_system_tray(
     _toggle_flag: Arc<AtomicBool>,
     _quit_flag: Arc<AtomicBool>,
+    _session_override: Arc<AtomicU8>,
 ) -> Result<JoinHandle<()>> {
     info!("Tray feature disabled; skipping system tray startup");
     Ok(thread::spawn(|| ()))
@@ -536,6 +624,7 @@ impl Daemon {
         let exe = env::current_exe().context("Failed to determine current executable path")?;
         let mut command = Command::new(exe);
         command.arg("--active");
+        self.apply_session_override_env(&mut command);
         if let Some(mode) = &self.initial_mode {
             command.arg("--mode").arg(mode);
         }
@@ -684,7 +773,8 @@ mod tests {
     fn tray_toggle_action_sets_flag() {
         let toggle = Arc::new(AtomicBool::new(false));
         let quit = Arc::new(AtomicBool::new(false));
-        let mut tray = WayscriberTray::new_for_tests(toggle.clone(), quit);
+        let resume_override = Arc::new(AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG));
+        let mut tray = WayscriberTray::new_for_tests(toggle.clone(), quit, resume_override);
 
         activate_menu_item(&mut tray, "Toggle Overlay");
         assert!(toggle.load(Ordering::SeqCst));
@@ -694,7 +784,8 @@ mod tests {
     fn tray_quit_action_sets_quit_flag() {
         let toggle = Arc::new(AtomicBool::new(false));
         let quit = Arc::new(AtomicBool::new(false));
-        let mut tray = WayscriberTray::new_for_tests(toggle, quit.clone());
+        let resume_override = Arc::new(AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG));
+        let mut tray = WayscriberTray::new_for_tests(toggle, quit.clone(), resume_override);
 
         activate_menu_item(&mut tray, "Quit");
         assert!(quit.load(Ordering::SeqCst));
