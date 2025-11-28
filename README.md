@@ -16,9 +16,11 @@ A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rus
 <details>
 <summary>Demo Video</summary>
 
-[View demo (wayscriber.com)](https://wayscriber.com/demo.mp4)
+[View demo (wayscriber.com)](https://wayscriber.com/demo.webm)
 
-https://github.com/user-attachments/assets/75fe3e9b-b156-47e5-8434-318d7f25151d
+
+https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
+
 
 </details>
 
