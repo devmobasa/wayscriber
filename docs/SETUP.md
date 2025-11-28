@@ -48,7 +48,7 @@ Then reload:
 hyprctl reload
 ```
 
-Now press **Super+D** to toggle the overlay on/off!
+Now press <kbd>Super+D</kbd> to toggle the overlay on/off!
 
 ### Method 2: One-Shot Mode (Alternative)
 
@@ -59,30 +59,30 @@ For quick one-time annotations without daemon:
 wayscriber --active
 ```
 
-This starts a fresh overlay each time. Exit with Escape.
+This starts a fresh overlay each time. Exit with <kbd>Escape</kbd>.
 
-**Note:** We recommend using daemon mode with Super+D instead as it preserves your drawings.
+**Note:** We recommend using daemon mode with <kbd>Super+D</kbd> instead as it preserves your drawings.
 
 ## Usage Flow
 
 ### Daemon Mode Workflow (Recommended)
 
 1. **Daemon starts automatically** → Runs in background with system tray icon
-2. **Press Super+D** → Drawing overlay appears
+2. **Press <kbd>Super+D</kbd>** → Drawing overlay appears
 3. **Draw your annotations** → All tools available
-4. **Press Escape or Ctrl+Q** → Overlay hides (daemon keeps running)
-5. **Press Super+D again** → Overlay reappears with previous drawings intact
+4. **Press <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd>** → Overlay hides (daemon keeps running)
+5. **Press <kbd>Super+D</kbd> again** → Overlay reappears with previous drawings intact
 
-No system tray/StatusNotifier watcher? Start the daemon with `wayscriber --daemon --no-tray` (or set `WAYSCRIBER_NO_TRAY=1`) to skip the tray icon; the Super+D toggle still works.
+No system tray/StatusNotifier watcher? Start the daemon with `wayscriber --daemon --no-tray` (or set `WAYSCRIBER_NO_TRAY=1`) to skip the tray icon; the <kbd>Super+D</kbd> toggle still works.
 
 ### One-Shot Mode Workflow (Alternative)
 
 1. **Run command** → Fresh drawing overlay appears
 2. **Draw your annotations** → All tools available
-3. **Press Escape** → Drawing overlay closes completely
+3. **Press <kbd>Escape</kbd>** → Drawing overlay closes completely
 4. **Run command again** → New fresh overlay (previous drawings lost)
 
-**Note:** Daemon mode with Super+D is recommended as it preserves your drawings when you toggle the overlay.
+**Note:** Daemon mode with <kbd>Super+D</kbd> is recommended as it preserves your drawings when you toggle the overlay.
 
 ## Verification
 
@@ -96,8 +96,8 @@ which wayscriber
 wayscriber --daemon &
 
 # Test keybind
-Press Super+D (should show overlay)
-Press Escape (should hide overlay)
+Press <kbd>Super+D</kbd> (should show overlay)
+Press <kbd>Escape</kbd> (should hide overlay)
 ```
 
 ## Autostart
@@ -119,9 +119,9 @@ Daemon mode is already included in Method 1! The `exec-once` line will start way
 **Want different key?**
 - Edit hyprland.conf
 - Examples:
-  - `SUPER, D` → Super+D
-  - `ALT, D` → Alt+D
-  - `CTRL SHIFT, 2` → Ctrl+Shift+2
+  - `SUPER, D` → <kbd>Super+D</kbd>
+  - `ALT, D` → <kbd>Alt+D</kbd>
+  - `CTRL SHIFT, 2` → <kbd>Ctrl+Shift+2</kbd>
 
 ## Uninstall
 
@@ -141,6 +141,6 @@ rm ~/.local/bin/wayscriber
    bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
    ```
 3. Reload: `hyprctl reload`
-4. Use: Press Super+D to toggle overlay
+4. Use: Press <kbd>Super+D</kbd> to toggle overlay
 
 Done! Drawings persist, tray icon available. ✨

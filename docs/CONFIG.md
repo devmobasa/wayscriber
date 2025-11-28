@@ -42,7 +42,7 @@ default_eraser_size = 12.0
 marker_opacity = 0.32
 
 # Default font size for text mode (8.0 - 72.0)
-# Can be adjusted at runtime with Ctrl+Shift+/- or Shift+Scroll
+# Can be adjusted at runtime with <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll
 default_font_size = 32.0
 ```
 
@@ -51,9 +51,9 @@ default_font_size = 32.0
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
 
 **Runtime Adjustments:**
-- **Pen thickness**: Use `+`/`-` keys or scroll wheel (range: 1-40px)
-- **Eraser size**: Use `+`/`-` keys or scroll wheel when eraser tool is active (range: 1-40px)
-- **Font size**: Use `Ctrl+Shift+`/`-` or `Shift+Scroll` (range: 8-72px)
+- **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-40px)
+- **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-40px)
+- **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
 **Defaults:**
 - Color: Red
@@ -156,7 +156,7 @@ use_pen_color = true  # Existing highlights update immediately when you change p
 
 **Status Bar:**
 - Shows current color, pen thickness, and active tool
-- Press `F10` to toggle help overlay
+- Press <kbd>F10</kbd> to toggle help overlay
 - Fully customizable styling (fonts, colors, sizes)
 
 **Position Options:**
@@ -181,7 +181,7 @@ use_pen_color = true  # Existing highlights update immediately when you change p
 
 ### `[ui.toolbar]` - Floating Toolbars
 
-Controls the top and side toolbars (toggle with `F2`/`F9`).
+Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
 
 ```toml
 [ui.toolbar]
@@ -257,9 +257,9 @@ auto_adjust_pen = true
 - **Blackboard**: Dark background for drawing (like a chalkboard)
 
 **Keybindings:**
-- `Ctrl+W`: Toggle whiteboard mode (press again to exit)
-- `Ctrl+B`: Toggle blackboard mode (press again to exit)
-- `Ctrl+Shift+T`: Return to transparent mode
+- <kbd>Ctrl+W</kbd>: Toggle whiteboard mode (press again to exit)
+- <kbd>Ctrl+B</kbd>: Toggle blackboard mode (press again to exit)
+- <kbd>Ctrl+Shift+T</kbd>: Return to transparent mode
 
 **Frame Isolation:**
 - Each mode maintains independent drawings
@@ -512,9 +512,9 @@ clear_canvas = ["X"]
 ```
 
 **Notes:**
-- Modifiers (`Shift`, `Ctrl`, `Alt`, `Tab`) are always captured for drawing tools
-- In text input mode, configured keybindings (like `Ctrl+Q` for exit) work before keys are consumed as text
-- Color keys only work when not holding `Ctrl` (to avoid conflicts with other actions)
+- Modifiers (<kbd>Shift</kbd>, <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Tab</kbd>) are always captured for drawing tools
+- In text input mode, configured keybindings (like <kbd>Ctrl+Q</kbd> for exit) work before keys are consumed as text
+- Color keys only work when not holding <kbd>Ctrl</kbd> (to avoid conflicts with other actions)
 - Invalid keybinding strings will be logged and fall back to defaults
 - Duplicate keybindings across actions will be detected and reported at startup
 

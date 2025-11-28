@@ -74,7 +74,7 @@
 3. Arch Linux (AUR):
 	- `yay -S wayscriber` (source) or `paru -S wayscriber`
 	- `yay -S wayscriber-bin` (prebuilt) or `paru -S wayscriber-bin`
-4. Optional: install the configurator GUI (`F11`):
+4. Optional: install the configurator GUI (<kbd>F11</kbd>):
    - Arch: `yay -S wayscriber-configurator` (or `paru -S wayscriber-configurator`)
    - Debian/Ubuntu/Fedora: grab `wayscriber-configurator` from the GitHub release assets (deb/rpm/tar)
    - Or set `WAYSCRIBER_CONFIGURATOR=/path/to/wayscriber-configurator` if you built it yourself
@@ -94,7 +94,7 @@ Or bind to a key in `~/.config/hypr/hyprland.conf`:
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press `F10` for help, `F11` for configurator, `Escape`/`Ctrl+Q` to exit, and `F12` to toggle the status bar. Use `Ctrl+Shift+F` to freeze/unfreeze the screen while keeping your drawings, or start already frozen with `wayscriber --freeze`.
+Press <kbd>F10</kbd> for help, <kbd>F11</kbd> for configurator, <kbd>Escape</kbd>/<kbd>Ctrl+Q</kbd> to exit, and <kbd>F12</kbd> to toggle the status bar. Use <kbd>Ctrl+Shift+F</kbd> to freeze/unfreeze the screen while keeping your drawings, or start already frozen with `wayscriber --freeze`.
 
 ### Option 2: Daemon Mode (Background Service)
 Run wayscriber in the background and toggle it with a keybind:
@@ -125,20 +125,20 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 ## Features at a Glance
 
 - **Drawing & editing**: Freehand pen, translucent highlighter marker, eraser brush (circle/rect, size-adjustable), straight lines, rectangles, ellipses, arrows, and multiline text with smoothing; undo & redo; quick size/color changes via hotkeys or scroll.
-- **Board modes**: Whiteboard, blackboard, and transparent overlays, each with isolated frames and auto pen contrast; snap back to transparent with `Ctrl+Shift+T`.
-- **Floating toolbars**: Pin/unpin top and side toolbars (`F2`/`F9`) with icon or text display modes, extended color palettes, undo/redo actions, and optional delay sliders; hover for tooltips even when frozen.
+- **Board modes**: Whiteboard, blackboard, and transparent overlays, each with isolated frames and auto pen contrast; snap back to transparent with <kbd>Ctrl+Shift+T</kbd>.
+- **Floating toolbars**: Pin/unpin top and side toolbars (<kbd>F2</kbd>/<kbd>F9</kbd>) with icon or text display modes, extended color palettes, undo/redo actions, and optional delay sliders; hover for tooltips even when frozen.
 - **Capture shortcuts**: Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard` when available.
 - **Session persistence**: Opt-in per board/monitor storage that restores your canvas plus pen color & thickness; inspect with `wayscriber --session-info` or clear with `wayscriber --clear-session`.
-- **Freeze / pause view**: Toggle freeze to pause what viewers see while your apps keep running; hotkey `Ctrl+Shift+F` or start frozen with `wayscriber --freeze`.
-- **Workflow helpers**: Background daemon with SIGUSR1 toggle, tray icon, one-shot mode, live status bar, and in-app help overlay (`F10`).
-- **Context menus & selection**: Right-click or press `Shift+F10` for per-shape actions (delete, duplicate, layer order, lock/unlock, properties) with keyboard navigation and selection halos for clarity.
-- **Click highlights**: Presenter-style halo on mouse clicks with configurable colors, radius, and duration; follows your pen color by default, toggle the effect with `Ctrl+Shift+H` or swap to highlight-only mode with `Ctrl+Alt+H`.
-- **Configurator & CLI**: Launch `wayscriber-configurator` (or press `F11`) to tweak colors, bindings, persistence, compression, and more; power users can edit the TOML or use CLI switches.
+- **Freeze / pause view**: Toggle freeze to pause what viewers see while your apps keep running; hotkey <kbd>Ctrl+Shift+F</kbd> or start frozen with `wayscriber --freeze`.
+- **Workflow helpers**: Background daemon with SIGUSR1 toggle, tray icon, one-shot mode, live status bar, and in-app help overlay (<kbd>F10</kbd>).
+- **Context menus & selection**: <kbd>Right-click</kbd> or press <kbd>Shift+F10</kbd> for per-shape actions (delete, duplicate, layer order, lock/unlock, properties) with keyboard navigation and selection halos for clarity.
+- **Click highlights**: Presenter-style halo on mouse clicks with configurable colors, radius, and duration; follows your pen color by default, toggle the effect with <kbd>Ctrl+Shift+H</kbd> or swap to highlight-only mode with <kbd>Ctrl+Alt+H</kbd>.
+- **Configurator & CLI**: Launch `wayscriber-configurator` (or press <kbd>F11</kbd>) to tweak colors, bindings, persistence, compression, and more; power users can edit the TOML or use CLI switches.
 - **Performance & reliability**: Dirty-region rendering keeps redraws fast, while session files use atomic writes, size limits, compression, and backups for safety.
 
 ### Session Persistence
 
-Wayscriber can remember your boards between runs (per monitor and per board color) along with pen color/thickness. Persistence is opt-in. Toggle it from the configurator (`F11 → Session` tab) or launch the GUI directly:
+Wayscriber can remember your boards between runs (per monitor and per board color) along with pen color/thickness. Persistence is opt-in. Toggle it from the configurator (<kbd>F11</kbd> → Session tab) or launch the GUI directly:
 
 ```bash
 wayscriber-configurator
@@ -291,7 +291,7 @@ bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 hyprctl reload
 ```
 
-The daemon shows a system tray icon (may be in Waybar drawer). Press `Super+D` to toggle overlay, right-click tray icon for options.
+The daemon shows a system tray icon (may be in Waybar drawer). Press <kbd>Super+D</kbd> to toggle overlay, <kbd>Right-click</kbd> the tray icon for options.
 
 No system tray or status notifier? Run headless: `wayscriber --daemon --no-tray` (or set `WAYSCRIBER_NO_TRAY=1`). The SIGUSR1 toggle still works without the tray.
 
@@ -327,69 +327,69 @@ bind = $mainMod, D, exec, wayscriber --active
 bind = $mainMod SHIFT, D, exec, wayscriber --active --mode whiteboard
 ```
 
-Exit the overlay with `Escape` or `Ctrl+Q`.
+Exit the overlay with <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd>.
 
 ### Screenshot Shortcuts
 
 wayscriber ships with keyboard shortcuts for quick captures:
 
-- `Ctrl+C` – copy the entire screen to the clipboard.
-- `Ctrl+S` – save the entire screen as a PNG (uses your capture directory).
-- `Ctrl+Shift+C` – select a region and copy it to the clipboard.
-- `Ctrl+Shift+S` – select a region and save it as a PNG.
-- `Ctrl+Shift+O` – capture the active window (Hyprland fast path, portal fallback).
-- `Ctrl+6` / `Ctrl+Shift+6` – reserved for remembered-region clipboard/file captures (coming soon).
+- <kbd>Ctrl+C</kbd> – copy the entire screen to the clipboard.
+- <kbd>Ctrl+S</kbd> – save the entire screen as a PNG (uses your capture directory).
+- <kbd>Ctrl+Shift+C</kbd> – select a region and copy it to the clipboard.
+- <kbd>Ctrl+Shift+S</kbd> – select a region and save it as a PNG.
+- <kbd>Ctrl+Shift+O</kbd> – capture the active window (Hyprland fast path, portal fallback).
+- <kbd>Ctrl+6</kbd> / <kbd>Ctrl+Shift+6</kbd> – reserved for remembered-region clipboard/file captures (coming soon).
 
 **Requirements:** install `wl-clipboard`, `grim`, and `slurp` for the fastest Hyprland workflow. If they are missing, wayscriber falls back to `xdg-desktop-portal`'s interactive picker.
 
 ## Controls Reference
 
-Press `F10` at any time for the in-app keyboard and mouse cheat sheet.
+Press <kbd>F10</kbd> at any time for the in-app keyboard and mouse cheat sheet.
 
 | Action | Key/Mouse |
 |--------|-----------|
 | **Drawing Tools** |
 | Freehand pen | Default (drag with left mouse button) |
-| Straight line | Hold `Shift` + drag |
-| Rectangle | Hold `Ctrl` + drag |
-| Ellipse/Circle | Hold `Tab` + drag |
-| Arrow | Hold `Ctrl+Shift` + drag |
-| Highlight brush (highlight-only) | `Ctrl+Alt+H` |
-| Text mode | Press `T`, click to position, type, `Shift+Enter` for new line, `Enter` to finish |
+| Straight line | Hold <kbd>Shift</kbd> + drag |
+| Rectangle | Hold <kbd>Ctrl</kbd> + drag |
+| Ellipse/Circle | Hold <kbd>Tab</kbd> + drag |
+| Arrow | Hold <kbd>Ctrl+Shift</kbd> + drag |
+| Highlight brush (highlight-only) | <kbd>Ctrl+Alt+H</kbd> |
+| Text mode | Press <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Shift+Enter</kbd> for new line, <kbd>Enter</kbd> to finish |
 | **Board Modes** |
-| Toggle Whiteboard | `Ctrl+W` (press again to exit) |
-| Toggle Blackboard | `Ctrl+B` (press again to exit) |
-| Return to Transparent | `Ctrl+Shift+T` |
+| Toggle Whiteboard | <kbd>Ctrl+W</kbd> (press again to exit) |
+| Toggle Blackboard | <kbd>Ctrl+B</kbd> (press again to exit) |
+| Return to Transparent | <kbd>Ctrl+Shift+T</kbd> |
 | **Colors** |
-| Red | `R` |
-| Green | `G` |
-| Blue | `B` |
-| Yellow | `Y` |
-| Orange | `O` |
-| Pink | `P` |
-| White | `W` |
-| Black | `K` |
+| Red | <kbd>R</kbd> |
+| Green | <kbd>G</kbd> |
+| Blue | <kbd>B</kbd> |
+| Yellow | <kbd>Y</kbd> |
+| Orange | <kbd>O</kbd> |
+| Pink | <kbd>P</kbd> |
+| White | <kbd>W</kbd> |
+| Black | <kbd>K</kbd> |
 | **Line Thickness** |
-| Increase | `+`, `=`, or scroll down |
-| Decrease | `-`, `_`, or scroll up |
+| Increase | <kbd>+</kbd>, <kbd>=</kbd>, or scroll down |
+| Decrease | <kbd>-</kbd>, <kbd>_</kbd>, or scroll up |
 | **Font Size** |
-| Increase | `Ctrl+Shift++` or `Shift` + scroll down |
-| Decrease | `Ctrl+Shift+-` or `Shift` + scroll up |
+| Increase | <kbd>Ctrl+Shift++</kbd> or <kbd>Shift</kbd> + scroll down |
+| Decrease | <kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll up |
 | **Editing** |
-| Undo last shape | `Ctrl+Z` |
-| Redo last undo | `Ctrl+Shift+Z` or `Ctrl+Y` |
-| Clear all | `E` |
-| Cancel action | Right-click or `Escape` |
+| Undo last shape | <kbd>Ctrl+Z</kbd> |
+| Redo last undo | <kbd>Ctrl+Shift+Z</kbd> or <kbd>Ctrl+Y</kbd> |
+| Clear all | <kbd>E</kbd> |
+| Cancel action | <kbd>Right-click</kbd> or <kbd>Escape</kbd> |
 | **Toolbars & UI** |
-| Toggle toolbars | `F2` or `F9` |
-| Toggle help overlay | `F10` |
-| Launch configurator | `F11` |
-| Toggle status bar | `F12` |
-| Toggle click highlight | `Ctrl+Shift+H` |
-| Toggle freeze | `Ctrl+Shift+F` |
-| Highlight brush (highlight-only) | `Ctrl+Alt+H` |
+| Toggle toolbars | <kbd>F2</kbd> or <kbd>F9</kbd> |
+| Toggle help overlay | <kbd>F10</kbd> |
+| Launch configurator | <kbd>F11</kbd> |
+| Toggle status bar | <kbd>F12</kbd> |
+| Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
+| Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
+| Highlight brush (highlight-only) | <kbd>Ctrl+Alt+H</kbd> |
 | **Exit** |
-| Exit overlay | `Escape` or `Ctrl+Q` |
+| Exit overlay | <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd> |
 
 ## Configuration
 
@@ -527,9 +527,9 @@ wayscriber/
 | Ellipses | ✅ | ✅ |
 | Arrows | ✅ | ✅ |
 | Text annotations | ✅ | ✅ |
-| **Whiteboard mode** | ✅ (W key) | ✅ (`Ctrl+W`) |
-| **Blackboard mode** | ✅ (K key) | ✅ (`Ctrl+B`) |
-| Multi-line text | ❌ | ✅ (`Shift+Enter`) |
+| **Whiteboard mode** | ✅ (<kbd>W</kbd> key) | ✅ (<kbd>Ctrl+W</kbd>) |
+| **Blackboard mode** | ✅ (<kbd>K</kbd> key) | ✅ (<kbd>Ctrl+B</kbd>) |
+| Multi-line text | ❌ | ✅ (<kbd>Shift+Enter</kbd>) |
 | Custom fonts | ❌ | ✅ (Pango) |
 | Color selection | ✅ | ✅ (8 colors) |
 | Undo | ✅ | ✅ |
@@ -548,10 +548,10 @@ wayscriber/
 - [x] Configuration file support
 - [x] Status bar and help overlay
 - [x] Scroll wheel thickness adjustment
-- [x] Daemon mode with global hotkey toggle (Super+D)
+- [x] Daemon mode with global hotkey toggle (<kbd>Super+D</kbd>)
 - [x] System tray integration
 - [x] Autostart with systemd user service
-- [x] Multi-line text support (Shift+Enter)
+- [x] Multi-line text support (<kbd>Shift+Enter</kbd>)
 - [x] Custom fonts with Pango rendering
 - [x] Whiteboard/blackboard modes with isolated frames
 - [x] Board mode configuration (colors, auto-adjust)
