@@ -275,6 +275,7 @@ impl ToolbarSurface {
                 let start_drag = matches!(
                     hit.kind,
                     crate::backend::wayland::toolbar::events::HitKind::DragSetThickness { .. }
+                        | crate::backend::wayland::toolbar::events::HitKind::DragSetMarkerOpacity { .. }
                         | crate::backend::wayland::toolbar::events::HitKind::DragSetFontSize
                         | crate::backend::wayland::toolbar::events::HitKind::PickColor { .. }
                         | crate::backend::wayland::toolbar::events::HitKind::DragUndoDelay
@@ -290,6 +291,11 @@ impl ToolbarSurface {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
                         let value = min + t * (max - min);
                         ToolbarEvent::SetThickness(value)
+                    }
+                    DragSetMarkerOpacity { min, max } => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let value = min + t * (max - min);
+                        ToolbarEvent::SetMarkerOpacity(value)
                     }
                     DragSetFontSize => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
@@ -350,6 +356,11 @@ impl ToolbarSurface {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
                         let value = min + t * (max - min);
                         return Some(ToolbarIntent(ToolbarEvent::SetThickness(value)));
+                    }
+                    DragSetMarkerOpacity { min, max } => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let value = min + t * (max - min);
+                        return Some(ToolbarIntent(ToolbarEvent::SetMarkerOpacity(value)));
                     }
                     DragSetFontSize => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);

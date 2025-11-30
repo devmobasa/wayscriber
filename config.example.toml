@@ -198,8 +198,8 @@ show_actions_section = true
 # Allows configuring delayed undo/redo all timing
 show_delay_sliders = false
 
-# Show marker opacity slider in side toolbar
-# Enable to adjust marker transparency from the UI
+# Show marker opacity slider in side toolbar even when the marker tool isn't active
+# Enable to keep marker transparency control visible at all times
 show_marker_opacity_section = false
 
 # ───────────────────────────────────────────────────────────────────────────────

@@ -17,45 +17,66 @@ pub fn top_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
 
 /// Compute the target logical size for the side toolbar given snapshot state.
 pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
-    let base_height: u32 = 30; // Header
-    let section_gap: u32 = 12;
+    let base_height = 30.0; // Header
+    let section_gap = 12.0;
 
-    let colors_h: u32 = 28 + 24 + 8 + 30 + if snapshot.show_more_colors { 30 } else { 0 };
-    let thickness_h: u32 = 52;
-    let text_size_h: u32 = 52;
-    let font_h: u32 = 50;
+    let picker_h = 24.0;
+    let swatch = 24.0;
+    let swatch_gap = 6.0;
+    let basic_rows = 1.0;
+    let extended_rows = if snapshot.show_more_colors { 1.0 } else { 0.0 };
+    let colors_h = 28.0 + picker_h + 8.0 + (swatch + swatch_gap) * (basic_rows + extended_rows);
 
-    let actions_h: u32 = if snapshot.show_actions_section {
+    let slider_card_h = 52.0;
+    let font_card_h = 50.0;
+
+    let actions_checkbox_h = 24.0;
+    let actions_content_h = if snapshot.show_actions_section {
         if snapshot.use_icons {
-            20 + 24 + 6 + 42 * 2 + 6 * 2
+            let icon_btn_size = 42.0;
+            let icon_gap = 6.0;
+            let icon_rows = 2.0;
+            (icon_btn_size + icon_gap) * icon_rows
         } else {
-            20 + 24 + 6 + 24 * 5 + 5 * 5
+            let action_h = 24.0;
+            let action_gap = 5.0;
+            let action_rows = 5.0;
+            (action_h + action_gap) * action_rows
         }
     } else {
-        20 + 24
+        0.0
     };
+    let actions_h = 20.0 + actions_checkbox_h + actions_content_h;
 
-    let delay_h = if snapshot.show_delay_sliders { 55 } else { 0 };
-    let step_h: u32 = 20
-        + 24
+    let delay_h = if snapshot.show_delay_sliders {
+        55.0
+    } else {
+        0.0
+    };
+    let step_h = 20.0
+        + 24.0
         + if snapshot.custom_section_enabled {
-            120
+            120.0
         } else {
-            0
+            0.0
         }
         + delay_h;
 
-    let total_gaps = 6;
-    let total_height = base_height
-        + colors_h
-        + thickness_h
-        + text_size_h
-        + font_h
-        + actions_h
-        + step_h
-        + section_gap * total_gaps
-        + 20;
-    (260, total_height)
+    let show_marker_opacity =
+        snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
+
+    let mut height: f64 = base_height + colors_h + section_gap;
+    height += slider_card_h + section_gap; // Thickness
+    if show_marker_opacity {
+        height += slider_card_h + section_gap; // Marker opacity
+    }
+    height += slider_card_h + section_gap; // Text size
+    height += font_card_h + section_gap;
+    height += actions_h + section_gap;
+    height += step_h;
+    height += 20.0;
+
+    (260, height.ceil() as u32)
 }
 
 /// Populate hit regions for the top toolbar.

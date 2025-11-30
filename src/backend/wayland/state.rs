@@ -862,6 +862,7 @@ impl WaylandState {
             event,
             ToolbarEvent::SetColor(_)
                 | ToolbarEvent::SetThickness(_)
+                | ToolbarEvent::SetMarkerOpacity(_)
                 | ToolbarEvent::SetFont(_)
                 | ToolbarEvent::SetFontSize(_)
                 | ToolbarEvent::ToggleFill(_)

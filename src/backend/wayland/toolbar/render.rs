@@ -549,8 +549,6 @@ pub fn render_side_palette(
     draw_group_card(ctx, card_x, y, card_w, slider_card_h);
     let thickness_label = if snapshot.thickness_targets_eraser {
         "Eraser size"
-    } else if snapshot.thickness_targets_marker {
-        "Marker opacity"
     } else {
         "Thickness"
     };
@@ -559,42 +557,54 @@ pub fn render_side_palette(
     let btn_size = 24.0;
     let nudge_icon_size = 14.0;
     let value_w = 40.0;
-    let slider_row_y = y + 26.0;
+    let thickness_slider_row_y = y + 26.0;
     let track_h = 8.0;
     let knob_r = 7.0;
-    let (min_thick, max_thick, nudge_step) = if snapshot.thickness_targets_marker {
-        (0.05, 0.9, 0.05)
-    } else {
-        (1.0, 50.0, 1.0)
-    };
+    let (min_thick, max_thick, nudge_step) = (1.0, 50.0, 1.0);
 
     let minus_x = x;
-    draw_button(ctx, minus_x, slider_row_y, btn_size, btn_size, false, false);
+    draw_button(
+        ctx,
+        minus_x,
+        thickness_slider_row_y,
+        btn_size,
+        btn_size,
+        false,
+        false,
+    );
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
     toolbar_icons::draw_icon_minus(
         ctx,
         minus_x + (btn_size - nudge_icon_size) / 2.0,
-        slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+        thickness_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
         nudge_icon_size,
     );
     hits.push(HitRegion {
-        rect: (minus_x, slider_row_y, btn_size, btn_size),
+        rect: (minus_x, thickness_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgeThickness(-nudge_step),
         kind: HitKind::Click,
         tooltip: None,
     });
 
     let plus_x = width - x - btn_size - value_w - 4.0;
-    draw_button(ctx, plus_x, slider_row_y, btn_size, btn_size, false, false);
+    draw_button(
+        ctx,
+        plus_x,
+        thickness_slider_row_y,
+        btn_size,
+        btn_size,
+        false,
+        false,
+    );
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
     toolbar_icons::draw_icon_plus(
         ctx,
         plus_x + (btn_size - nudge_icon_size) / 2.0,
-        slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+        thickness_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
         nudge_icon_size,
     );
     hits.push(HitRegion {
-        rect: (plus_x, slider_row_y, btn_size, btn_size),
+        rect: (plus_x, thickness_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgeThickness(nudge_step),
         kind: HitKind::Click,
         tooltip: None,
@@ -602,17 +612,17 @@ pub fn render_side_palette(
 
     let track_x = minus_x + btn_size + 6.0;
     let track_w = plus_x - track_x - 6.0;
-    let track_y = slider_row_y + (btn_size - track_h) / 2.0;
+    let thickness_track_y = thickness_slider_row_y + (btn_size - track_h) / 2.0;
     let t = ((snapshot.thickness - min_thick) / (max_thick - min_thick)).clamp(0.0, 1.0);
     let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
 
     ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
-    draw_round_rect(ctx, track_x, track_y, track_w, track_h, 4.0);
+    draw_round_rect(ctx, track_x, thickness_track_y, track_w, track_h, 4.0);
     let _ = ctx.fill();
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
     ctx.arc(
         knob_x,
-        track_y + track_h / 2.0,
+        thickness_track_y + track_h / 2.0,
         knob_r,
         0.0,
         std::f64::consts::PI * 2.0,
@@ -620,7 +630,7 @@ pub fn render_side_palette(
     let _ = ctx.fill();
 
     hits.push(HitRegion {
-        rect: (track_x, track_y - 6.0, track_w, track_h + 12.0),
+        rect: (track_x, thickness_track_y - 6.0, track_w, track_h + 12.0),
         event: ToolbarEvent::SetThickness(snapshot.thickness),
         kind: HitKind::DragSetThickness {
             min: min_thick,
@@ -629,21 +639,117 @@ pub fn render_side_palette(
         tooltip: None,
     });
 
-    let thickness_text = if snapshot.thickness_targets_marker {
-        format!("{:.0}%", snapshot.thickness * 100.0)
-    } else {
-        format!("{:.0}px", snapshot.thickness)
-    };
+    let thickness_text = format!("{:.0}px", snapshot.thickness);
     let value_x = width - x - value_w;
     draw_label_center(
         ctx,
         value_x,
-        slider_row_y,
+        thickness_slider_row_y,
         value_w,
         btn_size,
         &thickness_text,
     );
     y += slider_card_h + section_gap;
+
+    let show_marker_opacity =
+        snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
+    if show_marker_opacity {
+        let marker_slider_row_y = y + 26.0;
+        draw_group_card(ctx, card_x, y, card_w, slider_card_h);
+        draw_section_label(ctx, x, y + 12.0, "Marker opacity");
+
+        let minus_x = x;
+        draw_button(
+            ctx,
+            minus_x,
+            marker_slider_row_y,
+            btn_size,
+            btn_size,
+            false,
+            false,
+        );
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_minus(
+            ctx,
+            minus_x + (btn_size - nudge_icon_size) / 2.0,
+            marker_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+            nudge_icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (minus_x, marker_slider_row_y, btn_size, btn_size),
+            event: ToolbarEvent::NudgeMarkerOpacity(-0.05),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+
+        let plus_x = width - x - btn_size - value_w - 4.0;
+        draw_button(
+            ctx,
+            plus_x,
+            marker_slider_row_y,
+            btn_size,
+            btn_size,
+            false,
+            false,
+        );
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_plus(
+            ctx,
+            plus_x + (btn_size - nudge_icon_size) / 2.0,
+            marker_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+            nudge_icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (plus_x, marker_slider_row_y, btn_size, btn_size),
+            event: ToolbarEvent::NudgeMarkerOpacity(0.05),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+
+        let track_x = minus_x + btn_size + 6.0;
+        let track_w = plus_x - track_x - 6.0;
+        let marker_track_y = marker_slider_row_y + (btn_size - track_h) / 2.0;
+        let min_opacity = 0.05;
+        let max_opacity = 0.9;
+        let t =
+            ((snapshot.marker_opacity - min_opacity) / (max_opacity - min_opacity)).clamp(0.0, 1.0);
+        let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
+
+        ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+        draw_round_rect(ctx, track_x, marker_track_y, track_w, track_h, 4.0);
+        let _ = ctx.fill();
+        ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+        ctx.arc(
+            knob_x,
+            marker_track_y + track_h / 2.0,
+            knob_r,
+            0.0,
+            std::f64::consts::PI * 2.0,
+        );
+        let _ = ctx.fill();
+
+        hits.push(HitRegion {
+            rect: (track_x, marker_track_y - 6.0, track_w, track_h + 12.0),
+            event: ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity),
+            kind: HitKind::DragSetMarkerOpacity {
+                min: min_opacity,
+                max: max_opacity,
+            },
+            tooltip: None,
+        });
+
+        let opacity_text = format!("{:.0}%", snapshot.marker_opacity * 100.0);
+        draw_label_center(
+            ctx,
+            value_x,
+            marker_slider_row_y,
+            value_w,
+            btn_size,
+            &opacity_text,
+        );
+
+        y += slider_card_h + section_gap;
+    }
 
     draw_group_card(ctx, card_x, y, card_w, slider_card_h);
     draw_section_label(ctx, x, y + 12.0, "Text size");
