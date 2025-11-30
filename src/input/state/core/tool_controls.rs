@@ -46,7 +46,6 @@ impl InputState {
     pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
         match self.active_tool() {
             Tool::Eraser => self.set_eraser_size(value),
-            Tool::Marker => self.set_marker_opacity(value),
             _ => self.set_thickness(value),
         }
     }
@@ -55,9 +54,13 @@ impl InputState {
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
         match self.active_tool() {
             Tool::Eraser => self.set_eraser_size(self.eraser_size + delta),
-            Tool::Marker => self.set_marker_opacity(self.marker_opacity + delta),
             _ => self.set_thickness(self.current_thickness + delta),
         }
+    }
+
+    /// Nudges marker opacity by a delta (clamped to valid range).
+    pub fn nudge_marker_opacity(&mut self, delta: f64) -> bool {
+        self.set_marker_opacity(self.marker_opacity + delta)
     }
 
     /// Updates the current drawing color to an arbitrary value. Returns true if changed.
@@ -189,6 +192,7 @@ impl InputState {
         self.show_actions_section = show_actions_section;
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
+        // Preserve existing marker mode setting; do not auto-toggle here.
     }
 
     /// Wrapper for undo that preserves existing action plumbing.

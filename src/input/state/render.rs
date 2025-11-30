@@ -186,4 +186,13 @@ impl InputState {
             ..self.current_color
         }
     }
+
+    /// Color to use when drawing shapes, honoring marker opacity when enabled.
+    pub(crate) fn shape_color(&self) -> Color {
+        if self.shape_marker_mode {
+            self.marker_color()
+        } else {
+            self.current_color
+        }
+    }
 }

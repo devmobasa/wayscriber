@@ -276,6 +276,7 @@ impl ToolbarSurface {
                     hit.kind,
                     crate::backend::wayland::toolbar::events::HitKind::DragSetThickness { .. }
                         | crate::backend::wayland::toolbar::events::HitKind::DragSetFontSize
+                        | crate::backend::wayland::toolbar::events::HitKind::DragSetMarkerOpacity { .. }
                         | crate::backend::wayland::toolbar::events::HitKind::PickColor { .. }
                         | crate::backend::wayland::toolbar::events::HitKind::DragUndoDelay
                         | crate::backend::wayland::toolbar::events::HitKind::DragRedoDelay
@@ -302,6 +303,11 @@ impl ToolbarSurface {
                         ToolbarEvent::SetColor(
                             crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value),
                         )
+                    }
+                    DragSetMarkerOpacity { min, max } => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let value = min + t * (max - min);
+                        ToolbarEvent::SetMarkerOpacity(value)
                     }
                     DragUndoDelay => {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
@@ -355,6 +361,11 @@ impl ToolbarSurface {
                         let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
                         let value = 8.0 + t * (72.0 - 8.0);
                         return Some(ToolbarIntent(ToolbarEvent::SetFontSize(value)));
+                    }
+                    DragSetMarkerOpacity { min, max } => {
+                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
+                        let value = min + t * (max - min);
+                        return Some(ToolbarIntent(ToolbarEvent::SetMarkerOpacity(value)));
                     }
                     PickColor { x: px, y: py, w, h } => {
                         let hue = ((x - px) / w).clamp(0.0, 1.0);

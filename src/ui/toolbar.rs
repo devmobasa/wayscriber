@@ -8,7 +8,10 @@ pub enum ToolbarEvent {
     SelectTool(Tool),
     SetColor(Color),
     SetThickness(f64),
+    SetMarkerOpacity(f64),
     NudgeThickness(f64),
+    NudgeMarkerOpacity(f64),
+    ToggleShapeMarker(bool),
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
@@ -92,6 +95,10 @@ pub struct ToolbarSnapshot {
     pub show_more_colors: bool,
     /// Whether to show the Actions section
     pub show_actions_section: bool,
+    /// Whether shapes should use marker opacity/alpha when drawn
+    pub shape_marker_mode: bool,
+    /// Whether to show the marker opacity control (marker tool or shape marker mode)
+    pub show_marker_opacity: bool,
     /// Binding hints for tooltips
     pub binding_hints: ToolbarBindingHints,
 }
@@ -110,16 +117,17 @@ impl ToolbarSnapshot {
         let active_tool = state.active_tool();
         let thickness_targets_eraser =
             active_tool == Tool::Eraser || matches!(state.tool_override(), Some(Tool::Eraser));
-        let thickness_targets_marker =
+        let marker_tool_active =
             active_tool == Tool::Marker || matches!(state.tool_override(), Some(Tool::Marker));
+        let thickness_targets_marker = marker_tool_active;
         let eraser_kind = state.eraser_kind;
         let thickness_value = if thickness_targets_eraser {
             state.eraser_size
-        } else if thickness_targets_marker {
-            state.marker_opacity
         } else {
             state.current_thickness
         };
+        let shape_marker_mode = state.shape_marker_mode;
+        let show_marker_opacity = marker_tool_active || shape_marker_mode;
         Self {
             active_tool,
             tool_override: state.tool_override(),
@@ -154,6 +162,8 @@ impl ToolbarSnapshot {
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             binding_hints,
+            shape_marker_mode,
+            show_marker_opacity,
         }
     }
 }
@@ -224,9 +234,20 @@ impl InputState {
             }
             ToolbarEvent::SetColor(color) => self.set_color(color),
             ToolbarEvent::SetThickness(value) => self.set_thickness_for_active_tool(value),
+            ToolbarEvent::SetMarkerOpacity(value) => self.set_marker_opacity(value),
             ToolbarEvent::SetFont(descriptor) => self.set_font_descriptor(descriptor),
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
             ToolbarEvent::ToggleFill(enable) => self.set_fill_enabled(enable),
+            ToolbarEvent::ToggleShapeMarker(enable) => {
+                if self.shape_marker_mode != enable {
+                    self.shape_marker_mode = enable;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
             ToolbarEvent::SetUndoDelay(delay_secs) => {
                 let min_delay_s = 0.05;
                 let clamped_ms = (delay_secs.clamp(min_delay_s, 5.0) * 1000.0).round();
@@ -270,6 +291,7 @@ impl InputState {
                 }
             }
             ToolbarEvent::NudgeThickness(delta) => self.nudge_thickness_for_active_tool(delta),
+            ToolbarEvent::NudgeMarkerOpacity(delta) => self.nudge_marker_opacity(delta),
             ToolbarEvent::Undo => {
                 self.toolbar_undo();
                 true

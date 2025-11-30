@@ -6,6 +6,7 @@ pub enum HitKind {
     Click,
     DragSetThickness { min: f64, max: f64 },
     DragSetFontSize,
+    DragSetMarkerOpacity { min: f64, max: f64 },
     PickColor { x: f64, y: f64, w: f64, h: f64 },
     DragUndoDelay,
     DragRedoDelay,

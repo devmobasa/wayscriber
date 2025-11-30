@@ -550,7 +550,7 @@ pub fn render_side_palette(
     let thickness_label = if snapshot.thickness_targets_eraser {
         "Eraser size"
     } else if snapshot.thickness_targets_marker {
-        "Marker opacity"
+        "Marker thickness"
     } else {
         "Thickness"
     };
@@ -562,11 +562,7 @@ pub fn render_side_palette(
     let slider_row_y = y + 26.0;
     let track_h = 8.0;
     let knob_r = 7.0;
-    let (min_thick, max_thick, nudge_step) = if snapshot.thickness_targets_marker {
-        (0.05, 0.9, 0.05)
-    } else {
-        (1.0, 50.0, 1.0)
-    };
+    let (min_thick, max_thick, nudge_step) = (1.0, 50.0, 1.0);
 
     let minus_x = x;
     draw_button(ctx, minus_x, slider_row_y, btn_size, btn_size, false, false);
@@ -629,11 +625,7 @@ pub fn render_side_palette(
         tooltip: None,
     });
 
-    let thickness_text = if snapshot.thickness_targets_marker {
-        format!("{:.0}%", snapshot.thickness * 100.0)
-    } else {
-        format!("{:.0}px", snapshot.thickness)
-    };
+    let thickness_text = format!("{:.0}px", snapshot.thickness);
     let value_x = width - x - value_w;
     draw_label_center(
         ctx,
@@ -644,6 +636,124 @@ pub fn render_side_palette(
         &thickness_text,
     );
     y += slider_card_h + section_gap;
+
+    // Toggle to apply marker opacity to shapes even when a shape tool is active.
+    let marker_toggle_h = 32.0;
+    draw_group_card(ctx, card_x, y, card_w, marker_toggle_h);
+    let toggle_y = y + 6.0;
+    let toggle_h = marker_toggle_h - 12.0;
+    let toggle_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, toggle_y, card_w - 12.0, toggle_h))
+        .unwrap_or(false);
+    draw_checkbox(
+        ctx,
+        x,
+        toggle_y,
+        card_w - 12.0,
+        toggle_h,
+        snapshot.shape_marker_mode,
+        toggle_hover,
+        "Shapes use marker opacity",
+    );
+    hits.push(HitRegion {
+        rect: (x, toggle_y, card_w - 12.0, toggle_h),
+        event: ToolbarEvent::ToggleShapeMarker(!snapshot.shape_marker_mode),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+    y += marker_toggle_h + section_gap;
+
+    if snapshot.show_marker_opacity {
+        draw_group_card(ctx, card_x, y, card_w, slider_card_h);
+        draw_section_label(ctx, x, y + 12.0, "Marker opacity");
+
+        let opacity_min = 0.05;
+        let opacity_max = 0.9;
+        let opacity_step = 0.05;
+        let opacity_row_y = y + 26.0;
+
+        let minus_x = x;
+        draw_button(
+            ctx,
+            minus_x,
+            opacity_row_y,
+            btn_size,
+            btn_size,
+            false,
+            false,
+        );
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_minus(
+            ctx,
+            minus_x + (btn_size - nudge_icon_size) / 2.0,
+            opacity_row_y + (btn_size - nudge_icon_size) / 2.0,
+            nudge_icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (minus_x, opacity_row_y, btn_size, btn_size),
+            event: ToolbarEvent::NudgeMarkerOpacity(-opacity_step),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+
+        let plus_x = width - x - btn_size - value_w - 4.0;
+        draw_button(ctx, plus_x, opacity_row_y, btn_size, btn_size, false, false);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_plus(
+            ctx,
+            plus_x + (btn_size - nudge_icon_size) / 2.0,
+            opacity_row_y + (btn_size - nudge_icon_size) / 2.0,
+            nudge_icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (plus_x, opacity_row_y, btn_size, btn_size),
+            event: ToolbarEvent::NudgeMarkerOpacity(opacity_step),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+
+        let track_x = minus_x + btn_size + 6.0;
+        let track_w = plus_x - track_x - 6.0;
+        let track_y = opacity_row_y + (btn_size - track_h) / 2.0;
+        let t =
+            ((snapshot.marker_opacity - opacity_min) / (opacity_max - opacity_min)).clamp(0.0, 1.0);
+        let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
+
+        ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+        draw_round_rect(ctx, track_x, track_y, track_w, track_h, 4.0);
+        let _ = ctx.fill();
+        ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+        ctx.arc(
+            knob_x,
+            track_y + track_h / 2.0,
+            knob_r,
+            0.0,
+            std::f64::consts::PI * 2.0,
+        );
+        let _ = ctx.fill();
+
+        hits.push(HitRegion {
+            rect: (track_x, track_y - 6.0, track_w, track_h + 12.0),
+            event: ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity),
+            kind: HitKind::DragSetMarkerOpacity {
+                min: opacity_min,
+                max: opacity_max,
+            },
+            tooltip: None,
+        });
+
+        let opacity_text = format!("{:.0}%", snapshot.marker_opacity * 100.0);
+        let value_x = width - x - value_w;
+        draw_label_center(
+            ctx,
+            value_x,
+            opacity_row_y,
+            value_w,
+            btn_size,
+            &opacity_text,
+        );
+        y += slider_card_h + section_gap;
+    }
 
     draw_group_card(ctx, card_x, y, card_w, slider_card_h);
     draw_section_label(ctx, x, y + 12.0, "Text size");

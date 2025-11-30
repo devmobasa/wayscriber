@@ -22,6 +22,8 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
 
     let colors_h: u32 = 28 + 24 + 8 + 30 + if snapshot.show_more_colors { 30 } else { 0 };
     let thickness_h: u32 = 52;
+    let marker_toggle_h: u32 = 36;
+    let marker_opacity_h: u32 = if snapshot.show_marker_opacity { 52 } else { 0 };
     let text_size_h: u32 = 52;
     let font_h: u32 = 50;
 
@@ -45,10 +47,13 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
         }
         + delay_h;
 
-    let total_gaps = 6;
+    let extra_gap = if snapshot.show_marker_opacity { 1 } else { 0 };
+    let total_gaps = 6 + extra_gap + 1; // extra + toggle gap
     let total_height = base_height
         + colors_h
         + thickness_h
+        + marker_toggle_h
+        + marker_opacity_h
         + text_size_h
         + font_h
         + actions_h

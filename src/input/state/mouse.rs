@@ -248,7 +248,7 @@ impl InputState {
                         y1: start_y,
                         x2: x,
                         y2: y,
-                        color: self.current_color,
+                        color: self.shape_color(),
                         thick: self.current_thickness,
                     },
                     Tool::Rect => {
@@ -268,7 +268,7 @@ impl InputState {
                             w: width,
                             h: height,
                             fill: self.fill_enabled,
-                            color: self.current_color,
+                            color: self.shape_color(),
                             thick: self.current_thickness,
                         }
                     }
@@ -280,7 +280,7 @@ impl InputState {
                             rx,
                             ry,
                             fill: self.fill_enabled,
-                            color: self.current_color,
+                            color: self.shape_color(),
                             thick: self.current_thickness,
                         }
                     }
@@ -289,7 +289,7 @@ impl InputState {
                         y1: start_y,
                         x2: x,
                         y2: y,
-                        color: self.current_color,
+                        color: self.shape_color(),
                         thick: self.current_thickness,
                         arrow_length: self.arrow_length,
                         arrow_angle: self.arrow_angle,
