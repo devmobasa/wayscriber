@@ -483,14 +483,14 @@ impl WaylandBackend {
             layer_surface.commit();
 
             state.surface.set_layer_surface(layer_surface);
-            state.current_keyboard_interactivity = Some(desired_keyboard_mode);
+            state.set_current_keyboard_interactivity(Some(desired_keyboard_mode));
             info!("Layer shell surface created");
         } else if let Some(xdg_shell) = state.xdg_shell.as_ref() {
             info!("Layer shell missing; creating xdg-shell window");
             let window = xdg_shell.create_window(wl_surface, WindowDecorations::None, &qh);
             window.set_title("wayscriber overlay");
             window.set_app_id("com.devmobasa.wayscriber");
-            if state.xdg_fullscreen {
+            if state.xdg_fullscreen() {
                 if let Some(output) = state.preferred_fullscreen_output() {
                     info!("Requesting fullscreen on preferred output");
                     window.set_fullscreen(Some(&output));
@@ -568,7 +568,7 @@ impl WaylandBackend {
             }
 
             if state.input_state.take_pending_frozen_toggle() {
-                if !state.frozen_enabled {
+                if !state.frozen_enabled() {
                     warn!(
                         "Frozen mode disabled on this compositor (xdg fallback); ignoring toggle"
                     );

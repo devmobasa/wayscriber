@@ -373,6 +373,11 @@ Use the CLI helpers for quick maintenance:
 - `wayscriber --session-info` prints the active storage path, file details, and shape counts.
 - `wayscriber --clear-session` removes the session file, backup, and lock.
 
+Session overrides and recovery:
+
+- CLI flags: `--resume-session` forces persistence on, `--no-resume-session` forces it off for the current run. The environment variable `WAYSCRIBER_RESUME_SESSION=1/0` does the same.
+- Recovery: if a session file is corrupt or cannot be parsed/decompressed, wayscriber logs a warning, writes a `.bak` copy of the bad file, removes the corrupt file, and continues with defaults. Overrides above still apply after recovery.
+
 ### `[keybindings]` - Custom Keybindings
 
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.

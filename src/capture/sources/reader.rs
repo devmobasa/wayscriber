@@ -75,33 +75,6 @@ pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
     Ok(data)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[test]
-    fn reads_and_removes_file() {
-        let temp = TempDir::new().unwrap();
-        let file_path = temp.path().join("capture file.png");
-        std::fs::write(&file_path, b"portal-bytes").unwrap();
-        let uri = format!(
-            "file://{}",
-            file_path
-                .to_string_lossy()
-                .replace('%', "%25")
-                .replace(' ', "%20")
-        );
-
-        let data = read_image_from_uri(&uri).expect("read succeeds");
-        assert_eq!(data, b"portal-bytes");
-        assert!(
-            !file_path.exists(),
-            "read_image_from_uri should delete the portal temp file"
-        );
-    }
-}
-
 fn decode_file_uri(uri: &str) -> Result<PathBuf, CaptureError> {
     let raw = uri
         .strip_prefix("file://")
@@ -168,5 +141,32 @@ fn hex_value(b: u8) -> Option<u8> {
         b'a'..=b'f' => Some(10 + b - b'a'),
         b'A'..=b'F' => Some(10 + b - b'A'),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn reads_and_removes_file() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("capture file.png");
+        std::fs::write(&file_path, b"portal-bytes").unwrap();
+        let uri = format!(
+            "file://{}",
+            file_path
+                .to_string_lossy()
+                .replace('%', "%25")
+                .replace(' ', "%20")
+        );
+
+        let data = read_image_from_uri(&uri).expect("read succeeds");
+        assert_eq!(data, b"portal-bytes");
+        assert!(
+            !file_path.exists(),
+            "read_image_from_uri should delete the portal temp file"
+        );
     }
 }

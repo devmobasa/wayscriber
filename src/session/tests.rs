@@ -486,3 +486,24 @@ fn corrupted_history_is_dropped_but_shapes_load() {
     assert_eq!(frame.undo_stack_len(), 0);
     assert_eq!(frame.redo_stack_len(), 0);
 }
+
+#[test]
+fn corrupt_session_is_backed_up_and_reset() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-bad");
+    options.persist_transparent = true;
+
+    let session_path = options.session_file_path();
+    fs::write(&session_path, b"not json").expect("write corrupt session file");
+
+    let loaded = load_snapshot(&options).expect("load should not error");
+    assert!(loaded.is_none());
+
+    let backup_path = options.backup_file_path();
+    let backup = fs::read(&backup_path).expect("backup file present");
+    assert_eq!(backup, b"not json");
+    assert!(
+        !session_path.exists(),
+        "corrupt session file should be removed after backup"
+    );
+}

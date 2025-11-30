@@ -23,7 +23,7 @@ impl SeatHandler for WaylandState {
     ) {
         if capability == Capability::Keyboard {
             info!("Keyboard capability available");
-            self.current_seat = Some(seat.clone());
+            self.set_current_seat(Some(seat.clone()));
             if self.seat_state.get_keyboard(qh, &seat, None).is_ok() {
                 debug!("Keyboard initialized");
             }

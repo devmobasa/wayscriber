@@ -55,7 +55,7 @@ impl WindowHandler for WaylandState {
             .map(|h| h.get())
             .unwrap_or(fallback_dimensions.1);
 
-        if self.xdg_fullscreen {
+        if self.xdg_fullscreen() {
             if let Some(output) = self.preferred_fullscreen_output() {
                 // Reassert fullscreen on the preferred output every configure in case
                 // the compositor picked a different monitor initially.
