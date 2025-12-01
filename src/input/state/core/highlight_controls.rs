@@ -102,9 +102,9 @@ impl InputState {
         }
     }
 
-    /// Toggles highlight-only tool mode.
-    pub fn toggle_highlight_tool(&mut self) -> bool {
-        let enable = !self.highlight_tool_active();
+    /// Toggles the combined highlight tool and click highlight together.
+    pub fn toggle_all_highlights(&mut self) -> bool {
+        let enable = !(self.highlight_tool_active() || self.click_highlight_enabled());
         self.set_highlight_tool(enable);
         enable
     }

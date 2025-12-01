@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use log::{debug, info, warn};
 #[cfg(unix)]
 use signal_hook::{
-    consts::signal::{SIGINT, SIGTERM, SIGUSR1},
+    consts::signal::{SIGINT, SIGTERM, SIGUSR1, SIGUSR2},
     iterator::Signals,
 };
 use smithay_client_toolkit::{
@@ -23,7 +23,7 @@ use smithay_client_toolkit::{
 #[cfg(unix)]
 use std::thread;
 use std::{
-    env,
+    env, fs,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -40,7 +40,7 @@ use super::state::WaylandState;
 use crate::{
     RESUME_SESSION_ENV,
     capture::{CaptureManager, CaptureOutcome},
-    config::{Config, ConfigSource},
+    config::{Action, Config, ConfigSource},
     input::{BoardMode, ClickHighlightSettings, InputState},
     notification, paths, runtime_session_override, session,
 };
@@ -57,6 +57,55 @@ fn friendly_capture_error(error: &str) -> String {
     } else {
         "Screen capture failed. Please try again.".to_string()
     }
+}
+
+fn process_tray_action(state: &mut WaylandState) {
+    let action_path = crate::paths::tray_action_file();
+    // Read-and-delete best effort; if a new action is written between read and delete
+    // it will be picked up on the next signal/start.
+    let action_str = match fs::read_to_string(&action_path) {
+        Ok(content) => content.lines().next().unwrap_or("").trim().to_string(),
+        Err(err) => {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                warn!(
+                    "Tray action signal received but failed to read {}: {}",
+                    action_path.display(),
+                    err
+                );
+            }
+            return;
+        }
+    };
+
+    if action_str.is_empty() {
+        let _ = fs::remove_file(&action_path);
+        return;
+    }
+
+    match action_str.as_str() {
+        "toggle_freeze" => {
+            state.input_state.request_frozen_toggle();
+            state.input_state.needs_redraw = true;
+        }
+        "capture_full" => state.handle_capture_action(Action::CaptureFullScreen),
+        "capture_window" => state.handle_capture_action(Action::CaptureActiveWindow),
+        "capture_region" => {
+            // Honor clipboard preference for region captures
+            if state.config.capture.copy_to_clipboard {
+                state.handle_capture_action(Action::CaptureClipboardRegion);
+            } else {
+                state.handle_capture_action(Action::CaptureFileRegion);
+            }
+        }
+        "toggle_help" => {
+            state.input_state.show_help = !state.input_state.show_help;
+            state.input_state.dirty_tracker.mark_full();
+            state.input_state.needs_redraw = true;
+        }
+        other => warn!("Unknown tray action '{}'", other),
+    }
+
+    let _ = fs::remove_file(&action_path);
 }
 
 fn resume_override_from_env() -> Option<bool> {
@@ -431,34 +480,52 @@ impl WaylandBackend {
 
         // Ensure pinned toolbars are created immediately if visible on startup.
         state.sync_toolbar_visibility(&qh);
+        // Process any pending tray action that may have been queued before overlay start.
+        process_tray_action(&mut state);
 
         // Gracefully exit the overlay when external signals request termination
         #[cfg(unix)]
-        let exit_flag: Option<Arc<AtomicBool>> = {
-            let flag = Arc::new(AtomicBool::new(false));
-            match Signals::new([SIGTERM, SIGINT, SIGUSR1]) {
+        let (exit_flag, tray_action_flag): (
+            Option<Arc<AtomicBool>>,
+            Option<Arc<AtomicBool>>,
+        ) = {
+            let exit_flag = Arc::new(AtomicBool::new(false));
+            let tray_action_flag = Arc::new(AtomicBool::new(false));
+            match Signals::new([SIGTERM, SIGINT, SIGUSR1, SIGUSR2]) {
                 Ok(mut signals) => {
-                    let exit_flag_clone = Arc::clone(&flag);
+                    let exit_flag_clone = Arc::clone(&exit_flag);
+                    let tray_action_flag_clone = Arc::clone(&tray_action_flag);
                     thread::spawn(move || {
                         for sig in signals.forever() {
-                            debug!(
-                                "Overlay received signal {}; scheduling graceful shutdown",
-                                sig
-                            );
-                            exit_flag_clone.store(true, Ordering::Release);
+                            match sig {
+                                SIGUSR2 => {
+                                    debug!("Overlay received SIGUSR2 for tray action");
+                                    tray_action_flag_clone.store(true, Ordering::Release);
+                                }
+                                _ => {
+                                    debug!(
+                                        "Overlay received signal {}; scheduling graceful shutdown",
+                                        sig
+                                    );
+                                    exit_flag_clone.store(true, Ordering::Release);
+                                }
+                            }
                         }
                     });
-                    Some(flag)
+                    (Some(exit_flag), Some(tray_action_flag))
                 }
                 Err(err) => {
                     warn!("Failed to register overlay signal handlers: {}", err);
-                    Some(flag)
+                    (Some(exit_flag), Some(tray_action_flag))
                 }
             }
         };
 
         #[cfg(not(unix))]
-        let exit_flag: Option<Arc<AtomicBool>> = None;
+        let (exit_flag, tray_action_flag): (
+            Option<Arc<AtomicBool>>,
+            Option<Arc<AtomicBool>>,
+        ) = (None, None);
 
         // Create surface using layer-shell when available, otherwise fall back to xdg-shell
         let wl_surface = state.compositor_state.create_surface(&qh);
@@ -536,6 +603,14 @@ impl WaylandBackend {
             state
                 .frozen
                 .poll_portal_capture(&mut state.surface, &mut state.input_state);
+
+            if tray_action_flag
+                .as_ref()
+                .map(|flag| flag.swap(false, Ordering::AcqRel))
+                .unwrap_or(false)
+            {
+                process_tray_action(&mut state);
+            }
 
             // Dispatch all pending events (blocking) but check should_exit after each batch
             match event_queue.blocking_dispatch(&mut state) {

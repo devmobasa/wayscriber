@@ -7,23 +7,37 @@ use ksni::TrayMethods;
 use log::{debug, error, info, warn};
 #[cfg(not(feature = "tray"))]
 use log::{debug, info, warn};
+#[cfg(feature = "tray")]
+use png::Decoder;
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
 use std::env;
+#[cfg(feature = "tray")]
+use std::fs;
 use std::io::ErrorKind;
+#[cfg(feature = "tray")]
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 #[cfg(feature = "tray")]
 use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
+use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
+#[cfg(feature = "tray")]
+use crate::config::Config;
 use crate::{
-    RESUME_SESSION_ENV, SESSION_OVERRIDE_FOLLOW_CONFIG, SESSION_OVERRIDE_FORCE_OFF,
-    SESSION_OVERRIDE_FORCE_ON, decode_session_override, encode_session_override,
-    runtime_session_override, set_runtime_session_override,
+    RESUME_SESSION_ENV, decode_session_override, encode_session_override, runtime_session_override,
+    set_runtime_session_override,
+};
+#[cfg(feature = "tray")]
+use crate::{
+    paths::{log_dir, tray_action_file},
+    session::{clear_session, options_from_config},
 };
 
 /// Overlay state for daemon mode
@@ -39,6 +53,68 @@ type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
 #[cfg(feature = "tray")]
 const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
 
+#[cfg(feature = "tray")]
+/// Tray-to-overlay IPC:
+/// - Daemon writes an action string to `tray_action_file()` and signals SIGUSR2 to the overlay PID.
+/// - If the overlay is not running, the daemon will auto-toggle it so queued actions run at startup.
+/// - The overlay consumes the action file on SIGUSR2 and also once at startup to catch queued work.
+/// - Action strings are simple identifiers (e.g., "toggle_freeze", "capture_full", "toggle_help").
+/// This is intentionally simple/best-effort; if a write happens between read/delete, it will be
+/// processed on the next signal/start.
+#[allow(dead_code)]
+const _: () = ();
+
+#[cfg(feature = "tray")]
+fn load_session_resume_enabled_from_config() -> bool {
+    match Config::load() {
+        Ok(loaded) => {
+            let session = loaded.config.session;
+            session.persist_transparent
+                || session.persist_whiteboard
+                || session.persist_blackboard
+                || session.persist_history
+                || session.restore_tool_state
+        }
+        Err(err) => {
+            warn!(
+                "Failed to read config for session resume state; assuming disabled: {}",
+                err
+            );
+            false
+        }
+    }
+}
+
+#[cfg(feature = "tray")]
+fn update_session_resume_in_config(target_enabled: bool, fallback: bool) -> bool {
+    match Config::load() {
+        Ok(loaded) => {
+            let mut config = loaded.config;
+            config.session.persist_transparent = target_enabled;
+            config.session.persist_whiteboard = target_enabled;
+            config.session.persist_blackboard = target_enabled;
+            config.session.persist_history = target_enabled;
+            config.session.restore_tool_state = target_enabled;
+            if let Err(err) = config.save() {
+                warn!(
+                    "Failed to write session resume setting to config (desired {}): {}",
+                    target_enabled, err
+                );
+                fallback
+            } else {
+                target_enabled
+            }
+        }
+        Err(err) => {
+            warn!(
+                "Failed to load config while toggling session resume (desired {}): {}",
+                target_enabled, err
+            );
+            fallback
+        }
+    }
+}
+
 pub struct Daemon {
     overlay_state: OverlayState,
     should_quit: Arc<AtomicBool>,
@@ -48,6 +124,7 @@ pub struct Daemon {
     backend_runner: Option<Arc<BackendRunner>>,
     tray_thread: Option<JoinHandle<()>>,
     overlay_child: Option<Child>,
+    overlay_pid: Arc<AtomicU32>,
     session_resume_override: Arc<AtomicU8>,
 }
 
@@ -56,7 +133,9 @@ pub(crate) struct WayscriberTray {
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
     configurator_binary: String,
-    session_resume_override: Arc<AtomicU8>,
+    session_resume_enabled: bool,
+    overlay_pid: Arc<AtomicU32>,
+    tray_action_path: PathBuf,
 }
 
 #[cfg(feature = "tray")]
@@ -65,13 +144,17 @@ impl WayscriberTray {
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
         configurator_binary: String,
-        session_resume_override: Arc<AtomicU8>,
+        session_resume_enabled: bool,
+        overlay_pid: Arc<AtomicU32>,
+        tray_action_path: PathBuf,
     ) -> Self {
         Self {
             toggle_flag,
             quit_flag,
             configurator_binary,
-            session_resume_override,
+            session_resume_enabled,
+            overlay_pid,
+            tray_action_path,
         }
     }
 
@@ -79,13 +162,15 @@ impl WayscriberTray {
     fn new_for_tests(
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
-        session_resume_override: Arc<AtomicU8>,
+        session_resume_enabled: bool,
     ) -> Self {
         Self::new(
             toggle_flag,
             quit_flag,
             "true".into(),
-            session_resume_override,
+            session_resume_enabled,
+            Arc::new(AtomicU32::new(0)),
+            tray_action_file(),
         )
     }
 }
@@ -151,6 +236,137 @@ impl WayscriberTray {
             }
         }
     }
+
+    fn dispatch_overlay_action(&self, action: &str) {
+        if let Some(parent) = self.tray_action_path.parent() {
+            if let Err(err) = fs::create_dir_all(parent) {
+                warn!(
+                    "Failed to prepare tray action directory {}: {}",
+                    parent.display(),
+                    err
+                );
+                return;
+            }
+        }
+
+        if let Err(err) = fs::write(&self.tray_action_path, action) {
+            warn!(
+                "Failed to write tray action {} to {}: {}",
+                action,
+                self.tray_action_path.display(),
+                err
+            );
+            return;
+        }
+
+        let pid = self.overlay_pid.load(Ordering::Acquire);
+
+        #[cfg(unix)]
+        {
+            if pid != 0 {
+                if unsafe { libc::kill(pid as i32, libc::SIGUSR2) } != 0 {
+                    warn!(
+                        "Failed to signal overlay process {} for tray action {}: {}",
+                        pid,
+                        action,
+                        std::io::Error::last_os_error()
+                    );
+                }
+            } else {
+                // Overlay not running; request it to show so the action can run on startup.
+                self.toggle_flag.store(true, Ordering::Release);
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            if pid == 0 {
+                self.toggle_flag.store(true, Ordering::Release);
+            } else {
+                warn!("Tray overlay actions are only supported on Unix platforms");
+            }
+        }
+    }
+
+    fn clear_session_files(&self) {
+        match Config::load() {
+            Ok(loaded) => {
+                let config_dir = match Config::config_directory_from_source(&loaded.source) {
+                    Ok(dir) => dir,
+                    Err(err) => {
+                        warn!("Failed to resolve config directory: {}", err);
+                        return;
+                    }
+                };
+                match options_from_config(&loaded.config.session, &config_dir, None) {
+                    Ok(opts) => match clear_session(&opts) {
+                        Ok(outcome) => {
+                            info!("Cleared session files: {:?}", outcome);
+                        }
+                        Err(err) => warn!("Failed to clear session files: {}", err),
+                    },
+                    Err(err) => warn!("Failed to build session options: {}", err),
+                }
+            }
+            Err(err) => warn!("Failed to load config for clearing session: {}", err),
+        }
+    }
+
+    fn open_log_folder(&self) {
+        let dir = log_dir();
+        if let Err(err) = fs::create_dir_all(&dir) {
+            warn!("Failed to create log directory {}: {}", dir.display(), err);
+            return;
+        }
+
+        let mut command = Command::new("xdg-open");
+        command.arg(&dir);
+        command.stdin(Stdio::null());
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+
+        match command.spawn() {
+            Ok(child) => info!("Opened log directory via xdg-open (pid {})", child.id()),
+            Err(err) => warn!("Failed to open log directory {}: {}", dir.display(), err),
+        }
+    }
+
+    fn open_config_file(&self) {
+        let path = match Config::get_config_path() {
+            Ok(p) => p,
+            Err(err) => {
+                warn!("Unable to resolve config path: {}", err);
+                return;
+            }
+        };
+
+        let opener = if cfg!(target_os = "macos") {
+            "open"
+        } else if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "xdg-open"
+        };
+
+        let mut cmd = Command::new(opener);
+        if cfg!(target_os = "windows") {
+            cmd.args(["/C", "start", ""]).arg(&path);
+        } else {
+            cmd.arg(&path);
+        }
+
+        match cmd.spawn() {
+            Ok(child) => info!(
+                "Opened config file at {} (pid {})",
+                path.display(),
+                child.id()
+            ),
+            Err(err) => warn!("Failed to open config file at {}: {}", path.display(), err),
+        }
+    }
+
+    fn tray_icon_pixmap(&self) -> Vec<ksni::Icon> {
+        decode_tray_icon_png().unwrap_or_else(fallback_tray_icon)
+    }
 }
 
 #[cfg(feature = "tray")]
@@ -164,12 +380,12 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn icon_name(&self) -> String {
-        "applications-graphics".into()
+        "wayscriber".into()
     }
 
     fn tool_tip(&self) -> ksni::ToolTip {
         ksni::ToolTip {
-            icon_name: "applications-graphics".into(),
+            icon_name: "wayscriber".into(),
             icon_pixmap: vec![],
             title: format!("Wayscriber {}", env!("CARGO_PKG_VERSION")),
             description: "Toggle overlay, open configurator, or quit from the tray".into(),
@@ -177,37 +393,7 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        let size = 22;
-        let mut data = Vec::with_capacity(size * size * 4);
-
-        for y in 0..size {
-            for x in 0..size {
-                let (a, r, g, b) = if (2..=4).contains(&x) && (2..=4).contains(&y) {
-                    (255, 60, 60, 60)
-                } else if (3..=5).contains(&x) && (5..=7).contains(&y) {
-                    (255, 180, 120, 60)
-                } else if (4..=8).contains(&x) && (6..=14).contains(&y) {
-                    (255, 255, 220, 0)
-                } else if (7..=9).contains(&x) && (13..=17).contains(&y) {
-                    (255, 180, 180, 180)
-                } else if (8..=11).contains(&x) && (16..=19).contains(&y) {
-                    (255, 255, 150, 180)
-                } else {
-                    (0, 0, 0, 0)
-                };
-
-                data.push(a);
-                data.push(r);
-                data.push(g);
-                data.push(b);
-            }
-        }
-
-        vec![ksni::Icon {
-            width: size as i32,
-            height: size as i32,
-            data,
-        }]
+        self.tray_icon_pixmap()
     }
 
     fn category(&self) -> ksni::Category {
@@ -232,6 +418,51 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
+                label: "Toggle Freeze (overlay)".to_string(),
+                icon_name: "media-playback-pause".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action("toggle_freeze");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Capture: Full Screen".to_string(),
+                icon_name: "camera-photo".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action("capture_full");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Capture: Active Window".to_string(),
+                icon_name: "window-duplicate".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action("capture_window");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Capture: Region".to_string(),
+                icon_name: "selection-rectangular".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action("capture_region");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Toggle Help Overlay".to_string(),
+                icon_name: "help-browser".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action("toggle_help");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
                 label: "Open Configurator".to_string(),
                 icon_name: "preferences-desktop".into(),
                 activate: Box::new(|this: &mut Self| {
@@ -240,34 +471,48 @@ impl ksni::Tray for WayscriberTray {
                 ..Default::default()
             }
             .into(),
-            RadioGroup {
-                selected: match self.session_resume_override.load(Ordering::Acquire) {
-                    SESSION_OVERRIDE_FORCE_ON => 1,
-                    SESSION_OVERRIDE_FORCE_OFF => 2,
-                    _ => 0,
-                },
-                select: Box::new(|this: &mut Self, choice| {
-                    let value = match choice {
-                        1 => SESSION_OVERRIDE_FORCE_ON,
-                        2 => SESSION_OVERRIDE_FORCE_OFF,
-                        _ => SESSION_OVERRIDE_FOLLOW_CONFIG,
-                    };
-                    this.session_resume_override.store(value, Ordering::Release);
+            StandardItem {
+                label: "Open Config File".to_string(),
+                icon_name: "text-x-generic".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.open_config_file();
                 }),
-                options: vec![
-                    RadioItem {
-                        label: "Session resume: follow config".to_string(),
-                        ..Default::default()
-                    },
-                    RadioItem {
-                        label: "Session resume: force on (persist/restore)".to_string(),
-                        ..Default::default()
-                    },
-                    RadioItem {
-                        label: "Session resume: force off (always fresh)".to_string(),
-                        ..Default::default()
-                    },
-                ],
+                ..Default::default()
+            }
+            .into(),
+            CheckmarkItem {
+                label: if self.session_resume_enabled {
+                    "Session resume: enabled".to_string()
+                } else {
+                    "Session resume: disabled".to_string()
+                },
+                checked: self.session_resume_enabled,
+                icon_name: "document-save".into(),
+                activate: Box::new(|this: &mut Self| {
+                    let target = !this.session_resume_enabled;
+                    let persisted =
+                        update_session_resume_in_config(target, this.session_resume_enabled);
+                    this.session_resume_enabled = persisted;
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Clear saved session data".to_string(),
+                icon_name: "edit-clear".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.clear_session_files();
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Open log folder".to_string(),
+                icon_name: "folder".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.open_log_folder();
+                }),
+                ..Default::default()
             }
             .into(),
             MenuItem::Separator,
@@ -302,6 +547,7 @@ impl Daemon {
             backend_runner: None,
             tray_thread: None,
             overlay_child: None,
+            overlay_pid: Arc::new(AtomicU32::new(0)),
             session_resume_override: override_state,
         }
     }
@@ -321,6 +567,7 @@ impl Daemon {
             backend_runner: Some(backend_runner),
             tray_thread: None,
             overlay_child: None,
+            overlay_pid: Arc::new(AtomicU32::new(0)),
             session_resume_override: override_state,
         }
     }
@@ -402,8 +649,8 @@ impl Daemon {
         if self.tray_enabled {
             let tray_toggle = self.toggle_requested.clone();
             let tray_quit = self.should_quit.clone();
-            let tray_session_override = self.session_resume_override.clone();
-            match start_system_tray(tray_toggle, tray_quit, tray_session_override) {
+            let tray_overlay_pid = self.overlay_pid.clone();
+            match start_system_tray(tray_toggle, tray_quit, tray_overlay_pid) {
                 Ok(tray_handle) => {
                     self.tray_thread = Some(tray_handle);
                 }
@@ -523,22 +770,118 @@ impl Daemon {
     }
 }
 
+#[cfg(feature = "tray")]
+fn decode_tray_icon_png() -> Option<Vec<ksni::Icon>> {
+    const ICON_BYTES: &[u8] = include_bytes!("../assets/tray_icon.png");
+    let decoder = Decoder::new(ICON_BYTES);
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).ok()?;
+    let bytes = &buf[..info.buffer_size()];
+    let mut data = Vec::with_capacity(bytes.len());
+    // ksni expects ARGB32 (network byte order). If the PNG is grayscale+alpha,
+    // expand channels to ARGB with duplicated gray.
+    match info.color_type {
+        png::ColorType::Rgba => {
+            for chunk in bytes.chunks_exact(4) {
+                data.push(chunk[3]); // A
+                data.push(chunk[0]); // R
+                data.push(chunk[1]); // G
+                data.push(chunk[2]); // B
+            }
+        }
+        png::ColorType::GrayscaleAlpha => {
+            for chunk in bytes.chunks_exact(2) {
+                let g = chunk[0];
+                let a = chunk[1];
+                data.push(a);
+                data.push(g);
+                data.push(g);
+                data.push(g);
+            }
+        }
+        png::ColorType::Grayscale => {
+            for &g in bytes {
+                data.push(255);
+                data.push(g);
+                data.push(g);
+                data.push(g);
+            }
+        }
+        png::ColorType::Rgb => {
+            for chunk in bytes.chunks_exact(3) {
+                data.push(255);
+                data.push(chunk[0]);
+                data.push(chunk[1]);
+                data.push(chunk[2]);
+            }
+        }
+        _ => {
+            warn!("Unsupported tray icon color type; falling back to empty icon");
+            return None;
+        }
+    }
+    Some(vec![ksni::Icon {
+        width: info.width as i32,
+        height: info.height as i32,
+        data,
+    }])
+}
+
+#[cfg(feature = "tray")]
+fn fallback_tray_icon() -> Vec<ksni::Icon> {
+    let size = 22;
+    let mut data = Vec::with_capacity(size * size * 4);
+
+    for y in 0..size {
+        for x in 0..size {
+            let (a, r, g, b) = if (2..=4).contains(&x) && (2..=4).contains(&y) {
+                (255, 60, 60, 60)
+            } else if (3..=5).contains(&x) && (5..=7).contains(&y) {
+                (255, 180, 120, 60)
+            } else if (4..=8).contains(&x) && (6..=14).contains(&y) {
+                (255, 255, 220, 0)
+            } else if (7..=9).contains(&x) && (13..=17).contains(&y) {
+                (255, 180, 180, 180)
+            } else if (8..=11).contains(&x) && (16..=19).contains(&y) {
+                (255, 255, 150, 180)
+            } else {
+                (0, 0, 0, 0)
+            };
+
+            data.push(a);
+            data.push(r);
+            data.push(g);
+            data.push(b);
+        }
+    }
+
+    vec![ksni::Icon {
+        width: size as i32,
+        height: size as i32,
+        data,
+    }]
+}
+
 /// System tray implementation
 #[cfg(feature = "tray")]
 fn start_system_tray(
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
-    session_override: Arc<AtomicU8>,
+    overlay_pid: Arc<AtomicU32>,
 ) -> Result<JoinHandle<()>> {
     let configurator_binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
         .unwrap_or_else(|_| "wayscriber-configurator".to_string());
+    let session_resume_enabled = load_session_resume_enabled_from_config();
 
     let tray_quit_flag = quit_flag.clone();
     let tray = WayscriberTray::new(
         toggle_flag,
         tray_quit_flag.clone(),
         configurator_binary,
-        session_override,
+        session_resume_enabled,
+        overlay_pid,
+        tray_action_file(),
     );
     let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();
 
@@ -613,7 +956,7 @@ fn start_system_tray(
 fn start_system_tray(
     _toggle_flag: Arc<AtomicBool>,
     _quit_flag: Arc<AtomicBool>,
-    _session_override: Arc<AtomicU8>,
+    _overlay_pid: Arc<AtomicU32>,
 ) -> Result<JoinHandle<()>> {
     info!("Tray feature disabled; skipping system tray startup");
     Ok(thread::spawn(|| ()))
@@ -635,6 +978,7 @@ impl Daemon {
         info!("Spawning overlay process...");
         let child = command.spawn().context("Failed to spawn overlay process")?;
         let pid = child.id();
+        self.overlay_pid.store(pid, Ordering::Release);
         self.overlay_child = Some(child);
         self.overlay_state = OverlayState::Visible;
         info!("Overlay process started (pid {pid})");
@@ -679,11 +1023,13 @@ impl Daemon {
                     Err(err) => {
                         warn!("Failed to query overlay process status: {}", err);
                         let _ = child.kill();
+                        let _ = child.wait();
                         break;
                     }
                 }
             }
         }
+        self.overlay_pid.store(0, Ordering::Release);
         Ok(())
     }
 
@@ -698,6 +1044,7 @@ impl Daemon {
                     info!("Overlay process exited with status {:?}", status);
                     self.overlay_child = None;
                     self.overlay_state = OverlayState::Hidden;
+                    self.overlay_pid.store(0, Ordering::Release);
                 }
                 Ok(None) => {}
                 Err(err) => {
@@ -758,12 +1105,18 @@ mod tests {
 
     fn activate_menu_item(tray: &mut WayscriberTray, label: &str) {
         for item in tray.menu() {
-            if let MenuItem::Standard(standard) = item {
-                if standard.label.contains(label) {
+            match item {
+                MenuItem::Standard(standard) if standard.label.contains(label) => {
                     let activate = standard.activate;
                     activate(tray);
                     return;
                 }
+                MenuItem::Checkmark(check) if check.label.contains(label) => {
+                    let activate = check.activate;
+                    activate(tray);
+                    return;
+                }
+                _ => {}
             }
         }
         panic!("Menu item '{label}' not found");
@@ -773,8 +1126,7 @@ mod tests {
     fn tray_toggle_action_sets_flag() {
         let toggle = Arc::new(AtomicBool::new(false));
         let quit = Arc::new(AtomicBool::new(false));
-        let resume_override = Arc::new(AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG));
-        let mut tray = WayscriberTray::new_for_tests(toggle.clone(), quit, resume_override);
+        let mut tray = WayscriberTray::new_for_tests(toggle.clone(), quit, false);
 
         activate_menu_item(&mut tray, "Toggle Overlay");
         assert!(toggle.load(Ordering::SeqCst));
@@ -784,8 +1136,7 @@ mod tests {
     fn tray_quit_action_sets_quit_flag() {
         let toggle = Arc::new(AtomicBool::new(false));
         let quit = Arc::new(AtomicBool::new(false));
-        let resume_override = Arc::new(AtomicU8::new(SESSION_OVERRIDE_FOLLOW_CONFIG));
-        let mut tray = WayscriberTray::new_for_tests(toggle, quit.clone(), resume_override);
+        let mut tray = WayscriberTray::new_for_tests(toggle, quit.clone(), false);
 
         activate_menu_item(&mut tray, "Quit");
         assert!(quit.load(Ordering::SeqCst));

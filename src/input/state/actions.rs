@@ -524,7 +524,7 @@ impl InputState {
                 }
             }
             Action::ToggleHighlightTool => {
-                let enabled = self.toggle_highlight_tool();
+                let enabled = self.toggle_all_highlights();
                 let message = if enabled {
                     "Highlight pen enabled"
                 } else {

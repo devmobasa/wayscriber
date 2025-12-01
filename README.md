@@ -47,7 +47,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - **Draw shapes, arrows, and text** (with fill toggle) to explain steps, give demos, or build quick guides
 - **Redact screen regions** and capture screenshots with one keypress
 - **Toggle instantly** from a lightweight background daemon
-- **Persist your work** — canvases and tool state restore after restarts (with CLI/tray overrides)
+- **Persist your work** — canvases and tool state restore after restarts (CLI override + tray config toggle)
 - **Presenter helpers** — click highlights and screen freeze while apps keep running
 
 ### Supported Compositors
@@ -82,7 +82,7 @@ Whiteboard, blackboard, and transparent overlays with isolated frames and auto p
 Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard`. Falls back to xdg-desktop-portal if missing.
 
 ### Session Persistence
-Opt-in per board/monitor storage that restores your canvas plus pen color & thickness. One-off overrides via `--resume-session` / `--no-resume-session` or the tray toggle.
+Opt-in per board/monitor storage that restores your canvas plus pen color & thickness. One-off overrides via `--resume-session` / `--no-resume-session`; the tray checkmark flips the config on disk.
 
 ### Toolbars & UI
 Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), icon or text modes, color picker, extended palettes, status bar, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
@@ -210,7 +210,15 @@ Reload your config:
 hyprctl reload
 ```
 
-Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; otherwise right-click the tray icon for options (including session resume toggle).
+Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; otherwise right-click the tray icon for options:
+- Toggle overlay visibility
+- Freeze/unfreeze the current overlay
+- Capture full screen / active window / region
+- Toggle the help overlay
+- Flip session resume on/off (writes to config)
+- Clear saved session data
+- Open the log/runtime folder
+- Open configurator / Quit
 
 **Alternative** — use compositor autostart instead of systemd:
 ```conf
@@ -339,7 +347,7 @@ enable_vsync = true
 
 ### Session Persistence
 
-Enable via configurator (<kbd>F11</kbd> → Session tab), CLI flags, or the tray toggle.
+Enable via configurator (<kbd>F11</kbd> → Session tab), CLI flags, or the tray checkmark (writes to config).
 
 ```bash
 wayscriber --resume-session      # force resume (persist/restore all boards + history/tool state)
@@ -483,7 +491,7 @@ wayscriber/
 - [x] Native Wayland layer-shell
 - [x] Daemon mode with system tray
 - [x] Whiteboard/blackboard modes
-- [x] Session persistence (with CLI/tray overrides)
+- [x] Session persistence (with CLI override + tray config toggle)
 - [x] Highlighter & eraser tools
 - [x] Additional shapes (filled shapes)
 - [x] Color picker

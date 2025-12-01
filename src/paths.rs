@@ -48,3 +48,61 @@ pub fn expand_tilde(path: &str) -> PathBuf {
     }
     PathBuf::from(path)
 }
+
+fn fallback_runtime_root() -> PathBuf {
+    std::env::temp_dir().join("wayscriber")
+}
+
+fn runtime_root() -> PathBuf {
+    // Prefer XDG runtime dir for ephemeral files; fall back to data/home/temp for portability.
+    #[cfg(unix)]
+    if let Some(dir) = env::var_os("XDG_RUNTIME_DIR") {
+        if !dir.is_empty() {
+            return PathBuf::from(dir).join("wayscriber");
+        }
+    }
+
+    data_dir()
+        .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
+        .join("wayscriber")
+}
+
+/// Location for transient tray commands.
+/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+pub fn tray_action_file() -> PathBuf {
+    runtime_root().join("tray_action")
+}
+
+/// Location to open when showing logs or runtime artifacts.
+pub fn log_dir() -> PathBuf {
+    runtime_root().join("logs")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn tray_action_prefers_runtime_dir_when_set() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prev = env::var_os("XDG_RUNTIME_DIR");
+        // SAFETY: modifying env var in single-threaded test scope
+        unsafe {
+            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+        }
+
+        let path = tray_action_file();
+        assert!(path.starts_with(tmp.path()));
+
+        if let Some(prev) = prev {
+            unsafe {
+                env::set_var("XDG_RUNTIME_DIR", prev);
+            }
+        } else {
+            unsafe {
+                env::remove_var("XDG_RUNTIME_DIR");
+            }
+        }
+    }
+}

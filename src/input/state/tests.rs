@@ -67,6 +67,27 @@ fn test_adjust_font_size_decrease() {
 }
 
 #[test]
+fn test_toggle_all_highlights_toggles_both() {
+    let mut state = create_test_input_state();
+
+    // Start off disabled
+    assert!(!state.highlight_tool_active());
+    assert!(!state.click_highlight_enabled());
+
+    // Enable: should turn on both tool and click highlight
+    let enabled = state.toggle_all_highlights();
+    assert!(enabled);
+    assert!(state.highlight_tool_active());
+    assert!(state.click_highlight_enabled());
+
+    // Disable: should turn off both
+    let enabled_after = state.toggle_all_highlights();
+    assert!(!enabled_after);
+    assert!(!state.highlight_tool_active());
+    assert!(!state.click_highlight_enabled());
+}
+
+#[test]
 fn test_adjust_font_size_clamp_min() {
     let mut state = create_test_input_state();
     state.current_font_size = 10.0;
