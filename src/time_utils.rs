@@ -85,3 +85,36 @@ fn escape_literal(ch: char, out: &mut String) {
         _ => out.push(ch),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_with_template_basic_components() {
+        // 1_600_000_000 -> 2020-09-13 12:26:40 UTC
+        let dt = OffsetDateTime::from_unix_timestamp(1_600_000_000).unwrap();
+        let formatted = format_with_template(dt, "%Y-%m-%d %H:%M:%S");
+        assert_eq!(formatted, "2020-09-13 12:26:40");
+    }
+
+    #[test]
+    fn format_with_template_preserves_unknown_directives() {
+        let dt = OffsetDateTime::from_unix_timestamp(1_600_000_000).unwrap();
+        let formatted = format_with_template(dt, "%Y-%q-%m");
+        assert_eq!(formatted, "2020-%q-09");
+    }
+
+    #[test]
+    fn format_with_template_handles_escaped_percent() {
+        let dt = OffsetDateTime::from_unix_timestamp(1_600_000_000).unwrap();
+        let formatted = format_with_template(dt, "%% %Y");
+        assert_eq!(formatted, "% 2020");
+    }
+
+    #[test]
+    fn format_unix_millis_out_of_range_returns_none() {
+        let result = format_unix_millis(u64::MAX, "%Y");
+        assert!(result.is_none());
+    }
+}

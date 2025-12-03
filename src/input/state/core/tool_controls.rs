@@ -46,7 +46,6 @@ impl InputState {
     pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
         match self.active_tool() {
             Tool::Eraser => self.set_eraser_size(value),
-            Tool::Marker => self.set_marker_opacity(value),
             _ => self.set_thickness(value),
         }
     }
@@ -55,7 +54,6 @@ impl InputState {
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
         match self.active_tool() {
             Tool::Eraser => self.set_eraser_size(self.eraser_size + delta),
-            Tool::Marker => self.set_marker_opacity(self.marker_opacity + delta),
             _ => self.set_thickness(self.current_thickness + delta),
         }
     }

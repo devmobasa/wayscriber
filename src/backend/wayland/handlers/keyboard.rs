@@ -24,8 +24,8 @@ impl KeyboardHandler for WaylandState {
         _keysyms: &[Keysym],
     ) {
         debug!("Keyboard focus entered");
-        self.has_keyboard_focus = true;
-        self.last_activation_serial = Some(serial);
+        self.set_keyboard_focus(true);
+        self.set_last_activation_serial(Some(serial));
         self.maybe_retry_activation(qh);
     }
 
@@ -38,7 +38,7 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
     ) {
         debug!("Keyboard focus left");
-        self.has_keyboard_focus = false;
+        self.set_keyboard_focus(false);
         if self.surface.is_xdg_window() {
             warn!("Keyboard focus lost in xdg fallback; exiting overlay");
             notification::send_notification_async(

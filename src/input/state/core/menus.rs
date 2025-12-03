@@ -39,11 +39,11 @@ pub enum MenuCommand {
     EditText,
     ClearAll,
     ToggleHighlightTool,
-    ToggleClickHighlight,
     SwitchToWhiteboard,
     SwitchToBlackboard,
     ReturnToTransparent,
     ToggleHelp,
+    OpenConfigFile,
 }
 
 /// Lightweight descriptor for rendering context menu entries.
@@ -246,18 +246,11 @@ impl InputState {
             Some(MenuCommand::ClearAll),
         ));
         entries.push(ContextMenuEntry::new(
-            "Toggle Highlight Tool",
+            "Toggle Highlight (tool + click)",
             Some("Ctrl+Alt+H"),
             false,
             false,
             Some(MenuCommand::ToggleHighlightTool),
-        ));
-        entries.push(ContextMenuEntry::new(
-            "Toggle Click Highlight",
-            Some("Ctrl+Shift+H"),
-            false,
-            false,
-            Some(MenuCommand::ToggleClickHighlight),
         ));
 
         match self.canvas_set.active_mode() {
@@ -317,6 +310,13 @@ impl InputState {
             false,
             false,
             Some(MenuCommand::ToggleHelp),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Open Config File",
+            None::<String>,
+            false,
+            false,
+            Some(MenuCommand::OpenConfigFile),
         ));
         entries
     }
@@ -763,11 +763,7 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::ToggleHighlightTool => {
-                self.toggle_highlight_tool();
-                self.close_context_menu();
-            }
-            MenuCommand::ToggleClickHighlight => {
-                self.toggle_click_highlight();
+                self.toggle_all_highlights();
                 self.close_context_menu();
             }
             MenuCommand::SwitchToWhiteboard => {
@@ -786,6 +782,10 @@ impl InputState {
                 self.show_help = !self.show_help;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.close_context_menu();
+            }
+            MenuCommand::OpenConfigFile => {
+                self.open_config_file_default();
                 self.close_context_menu();
             }
         }

@@ -49,10 +49,13 @@ use crate::{
     util::Rect,
 };
 
+use self::data::StateData;
 use super::{
     capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
     toolbar::ToolbarSurfaceManager,
 };
+
+mod data;
 
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
@@ -69,34 +72,17 @@ pub(super) struct WaylandState {
     // Surface and buffer management
     pub(super) surface: SurfaceState,
     pub(super) toolbar: ToolbarSurfaceManager,
-    pub(super) last_toolbar_snapshot: Option<ToolbarSnapshot>,
-    /// Tracks the current keyboard interactivity applied to the main layer surface
-    pub(super) current_keyboard_interactivity: Option<KeyboardInteractivity>,
-    /// Whether the pointer currently targets a toolbar surface
-    pub(super) pointer_over_toolbar: bool,
-    /// Whether we are actively dragging a toolbar control (e.g., thickness slider)
-    pub(super) toolbar_dragging: bool,
-    /// Force toolbar surfaces to be recreated on first sync (ensures stacking above main overlay).
-    pub(super) toolbar_needs_recreate: bool,
+    data: StateData,
 
     // Configuration
     pub(super) config: Config,
-    pub(super) preferred_output_identity: Option<String>,
-    pub(super) xdg_fullscreen: bool,
 
     // Input state
     pub(super) input_state: InputState,
-    pub(super) current_mouse_x: i32,
-    pub(super) current_mouse_y: i32,
-    pub(super) has_keyboard_focus: bool,
-    pub(super) has_pointer_focus: bool,
-    pub(super) current_seat: Option<wl_seat::WlSeat>,
-    pub(super) last_activation_serial: Option<u32>,
 
     // Capture manager
     pub(super) capture: CaptureState,
     pub(super) frozen: FrozenState,
-    pub(super) frozen_enabled: bool,
 
     // Pointer cursor
     pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
@@ -144,11 +130,6 @@ pub(super) struct WaylandState {
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,
-
-    // Pending flags
-    pub(super) pending_freeze_on_start: bool,
-    // Activation token for xdg-shell fallback
-    pending_activation_token: Option<String>,
 }
 
 impl WaylandState {
@@ -184,6 +165,12 @@ impl WaylandState {
             }
         };
 
+        let mut data = StateData::new();
+        data.frozen_enabled = frozen_enabled;
+        data.pending_freeze_on_start = pending_freeze_on_start;
+        data.preferred_output_identity = preferred_output_identity;
+        data.xdg_fullscreen = xdg_fullscreen;
+
         Self {
             registry_state,
             compositor_state,
@@ -195,24 +182,11 @@ impl WaylandState {
             seat_state,
             surface: SurfaceState::new(),
             toolbar: ToolbarSurfaceManager::new(),
-            last_toolbar_snapshot: None,
-            current_keyboard_interactivity: None,
-            pointer_over_toolbar: false,
-            toolbar_dragging: false,
-            toolbar_needs_recreate: true,
+            data,
             config,
-            preferred_output_identity,
-            xdg_fullscreen,
             input_state,
-            current_mouse_x: 0,
-            current_mouse_y: 0,
-            has_keyboard_focus: false,
-            has_pointer_focus: false,
-            current_seat: None,
-            last_activation_serial: None,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
-            frozen_enabled,
             themed_pointer: None,
             #[cfg(tablet)]
             tablet_manager,
@@ -252,9 +226,128 @@ impl WaylandState {
             stylus_peak_thickness: None,
             session: SessionState::new(session_options),
             tokio_handle,
-            pending_freeze_on_start,
-            pending_activation_token: None,
         }
+    }
+
+    pub(super) fn pointer_over_toolbar(&self) -> bool {
+        self.data.pointer_over_toolbar
+    }
+
+    pub(super) fn set_pointer_over_toolbar(&mut self, value: bool) {
+        self.data.pointer_over_toolbar = value;
+    }
+
+    pub(super) fn toolbar_dragging(&self) -> bool {
+        self.data.toolbar_dragging
+    }
+
+    pub(super) fn set_toolbar_dragging(&mut self, value: bool) {
+        self.data.toolbar_dragging = value;
+    }
+
+    pub(super) fn toolbar_needs_recreate(&self) -> bool {
+        self.data.toolbar_needs_recreate
+    }
+
+    pub(super) fn set_toolbar_needs_recreate(&mut self, value: bool) {
+        self.data.toolbar_needs_recreate = value;
+    }
+
+    pub(super) fn current_mouse(&self) -> (i32, i32) {
+        (self.data.current_mouse_x, self.data.current_mouse_y)
+    }
+
+    pub(super) fn set_current_mouse(&mut self, x: i32, y: i32) {
+        self.data.current_mouse_x = x;
+        self.data.current_mouse_y = y;
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn has_keyboard_focus(&self) -> bool {
+        self.data.has_keyboard_focus
+    }
+
+    pub(super) fn set_keyboard_focus(&mut self, value: bool) {
+        self.data.has_keyboard_focus = value;
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn has_pointer_focus(&self) -> bool {
+        self.data.has_pointer_focus
+    }
+
+    pub(super) fn set_pointer_focus(&mut self, value: bool) {
+        self.data.has_pointer_focus = value;
+    }
+
+    pub(super) fn current_seat(&self) -> Option<wl_seat::WlSeat> {
+        self.data.current_seat.clone()
+    }
+
+    pub(super) fn set_current_seat(&mut self, seat: Option<wl_seat::WlSeat>) {
+        self.data.current_seat = seat;
+    }
+
+    pub(super) fn last_activation_serial(&self) -> Option<u32> {
+        self.data.last_activation_serial
+    }
+
+    pub(super) fn set_last_activation_serial(&mut self, serial: Option<u32>) {
+        self.data.last_activation_serial = serial;
+    }
+
+    pub(super) fn current_keyboard_interactivity(&self) -> Option<KeyboardInteractivity> {
+        self.data.current_keyboard_interactivity
+    }
+
+    pub(super) fn set_current_keyboard_interactivity(
+        &mut self,
+        interactivity: Option<KeyboardInteractivity>,
+    ) {
+        self.data.current_keyboard_interactivity = interactivity;
+    }
+
+    pub(super) fn frozen_enabled(&self) -> bool {
+        self.data.frozen_enabled
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn set_frozen_enabled(&mut self, value: bool) {
+        self.data.frozen_enabled = value;
+    }
+
+    pub(super) fn pending_freeze_on_start(&self) -> bool {
+        self.data.pending_freeze_on_start
+    }
+
+    pub(super) fn set_pending_freeze_on_start(&mut self, value: bool) {
+        self.data.pending_freeze_on_start = value;
+    }
+
+    pub(super) fn pending_activation_token(&self) -> Option<String> {
+        self.data.pending_activation_token.clone()
+    }
+
+    pub(super) fn set_pending_activation_token(&mut self, token: Option<String>) {
+        self.data.pending_activation_token = token;
+    }
+
+    pub(super) fn preferred_output_identity(&self) -> Option<&str> {
+        self.data.preferred_output_identity.as_deref()
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn set_preferred_output_identity(&mut self, value: Option<String>) {
+        self.data.preferred_output_identity = value;
+    }
+
+    pub(super) fn xdg_fullscreen(&self) -> bool {
+        self.data.xdg_fullscreen
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn set_xdg_fullscreen(&mut self, value: bool) {
+        self.data.xdg_fullscreen = value;
     }
 
     pub(super) fn session_options(&self) -> Option<&SessionOptions> {
@@ -266,7 +359,7 @@ impl WaylandState {
     }
 
     pub(super) fn preferred_fullscreen_output(&self) -> Option<wl_output::WlOutput> {
-        if let Some(ref preferred) = self.preferred_output_identity {
+        if let Some(preferred) = self.preferred_output_identity() {
             if let Some(output) = self.output_state.outputs().find(|output| {
                 self.output_identity_for(output)
                     .map(|id| id.eq_ignore_ascii_case(preferred))
@@ -293,14 +386,22 @@ impl WaylandState {
     /// Applies keyboard interactivity based on toolbar visibility.
     pub(super) fn refresh_keyboard_interactivity(&mut self) {
         let desired = self.desired_keyboard_interactivity();
+        let current = self.current_keyboard_interactivity();
 
-        if let Some(layer) = self.surface.layer_surface_mut() {
-            if self.current_keyboard_interactivity != Some(desired) {
+        let updated = if let Some(layer) = self.surface.layer_surface_mut() {
+            if current != Some(desired) {
                 layer.set_keyboard_interactivity(desired);
-                self.current_keyboard_interactivity = Some(desired);
+                true
+            } else {
+                false
             }
         } else {
-            self.current_keyboard_interactivity = None;
+            self.set_current_keyboard_interactivity(None);
+            return;
+        };
+
+        if updated {
+            self.set_current_keyboard_interactivity(Some(desired));
         }
     }
 
@@ -322,15 +423,15 @@ impl WaylandState {
 
         let any_visible = self.toolbar.is_visible();
         if !any_visible {
-            self.pointer_over_toolbar = false;
+            self.set_pointer_over_toolbar(false);
         }
 
         if any_visible {
+            if self.toolbar_needs_recreate() {
+                self.toolbar.destroy_all();
+                self.set_toolbar_needs_recreate(false);
+            }
             if let Some(layer_shell) = self.layer_shell.as_ref() {
-                if self.toolbar_needs_recreate {
-                    self.toolbar.destroy_all();
-                    self.toolbar_needs_recreate = false;
-                }
                 let scale = self.surface.scale();
                 let snapshot = self.toolbar_snapshot();
                 self.toolbar.ensure_created(
@@ -369,10 +470,10 @@ impl WaylandState {
         };
 
         if let Some(seat_serial) = self
-            .current_seat
+            .current_seat()
             .as_ref()
             .cloned()
-            .zip(self.last_activation_serial)
+            .zip(self.last_activation_serial())
         {
             activation.request_token::<Self>(
                 qh,
@@ -384,7 +485,7 @@ impl WaylandState {
             );
         } else {
             // Defer until we have a keyboard enter serial.
-            self.pending_activation_token = Some(String::new()); // marker
+            self.set_pending_activation_token(Some(String::new())); // marker
         }
     }
 
@@ -393,7 +494,7 @@ impl WaylandState {
             return;
         }
 
-        let Some(token) = self.pending_activation_token.clone() else {
+        let Some(token) = self.pending_activation_token() else {
             return;
         };
 
@@ -406,13 +507,13 @@ impl WaylandState {
         };
 
         activation.activate::<WaylandState>(&wl_surface, token);
-        self.pending_activation_token = None;
+        self.set_pending_activation_token(None);
     }
 
     pub(super) fn maybe_retry_activation(&mut self, qh: &QueueHandle<Self>) {
-        if self.pending_activation_token.is_some() && self.last_activation_serial.is_some() {
+        if self.pending_activation_token().is_some() && self.last_activation_serial().is_some() {
             // Drop the placeholder and re-request with the new serial.
-            self.pending_activation_token = None;
+            self.set_pending_activation_token(None);
             self.request_xdg_activation(qh);
         }
     }
@@ -601,11 +702,8 @@ impl WaylandState {
 
         // Render provisional shape if actively drawing
         // Use optimized method that avoids cloning for freehand
-        if self.input_state.render_provisional_shape(
-            &ctx,
-            self.current_mouse_x,
-            self.current_mouse_y,
-        ) {
+        let (mx, my) = self.current_mouse();
+        if self.input_state.render_provisional_shape(&ctx, mx, my) {
             debug!("Rendered provisional shape");
         }
 
@@ -655,7 +753,7 @@ impl WaylandState {
                 &self.config.ui.help_overlay_style,
                 width,
                 height,
-                self.frozen_enabled,
+                self.frozen_enabled(),
             );
         }
 
@@ -723,15 +821,9 @@ impl WaylandState {
         // Render toolbar overlays if visible, only when state/hover changed.
         if self.toolbar.is_visible() {
             let snapshot = self.toolbar_snapshot();
-            if self
-                .last_toolbar_snapshot
-                .as_ref()
-                .map(|prev| prev != &snapshot)
-                .unwrap_or(true)
-            {
+            if self.toolbar.update_snapshot(&snapshot) {
                 self.toolbar.mark_dirty();
             }
-            self.last_toolbar_snapshot = Some(snapshot.clone());
             self.render_toolbars(&snapshot);
         }
 
@@ -770,6 +862,7 @@ impl WaylandState {
             event,
             ToolbarEvent::SetColor(_)
                 | ToolbarEvent::SetThickness(_)
+                | ToolbarEvent::SetMarkerOpacity(_)
                 | ToolbarEvent::SetFont(_)
                 | ToolbarEvent::SetFontSize(_)
                 | ToolbarEvent::ToggleFill(_)
@@ -1022,7 +1115,7 @@ impl ActivationHandler for WaylandState {
     type RequestData = RequestData;
 
     fn new_token(&mut self, token: String, _data: &Self::RequestData) {
-        self.pending_activation_token = Some(token);
+        self.set_pending_activation_token(Some(token));
         self.activate_xdg_window_if_possible();
     }
 }

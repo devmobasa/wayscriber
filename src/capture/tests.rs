@@ -417,3 +417,42 @@ async fn capture_manager_records_failure_status() {
         CaptureStatus::Failed(_)
     ));
 }
+
+#[tokio::test]
+async fn perform_capture_propagates_source_error() {
+    let source = MockSource {
+        data: vec![],
+        error: Arc::new(Mutex::new(Some(CaptureError::ImageError(
+            "boom".to_string(),
+        )))),
+        captured_types: Arc::new(Mutex::new(Vec::new())),
+    };
+    let saver = MockSaver {
+        should_fail: false,
+        path: PathBuf::from("/tmp/unneeded.png"),
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let clipboard = MockClipboard {
+        should_fail: false,
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let deps = CaptureDependencies {
+        source: Arc::new(source),
+        saver: Arc::new(saver),
+        clipboard: Arc::new(clipboard),
+    };
+    let request = CaptureRequest {
+        capture_type: CaptureType::FullScreen,
+        destination: CaptureDestination::ClipboardOnly,
+        save_config: None,
+    };
+
+    let err = perform_capture(request, Arc::new(deps)).await.unwrap_err();
+    match err {
+        CaptureError::ImageError(msg) => assert!(
+            msg.contains("boom"),
+            "expected error message to contain 'boom', got: {msg}"
+        ),
+        other => panic!("expected ImageError, got {other:?}"),
+    }
+}

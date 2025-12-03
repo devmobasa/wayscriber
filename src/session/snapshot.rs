@@ -359,9 +359,24 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
         );
     }
 
-    match result? {
-        Some(loaded) => Ok(Some(loaded.snapshot)),
-        None => Ok(None),
+    match result {
+        Ok(Some(loaded)) => Ok(Some(loaded.snapshot)),
+        Ok(None) => Ok(None),
+        Err(err) => {
+            warn!(
+                "Failed to load session {}; backing up and continuing with defaults: {}",
+                session_path.display(),
+                err
+            );
+            if let Err(backup_err) = backup_corrupt_session(&session_path, options) {
+                warn!(
+                    "Failed to back up corrupt session {}: {}",
+                    session_path.display(),
+                    backup_err
+                );
+            }
+            Ok(None)
+        }
     }
 }
 
@@ -458,6 +473,21 @@ pub(crate) fn load_snapshot_inner(
         compressed,
         version: session_file.version,
     }))
+}
+
+fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Result<()> {
+    let bytes = fs::read(session_path)
+        .with_context(|| format!("failed to read corrupt session {}", session_path.display()))?;
+    let backup_path = options.backup_file_path();
+    fs::write(&backup_path, &bytes)
+        .with_context(|| format!("failed to write session backup {}", backup_path.display()))?;
+    fs::remove_file(session_path).with_context(|| {
+        format!(
+            "failed to remove corrupt session {}",
+            session_path.display()
+        )
+    })?;
+    Ok(())
 }
 
 /// Apply a session snapshot to the live [`InputState`].

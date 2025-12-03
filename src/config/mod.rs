@@ -230,6 +230,45 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn create_default_file_writes_example_when_missing() {
+        with_temp_config_home(|config_root| {
+            let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+            assert!(
+                !config_dir.join("config.toml").exists(),
+                "config.toml should not exist before create_default_file"
+            );
+
+            Config::create_default_file().expect("create_default_file should succeed");
+
+            let config_path = config_dir.join("config.toml");
+            let contents =
+                fs::read_to_string(&config_path).expect("config file should be readable");
+            assert!(
+                contents.contains("[drawing]"),
+                "default config should include [drawing] section"
+            );
+        });
+    }
+
+    #[test]
+    fn create_default_file_errors_when_config_exists() {
+        with_temp_config_home(|config_root| {
+            let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+            fs::create_dir_all(&config_dir).unwrap();
+            let config_path = config_dir.join("config.toml");
+            fs::write(&config_path, "custom = true").unwrap();
+
+            let err = Config::create_default_file()
+                .expect_err("create_default_file should fail when config exists");
+            let msg = err.to_string();
+            assert!(
+                msg.contains("already exists"),
+                "error message should mention existing config, got: {msg}"
+            );
+        });
+    }
 }
 
 pub(super) fn config_home_dir() -> Result<PathBuf> {

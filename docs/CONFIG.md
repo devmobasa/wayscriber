@@ -203,7 +203,7 @@ show_actions_section = true
 # Show delayed undo/redo sliders in the side toolbar
 show_delay_sliders = false
 
-# Show the marker opacity slider at the bottom of the side toolbar
+# Show the marker opacity slider at the bottom of the side toolbar even when the marker tool isn't selected
 show_marker_opacity_section = false
 ```
 
@@ -212,7 +212,7 @@ show_marker_opacity_section = false
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Actions**: `show_actions_section` hides/shows the undo/redo action buttons.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
-- **Marker opacity**: `show_marker_opacity_section` toggles the marker opacity slider section at the bottom of the side toolbar.
+- **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 
 **Defaults:** all set as above.
@@ -372,6 +372,11 @@ Use the CLI helpers for quick maintenance:
 
 - `wayscriber --session-info` prints the active storage path, file details, and shape counts.
 - `wayscriber --clear-session` removes the session file, backup, and lock.
+
+Session overrides and recovery:
+
+- CLI flags: `--resume-session` forces persistence on, `--no-resume-session` forces it off for the current run. The environment variable `WAYSCRIBER_RESUME_SESSION=1/0` does the same.
+- Recovery: if a session file is corrupt or cannot be parsed/decompressed, wayscriber logs a warning, writes a `.bak` copy of the bad file, removes the corrupt file, and continues with defaults. Overrides above still apply after recovery.
 
 ### `[keybindings]` - Custom Keybindings
 

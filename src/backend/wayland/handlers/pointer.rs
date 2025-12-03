@@ -5,6 +5,7 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
+use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::{MouseButton, Tool};
 
 use super::super::state::WaylandState;
@@ -25,13 +26,12 @@ impl PointerHandler for WaylandState {
                         "Pointer entered at ({}, {})",
                         event.position.0, event.position.1
                     );
-                    self.has_pointer_focus = true;
-                    self.pointer_over_toolbar = on_toolbar;
-                    self.current_mouse_x = event.position.0 as i32;
-                    self.current_mouse_y = event.position.1 as i32;
+                    self.set_pointer_focus(true);
+                    self.set_pointer_over_toolbar(on_toolbar);
+                    self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
                     if !on_toolbar {
-                        self.input_state
-                            .update_pointer_position(self.current_mouse_x, self.current_mouse_y);
+                        let (mx, my) = self.current_mouse();
+                        self.input_state.update_pointer_position(mx, my);
                     }
                     if let Some(pointer) = self.themed_pointer.as_ref() {
                         if let Err(err) = pointer.set_cursor(conn, CursorIcon::Crosshair) {
@@ -46,21 +46,22 @@ impl PointerHandler for WaylandState {
                 }
                 PointerEventKind::Leave { .. } => {
                     debug!("Pointer left surface");
-                    self.has_pointer_focus = false;
+                    self.set_pointer_focus(false);
                     if on_toolbar {
-                        self.pointer_over_toolbar = false;
+                        self.set_pointer_over_toolbar(false);
                         self.toolbar.pointer_leave(&event.surface);
-                        self.toolbar_dragging = false;
+                        self.set_toolbar_dragging(false);
                         self.toolbar.mark_dirty();
                         self.input_state.needs_redraw = true;
                     }
                 }
                 PointerEventKind::Motion { .. } => {
                     if on_toolbar {
-                        self.pointer_over_toolbar = true;
+                        self.set_pointer_over_toolbar(true);
                         let evt = self.toolbar.pointer_motion(&event.surface, event.position);
-                        if self.toolbar_dragging {
-                            if let Some(evt) = evt {
+                        if self.toolbar_dragging() {
+                            if let Some(intent) = evt {
+                                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);
                             }
                         } else {
@@ -70,10 +71,11 @@ impl PointerHandler for WaylandState {
                         self.refresh_keyboard_interactivity();
                         continue;
                     }
-                    if self.pointer_over_toolbar {
+                    if self.pointer_over_toolbar() {
                         let evt = self.toolbar.pointer_motion(&event.surface, event.position);
-                        if self.toolbar_dragging {
-                            if let Some(evt) = evt {
+                        if self.toolbar_dragging() {
+                            if let Some(intent) = evt {
+                                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);
                             }
                         } else {
@@ -83,20 +85,19 @@ impl PointerHandler for WaylandState {
                         self.refresh_keyboard_interactivity();
                         continue;
                     }
-                    self.current_mouse_x = event.position.0 as i32;
-                    self.current_mouse_y = event.position.1 as i32;
-                    self.input_state
-                        .update_pointer_position(self.current_mouse_x, self.current_mouse_y);
-                    self.input_state
-                        .on_mouse_motion(self.current_mouse_x, self.current_mouse_y);
+                    self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+                    let (mx, my) = self.current_mouse();
+                    self.input_state.update_pointer_position(mx, my);
+                    self.input_state.on_mouse_motion(mx, my);
                 }
                 PointerEventKind::Press { button, .. } => {
                     if on_toolbar {
                         if button == BTN_LEFT {
-                            if let Some((evt, drag)) =
+                            if let Some((intent, drag)) =
                                 self.toolbar.pointer_press(&event.surface, event.position)
                             {
-                                self.toolbar_dragging = drag;
+                                self.set_toolbar_dragging(drag);
+                                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);
                                 self.toolbar.mark_dirty();
                                 self.input_state.needs_redraw = true;
@@ -104,8 +105,8 @@ impl PointerHandler for WaylandState {
                             }
                         }
                         continue;
-                    } else if self.pointer_over_toolbar {
-                        self.toolbar_dragging = false;
+                    } else if self.pointer_over_toolbar() {
+                        self.set_toolbar_dragging(false);
                         continue;
                     }
                     debug!(
@@ -128,9 +129,9 @@ impl PointerHandler for WaylandState {
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Release { button, .. } => {
-                    if on_toolbar || self.pointer_over_toolbar {
+                    if on_toolbar || self.pointer_over_toolbar() {
                         if button == BTN_LEFT {
-                            self.toolbar_dragging = false;
+                            self.set_toolbar_dragging(false);
                         }
                         continue;
                     }
@@ -151,7 +152,7 @@ impl PointerHandler for WaylandState {
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Axis { vertical, .. } => {
-                    if on_toolbar || self.pointer_over_toolbar {
+                    if on_toolbar || self.pointer_over_toolbar() {
                         continue;
                     }
                     let scroll_direction = if vertical.discrete != 0 {

@@ -201,3 +201,67 @@ fn resolve_display_id(display_id: Option<&str>) -> String {
         Err(_) => "default".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{SessionConfig, SessionStorageMode};
+    use std::path::Path;
+    use std::sync::Mutex;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn sanitize_identifier_replaces_non_alphanumeric() {
+        assert_eq!(sanitize_identifier("DP-1"), "DP_1");
+        assert_eq!(sanitize_identifier("output:name"), "output_name");
+        assert_eq!(sanitize_identifier("abc/def-01"), "abc_def_01");
+    }
+
+    #[test]
+    fn sanitize_identifier_empty_defaults_to_default() {
+        assert_eq!(sanitize_identifier(""), "default");
+    }
+
+    #[test]
+    fn resolve_display_id_prefers_argument_and_uses_env_fallback() {
+        use std::env;
+
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let prev = env::var_os("WAYLAND_DISPLAY");
+        // SAFETY: serialized via ENV_MUTEX
+        unsafe {
+            env::set_var("WAYLAND_DISPLAY", "wayland-0");
+        }
+
+        let from_arg = resolve_display_id(Some("custom-display"));
+        assert_eq!(from_arg, "custom_display");
+
+        let from_env = resolve_display_id(None);
+        assert_eq!(from_env, "wayland_0");
+
+        match prev {
+            Some(v) => unsafe { env::set_var("WAYLAND_DISPLAY", v) },
+            None => unsafe { env::remove_var("WAYLAND_DISPLAY") },
+        }
+    }
+
+    #[test]
+    fn options_from_config_clamps_max_persisted_undo_depth() {
+        let mut cfg = SessionConfig {
+            max_persisted_undo_depth: Some(5),
+            storage: SessionStorageMode::Config,
+            ..SessionConfig::default()
+        };
+
+        let opts = options_from_config(&cfg, Path::new("/tmp"), Some("display")).unwrap();
+        assert_eq!(opts.max_persisted_undo_depth, Some(10));
+
+        cfg.max_persisted_undo_depth = Some(2_000);
+        let opts2 = options_from_config(&cfg, Path::new("/tmp"), Some("display")).unwrap();
+        assert_eq!(opts2.max_persisted_undo_depth, Some(1_000));
+    }
+}

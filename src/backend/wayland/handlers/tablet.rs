@@ -9,6 +9,7 @@ use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
 };
 
+use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 
 use super::super::state::WaylandState;
@@ -301,7 +302,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_surface = Some(surface.clone());
                 state.stylus_on_overlay = on_overlay;
                 state.stylus_on_toolbar = on_toolbar;
-                state.toolbar_dragging = false;
+                state.set_toolbar_dragging(false);
                 state.stylus_tip_down = false;
                 state.stylus_base_thickness = Some(state.input_state.current_thickness);
                 state.stylus_pressure_thickness = None;
@@ -319,7 +320,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_tip_down = false;
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
-                state.toolbar_dragging = false;
+                state.set_toolbar_dragging(false);
                 if let Some(surf) = state.stylus_surface.take() {
                     if state.toolbar.is_toolbar_surface(&surf) {
                         state.toolbar.pointer_leave(&surf);
@@ -332,14 +333,16 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
             }
             Event::Down { .. } => {
                 if state.stylus_on_toolbar {
-                    let (sx, sy) = state
-                        .stylus_last_pos
-                        .unwrap_or((state.current_mouse_x as f64, state.current_mouse_y as f64));
-                    state.current_mouse_x = sx as i32;
-                    state.current_mouse_y = sy as i32;
+                    let (sx, sy) = state.stylus_last_pos.unwrap_or_else(|| {
+                        let (mx, my) = state.current_mouse();
+                        (mx as f64, my as f64)
+                    });
+                    state.set_current_mouse(sx as i32, sy as i32);
                     if let Some(surface) = state.stylus_surface.as_ref() {
-                        if let Some((evt, drag)) = state.toolbar.pointer_press(surface, (sx, sy)) {
-                            state.toolbar_dragging = drag;
+                        if let Some((intent, drag)) = state.toolbar.pointer_press(surface, (sx, sy))
+                        {
+                            state.set_toolbar_dragging(drag);
+                            let evt = intent_to_event(intent, state.toolbar.last_snapshot());
                             state.handle_toolbar_event(evt);
                             state.toolbar.mark_dirty();
                             state.input_state.needs_redraw = true;
@@ -357,18 +360,19 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.record_stylus_peak(state.input_state.current_thickness);
                 info!(
                     "✏️  Stylus DOWN at ({}, {})",
-                    state.current_mouse_x, state.current_mouse_y
+                    state.current_mouse().0,
+                    state.current_mouse().1
                 );
                 state.input_state.on_mouse_press(
                     MouseButton::Left,
-                    state.current_mouse_x,
-                    state.current_mouse_y,
+                    state.current_mouse().0,
+                    state.current_mouse().1,
                 );
                 state.input_state.needs_redraw = true;
             }
             Event::Up => {
                 if state.stylus_on_toolbar {
-                    state.toolbar_dragging = false;
+                    state.set_toolbar_dragging(false);
                     return;
                 }
                 if !state.stylus_on_overlay {
@@ -388,12 +392,13 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_peak_thickness = None;
                 info!(
                     "✏️  Stylus UP at ({}, {})",
-                    state.current_mouse_x, state.current_mouse_y
+                    state.current_mouse().0,
+                    state.current_mouse().1
                 );
                 state.input_state.on_mouse_release(
                     MouseButton::Left,
-                    state.current_mouse_x,
-                    state.current_mouse_y,
+                    state.current_mouse().0,
+                    state.current_mouse().1,
                 );
                 state.input_state.needs_redraw = true;
             }
@@ -404,8 +409,9 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.stylus_last_pos = Some((xf, yf));
                     if let Some(surface) = state.stylus_surface.as_ref() {
                         let evt = state.toolbar.pointer_motion(surface, (xf, yf));
-                        if state.toolbar_dragging {
-                            if let Some(evt) = evt {
+                        if state.toolbar_dragging() {
+                            if let Some(intent) = evt {
+                                let evt = intent_to_event(intent, state.toolbar.last_snapshot());
                                 state.handle_toolbar_event(evt);
                             }
                         } else {
@@ -414,21 +420,18 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                         state.input_state.needs_redraw = true;
                         state.refresh_keyboard_interactivity();
                     }
-                    state.current_mouse_x = x as i32;
-                    state.current_mouse_y = y as i32;
+                    state.set_current_mouse(x as i32, y as i32);
                     return;
                 }
                 if !state.stylus_on_overlay {
                     return;
                 }
-                state.current_mouse_x = x as i32;
-                state.current_mouse_y = y as i32;
+                state.set_current_mouse(x as i32, y as i32);
                 let xf = x;
                 let yf = y;
                 state.stylus_last_pos = Some((xf, yf));
-                state
-                    .input_state
-                    .on_mouse_motion(state.current_mouse_x, state.current_mouse_y);
+                let (mx, my) = state.current_mouse();
+                state.input_state.on_mouse_motion(mx, my);
                 if state.stylus_tip_down {
                     state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
                     state.record_stylus_peak(state.input_state.current_thickness);
