@@ -324,13 +324,70 @@ fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::Cli;
+    use super::{Cli, env_flag_enabled};
     use clap::Parser;
+    use std::env;
+    use std::sync::Mutex;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn active_mode_with_explicit_board_mode() {
         let cli = Cli::try_parse_from(["wayscriber", "--active", "--mode", "whiteboard"]).unwrap();
         assert!(cli.active);
         assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
+    }
+
+    #[test]
+    fn env_flag_enabled_accepts_truthy_values() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        for value in ["1", "true", "yes", "on", "TrUe"] {
+            // SAFETY: serialized via ENV_MUTEX
+            unsafe {
+                env::set_var("WAYSCRIBER_TEST_FLAG", value);
+            }
+            assert!(
+                env_flag_enabled("WAYSCRIBER_TEST_FLAG"),
+                "expected '{value}' to be treated as truthy"
+            );
+        }
+
+        unsafe {
+            env::remove_var("WAYSCRIBER_TEST_FLAG");
+        }
+    }
+
+    #[test]
+    fn env_flag_enabled_rejects_non_truthy_values() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        for value in ["0", "false", "no", "off", "", "random"] {
+            // SAFETY: serialized via ENV_MUTEX
+            unsafe {
+                env::set_var("WAYSCRIBER_TEST_FLAG", value);
+            }
+            assert!(
+                !env_flag_enabled("WAYSCRIBER_TEST_FLAG"),
+                "expected '{value}' to be treated as falsey"
+            );
+        }
+
+        unsafe {
+            env::remove_var("WAYSCRIBER_TEST_FLAG");
+        }
+    }
+
+    #[test]
+    fn cli_conflicting_flags_fail() {
+        let result = Cli::try_parse_from(["wayscriber", "--active", "--clear-session"]);
+        assert!(
+            result.is_err(),
+            "expected conflicting flags (--active and --clear-session) to error"
+        );
     }
 }

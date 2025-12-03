@@ -59,8 +59,8 @@ const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
 /// - If the overlay is not running, the daemon will auto-toggle it so queued actions run at startup.
 /// - The overlay consumes the action file on SIGUSR2 and also once at startup to catch queued work.
 /// - Action strings are simple identifiers (e.g., "toggle_freeze", "capture_full", "toggle_help").
-/// This is intentionally simple/best-effort; if a write happens between read/delete, it will be
-/// processed on the next signal/start.
+///   This is intentionally simple/best-effort; if a write happens between read/delete, it will be
+///   processed on the next signal/start.
 #[allow(dead_code)]
 const _: () = ();
 

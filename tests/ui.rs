@@ -82,3 +82,51 @@ fn render_help_overlay_draws_content() {
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }
+
+#[test]
+fn render_status_bar_draws_in_board_modes() {
+    let mut input = make_input_state();
+    input.update_screen_dimensions(800, 480);
+    let style = StatusBarStyle::default();
+
+    let modes = [
+        wayscriber::input::BoardMode::Whiteboard,
+        wayscriber::input::BoardMode::Blackboard,
+    ];
+
+    for mode in modes {
+        input.switch_board_mode(mode);
+        let (mut surface, ctx) = surface_with_context(400, 200);
+        wayscriber::ui::render_status_bar(
+            &ctx,
+            &input,
+            StatusPosition::BottomLeft,
+            &style,
+            400,
+            200,
+        );
+        drop(ctx);
+        assert!(
+            surface_has_pixels(&mut surface),
+            "status bar should render pixels for mode {:?}",
+            mode
+        );
+    }
+}
+
+#[test]
+fn render_help_overlay_without_frozen_shortcuts_draws_content() {
+    let style = HelpOverlayStyle::default();
+    let (mut surface, ctx) = surface_with_context(800, 600);
+    wayscriber::ui::render_help_overlay(&ctx, &style, 800, 600, false);
+    drop(ctx);
+    assert!(surface_has_pixels(&mut surface));
+}
+
+#[test]
+fn render_frozen_badge_draws_pixels() {
+    let (mut surface, ctx) = surface_with_context(400, 200);
+    wayscriber::ui::render_frozen_badge(&ctx, 400, 200);
+    drop(ctx);
+    assert!(surface_has_pixels(&mut surface));
+}
