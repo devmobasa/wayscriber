@@ -33,6 +33,7 @@ fn main() {
     }
 }
 
+#[allow(clippy::collapsible_if)]
 fn resolve_git_dir() -> Option<PathBuf> {
     if let Some(from_env) = env::var_os("GIT_DIR") {
         return Some(PathBuf::from(from_env));
@@ -60,6 +61,7 @@ fn resolve_git_dir() -> Option<PathBuf> {
     None
 }
 
+#[allow(clippy::collapsible_if)]
 fn emit_rerun(path: &Path) {
     if path.exists() {
         if let Some(display) = path.to_str() {
