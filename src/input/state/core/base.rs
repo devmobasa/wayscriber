@@ -313,4 +313,17 @@ impl InputState {
 
         state
     }
+
+    /// Resets all tracked keyboard modifiers to the "released" state.
+    ///
+    /// This is used as a safety net when external UI (portals, other windows)
+    /// or focus transitions may cause us to miss key release events from
+    /// the compositor, which would otherwise leave modifiers "stuck" and break
+    /// shortcut handling and tool selection.
+    pub fn reset_modifiers(&mut self) {
+        self.modifiers.shift = false;
+        self.modifiers.ctrl = false;
+        self.modifiers.alt = false;
+        self.modifiers.tab = false;
+    }
 }
