@@ -326,4 +326,15 @@ impl InputState {
         self.modifiers.alt = false;
         self.modifiers.tab = false;
     }
+
+    /// Synchronize modifier state from backend-provided values (e.g. compositor).
+    ///
+    /// This lets us correct cases where a key release event was missed but the compositor's
+    /// authoritative modifier state is still accurate.
+    pub fn sync_modifiers(&mut self, shift: bool, ctrl: bool, alt: bool) {
+        self.modifiers.shift = shift;
+        self.modifiers.ctrl = ctrl;
+        self.modifiers.alt = alt;
+        // Tab has no direct compositor flag; leave it unchanged.
+    }
 }

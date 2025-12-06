@@ -118,6 +118,10 @@ impl KeyboardHandler for WaylandState {
             "Modifiers: ctrl={} alt={} shift={}",
             modifiers.ctrl, modifiers.alt, modifiers.shift
         );
+        // Trust compositor-reported modifier state to reconcile any missed key release
+        // events and avoid "stuck" modifiers.
+        self.input_state
+            .sync_modifiers(modifiers.shift, modifiers.ctrl, modifiers.alt);
     }
 
     fn repeat_key(
