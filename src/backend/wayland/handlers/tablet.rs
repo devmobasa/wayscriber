@@ -332,6 +332,18 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_last_pos = None;
             }
             Event::Down { .. } => {
+                let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
+                if inline_active {
+                    let (sx, sy) = state.stylus_last_pos.unwrap_or_else(|| {
+                        let (mx, my) = state.current_mouse();
+                        (mx as f64, my as f64)
+                    });
+                    if state.inline_toolbar_press((sx, sy)) {
+                        state.stylus_on_toolbar = true;
+                        state.set_toolbar_dragging(state.toolbar_dragging());
+                        return;
+                    }
+                }
                 if state.stylus_on_toolbar {
                     let (sx, sy) = state.stylus_last_pos.unwrap_or_else(|| {
                         let (mx, my) = state.current_mouse();
@@ -371,6 +383,14 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.input_state.needs_redraw = true;
             }
             Event::Up => {
+                let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
+                if inline_active && state.stylus_on_toolbar {
+                    let (mx, my) = state.current_mouse();
+                    state.inline_toolbar_release((mx as f64, my as f64));
+                    state.stylus_on_toolbar = false;
+                    state.set_toolbar_dragging(false);
+                    return;
+                }
                 if state.stylus_on_toolbar {
                     state.set_toolbar_dragging(false);
                     return;
@@ -403,6 +423,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.input_state.needs_redraw = true;
             }
             Event::Motion { x, y } => {
+                let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if state.stylus_on_toolbar {
                     let xf = x;
                     let yf = y;
@@ -422,6 +443,15 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     }
                     state.set_current_mouse(x as i32, y as i32);
                     return;
+                }
+                if inline_active {
+                    state.stylus_last_pos = Some((x, y));
+                    if state.inline_toolbar_motion((x, y)) {
+                        state.stylus_on_toolbar = true;
+                        return;
+                    } else {
+                        state.stylus_on_toolbar = false;
+                    }
                 }
                 if !state.stylus_on_overlay {
                     return;

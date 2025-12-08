@@ -52,8 +52,17 @@ use crate::{
 
 use self::data::StateData;
 use super::{
-    capture::CaptureState, frozen::FrozenState, session::SessionState, surface::SurfaceState,
-    toolbar::ToolbarSurfaceManager,
+    capture::CaptureState,
+    frozen::FrozenState,
+    session::SessionState,
+    surface::SurfaceState,
+    toolbar::{
+        ToolbarSurfaceManager,
+        hit::{drag_intent_for_hit, intent_for_hit},
+        layout::{side_size, top_size},
+        render::{render_side_palette, render_top_strip},
+    },
+    toolbar_intent::intent_to_event,
 };
 
 mod data;
@@ -171,6 +180,7 @@ impl WaylandState {
         data.pending_freeze_on_start = pending_freeze_on_start;
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
+        data.inline_toolbars = layer_shell.is_none();
 
         Self {
             registry_state,
@@ -476,12 +486,6 @@ impl WaylandState {
         if any_visible && self.layer_shell.is_none() {
             self.log_toolbar_layer_shell_missing_once();
             self.notify_toolbar_layer_shell_missing_once();
-            if self.input_state.set_toolbar_visible(false) {
-                self.toolbar.set_visible(false);
-                self.set_pointer_over_toolbar(false);
-            }
-            self.refresh_keyboard_interactivity();
-            return;
         }
 
         if any_visible && self.layer_shell.is_some() {
@@ -502,6 +506,10 @@ impl WaylandState {
             }
         }
 
+        if !any_visible {
+            self.clear_inline_toolbar_hits();
+        }
+
         self.refresh_keyboard_interactivity();
     }
 
@@ -512,6 +520,233 @@ impl WaylandState {
 
         // No hover tracking yet; pass None. Can be updated when we record pointer positions per surface.
         self.toolbar.render(&self.shm, snapshot, None);
+    }
+
+    fn point_in_rect(&self, px: f64, py: f64, x: f64, y: f64, w: f64, h: f64) -> bool {
+        px >= x && px <= x + w && py >= y && py <= y + h
+    }
+
+    pub(super) fn inline_toolbars_active(&self) -> bool {
+        self.data.inline_toolbars
+    }
+
+    fn clear_inline_toolbar_hits(&mut self) {
+        self.data.inline_top_hits.clear();
+        self.data.inline_side_hits.clear();
+        self.data.inline_top_rect = None;
+        self.data.inline_side_rect = None;
+        self.data.inline_top_hover = None;
+        self.data.inline_side_hover = None;
+    }
+
+    fn render_inline_toolbars(&mut self, ctx: &cairo::Context, snapshot: &ToolbarSnapshot) {
+        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+            self.clear_inline_toolbar_hits();
+            return;
+        }
+
+        self.clear_inline_toolbar_hits();
+
+        let top_offset = (12.0, 12.0);
+        let side_offset = (24.0, 24.0);
+
+        let top_size = top_size(snapshot);
+        let side_size = side_size(snapshot);
+
+        // Top toolbar
+        let top_hover_local = self
+            .data
+            .inline_top_hover
+            .map(|(x, y)| (x - top_offset.0, y - top_offset.1));
+        let _ = ctx.save();
+        ctx.translate(top_offset.0, top_offset.1);
+        if let Err(err) = render_top_strip(
+            ctx,
+            top_size.0 as f64,
+            top_size.1 as f64,
+            snapshot,
+            &mut self.data.inline_top_hits,
+            top_hover_local,
+        ) {
+            log::warn!("Failed to render inline top toolbar: {}", err);
+        }
+        let _ = ctx.restore();
+        for hit in &mut self.data.inline_top_hits {
+            hit.rect.0 += top_offset.0;
+            hit.rect.1 += top_offset.1;
+        }
+        self.data.inline_top_rect = Some((
+            top_offset.0,
+            top_offset.1,
+            top_size.0 as f64,
+            top_size.1 as f64,
+        ));
+
+        // Side toolbar
+        let side_hover_local = self
+            .data
+            .inline_side_hover
+            .map(|(x, y)| (x - side_offset.0, y - side_offset.1));
+        let _ = ctx.save();
+        ctx.translate(side_offset.0, side_offset.1);
+        if let Err(err) = render_side_palette(
+            ctx,
+            side_size.0 as f64,
+            side_size.1 as f64,
+            snapshot,
+            &mut self.data.inline_side_hits,
+            side_hover_local,
+        ) {
+            log::warn!("Failed to render inline side toolbar: {}", err);
+        }
+        let _ = ctx.restore();
+        for hit in &mut self.data.inline_side_hits {
+            hit.rect.0 += side_offset.0;
+            hit.rect.1 += side_offset.1;
+        }
+        self.data.inline_side_rect = Some((
+            side_offset.0,
+            side_offset.1,
+            side_size.0 as f64,
+            side_size.1 as f64,
+        ));
+    }
+
+    fn inline_toolbar_hit_at(
+        &self,
+        position: (f64, f64),
+    ) -> Option<(crate::backend::wayland::toolbar_intent::ToolbarIntent, bool)> {
+        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+            return None;
+        }
+        self.data
+            .inline_top_hits
+            .iter()
+            .chain(self.data.inline_side_hits.iter())
+            .find_map(|hit| intent_for_hit(hit, position.0, position.1))
+    }
+
+    fn inline_toolbar_drag_at(
+        &self,
+        position: (f64, f64),
+    ) -> Option<crate::backend::wayland::toolbar_intent::ToolbarIntent> {
+        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+            return None;
+        }
+        self.data
+            .inline_top_hits
+            .iter()
+            .chain(self.data.inline_side_hits.iter())
+            .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+    }
+
+    pub(super) fn inline_toolbar_motion(&mut self, position: (f64, f64)) -> bool {
+        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+            return false;
+        }
+
+        self.set_current_mouse(position.0 as i32, position.1 as i32);
+        let (mx, my) = self.current_mouse();
+        self.input_state.update_pointer_position(mx, my);
+
+        let was_top_hover = self.data.inline_top_hover;
+        let was_side_hover = self.data.inline_side_hover;
+
+        self.data.inline_top_hover = None;
+        self.data.inline_side_hover = None;
+
+        let mut over_toolbar = false;
+
+        if let Some((x, y, w, h)) = self.data.inline_top_rect {
+            if self.point_in_rect(position.0, position.1, x, y, w, h) {
+                over_toolbar = true;
+                self.data.inline_top_hover = Some(position);
+            }
+        }
+
+        if let Some((x, y, w, h)) = self.data.inline_side_rect {
+            if self.point_in_rect(position.0, position.1, x, y, w, h) {
+                over_toolbar = true;
+                self.data.inline_side_hover = Some(position);
+            }
+        }
+
+        if self.toolbar_dragging() {
+            if let Some(intent) = self.inline_toolbar_drag_at(position) {
+                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+                self.handle_toolbar_event(evt);
+                self.toolbar.mark_dirty();
+                self.input_state.needs_redraw = true;
+            }
+            over_toolbar = true;
+        }
+
+        if was_top_hover != self.data.inline_top_hover
+            || was_side_hover != self.data.inline_side_hover
+        {
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+        }
+
+        if over_toolbar {
+            self.set_pointer_over_toolbar(true);
+        } else if !self.toolbar_dragging() {
+            self.set_pointer_over_toolbar(false);
+        }
+
+        over_toolbar
+    }
+
+    pub(super) fn inline_toolbar_press(&mut self, position: (f64, f64)) -> bool {
+        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+            return false;
+        }
+        if let Some((intent, drag)) = self.inline_toolbar_hit_at(position) {
+            self.set_toolbar_dragging(drag);
+            let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+            self.handle_toolbar_event(evt);
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+            self.set_pointer_over_toolbar(true);
+            return true;
+        }
+        false
+    }
+
+    pub(super) fn inline_toolbar_leave(&mut self) {
+        if !self.inline_toolbars_active() {
+            return;
+        }
+        let had_hover =
+            self.data.inline_top_hover.is_some() || self.data.inline_side_hover.is_some();
+        self.data.inline_top_hover = None;
+        self.data.inline_side_hover = None;
+        self.set_pointer_over_toolbar(false);
+        self.set_toolbar_dragging(false);
+        if had_hover {
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+        }
+    }
+
+    pub(super) fn inline_toolbar_release(&mut self, position: (f64, f64)) -> bool {
+        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+            return false;
+        }
+        if self.pointer_over_toolbar() || self.toolbar_dragging() {
+            if self.toolbar_dragging() {
+                if let Some(intent) = self.inline_toolbar_drag_at(position) {
+                    let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+                    self.handle_toolbar_event(evt);
+                    self.toolbar.mark_dirty();
+                    self.input_state.needs_redraw = true;
+                }
+            }
+            self.set_toolbar_dragging(false);
+            self.set_pointer_over_toolbar(false);
+            return true;
+        }
+        false
     }
 
     pub(super) fn request_xdg_activation(&mut self, qh: &QueueHandle<Self>) {
@@ -827,6 +1062,15 @@ impl WaylandState {
         // Render context menu if open
         crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
 
+        // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.
+        if self.toolbar.is_visible() && self.inline_toolbars_active() {
+            let snapshot = self.toolbar_snapshot();
+            if self.toolbar.update_snapshot(&snapshot) {
+                self.toolbar.mark_dirty();
+            }
+            self.render_inline_toolbars(&ctx, &snapshot);
+        }
+
         let _ = ctx.restore();
 
         // Flush Cairo
@@ -877,7 +1121,7 @@ impl WaylandState {
         debug!("=== RENDER COMPLETE ===");
 
         // Render toolbar overlays if visible, only when state/hover changed.
-        if self.toolbar.is_visible() {
+        if self.toolbar.is_visible() && !self.inline_toolbars_active() {
             let snapshot = self.toolbar_snapshot();
             if self.toolbar.update_snapshot(&snapshot) {
                 self.toolbar.mark_dirty();

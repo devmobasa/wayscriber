@@ -1,3 +1,4 @@
+use crate::backend::wayland::toolbar::hit::HitRegion;
 use wayland_client::protocol::wl_seat;
 
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
@@ -16,6 +17,13 @@ pub struct StateData {
     pub(super) toolbar_needs_recreate: bool,
     pub(super) toolbar_layer_shell_missing_logged: bool,
     pub(super) toolbar_layer_shell_notice_sent: bool,
+    pub(super) inline_toolbars: bool,
+    pub(super) inline_top_hits: Vec<HitRegion>,
+    pub(super) inline_side_hits: Vec<HitRegion>,
+    pub(super) inline_top_rect: Option<(f64, f64, f64, f64)>,
+    pub(super) inline_side_rect: Option<(f64, f64, f64, f64)>,
+    pub(super) inline_top_hover: Option<(f64, f64)>,
+    pub(super) inline_side_hover: Option<(f64, f64)>,
     pub(super) pending_activation_token: Option<String>,
     pub(super) pending_freeze_on_start: bool,
     pub(super) frozen_enabled: bool,
@@ -38,6 +46,13 @@ impl StateData {
             toolbar_needs_recreate: true,
             toolbar_layer_shell_missing_logged: false,
             toolbar_layer_shell_notice_sent: false,
+            inline_toolbars: false,
+            inline_top_hits: Vec::new(),
+            inline_side_hits: Vec::new(),
+            inline_top_rect: None,
+            inline_side_rect: None,
+            inline_top_hover: None,
+            inline_side_hover: None,
             pending_activation_token: None,
             pending_freeze_on_start: false,
             frozen_enabled: false,

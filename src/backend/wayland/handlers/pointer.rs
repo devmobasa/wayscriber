@@ -20,6 +20,7 @@ impl PointerHandler for WaylandState {
     ) {
         for event in events {
             let on_toolbar = self.toolbar.is_toolbar_surface(&event.surface);
+            let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
             match event.kind {
                 PointerEventKind::Enter { .. } => {
                     debug!(
@@ -43,6 +44,9 @@ impl PointerHandler for WaylandState {
                             }
                         }
                     }
+                    if inline_active {
+                        self.inline_toolbar_motion(event.position);
+                    }
                 }
                 PointerEventKind::Leave { .. } => {
                     debug!("Pointer left surface");
@@ -54,8 +58,14 @@ impl PointerHandler for WaylandState {
                         self.toolbar.mark_dirty();
                         self.input_state.needs_redraw = true;
                     }
+                    if inline_active {
+                        self.inline_toolbar_leave();
+                    }
                 }
                 PointerEventKind::Motion { .. } => {
+                    if inline_active && self.inline_toolbar_motion(event.position) {
+                        continue;
+                    }
                     if on_toolbar {
                         self.set_pointer_over_toolbar(true);
                         let evt = self.toolbar.pointer_motion(&event.surface, event.position);
@@ -91,6 +101,12 @@ impl PointerHandler for WaylandState {
                     self.input_state.on_mouse_motion(mx, my);
                 }
                 PointerEventKind::Press { button, .. } => {
+                    if inline_active
+                        && ((button == BTN_LEFT && self.inline_toolbar_press(event.position))
+                            || self.pointer_over_toolbar())
+                    {
+                        continue;
+                    }
                     if on_toolbar {
                         if button == BTN_LEFT {
                             if let Some((intent, drag)) =
@@ -129,6 +145,14 @@ impl PointerHandler for WaylandState {
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Release { button, .. } => {
+                    if inline_active {
+                        if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
+                            continue;
+                        }
+                        if self.pointer_over_toolbar() || self.toolbar_dragging() {
+                            continue;
+                        }
+                    }
                     if on_toolbar || self.pointer_over_toolbar() {
                         if button == BTN_LEFT {
                             self.set_toolbar_dragging(false);
