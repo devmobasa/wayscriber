@@ -44,6 +44,7 @@ use crate::{
     },
     config::{Action, ColorSpec, Config},
     input::{DrawingState, InputState},
+    notification,
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
     util::Rect,
@@ -398,6 +399,24 @@ impl WaylandState {
         self.data.toolbar_layer_shell_missing_logged = true;
     }
 
+    fn notify_toolbar_layer_shell_missing_once(&mut self) {
+        if self.data.toolbar_layer_shell_notice_sent {
+            return;
+        }
+
+        self.data.toolbar_layer_shell_notice_sent = true;
+        let summary = "Toolbars unavailable on this desktop";
+        let body = "This compositor does not expose the layer-shell protocol, so the toolbar surfaces cannot be created. Try a compositor with layer-shell support or an X11 session.";
+        notification::send_notification_async(
+            &self.tokio_handle,
+            summary.to_string(),
+            body.to_string(),
+            Some("dialog-warning".to_string()),
+        );
+        log::warn!("{}", summary);
+        log::warn!("{}", body);
+    }
+
     /// Applies keyboard interactivity based on toolbar visibility.
     pub(super) fn refresh_keyboard_interactivity(&mut self) {
         let desired = self.desired_keyboard_interactivity();
@@ -456,6 +475,13 @@ impl WaylandState {
 
         if any_visible && self.layer_shell.is_none() {
             self.log_toolbar_layer_shell_missing_once();
+            self.notify_toolbar_layer_shell_missing_once();
+            if self.input_state.set_toolbar_visible(false) {
+                self.toolbar.set_visible(false);
+                self.set_pointer_over_toolbar(false);
+            }
+            self.refresh_keyboard_interactivity();
+            return;
         }
 
         if any_visible && self.layer_shell.is_some() {
