@@ -5,6 +5,7 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
+use crate::backend::wayland::state::MoveDragKind;
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::{MouseButton, Tool};
 
@@ -54,19 +55,36 @@ impl PointerHandler for WaylandState {
                     if on_toolbar {
                         self.set_pointer_over_toolbar(false);
                         self.toolbar.pointer_leave(&event.surface);
-                        self.set_toolbar_dragging(false);
-                        self.end_toolbar_move_drag();
+                        // Don't clear drag state if we're in a move drag - the user may be
+                        // dragging the toolbar and their pointer left the toolbar surface.
+                        // The drag will continue on the main surface.
+                        if !self.is_move_dragging() {
+                            self.set_toolbar_dragging(false);
+                            self.end_toolbar_move_drag();
+                        }
                         self.toolbar.mark_dirty();
                         self.input_state.needs_redraw = true;
                     }
                     if inline_active {
                         self.inline_toolbar_leave();
                     }
-                    if on_toolbar || inline_active {
+                    if (on_toolbar || inline_active) && !self.is_move_dragging() {
                         self.end_toolbar_move_drag();
                     }
                 }
                 PointerEventKind::Motion { .. } => {
+                    if self.is_move_dragging() {
+                        if let Some(kind) = self.active_move_drag_kind() {
+                            let coord = match kind {
+                                MoveDragKind::Top => event.position.0,
+                                MoveDragKind::Side => event.position.1,
+                            };
+                            self.handle_toolbar_move(kind, coord);
+                            self.input_state.needs_redraw = true;
+                            self.toolbar.mark_dirty();
+                            continue;
+                        }
+                    }
                     if inline_active && self.inline_toolbar_motion(event.position) {
                         continue;
                     }
@@ -107,6 +125,18 @@ impl PointerHandler for WaylandState {
                         }
                         self.input_state.needs_redraw = true;
                         self.refresh_keyboard_interactivity();
+                        continue;
+                    }
+                    // Handle move drag that continues on the main surface after leaving toolbar
+                    if self.is_move_dragging() {
+                        if let Some(intent) =
+                            self.move_drag_intent(event.position.0, event.position.1)
+                        {
+                            let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+                            self.handle_toolbar_event(evt);
+                            self.toolbar.mark_dirty();
+                            self.input_state.needs_redraw = true;
+                        }
                         continue;
                     }
                     self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
@@ -172,6 +202,12 @@ impl PointerHandler for WaylandState {
                         if button == BTN_LEFT {
                             self.set_toolbar_dragging(false);
                         }
+                        self.end_toolbar_move_drag();
+                        continue;
+                    }
+                    // End move drag if released on the main surface
+                    if button == BTN_LEFT && self.is_move_dragging() {
+                        self.set_toolbar_dragging(false);
                         self.end_toolbar_move_drag();
                         continue;
                     }

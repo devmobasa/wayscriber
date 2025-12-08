@@ -50,7 +50,8 @@ use crate::{
     util::Rect,
 };
 
-use self::data::{MoveDrag, MoveDragKind, StateData};
+pub use self::data::MoveDragKind;
+use self::data::{MoveDrag, StateData};
 use super::{
     capture::CaptureState,
     frozen::FrozenState,
@@ -188,6 +189,8 @@ impl WaylandState {
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
         data.inline_toolbars = layer_shell.is_none();
+        data.toolbar_top_offset = config.ui.toolbar.top_offset;
+        data.toolbar_side_offset = config.ui.toolbar.side_offset;
 
         Self {
             registry_state,
@@ -553,6 +556,22 @@ impl WaylandState {
         self.data.toolbar_side_offset = self.data.toolbar_side_offset.clamp(0.0, max_side);
     }
 
+    fn begin_toolbar_move_drag(&mut self, kind: MoveDragKind, coord: f64) {
+        let start_offset = match kind {
+            MoveDragKind::Top => self.data.toolbar_top_offset,
+            MoveDragKind::Side => self.data.toolbar_side_offset,
+        };
+        if self.data.toolbar_move_drag.is_none() {
+            self.data.toolbar_move_drag = Some(MoveDrag {
+                kind,
+                start_coord: coord,
+                start_offset,
+            });
+        }
+        self.data.active_drag_kind = Some(kind);
+        self.set_toolbar_dragging(true);
+    }
+
     fn apply_toolbar_offsets(&mut self, snapshot: &ToolbarSnapshot) {
         self.clamp_toolbar_offsets(snapshot);
         if self.layer_shell.is_some() {
@@ -566,7 +585,7 @@ impl WaylandState {
         }
     }
 
-    fn handle_toolbar_move(&mut self, kind: MoveDragKind, coord: f64) {
+    pub(super) fn handle_toolbar_move(&mut self, kind: MoveDragKind, coord: f64) {
         let snapshot = self
             .toolbar
             .last_snapshot()
@@ -585,6 +604,7 @@ impl WaylandState {
                 start_offset: base_offset,
             },
         };
+        self.data.active_drag_kind = Some(kind);
 
         let delta = coord - drag.start_coord;
         match kind {
@@ -615,6 +635,8 @@ impl WaylandState {
             self.data.toolbar_move_drag = None;
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);
+            self.data.active_drag_kind = None;
+            self.save_toolbar_pin_config();
         }
     }
 
@@ -765,6 +787,15 @@ impl WaylandState {
         }
     }
 
+    /// Returns true if we're currently in a toolbar move drag operation.
+    pub(super) fn is_move_dragging(&self) -> bool {
+        self.data.toolbar_move_drag.is_some()
+    }
+
+    pub(super) fn active_move_drag_kind(&self) -> Option<MoveDragKind> {
+        self.data.active_drag_kind
+    }
+
     pub(super) fn inline_toolbar_motion(&mut self, position: (f64, f64)) -> bool {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return false;
@@ -802,6 +833,12 @@ impl WaylandState {
                 self.handle_toolbar_event(evt);
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
+            } else if let Some(kind) = self.active_move_drag_kind() {
+                let coord = match kind {
+                    MoveDragKind::Top => position.0,
+                    MoveDragKind::Side => position.1,
+                };
+                self.handle_toolbar_move(kind, coord);
             }
             over_toolbar = true;
         }
@@ -847,8 +884,11 @@ impl WaylandState {
         self.data.inline_top_hover = None;
         self.data.inline_side_hover = None;
         self.set_pointer_over_toolbar(false);
-        self.set_toolbar_dragging(false);
-        self.end_toolbar_move_drag();
+        // Don't clear drag state if we're in a move drag - the drag continues outside
+        if !self.is_move_dragging() {
+            self.set_toolbar_dragging(false);
+            self.end_toolbar_move_drag();
+        }
         if had_hover {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
@@ -1252,10 +1292,12 @@ impl WaylandState {
     pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
         match event {
             ToolbarEvent::MoveTopToolbar(x) => {
+                self.begin_toolbar_move_drag(MoveDragKind::Top, x);
                 self.handle_toolbar_move(MoveDragKind::Top, x);
                 return;
             }
             ToolbarEvent::MoveSideToolbar(y) => {
+                self.begin_toolbar_move_drag(MoveDragKind::Side, y);
                 self.handle_toolbar_move(MoveDragKind::Side, y);
                 return;
             }
@@ -1350,6 +1392,8 @@ impl WaylandState {
         self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
         self.config.ui.toolbar.show_marker_opacity_section =
             self.input_state.show_marker_opacity_section;
+        self.config.ui.toolbar.top_offset = self.data.toolbar_top_offset;
+        self.config.ui.toolbar.side_offset = self.data.toolbar_side_offset;
         // Step controls toggle is in history config
         self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
 

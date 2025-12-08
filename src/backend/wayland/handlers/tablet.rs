@@ -9,6 +9,7 @@ use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
 };
 
+use crate::backend::wayland::state::MoveDragKind;
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 
@@ -426,6 +427,19 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.input_state.needs_redraw = true;
             }
             Event::Motion { x, y } => {
+                if state.is_move_dragging() {
+                    if let Some(kind) = state.active_move_drag_kind() {
+                        let coord = match kind {
+                            MoveDragKind::Top => x,
+                            MoveDragKind::Side => y,
+                        };
+                        state.handle_toolbar_move(kind, coord);
+                        state.toolbar.mark_dirty();
+                        state.input_state.needs_redraw = true;
+                        state.set_current_mouse(x as i32, y as i32);
+                        return;
+                    }
+                }
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if state.stylus_on_toolbar {
                     let xf = x;
