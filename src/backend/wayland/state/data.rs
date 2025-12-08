@@ -9,8 +9,7 @@ pub enum MoveDragKind {
 #[derive(Debug, Clone, Copy)]
 pub struct MoveDrag {
     pub kind: MoveDragKind,
-    pub start_coord: f64,
-    pub start_offset: f64,
+    pub last_coord: f64,
 }
 use wayland_client::protocol::wl_seat;
 

@@ -541,6 +541,23 @@ impl WaylandState {
         self.data.inline_toolbars
     }
 
+    /// Convert a toolbar-local coordinate into a screen-relative coordinate so that
+    /// dragging continues to work even after the surface has moved.
+    fn effective_toolbar_coord(&self, kind: MoveDragKind, local_coord: f64) -> f64 {
+        if self.layer_shell.is_none() {
+            return local_coord;
+        }
+
+        match kind {
+            MoveDragKind::Top => {
+                Self::TOP_BASE_MARGIN_LEFT + self.data.toolbar_top_offset + local_coord
+            }
+            MoveDragKind::Side => {
+                Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset + local_coord
+            }
+        }
+    }
+
     fn clamp_toolbar_offsets(&mut self, snapshot: &ToolbarSnapshot) {
         let width = self.surface.width() as f64;
         let height = self.surface.height() as f64;
@@ -557,15 +574,17 @@ impl WaylandState {
     }
 
     fn begin_toolbar_move_drag(&mut self, kind: MoveDragKind, coord: f64) {
-        let start_offset = match kind {
-            MoveDragKind::Top => self.data.toolbar_top_offset,
-            MoveDragKind::Side => self.data.toolbar_side_offset,
-        };
         if self.data.toolbar_move_drag.is_none() {
+            let screen_coord = self.effective_toolbar_coord(kind, coord);
+            log::debug!(
+                "Begin toolbar move drag: kind={:?}, local_coord={}, screen_coord={}",
+                kind,
+                coord,
+                screen_coord
+            );
             self.data.toolbar_move_drag = Some(MoveDrag {
                 kind,
-                start_coord: coord,
-                start_offset,
+                last_coord: screen_coord,
             });
         }
         self.data.active_drag_kind = Some(kind);
@@ -585,38 +604,56 @@ impl WaylandState {
         }
     }
 
+    /// Handle toolbar move with toolbar-surface-local coordinates.
+    /// Converts to screen coordinates internally.
     pub(super) fn handle_toolbar_move(&mut self, kind: MoveDragKind, coord: f64) {
+        let screen_coord = self.effective_toolbar_coord(kind, coord);
+        self.handle_toolbar_move_screen(kind, screen_coord);
+    }
+
+    /// Handle toolbar move with screen-relative coordinates (no conversion).
+    /// Use this when coords are already in screen space (e.g., from main overlay surface).
+    pub(super) fn handle_toolbar_move_screen(&mut self, kind: MoveDragKind, screen_coord: f64) {
         let snapshot = self
             .toolbar
             .last_snapshot()
             .cloned()
             .unwrap_or_else(|| self.toolbar_snapshot());
-        let base_offset = match kind {
-            MoveDragKind::Top => self.data.toolbar_top_offset,
-            MoveDragKind::Side => self.data.toolbar_side_offset,
-        };
-
         let drag = match self.data.toolbar_move_drag {
             Some(d) if d.kind == kind => d,
             _ => MoveDrag {
                 kind,
-                start_coord: coord,
-                start_offset: base_offset,
+                last_coord: screen_coord,
             },
         };
         self.data.active_drag_kind = Some(kind);
 
-        let delta = coord - drag.start_coord;
+        let current_offset = match kind {
+            MoveDragKind::Top => self.data.toolbar_top_offset,
+            MoveDragKind::Side => self.data.toolbar_side_offset,
+        };
+        let delta = screen_coord - drag.last_coord;
+        log::debug!(
+            "handle_toolbar_move_screen: kind={:?}, screen_coord={}, last_coord={}, delta={}, current_offset={}",
+            kind,
+            screen_coord,
+            drag.last_coord,
+            delta,
+            current_offset
+        );
         match kind {
             MoveDragKind::Top => {
-                self.data.toolbar_top_offset = drag.start_offset + delta;
+                self.data.toolbar_top_offset = current_offset + delta;
             }
             MoveDragKind::Side => {
-                self.data.toolbar_side_offset = drag.start_offset + delta;
+                self.data.toolbar_side_offset = current_offset + delta;
             }
         }
 
-        self.data.toolbar_move_drag = Some(drag);
+        self.data.toolbar_move_drag = Some(MoveDrag {
+            last_coord: screen_coord,
+            ..drag
+        });
         self.apply_toolbar_offsets(&snapshot);
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;

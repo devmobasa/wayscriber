@@ -433,7 +433,13 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                             MoveDragKind::Top => x,
                             MoveDragKind::Side => y,
                         };
-                        state.handle_toolbar_move(kind, coord);
+                        // On toolbar surface: coords are toolbar-local, need conversion
+                        // On main surface: coords are already screen-relative
+                        if state.stylus_on_toolbar {
+                            state.handle_toolbar_move(kind, coord);
+                        } else {
+                            state.handle_toolbar_move_screen(kind, coord);
+                        }
                         state.toolbar.mark_dirty();
                         state.input_state.needs_redraw = true;
                         state.set_current_mouse(x as i32, y as i32);
