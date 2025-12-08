@@ -120,11 +120,23 @@ wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/la
 sudo apt install ./wayscriber-amd64.deb
 ```
 
+GUI configurator (optional):
+```bash
+wget -O wayscriber-configurator-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb
+sudo apt install ./wayscriber-configurator-amd64.deb
+```
+
 ### Fedora / RHEL
 
 ```bash
 wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
 sudo rpm -Uvh wayscriber-x86_64.rpm
+```
+
+GUI configurator (optional):
+```bash
+wget -O wayscriber-configurator-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm
+sudo rpm -Uvh wayscriber-configurator-x86_64.rpm
 ```
 
 ### Arch Linux (AUR)
