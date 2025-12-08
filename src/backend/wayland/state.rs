@@ -471,7 +471,7 @@ impl WaylandState {
         }
 
         if any_visible {
-            log::info!(
+            log::debug!(
                 "Toolbar visibility sync: top_visible={}, side_visible={}, layer_shell_available={}, top_created={}, side_created={}, needs_recreate={}, scale={}",
                 top_visible,
                 side_visible,
@@ -547,11 +547,12 @@ impl WaylandState {
 
         self.clear_inline_toolbar_hits();
 
-        let top_offset = (12.0, 12.0);
-        let side_offset = (24.0, 24.0);
-
         let top_size = top_size(snapshot);
         let side_size = side_size(snapshot);
+
+        // Position inline toolbars with padding and keep top bar to the right of the side bar.
+        let side_offset = (24.0, 24.0);
+        let top_offset = (side_offset.0 + side_size.0 as f64 + 16.0, 16.0);
 
         // Top toolbar
         let top_hover_local = self
