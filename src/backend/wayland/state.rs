@@ -50,7 +50,7 @@ use crate::{
     util::Rect,
 };
 
-use self::data::StateData;
+use self::data::{MoveDrag, MoveDragKind, StateData};
 use super::{
     capture::CaptureState,
     frozen::FrozenState,
@@ -143,6 +143,13 @@ pub(super) struct WaylandState {
 }
 
 impl WaylandState {
+    const TOP_BASE_MARGIN_LEFT: f64 = 12.0;
+    const TOP_MARGIN_RIGHT: f64 = 12.0;
+    const SIDE_BASE_MARGIN_TOP: f64 = 24.0;
+    const SIDE_MARGIN_BOTTOM: f64 = 24.0;
+    const INLINE_TOP_Y: f64 = 16.0;
+    const INLINE_SIDE_X: f64 = 24.0;
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         registry_state: RegistryState,
@@ -493,9 +500,10 @@ impl WaylandState {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(false);
             }
+            let snapshot = self.toolbar_snapshot();
+            self.apply_toolbar_offsets(&snapshot);
             if let Some(layer_shell) = self.layer_shell.as_ref() {
                 let scale = self.surface.scale();
-                let snapshot = self.toolbar_snapshot();
                 self.toolbar.ensure_created(
                     qh,
                     &self.compositor_state,
@@ -530,6 +538,86 @@ impl WaylandState {
         self.data.inline_toolbars
     }
 
+    fn clamp_toolbar_offsets(&mut self, snapshot: &ToolbarSnapshot) {
+        let width = self.surface.width() as f64;
+        let height = self.surface.height() as f64;
+        let top_w = top_size(snapshot).0 as f64;
+        let side_h = side_size(snapshot).1 as f64;
+
+        let max_top =
+            (width - top_w - Self::TOP_BASE_MARGIN_LEFT - Self::TOP_MARGIN_RIGHT).max(0.0);
+        let max_side =
+            (height - side_h - Self::SIDE_BASE_MARGIN_TOP - Self::SIDE_MARGIN_BOTTOM).max(0.0);
+
+        self.data.toolbar_top_offset = self.data.toolbar_top_offset.clamp(0.0, max_top);
+        self.data.toolbar_side_offset = self.data.toolbar_side_offset.clamp(0.0, max_side);
+    }
+
+    fn apply_toolbar_offsets(&mut self, snapshot: &ToolbarSnapshot) {
+        self.clamp_toolbar_offsets(snapshot);
+        if self.layer_shell.is_some() {
+            let top_margin_left =
+                (Self::TOP_BASE_MARGIN_LEFT + self.data.toolbar_top_offset).round() as i32;
+            let side_margin_top =
+                (Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset).round() as i32;
+            self.toolbar.set_top_margin_left(top_margin_left);
+            self.toolbar.set_side_margin_top(side_margin_top);
+            self.toolbar.mark_dirty();
+        }
+    }
+
+    fn handle_toolbar_move(&mut self, kind: MoveDragKind, coord: f64) {
+        let snapshot = self
+            .toolbar
+            .last_snapshot()
+            .cloned()
+            .unwrap_or_else(|| self.toolbar_snapshot());
+        let base_offset = match kind {
+            MoveDragKind::Top => self.data.toolbar_top_offset,
+            MoveDragKind::Side => self.data.toolbar_side_offset,
+        };
+
+        let drag = match self.data.toolbar_move_drag {
+            Some(d) if d.kind == kind => d,
+            _ => MoveDrag {
+                kind,
+                start_coord: coord,
+                start_offset: base_offset,
+            },
+        };
+
+        let delta = coord - drag.start_coord;
+        match kind {
+            MoveDragKind::Top => {
+                self.data.toolbar_top_offset = drag.start_offset + delta;
+            }
+            MoveDragKind::Side => {
+                self.data.toolbar_side_offset = drag.start_offset + delta;
+            }
+        }
+
+        self.data.toolbar_move_drag = Some(drag);
+        self.apply_toolbar_offsets(&snapshot);
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
+
+        // Ensure we don't drift off-screen.
+        self.clamp_toolbar_offsets(&snapshot);
+
+        if self.layer_shell.is_none() {
+            // Inline mode uses cached rects, so force a relayout.
+            self.clear_inline_toolbar_hits();
+        }
+    }
+
+    pub(super) fn end_toolbar_move_drag(&mut self) {
+        if self.data.toolbar_move_drag.is_some() {
+            self.data.toolbar_move_drag = None;
+            self.set_toolbar_dragging(false);
+            self.set_pointer_over_toolbar(false);
+        }
+    }
+
     fn clear_inline_toolbar_hits(&mut self) {
         self.data.inline_top_hits.clear();
         self.data.inline_side_hits.clear();
@@ -546,13 +634,20 @@ impl WaylandState {
         }
 
         self.clear_inline_toolbar_hits();
+        self.clamp_toolbar_offsets(snapshot);
 
         let top_size = top_size(snapshot);
         let side_size = side_size(snapshot);
 
         // Position inline toolbars with padding and keep top bar to the right of the side bar.
-        let side_offset = (24.0, 24.0);
-        let top_offset = (side_offset.0 + side_size.0 as f64 + 16.0, 16.0);
+        let side_offset = (
+            Self::INLINE_SIDE_X,
+            Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset,
+        );
+        let top_offset = (
+            side_offset.0 + side_size.0 as f64 + 16.0 + self.data.toolbar_top_offset,
+            Self::INLINE_TOP_Y,
+        );
 
         // Top toolbar
         let top_hover_local = self
@@ -634,11 +729,40 @@ impl WaylandState {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return None;
         }
+        // If we have an active move drag, generate intent directly from it
+        // This allows dragging to continue even when mouse is outside the hit region
+        if let Some(intent) = self.move_drag_intent(position.0, position.1) {
+            return Some(intent);
+        }
         self.data
             .inline_top_hits
             .iter()
             .chain(self.data.inline_side_hits.iter())
             .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+    }
+
+    /// Generate a drag intent from the active toolbar move drag state.
+    /// This bypasses hit testing to allow dragging to continue when the mouse
+    /// moves outside the original drag handle region.
+    pub(super) fn move_drag_intent(
+        &self,
+        x: f64,
+        y: f64,
+    ) -> Option<crate::backend::wayland::toolbar_intent::ToolbarIntent> {
+        use crate::backend::wayland::toolbar_intent::ToolbarIntent;
+        use crate::ui::toolbar::ToolbarEvent;
+
+        match self.data.toolbar_move_drag {
+            Some(MoveDrag {
+                kind: MoveDragKind::Top,
+                ..
+            }) => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar(x))),
+            Some(MoveDrag {
+                kind: MoveDragKind::Side,
+                ..
+            }) => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar(y))),
+            None => None,
+        }
     }
 
     pub(super) fn inline_toolbar_motion(&mut self, position: (f64, f64)) -> bool {
@@ -724,6 +848,7 @@ impl WaylandState {
         self.data.inline_side_hover = None;
         self.set_pointer_over_toolbar(false);
         self.set_toolbar_dragging(false);
+        self.end_toolbar_move_drag();
         if had_hover {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
@@ -745,6 +870,7 @@ impl WaylandState {
             }
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);
+            self.end_toolbar_move_drag();
             return true;
         }
         false
@@ -1090,26 +1216,9 @@ impl WaylandState {
         wl_surface.set_buffer_scale(scale);
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
-        let dirty_regions = scale_damage_regions(
-            resolve_damage_regions(
-                self.surface.width().min(i32::MAX as u32) as i32,
-                self.surface.height().min(i32::MAX as u32) as i32,
-                self.input_state.take_dirty_regions(),
-            ),
-            scale,
-        );
-
-        if dirty_regions.is_empty() {
-            debug!("No valid dirty regions; skipping damage request");
-        } else {
-            for rect in &dirty_regions {
-                debug!(
-                    "Damaging buffer region x={} y={} w={} h={}",
-                    rect.x, rect.y, rect.width, rect.height
-                );
-                wl_surface.damage_buffer(rect.x, rect.y, rect.width, rect.height);
-            }
-        }
+        // Damage the full surface to avoid missed updates when reusing buffers or when dirty
+        // tracking fails to cover all changed content (preference: correctness over micro-opt).
+        wl_surface.damage_buffer(0, 0, phys_width as i32, phys_height as i32);
 
         if self.config.performance.enable_vsync {
             debug!("Requesting frame callback (vsync enabled)");
@@ -1141,6 +1250,18 @@ impl WaylandState {
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
     pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
+        match event {
+            ToolbarEvent::MoveTopToolbar(x) => {
+                self.handle_toolbar_move(MoveDragKind::Top, x);
+                return;
+            }
+            ToolbarEvent::MoveSideToolbar(y) => {
+                self.handle_toolbar_move(MoveDragKind::Side, y);
+                return;
+            }
+            _ => {}
+        }
+
         #[cfg(tablet)]
         let prev_thickness = self.input_state.current_thickness;
         #[cfg(tablet)]
@@ -1384,6 +1505,7 @@ impl WaylandState {
     }
 }
 
+#[allow(dead_code)]
 fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Vec<Rect> {
     regions.retain(Rect::is_valid);
 
@@ -1396,6 +1518,7 @@ fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Ve
     regions
 }
 
+#[allow(dead_code)]
 fn scale_damage_regions(regions: Vec<Rect>, scale: i32) -> Vec<Rect> {
     if scale <= 1 {
         return regions;

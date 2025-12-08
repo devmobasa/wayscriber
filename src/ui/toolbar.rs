@@ -51,6 +51,10 @@ pub enum ToolbarEvent {
     ToggleMoreColors(bool),
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
+    /// Drag handle for top toolbar (carries pointer x in toolbar coords)
+    MoveTopToolbar(f64),
+    /// Drag handle for side toolbar (carries pointer y in toolbar coords)
+    MoveSideToolbar(f64),
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -409,6 +413,7 @@ impl InputState {
                     false
                 }
             }
+            ToolbarEvent::MoveTopToolbar(_) | ToolbarEvent::MoveSideToolbar(_) => false,
         }
     }
 }

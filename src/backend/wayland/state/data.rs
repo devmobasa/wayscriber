@@ -1,4 +1,17 @@
 use crate::backend::wayland::toolbar::hit::HitRegion;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveDragKind {
+    Top,
+    Side,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MoveDrag {
+    pub kind: MoveDragKind,
+    pub start_coord: f64,
+    pub start_offset: f64,
+}
 use wayland_client::protocol::wl_seat;
 
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
@@ -24,6 +37,9 @@ pub struct StateData {
     pub(super) inline_side_rect: Option<(f64, f64, f64, f64)>,
     pub(super) inline_top_hover: Option<(f64, f64)>,
     pub(super) inline_side_hover: Option<(f64, f64)>,
+    pub(super) toolbar_top_offset: f64,
+    pub(super) toolbar_side_offset: f64,
+    pub(super) toolbar_move_drag: Option<MoveDrag>,
     pub(super) pending_activation_token: Option<String>,
     pub(super) pending_freeze_on_start: bool,
     pub(super) frozen_enabled: bool,
@@ -53,6 +69,9 @@ impl StateData {
             inline_side_rect: None,
             inline_top_hover: None,
             inline_side_hover: None,
+            toolbar_top_offset: 0.0,
+            toolbar_side_offset: 0.0,
+            toolbar_move_drag: None,
             pending_activation_token: None,
             pending_freeze_on_start: false,
             frozen_enabled: false,

@@ -51,6 +51,7 @@ impl DirtyTracker {
     ///
     /// When the full surface is marked, returns a single rectangle covering the
     /// entire surface; otherwise returns accumulated rectangles.
+    #[allow(dead_code)]
     pub fn take_regions(&mut self, width: i32, height: i32) -> Vec<Rect> {
         if self.force_full {
             self.force_full = false;
@@ -62,6 +63,12 @@ impl DirtyTracker {
             }
             Vec::new()
         } else {
+            self.regions.retain(Rect::is_valid);
+            if self.regions.is_empty() && width > 0 && height > 0 {
+                if let Some(full) = Rect::new(0, 0, width, height) {
+                    return vec![full];
+                }
+            }
             self.regions.drain(..).collect()
         }
     }

@@ -321,6 +321,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
                 state.set_toolbar_dragging(false);
+                state.end_toolbar_move_drag();
                 if let Some(surf) = state.stylus_surface.take() {
                     if state.toolbar.is_toolbar_surface(&surf) {
                         state.toolbar.pointer_leave(&surf);
@@ -389,10 +390,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.inline_toolbar_release((mx as f64, my as f64));
                     state.stylus_on_toolbar = false;
                     state.set_toolbar_dragging(false);
+                    state.end_toolbar_move_drag();
                     return;
                 }
                 if state.stylus_on_toolbar {
                     state.set_toolbar_dragging(false);
+                    state.end_toolbar_move_drag();
                     return;
                 }
                 if !state.stylus_on_overlay {
@@ -431,7 +434,10 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     if let Some(surface) = state.stylus_surface.as_ref() {
                         let evt = state.toolbar.pointer_motion(surface, (xf, yf));
                         if state.toolbar_dragging() {
-                            if let Some(intent) = evt {
+                            // Use move_drag_intent if pointer_motion didn't return an intent
+                            // This allows dragging to continue when stylus moves outside hit region
+                            let intent = evt.or_else(|| state.move_drag_intent(xf, yf));
+                            if let Some(intent) = intent {
                                 let evt = intent_to_event(intent, state.toolbar.last_snapshot());
                                 state.handle_toolbar_event(evt);
                             }

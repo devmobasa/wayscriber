@@ -55,11 +55,15 @@ impl PointerHandler for WaylandState {
                         self.set_pointer_over_toolbar(false);
                         self.toolbar.pointer_leave(&event.surface);
                         self.set_toolbar_dragging(false);
+                        self.end_toolbar_move_drag();
                         self.toolbar.mark_dirty();
                         self.input_state.needs_redraw = true;
                     }
                     if inline_active {
                         self.inline_toolbar_leave();
+                    }
+                    if on_toolbar || inline_active {
+                        self.end_toolbar_move_drag();
                     }
                 }
                 PointerEventKind::Motion { .. } => {
@@ -70,7 +74,12 @@ impl PointerHandler for WaylandState {
                         self.set_pointer_over_toolbar(true);
                         let evt = self.toolbar.pointer_motion(&event.surface, event.position);
                         if self.toolbar_dragging() {
-                            if let Some(intent) = evt {
+                            // Use move_drag_intent if pointer_motion didn't return an intent
+                            // This allows dragging to continue when mouse moves outside hit region
+                            let intent = evt.or_else(|| {
+                                self.move_drag_intent(event.position.0, event.position.1)
+                            });
+                            if let Some(intent) = intent {
                                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);
                             }
@@ -84,7 +93,12 @@ impl PointerHandler for WaylandState {
                     if self.pointer_over_toolbar() {
                         let evt = self.toolbar.pointer_motion(&event.surface, event.position);
                         if self.toolbar_dragging() {
-                            if let Some(intent) = evt {
+                            // Use move_drag_intent if pointer_motion didn't return an intent
+                            // This allows dragging to continue when mouse moves outside hit region
+                            let intent = evt.or_else(|| {
+                                self.move_drag_intent(event.position.0, event.position.1)
+                            });
+                            if let Some(intent) = intent {
                                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);
                             }
@@ -150,6 +164,7 @@ impl PointerHandler for WaylandState {
                             continue;
                         }
                         if self.pointer_over_toolbar() || self.toolbar_dragging() {
+                            self.end_toolbar_move_drag();
                             continue;
                         }
                     }
@@ -157,6 +172,7 @@ impl PointerHandler for WaylandState {
                         if button == BTN_LEFT {
                             self.set_toolbar_dragging(false);
                         }
+                        self.end_toolbar_move_drag();
                         continue;
                     }
                     debug!("Button {} released", button);

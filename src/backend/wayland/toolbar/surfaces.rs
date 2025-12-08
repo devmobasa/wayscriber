@@ -156,6 +156,20 @@ impl ToolbarSurface {
         self.logical_size = size;
     }
 
+    pub fn set_left_margin(&mut self, left: i32) {
+        self.margin.3 = left;
+        if let Some(layer) = self.layer_surface.as_ref() {
+            layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
+        }
+    }
+
+    pub fn set_top_margin(&mut self, top: i32) {
+        self.margin.0 = top;
+        if let Some(layer) = self.layer_surface.as_ref() {
+            layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
+        }
+    }
+
     pub fn set_scale(&mut self, scale: i32) {
         let scale = scale.max(1);
         if self.scale != scale {

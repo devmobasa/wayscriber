@@ -28,6 +28,22 @@ pub fn render_top_strip(
     let gap = 8.0;
     let mut x = 16.0;
 
+    // Drag handle (left)
+    let handle_w = 18.0;
+    let handle_h = 18.0;
+    let handle_y = 10.0;
+    let handle_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, handle_y, handle_w, handle_h))
+        .unwrap_or(false);
+    draw_drag_handle(ctx, x, handle_y, handle_w, handle_h, handle_hover);
+    hits.push(HitRegion {
+        rect: (x, handle_y, handle_w, handle_h),
+        event: ToolbarEvent::MoveTopToolbar(0.0),
+        kind: HitKind::DragMoveTop,
+        tooltip: Some("Drag toolbar".to_string()),
+    });
+    x += handle_w + gap;
+
     type IconFn = fn(&cairo::Context, f64, f64, f64);
     let buttons: &[(Tool, IconFn, &str)] = &[
         (
@@ -346,7 +362,22 @@ pub fn render_side_palette(
     ctx.set_font_size(13.0);
 
     let btn_size = 22.0;
-    let header_y = y;
+    let mut header_y = y;
+    let handle_w = 18.0;
+    let handle_h = 18.0;
+
+    // Place handle above the header row to avoid widening the palette.
+    let handle_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, header_y, handle_w, handle_h))
+        .unwrap_or(false);
+    draw_drag_handle(ctx, x, header_y, handle_w, handle_h, handle_hover);
+    hits.push(HitRegion {
+        rect: (x, header_y, handle_w, handle_h),
+        event: ToolbarEvent::MoveSideToolbar(0.0),
+        kind: HitKind::DragMoveSide,
+        tooltip: Some("Drag toolbar".to_string()),
+    });
+    header_y += handle_h + 6.0;
 
     let icons_w = 58.0;
     let icons_h = btn_size;
@@ -405,7 +436,7 @@ pub fn render_side_palette(
         tooltip: Some("Close".to_string()),
     });
 
-    y += btn_size + 6.0;
+    y = header_y + btn_size + 12.0;
 
     let card_x = x - 6.0;
     let card_w = width - 2.0 * x + 12.0;
@@ -1386,6 +1417,25 @@ fn draw_panel_background(ctx: &cairo::Context, width: f64, height: f64) {
     ctx.set_source_rgba(0.05, 0.05, 0.08, 0.92);
     draw_round_rect(ctx, 0.0, 0.0, width, height, 14.0);
     let _ = ctx.fill();
+}
+
+fn draw_drag_handle(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, hover: bool) {
+    draw_round_rect(ctx, x, y, w, h, 4.0);
+    let alpha = if hover { 0.9 } else { 0.6 };
+    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha * 0.5);
+    let _ = ctx.fill();
+
+    ctx.set_line_width(1.1);
+    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha);
+    let bar_w = w * 0.55;
+    let bar_h = 2.0;
+    let bar_x = x + (w - bar_w) / 2.0;
+    let mut bar_y = y + (h - 3.0 * bar_h) / 2.0;
+    for _ in 0..3 {
+        draw_round_rect(ctx, bar_x, bar_y, bar_w, bar_h, 1.0);
+        let _ = ctx.fill();
+        bar_y += bar_h + 2.0;
+    }
 }
 
 fn draw_group_card(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {

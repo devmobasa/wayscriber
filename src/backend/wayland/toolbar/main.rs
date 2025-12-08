@@ -119,6 +119,14 @@ impl ToolbarSurfaceManager {
         self.top.is_surface(surface) || self.side.is_surface(surface)
     }
 
+    pub fn set_top_margin_left(&mut self, left: i32) {
+        self.top.set_left_margin(left);
+    }
+
+    pub fn set_side_margin_top(&mut self, top: i32) {
+        self.side.set_top_margin(top);
+    }
+
     pub fn destroy_all(&mut self) {
         self.top.destroy();
         self.side.destroy();
