@@ -320,6 +320,26 @@ impl WaylandBackend {
             None => {}
         }
 
+        if let Some(ref opts) = session_options {
+            info!(
+                "Session persistence: base_dir={}, per_output={}, display_id='{}', output_identity={:?}, boards[T/W/B]={}/{}/{}, history={}, max_persisted_history={:?}, restore_tool_state={}, max_file_size={} bytes, compression={:?}",
+                opts.base_dir.display(),
+                opts.per_output,
+                opts.display_id,
+                opts.output_identity(),
+                opts.persist_transparent,
+                opts.persist_whiteboard,
+                opts.persist_blackboard,
+                opts.persist_history,
+                opts.max_persisted_undo_depth,
+                opts.restore_tool_state,
+                opts.max_file_size_bytes,
+                opts.compression
+            );
+        } else {
+            info!("Session persistence disabled (no session options available)");
+        }
+
         #[cfg(tablet)]
         let tablet_manager = if config.tablet.enabled {
             match globals.bind::<ZwpTabletManagerV2, _, _>(&qh, 1..=TABLET_MANAGER_MAX_VERSION, ())

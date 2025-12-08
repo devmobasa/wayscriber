@@ -313,14 +313,18 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
 /// Attempt to load a previously saved session.
 pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>> {
     if !options.any_enabled() && !options.restore_tool_state {
-        debug!("Persistence disabled for all boards; skipping load");
+        info!(
+            "Session load skipped: persistence disabled (base_dir={}, file={})",
+            options.base_dir.display(),
+            options.session_file_path().display()
+        );
         return Ok(None);
     }
 
     let session_path = options.session_file_path();
     if !session_path.exists() {
-        debug!(
-            "No session file present at {}, skipping load",
+        info!(
+            "Session file not found at {}; skipping load",
             session_path.display()
         );
         return Ok(None);
@@ -328,6 +332,13 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
 
     let metadata = fs::metadata(&session_path)
         .with_context(|| format!("failed to stat session file {}", session_path.display()))?;
+    info!(
+        "Session file present at {} ({} bytes, per_output={}, output_identity={:?})",
+        session_path.display(),
+        metadata.len(),
+        options.per_output,
+        options.output_identity()
+    );
     if metadata.len() > options.max_file_size_bytes {
         warn!(
             "Session file {} is {} bytes which exceeds the configured limit ({} bytes); refusing to load",
@@ -360,8 +371,32 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
     }
 
     match result {
-        Ok(Some(loaded)) => Ok(Some(loaded.snapshot)),
-        Ok(None) => Ok(None),
+        Ok(Some(loaded)) => {
+            let boards = (
+                loaded.snapshot.transparent.is_some(),
+                loaded.snapshot.whiteboard.is_some(),
+                loaded.snapshot.blackboard.is_some(),
+            );
+            let tool_state = loaded.snapshot.tool_state.is_some();
+            info!(
+                "Loaded session from {} (version {}, compressed={}, boards[T/W/B]={}/{}/{}, tool_state={})",
+                session_path.display(),
+                loaded.version,
+                loaded.compressed,
+                boards.0,
+                boards.1,
+                boards.2,
+                tool_state
+            );
+            Ok(Some(loaded.snapshot))
+        }
+        Ok(None) => {
+            info!(
+                "Session file {} contained no usable data; continuing with defaults",
+                session_path.display()
+            );
+            Ok(None)
+        }
         Err(err) => {
             warn!(
                 "Failed to load session {}; backing up and continuing with defaults: {}",
