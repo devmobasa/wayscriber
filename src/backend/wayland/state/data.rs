@@ -14,6 +14,7 @@ pub struct StateData {
     pub(super) current_keyboard_interactivity:
         Option<smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity>,
     pub(super) toolbar_needs_recreate: bool,
+    pub(super) toolbar_layer_shell_missing_logged: bool,
     pub(super) pending_activation_token: Option<String>,
     pub(super) pending_freeze_on_start: bool,
     pub(super) frozen_enabled: bool,
@@ -34,6 +35,7 @@ impl StateData {
             toolbar_dragging: false,
             current_keyboard_interactivity: None,
             toolbar_needs_recreate: true,
+            toolbar_layer_shell_missing_logged: false,
             pending_activation_token: None,
             pending_freeze_on_start: false,
             frozen_enabled: false,

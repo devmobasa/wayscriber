@@ -1,4 +1,5 @@
 use anyhow::Result;
+use log::{debug, info};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     shell::{
@@ -79,6 +80,11 @@ impl ToolbarSurface {
             return;
         }
 
+        info!(
+            "Creating toolbar surface '{}' (anchor {:?}, logical {:?}, margin {:?}, scale {})",
+            self.name, self.anchor, self.logical_size, self.margin, scale
+        );
+
         let wl_surface = compositor.create_surface(qh);
         wl_surface.set_buffer_scale(scale);
 
@@ -128,6 +134,10 @@ impl ToolbarSurface {
             let changed = self.width != configure.new_size.0 || self.height != configure.new_size.1;
             self.width = configure.new_size.0;
             self.height = configure.new_size.1;
+            debug!(
+                "Toolbar surface '{}' configured to {}x{} (scale {})",
+                self.name, self.width, self.height, self.scale
+            );
             if changed {
                 self.pool = None;
             }

@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
+use log::info;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     shell::wlr_layer::{Anchor, LayerShell, LayerSurfaceConfigure},
@@ -136,6 +137,17 @@ impl ToolbarSurfaceManager {
         let side_size = crate::backend::wayland::toolbar::side_size(snapshot);
 
         if self.is_top_visible() {
+            if self.top.layer_surface.is_none() {
+                info!(
+                    "Ensuring top toolbar surface exists at logical size {:?}, scale {}",
+                    top_size, scale
+                );
+            } else if self.top.logical_size != (0, 0) && self.top.logical_size != top_size {
+                info!(
+                    "Top toolbar size change: {:?} -> {:?} (scale {})",
+                    self.top.logical_size, top_size, scale
+                );
+            }
             if self.top.logical_size != (0, 0) && self.top.logical_size != top_size {
                 self.top.destroy();
             }
@@ -146,6 +158,17 @@ impl ToolbarSurfaceManager {
         }
 
         if self.is_side_visible() {
+            if self.side.layer_surface.is_none() {
+                info!(
+                    "Ensuring side toolbar surface exists at logical size {:?}, scale {}",
+                    side_size, scale
+                );
+            } else if self.side.logical_size != (0, 0) && self.side.logical_size != side_size {
+                info!(
+                    "Side toolbar size change: {:?} -> {:?} (scale {})",
+                    self.side.logical_size, side_size, scale
+                );
+            }
             if self.side.logical_size != (0, 0) && self.side.logical_size != side_size {
                 self.side.destroy();
             }

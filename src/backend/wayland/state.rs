@@ -376,11 +376,26 @@ impl WaylandState {
 
     /// Determines the desired keyboard interactivity for the main layer surface.
     pub(super) fn desired_keyboard_interactivity(&self) -> KeyboardInteractivity {
-        if self.toolbar.is_visible() {
+        if self.layer_shell.is_some() && self.toolbar.is_visible() {
             KeyboardInteractivity::OnDemand
         } else {
             KeyboardInteractivity::Exclusive
         }
+    }
+
+    fn log_toolbar_layer_shell_missing_once(&mut self) {
+        if self.data.toolbar_layer_shell_missing_logged {
+            return;
+        }
+
+        let desktop_env = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "unknown".into());
+        let session_env = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_else(|_| "unknown".into());
+        log::warn!(
+            "Layer-shell protocol unavailable; toolbar surfaces will not appear (desktop='{}', session='{}'). Overlay may be limited to the work area on compositors like GNOME.",
+            desktop_env,
+            session_env
+        );
+        self.data.toolbar_layer_shell_missing_logged = true;
     }
 
     /// Applies keyboard interactivity based on toolbar visibility.
@@ -426,7 +441,11 @@ impl WaylandState {
             self.set_pointer_over_toolbar(false);
         }
 
-        if any_visible {
+        if any_visible && self.layer_shell.is_none() {
+            self.log_toolbar_layer_shell_missing_once();
+        }
+
+        if any_visible && self.layer_shell.is_some() {
             if self.toolbar_needs_recreate() {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(false);

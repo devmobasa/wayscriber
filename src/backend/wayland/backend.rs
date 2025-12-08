@@ -174,7 +174,14 @@ impl WaylandBackend {
                 Some(shell)
             }
             Err(err) => {
-                warn!("Layer shell not available: {}", err);
+                let desktop_env =
+                    env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "unknown".into());
+                let session_env =
+                    env::var("XDG_SESSION_DESKTOP").unwrap_or_else(|_| "unknown".into());
+                warn!(
+                    "Layer shell not available: {} (desktop='{}', session='{}'); toolbars will be disabled and xdg fallback may not cover docks/panels.",
+                    err, desktop_env, session_env
+                );
                 None
             }
         };

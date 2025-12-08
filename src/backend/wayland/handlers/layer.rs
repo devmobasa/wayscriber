@@ -36,6 +36,15 @@ impl LayerShellHandler for WaylandState {
         }
 
         if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
+            let prev_dims = (self.surface.width(), self.surface.height());
+            debug!(
+                "Layer surface configure: new logical size {}x{} (previous {}x{}), scale {}",
+                configure.new_size.0,
+                configure.new_size.1,
+                prev_dims.0,
+                prev_dims.1,
+                self.surface.scale()
+            );
             let size_changed = self
                 .surface
                 .update_dimensions(configure.new_size.0, configure.new_size.1);
