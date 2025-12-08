@@ -144,6 +144,8 @@ sudo rpm -Uvh wayscriber-configurator-x86_64.rpm
 ```bash
 yay -S wayscriber        # from source
 yay -S wayscriber-bin    # prebuilt binary
+# Optional GUI configurator:
+yay -S wayscriber-configurator
 ```
 
 ### From Source
