@@ -564,6 +564,19 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
+            log::info!(
+                "Restoring tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}], font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}",
+                tool_state.current_color,
+                tool_state.current_thickness,
+                tool_state.eraser_size,
+                tool_state.eraser_kind,
+                tool_state.current_font_size,
+                tool_state.text_background_enabled,
+                tool_state.arrow_length,
+                tool_state.arrow_angle,
+                tool_state.show_status_bar,
+                tool_state.board_previous_color
+            );
             input.current_color = tool_state.current_color;
             input.current_thickness = tool_state
                 .current_thickness
@@ -578,6 +591,8 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
             input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
             input.board_previous_color = tool_state.board_previous_color;
             input.show_status_bar = tool_state.show_status_bar;
+        } else {
+            log::info!("No tool state found in session; skipping tool restore");
         }
     }
 

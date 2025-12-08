@@ -197,8 +197,14 @@ fn resolve_display_id(display_id: Option<&str>) -> String {
     }
 
     match env::var("WAYLAND_DISPLAY") {
-        Ok(value) => sanitize_identifier(&value),
-        Err(_) => "default".to_string(),
+        Ok(value) => {
+            log::info!("Session display id from WAYLAND_DISPLAY='{}'", value);
+            sanitize_identifier(&value)
+        }
+        Err(_) => {
+            log::info!("Session display id fallback to 'default' (WAYLAND_DISPLAY missing)");
+            "default".to_string()
+        }
     }
 }
 
