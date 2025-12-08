@@ -54,6 +54,14 @@ impl ToolbarSurfaceManager {
         Self::default()
     }
 
+    pub fn top_created(&self) -> bool {
+        self.top.layer_surface.is_some()
+    }
+
+    pub fn side_created(&self) -> bool {
+        self.side.layer_surface.is_some()
+    }
+
     /// Returns true if any toolbar is visible
     pub fn is_visible(&self) -> bool {
         self.visible || self.top_visible || self.side_visible

@@ -441,6 +441,19 @@ impl WaylandState {
             self.set_pointer_over_toolbar(false);
         }
 
+        if any_visible {
+            log::info!(
+                "Toolbar visibility sync: top_visible={}, side_visible={}, layer_shell_available={}, top_created={}, side_created={}, needs_recreate={}, scale={}",
+                top_visible,
+                side_visible,
+                self.layer_shell.is_some(),
+                self.toolbar.top_created(),
+                self.toolbar.side_created(),
+                self.toolbar_needs_recreate(),
+                self.surface.scale()
+            );
+        }
+
         if any_visible && self.layer_shell.is_none() {
             self.log_toolbar_layer_shell_missing_once();
         }

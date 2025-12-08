@@ -195,6 +195,15 @@ impl ToolbarSurface {
         ) -> Result<()>,
     {
         if !self.configured || !self.dirty || self.width == 0 || self.height == 0 {
+            log::debug!(
+                "Skipping render for toolbar '{}' (configured={}, dirty={}, width={}, height={}, scale={})",
+                self.name,
+                self.configured,
+                self.dirty,
+                self.width,
+                self.height,
+                self.scale
+            );
             return Ok(());
         }
 
