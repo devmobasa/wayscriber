@@ -573,18 +573,18 @@ impl WaylandState {
         self.data.toolbar_side_offset = self.data.toolbar_side_offset.clamp(0.0, max_side);
     }
 
-    fn begin_toolbar_move_drag(&mut self, kind: MoveDragKind, coord: f64) {
+    fn begin_toolbar_move_drag(&mut self, kind: MoveDragKind, local_coord: f64) {
         if self.data.toolbar_move_drag.is_none() {
-            let screen_coord = self.effective_toolbar_coord(kind, coord);
             log::debug!(
-                "Begin toolbar move drag: kind={:?}, local_coord={}, screen_coord={}",
+                "Begin toolbar move drag: kind={:?}, local_coord={}",
                 kind,
-                coord,
-                screen_coord
+                local_coord
             );
+            // Store as local coords since the initial press is on the toolbar surface
             self.data.toolbar_move_drag = Some(MoveDrag {
                 kind,
-                last_coord: screen_coord,
+                last_coord: local_coord,
+                coord_is_screen: false,
             });
         }
         self.data.active_drag_kind = Some(kind);
@@ -598,6 +598,11 @@ impl WaylandState {
                 (Self::TOP_BASE_MARGIN_LEFT + self.data.toolbar_top_offset).round() as i32;
             let side_margin_top =
                 (Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset).round() as i32;
+            log::debug!(
+                "apply_toolbar_offsets: top_margin_left={}, side_margin_top={}",
+                top_margin_left,
+                side_margin_top
+            );
             self.toolbar.set_top_margin_left(top_margin_left);
             self.toolbar.set_side_margin_top(side_margin_top);
             self.toolbar.mark_dirty();
@@ -605,10 +610,81 @@ impl WaylandState {
     }
 
     /// Handle toolbar move with toolbar-surface-local coordinates.
-    /// Converts to screen coordinates internally.
-    pub(super) fn handle_toolbar_move(&mut self, kind: MoveDragKind, coord: f64) {
-        let screen_coord = self.effective_toolbar_coord(kind, coord);
-        self.handle_toolbar_move_screen(kind, screen_coord);
+    /// On layer-shell, toolbar-local coords stay consistent as the toolbar moves,
+    /// so we use them directly for delta calculation.
+    pub(super) fn handle_toolbar_move(&mut self, kind: MoveDragKind, local_coord: f64) {
+        // For layer-shell surfaces, use local coordinates directly since they're
+        // consistent within the toolbar surface. Only convert to screen coords
+        // when transitioning to/from main surface.
+        self.handle_toolbar_move_local(kind, local_coord);
+    }
+
+    /// Handle toolbar move with toolbar-surface-local coordinates.
+    fn handle_toolbar_move_local(&mut self, kind: MoveDragKind, local_coord: f64) {
+        let snapshot = self
+            .toolbar
+            .last_snapshot()
+            .cloned()
+            .unwrap_or_else(|| self.toolbar_snapshot());
+
+        // Check if we need to transition coordinate systems
+        let (last_coord, coord_is_screen) = match &self.data.toolbar_move_drag {
+            Some(d) if d.kind == kind => (d.last_coord, d.coord_is_screen),
+            _ => (local_coord, false), // Start fresh with local coords
+        };
+
+        // If last coord was screen-based, convert current local to screen for comparison
+        let (effective_coord, new_is_screen) = if coord_is_screen {
+            (self.effective_toolbar_coord(kind, local_coord), true)
+        } else {
+            (local_coord, false)
+        };
+
+        self.data.active_drag_kind = Some(kind);
+
+        let current_offset = match kind {
+            MoveDragKind::Top => self.data.toolbar_top_offset,
+            MoveDragKind::Side => self.data.toolbar_side_offset,
+        };
+        let delta = effective_coord - last_coord;
+        log::debug!(
+            "handle_toolbar_move_local: kind={:?}, local_coord={}, effective_coord={}, last_coord={}, delta={}, offset={}",
+            kind,
+            local_coord,
+            effective_coord,
+            last_coord,
+            delta,
+            current_offset
+        );
+
+        let new_offset = current_offset + delta;
+        match kind {
+            MoveDragKind::Top => {
+                self.data.toolbar_top_offset = new_offset;
+            }
+            MoveDragKind::Side => {
+                self.data.toolbar_side_offset = new_offset;
+            }
+        }
+        log::debug!(
+            "After update: new_offset={}, toolbar_side_offset={}",
+            new_offset,
+            self.data.toolbar_side_offset
+        );
+
+        self.data.toolbar_move_drag = Some(MoveDrag {
+            kind,
+            last_coord: effective_coord,
+            coord_is_screen: new_is_screen,
+        });
+        self.apply_toolbar_offsets(&snapshot);
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
+        self.clamp_toolbar_offsets(&snapshot);
+
+        if self.layer_shell.is_none() {
+            self.clear_inline_toolbar_hits();
+        }
     }
 
     /// Handle toolbar move with screen-relative coordinates (no conversion).
@@ -619,25 +695,32 @@ impl WaylandState {
             .last_snapshot()
             .cloned()
             .unwrap_or_else(|| self.toolbar_snapshot());
-        let drag = match self.data.toolbar_move_drag {
-            Some(d) if d.kind == kind => d,
-            _ => MoveDrag {
-                kind,
-                last_coord: screen_coord,
-            },
+
+        // Get last coord, converting from local to screen if needed
+        let last_screen_coord = match self.data.toolbar_move_drag {
+            Some(d) if d.kind == kind => {
+                if d.coord_is_screen {
+                    d.last_coord
+                } else {
+                    // Convert local to screen for comparison
+                    self.effective_toolbar_coord(kind, d.last_coord)
+                }
+            }
+            _ => screen_coord, // Start fresh
         };
+
         self.data.active_drag_kind = Some(kind);
 
         let current_offset = match kind {
             MoveDragKind::Top => self.data.toolbar_top_offset,
             MoveDragKind::Side => self.data.toolbar_side_offset,
         };
-        let delta = screen_coord - drag.last_coord;
+        let delta = screen_coord - last_screen_coord;
         log::debug!(
-            "handle_toolbar_move_screen: kind={:?}, screen_coord={}, last_coord={}, delta={}, current_offset={}",
+            "handle_toolbar_move_screen: kind={:?}, screen_coord={}, last_screen_coord={}, delta={}, current_offset={}",
             kind,
             screen_coord,
-            drag.last_coord,
+            last_screen_coord,
             delta,
             current_offset
         );
@@ -651,8 +734,9 @@ impl WaylandState {
         }
 
         self.data.toolbar_move_drag = Some(MoveDrag {
+            kind,
             last_coord: screen_coord,
-            ..drag
+            coord_is_screen: true,
         });
         self.apply_toolbar_offsets(&snapshot);
         self.toolbar.mark_dirty();

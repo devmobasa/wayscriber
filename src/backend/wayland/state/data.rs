@@ -10,6 +10,8 @@ pub enum MoveDragKind {
 pub struct MoveDrag {
     pub kind: MoveDragKind,
     pub last_coord: f64,
+    /// Whether last_coord is in screen coordinates (true) or toolbar-local (false)
+    pub coord_is_screen: bool,
 }
 use wayland_client::protocol::wl_seat;
 

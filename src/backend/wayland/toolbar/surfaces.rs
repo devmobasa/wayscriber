@@ -160,6 +160,8 @@ impl ToolbarSurface {
         self.margin.3 = left;
         if let Some(layer) = self.layer_surface.as_ref() {
             layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
+            // Commit immediately so the margin change takes effect
+            layer.wl_surface().commit();
         }
     }
 
@@ -167,6 +169,8 @@ impl ToolbarSurface {
         self.margin.0 = top;
         if let Some(layer) = self.layer_surface.as_ref() {
             layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
+            // Commit immediately so the margin change takes effect
+            layer.wl_surface().commit();
         }
     }
 
