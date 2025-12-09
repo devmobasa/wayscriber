@@ -280,6 +280,7 @@ impl InputState {
         if !matches!(action, Action::OpenContextMenu) {
             self.close_properties_panel();
         }
+
         match action {
             Action::Exit => {
                 // Exit drawing mode or cancel current action
@@ -578,17 +579,13 @@ impl InputState {
                 self.set_pending_capture_action(action);
 
                 // Clear modifiers to prevent them from being "stuck" after capture
-                // (portal dialog causes key releases to be missed)
-                self.modifiers.ctrl = false;
-                self.modifiers.shift = false;
-                self.modifiers.alt = false;
+                // (portal dialog causes key releases to be missed or focus to flicker)
+                self.reset_modifiers();
             }
             Action::ToggleFrozenMode => {
                 log::info!("Toggle frozen mode requested");
                 self.request_frozen_toggle();
-                self.modifiers.ctrl = false;
-                self.modifiers.shift = false;
-                self.modifiers.alt = false;
+                self.reset_modifiers();
             }
         }
     }

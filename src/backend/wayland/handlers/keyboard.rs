@@ -39,6 +39,14 @@ impl KeyboardHandler for WaylandState {
     ) {
         debug!("Keyboard focus left");
         self.set_keyboard_focus(false);
+
+        // When the compositor moves focus away from our surface (e.g. to a portal
+        // dialog, another layer surface, or a different window), it's possible for
+        // us to miss some key release events. To avoid leaving modifiers "stuck"
+        // and breaking shortcuts/tools, aggressively reset our modifier state on
+        // focus loss.
+        self.input_state.reset_modifiers();
+
         if self.surface.is_xdg_window() {
             warn!("Keyboard focus lost in xdg fallback; exiting overlay");
             notification::send_notification_async(
@@ -110,6 +118,10 @@ impl KeyboardHandler for WaylandState {
             "Modifiers: ctrl={} alt={} shift={}",
             modifiers.ctrl, modifiers.alt, modifiers.shift
         );
+        // Trust compositor-reported modifier state to reconcile any missed key release
+        // events and avoid "stuck" modifiers.
+        self.input_state
+            .sync_modifiers(modifiers.shift, modifiers.ctrl, modifiers.alt);
     }
 
     fn repeat_key(
