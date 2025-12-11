@@ -48,22 +48,25 @@ fn draw_icon_zoom_toggle(ctx: &cairo::Context, x: f64, y: f64, size: f64, active
     let cy = y + size * 0.45;
     ctx.set_line_width(size * 0.08);
     ctx.new_path();
+    // Outer magnifying glass circle
     ctx.arc(cx, cy, r, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.stroke();
+    // Handle
     let handle_len = r * 0.9;
     ctx.move_to(cx + r * 0.6, cy + r * 0.6);
     ctx.line_to(cx + r * 0.6 + handle_len, cy + r * 0.6 + handle_len);
     let _ = ctx.stroke();
     if active {
-        ctx.set_line_width(size * 0.06);
-        ctx.move_to(cx - r * 0.55, cy - r * 0.55);
-        ctx.line_to(cx + r * 0.55, cy + r * 0.55);
+        // Concentric circles (target/focus indicator) when zoom is active
+        ctx.set_line_width(size * 0.05);
+        ctx.new_path();
+        ctx.arc(cx, cy, r * 0.55, 0.0, std::f64::consts::PI * 2.0);
         let _ = ctx.stroke();
-    } else {
-        let dot_r = r * 0.35;
-        ctx.arc(cx, cy, dot_r, 0.0, std::f64::consts::PI * 2.0);
+        ctx.new_path();
+        ctx.arc(cx, cy, r * 0.2, 0.0, std::f64::consts::PI * 2.0);
         let _ = ctx.fill();
     }
+    // When inactive: empty magnifying glass (no inner elements)
 }
 
 pub fn render_top_strip(
