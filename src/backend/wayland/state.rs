@@ -599,6 +599,10 @@ impl WaylandState {
             return Ok(false);
         }
 
+        // If zoom was deactivated or reset to 1.0 via any path, ensure we release
+        // zoom-owned frozen frames before proceeding.
+        self.unfreeze_zoom_if_needed();
+
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
         let scale = self.surface.scale().max(1);
