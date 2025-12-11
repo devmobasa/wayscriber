@@ -815,6 +815,13 @@ impl WaylandState {
             let _ = ctx.restore();
         }
 
+        // Render UI overlays at logical coordinates. Apply the output scale so that UI anchors
+        // to the expected screen corners on HiDPI displays regardless of zoom state.
+        let _ = ctx.save();
+        if scale > 1 {
+            ctx.scale(scale as f64, scale as f64);
+        }
+
         // Render frozen badge even if status bar is hidden
         if self.input_state.frozen_active() && self.config.ui.show_frozen_badge {
             crate::ui::render_frozen_badge(&ctx, width, height);
