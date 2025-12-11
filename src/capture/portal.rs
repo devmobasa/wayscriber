@@ -102,10 +102,24 @@ pub async fn capture_via_portal(capture_type: CaptureType) -> Result<String, Cap
     log::debug!("Waiting for Response signal...");
 
     // Get the first (and only) response
-    let response_signal = response_stream
-        .next()
-        .await
-        .ok_or_else(|| CaptureError::InvalidResponse("No Response signal received".to_string()))?;
+    let response_signal = match tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        response_stream.next(),
+    )
+    .await
+    {
+        Ok(Some(signal)) => signal,
+        Ok(None) => {
+            return Err(CaptureError::InvalidResponse(
+                "No Response signal received".to_string(),
+            ));
+        }
+        Err(_) => {
+            return Err(CaptureError::Cancelled(
+                "Portal response timed out".to_string(),
+            ));
+        }
+    };
 
     let args = response_signal.args().map_err(|e| {
         CaptureError::InvalidResponse(format!("Failed to parse response args: {}", e))

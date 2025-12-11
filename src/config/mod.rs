@@ -19,7 +19,7 @@ pub use types::TabletInputConfig;
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
     HistoryConfig, PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode,
-    StatusBarStyle, ToolbarConfig, UiConfig,
+    StatusBarStyle, ToolbarConfig, UiConfig, ZoomConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)
@@ -665,6 +665,34 @@ impl Config {
             }
         }
 
+        // Zoom guardrails
+        if self.ui.zoom.virtual_area_cap_px2 < 1_000_000 {
+            log::warn!(
+                "zoom.virtual_area_cap_px2 {} too small; using minimum 1_000_000",
+                self.ui.zoom.virtual_area_cap_px2
+            );
+            self.ui.zoom.virtual_area_cap_px2 = 1_000_000;
+        }
+
+        if !(720..=12_000).contains(&self.ui.zoom.max_capture_dimension) {
+            log::warn!(
+                "zoom.max_capture_dimension {} outside 720-12000; clamping",
+                self.ui.zoom.max_capture_dimension
+            );
+            self.ui.zoom.max_capture_dimension =
+                self.ui.zoom.max_capture_dimension.clamp(720, 12_000);
+        }
+
+        if self.ui.zoom.control_modifier.trim().is_empty() {
+            log::warn!("zoom.control_modifier empty; defaulting to Space");
+            self.ui.zoom.control_modifier = "Space".to_string();
+        }
+
+        if self.ui.zoom.request_on_crossing_shortcut.trim().is_empty() {
+            log::warn!("zoom.request_on_crossing_shortcut empty; defaulting to Ctrl+Shift+Z");
+            self.ui.zoom.request_on_crossing_shortcut = "Ctrl+Shift+Z".to_string();
+        }
+
         // Validate keybindings (try to build action map to catch parse errors)
         if let Err(e) = self.keybindings.build_action_map() {
             log::warn!("Invalid keybinding configuration: {}. Using defaults.", e);
@@ -674,6 +702,29 @@ impl Config {
         if self.session.max_shapes_per_frame == 0 {
             log::warn!("session.max_shapes_per_frame must be positive; using 1 instead");
             self.session.max_shapes_per_frame = 1;
+        }
+
+        if self.ui.zoom.min_factor < 0.1 {
+            log::warn!(
+                "zoom.min_factor {:.2} below 0.1; clamping to 0.1",
+                self.ui.zoom.min_factor
+            );
+            self.ui.zoom.min_factor = 0.1;
+        }
+        if self.ui.zoom.max_factor <= self.ui.zoom.min_factor {
+            log::warn!(
+                "zoom.max_factor {:.2} must be greater than min_factor {:.2}; raising max",
+                self.ui.zoom.max_factor,
+                self.ui.zoom.min_factor
+            );
+            self.ui.zoom.max_factor = (self.ui.zoom.min_factor + 0.5).max(0.6);
+        }
+        if self.ui.zoom.step <= 0.0 {
+            log::warn!(
+                "zoom.step {:.2} must be positive; defaulting to 0.2",
+                self.ui.zoom.step
+            );
+            self.ui.zoom.step = 0.2;
         }
 
         if self.session.max_file_size_mb == 0 {

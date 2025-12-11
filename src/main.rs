@@ -44,6 +44,7 @@ mod session;
 mod time_utils;
 mod ui;
 mod util;
+mod zoom;
 
 #[derive(Parser, Debug)]
 #[command(name = "wayscriber")]

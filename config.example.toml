@@ -203,6 +203,37 @@ show_delay_sliders = false
 show_marker_opacity_section = false
 
 # ───────────────────────────────────────────────────────────────────────────────
+# Zoom (magnifier) settings
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.zoom]
+# Enable full-desktop stream attempts when layout validation passes (uniform scale, no rotation)
+full_desktop_enabled = false
+
+# Zoom factor limits and step size
+min_factor = 0.1
+max_factor = 4.0
+step = 0.2
+
+# Cap virtual desktop area (pixels^2) before falling back to per-monitor streams
+virtual_area_cap_px2 = 9_000_000
+
+# Downscale captures/streams for CPU paths to this max dimension
+max_capture_dimension = 2560
+
+# Prompt each time when crossing monitors if portal persistence is denied
+prompt_on_crossing = false
+
+# Modifier to engage zoom controls (scroll/pan) while keeping app interaction by default
+control_modifier = "Space"
+
+# Whether zoom captures input by default (otherwise apps remain interactive)
+capture_input_by_default = false
+
+# Shortcut hint shown in HUD for requesting a transient stream on the current monitor
+request_on_crossing_shortcut = "Ctrl+Alt+M"
+
+# ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -438,6 +469,14 @@ toggle_fill = []
 
 # Toggle context menu (keyboard alternative to right-click)
 open_context_menu = ["Shift+F10", "Menu"]
+
+# Zoom controls
+toggle_zoom = ["Ctrl+Alt+Z"]
+zoom_in = ["Ctrl+Alt+ScrollUp", "Ctrl+Alt++", "Ctrl+Alt+="]
+zoom_out = ["Ctrl+Alt+ScrollDown", "Ctrl+Alt+-", "Ctrl+Alt+_"]
+reset_zoom = ["Ctrl+Alt+0"]
+request_zoom_for_current_monitor = ["Ctrl+Alt+M"]
+toggle_zoom_input_capture = ["Ctrl+Alt+P"]
 
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]

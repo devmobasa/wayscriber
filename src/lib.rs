@@ -12,5 +12,6 @@ pub mod session;
 pub mod time_utils;
 pub mod ui;
 pub mod util;
+pub mod zoom;
 
 pub use config::Config;

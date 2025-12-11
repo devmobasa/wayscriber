@@ -1,6 +1,9 @@
 use super::base::InputState;
 use crate::config::Action;
 use crate::config::Config;
+use crate::config::ZoomConfig;
+use crate::input::state::ZoomCommandResult;
+use crate::input::state::zoom::ZoomCommand;
 use crate::util::Rect;
 use std::io::ErrorKind;
 use std::process::{Command, Stdio};
@@ -9,6 +12,11 @@ impl InputState {
     /// Updates the cached pointer location.
     pub fn update_pointer_position(&mut self, x: i32, y: i32) {
         self.last_pointer_position = (x, y);
+        self.zoom.update_pointer((x as f64, y as f64));
+        if self.zoom.is_active() {
+            self.zoom.center_logical = (x as f64, y as f64);
+            self.needs_redraw = true;
+        }
     }
 
     /// Updates the undo stack limit for subsequent actions.
@@ -65,6 +73,53 @@ impl InputState {
     /// Stores a capture action for retrieval by the backend.
     pub(crate) fn set_pending_capture_action(&mut self, action: Action) {
         self.pending_capture_action = Some(action);
+    }
+
+    /// Stores a zoom command for retrieval by the backend.
+    pub(crate) fn enqueue_zoom_command(&mut self, command: ZoomCommand) {
+        self.pending_zoom_command = Some(command);
+    }
+
+    /// Takes and clears any pending zoom command.
+    pub fn take_pending_zoom_command(&mut self) -> Option<ZoomCommand> {
+        self.pending_zoom_command.take()
+    }
+
+    /// Applies a zoom command and returns whether state changed or a monitor request was issued.
+    pub fn apply_zoom_command(
+        &mut self,
+        command: ZoomCommand,
+        viewport_logical: (f64, f64),
+    ) -> ZoomCommandResult {
+        let pointer = (
+            self.last_pointer_position.0 as f64,
+            self.last_pointer_position.1 as f64,
+        );
+        let result = self.zoom.apply_command(command, pointer, viewport_logical);
+        if matches!(result, ZoomCommandResult::StateChanged) {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+        } else if matches!(result, ZoomCommandResult::RequestCurrentMonitor) {
+            self.pending_zoom_monitor_request = true;
+        }
+        result
+    }
+
+    /// Applies zoom configuration defaults/limits.
+    pub fn configure_zoom(&mut self, config: &ZoomConfig) {
+        self.zoom.configure(
+            config.min_factor,
+            config.max_factor,
+            config.step,
+            config.capture_input_by_default,
+        );
+    }
+
+    /// Returns and clears any pending zoom monitor request hint.
+    pub fn take_pending_zoom_monitor_request(&mut self) -> bool {
+        let pending = self.pending_zoom_monitor_request;
+        self.pending_zoom_monitor_request = false;
+        pending
     }
 
     /// Marks a frozen-mode toggle request for the backend.

@@ -11,6 +11,83 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use super::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
 use super::hit::HitRegion;
 
+fn draw_icon_zoom_shape(ctx: &cairo::Context, x: f64, y: f64, size: f64, plus: bool) {
+    let r = size * 0.35;
+    let cx = x + size * 0.45;
+    let cy = y + size * 0.45;
+    ctx.set_line_width(size * 0.08);
+    ctx.new_path();
+    ctx.arc(cx, cy, r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.stroke();
+    let handle_len = r * 0.9;
+    ctx.move_to(cx + r * 0.6, cy + r * 0.6);
+    ctx.line_to(cx + r * 0.6 + handle_len, cy + r * 0.6 + handle_len);
+    let _ = ctx.stroke();
+    ctx.set_line_width(size * 0.06);
+    ctx.move_to(cx - r * 0.5, cy);
+    ctx.line_to(cx + r * 0.5, cy);
+    let _ = ctx.stroke();
+    if plus {
+        ctx.move_to(cx, cy - r * 0.5);
+        ctx.line_to(cx, cy + r * 0.5);
+        let _ = ctx.stroke();
+    }
+}
+
+fn draw_icon_zoom_plus(ctx: &cairo::Context, x: f64, y: f64, size: f64) {
+    draw_icon_zoom_shape(ctx, x, y, size, true);
+}
+
+fn draw_icon_zoom_minus(ctx: &cairo::Context, x: f64, y: f64, size: f64) {
+    draw_icon_zoom_shape(ctx, x, y, size, false);
+}
+
+fn draw_icon_zoom_reset(ctx: &cairo::Context, x: f64, y: f64, size: f64) {
+    ctx.set_line_width(size * 0.08);
+    let r = size * 0.4;
+    let cx = x + size * 0.45;
+    let cy = y + size * 0.45;
+    ctx.new_path();
+    ctx.arc(
+        cx,
+        cy,
+        r,
+        std::f64::consts::PI * 0.2,
+        std::f64::consts::PI * 1.6,
+    );
+    ctx.line_to(cx + r * 0.5, cy - r * 0.9);
+    ctx.line_to(cx + r * 0.1, cy - r * 0.9);
+    let _ = ctx.stroke();
+}
+
+fn draw_icon_zoom_toggle(ctx: &cairo::Context, x: f64, y: f64, size: f64, active: bool) {
+    let r = size * 0.35;
+    let cx = x + size * 0.45;
+    let cy = y + size * 0.45;
+    ctx.set_line_width(size * 0.08);
+    ctx.new_path();
+    ctx.arc(cx, cy, r, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.stroke();
+    let handle_len = r * 0.9;
+    ctx.move_to(cx + r * 0.6, cy + r * 0.6);
+    ctx.line_to(cx + r * 0.6 + handle_len, cy + r * 0.6 + handle_len);
+    let _ = ctx.stroke();
+    if active {
+        ctx.set_line_width(size * 0.06);
+        ctx.move_to(cx - r * 0.6, cy - r * 0.6);
+        ctx.line_to(cx + r * 0.6, cy + r * 0.6);
+        let _ = ctx.stroke();
+    } else {
+        ctx.set_line_width(size * 0.06);
+        ctx.move_to(cx - r * 0.5, cy);
+        ctx.line_to(cx + r * 0.5, cy);
+        let _ = ctx.stroke();
+        ctx.move_to(cx, cy - r * 0.5);
+        ctx.line_to(cx, cy + r * 0.5);
+        let _ = ctx.stroke();
+    }
+}
+
 pub fn render_top_strip(
     ctx: &cairo::Context,
     width: f64,

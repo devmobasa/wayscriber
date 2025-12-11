@@ -8,13 +8,18 @@ pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
         use std::process::{Command, Stdio};
 
         log::debug!("Capturing full screen via grim");
-        let output = Command::new("grim")
-            .arg("-")
-            .stdout(Stdio::piped())
-            .output()
-            .map_err(|e| {
+
+        let monitor_arg = hyprland_focused_monitor_name()?;
+
+        let output = {
+            let mut cmd = Command::new("grim");
+            if let Some(name) = &monitor_arg {
+                cmd.args(["-o", name]);
+            }
+            cmd.arg("-").stdout(Stdio::piped()).output().map_err(|e| {
                 CaptureError::ImageError(format!("Failed to run grim for full screen: {}", e))
-            })?;
+            })?
+        };
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -72,7 +77,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
             CaptureError::InvalidResponse("Missing 'size' in hyprctl output".into())
         })?;
 
-        let (mut x, mut y) = (
+        let (x, y) = (
             at.first()
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[0]' value".into()))?,
@@ -80,7 +85,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'at[1]' value".into()))?,
         );
-        let (mut width, mut height) = (
+        let (width, height) = (
             size.first()
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| CaptureError::InvalidResponse("Invalid 'size[0]' value".into()))?,
@@ -95,36 +100,48 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
             ));
         }
 
-        let monitor_id = json.get("monitor").and_then(|v| v.as_i64());
         let monitor_name = json.get("monitor").and_then(|v| v.as_str());
+        let monitor_info = monitor_name
+            .and_then(|name| hyprland_monitor_info(name).transpose())
+            .transpose()?;
 
-        if let Some(scale) = hyprland_monitor_scale(monitor_id, monitor_name)? {
-            if (scale - 1.0).abs() > f64::EPSILON {
-                log::debug!(
-                    "Applying monitor scale {:.2} to active window capture",
-                    scale
-                );
-                x *= scale;
-                y *= scale;
-                width *= scale;
-                height *= scale;
-            }
-        }
+        let (geom_str, use_monitor) = if let Some(info) = monitor_info {
+            let gx = (x - info.origin_x as f64).round() as i32;
+            let gy = (y - info.origin_y as f64).round() as i32;
+            let geom = format!(
+                "{},{} {}x{}",
+                gx,
+                gy,
+                width.round() as u32,
+                height.round() as u32
+            );
+            (geom, Some(info.name))
+        } else {
+            let geom = format!(
+                "{},{} {}x{}",
+                x.round() as i32,
+                y.round() as i32,
+                width.round() as u32,
+                height.round() as u32
+            );
+            (geom, None)
+        };
 
-        let geometry = format!(
-            "{},{} {}x{}",
-            x.round() as i32,
-            y.round() as i32,
-            width.round() as u32,
-            height.round() as u32
+        log::debug!(
+            "Capturing active window via grim: {} (monitor {:?})",
+            geom_str,
+            use_monitor
         );
-
-        log::debug!("Capturing active window via grim: {}", geometry);
-        let grim_output = Command::new("grim")
-            .args(["-g", &geometry, "-"])
-            .stdout(Stdio::piped())
-            .output()
-            .map_err(|e| CaptureError::ImageError(format!("Failed to run grim: {}", e)))?;
+        let grim_output = {
+            let mut cmd = Command::new("grim");
+            if let Some(name) = use_monitor {
+                cmd.args(["-o", &name]);
+            }
+            cmd.args(["-g", &geom_str, "-"])
+                .stdout(Stdio::piped())
+                .output()
+                .map_err(|e| CaptureError::ImageError(format!("Failed to run grim: {}", e)))?
+        };
 
         if !grim_output.status.success() {
             let stderr = String::from_utf8_lossy(&grim_output.stderr);
@@ -213,16 +230,15 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
     })?
 }
 
-fn hyprland_monitor_scale(
-    monitor_id: Option<i64>,
-    monitor_name: Option<&str>,
-) -> Result<Option<f64>, CaptureError> {
+struct MonitorInfo {
+    name: String,
+    origin_x: i32,
+    origin_y: i32,
+}
+
+fn hyprland_focused_monitor_name() -> Result<Option<String>, CaptureError> {
     use serde_json::Value;
     use std::process::{Command, Stdio};
-
-    if monitor_id.is_none() && monitor_name.is_none() {
-        return Ok(None);
-    }
 
     let output = Command::new("hyprctl")
         .args(["monitors", "-j"])
@@ -247,30 +263,63 @@ fn hyprland_monitor_scale(
     })?;
 
     for monitor in list {
-        let id_match = monitor_id
-            .and_then(|target| {
-                monitor
-                    .get("id")
-                    .and_then(|v| v.as_i64())
-                    .map(|id| id == target)
-            })
-            .unwrap_or(false);
-        let name_match = monitor_name
-            .and_then(|target| {
-                monitor
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(|name| name == target)
-            })
+        let focused = monitor
+            .get("focused")
+            .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        if id_match || name_match {
-            if let Some(scale) = monitor.get("scale").and_then(|v| v.as_f64()) {
-                return Ok(Some(scale));
-            } else {
-                return Ok(Some(1.0));
+        if focused {
+            if let Some(name) = monitor.get("name").and_then(|v| v.as_str()) {
+                return Ok(Some(name.to_string()));
             }
         }
+    }
+
+    Ok(None)
+}
+
+fn hyprland_monitor_info(name: &str) -> Result<Option<MonitorInfo>, CaptureError> {
+    use serde_json::Value;
+    use std::process::{Command, Stdio};
+
+    let output = Command::new("hyprctl")
+        .args(["monitors", "-j"])
+        .stdout(Stdio::piped())
+        .output()
+        .map_err(|e| CaptureError::ImageError(format!("Failed to run hyprctl monitors: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CaptureError::ImageError(format!(
+            "hyprctl monitors failed: {}",
+            stderr.trim()
+        )));
+    }
+
+    let monitors: Value = serde_json::from_slice(&output.stdout).map_err(|e| {
+        CaptureError::InvalidResponse(format!("Failed to parse hyprctl monitors output: {}", e))
+    })?;
+
+    let list = monitors.as_array().ok_or_else(|| {
+        CaptureError::InvalidResponse("hyprctl monitors did not return an array".into())
+    })?;
+
+    for monitor in list {
+        let name_match = monitor
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(|n| n == name)
+            .unwrap_or(false);
+        if !name_match {
+            continue;
+        }
+        let origin_x = monitor.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let origin_y = monitor.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        return Ok(Some(MonitorInfo {
+            name: name.to_string(),
+            origin_x,
+            origin_y,
+        }));
     }
 
     Ok(None)

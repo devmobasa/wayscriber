@@ -13,6 +13,7 @@ use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
+use crate::input::state::zoom::{ZoomCommand, ZoomState};
 use crate::input::{modifiers::Modifiers, tool::Tool};
 use crate::util::Rect;
 use std::collections::HashMap;
@@ -179,10 +180,16 @@ pub struct InputState {
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
     pub(super) pending_frozen_toggle: bool,
+    /// Pending zoom command for backend/renderer coordination
+    pub(super) pending_zoom_command: Option<ZoomCommand>,
+    /// Pending zoom monitor request (used when persistence is denied)
+    pub(super) pending_zoom_monitor_request: bool,
     /// Whether to show extended color palette
     pub show_more_colors: bool,
     /// Whether to show the Actions section (undo all, redo all, etc.)
     pub show_actions_section: bool,
+    /// Zoom runtime state (placeholder; behavior wired later)
+    pub zoom: ZoomState,
 }
 
 /// Tracks in-progress delayed undo/redo playback.
@@ -303,8 +310,11 @@ impl InputState {
             shape_properties_panel: None,
             frozen_active: false,
             pending_frozen_toggle: false,
+            pending_zoom_command: None,
+            pending_zoom_monitor_request: false,
             show_more_colors: false,
             show_actions_section: true, // Show by default
+            zoom: ZoomState::default(),
         };
 
         if state.click_highlight.uses_pen_color() {

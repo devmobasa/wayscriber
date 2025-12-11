@@ -61,6 +61,12 @@ pub enum Action {
     ToggleHighlightTool,
     ToggleFill,
     OpenContextMenu,
+    ToggleZoom,
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
+    RequestZoomForCurrentMonitor,
+    ToggleZoomInputCapture,
 
     // Configurator
     OpenConfigurator,
@@ -303,6 +309,19 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_open_context_menu")]
     pub open_context_menu: Vec<String>,
 
+    #[serde(default)]
+    pub toggle_zoom: Vec<String>,
+    #[serde(default)]
+    pub zoom_in: Vec<String>,
+    #[serde(default)]
+    pub zoom_out: Vec<String>,
+    #[serde(default)]
+    pub reset_zoom: Vec<String>,
+    #[serde(default)]
+    pub request_zoom_for_current_monitor: Vec<String>,
+    #[serde(default)]
+    pub toggle_zoom_input_capture: Vec<String>,
+
     #[serde(default = "default_open_configurator")]
     pub open_configurator: Vec<String>,
 
@@ -405,6 +424,20 @@ impl Default for KeybindingsConfig {
             toggle_fill: default_toggle_fill(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
             open_context_menu: default_open_context_menu(),
+            toggle_zoom: Vec::new(),
+            zoom_in: vec![
+                "Ctrl+Alt++".to_string(),
+                "Ctrl+Alt+=".to_string(),
+                "Ctrl+Alt+ScrollUp".to_string(),
+            ],
+            zoom_out: vec![
+                "Ctrl+Alt+-".to_string(),
+                "Ctrl+Alt+_".to_string(),
+                "Ctrl+Alt+ScrollDown".to_string(),
+            ],
+            reset_zoom: Vec::new(),
+            request_zoom_for_current_monitor: Vec::new(),
+            toggle_zoom_input_capture: Vec::new(),
             open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
             set_color_green: default_set_color_green(),
@@ -630,6 +663,30 @@ impl KeybindingsConfig {
 
         for binding_str in &self.open_context_menu {
             insert_binding(binding_str, Action::OpenContextMenu)?;
+        }
+
+        for binding_str in &self.toggle_zoom {
+            insert_binding(binding_str, Action::ToggleZoom)?;
+        }
+
+        for binding_str in &self.zoom_in {
+            insert_binding(binding_str, Action::ZoomIn)?;
+        }
+
+        for binding_str in &self.zoom_out {
+            insert_binding(binding_str, Action::ZoomOut)?;
+        }
+
+        for binding_str in &self.reset_zoom {
+            insert_binding(binding_str, Action::ResetZoom)?;
+        }
+
+        for binding_str in &self.request_zoom_for_current_monitor {
+            insert_binding(binding_str, Action::RequestZoomForCurrentMonitor)?;
+        }
+
+        for binding_str in &self.toggle_zoom_input_capture {
+            insert_binding(binding_str, Action::ToggleZoomInputCapture)?;
         }
 
         for binding_str in &self.open_configurator {

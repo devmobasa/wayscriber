@@ -1,5 +1,6 @@
 use crate::config::Action;
 use crate::draw::Shape;
+use crate::input::state::zoom::ZoomCommand;
 use crate::input::{board_mode::BoardMode, events::Key, tool::Tool};
 use crate::util;
 use log::{info, warn};
@@ -536,6 +537,24 @@ impl InputState {
             Action::OpenContextMenu => {
                 self.toggle_context_menu_via_keyboard();
             }
+            Action::ToggleZoom => {
+                self.enqueue_zoom_command(ZoomCommand::Toggle);
+            }
+            Action::ZoomIn => {
+                self.enqueue_zoom_command(ZoomCommand::ZoomIn);
+            }
+            Action::ZoomOut => {
+                self.enqueue_zoom_command(ZoomCommand::ZoomOut);
+            }
+            Action::ResetZoom => {
+                self.enqueue_zoom_command(ZoomCommand::Reset);
+            }
+            Action::RequestZoomForCurrentMonitor => {
+                self.enqueue_zoom_command(ZoomCommand::RequestCurrentMonitor);
+            }
+            Action::ToggleZoomInputCapture => {
+                self.enqueue_zoom_command(ZoomCommand::ToggleInputCapture);
+            }
             Action::OpenConfigurator => {
                 self.launch_configurator();
             }
@@ -588,6 +607,11 @@ impl InputState {
                 self.reset_modifiers();
             }
         }
+    }
+
+    /// Public wrapper for limited action handling (used by pointer scroll dispatch).
+    pub fn handle_action_public(&mut self, action: crate::config::Action) {
+        self.handle_action(action);
     }
 
     /// Processes a key release event.

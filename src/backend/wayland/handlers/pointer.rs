@@ -6,6 +6,7 @@ use smithay_client_toolkit::seat::pointer::{
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
 use crate::backend::wayland::toolbar_intent::intent_to_event;
+use crate::config::Action;
 use crate::input::{MouseButton, Tool};
 
 use super::super::state::WaylandState;
@@ -155,6 +156,7 @@ impl PointerHandler for WaylandState {
                     if on_toolbar || self.pointer_over_toolbar() {
                         continue;
                     }
+
                     let scroll_direction = if vertical.discrete != 0 {
                         vertical.discrete
                     } else if vertical.absolute.abs() > 0.1 {
@@ -162,6 +164,24 @@ impl PointerHandler for WaylandState {
                     } else {
                         0
                     };
+
+                    if scroll_direction != 0 {
+                        let key = if scroll_direction > 0 {
+                            "ScrollUp"
+                        } else {
+                            "ScrollDown"
+                        };
+                        if let Some(action) = self.input_state.find_action(key) {
+                            match action {
+                                Action::ZoomIn | Action::ZoomOut => {
+                                    self.input_state.handle_action_public(action);
+                                    self.input_state.needs_redraw = true;
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
 
                     match scroll_direction.cmp(&0) {
                         std::cmp::Ordering::Greater if self.input_state.modifiers.shift => {

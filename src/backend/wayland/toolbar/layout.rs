@@ -380,6 +380,28 @@ pub fn build_side_hits(
             });
             y += btn_h + 6.0;
         }
+
+        // Zoom row (separate)
+        let gap = 6.0;
+        let btn_h = if use_icons { 42.0 } else { 24.0 };
+        let total_w = width - 32.0;
+        let btn_w = (total_w - 2.0 * gap) / 3.0;
+        let start_x = x;
+        let zoom_buttons = [
+            ToolbarEvent::ToggleZoom,
+            ToolbarEvent::ZoomIn,
+            ToolbarEvent::ZoomOut,
+        ];
+        for (idx, evt) in zoom_buttons.iter().enumerate() {
+            let bx = start_x + idx as f64 * (btn_w + gap);
+            hits.push(HitRegion {
+                rect: (bx, y, btn_w, btn_h),
+                event: evt.clone(),
+                kind: HitKind::Click,
+                tooltip: None,
+            });
+        }
+        y += btn_h + 6.0;
     }
 
     // Delay sliders

@@ -41,6 +41,7 @@ use crate::{
     RESUME_SESSION_ENV,
     capture::{CaptureManager, CaptureOutcome},
     config::{Action, Config, ConfigSource},
+    input::state::ZoomCommandResult,
     input::{BoardMode, ClickHighlightSettings, InputState},
     notification, paths, runtime_session_override, session,
 };
@@ -398,6 +399,7 @@ impl WaylandBackend {
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
+        input_state.configure_zoom(&config.ui.zoom);
 
         // Initialize toolbar visibility from pinned config
         input_state.init_toolbar_from_config(
@@ -673,6 +675,17 @@ impl WaylandBackend {
                     }
                 }
             }
+
+            if let Some(cmd) = state.input_state.take_pending_zoom_command() {
+                let viewport = (state.surface.width() as f64, state.surface.height() as f64);
+                let result = state.input_state.apply_zoom_command(cmd, viewport);
+                if matches!(result, ZoomCommandResult::RequestCurrentMonitor) {
+                    debug!(
+                        "Zoom requested transient stream for current monitor (not yet implemented)"
+                    );
+                }
+            }
+            state.ensure_zoom_capture(&qh);
 
             // Check for completed capture operations
             if state.capture.is_in_progress() {

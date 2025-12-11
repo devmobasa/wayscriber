@@ -245,6 +245,35 @@ impl WaylandState {
         self.data.toolbar_dragging = value;
     }
 
+    /// Ensure a frozen capture exists when zoom is active (stub live zoom path).
+    pub(super) fn ensure_zoom_capture(&mut self, qh: &QueueHandle<Self>) {
+        if !self.input_state.zoom.is_active() {
+            return;
+        }
+        if self.frozen.image().is_some() || self.frozen.is_in_progress() {
+            return;
+        }
+        if !self.frozen_enabled() {
+            warn!("Zoom requested capture but frozen mode is unavailable on this compositor");
+            return;
+        }
+        let use_fallback = !self.frozen.manager_available();
+        if use_fallback {
+            warn!("Zoom capture: screencopy unavailable, using portal fallback");
+        }
+        if let Err(err) = self.frozen.start_capture(
+            &self.shm,
+            &mut self.surface,
+            qh,
+            use_fallback,
+            &mut self.input_state,
+            &self.tokio_handle,
+        ) {
+            warn!("Zoom capture failed to start: {}", err);
+            self.frozen.cancel(&mut self.surface, &mut self.input_state);
+        }
+    }
+
     pub(super) fn toolbar_needs_recreate(&self) -> bool {
         self.data.toolbar_needs_recreate
     }
@@ -561,6 +590,28 @@ impl WaylandState {
         let highlight_active = self.input_state.advance_click_highlights(now);
         let mut eraser_pattern: Option<cairo::SurfacePattern> = None;
         let mut eraser_bg_color: Option<Color> = None;
+        let rotation_degrees = self
+            .surface
+            .current_output()
+            .and_then(|o| self.output_state.info(&o))
+            .map(|info| match info.transform {
+                wl_output::Transform::_90 => 90,
+                wl_output::Transform::_180 => 180,
+                wl_output::Transform::_270 => 270,
+                wl_output::Transform::Flipped => 0,
+                wl_output::Transform::Flipped90 => 90,
+                wl_output::Transform::Flipped180 => 180,
+                wl_output::Transform::Flipped270 => 270,
+                _ => 0,
+            })
+            .unwrap_or(0);
+
+        let zoom_view = self.input_state.zoom.view_for_viewport(
+            (width as f64, height as f64),
+            (0.0, 0.0),
+            scale as f64,
+            rotation_degrees,
+        );
 
         // Get a buffer from the pool
         let (buffer, canvas) = {
@@ -621,36 +672,63 @@ impl WaylandState {
             }
             .context("Failed to create frozen image surface")?;
 
-            let scale_x = if image.width > 0 {
-                phys_width as f64 / image.width as f64
+            if let Some(view) = zoom_view {
+                // Render zoomed crop to fill the surface.
+                let pattern = cairo::SurfacePattern::create(&surface);
+                pattern.set_filter(cairo::Filter::Bilinear);
+                pattern.set_extend(cairo::Extend::Pad);
+                let sx = if phys_width > 0 {
+                    view.crop_frame.width / (phys_width as f64)
+                } else {
+                    1.0
+                };
+                let sy = if phys_height > 0 {
+                    view.crop_frame.height / (phys_height as f64)
+                } else {
+                    1.0
+                };
+                let mut matrix = cairo::Matrix::identity();
+                matrix.translate(view.crop_frame.x, view.crop_frame.y);
+                matrix.scale(sx, sy);
+                pattern.set_matrix(matrix);
+                ctx.rectangle(0.0, 0.0, phys_width as f64, phys_height as f64);
+                let _ = ctx.set_source(&pattern);
+                if let Err(err) = ctx.fill() {
+                    warn!("Failed to paint zoomed frozen background: {}", err);
+                }
+                eraser_pattern = Some(pattern);
             } else {
-                1.0
-            };
-            let scale_y = if image.height > 0 {
-                phys_height as f64 / image.height as f64
-            } else {
-                1.0
-            };
-            let _ = ctx.save();
-            if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
-                ctx.scale(scale_x, scale_y);
-            }
+                let scale_x = if image.width > 0 {
+                    phys_width as f64 / image.width as f64
+                } else {
+                    1.0
+                };
+                let scale_y = if image.height > 0 {
+                    phys_height as f64 / image.height as f64
+                } else {
+                    1.0
+                };
+                let _ = ctx.save();
+                if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
+                    ctx.scale(scale_x, scale_y);
+                }
 
-            if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
-                warn!("Failed to set frozen background surface: {}", err);
-            } else if let Err(err) = ctx.paint() {
-                warn!("Failed to paint frozen background: {}", err);
-            }
-            let _ = ctx.restore();
+                if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
+                    warn!("Failed to set frozen background surface: {}", err);
+                } else if let Err(err) = ctx.paint() {
+                    warn!("Failed to paint frozen background: {}", err);
+                }
+                let _ = ctx.restore();
 
-            let pattern = cairo::SurfacePattern::create(&surface);
-            pattern.set_extend(cairo::Extend::Pad);
-            let mut matrix = cairo::Matrix::identity();
-            let scale_x_inv = 1.0 / (scale as f64 * scale_x.max(f64::MIN_POSITIVE));
-            let scale_y_inv = 1.0 / (scale as f64 * scale_y.max(f64::MIN_POSITIVE));
-            matrix.scale(scale_x_inv, scale_y_inv);
-            pattern.set_matrix(matrix);
-            eraser_pattern = Some(pattern);
+                let pattern = cairo::SurfacePattern::create(&surface);
+                pattern.set_extend(cairo::Extend::Pad);
+                let mut matrix = cairo::Matrix::identity();
+                let scale_x_inv = 1.0 / (scale as f64 * scale_x.max(f64::MIN_POSITIVE));
+                let scale_y_inv = 1.0 / (scale as f64 * scale_y.max(f64::MIN_POSITIVE));
+                matrix.scale(scale_x_inv, scale_y_inv);
+                pattern.set_matrix(matrix);
+                eraser_pattern = Some(pattern);
+            }
         } else {
             // Render board background if in board mode (whiteboard/blackboard)
             crate::draw::render_board_background(
@@ -665,69 +743,77 @@ impl WaylandState {
         }
 
         // Scale subsequent drawing to logical coordinates
-        let _ = ctx.save();
-        if scale > 1 {
-            ctx.scale(scale as f64, scale as f64);
-        }
-        // Render all completed shapes from active frame
-        debug!(
-            "Rendering {} completed shapes",
-            self.input_state.canvas_set.active_frame().shapes.len()
-        );
-        let eraser_ctx = crate::draw::EraserReplayContext {
-            pattern: eraser_pattern.as_ref().map(|p| p as &cairo::Pattern),
-            bg_color: eraser_bg_color,
-        };
-        crate::draw::render_shapes(
-            &ctx,
-            &self.input_state.canvas_set.active_frame().shapes,
-            Some(&eraser_ctx),
-        );
+        let render_scene = |ctx: &cairo::Context, mx: i32, my: i32| {
+            debug!(
+                "Rendering {} completed shapes",
+                self.input_state.canvas_set.active_frame().shapes.len()
+            );
+            let eraser_ctx = crate::draw::EraserReplayContext {
+                pattern: eraser_pattern.as_ref().map(|p| p as &cairo::Pattern),
+                bg_color: eraser_bg_color,
+            };
+            crate::draw::render_shapes(
+                ctx,
+                &self.input_state.canvas_set.active_frame().shapes,
+                Some(&eraser_ctx),
+            );
 
-        // Render selection halo overlays
-        if self.input_state.has_selection() {
-            let selected: HashSet<_> = self
-                .input_state
-                .selected_shape_ids()
-                .iter()
-                .copied()
-                .collect();
-            let frame = self.input_state.canvas_set.active_frame();
-            for drawn in &frame.shapes {
-                if selected.contains(&drawn.id) {
-                    crate::draw::render_selection_halo(&ctx, drawn);
+            if self.input_state.has_selection() {
+                let selected: HashSet<_> = self
+                    .input_state
+                    .selected_shape_ids()
+                    .iter()
+                    .copied()
+                    .collect();
+                let frame = self.input_state.canvas_set.active_frame();
+                for drawn in &frame.shapes {
+                    if selected.contains(&drawn.id) {
+                        crate::draw::render_selection_halo(ctx, drawn);
+                    }
                 }
             }
-        }
 
-        // Render provisional shape if actively drawing
-        // Use optimized method that avoids cloning for freehand
+            if self.input_state.render_provisional_shape(ctx, mx, my) {
+                debug!("Rendered provisional shape");
+            }
+
+            if let DrawingState::TextInput { x, y, buffer } = &self.input_state.state {
+                let preview_text = if buffer.is_empty() {
+                    "_".to_string()
+                } else {
+                    format!("{}_", buffer)
+                };
+                crate::draw::render_text(
+                    ctx,
+                    *x,
+                    *y,
+                    &preview_text,
+                    self.input_state.current_color,
+                    self.input_state.current_font_size,
+                    &self.input_state.font_descriptor,
+                    self.input_state.text_background_enabled,
+                );
+            }
+
+            self.input_state.render_click_highlights(ctx, now);
+        };
+
         let (mx, my) = self.current_mouse();
-        if self.input_state.render_provisional_shape(&ctx, mx, my) {
-            debug!("Rendered provisional shape");
+        if let Some(view) = zoom_view {
+            let combined_scale = view.scale_factor * scale as f64;
+            let _ = ctx.save();
+            ctx.translate(-view.crop_logical.x, -view.crop_logical.y);
+            ctx.scale(combined_scale, combined_scale);
+            render_scene(&ctx, mx, my);
+            let _ = ctx.restore();
+        } else {
+            let _ = ctx.save();
+            if scale > 1 {
+                ctx.scale(scale as f64, scale as f64);
+            }
+            render_scene(&ctx, mx, my);
+            let _ = ctx.restore();
         }
-
-        // Render text cursor/buffer if in text mode
-        if let DrawingState::TextInput { x, y, buffer } = &self.input_state.state {
-            let preview_text = if buffer.is_empty() {
-                "_".to_string() // Show cursor when buffer is empty
-            } else {
-                format!("{}_", buffer)
-            };
-            crate::draw::render_text(
-                &ctx,
-                *x,
-                *y,
-                &preview_text,
-                self.input_state.current_color,
-                self.input_state.current_font_size,
-                &self.input_state.font_descriptor,
-                self.input_state.text_background_enabled,
-            );
-        }
-
-        // Render click highlight overlays before UI so status/help remain legible
-        self.input_state.render_click_highlights(&ctx, now);
 
         // Render frozen badge even if status bar is hidden
         if self.input_state.frozen_active() && self.config.ui.show_frozen_badge {

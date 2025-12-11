@@ -27,6 +27,10 @@ pub enum ToolbarEvent {
     /// Toggle both highlight tool and click highlight together
     ToggleAllHighlight(bool),
     ToggleFreeze,
+    ToggleZoom,
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
     OpenConfigurator,
     OpenConfigFile,
     ToggleCustomSection(bool),
@@ -98,6 +102,12 @@ pub struct ToolbarSnapshot {
     pub show_marker_opacity_section: bool,
     /// Binding hints for tooltips
     pub binding_hints: ToolbarBindingHints,
+    /// Zoom status and binding hints
+    pub zoom_active: bool,
+    pub zoom_hint_toggle: Option<String>,
+    pub zoom_hint_in: Option<String>,
+    pub zoom_hint_out: Option<String>,
+    pub zoom_hint_reset: Option<String>,
 }
 
 impl ToolbarSnapshot {
@@ -156,13 +166,22 @@ impl ToolbarSnapshot {
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
-            binding_hints,
+            binding_hints: binding_hints.clone(),
+            zoom_active: state.zoom.is_active(),
+            zoom_hint_toggle: binding_hints.zoom_toggle.clone(),
+            zoom_hint_in: binding_hints.zoom_in.clone(),
+            zoom_hint_out: binding_hints.zoom_out.clone(),
+            zoom_hint_reset: binding_hints.zoom_reset.clone(),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ToolbarBindingHints {
+    pub zoom_toggle: Option<String>,
+    pub zoom_in: Option<String>,
+    pub zoom_out: Option<String>,
+    pub zoom_reset: Option<String>,
     pub pen: Option<String>,
     pub line: Option<String>,
     pub rect: Option<String>,
@@ -195,6 +214,10 @@ impl ToolbarBindingHints {
     pub fn from_keybindings(kb: &KeybindingsConfig) -> Self {
         let first = |v: &Vec<String>| v.first().cloned();
         Self {
+            zoom_toggle: first(&kb.toggle_zoom),
+            zoom_in: first(&kb.zoom_in),
+            zoom_out: first(&kb.zoom_out),
+            zoom_reset: first(&kb.reset_zoom),
             pen: first(&kb.select_pen_tool),
             line: first(&kb.select_line_tool),
             rect: first(&kb.select_rect_tool),
@@ -332,6 +355,26 @@ impl InputState {
             }
             ToolbarEvent::ToggleFreeze => {
                 self.request_frozen_toggle();
+                self.needs_redraw = true;
+                true
+            }
+            ToolbarEvent::ToggleZoom => {
+                self.enqueue_zoom_command(crate::input::state::ZoomCommand::Toggle);
+                self.needs_redraw = true;
+                true
+            }
+            ToolbarEvent::ZoomIn => {
+                self.enqueue_zoom_command(crate::input::state::ZoomCommand::ZoomIn);
+                self.needs_redraw = true;
+                true
+            }
+            ToolbarEvent::ZoomOut => {
+                self.enqueue_zoom_command(crate::input::state::ZoomCommand::ZoomOut);
+                self.needs_redraw = true;
+                true
+            }
+            ToolbarEvent::ResetZoom => {
+                self.enqueue_zoom_command(crate::input::state::ZoomCommand::Reset);
                 self.needs_redraw = true;
                 true
             }

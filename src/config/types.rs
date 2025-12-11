@@ -231,6 +231,10 @@ pub struct UiConfig {
     /// Toolbar visibility and pinning options
     #[serde(default)]
     pub toolbar: ToolbarConfig,
+
+    /// Zoom behavior and performance preferences
+    #[serde(default)]
+    pub zoom: ZoomConfig,
 }
 
 impl Default for UiConfig {
@@ -246,6 +250,7 @@ impl Default for UiConfig {
             click_highlight: ClickHighlightConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
             toolbar: ToolbarConfig::default(),
+            zoom: ZoomConfig::default(),
         }
     }
 }
@@ -389,6 +394,67 @@ impl Default for HelpOverlayStyle {
             border_color: default_help_border_color(),
             border_width: default_help_border_width(),
             text_color: default_help_text_color(),
+        }
+    }
+}
+
+/// Zoom configuration and guardrails.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ZoomConfig {
+    /// Allow attempting a full-desktop stream when layout validation passes.
+    #[serde(default = "default_zoom_full_desktop_enabled")]
+    pub full_desktop_enabled: bool,
+
+    /// Minimum zoom factor (>= 1.0).
+    #[serde(default = "default_zoom_min_factor")]
+    pub min_factor: f32,
+
+    /// Maximum zoom factor.
+    #[serde(default = "default_zoom_max_factor")]
+    pub max_factor: f32,
+
+    /// Step applied for zoom in/out commands.
+    #[serde(default = "default_zoom_step")]
+    pub step: f32,
+
+    /// Maximum virtual desktop pixel area for considering full-desktop streams.
+    #[serde(default = "default_zoom_virtual_area_cap")]
+    pub virtual_area_cap_px2: u32,
+
+    /// Maximum dimension for captures/streams when downscaling for CPU paths.
+    #[serde(default = "default_zoom_max_dimension")]
+    pub max_capture_dimension: u32,
+
+    /// Whether to prompt on crossing when persistence is denied.
+    #[serde(default = "default_zoom_prompt_on_crossing")]
+    pub prompt_on_crossing: bool,
+
+    /// Shortcut hint for requesting a transient stream on the current monitor.
+    #[serde(default = "default_zoom_request_shortcut")]
+    pub request_on_crossing_shortcut: String,
+
+    /// Modifier used to engage zoom controls (scroll/pan) while allowing passthrough by default.
+    #[serde(default = "default_zoom_control_modifier")]
+    pub control_modifier: String,
+
+    /// Whether the overlay captures input by default while zoomed.
+    #[serde(default = "default_zoom_capture_input")]
+    pub capture_input_by_default: bool,
+}
+
+impl Default for ZoomConfig {
+    fn default() -> Self {
+        Self {
+            full_desktop_enabled: default_zoom_full_desktop_enabled(),
+            min_factor: default_zoom_min_factor(),
+            max_factor: default_zoom_max_factor(),
+            step: default_zoom_step(),
+            virtual_area_cap_px2: default_zoom_virtual_area_cap(),
+            max_capture_dimension: default_zoom_max_dimension(),
+            prompt_on_crossing: default_zoom_prompt_on_crossing(),
+            request_on_crossing_shortcut: default_zoom_request_shortcut(),
+            control_modifier: default_zoom_control_modifier(),
+            capture_input_by_default: default_zoom_capture_input(),
         }
     }
 }
@@ -643,6 +709,46 @@ fn default_click_highlight_use_pen_color() -> bool {
 
 fn default_context_menu_enabled() -> bool {
     true
+}
+
+fn default_zoom_full_desktop_enabled() -> bool {
+    false
+}
+
+fn default_zoom_min_factor() -> f32 {
+    0.1
+}
+
+fn default_zoom_max_factor() -> f32 {
+    4.0
+}
+
+fn default_zoom_step() -> f32 {
+    0.2
+}
+
+fn default_zoom_virtual_area_cap() -> u32 {
+    9_000_000
+}
+
+fn default_zoom_max_dimension() -> u32 {
+    2_560
+}
+
+fn default_zoom_prompt_on_crossing() -> bool {
+    false
+}
+
+fn default_zoom_request_shortcut() -> String {
+    "Ctrl+Shift+Z".to_string()
+}
+
+fn default_zoom_control_modifier() -> String {
+    "Space".to_string()
+}
+
+fn default_zoom_capture_input() -> bool {
+    false
 }
 
 /// Board mode configuration for whiteboard/blackboard features.
