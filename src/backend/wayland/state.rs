@@ -257,6 +257,7 @@ impl WaylandState {
             warn!("Zoom requested capture but frozen mode is unavailable on this compositor");
             return;
         }
+        let was_frozen = self.input_state.frozen_active();
         let use_fallback = !self.frozen.manager_available();
         if use_fallback {
             warn!("Zoom capture: screencopy unavailable, using portal fallback");
@@ -271,7 +272,26 @@ impl WaylandState {
         ) {
             warn!("Zoom capture failed to start: {}", err);
             self.frozen.cancel(&mut self.surface, &mut self.input_state);
+        } else if !was_frozen {
+            // Mark that the frozen frame belongs to zoom so we can auto-unfreeze later.
+            self.input_state.zoom.zoom_induced_freeze = true;
         }
+    }
+
+    /// Auto-unfreeze a zoom-owned frozen frame when zoom is disabled or returns to unity.
+    pub(super) fn unfreeze_zoom_if_needed(&mut self) {
+        if !self.input_state.zoom.zoom_induced_freeze {
+            return;
+        }
+        let at_unity_or_disabled = !self.input_state.zoom.is_active()
+            || (self.input_state.zoom.factor <= 1.0 + f32::EPSILON);
+        if !at_unity_or_disabled {
+            return;
+        }
+        if self.input_state.frozen_active() {
+            self.frozen.unfreeze(&mut self.input_state);
+        }
+        self.input_state.zoom.zoom_induced_freeze = false;
     }
 
     pub(super) fn toolbar_needs_recreate(&self) -> bool {

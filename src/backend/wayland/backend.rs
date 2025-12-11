@@ -684,6 +684,7 @@ impl WaylandBackend {
                         "Zoom requested transient stream for current monitor (not yet implemented)"
                     );
                 }
+                state.unfreeze_zoom_if_needed();
             }
             state.ensure_zoom_capture(&qh);
 

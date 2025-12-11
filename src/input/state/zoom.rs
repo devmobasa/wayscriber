@@ -40,6 +40,8 @@ pub struct ZoomState {
     pub active: bool,
     /// Current mode (live stream vs frozen frame).
     pub mode: ZoomMode,
+    /// Whether the current frozen capture was initiated by zoom (vs user freeze).
+    pub zoom_induced_freeze: bool,
     /// Current applied zoom factor.
     pub factor: f32,
     /// Target factor for smoothing; equals factor when idle.
@@ -117,13 +119,26 @@ impl ZoomState {
                     self.center_logical = pointer_logical;
                 }
                 state_changed |= self.bump_factor(-self.step);
+                if self.factor <= 1.0 + f32::EPSILON {
+                    if self.active {
+                        state_changed = true;
+                    }
+                    self.active = false;
+                }
             }
             ZoomCommand::Reset => {
                 self.active = true;
                 self.mode = ZoomMode::Frozen;
                 self.center_logical = pointer_logical;
                 self.last_pointer_logical = pointer_logical;
+                // Reset to default factor; ownership of any frozen image handled by backend.
                 state_changed |= self.set_factor(1.0);
+                if self.factor <= 1.0 + f32::EPSILON {
+                    if self.active {
+                        state_changed = true;
+                    }
+                    self.active = false;
+                }
             }
             ZoomCommand::RequestCurrentMonitor => {
                 // For now handled upstream; treat as hint to backend.
@@ -243,6 +258,7 @@ impl Default for ZoomState {
         Self {
             active: false,
             mode: ZoomMode::Frozen,
+            zoom_induced_freeze: false,
             factor: 1.0,
             target_factor: 1.0,
             center_logical: (0.0, 0.0),
