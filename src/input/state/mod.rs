@@ -7,6 +7,7 @@ mod render;
 mod tests;
 mod zoom;
 
+#[allow(unused_imports)]
 pub use crate::zoom::RectF as ZoomRectF;
 #[allow(unused_imports)]
 pub use core::{
@@ -14,4 +15,5 @@ pub use core::{
     MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, SelectionState,
 };
 pub use highlight::ClickHighlightSettings;
+#[allow(unused_imports)]
 pub use zoom::{ZoomCommand, ZoomCommandResult, ZoomMode, ZoomState, ZoomView};

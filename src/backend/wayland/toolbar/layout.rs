@@ -36,12 +36,12 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
             let icon_btn_size = 42.0;
             let icon_gap = 6.0;
             let icon_rows = 2.0;
-            (icon_btn_size + icon_gap) * icon_rows
+            (icon_btn_size + icon_gap) * icon_rows + 12.0 + icon_btn_size
         } else {
             let action_h = 24.0;
             let action_gap = 5.0;
             let action_rows = 5.0;
-            (action_h + action_gap) * action_rows
+            (action_h + action_gap) * action_rows + 12.0 + action_h
         }
     } else {
         0.0

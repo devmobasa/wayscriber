@@ -116,6 +116,7 @@ impl InputState {
     }
 
     /// Returns and clears any pending zoom monitor request hint.
+    #[allow(dead_code)]
     pub fn take_pending_zoom_monitor_request(&mut self) -> bool {
         let pending = self.pending_zoom_monitor_request;
         self.pending_zoom_monitor_request = false;

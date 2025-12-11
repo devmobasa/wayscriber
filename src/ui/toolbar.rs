@@ -30,6 +30,7 @@ pub enum ToolbarEvent {
     ToggleZoom,
     ZoomIn,
     ZoomOut,
+    #[allow(dead_code)]
     ResetZoom,
     OpenConfigurator,
     OpenConfigFile,

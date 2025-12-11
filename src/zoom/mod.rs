@@ -13,6 +13,7 @@ pub struct RectF {
 }
 
 impl RectF {
+    #[allow(dead_code)]
     pub fn new(x: f64, y: f64, width: f64, height: f64) -> Option<Self> {
         if width <= 0.0 || height <= 0.0 {
             None

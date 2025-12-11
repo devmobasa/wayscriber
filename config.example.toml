@@ -472,8 +472,8 @@ open_context_menu = ["Shift+F10", "Menu"]
 
 # Zoom controls
 toggle_zoom = ["Ctrl+Alt+Z"]
-zoom_in = ["Ctrl+Alt+ScrollUp", "Ctrl+Alt++", "Ctrl+Alt+="]
-zoom_out = ["Ctrl+Alt+ScrollDown", "Ctrl+Alt+-", "Ctrl+Alt+_"]
+zoom_in = ["Ctrl+Alt+ScrollDown", "Ctrl+Alt++", "Ctrl+Alt+="]
+zoom_out = ["Ctrl+Alt+ScrollUp", "Ctrl+Alt+-", "Ctrl+Alt+_"]
 reset_zoom = ["Ctrl+Alt+0"]
 request_zoom_for_current_monitor = ["Ctrl+Alt+M"]
 toggle_zoom_input_capture = ["Ctrl+Alt+P"]

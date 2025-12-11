@@ -426,14 +426,14 @@ impl Default for KeybindingsConfig {
             open_context_menu: default_open_context_menu(),
             toggle_zoom: Vec::new(),
             zoom_in: vec![
+                "Ctrl+Alt+ScrollDown".to_string(),
                 "Ctrl+Alt++".to_string(),
                 "Ctrl+Alt+=".to_string(),
-                "Ctrl+Alt+ScrollUp".to_string(),
             ],
             zoom_out: vec![
+                "Ctrl+Alt+ScrollUp".to_string(),
                 "Ctrl+Alt+-".to_string(),
                 "Ctrl+Alt+_".to_string(),
-                "Ctrl+Alt+ScrollDown".to_string(),
             ],
             reset_zoom: Vec::new(),
             request_zoom_for_current_monitor: Vec::new(),

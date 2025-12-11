@@ -3,6 +3,7 @@
 use crate::zoom::{RectF, clamp_factor, crop_rect_logical, logical_rect_to_frame_px};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum ZoomMode {
     Live,
     Frozen,
@@ -58,6 +59,7 @@ pub struct ZoomState {
 }
 
 impl ZoomState {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
@@ -165,6 +167,7 @@ impl ZoomState {
         self.active && self.factor > 1.0 - f32::EPSILON
     }
 
+    #[allow(dead_code)]
     pub fn crop_rect_logical(&self, viewport_logical: (f64, f64)) -> RectF {
         crop_rect_logical(
             self.center_logical,
@@ -175,6 +178,7 @@ impl ZoomState {
         )
     }
 
+    #[allow(dead_code)]
     pub fn crop_rect_frame(
         &self,
         viewport_logical: (f64, f64),
@@ -191,6 +195,7 @@ impl ZoomState {
         logical_rect_to_frame_px(logical_rect, output_origin_logical, scale)
     }
 
+    #[allow(dead_code)]
     pub fn scale_factor(&self, viewport_logical: (f64, f64)) -> f64 {
         let rect = crop_rect_logical(
             self.center_logical,
