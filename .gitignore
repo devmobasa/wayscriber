@@ -30,6 +30,7 @@ packaging/**
 !packaging/package.configurator.yaml
 
 docs/board
+docs/temp
 
 dist/
 
