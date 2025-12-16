@@ -20,8 +20,24 @@ makedepends=(
     'cargo'
     'git'
 )
-source=("git+https://github.com/devmobasa/wayscriber.git#tag=v$pkgver")
-sha256sums=('SKIP')
+source=("git+https://github.com/devmobasa/wayscriber.git#tag=v$pkgver"
+        "wayscriber.desktop"
+        "wayscriber-configurator.desktop"
+        "icons/wayscriber-24.png"
+        "icons/wayscriber-64.png"
+        "icons/wayscriber-128.png"
+        "icons/wayscriber-configurator-24.png"
+        "icons/wayscriber-configurator-64.png"
+        "icons/wayscriber-configurator-128.png")
+sha256sums=('SKIP'
+            'bef462b71dd1247ea1135d0862d48fb4927c32afdb8852891b0af76c6aacc6d0'
+            '752ffafb4a04db3459c5a64893ba795a6b56c790820f99f3aaece871a1d2c321'
+            'd469a2ae923a43463e0b912118cfc81f85343c9c2c372b5bf546c7389c1f364c'
+            'aa18140e5b8290b79d9c71f9ed05b2466d6ece0be445054c4864db9e2b4f5e83'
+            'a5653a2393ca82ad06cad2fbe65cb95dafb1e94b8b3d937682acc5873f766638'
+            '31e78c9dbe0e6b315bc0fa100db81f8642ccedbd9c1731553052878abd1d0e4a'
+            'edc1a54e03b66ea72a03a82c9dd65e63aa4f1d489dd109afb02b5787b59d51d1'
+            '5ca40d3021acaa65252b224de4dfebdf38e5c2d4fe077a1be4a060ead0eb9c80')
 
 prepare() {
     cd "$pkgname"
@@ -47,6 +63,16 @@ package() {
 
     # Install systemd user service
     install -Dm644 packaging/wayscriber.service "$pkgdir/usr/lib/systemd/user/wayscriber.service"
+
+    # Install desktop entries and icons
+    install -Dm644 "$srcdir/wayscriber.desktop" "$pkgdir/usr/share/applications/wayscriber.desktop"
+    install -Dm644 "$srcdir/wayscriber-configurator.desktop" "$pkgdir/usr/share/applications/wayscriber-configurator.desktop"
+    install -Dm644 "$srcdir/wayscriber-24.png" "$pkgdir/usr/share/icons/hicolor/24x24/apps/wayscriber.png"
+    install -Dm644 "$srcdir/wayscriber-64.png" "$pkgdir/usr/share/icons/hicolor/64x64/apps/wayscriber.png"
+    install -Dm644 "$srcdir/wayscriber-128.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/wayscriber.png"
+    install -Dm644 "$srcdir/wayscriber-configurator-24.png" "$pkgdir/usr/share/icons/hicolor/24x24/apps/wayscriber-configurator.png"
+    install -Dm644 "$srcdir/wayscriber-configurator-64.png" "$pkgdir/usr/share/icons/hicolor/64x64/apps/wayscriber-configurator.png"
+    install -Dm644 "$srcdir/wayscriber-configurator-128.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png"
 
     # Install documentation and example config
     install -Dm644 config.example.toml "$pkgdir/usr/share/doc/$pkgname/config.example.toml"

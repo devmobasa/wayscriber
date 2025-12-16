@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Wayscriber Configurator
+GenericName=Application Preferences
+Comment=Configure Wayscriber drawing options and shortcuts
+Exec=wayscriber-configurator
+TryExec=wayscriber-configurator
+Icon=wayscriber-configurator
+Terminal=false
+Categories=Settings;
+Keywords=settings;configuration;draw;annotate;wayland;wayscriber;
+StartupNotify=false

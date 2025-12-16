@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Wayscriber
+GenericName=Screen Annotation
+Comment=Draw and annotate on your Wayland desktop
+Exec=wayscriber --active
+TryExec=wayscriber
+Icon=wayscriber
+Terminal=false
+Categories=Graphics;
+Keywords=draw;annotate;screenshot;whiteboard;wayland;
+StartupNotify=false
