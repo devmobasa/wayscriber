@@ -20,11 +20,9 @@ use smithay_client_toolkit::{
 };
 use std::time::Instant;
 use std::{collections::HashSet, sync::OnceLock};
-#[cfg(tablet)]
-use wayland_client::protocol::wl_surface;
 use wayland_client::{
     Proxy, QueueHandle,
-    protocol::{wl_output, wl_seat, wl_shm},
+    protocol::{wl_output, wl_seat, wl_shm, wl_surface},
 };
 #[cfg(tablet)]
 use wayland_protocols::wp::tablet::zv2::client::{
