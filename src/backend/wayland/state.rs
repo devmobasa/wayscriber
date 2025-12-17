@@ -534,6 +534,18 @@ impl WaylandState {
             if (expected_top && !top_configured) || (expected_side && !side_configured) {
                 self.data.toolbar_configure_miss_count =
                     self.data.toolbar_configure_miss_count.saturating_add(1);
+                if debug_toolbar_drag_logging_enabled()
+                    && self.data.toolbar_configure_miss_count % 60 == 0
+                {
+                    debug!(
+                        "Toolbar configure pending: count={}, expected_top={}, configured_top={}, expected_side={}, configured_side={}",
+                        self.data.toolbar_configure_miss_count,
+                        expected_top,
+                        top_configured,
+                        expected_side,
+                        side_configured
+                    );
+                }
             } else {
                 self.data.toolbar_configure_miss_count = 0;
             }
