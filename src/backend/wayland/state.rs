@@ -18,8 +18,8 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
-use std::collections::HashSet;
 use std::time::Instant;
+use std::{collections::HashSet, sync::OnceLock};
 #[cfg(tablet)]
 use wayland_client::protocol::wl_surface;
 use wayland_client::{
@@ -1377,8 +1377,26 @@ impl WaylandState {
         wl_surface.set_buffer_scale(scale);
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
-        // Damage the full surface to avoid missed updates when reusing buffers or when dirty
-        // tracking fails to cover all changed content (preference: correctness over micro-opt).
+        // Capture damage hints for diagnostics. We still apply full damage below to avoid missed
+        // redraws, but logging the computed regions helps pinpoint under-reporting issues.
+        let logical_damage = resolve_damage_regions(
+            self.surface.width().min(i32::MAX as u32) as i32,
+            self.surface.height().min(i32::MAX as u32) as i32,
+            self.input_state.take_dirty_regions(),
+        );
+        if debug_damage_logging_enabled() {
+            let scaled_damage = scale_damage_regions(logical_damage.clone(), scale);
+            debug!(
+                "Damage hints (scaled): count={}, {}",
+                scaled_damage.len(),
+                damage_summary(&scaled_damage)
+            );
+        }
+
+        // Prefer correctness over micro-optimizations: full damage avoids cases where incomplete
+        // hints result in stale pixels (reported as disappearing/reappearing strokes). If we ever
+        // return to partial damage, implement per-buffer damage tracking instead of draining a
+        // single accumulator.
         wl_surface.damage_buffer(0, 0, phys_width as i32, phys_height as i32);
 
         if self.config.performance.enable_vsync {
@@ -1702,6 +1720,33 @@ fn scale_damage_regions(regions: Vec<Rect>, scale: i32) -> Vec<Rect> {
         .collect()
 }
 
+fn damage_summary(regions: &[Rect]) -> String {
+    if regions.is_empty() {
+        return "[]".to_string();
+    }
+
+    let mut parts = Vec::with_capacity(regions.len());
+    for r in regions.iter().take(5) {
+        parts.push(format!("({},{}) {}x{}", r.x, r.y, r.width, r.height));
+    }
+    if regions.len() > 5 {
+        parts.push(format!("… +{} more", regions.len() - 5));
+    }
+    parts.join(", ")
+}
+
+fn parse_debug_damage_env(raw: &str) -> bool {
+    let v = raw.to_ascii_lowercase();
+    !(v.is_empty() || v == "0" || v == "false" || v == "off")
+}
+
+fn debug_damage_logging_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        parse_debug_damage_env(&std::env::var("WAYSCRIBER_DEBUG_DAMAGE").unwrap_or_default())
+    })
+}
+
 impl ActivationHandler for WaylandState {
     type RequestData = RequestData;
 
@@ -1715,6 +1760,9 @@ impl ActivationHandler for WaylandState {
 mod tests {
     use super::*;
 
+    // NOTE: The functions below are used for diagnostic logging only; the renderer currently applies
+    // full-surface damage for correctness. These tests document the intended behavior if we ever
+    // reintroduce partial damage handling.
     #[test]
     fn resolve_damage_returns_full_when_empty() {
         let regions = resolve_damage_regions(1920, 1080, Vec::new());
@@ -1762,5 +1810,35 @@ mod tests {
 
         assert_eq!(regions.len(), 1);
         assert_eq!(regions[0], Rect::new(5, 5, 20, 30).unwrap());
+    }
+
+    #[test]
+    fn full_damage_policy_is_explicit() {
+        // This documents that we intentionally call damage_buffer over the full surface to avoid
+        // stale pixels with buffer reuse. If you switch back to partial damage, implement
+        // per-buffer damage tracking instead of draining a single accumulator.
+    }
+
+    #[test]
+    fn scale_damage_regions_multiplies_by_scale() {
+        let regions = vec![Rect {
+            x: 2,
+            y: 3,
+            width: 4,
+            height: 5,
+        }];
+        let scaled = scale_damage_regions(regions, 2);
+        assert_eq!(scaled.len(), 1);
+        assert_eq!(scaled[0], Rect::new(4, 6, 8, 10).unwrap());
+    }
+
+    #[test]
+    fn debug_damage_logging_env_parses_falsey() {
+        assert!(!parse_debug_damage_env(""));
+        assert!(!parse_debug_damage_env("0"));
+        assert!(!parse_debug_damage_env("false"));
+        assert!(!parse_debug_damage_env("off"));
+        assert!(parse_debug_damage_env("1"));
+        assert!(parse_debug_damage_env("true"));
     }
 }

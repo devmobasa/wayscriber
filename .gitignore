@@ -28,6 +28,12 @@ packaging/**
 !packaging/PKGBUILD
 !packaging/package.wayscriber.yaml
 !packaging/package.configurator.yaml
+!packaging/icons/
+!packaging/icons/*.png
+!packaging/wayscriber.desktop
+!packaging/wayscriber-configurator.desktop
+
+.venv/
 
 docs/board
 
