@@ -1019,17 +1019,13 @@ impl WaylandState {
             self.data.toolbar_side_offset
         );
 
-        // Apply delta with dampening on secondary axis to reduce cross-axis jitter
-        const SECONDARY_AXIS_DAMPEN: f64 = 0.3;
         match kind {
             MoveDragKind::Top => {
-                // Top toolbar: X is primary, Y is dampened
                 self.data.toolbar_top_offset += delta.0;
-                self.data.toolbar_top_offset_y += delta.1 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_top_offset_y += delta.1;
             }
             MoveDragKind::Side => {
-                // Side toolbar: Y is primary, X is dampened
-                self.data.toolbar_side_offset_x += delta.0 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_side_offset_x += delta.0;
                 self.data.toolbar_side_offset += delta.1;
             }
         }
@@ -1111,17 +1107,13 @@ impl WaylandState {
             self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset
         );
-        // Apply delta with dampening on secondary axis to reduce cross-axis jitter
-        const SECONDARY_AXIS_DAMPEN: f64 = 0.3;
         match kind {
             MoveDragKind::Top => {
-                // Top toolbar: X is primary, Y is dampened
                 self.data.toolbar_top_offset += delta.0;
-                self.data.toolbar_top_offset_y += delta.1 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_top_offset_y += delta.1;
             }
             MoveDragKind::Side => {
-                // Side toolbar: Y is primary, X is dampened
-                self.data.toolbar_side_offset_x += delta.0 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_side_offset_x += delta.0;
                 self.data.toolbar_side_offset += delta.1;
             }
         }
@@ -1152,17 +1144,13 @@ impl WaylandState {
             .cloned()
             .unwrap_or_else(|| self.toolbar_snapshot());
 
-        // Apply delta with dampening on secondary axis to reduce cross-axis jitter
-        const SECONDARY_AXIS_DAMPEN: f64 = 0.3;
         match kind {
             MoveDragKind::Top => {
-                // Top toolbar: X is primary, Y is dampened
                 self.data.toolbar_top_offset += delta.0;
-                self.data.toolbar_top_offset_y += delta.1 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_top_offset_y += delta.1;
             }
             MoveDragKind::Side => {
-                // Side toolbar: Y is primary, X is dampened
-                self.data.toolbar_side_offset_x += delta.0 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_side_offset_x += delta.0;
                 self.data.toolbar_side_offset += delta.1;
             }
         }
