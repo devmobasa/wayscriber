@@ -1,4 +1,3 @@
-use log::debug;
 use smithay_client_toolkit::seat::pointer_constraints::PointerConstraintsHandler;
 use wayland_client::{
     Connection, QueueHandle,
@@ -41,7 +40,7 @@ impl PointerConstraintsHandler for WaylandState {
         _surface: &wl_surface::WlSurface,
         _pointer: &wl_pointer::WlPointer,
     ) {
-        debug!("Pointer lock activated for toolbar drag");
+        log::info!("Pointer lock activated for toolbar drag");
         self.locked_pointer = Some(locked_pointer.clone());
     }
 
@@ -53,7 +52,7 @@ impl PointerConstraintsHandler for WaylandState {
         _surface: &wl_surface::WlSurface,
         _pointer: &wl_pointer::WlPointer,
     ) {
-        debug!("Pointer lock deactivated for toolbar drag");
+        log::info!("Pointer lock deactivated for toolbar drag");
         self.unlock_pointer();
     }
 }

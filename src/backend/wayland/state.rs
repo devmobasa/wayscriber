@@ -3,6 +3,7 @@
 use crate::draw::Color;
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
+use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
     compositor::CompositorState,
@@ -351,25 +352,19 @@ impl WaylandState {
         surface: &wl_surface::WlSurface,
     ) {
         if self.inline_toolbars_active() || self.pointer_lock_active() {
-            if debug_toolbar_drag_logging_enabled() {
-                debug!(
-                    "skip pointer lock: inline_active={}, already_locked={}",
-                    self.inline_toolbars_active(),
-                    self.pointer_lock_active()
-                );
-            }
+            log::info!(
+                "skip pointer lock: inline_active={}, already_locked={}",
+                self.inline_toolbars_active(),
+                self.pointer_lock_active()
+            );
             return;
         }
         if self.pointer_constraints_state.bound_global().is_err() {
-            if debug_toolbar_drag_logging_enabled() {
-                debug!("pointer lock unavailable: constraints global missing");
-            }
+            log::info!("pointer lock unavailable: constraints global missing");
             return;
         }
         let Some(pointer) = self.current_pointer() else {
-            if debug_toolbar_drag_logging_enabled() {
-                debug!("pointer lock unavailable: no current pointer");
-            }
+            log::info!("pointer lock unavailable: no current pointer");
             return;
         };
 
@@ -382,14 +377,12 @@ impl WaylandState {
         ) {
             Ok(lp) => {
                 self.locked_pointer = Some(lp);
-                if debug_toolbar_drag_logging_enabled() {
-                    debug!(
-                        "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
-                        self.current_seat_id(),
-                        surface_id(surface),
-                        pointer.id().protocol_id()
-                    );
-                }
+                log::info!(
+                    "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
+                    self.current_seat_id(),
+                    surface_id(surface),
+                    pointer.id().protocol_id()
+                );
             }
             Err(err) => {
                 warn!("Failed to lock pointer for toolbar drag: {}", err);
@@ -403,14 +396,23 @@ impl WaylandState {
         {
             Ok(rp) => {
                 self.relative_pointer = Some(rp);
-                if debug_toolbar_drag_logging_enabled() {
-                    debug!("relative pointer bound for drag");
-                }
+                log::info!("relative pointer bound for drag");
             }
             Err(err) => {
                 warn!("Failed to obtain relative pointer for drag: {}", err);
-                // Leave lock in place but we won't get relative events; absolute fallback may still work.
+                // Abort lock if relative pointer is unavailable; fall back to absolute path.
+                self.unlock_pointer();
             }
+        }
+
+        // If layer-shell appears to ignore margin updates, fall back to inline toolbars during drag so
+        // users can still reposition. This destroys existing layer surfaces and switches rendering to inline.
+        if self.layer_shell.is_some() && !self.inline_toolbars_active() {
+            log::info!("Switching to inline toolbars during drag (layer-shell margins ignored)");
+            self.toolbar.destroy_all();
+            self.set_toolbar_needs_recreate(true);
+            self.data.inline_toolbars = true;
+            self.clear_inline_toolbar_hits();
         }
     }
 
@@ -866,6 +868,13 @@ impl WaylandState {
             coord_is_screen: new_is_screen,
         });
         self.apply_toolbar_offsets(&snapshot);
+        // Force commits so compositors apply new margins immediately.
+        if let Some(layer) = self.toolbar.top_layer_surface() {
+            layer.wl_surface().commit();
+        }
+        if let Some(layer) = self.toolbar.side_layer_surface() {
+            layer.wl_surface().commit();
+        }
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;
         self.clamp_toolbar_offsets(&snapshot);
@@ -957,6 +966,26 @@ impl WaylandState {
 
         self.clamp_toolbar_offsets(&snapshot);
         self.apply_toolbar_offsets(&snapshot);
+        // Commit both toolbar surfaces immediately to force the compositor to apply margins.
+        if let Some(layer) = self.toolbar.top_layer_surface() {
+            layer.wl_surface().commit();
+        }
+        if let Some(layer) = self.toolbar.side_layer_surface() {
+            layer.wl_surface().commit();
+        }
+
+        // Fallback for compositors that ignore margin updates: recreate toolbar surfaces when locked.
+        if self.layer_shell.is_some()
+            && !self.inline_toolbars_active()
+            && self.pointer_lock_active()
+        {
+            log::info!("Recreating toolbar surfaces during drag to force margin update");
+            self.toolbar.destroy_all();
+            if let Some(layer_shell) = self.layer_shell.as_ref() {
+                let _ = layer_shell; // silence unused warning if any
+            }
+            self.set_toolbar_needs_recreate(true);
+        }
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;
     }

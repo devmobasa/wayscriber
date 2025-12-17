@@ -127,6 +127,18 @@ impl ToolbarSurfaceManager {
         self.side.set_top_margin(top);
     }
 
+    pub fn top_layer_surface(
+        &self,
+    ) -> Option<&smithay_client_toolkit::shell::wlr_layer::LayerSurface> {
+        self.top.layer_surface.as_ref()
+    }
+
+    pub fn side_layer_surface(
+        &self,
+    ) -> Option<&smithay_client_toolkit::shell::wlr_layer::LayerSurface> {
+        self.side.layer_surface.as_ref()
+    }
+
     pub fn destroy_all(&mut self) {
         self.top.destroy();
         self.side.destroy();

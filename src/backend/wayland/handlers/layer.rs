@@ -1,9 +1,10 @@
 // Responds to layer-shell configure/close events, keeping dimensions in sync with the compositor.
 use log::{debug, info, warn};
-use smithay_client_toolkit::shell::wlr_layer::{
-    LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
+use smithay_client_toolkit::shell::{
+    WaylandSurface,
+    wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
 };
-use wayland_client::{Connection, QueueHandle};
+use wayland_client::{Connection, Proxy, QueueHandle};
 
 use super::super::state::WaylandState;
 use crate::session;
@@ -31,6 +32,12 @@ impl LayerShellHandler for WaylandState {
         _serial: u32,
     ) {
         if self.toolbar.handle_configure(&configure, layer) {
+            log::info!(
+                "Toolbar layer configure: size={}x{}, layer={}",
+                configure.new_size.0,
+                configure.new_size.1,
+                layer.wl_surface().id().protocol_id()
+            );
             self.input_state.needs_redraw = true;
             return;
         }
