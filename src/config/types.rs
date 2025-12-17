@@ -959,6 +959,10 @@ pub struct ToolbarConfig {
     /// Saved vertical offset for the side toolbar (layer-shell/inline)
     #[serde(default)]
     pub side_offset: f64,
+
+    /// Force inline toolbars even when layer-shell is available (debug/compatibility).
+    #[serde(default)]
+    pub force_inline: bool,
 }
 
 impl Default for ToolbarConfig {
@@ -973,6 +977,7 @@ impl Default for ToolbarConfig {
             show_marker_opacity_section: default_show_marker_opacity_section(),
             top_offset: 0.0,
             side_offset: 0.0,
+            force_inline: false,
         }
     }
 }

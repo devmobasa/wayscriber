@@ -2,7 +2,7 @@
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
 use crate::draw::Color;
 use anyhow::{Context, Result};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
     compositor::CompositorState,
@@ -23,7 +23,7 @@ use std::{collections::HashSet, sync::OnceLock};
 #[cfg(tablet)]
 use wayland_client::protocol::wl_surface;
 use wayland_client::{
-    QueueHandle,
+    Proxy, QueueHandle,
     protocol::{wl_output, wl_seat, wl_shm},
 };
 #[cfg(tablet)]
@@ -188,7 +188,13 @@ impl WaylandState {
         data.pending_freeze_on_start = pending_freeze_on_start;
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
-        data.inline_toolbars = layer_shell.is_none();
+        let force_inline_toolbars = force_inline_toolbars_requested(&config);
+        data.inline_toolbars = layer_shell.is_none() || force_inline_toolbars;
+        if force_inline_toolbars {
+            info!(
+                "Forcing inline toolbars (config/ui.toolbar.force_inline or WAYSCRIBER_FORCE_INLINE_TOOLBARS)"
+            );
+        }
         data.toolbar_top_offset = config.ui.toolbar.top_offset;
         data.toolbar_side_offset = config.ui.toolbar.side_offset;
 
@@ -303,6 +309,13 @@ impl WaylandState {
 
     pub(super) fn current_seat(&self) -> Option<wl_seat::WlSeat> {
         self.data.current_seat.clone()
+    }
+
+    pub(super) fn current_seat_id(&self) -> Option<u32> {
+        self.data
+            .current_seat
+            .as_ref()
+            .map(|seat| seat.id().protocol_id())
     }
 
     pub(super) fn set_current_seat(&mut self, seat: Option<wl_seat::WlSeat>) {
@@ -464,6 +477,7 @@ impl WaylandState {
         // Sync individual toolbar visibility
         let top_visible = self.input_state.toolbar_top_visible();
         let side_visible = self.input_state.toolbar_side_visible();
+        let inline_active = self.inline_toolbars_active();
 
         if top_visible != self.toolbar.is_top_visible() {
             self.toolbar.set_top_visible(top_visible);
@@ -482,10 +496,11 @@ impl WaylandState {
 
         if any_visible {
             log::debug!(
-                "Toolbar visibility sync: top_visible={}, side_visible={}, layer_shell_available={}, top_created={}, side_created={}, needs_recreate={}, scale={}",
+                "Toolbar visibility sync: top_visible={}, side_visible={}, layer_shell_available={}, inline_active={}, top_created={}, side_created={}, needs_recreate={}, scale={}",
                 top_visible,
                 side_visible,
                 self.layer_shell.is_some(),
+                inline_active,
                 self.toolbar.top_created(),
                 self.toolbar.side_created(),
                 self.toolbar_needs_recreate(),
@@ -493,12 +508,21 @@ impl WaylandState {
             );
         }
 
-        if any_visible && self.layer_shell.is_none() {
+        if any_visible && self.layer_shell.is_none() && !inline_active {
             self.log_toolbar_layer_shell_missing_once();
             self.notify_toolbar_layer_shell_missing_once();
         }
 
-        if any_visible && self.layer_shell.is_some() {
+        if any_visible && inline_active {
+            // If we forced inline while layer surfaces already existed, tear them down to avoid
+            // focus/input conflicts on compositors that support layer-shell.
+            if self.toolbar.top_created() || self.toolbar.side_created() {
+                self.toolbar.destroy_all();
+                self.set_toolbar_needs_recreate(true);
+            }
+        }
+
+        if any_visible && self.layer_shell.is_some() && !inline_active {
             if self.toolbar_needs_recreate() {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(false);
@@ -598,11 +622,19 @@ impl WaylandState {
                 (Self::TOP_BASE_MARGIN_LEFT + self.data.toolbar_top_offset).round() as i32;
             let side_margin_top =
                 (Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset).round() as i32;
-            log::debug!(
-                "apply_toolbar_offsets: top_margin_left={}, side_margin_top={}",
-                top_margin_left,
-                side_margin_top
-            );
+            if debug_toolbar_drag_logging_enabled() {
+                debug!(
+                    "apply_toolbar_offsets: top_margin_left={} (last={:?}), side_margin_top={} (last={:?}), offsets=({}, {})",
+                    top_margin_left,
+                    self.data.last_applied_top_margin,
+                    side_margin_top,
+                    self.data.last_applied_side_margin,
+                    self.data.toolbar_top_offset,
+                    self.data.toolbar_side_offset
+                );
+            }
+            self.data.last_applied_top_margin = Some(top_margin_left);
+            self.data.last_applied_side_margin = Some(side_margin_top);
             self.toolbar.set_top_margin_left(top_margin_left);
             self.toolbar.set_side_margin_top(side_margin_top);
             self.toolbar.mark_dirty();
@@ -1735,9 +1767,13 @@ fn damage_summary(regions: &[Rect]) -> String {
     parts.join(", ")
 }
 
-fn parse_debug_damage_env(raw: &str) -> bool {
+fn parse_boolish_env(raw: &str) -> bool {
     let v = raw.to_ascii_lowercase();
     !(v.is_empty() || v == "0" || v == "false" || v == "off")
+}
+
+fn parse_debug_damage_env(raw: &str) -> bool {
+    parse_boolish_env(raw)
 }
 
 fn debug_damage_logging_enabled() -> bool {
@@ -1745,6 +1781,28 @@ fn debug_damage_logging_enabled() -> bool {
     *ENABLED.get_or_init(|| {
         parse_debug_damage_env(&std::env::var("WAYSCRIBER_DEBUG_DAMAGE").unwrap_or_default())
     })
+}
+
+pub(super) fn surface_id(surface: &wl_surface::WlSurface) -> u32 {
+    surface.id().protocol_id()
+}
+
+pub(super) fn debug_toolbar_drag_logging_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        parse_boolish_env(&std::env::var("WAYSCRIBER_DEBUG_TOOLBAR_DRAG").unwrap_or_default())
+    })
+}
+
+fn force_inline_env_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        parse_boolish_env(&std::env::var("WAYSCRIBER_FORCE_INLINE_TOOLBARS").unwrap_or_default())
+    })
+}
+
+fn force_inline_toolbars_requested(config: &Config) -> bool {
+    config.ui.toolbar.force_inline || force_inline_env_enabled()
 }
 
 impl ActivationHandler for WaylandState {

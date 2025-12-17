@@ -5,7 +5,9 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
-use crate::backend::wayland::state::MoveDragKind;
+use crate::backend::wayland::state::{
+    MoveDragKind, debug_toolbar_drag_logging_enabled, surface_id,
+};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::{MouseButton, Tool};
 
@@ -35,6 +37,21 @@ impl PointerHandler for WaylandState {
         for event in events {
             let on_toolbar = self.toolbar.is_toolbar_surface(&event.surface);
             let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+            if debug_toolbar_drag_logging_enabled() {
+                debug!(
+                    "pointer {:?}: seat={:?}, surface={}, on_toolbar={}, inline_active={}, pos=({:.1}, {:.1}), drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
+                    event.kind,
+                    self.current_seat_id(),
+                    surface_id(&event.surface),
+                    on_toolbar,
+                    inline_active,
+                    event.position.0,
+                    event.position.1,
+                    self.is_move_dragging(),
+                    self.toolbar_dragging(),
+                    self.pointer_over_toolbar()
+                );
+            }
             match event.kind {
                 PointerEventKind::Enter { .. } => {
                     debug!(
@@ -174,6 +191,15 @@ impl PointerHandler for WaylandState {
                     self.input_state.on_mouse_motion(mx, my);
                 }
                 PointerEventKind::Press { button, .. } => {
+                    if debug_toolbar_drag_logging_enabled() {
+                        debug!(
+                            "pointer press: button={}, on_toolbar={}, inline_active={}, drag_active={}",
+                            button,
+                            on_toolbar,
+                            inline_active,
+                            self.is_move_dragging()
+                        );
+                    }
                     if inline_active
                         && ((button == BTN_LEFT && self.inline_toolbar_press(event.position))
                             || self.pointer_over_toolbar())
@@ -218,6 +244,17 @@ impl PointerHandler for WaylandState {
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Release { button, .. } => {
+                    if debug_toolbar_drag_logging_enabled() {
+                        debug!(
+                            "pointer release: button={}, on_toolbar={}, inline_active={}, drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
+                            button,
+                            on_toolbar,
+                            inline_active,
+                            self.is_move_dragging(),
+                            self.toolbar_dragging(),
+                            self.pointer_over_toolbar()
+                        );
+                    }
                     if inline_active {
                         if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
                             continue;
