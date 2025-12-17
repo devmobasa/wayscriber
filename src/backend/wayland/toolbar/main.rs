@@ -40,8 +40,17 @@ impl Default for ToolbarSurfaceManager {
             visible: false,
             top_visible: false,
             side_visible: false,
-            top: ToolbarSurface::new("wayscriber-toolbar-top", Anchor::TOP, (12, 12, 0, 12)),
-            side: ToolbarSurface::new("wayscriber-toolbar-side", Anchor::LEFT, (24, 0, 24, 24)),
+            // Anchor top/side toolbars to both axes they offset along so margins take effect.
+            top: ToolbarSurface::new(
+                "wayscriber-toolbar-top",
+                Anchor::TOP | Anchor::LEFT,
+                (12, 12, 0, 12),
+            ),
+            side: ToolbarSurface::new(
+                "wayscriber-toolbar-side",
+                Anchor::LEFT | Anchor::TOP,
+                (24, 0, 24, 24),
+            ),
             top_hover: None,
             side_hover: None,
             last_snapshot: None,

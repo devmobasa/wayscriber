@@ -26,7 +26,7 @@ impl LayerShellHandler for WaylandState {
     fn configure(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
@@ -83,6 +83,10 @@ impl LayerShellHandler for WaylandState {
         let (phys_w, phys_h) = self.surface.physical_dimensions();
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
+
+        // Re-apply toolbar offsets now that we have a configured surface size; avoids clamping to 0
+        // on startup before the compositor provides dimensions.
+        self.sync_toolbar_visibility(qh);
 
         // Fallback: on xdg-only environments we might never get surface_enter before configure.
         // Try to load a session snapshot once even without output identity; compositor handler
