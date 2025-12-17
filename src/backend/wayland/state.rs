@@ -514,11 +514,6 @@ impl WaylandState {
             self.notify_toolbar_layer_shell_missing_once();
         }
 
-        if any_visible && self.layer_shell.is_none() && !inline_active {
-            self.log_toolbar_layer_shell_missing_once();
-            self.notify_toolbar_layer_shell_missing_once();
-        }
-
         if any_visible && inline_active {
             // If we forced inline while layer surfaces already existed, tear them down to avoid
             // focus/input conflicts on compositors that support layer-shell.
