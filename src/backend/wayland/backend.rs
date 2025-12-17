@@ -7,6 +7,7 @@ use signal_hook::{
     consts::signal::{SIGINT, SIGTERM, SIGUSR1, SIGUSR2},
     iterator::Signals,
 };
+use smithay_client_toolkit::globals::ProvidesBoundGlobal;
 use smithay_client_toolkit::{
     activation::ActivationState,
     compositor::CompositorState,
@@ -229,6 +230,11 @@ impl WaylandBackend {
         let registry_state = RegistryState::new(&globals);
         let pointer_constraints_state = PointerConstraintsState::bind(&globals, &qh);
         let relative_pointer_state = RelativePointerState::bind(&globals, &qh);
+        if pointer_constraints_state.bound_global().is_ok() {
+            debug!("Pointer constraints global available");
+        } else {
+            debug!("Pointer constraints global not available");
+        }
 
         let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ())
         {

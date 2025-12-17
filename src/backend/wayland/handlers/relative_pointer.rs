@@ -15,6 +15,13 @@ impl RelativePointerHandler for WaylandState {
         event: RelativeMotionEvent,
     ) {
         if !self.pointer_lock_active() || !self.is_move_dragging() {
+            if debug_toolbar_drag_logging_enabled() {
+                debug!(
+                    "relative motion ignored: lock_active={}, drag_active={}",
+                    self.pointer_lock_active(),
+                    self.is_move_dragging()
+                );
+            }
             return;
         }
 
@@ -29,8 +36,12 @@ impl RelativePointerHandler for WaylandState {
 
         if debug_toolbar_drag_logging_enabled() {
             debug!(
-                "relative drag: kind={:?}, delta={:.3}, utime={}",
-                kind, delta, event.utime
+                "relative drag: kind={:?}, delta={:.3}, utime={}, offsets=({}, {})",
+                kind,
+                delta,
+                event.utime,
+                self.toolbar_top_offset(),
+                self.toolbar_side_offset()
             );
         }
 

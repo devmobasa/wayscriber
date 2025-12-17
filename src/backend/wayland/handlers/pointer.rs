@@ -211,6 +211,14 @@ impl PointerHandler for WaylandState {
                             if let Some((intent, drag)) =
                                 self.toolbar.pointer_press(&event.surface, event.position)
                             {
+                                if debug_toolbar_drag_logging_enabled() {
+                                    debug!(
+                                        "toolbar press: drag_start={}, surface={}, seat={:?}",
+                                        drag,
+                                        surface_id(&event.surface),
+                                        self.current_seat_id()
+                                    );
+                                }
                                 self.set_toolbar_dragging(drag);
                                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);

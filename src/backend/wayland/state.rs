@@ -333,6 +333,14 @@ impl WaylandState {
         self.themed_pointer.as_ref().map(|p| p.pointer().clone())
     }
 
+    pub(super) fn toolbar_top_offset(&self) -> f64 {
+        self.data.toolbar_top_offset
+    }
+
+    pub(super) fn toolbar_side_offset(&self) -> f64 {
+        self.data.toolbar_side_offset
+    }
+
     pub(super) fn pointer_lock_active(&self) -> bool {
         self.locked_pointer.is_some()
     }
@@ -343,12 +351,25 @@ impl WaylandState {
         surface: &wl_surface::WlSurface,
     ) {
         if self.inline_toolbars_active() || self.pointer_lock_active() {
+            if debug_toolbar_drag_logging_enabled() {
+                debug!(
+                    "skip pointer lock: inline_active={}, already_locked={}",
+                    self.inline_toolbars_active(),
+                    self.pointer_lock_active()
+                );
+            }
             return;
         }
         if self.pointer_constraints_state.bound_global().is_err() {
+            if debug_toolbar_drag_logging_enabled() {
+                debug!("pointer lock unavailable: constraints global missing");
+            }
             return;
         }
         let Some(pointer) = self.current_pointer() else {
+            if debug_toolbar_drag_logging_enabled() {
+                debug!("pointer lock unavailable: no current pointer");
+            }
             return;
         };
 
@@ -361,6 +382,14 @@ impl WaylandState {
         ) {
             Ok(lp) => {
                 self.locked_pointer = Some(lp);
+                if debug_toolbar_drag_logging_enabled() {
+                    debug!(
+                        "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
+                        self.current_seat_id(),
+                        surface_id(surface),
+                        pointer.id().protocol_id()
+                    );
+                }
             }
             Err(err) => {
                 warn!("Failed to lock pointer for toolbar drag: {}", err);
@@ -374,9 +403,13 @@ impl WaylandState {
         {
             Ok(rp) => {
                 self.relative_pointer = Some(rp);
+                if debug_toolbar_drag_logging_enabled() {
+                    debug!("relative pointer bound for drag");
+                }
             }
             Err(err) => {
                 warn!("Failed to obtain relative pointer for drag: {}", err);
+                // Leave lock in place but we won't get relative events; absolute fallback may still work.
             }
         }
     }
