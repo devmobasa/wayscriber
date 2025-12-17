@@ -150,6 +150,7 @@ impl WaylandState {
     const SIDE_MARGIN_BOTTOM: f64 = 24.0;
     const INLINE_TOP_Y: f64 = 16.0;
     const INLINE_SIDE_X: f64 = 24.0;
+    const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
 
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
@@ -492,6 +493,7 @@ impl WaylandState {
         let any_visible = self.toolbar.is_visible();
         if !any_visible {
             self.set_pointer_over_toolbar(false);
+            self.data.toolbar_configure_miss_count = 0;
         }
 
         if any_visible {
@@ -520,9 +522,36 @@ impl WaylandState {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(true);
             }
+            self.data.toolbar_configure_miss_count = 0;
         }
 
         if any_visible && self.layer_shell.is_some() && !inline_active {
+            // Detect compositors ignoring or failing to configure toolbar layer surfaces; if they
+            // never configure after repeated attempts, fall back to inline toolbars automatically.
+            let (top_configured, side_configured) = self.toolbar.configured_states();
+            let expected_top = self.toolbar.is_top_visible();
+            let expected_side = self.toolbar.is_side_visible();
+            if (expected_top && !top_configured) || (expected_side && !side_configured) {
+                self.data.toolbar_configure_miss_count =
+                    self.data.toolbar_configure_miss_count.saturating_add(1);
+            } else {
+                self.data.toolbar_configure_miss_count = 0;
+            }
+
+            if self.data.toolbar_configure_miss_count > Self::TOOLBAR_CONFIGURE_FAIL_THRESHOLD {
+                warn!(
+                    "Toolbar layer surfaces did not configure after {} frames; falling back to inline toolbars",
+                    self.data.toolbar_configure_miss_count
+                );
+                self.toolbar.destroy_all();
+                self.data.inline_toolbars = true;
+                self.set_toolbar_needs_recreate(true);
+                self.data.toolbar_configure_miss_count = 0;
+                // Re-run visibility sync with inline mode enabled.
+                self.sync_toolbar_visibility(qh);
+                return;
+            }
+
             if self.toolbar_needs_recreate() {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(false);

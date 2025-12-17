@@ -141,6 +141,10 @@ impl ToolbarSurfaceManager {
         self.top.is_layer(layer) || self.side.is_layer(layer)
     }
 
+    pub fn configured_states(&self) -> (bool, bool) {
+        (self.top.configured, self.side.configured)
+    }
+
     pub fn ensure_created(
         &mut self,
         qh: &QueueHandle<WaylandState>,
