@@ -508,6 +508,12 @@ impl WaylandState {
             );
         }
 
+        // Warn the user when layer-shell is unavailable and we're forced to inline fallback.
+        if any_visible && self.layer_shell.is_none() {
+            self.log_toolbar_layer_shell_missing_once();
+            self.notify_toolbar_layer_shell_missing_once();
+        }
+
         if any_visible && self.layer_shell.is_none() && !inline_active {
             self.log_toolbar_layer_shell_missing_once();
             self.notify_toolbar_layer_shell_missing_once();
@@ -607,7 +613,7 @@ impl WaylandState {
     /// Convert a toolbar-local coordinate into a screen-relative coordinate so that
     /// dragging continues to work even after the surface has moved.
     fn effective_toolbar_coord(&self, kind: MoveDragKind, local_coord: f64) -> f64 {
-        if self.layer_shell.is_none() {
+        if self.layer_shell.is_none() || self.inline_toolbars_active() {
             return local_coord;
         }
 
@@ -753,7 +759,7 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
         self.clamp_toolbar_offsets(&snapshot);
 
-        if self.layer_shell.is_none() {
+        if self.layer_shell.is_none() || self.inline_toolbars_active() {
             self.clear_inline_toolbar_hits();
         }
     }
@@ -816,7 +822,7 @@ impl WaylandState {
         // Ensure we don't drift off-screen.
         self.clamp_toolbar_offsets(&snapshot);
 
-        if self.layer_shell.is_none() {
+        if self.layer_shell.is_none() || self.inline_toolbars_active() {
             // Inline mode uses cached rects, so force a relayout.
             self.clear_inline_toolbar_hits();
         }
