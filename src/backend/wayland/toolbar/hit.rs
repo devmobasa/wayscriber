@@ -88,8 +88,8 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
                 crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
             )
         }
-        DragMoveTop => ToolbarEvent::MoveTopToolbar(x),
-        DragMoveSide => ToolbarEvent::MoveSideToolbar(y),
+        DragMoveTop => ToolbarEvent::MoveTopToolbar { x, y },
+        DragMoveSide => ToolbarEvent::MoveSideToolbar { x, y },
         crate::backend::wayland::toolbar::events::HitKind::Click => hit.event.clone(),
     };
 
@@ -150,8 +150,8 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
                 crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
             )))
         }
-        DragMoveTop => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar(x))),
-        DragMoveSide => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar(y))),
+        DragMoveTop => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
+        DragMoveSide => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
         _ => None,
     }
 }

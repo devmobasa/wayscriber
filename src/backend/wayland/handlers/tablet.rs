@@ -9,7 +9,6 @@ use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
 };
 
-use crate::backend::wayland::state::MoveDragKind;
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 
@@ -429,16 +428,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
             Event::Motion { x, y } => {
                 if state.is_move_dragging() {
                     if let Some(kind) = state.active_move_drag_kind() {
-                        let coord = match kind {
-                            MoveDragKind::Top => x,
-                            MoveDragKind::Side => y,
-                        };
                         // On toolbar surface: coords are toolbar-local, need conversion
                         // On main surface: coords are already screen-relative
                         if state.stylus_on_toolbar {
-                            state.handle_toolbar_move(kind, coord);
+                            state.handle_toolbar_move(kind, (x, y));
                         } else {
-                            state.handle_toolbar_move_screen(kind, coord);
+                            state.handle_toolbar_move_screen(kind, (x, y));
                         }
                         state.toolbar.mark_dirty();
                         state.input_state.needs_redraw = true;

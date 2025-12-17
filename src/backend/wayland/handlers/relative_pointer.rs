@@ -2,7 +2,7 @@ use smithay_client_toolkit::seat::relative_pointer::{RelativeMotionEvent, Relati
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 use wayland_protocols::wp::relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1;
 
-use super::super::state::{MoveDragKind, WaylandState};
+use super::super::state::WaylandState;
 
 impl RelativePointerHandler for WaylandState {
     fn relative_pointer_motion(
@@ -26,20 +26,18 @@ impl RelativePointerHandler for WaylandState {
             return;
         };
 
-        let delta = match kind {
-            MoveDragKind::Top => event.delta.0,
-            MoveDragKind::Side => event.delta.1,
-        };
-
         log::info!(
-            "relative drag: kind={:?}, delta={:.3}, utime={}, offsets=({}, {})",
+            "relative drag: kind={:?}, delta=({:.3}, {:.3}), utime={}, offsets=({}, {})/({}, {})",
             kind,
-            delta,
+            event.delta.0,
+            event.delta.1,
             event.utime,
             self.toolbar_top_offset(),
+            self.toolbar_top_offset_y(),
+            self.toolbar_side_offset_x(),
             self.toolbar_side_offset()
         );
 
-        self.apply_toolbar_relative_delta(kind, delta);
+        self.apply_toolbar_relative_delta(kind, event.delta);
     }
 }

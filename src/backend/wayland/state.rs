@@ -85,7 +85,9 @@ pub(super) struct WaylandState {
     pub(super) xdg_shell: Option<XdgShell>,
     pub(super) activation: Option<ActivationState>,
     pub(super) shm: Shm,
+    #[allow(dead_code)] // Kept for potential future pointer lock support
     pub(super) pointer_constraints_state: PointerConstraintsState,
+    #[allow(dead_code)] // Kept for potential future pointer lock support
     pub(super) relative_pointer_state: RelativePointerState,
     pub(super) output_state: OutputState,
     pub(super) seat_state: SeatState,
@@ -157,8 +159,12 @@ pub(super) struct WaylandState {
 
 impl WaylandState {
     const TOP_MARGIN_RIGHT: f64 = 12.0;
+    const TOP_BASE_MARGIN_TOP: f64 = 12.0;
+    const TOP_MARGIN_BOTTOM: f64 = 0.0;
     const SIDE_BASE_MARGIN_TOP: f64 = 24.0;
     const SIDE_MARGIN_BOTTOM: f64 = 24.0;
+    const SIDE_BASE_MARGIN_LEFT: f64 = 24.0;
+    const SIDE_MARGIN_RIGHT: f64 = 0.0;
     const INLINE_TOP_Y: f64 = 16.0;
     const INLINE_SIDE_X: f64 = 24.0;
     const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
@@ -211,10 +217,15 @@ impl WaylandState {
             );
         }
         data.toolbar_top_offset = config.ui.toolbar.top_offset;
+        data.toolbar_top_offset_y = config.ui.toolbar.top_offset_y;
         data.toolbar_side_offset = config.ui.toolbar.side_offset;
+        data.toolbar_side_offset_x = config.ui.toolbar.side_offset_x;
         drag_log(format!(
-            "load offsets from config: top_offset={}, side_offset={}",
-            data.toolbar_top_offset, data.toolbar_side_offset
+            "load offsets from config: top_offset=({}, {}), side_offset=({}, {})",
+            data.toolbar_top_offset,
+            data.toolbar_top_offset_y,
+            data.toolbar_side_offset,
+            data.toolbar_side_offset_x
         ));
 
         Self {
@@ -334,6 +345,7 @@ impl WaylandState {
         self.data.current_seat.clone()
     }
 
+    #[allow(dead_code)] // Kept for potential future pointer lock support
     pub(super) fn current_pointer(&self) -> Option<wl_pointer::WlPointer> {
         self.themed_pointer.as_ref().map(|p| p.pointer().clone())
     }
@@ -342,14 +354,23 @@ impl WaylandState {
         self.data.toolbar_top_offset
     }
 
+    pub(super) fn toolbar_top_offset_y(&self) -> f64 {
+        self.data.toolbar_top_offset_y
+    }
+
     pub(super) fn toolbar_side_offset(&self) -> f64 {
         self.data.toolbar_side_offset
+    }
+
+    pub(super) fn toolbar_side_offset_x(&self) -> f64 {
+        self.data.toolbar_side_offset_x
     }
 
     pub(super) fn pointer_lock_active(&self) -> bool {
         self.locked_pointer.is_some()
     }
 
+    #[allow(dead_code)] // Kept for potential future pointer lock support
     pub(super) fn lock_pointer_for_drag(
         &mut self,
         qh: &QueueHandle<Self>,
@@ -630,9 +651,11 @@ impl WaylandState {
                 self.surface.scale()
             );
             drag_log(format!(
-                "toolbar sync: top_offset={}, side_offset={}, inline_active={}, layer_shell={}, needs_recreate={}",
+                "toolbar sync: top_offset=({}, {}), side_offset=({}, {}), inline_active={}, layer_shell={}, needs_recreate={}",
                 self.data.toolbar_top_offset,
+                self.data.toolbar_top_offset_y,
                 self.data.toolbar_side_offset,
+                self.data.toolbar_side_offset_x,
                 inline_active,
                 self.layer_shell.is_some(),
                 self.toolbar_needs_recreate()
@@ -736,36 +759,53 @@ impl WaylandState {
         self.data.inline_toolbars
     }
 
-    /// Base X position for the top toolbar when laid out inline. Used as the
-    /// reference for offset clamping and conversion even when layer-shell is active
-    /// so offsets are consistent across compositors/modes.
+    /// Base X position for the top toolbar when laid out inline.
+    /// When a drag is in progress we freeze this base to avoid shifting the top bar while moving the side bar.
     fn inline_top_base_x(&self, snapshot: &ToolbarSnapshot) -> f64 {
+        if self.is_move_dragging() {
+            if let Some(x) = self.data.drag_top_base_x {
+                return x;
+            }
+        }
         let side_visible = self.toolbar.is_side_visible();
         let side_size = side_size(snapshot);
         let top_size = top_size(snapshot);
         let side_start_y = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
-        let top_bottom_y = Self::INLINE_TOP_Y + top_size.1 as f64;
+        let top_bottom_y = Self::INLINE_TOP_Y + self.data.toolbar_top_offset_y + top_size.1 as f64;
         let side_overlaps_top = side_visible && side_start_y < top_bottom_y;
-        let base = Self::INLINE_SIDE_X;
-        if side_overlaps_top {
+        let base = Self::INLINE_SIDE_X + self.data.toolbar_side_offset_x;
+        // When dragging the side toolbar, don't push the top bar; keep its base stable so it
+        // doesn't shift while moving the side bar.
+        if side_overlaps_top && self.active_move_drag_kind() != Some(MoveDragKind::Side) {
             base + side_size.0 as f64 + Self::INLINE_TOP_PUSH
         } else {
             base
         }
     }
 
+    fn inline_top_base_y(&self) -> f64 {
+        if self.is_move_dragging() {
+            if let Some(y) = self.data.drag_top_base_y {
+                return y;
+            }
+        }
+        Self::INLINE_TOP_Y
+    }
+
     /// Convert a toolbar-local coordinate into a screen-relative coordinate so that
     /// dragging continues to work even after the surface has moved.
-    fn effective_toolbar_coord(&self, kind: MoveDragKind, local_coord: f64) -> f64 {
+    fn local_to_screen_coords(&self, kind: MoveDragKind, local_coord: (f64, f64)) -> (f64, f64) {
         match kind {
-            MoveDragKind::Top => {
+            MoveDragKind::Top => (
                 self.inline_top_base_x(&self.toolbar_snapshot())
                     + self.data.toolbar_top_offset
-                    + local_coord
-            }
-            MoveDragKind::Side => {
-                Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset + local_coord
-            }
+                    + local_coord.0,
+                self.inline_top_base_y() + self.data.toolbar_top_offset_y + local_coord.1,
+            ),
+            MoveDragKind::Side => (
+                Self::SIDE_BASE_MARGIN_LEFT + self.data.toolbar_side_offset_x + local_coord.0,
+                Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset + local_coord.1,
+            ),
         }
     }
 
@@ -779,39 +819,70 @@ impl WaylandState {
             ));
             return false;
         }
-        let top_w = top_size(snapshot).0 as f64;
-        let side_h = side_size(snapshot).1 as f64;
+        let (top_w, top_h) = top_size(snapshot);
+        let (side_w, side_h) = side_size(snapshot);
         let top_base_x = self.inline_top_base_x(snapshot);
+        let top_base_y = self.inline_top_base_y();
 
-        let max_top = (width - top_w - top_base_x - Self::TOP_MARGIN_RIGHT).max(0.0);
-        let max_side =
-            (height - side_h - Self::SIDE_BASE_MARGIN_TOP - Self::SIDE_MARGIN_BOTTOM).max(0.0);
+        let mut max_top_x = (width - top_w as f64 - top_base_x - Self::TOP_MARGIN_RIGHT).max(0.0);
+        let mut max_top_y = (height - top_h as f64 - top_base_y - Self::TOP_MARGIN_BOTTOM).max(0.0);
+        let mut max_side_y =
+            (height - side_h as f64 - Self::SIDE_BASE_MARGIN_TOP - Self::SIDE_MARGIN_BOTTOM)
+                .max(0.0);
+        let mut max_side_x =
+            (width - side_w as f64 - Self::SIDE_BASE_MARGIN_LEFT - Self::SIDE_MARGIN_RIGHT)
+                .max(0.0);
 
-        let before_top = self.data.toolbar_top_offset;
-        let before_side = self.data.toolbar_side_offset;
-        self.data.toolbar_top_offset = self.data.toolbar_top_offset.clamp(0.0, max_top);
-        self.data.toolbar_side_offset = self.data.toolbar_side_offset.clamp(0.0, max_side);
-        drag_log(format!(
-            "clamp offsets: before=({}, {}), after=({}, {}), max=({}, {}), size=({}, {}), top_base_x={}",
-            before_top,
-            before_side,
-            self.data.toolbar_top_offset,
+        // Ensure max bounds remain non-negative.
+        max_top_x = max_top_x.max(0.0);
+        max_top_y = max_top_y.max(0.0);
+        max_side_x = max_side_x.max(0.0);
+        max_side_y = max_side_y.max(0.0);
+
+        // Allow negative offsets so toolbars can reach screen edges by cancelling base margins
+        let min_top_x = -top_base_x;
+        let min_top_y = -top_base_y;
+        let min_side_x = -Self::SIDE_BASE_MARGIN_LEFT;
+        let min_side_y = -Self::SIDE_BASE_MARGIN_TOP;
+
+        let before_top = (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y);
+        let before_side = (
+            self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset,
-            max_top,
-            max_side,
+        );
+        self.data.toolbar_top_offset = self.data.toolbar_top_offset.clamp(min_top_x, max_top_x);
+        self.data.toolbar_top_offset_y = self.data.toolbar_top_offset_y.clamp(min_top_y, max_top_y);
+        self.data.toolbar_side_offset = self.data.toolbar_side_offset.clamp(min_side_y, max_side_y);
+        self.data.toolbar_side_offset_x = self.data.toolbar_side_offset_x.clamp(min_side_x, max_side_x);
+        drag_log(format!(
+            "clamp offsets: before=({:.3}, {:.3})/({:.3}, {:.3}), after=({:.3}, {:.3})/({:.3}, {:.3}), max=({:.3}, {:.3})/({:.3}, {:.3}), size=({}, {}), top_base_x={:.3}, top_base_y={:.3}",
+            before_top.0,
+            before_top.1,
+            before_side.0,
+            before_side.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset,
+            max_top_x,
+            max_top_y,
+            max_side_x,
+            max_side_y,
             width,
             height,
-            top_base_x
+            top_base_x,
+            top_base_y
         ));
         true
     }
 
-    fn begin_toolbar_move_drag(&mut self, kind: MoveDragKind, local_coord: f64) {
+    fn begin_toolbar_move_drag(&mut self, kind: MoveDragKind, local_coord: (f64, f64)) {
         if self.data.toolbar_move_drag.is_none() {
             log::debug!(
-                "Begin toolbar move drag: kind={:?}, local_coord={}",
+                "Begin toolbar move drag: kind={:?}, local_coord=({:.3}, {:.3})",
                 kind,
-                local_coord
+                local_coord.0,
+                local_coord.1
             );
             // Store as local coords since the initial press is on the toolbar surface
             self.data.toolbar_move_drag = Some(MoveDrag {
@@ -819,6 +890,10 @@ impl WaylandState {
                 last_coord: local_coord,
                 coord_is_screen: false,
             });
+            // Freeze base positions so the other toolbar doesn't push while dragging.
+            let snapshot = self.toolbar_snapshot();
+            self.data.drag_top_base_x = Some(self.inline_top_base_x(&snapshot));
+            self.data.drag_top_base_y = Some(self.inline_top_base_y());
         }
         self.data.active_drag_kind = Some(kind);
         self.set_toolbar_dragging(true);
@@ -837,33 +912,51 @@ impl WaylandState {
         if self.layer_shell.is_some() {
             let top_base_x = self.inline_top_base_x(snapshot);
             let top_margin_left = (top_base_x + self.data.toolbar_top_offset).round() as i32;
+            let top_margin_top =
+                (Self::TOP_BASE_MARGIN_TOP + self.data.toolbar_top_offset_y).round() as i32;
             let side_margin_top =
                 (Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset).round() as i32;
+            let side_margin_left =
+                (Self::SIDE_BASE_MARGIN_LEFT + self.data.toolbar_side_offset_x).round() as i32;
             drag_log(format!(
-                "apply_toolbar_offsets: top_margin_left={}, side_margin_top={}, offsets=({}, {}), scale={}, top_base_x={}",
+                "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, side_margin_top={}, side_margin_left={}, offsets=({}, {})/({}, {}), scale={}, top_base_x={}",
                 top_margin_left,
+                top_margin_top,
                 side_margin_top,
+                side_margin_left,
                 self.data.toolbar_top_offset,
+                self.data.toolbar_top_offset_y,
+                self.data.toolbar_side_offset_x,
                 self.data.toolbar_side_offset,
                 self.surface.scale(),
                 top_base_x
             ));
             if debug_toolbar_drag_logging_enabled() {
                 debug!(
-                    "apply_toolbar_offsets: top_margin_left={} (last={:?}), side_margin_top={} (last={:?}), offsets=({}, {}), top_base_x={}",
+                    "apply_toolbar_offsets: top_margin_left={} (last={:?}), top_margin_top={} (last={:?}), side_margin_top={} (last={:?}), side_margin_left={} (last={:?}), offsets=({}, {})/({}, {}), top_base_x={}",
                     top_margin_left,
                     self.data.last_applied_top_margin,
+                    top_margin_top,
+                    self.data.last_applied_top_margin_top,
                     side_margin_top,
                     self.data.last_applied_side_margin,
+                    side_margin_left,
+                    self.data.last_applied_side_margin_left,
                     self.data.toolbar_top_offset,
+                    self.data.toolbar_top_offset_y,
+                    self.data.toolbar_side_offset_x,
                     self.data.toolbar_side_offset,
                     top_base_x
                 );
             }
             self.data.last_applied_top_margin = Some(top_margin_left);
             self.data.last_applied_side_margin = Some(side_margin_top);
+            self.data.last_applied_top_margin_top = Some(top_margin_top);
+            self.data.last_applied_side_margin_left = Some(side_margin_left);
             self.toolbar.set_top_margin_left(top_margin_left);
+            self.toolbar.set_top_margin_top(top_margin_top);
             self.toolbar.set_side_margin_top(side_margin_top);
+            self.toolbar.set_side_margin_left(side_margin_left);
             self.toolbar.mark_dirty();
         }
     }
@@ -871,7 +964,7 @@ impl WaylandState {
     /// Handle toolbar move with toolbar-surface-local coordinates.
     /// On layer-shell, toolbar-local coords stay consistent as the toolbar moves,
     /// so we use them directly for delta calculation.
-    pub(super) fn handle_toolbar_move(&mut self, kind: MoveDragKind, local_coord: f64) {
+    pub(super) fn handle_toolbar_move(&mut self, kind: MoveDragKind, local_coord: (f64, f64)) {
         if self.pointer_lock_active() {
             return;
         }
@@ -882,7 +975,7 @@ impl WaylandState {
     }
 
     /// Handle toolbar move with toolbar-surface-local coordinates.
-    fn handle_toolbar_move_local(&mut self, kind: MoveDragKind, local_coord: f64) {
+    fn handle_toolbar_move_local(&mut self, kind: MoveDragKind, local_coord: (f64, f64)) {
         let snapshot = self
             .toolbar
             .last_snapshot()
@@ -896,48 +989,62 @@ impl WaylandState {
         };
 
         // If last coord was screen-based, convert current local to screen for comparison
-        let (effective_coord, new_is_screen) = if coord_is_screen {
-            (self.effective_toolbar_coord(kind, local_coord), true)
+        let last_screen = if coord_is_screen {
+            last_coord
         } else {
-            (local_coord, false)
+            self.local_to_screen_coords(kind, last_coord)
         };
+        let effective_coord = self.local_to_screen_coords(kind, local_coord);
 
         self.data.active_drag_kind = Some(kind);
 
-        let current_offset = match kind {
-            MoveDragKind::Top => self.data.toolbar_top_offset,
-            MoveDragKind::Side => self.data.toolbar_side_offset,
-        };
-        let delta = effective_coord - last_coord;
+        let delta = (
+            effective_coord.0 - last_screen.0,
+            effective_coord.1 - last_screen.1,
+        );
         log::debug!(
-            "handle_toolbar_move_local: kind={:?}, local_coord={}, effective_coord={}, last_coord={}, delta={}, offset={}",
+            "handle_toolbar_move_local: kind={:?}, local_coord=({:.3}, {:.3}), effective_coord=({:.3}, {:.3}), last_coord=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
             kind,
-            local_coord,
-            effective_coord,
-            last_coord,
-            delta,
-            current_offset
+            local_coord.0,
+            local_coord.1,
+            effective_coord.0,
+            effective_coord.1,
+            last_screen.0,
+            last_screen.1,
+            delta.0,
+            delta.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
         );
 
-        let new_offset = current_offset + delta;
+        // Apply delta with dampening on secondary axis to reduce cross-axis jitter
+        const SECONDARY_AXIS_DAMPEN: f64 = 0.3;
         match kind {
             MoveDragKind::Top => {
-                self.data.toolbar_top_offset = new_offset;
+                // Top toolbar: X is primary, Y is dampened
+                self.data.toolbar_top_offset += delta.0;
+                self.data.toolbar_top_offset_y += delta.1 * SECONDARY_AXIS_DAMPEN;
             }
             MoveDragKind::Side => {
-                self.data.toolbar_side_offset = new_offset;
+                // Side toolbar: Y is primary, X is dampened
+                self.data.toolbar_side_offset_x += delta.0 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_side_offset += delta.1;
             }
         }
         log::debug!(
-            "After update: new_offset={}, toolbar_side_offset={}",
-            new_offset,
+            "After update offsets: top=({}, {}), side=({}, {})",
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset
         );
 
         self.data.toolbar_move_drag = Some(MoveDrag {
             kind,
             last_coord: effective_coord,
-            coord_is_screen: new_is_screen,
+            coord_is_screen: true,
         });
         self.apply_toolbar_offsets(&snapshot);
         // Force commits so compositors apply new margins immediately.
@@ -958,7 +1065,11 @@ impl WaylandState {
 
     /// Handle toolbar move with screen-relative coordinates (no conversion).
     /// Use this when coords are already in screen space (e.g., from main overlay surface).
-    pub(super) fn handle_toolbar_move_screen(&mut self, kind: MoveDragKind, screen_coord: f64) {
+    pub(super) fn handle_toolbar_move_screen(
+        &mut self,
+        kind: MoveDragKind,
+        screen_coord: (f64, f64),
+    ) {
         if self.pointer_lock_active() {
             return;
         }
@@ -974,8 +1085,7 @@ impl WaylandState {
                 if d.coord_is_screen {
                     d.last_coord
                 } else {
-                    // Convert local to screen for comparison
-                    self.effective_toolbar_coord(kind, d.last_coord)
+                    self.local_to_screen_coords(kind, d.last_coord)
                 }
             }
             _ => screen_coord, // Start fresh
@@ -983,25 +1093,36 @@ impl WaylandState {
 
         self.data.active_drag_kind = Some(kind);
 
-        let current_offset = match kind {
-            MoveDragKind::Top => self.data.toolbar_top_offset,
-            MoveDragKind::Side => self.data.toolbar_side_offset,
-        };
-        let delta = screen_coord - last_screen_coord;
-        log::debug!(
-            "handle_toolbar_move_screen: kind={:?}, screen_coord={}, last_screen_coord={}, delta={}, current_offset={}",
-            kind,
-            screen_coord,
-            last_screen_coord,
-            delta,
-            current_offset
+        let delta = (
+            screen_coord.0 - last_screen_coord.0,
+            screen_coord.1 - last_screen_coord.1,
         );
+        log::debug!(
+            "handle_toolbar_move_screen: kind={:?}, screen_coord=({:.3}, {:.3}), last_screen_coord=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
+            kind,
+            screen_coord.0,
+            screen_coord.1,
+            last_screen_coord.0,
+            last_screen_coord.1,
+            delta.0,
+            delta.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
+        );
+        // Apply delta with dampening on secondary axis to reduce cross-axis jitter
+        const SECONDARY_AXIS_DAMPEN: f64 = 0.3;
         match kind {
             MoveDragKind::Top => {
-                self.data.toolbar_top_offset = current_offset + delta;
+                // Top toolbar: X is primary, Y is dampened
+                self.data.toolbar_top_offset += delta.0;
+                self.data.toolbar_top_offset_y += delta.1 * SECONDARY_AXIS_DAMPEN;
             }
             MoveDragKind::Side => {
-                self.data.toolbar_side_offset = current_offset + delta;
+                // Side toolbar: Y is primary, X is dampened
+                self.data.toolbar_side_offset_x += delta.0 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_side_offset += delta.1;
             }
         }
 
@@ -1024,16 +1145,26 @@ impl WaylandState {
     }
 
     /// Apply a relative delta to toolbar offsets (used with locked pointer + relative motion).
-    pub(super) fn apply_toolbar_relative_delta(&mut self, kind: MoveDragKind, delta: f64) {
+    pub(super) fn apply_toolbar_relative_delta(&mut self, kind: MoveDragKind, delta: (f64, f64)) {
         let snapshot = self
             .toolbar
             .last_snapshot()
             .cloned()
             .unwrap_or_else(|| self.toolbar_snapshot());
 
+        // Apply delta with dampening on secondary axis to reduce cross-axis jitter
+        const SECONDARY_AXIS_DAMPEN: f64 = 0.3;
         match kind {
-            MoveDragKind::Top => self.data.toolbar_top_offset += delta,
-            MoveDragKind::Side => self.data.toolbar_side_offset += delta,
+            MoveDragKind::Top => {
+                // Top toolbar: X is primary, Y is dampened
+                self.data.toolbar_top_offset += delta.0;
+                self.data.toolbar_top_offset_y += delta.1 * SECONDARY_AXIS_DAMPEN;
+            }
+            MoveDragKind::Side => {
+                // Side toolbar: Y is primary, X is dampened
+                self.data.toolbar_side_offset_x += delta.0 * SECONDARY_AXIS_DAMPEN;
+                self.data.toolbar_side_offset += delta.1;
+            }
         }
 
         self.clamp_toolbar_offsets(&snapshot);
@@ -1047,22 +1178,16 @@ impl WaylandState {
         }
 
         drag_log(format!(
-            "relative delta applied: kind={:?}, delta={}, offsets=({}, {})",
-            kind, delta, self.data.toolbar_top_offset, self.data.toolbar_side_offset
+            "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
+            kind,
+            delta.0,
+            delta.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
         ));
 
-        // Fallback for compositors that ignore margin updates: recreate toolbar surfaces when locked.
-        if self.layer_shell.is_some()
-            && !self.inline_toolbars_active()
-            && self.pointer_lock_active()
-        {
-            log::info!("Recreating toolbar surfaces during drag to force margin update");
-            self.toolbar.destroy_all();
-            if let Some(layer_shell) = self.layer_shell.as_ref() {
-                let _ = layer_shell; // silence unused warning if any
-            }
-            self.set_toolbar_needs_recreate(true);
-        }
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;
     }
@@ -1073,6 +1198,8 @@ impl WaylandState {
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);
             self.data.active_drag_kind = None;
+            self.data.drag_top_base_x = None;
+            self.data.drag_top_base_y = None;
             self.save_toolbar_pin_config();
             self.unlock_pointer();
         }
@@ -1101,14 +1228,14 @@ impl WaylandState {
 
         // Position inline toolbars with padding and keep top bar to the right of the side bar.
         let side_offset = (
-            Self::INLINE_SIDE_X,
+            Self::INLINE_SIDE_X + self.data.toolbar_side_offset_x,
             Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset,
         );
 
         let top_base_x = self.inline_top_base_x(snapshot);
         let top_offset = (
             top_base_x + self.data.toolbar_top_offset,
-            Self::INLINE_TOP_Y,
+            self.inline_top_base_y() + self.data.toolbar_top_offset_y,
         );
 
         // Top toolbar
@@ -1218,11 +1345,11 @@ impl WaylandState {
             Some(MoveDrag {
                 kind: MoveDragKind::Top,
                 ..
-            }) => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar(x))),
+            }) => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
             Some(MoveDrag {
                 kind: MoveDragKind::Side,
                 ..
-            }) => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar(y))),
+            }) => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
             None => None,
         }
     }
@@ -1274,11 +1401,7 @@ impl WaylandState {
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
             } else if let Some(kind) = self.active_move_drag_kind() {
-                let coord = match kind {
-                    MoveDragKind::Top => position.0,
-                    MoveDragKind::Side => position.1,
-                };
-                self.handle_toolbar_move(kind, coord);
+                self.handle_toolbar_move(kind, position);
             }
             over_toolbar = true;
         }
@@ -1749,14 +1872,14 @@ impl WaylandState {
     /// Applies an incoming toolbar event and schedules redraws as needed.
     pub(super) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
         match event {
-            ToolbarEvent::MoveTopToolbar(x) => {
-                self.begin_toolbar_move_drag(MoveDragKind::Top, x);
-                self.handle_toolbar_move(MoveDragKind::Top, x);
+            ToolbarEvent::MoveTopToolbar { x, y } => {
+                self.begin_toolbar_move_drag(MoveDragKind::Top, (x, y));
+                self.handle_toolbar_move(MoveDragKind::Top, (x, y));
                 return;
             }
-            ToolbarEvent::MoveSideToolbar(y) => {
-                self.begin_toolbar_move_drag(MoveDragKind::Side, y);
-                self.handle_toolbar_move(MoveDragKind::Side, y);
+            ToolbarEvent::MoveSideToolbar { x, y } => {
+                self.begin_toolbar_move_drag(MoveDragKind::Side, (x, y));
+                self.handle_toolbar_move(MoveDragKind::Side, (x, y));
                 return;
             }
             _ => {}
@@ -1851,7 +1974,9 @@ impl WaylandState {
         self.config.ui.toolbar.show_marker_opacity_section =
             self.input_state.show_marker_opacity_section;
         self.config.ui.toolbar.top_offset = self.data.toolbar_top_offset;
+        self.config.ui.toolbar.top_offset_y = self.data.toolbar_top_offset_y;
         self.config.ui.toolbar.side_offset = self.data.toolbar_side_offset;
+        self.config.ui.toolbar.side_offset_x = self.data.toolbar_side_offset_x;
         // Step controls toggle is in history config
         self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
 

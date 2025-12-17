@@ -5,9 +5,7 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
-use crate::backend::wayland::state::{
-    MoveDragKind, debug_toolbar_drag_logging_enabled, surface_id,
-};
+use crate::backend::wayland::state::{debug_toolbar_drag_logging_enabled, surface_id};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::{MouseButton, Tool};
 
@@ -17,7 +15,7 @@ impl PointerHandler for WaylandState {
     fn pointer_frame(
         &mut self,
         conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
@@ -107,20 +105,16 @@ impl PointerHandler for WaylandState {
                 PointerEventKind::Motion { .. } => {
                     if self.is_move_dragging() {
                         if let Some(kind) = self.active_move_drag_kind() {
-                            let coord = match kind {
-                                MoveDragKind::Top => event.position.0,
-                                MoveDragKind::Side => event.position.1,
-                            };
                             debug!(
-                                "Move drag motion: kind={:?}, coord={}, on_toolbar={}, pos=({}, {})",
-                                kind, coord, on_toolbar, event.position.0, event.position.1
+                                "Move drag motion: kind={:?}, pos=({}, {}), on_toolbar={}",
+                                kind, event.position.0, event.position.1, on_toolbar
                             );
                             // On toolbar surface: coords are toolbar-local, need conversion
                             // On main surface: coords are already screen-relative (fullscreen overlay)
                             if on_toolbar {
-                                self.handle_toolbar_move(kind, coord);
+                                self.handle_toolbar_move(kind, event.position);
                             } else {
-                                self.handle_toolbar_move_screen(kind, coord);
+                                self.handle_toolbar_move_screen(kind, event.position);
                             }
                             self.input_state.needs_redraw = true;
                             self.toolbar.mark_dirty();
@@ -224,9 +218,6 @@ impl PointerHandler for WaylandState {
                                 self.toolbar.mark_dirty();
                                 self.input_state.needs_redraw = true;
                                 self.refresh_keyboard_interactivity();
-                                if drag && !self.inline_toolbars_active() {
-                                    self.lock_pointer_for_drag(qh, &event.surface);
-                                }
                             }
                         }
                         continue;

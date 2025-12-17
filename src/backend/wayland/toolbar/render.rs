@@ -38,7 +38,7 @@ pub fn render_top_strip(
     draw_drag_handle(ctx, x, handle_y, handle_w, handle_h, handle_hover);
     hits.push(HitRegion {
         rect: (x, handle_y, handle_w, handle_h),
-        event: ToolbarEvent::MoveTopToolbar(0.0),
+        event: ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 },
         kind: HitKind::DragMoveTop,
         tooltip: Some("Drag toolbar".to_string()),
     });
@@ -373,7 +373,7 @@ pub fn render_side_palette(
     draw_drag_handle(ctx, x, header_y, handle_w, handle_h, handle_hover);
     hits.push(HitRegion {
         rect: (x, header_y, handle_w, handle_h),
-        event: ToolbarEvent::MoveSideToolbar(0.0),
+        event: ToolbarEvent::MoveSideToolbar { x: 0.0, y: 0.0 },
         kind: HitKind::DragMoveSide,
         tooltip: Some("Drag toolbar".to_string()),
     });
