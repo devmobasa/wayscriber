@@ -1021,14 +1021,25 @@ impl WaylandState {
 
         let top_size = top_size(snapshot);
         let side_size = side_size(snapshot);
+        let side_visible = self.toolbar.is_side_visible();
 
         // Position inline toolbars with padding and keep top bar to the right of the side bar.
         let side_offset = (
             Self::INLINE_SIDE_X,
             Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset,
         );
+
+        // Only push the top bar to the right of the side bar when they vertically overlap. If the side
+        // bar is moved down (e.g., to the bottom), allow the top bar to reach the left edge.
+        let side_overlaps_top =
+            side_visible && side_offset.1 < Self::INLINE_TOP_Y + top_size.1 as f64; // side starts above top bar bottom
+        let top_base_x = if side_overlaps_top {
+            side_offset.0 + side_size.0 as f64 + 16.0
+        } else {
+            Self::INLINE_SIDE_X
+        };
         let top_offset = (
-            side_offset.0 + side_size.0 as f64 + 16.0 + self.data.toolbar_top_offset,
+            top_base_x + self.data.toolbar_top_offset,
             Self::INLINE_TOP_Y,
         );
 
