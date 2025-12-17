@@ -17,7 +17,7 @@ impl PointerHandler for WaylandState {
     fn pointer_frame(
         &mut self,
         conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
@@ -217,6 +217,9 @@ impl PointerHandler for WaylandState {
                                 self.toolbar.mark_dirty();
                                 self.input_state.needs_redraw = true;
                                 self.refresh_keyboard_interactivity();
+                                if drag && !self.inline_toolbars_active() {
+                                    self.lock_pointer_for_drag(qh, &event.surface);
+                                }
                             }
                         }
                         continue;
@@ -257,10 +260,12 @@ impl PointerHandler for WaylandState {
                     }
                     if inline_active {
                         if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
+                            self.unlock_pointer();
                             continue;
                         }
                         if self.pointer_over_toolbar() || self.toolbar_dragging() {
                             self.end_toolbar_move_drag();
+                            self.unlock_pointer();
                             continue;
                         }
                     }
@@ -269,12 +274,14 @@ impl PointerHandler for WaylandState {
                             self.set_toolbar_dragging(false);
                         }
                         self.end_toolbar_move_drag();
+                        self.unlock_pointer();
                         continue;
                     }
                     // End move drag if released on the main surface
                     if button == BTN_LEFT && self.is_move_dragging() {
                         self.set_toolbar_dragging(false);
                         self.end_toolbar_move_drag();
+                        self.unlock_pointer();
                         continue;
                     }
                     debug!("Button {} released", button);

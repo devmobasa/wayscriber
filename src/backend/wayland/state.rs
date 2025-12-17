@@ -6,11 +6,14 @@ use log::{debug, info, warn};
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
     compositor::CompositorState,
+    globals::ProvidesBoundGlobal,
     output::OutputState,
     registry::RegistryState,
     seat::{
         SeatState,
         pointer::{PointerData, ThemedPointer},
+        pointer_constraints::PointerConstraintsState,
+        relative_pointer::RelativePointerState,
     },
     shell::{
         wlr_layer::{KeyboardInteractivity, LayerShell},
@@ -22,7 +25,7 @@ use std::time::Instant;
 use std::{collections::HashSet, sync::OnceLock};
 use wayland_client::{
     Proxy, QueueHandle,
-    protocol::{wl_output, wl_seat, wl_shm, wl_surface},
+    protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
 };
 #[cfg(tablet)]
 use wayland_protocols::wp::tablet::zv2::client::{
@@ -30,6 +33,12 @@ use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2, zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2,
     zwp_tablet_pad_v2::ZwpTabletPadV2, zwp_tablet_seat_v2::ZwpTabletSeatV2,
     zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
+};
+use wayland_protocols::wp::{
+    pointer_constraints::zv1::client::{
+        zwp_locked_pointer_v1::ZwpLockedPointerV1, zwp_pointer_constraints_v1,
+    },
+    relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
 };
 
 #[cfg(tablet)]
@@ -75,6 +84,8 @@ pub(super) struct WaylandState {
     pub(super) xdg_shell: Option<XdgShell>,
     pub(super) activation: Option<ActivationState>,
     pub(super) shm: Shm,
+    pub(super) pointer_constraints_state: PointerConstraintsState,
+    pub(super) relative_pointer_state: RelativePointerState,
     pub(super) output_state: OutputState,
     pub(super) seat_state: SeatState,
 
@@ -95,6 +106,8 @@ pub(super) struct WaylandState {
 
     // Pointer cursor
     pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
+    pub(super) locked_pointer: Option<ZwpLockedPointerV1>,
+    pub(super) relative_pointer: Option<ZwpRelativePointerV1>,
 
     // Tablet / stylus (feature-gated)
     #[cfg(tablet)]
@@ -158,6 +171,8 @@ impl WaylandState {
         xdg_shell: Option<XdgShell>,
         activation: Option<ActivationState>,
         shm: Shm,
+        pointer_constraints_state: PointerConstraintsState,
+        relative_pointer_state: RelativePointerState,
         output_state: OutputState,
         seat_state: SeatState,
         config: Config,
@@ -204,6 +219,8 @@ impl WaylandState {
             xdg_shell,
             activation,
             shm,
+            pointer_constraints_state,
+            relative_pointer_state,
             output_state,
             seat_state,
             surface: SurfaceState::new(),
@@ -214,6 +231,8 @@ impl WaylandState {
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
             themed_pointer: None,
+            locked_pointer: None,
+            relative_pointer: None,
             #[cfg(tablet)]
             tablet_manager,
             #[cfg(tablet)]
@@ -308,6 +327,67 @@ impl WaylandState {
 
     pub(super) fn current_seat(&self) -> Option<wl_seat::WlSeat> {
         self.data.current_seat.clone()
+    }
+
+    pub(super) fn current_pointer(&self) -> Option<wl_pointer::WlPointer> {
+        self.themed_pointer.as_ref().map(|p| p.pointer().clone())
+    }
+
+    pub(super) fn pointer_lock_active(&self) -> bool {
+        self.locked_pointer.is_some()
+    }
+
+    pub(super) fn lock_pointer_for_drag(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        surface: &wl_surface::WlSurface,
+    ) {
+        if self.inline_toolbars_active() || self.pointer_lock_active() {
+            return;
+        }
+        if self.pointer_constraints_state.bound_global().is_err() {
+            return;
+        }
+        let Some(pointer) = self.current_pointer() else {
+            return;
+        };
+
+        match self.pointer_constraints_state.lock_pointer(
+            surface,
+            &pointer,
+            None,
+            zwp_pointer_constraints_v1::Lifetime::Oneshot,
+            qh,
+        ) {
+            Ok(lp) => {
+                self.locked_pointer = Some(lp);
+            }
+            Err(err) => {
+                warn!("Failed to lock pointer for toolbar drag: {}", err);
+                return;
+            }
+        }
+
+        match self
+            .relative_pointer_state
+            .get_relative_pointer(&pointer, qh)
+        {
+            Ok(rp) => {
+                self.relative_pointer = Some(rp);
+            }
+            Err(err) => {
+                warn!("Failed to obtain relative pointer for drag: {}", err);
+            }
+        }
+    }
+
+    pub(super) fn unlock_pointer(&mut self) {
+        if let Some(lp) = self.locked_pointer.take() {
+            lp.destroy();
+        }
+        if let Some(rp) = self.relative_pointer.take() {
+            rp.destroy();
+        }
     }
 
     pub(super) fn current_seat_id(&self) -> Option<u32> {
@@ -685,6 +765,9 @@ impl WaylandState {
     /// On layer-shell, toolbar-local coords stay consistent as the toolbar moves,
     /// so we use them directly for delta calculation.
     pub(super) fn handle_toolbar_move(&mut self, kind: MoveDragKind, local_coord: f64) {
+        if self.pointer_lock_active() {
+            return;
+        }
         // For layer-shell surfaces, use local coordinates directly since they're
         // consistent within the toolbar surface. Only convert to screen coords
         // when transitioning to/from main surface.
@@ -762,6 +845,9 @@ impl WaylandState {
     /// Handle toolbar move with screen-relative coordinates (no conversion).
     /// Use this when coords are already in screen space (e.g., from main overlay surface).
     pub(super) fn handle_toolbar_move_screen(&mut self, kind: MoveDragKind, screen_coord: f64) {
+        if self.pointer_lock_active() {
+            return;
+        }
         let snapshot = self
             .toolbar
             .last_snapshot()
@@ -823,6 +909,25 @@ impl WaylandState {
         }
     }
 
+    /// Apply a relative delta to toolbar offsets (used with locked pointer + relative motion).
+    pub(super) fn apply_toolbar_relative_delta(&mut self, kind: MoveDragKind, delta: f64) {
+        let snapshot = self
+            .toolbar
+            .last_snapshot()
+            .cloned()
+            .unwrap_or_else(|| self.toolbar_snapshot());
+
+        match kind {
+            MoveDragKind::Top => self.data.toolbar_top_offset += delta,
+            MoveDragKind::Side => self.data.toolbar_side_offset += delta,
+        }
+
+        self.clamp_toolbar_offsets(&snapshot);
+        self.apply_toolbar_offsets(&snapshot);
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
+    }
+
     pub(super) fn end_toolbar_move_drag(&mut self) {
         if self.data.toolbar_move_drag.is_some() {
             self.data.toolbar_move_drag = None;
@@ -830,6 +935,7 @@ impl WaylandState {
             self.set_pointer_over_toolbar(false);
             self.data.active_drag_kind = None;
             self.save_toolbar_pin_config();
+            self.unlock_pointer();
         }
     }
 

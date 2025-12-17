@@ -12,7 +12,10 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
-    seat::SeatState,
+    seat::{
+        SeatState, pointer_constraints::PointerConstraintsState,
+        relative_pointer::RelativePointerState,
+    },
     shell::{
         WaylandSurface,
         wlr_layer::{Anchor, Layer, LayerShell},
@@ -224,6 +227,8 @@ impl WaylandBackend {
         debug!("Initialized seat state");
 
         let registry_state = RegistryState::new(&globals);
+        let pointer_constraints_state = PointerConstraintsState::bind(&globals, &qh);
+        let relative_pointer_state = RelativePointerState::bind(&globals, &qh);
 
         let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ())
         {
@@ -489,6 +494,8 @@ impl WaylandBackend {
             xdg_shell,
             activation,
             shm,
+            pointer_constraints_state,
+            relative_pointer_state,
             output_state,
             seat_state,
             config,
