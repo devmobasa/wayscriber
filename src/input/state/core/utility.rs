@@ -26,6 +26,7 @@ impl InputState {
     }
 
     /// Drains pending dirty rectangles for the current surface size.
+    #[allow(dead_code)]
     pub fn take_dirty_regions(&mut self) -> Vec<Rect> {
         let width = self.screen_width.min(i32::MAX as u32) as i32;
         let height = self.screen_height.min(i32::MAX as u32) as i32;

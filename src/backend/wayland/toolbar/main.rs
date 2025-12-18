@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
+use log::info;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     shell::wlr_layer::{Anchor, LayerShell, LayerSurfaceConfigure},
@@ -39,8 +40,17 @@ impl Default for ToolbarSurfaceManager {
             visible: false,
             top_visible: false,
             side_visible: false,
-            top: ToolbarSurface::new("wayscriber-toolbar-top", Anchor::TOP, (12, 12, 0, 12)),
-            side: ToolbarSurface::new("wayscriber-toolbar-side", Anchor::LEFT, (24, 0, 24, 24)),
+            // Anchor top/side toolbars to both axes they offset along so margins take effect.
+            top: ToolbarSurface::new(
+                "wayscriber-toolbar-top",
+                Anchor::TOP | Anchor::LEFT,
+                (12, 12, 0, 12),
+            ),
+            side: ToolbarSurface::new(
+                "wayscriber-toolbar-side",
+                Anchor::LEFT | Anchor::TOP,
+                (24, 0, 24, 24),
+            ),
             top_hover: None,
             side_hover: None,
             last_snapshot: None,
@@ -51,6 +61,14 @@ impl Default for ToolbarSurfaceManager {
 impl ToolbarSurfaceManager {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn top_created(&self) -> bool {
+        self.top.layer_surface.is_some()
+    }
+
+    pub fn side_created(&self) -> bool {
+        self.side.layer_surface.is_some()
     }
 
     /// Returns true if any toolbar is visible
@@ -110,6 +128,34 @@ impl ToolbarSurfaceManager {
         self.top.is_surface(surface) || self.side.is_surface(surface)
     }
 
+    pub fn set_top_margin_left(&mut self, left: i32) {
+        self.top.set_left_margin(left);
+    }
+
+    pub fn set_top_margin_top(&mut self, top: i32) {
+        self.top.set_top_margin(top);
+    }
+
+    pub fn set_side_margin_top(&mut self, top: i32) {
+        self.side.set_top_margin(top);
+    }
+
+    pub fn set_side_margin_left(&mut self, left: i32) {
+        self.side.set_left_margin(left);
+    }
+
+    pub fn top_layer_surface(
+        &self,
+    ) -> Option<&smithay_client_toolkit::shell::wlr_layer::LayerSurface> {
+        self.top.layer_surface.as_ref()
+    }
+
+    pub fn side_layer_surface(
+        &self,
+    ) -> Option<&smithay_client_toolkit::shell::wlr_layer::LayerSurface> {
+        self.side.layer_surface.as_ref()
+    }
+
     pub fn destroy_all(&mut self) {
         self.top.destroy();
         self.side.destroy();
@@ -124,6 +170,10 @@ impl ToolbarSurfaceManager {
         self.top.is_layer(layer) || self.side.is_layer(layer)
     }
 
+    pub fn configured_states(&self) -> (bool, bool) {
+        (self.top.configured, self.side.configured)
+    }
+
     pub fn ensure_created(
         &mut self,
         qh: &QueueHandle<WaylandState>,
@@ -136,6 +186,17 @@ impl ToolbarSurfaceManager {
         let side_size = crate::backend::wayland::toolbar::side_size(snapshot);
 
         if self.is_top_visible() {
+            if self.top.layer_surface.is_none() {
+                info!(
+                    "Ensuring top toolbar surface exists at logical size {:?}, scale {}",
+                    top_size, scale
+                );
+            } else if self.top.logical_size != (0, 0) && self.top.logical_size != top_size {
+                info!(
+                    "Top toolbar size change: {:?} -> {:?} (scale {})",
+                    self.top.logical_size, top_size, scale
+                );
+            }
             if self.top.logical_size != (0, 0) && self.top.logical_size != top_size {
                 self.top.destroy();
             }
@@ -146,6 +207,17 @@ impl ToolbarSurfaceManager {
         }
 
         if self.is_side_visible() {
+            if self.side.layer_surface.is_none() {
+                info!(
+                    "Ensuring side toolbar surface exists at logical size {:?}, scale {}",
+                    side_size, scale
+                );
+            } else if self.side.logical_size != (0, 0) && self.side.logical_size != side_size {
+                info!(
+                    "Side toolbar size change: {:?} -> {:?} (scale {})",
+                    self.side.logical_size, side_size, scale
+                );
+            }
             if self.side.logical_size != (0, 0) && self.side.logical_size != side_size {
                 self.side.destroy();
             }

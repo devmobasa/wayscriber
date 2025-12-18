@@ -321,6 +321,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
                 state.set_toolbar_dragging(false);
+                state.end_toolbar_move_drag();
                 if let Some(surf) = state.stylus_surface.take() {
                     if state.toolbar.is_toolbar_surface(&surf) {
                         state.toolbar.pointer_leave(&surf);
@@ -332,6 +333,18 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_last_pos = None;
             }
             Event::Down { .. } => {
+                let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
+                if inline_active {
+                    let (sx, sy) = state.stylus_last_pos.unwrap_or_else(|| {
+                        let (mx, my) = state.current_mouse();
+                        (mx as f64, my as f64)
+                    });
+                    if state.inline_toolbar_press((sx, sy)) {
+                        state.stylus_on_toolbar = true;
+                        state.set_toolbar_dragging(state.toolbar_dragging());
+                        return;
+                    }
+                }
                 if state.stylus_on_toolbar {
                     let (sx, sy) = state.stylus_last_pos.unwrap_or_else(|| {
                         let (mx, my) = state.current_mouse();
@@ -371,8 +384,18 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.input_state.needs_redraw = true;
             }
             Event::Up => {
+                let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
+                if inline_active && state.stylus_on_toolbar {
+                    let (mx, my) = state.current_mouse();
+                    state.inline_toolbar_release((mx as f64, my as f64));
+                    state.stylus_on_toolbar = false;
+                    state.set_toolbar_dragging(false);
+                    state.end_toolbar_move_drag();
+                    return;
+                }
                 if state.stylus_on_toolbar {
                     state.set_toolbar_dragging(false);
+                    state.end_toolbar_move_drag();
                     return;
                 }
                 if !state.stylus_on_overlay {
@@ -403,6 +426,22 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.input_state.needs_redraw = true;
             }
             Event::Motion { x, y } => {
+                if state.is_move_dragging() {
+                    if let Some(kind) = state.active_move_drag_kind() {
+                        // On toolbar surface: coords are toolbar-local, need conversion
+                        // On main surface: coords are already screen-relative
+                        if state.stylus_on_toolbar {
+                            state.handle_toolbar_move(kind, (x, y));
+                        } else {
+                            state.handle_toolbar_move_screen(kind, (x, y));
+                        }
+                        state.toolbar.mark_dirty();
+                        state.input_state.needs_redraw = true;
+                        state.set_current_mouse(x as i32, y as i32);
+                        return;
+                    }
+                }
+                let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if state.stylus_on_toolbar {
                     let xf = x;
                     let yf = y;
@@ -410,7 +449,10 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     if let Some(surface) = state.stylus_surface.as_ref() {
                         let evt = state.toolbar.pointer_motion(surface, (xf, yf));
                         if state.toolbar_dragging() {
-                            if let Some(intent) = evt {
+                            // Use move_drag_intent if pointer_motion didn't return an intent
+                            // This allows dragging to continue when stylus moves outside hit region
+                            let intent = evt.or_else(|| state.move_drag_intent(xf, yf));
+                            if let Some(intent) = intent {
                                 let evt = intent_to_event(intent, state.toolbar.last_snapshot());
                                 state.handle_toolbar_event(evt);
                             }
@@ -422,6 +464,15 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     }
                     state.set_current_mouse(x as i32, y as i32);
                     return;
+                }
+                if inline_active {
+                    state.stylus_last_pos = Some((x, y));
+                    if state.inline_toolbar_motion((x, y)) {
+                        state.stylus_on_toolbar = true;
+                        return;
+                    } else {
+                        state.stylus_on_toolbar = false;
+                    }
                 }
                 if !state.stylus_on_overlay {
                     return;

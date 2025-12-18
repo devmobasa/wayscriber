@@ -12,6 +12,8 @@ pub enum HitKind {
     DragRedoDelay,
     DragCustomUndoDelay,
     DragCustomRedoDelay,
+    DragMoveTop,
+    DragMoveSide,
 }
 
 /// Convert normalized drag position [0,1] to a delay in seconds.
