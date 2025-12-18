@@ -843,7 +843,10 @@ impl WaylandState {
         self.data.toolbar_top_offset = self.data.toolbar_top_offset.clamp(min_top_x, max_top_x);
         self.data.toolbar_top_offset_y = self.data.toolbar_top_offset_y.clamp(min_top_y, max_top_y);
         self.data.toolbar_side_offset = self.data.toolbar_side_offset.clamp(min_side_y, max_side_y);
-        self.data.toolbar_side_offset_x = self.data.toolbar_side_offset_x.clamp(min_side_x, max_side_x);
+        self.data.toolbar_side_offset_x = self
+            .data
+            .toolbar_side_offset_x
+            .clamp(min_side_x, max_side_x);
         drag_log(format!(
             "clamp offsets: before=({:.3}, {:.3})/({:.3}, {:.3}), after=({:.3}, {:.3})/({:.3}, {:.3}), max=({:.3}, {:.3})/({:.3}, {:.3}), size=({}, {}), top_base_x={:.3}, top_base_y={:.3}",
             before_top.0,
