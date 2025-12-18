@@ -429,16 +429,6 @@ impl WaylandState {
                 self.unlock_pointer();
             }
         }
-
-        // If layer-shell appears to ignore margin updates, fall back to inline toolbars during drag so
-        // users can still reposition. This destroys existing layer surfaces and switches rendering to inline.
-        if self.layer_shell.is_some() && !self.inline_toolbars_active() {
-            log::info!("Switching to inline toolbars during drag (layer-shell margins ignored)");
-            self.toolbar.destroy_all();
-            self.set_toolbar_needs_recreate(true);
-            self.data.inline_toolbars = true;
-            self.clear_inline_toolbar_hits();
-        }
     }
 
     pub(super) fn unlock_pointer(&mut self) {

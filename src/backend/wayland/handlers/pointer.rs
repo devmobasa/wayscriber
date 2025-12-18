@@ -8,6 +8,7 @@ use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 use crate::backend::wayland::state::{debug_toolbar_drag_logging_enabled, surface_id};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::{MouseButton, Tool};
+use crate::ui::toolbar::ToolbarEvent;
 
 use super::super::state::WaylandState;
 
@@ -15,7 +16,7 @@ impl PointerHandler for WaylandState {
     fn pointer_frame(
         &mut self,
         conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
@@ -205,6 +206,16 @@ impl PointerHandler for WaylandState {
                             if let Some((intent, drag)) =
                                 self.toolbar.pointer_press(&event.surface, event.position)
                             {
+                                let toolbar_event =
+                                    intent_to_event(intent, self.toolbar.last_snapshot());
+                                if matches!(
+                                    toolbar_event,
+                                    ToolbarEvent::MoveTopToolbar { .. }
+                                        | ToolbarEvent::MoveSideToolbar { .. }
+                                ) && drag
+                                {
+                                    self.lock_pointer_for_drag(qh, &event.surface);
+                                }
                                 log::info!(
                                     "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
                                     drag,
@@ -213,8 +224,7 @@ impl PointerHandler for WaylandState {
                                     self.inline_toolbars_active()
                                 );
                                 self.set_toolbar_dragging(drag);
-                                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                                self.handle_toolbar_event(evt);
+                                self.handle_toolbar_event(toolbar_event);
                                 self.toolbar.mark_dirty();
                                 self.input_state.needs_redraw = true;
                                 self.refresh_keyboard_interactivity();

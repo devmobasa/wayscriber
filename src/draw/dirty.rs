@@ -64,11 +64,6 @@ impl DirtyTracker {
             Vec::new()
         } else {
             self.regions.retain(Rect::is_valid);
-            if self.regions.is_empty() && width > 0 && height > 0 {
-                if let Some(full) = Rect::new(0, 0, width, height) {
-                    return vec![full];
-                }
-            }
             self.regions.drain(..).collect()
         }
     }
