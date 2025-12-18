@@ -1,9 +1,10 @@
 // Responds to layer-shell configure/close events, keeping dimensions in sync with the compositor.
 use log::{debug, info, warn};
-use smithay_client_toolkit::shell::wlr_layer::{
-    LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
+use smithay_client_toolkit::shell::{
+    WaylandSurface,
+    wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
 };
-use wayland_client::{Connection, QueueHandle};
+use wayland_client::{Connection, Proxy, QueueHandle};
 
 use super::super::state::WaylandState;
 use crate::session;
@@ -25,17 +26,32 @@ impl LayerShellHandler for WaylandState {
     fn configure(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
         if self.toolbar.handle_configure(&configure, layer) {
+            log::info!(
+                "Toolbar layer configure: size={}x{}, layer={}",
+                configure.new_size.0,
+                configure.new_size.1,
+                layer.wl_surface().id().protocol_id()
+            );
             self.input_state.needs_redraw = true;
             return;
         }
 
         if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
+            let prev_dims = (self.surface.width(), self.surface.height());
+            debug!(
+                "Layer surface configure: new logical size {}x{} (previous {}x{}), scale {}",
+                configure.new_size.0,
+                configure.new_size.1,
+                prev_dims.0,
+                prev_dims.1,
+                self.surface.scale()
+            );
             let size_changed = self
                 .surface
                 .update_dimensions(configure.new_size.0, configure.new_size.1);
@@ -67,6 +83,10 @@ impl LayerShellHandler for WaylandState {
         let (phys_w, phys_h) = self.surface.physical_dimensions();
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
+
+        // Re-apply toolbar offsets now that we have a configured surface size; avoids clamping to 0
+        // on startup before the compositor provides dimensions.
+        self.sync_toolbar_visibility(qh);
 
         // Fallback: on xdg-only environments we might never get surface_enter before configure.
         // Try to load a session snapshot once even without output identity; compositor handler

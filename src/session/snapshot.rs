@@ -313,14 +313,18 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
 /// Attempt to load a previously saved session.
 pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>> {
     if !options.any_enabled() && !options.restore_tool_state {
-        debug!("Persistence disabled for all boards; skipping load");
+        info!(
+            "Session load skipped: persistence disabled (base_dir={}, file={})",
+            options.base_dir.display(),
+            options.session_file_path().display()
+        );
         return Ok(None);
     }
 
     let session_path = options.session_file_path();
     if !session_path.exists() {
-        debug!(
-            "No session file present at {}, skipping load",
+        info!(
+            "Session file not found at {}; skipping load",
             session_path.display()
         );
         return Ok(None);
@@ -328,6 +332,13 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
 
     let metadata = fs::metadata(&session_path)
         .with_context(|| format!("failed to stat session file {}", session_path.display()))?;
+    info!(
+        "Session file present at {} ({} bytes, per_output={}, output_identity={:?})",
+        session_path.display(),
+        metadata.len(),
+        options.per_output,
+        options.output_identity()
+    );
     if metadata.len() > options.max_file_size_bytes {
         warn!(
             "Session file {} is {} bytes which exceeds the configured limit ({} bytes); refusing to load",
@@ -360,8 +371,32 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
     }
 
     match result {
-        Ok(Some(loaded)) => Ok(Some(loaded.snapshot)),
-        Ok(None) => Ok(None),
+        Ok(Some(loaded)) => {
+            let boards = (
+                loaded.snapshot.transparent.is_some(),
+                loaded.snapshot.whiteboard.is_some(),
+                loaded.snapshot.blackboard.is_some(),
+            );
+            let tool_state = loaded.snapshot.tool_state.is_some();
+            info!(
+                "Loaded session from {} (version {}, compressed={}, boards[T/W/B]={}/{}/{}, tool_state={})",
+                session_path.display(),
+                loaded.version,
+                loaded.compressed,
+                boards.0,
+                boards.1,
+                boards.2,
+                tool_state
+            );
+            Ok(Some(loaded.snapshot))
+        }
+        Ok(None) => {
+            info!(
+                "Session file {} contained no usable data; continuing with defaults",
+                session_path.display()
+            );
+            Ok(None)
+        }
         Err(err) => {
             warn!(
                 "Failed to load session {}; backing up and continuing with defaults: {}",
@@ -529,6 +564,19 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
+            log::info!(
+                "Restoring tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}], font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}",
+                tool_state.current_color,
+                tool_state.current_thickness,
+                tool_state.eraser_size,
+                tool_state.eraser_kind,
+                tool_state.current_font_size,
+                tool_state.text_background_enabled,
+                tool_state.arrow_length,
+                tool_state.arrow_angle,
+                tool_state.show_status_bar,
+                tool_state.board_previous_color
+            );
             input.current_color = tool_state.current_color;
             input.current_thickness = tool_state
                 .current_thickness
@@ -543,6 +591,8 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
             input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
             input.board_previous_color = tool_state.board_previous_color;
             input.show_status_bar = tool_state.show_status_bar;
+        } else {
+            log::info!("No tool state found in session; skipping tool restore");
         }
     }
 

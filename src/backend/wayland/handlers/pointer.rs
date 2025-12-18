@@ -5,8 +5,10 @@ use smithay_client_toolkit::seat::pointer::{
 };
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
+use crate::backend::wayland::state::{debug_toolbar_drag_logging_enabled, surface_id};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::{MouseButton, Tool};
+use crate::ui::toolbar::ToolbarEvent;
 
 use super::super::state::WaylandState;
 
@@ -14,17 +16,49 @@ impl PointerHandler for WaylandState {
     fn pointer_frame(
         &mut self,
         conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
+        let update_cursor = |toolbar_hover: bool, conn: &Connection, this: &mut WaylandState| {
+            if let Some(pointer) = this.themed_pointer.as_ref() {
+                let icon = if toolbar_hover {
+                    CursorIcon::Default
+                } else {
+                    CursorIcon::Crosshair
+                };
+                if let Err(err) = pointer.set_cursor(conn, icon) {
+                    warn!("Failed to set cursor icon: {}", err);
+                }
+            }
+        };
+
         for event in events {
             let on_toolbar = self.toolbar.is_toolbar_surface(&event.surface);
+            let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+            if debug_toolbar_drag_logging_enabled() {
+                debug!(
+                    "pointer {:?}: seat={:?}, surface={}, on_toolbar={}, inline_active={}, pos=({:.1}, {:.1}), drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
+                    event.kind,
+                    self.current_seat_id(),
+                    surface_id(&event.surface),
+                    on_toolbar,
+                    inline_active,
+                    event.position.0,
+                    event.position.1,
+                    self.is_move_dragging(),
+                    self.toolbar_dragging(),
+                    self.pointer_over_toolbar()
+                );
+            }
             match event.kind {
                 PointerEventKind::Enter { .. } => {
                     debug!(
-                        "Pointer entered at ({}, {})",
-                        event.position.0, event.position.1
+                        "Pointer entered at ({}, {}), on_toolbar={}, is_move_dragging={}",
+                        event.position.0,
+                        event.position.1,
+                        on_toolbar,
+                        self.is_move_dragging()
                     );
                     self.set_pointer_focus(true);
                     self.set_pointer_over_toolbar(on_toolbar);
@@ -33,34 +67,75 @@ impl PointerHandler for WaylandState {
                         let (mx, my) = self.current_mouse();
                         self.input_state.update_pointer_position(mx, my);
                     }
-                    if let Some(pointer) = self.themed_pointer.as_ref() {
-                        if let Err(err) = pointer.set_cursor(conn, CursorIcon::Crosshair) {
-                            warn!("Failed to set cursor icon: {}", err);
-                        }
-                        if on_toolbar {
-                            if let Err(err) = pointer.set_cursor(conn, CursorIcon::Default) {
-                                warn!("Failed to set toolbar cursor icon: {}", err);
-                            }
-                        }
+                    update_cursor(on_toolbar, conn, self);
+                    if inline_active {
+                        self.inline_toolbar_motion(event.position);
                     }
                 }
                 PointerEventKind::Leave { .. } => {
-                    debug!("Pointer left surface");
+                    debug!(
+                        "Pointer left surface: on_toolbar={}, is_move_dragging={}",
+                        on_toolbar,
+                        self.is_move_dragging()
+                    );
                     self.set_pointer_focus(false);
                     if on_toolbar {
                         self.set_pointer_over_toolbar(false);
                         self.toolbar.pointer_leave(&event.surface);
-                        self.set_toolbar_dragging(false);
+                        // Don't clear drag state if we're in a move drag - the user may be
+                        // dragging the toolbar and their pointer left the toolbar surface.
+                        // The drag will continue on the main surface.
+                        if !self.is_move_dragging() {
+                            debug!("Clearing toolbar drag state on leave");
+                            self.set_toolbar_dragging(false);
+                            self.end_toolbar_move_drag();
+                        } else {
+                            debug!("Preserving move drag state on toolbar leave");
+                        }
                         self.toolbar.mark_dirty();
                         self.input_state.needs_redraw = true;
                     }
+                    if inline_active {
+                        self.inline_toolbar_leave();
+                    }
+                    if (on_toolbar || inline_active) && !self.is_move_dragging() {
+                        self.end_toolbar_move_drag();
+                    }
+                    update_cursor(false, conn, self);
                 }
                 PointerEventKind::Motion { .. } => {
+                    if self.is_move_dragging() {
+                        if let Some(kind) = self.active_move_drag_kind() {
+                            debug!(
+                                "Move drag motion: kind={:?}, pos=({}, {}), on_toolbar={}",
+                                kind, event.position.0, event.position.1, on_toolbar
+                            );
+                            // On toolbar surface: coords are toolbar-local, need conversion
+                            // On main surface: coords are already screen-relative (fullscreen overlay)
+                            if on_toolbar {
+                                self.handle_toolbar_move(kind, event.position);
+                            } else {
+                                self.handle_toolbar_move_screen(kind, event.position);
+                            }
+                            self.input_state.needs_redraw = true;
+                            self.toolbar.mark_dirty();
+                            continue;
+                        }
+                    }
+                    if inline_active && self.inline_toolbar_motion(event.position) {
+                        update_cursor(true, conn, self);
+                        continue;
+                    }
                     if on_toolbar {
                         self.set_pointer_over_toolbar(true);
                         let evt = self.toolbar.pointer_motion(&event.surface, event.position);
                         if self.toolbar_dragging() {
-                            if let Some(intent) = evt {
+                            // Use move_drag_intent if pointer_motion didn't return an intent
+                            // This allows dragging to continue when mouse moves outside hit region
+                            let intent = evt.or_else(|| {
+                                self.move_drag_intent(event.position.0, event.position.1)
+                            });
+                            if let Some(intent) = intent {
                                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);
                             }
@@ -69,12 +144,18 @@ impl PointerHandler for WaylandState {
                         }
                         self.input_state.needs_redraw = true;
                         self.refresh_keyboard_interactivity();
+                        update_cursor(true, conn, self);
                         continue;
                     }
                     if self.pointer_over_toolbar() {
                         let evt = self.toolbar.pointer_motion(&event.surface, event.position);
                         if self.toolbar_dragging() {
-                            if let Some(intent) = evt {
+                            // Use move_drag_intent if pointer_motion didn't return an intent
+                            // This allows dragging to continue when mouse moves outside hit region
+                            let intent = evt.or_else(|| {
+                                self.move_drag_intent(event.position.0, event.position.1)
+                            });
+                            if let Some(intent) = intent {
                                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                                 self.handle_toolbar_event(evt);
                             }
@@ -83,6 +164,20 @@ impl PointerHandler for WaylandState {
                         }
                         self.input_state.needs_redraw = true;
                         self.refresh_keyboard_interactivity();
+                        update_cursor(true, conn, self);
+                        continue;
+                    }
+                    update_cursor(false, conn, self);
+                    // Handle move drag that continues on the main surface after leaving toolbar
+                    if self.is_move_dragging() {
+                        if let Some(intent) =
+                            self.move_drag_intent(event.position.0, event.position.1)
+                        {
+                            let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+                            self.handle_toolbar_event(evt);
+                            self.toolbar.mark_dirty();
+                            self.input_state.needs_redraw = true;
+                        }
                         continue;
                     }
                     self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
@@ -91,14 +186,45 @@ impl PointerHandler for WaylandState {
                     self.input_state.on_mouse_motion(mx, my);
                 }
                 PointerEventKind::Press { button, .. } => {
+                    if debug_toolbar_drag_logging_enabled() {
+                        debug!(
+                            "pointer press: button={}, on_toolbar={}, inline_active={}, drag_active={}",
+                            button,
+                            on_toolbar,
+                            inline_active,
+                            self.is_move_dragging()
+                        );
+                    }
+                    if inline_active
+                        && ((button == BTN_LEFT && self.inline_toolbar_press(event.position))
+                            || self.pointer_over_toolbar())
+                    {
+                        continue;
+                    }
                     if on_toolbar {
                         if button == BTN_LEFT {
                             if let Some((intent, drag)) =
                                 self.toolbar.pointer_press(&event.surface, event.position)
                             {
+                                let toolbar_event =
+                                    intent_to_event(intent, self.toolbar.last_snapshot());
+                                if matches!(
+                                    toolbar_event,
+                                    ToolbarEvent::MoveTopToolbar { .. }
+                                        | ToolbarEvent::MoveSideToolbar { .. }
+                                ) && drag
+                                {
+                                    self.lock_pointer_for_drag(qh, &event.surface);
+                                }
+                                log::info!(
+                                    "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
+                                    drag,
+                                    surface_id(&event.surface),
+                                    self.current_seat_id(),
+                                    self.inline_toolbars_active()
+                                );
                                 self.set_toolbar_dragging(drag);
-                                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                                self.handle_toolbar_event(evt);
+                                self.handle_toolbar_event(toolbar_event);
                                 self.toolbar.mark_dirty();
                                 self.input_state.needs_redraw = true;
                                 self.refresh_keyboard_interactivity();
@@ -129,10 +255,41 @@ impl PointerHandler for WaylandState {
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Release { button, .. } => {
+                    if debug_toolbar_drag_logging_enabled() {
+                        debug!(
+                            "pointer release: button={}, on_toolbar={}, inline_active={}, drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
+                            button,
+                            on_toolbar,
+                            inline_active,
+                            self.is_move_dragging(),
+                            self.toolbar_dragging(),
+                            self.pointer_over_toolbar()
+                        );
+                    }
+                    if inline_active {
+                        if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
+                            self.unlock_pointer();
+                            continue;
+                        }
+                        if self.pointer_over_toolbar() || self.toolbar_dragging() {
+                            self.end_toolbar_move_drag();
+                            self.unlock_pointer();
+                            continue;
+                        }
+                    }
                     if on_toolbar || self.pointer_over_toolbar() {
                         if button == BTN_LEFT {
                             self.set_toolbar_dragging(false);
                         }
+                        self.end_toolbar_move_drag();
+                        self.unlock_pointer();
+                        continue;
+                    }
+                    // End move drag if released on the main surface
+                    if button == BTN_LEFT && self.is_move_dragging() {
+                        self.set_toolbar_dragging(false);
+                        self.end_toolbar_move_drag();
+                        self.unlock_pointer();
                         continue;
                     }
                     debug!("Button {} released", button);

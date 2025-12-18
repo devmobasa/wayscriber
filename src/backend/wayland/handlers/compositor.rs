@@ -116,11 +116,21 @@ impl CompositorHandler for WaylandState {
 
             if changed {
                 if let Some(id) = options.output_identity() {
-                    info!("Persisting session using monitor identity '{}'.", id);
+                    info!(
+                        "Persisting session using monitor identity '{}' (session file: {}).",
+                        id,
+                        options.session_file_path().display()
+                    );
                 }
             }
 
             if changed || !already_loaded {
+                info!(
+                    "Loading session snapshot from {} (per_output={}, output_identity={:?})",
+                    options.session_file_path().display(),
+                    options.per_output,
+                    options.output_identity()
+                );
                 load_result = Some(session::load_snapshot(options));
                 load_requested = true;
             }

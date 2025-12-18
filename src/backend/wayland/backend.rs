@@ -7,12 +7,16 @@ use signal_hook::{
     consts::signal::{SIGINT, SIGTERM, SIGUSR1, SIGUSR2},
     iterator::Signals,
 };
+use smithay_client_toolkit::globals::ProvidesBoundGlobal;
 use smithay_client_toolkit::{
     activation::ActivationState,
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
-    seat::SeatState,
+    seat::{
+        SeatState, pointer_constraints::PointerConstraintsState,
+        relative_pointer::RelativePointerState,
+    },
     shell::{
         WaylandSurface,
         wlr_layer::{Anchor, Layer, LayerShell},
@@ -174,7 +178,14 @@ impl WaylandBackend {
                 Some(shell)
             }
             Err(err) => {
-                warn!("Layer shell not available: {}", err);
+                let desktop_env =
+                    env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "unknown".into());
+                let session_env =
+                    env::var("XDG_SESSION_DESKTOP").unwrap_or_else(|_| "unknown".into());
+                warn!(
+                    "Layer shell not available: {} (desktop='{}', session='{}'); toolbars will be disabled and xdg fallback may not cover docks/panels.",
+                    err, desktop_env, session_env
+                );
                 None
             }
         };
@@ -217,6 +228,13 @@ impl WaylandBackend {
         debug!("Initialized seat state");
 
         let registry_state = RegistryState::new(&globals);
+        let pointer_constraints_state = PointerConstraintsState::bind(&globals, &qh);
+        let relative_pointer_state = RelativePointerState::bind(&globals, &qh);
+        if pointer_constraints_state.bound_global().is_ok() {
+            debug!("Pointer constraints global available");
+        } else {
+            debug!("Pointer constraints global not available");
+        }
 
         let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(&qh, 1..=3, ())
         {
@@ -311,6 +329,26 @@ impl WaylandBackend {
                 session_options = None;
             }
             None => {}
+        }
+
+        if let Some(ref opts) = session_options {
+            info!(
+                "Session persistence: base_dir={}, per_output={}, display_id='{}', output_identity={:?}, boards[T/W/B]={}/{}/{}, history={}, max_persisted_history={:?}, restore_tool_state={}, max_file_size={} bytes, compression={:?}",
+                opts.base_dir.display(),
+                opts.per_output,
+                opts.display_id,
+                opts.output_identity(),
+                opts.persist_transparent,
+                opts.persist_whiteboard,
+                opts.persist_blackboard,
+                opts.persist_history,
+                opts.max_persisted_undo_depth,
+                opts.restore_tool_state,
+                opts.max_file_size_bytes,
+                opts.compression
+            );
+        } else {
+            info!("Session persistence disabled (no session options available)");
         }
 
         #[cfg(tablet)]
@@ -462,6 +500,8 @@ impl WaylandBackend {
             xdg_shell,
             activation,
             shm,
+            pointer_constraints_state,
+            relative_pointer_state,
             output_state,
             seat_state,
             config,

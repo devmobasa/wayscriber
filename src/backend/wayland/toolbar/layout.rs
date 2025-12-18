@@ -9,15 +9,15 @@ use crate::ui::toolbar::ToolbarEvent;
 /// Compute the target logical size for the top toolbar given snapshot state.
 pub fn top_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
     if snapshot.use_icons {
-        (705, 80)
+        (735, 80)
     } else {
-        (845, 56)
+        (875, 56)
     }
 }
 
 /// Compute the target logical size for the side toolbar given snapshot state.
 pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
-    let base_height = 30.0; // Header
+    let base_height = 30.0 + 24.0; // Header + drag handle
     let section_gap = 12.0;
 
     let picker_h = 24.0;

@@ -951,6 +951,26 @@ pub struct ToolbarConfig {
     /// Show the marker opacity slider section in the side toolbar
     #[serde(default = "default_show_marker_opacity_section")]
     pub show_marker_opacity_section: bool,
+
+    /// Saved horizontal offset for the top toolbar (layer-shell/inline)
+    #[serde(default)]
+    pub top_offset: f64,
+
+    /// Saved vertical offset for the top toolbar (layer-shell/inline)
+    #[serde(default)]
+    pub top_offset_y: f64,
+
+    /// Saved vertical offset for the side toolbar (layer-shell/inline)
+    #[serde(default)]
+    pub side_offset: f64,
+
+    /// Saved horizontal offset for the side toolbar (layer-shell/inline)
+    #[serde(default)]
+    pub side_offset_x: f64,
+
+    /// Force inline toolbars even when layer-shell is available (debug/compatibility).
+    #[serde(default)]
+    pub force_inline: bool,
 }
 
 impl Default for ToolbarConfig {
@@ -963,6 +983,11 @@ impl Default for ToolbarConfig {
             show_actions_section: default_show_actions_section(),
             show_delay_sliders: default_show_delay_sliders(),
             show_marker_opacity_section: default_show_marker_opacity_section(),
+            top_offset: 0.0,
+            top_offset_y: 0.0,
+            side_offset: 0.0,
+            side_offset_x: 0.0,
+            force_inline: false,
         }
     }
 }

@@ -1,3 +1,18 @@
+use crate::backend::wayland::toolbar::hit::HitRegion;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveDragKind {
+    Top,
+    Side,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MoveDrag {
+    pub kind: MoveDragKind,
+    pub last_coord: (f64, f64),
+    /// Whether last_coord is in screen coordinates (true) or toolbar-local (false)
+    pub coord_is_screen: bool,
+}
 use wayland_client::protocol::wl_seat;
 
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
@@ -14,6 +29,28 @@ pub struct StateData {
     pub(super) current_keyboard_interactivity:
         Option<smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity>,
     pub(super) toolbar_needs_recreate: bool,
+    pub(super) toolbar_layer_shell_missing_logged: bool,
+    pub(super) toolbar_layer_shell_notice_sent: bool,
+    pub(super) inline_toolbars: bool,
+    pub(super) inline_top_hits: Vec<HitRegion>,
+    pub(super) inline_side_hits: Vec<HitRegion>,
+    pub(super) inline_top_rect: Option<(f64, f64, f64, f64)>,
+    pub(super) inline_side_rect: Option<(f64, f64, f64, f64)>,
+    pub(super) inline_top_hover: Option<(f64, f64)>,
+    pub(super) inline_side_hover: Option<(f64, f64)>,
+    pub(super) toolbar_top_offset: f64,
+    pub(super) toolbar_top_offset_y: f64,
+    pub(super) toolbar_side_offset: f64,
+    pub(super) toolbar_side_offset_x: f64,
+    pub(super) toolbar_configure_miss_count: u32,
+    pub(super) last_applied_top_margin: Option<i32>,
+    pub(super) last_applied_side_margin: Option<i32>,
+    pub(super) last_applied_top_margin_top: Option<i32>,
+    pub(super) last_applied_side_margin_left: Option<i32>,
+    pub(super) toolbar_move_drag: Option<MoveDrag>,
+    pub(super) active_drag_kind: Option<MoveDragKind>,
+    pub(super) drag_top_base_x: Option<f64>,
+    pub(super) drag_top_base_y: Option<f64>,
     pub(super) pending_activation_token: Option<String>,
     pub(super) pending_freeze_on_start: bool,
     pub(super) frozen_enabled: bool,
@@ -34,6 +71,28 @@ impl StateData {
             toolbar_dragging: false,
             current_keyboard_interactivity: None,
             toolbar_needs_recreate: true,
+            toolbar_layer_shell_missing_logged: false,
+            toolbar_layer_shell_notice_sent: false,
+            inline_toolbars: false,
+            inline_top_hits: Vec::new(),
+            inline_side_hits: Vec::new(),
+            inline_top_rect: None,
+            inline_side_rect: None,
+            inline_top_hover: None,
+            inline_side_hover: None,
+            toolbar_top_offset: 0.0,
+            toolbar_top_offset_y: 0.0,
+            toolbar_side_offset: 0.0,
+            toolbar_side_offset_x: 0.0,
+            toolbar_configure_miss_count: 0,
+            last_applied_top_margin: None,
+            last_applied_side_margin: None,
+            last_applied_top_margin_top: None,
+            last_applied_side_margin_left: None,
+            toolbar_move_drag: None,
+            active_drag_kind: None,
+            drag_top_base_x: None,
+            drag_top_base_y: None,
             pending_activation_token: None,
             pending_freeze_on_start: false,
             frozen_enabled: false,

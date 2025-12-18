@@ -1,4 +1,5 @@
 use anyhow::Result;
+use log::{debug, info};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     shell::{
@@ -13,7 +14,7 @@ use wayland_client::{
 };
 
 use crate::backend::wayland::state::WaylandState;
-use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::backend::wayland::toolbar::hit::{HitRegion, drag_intent_for_hit, intent_for_hit};
 use crate::ui::toolbar::ToolbarSnapshot;
 
 #[derive(Debug)]
@@ -79,6 +80,11 @@ impl ToolbarSurface {
             return;
         }
 
+        info!(
+            "Creating toolbar surface '{}' (anchor {:?}, logical {:?}, margin {:?}, scale {})",
+            self.name, self.anchor, self.logical_size, self.margin, scale
+        );
+
         let wl_surface = compositor.create_surface(qh);
         wl_surface.set_buffer_scale(scale);
 
@@ -128,6 +134,10 @@ impl ToolbarSurface {
             let changed = self.width != configure.new_size.0 || self.height != configure.new_size.1;
             self.width = configure.new_size.0;
             self.height = configure.new_size.1;
+            debug!(
+                "Toolbar surface '{}' configured to {}x{} (scale {})",
+                self.name, self.width, self.height, self.scale
+            );
             if changed {
                 self.pool = None;
             }
@@ -144,6 +154,24 @@ impl ToolbarSurface {
 
     pub fn set_logical_size(&mut self, size: (u32, u32)) {
         self.logical_size = size;
+    }
+
+    pub fn set_left_margin(&mut self, left: i32) {
+        self.margin.3 = left;
+        if let Some(layer) = self.layer_surface.as_ref() {
+            layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
+            // Commit immediately so the margin change takes effect
+            layer.wl_surface().commit();
+        }
+    }
+
+    pub fn set_top_margin(&mut self, top: i32) {
+        self.margin.0 = top;
+        if let Some(layer) = self.layer_surface.as_ref() {
+            layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
+            // Commit immediately so the margin change takes effect
+            layer.wl_surface().commit();
+        }
     }
 
     pub fn set_scale(&mut self, scale: i32) {
@@ -185,6 +213,15 @@ impl ToolbarSurface {
         ) -> Result<()>,
     {
         if !self.configured || !self.dirty || self.width == 0 || self.height == 0 {
+            log::debug!(
+                "Skipping render for toolbar '{}' (configured={}, dirty={}, width={}, height={}, scale={})",
+                self.name,
+                self.configured,
+                self.dirty,
+                self.width,
+                self.height,
+                self.scale
+            );
             return Ok(());
         }
 
@@ -270,75 +307,9 @@ impl ToolbarSurface {
         x: f64,
         y: f64,
     ) -> Option<(crate::backend::wayland::toolbar_intent::ToolbarIntent, bool)> {
-        for hit in &self.hit_regions {
-            if hit.contains(x, y) {
-                let start_drag = matches!(
-                    hit.kind,
-                    crate::backend::wayland::toolbar::events::HitKind::DragSetThickness { .. }
-                        | crate::backend::wayland::toolbar::events::HitKind::DragSetMarkerOpacity { .. }
-                        | crate::backend::wayland::toolbar::events::HitKind::DragSetFontSize
-                        | crate::backend::wayland::toolbar::events::HitKind::PickColor { .. }
-                        | crate::backend::wayland::toolbar::events::HitKind::DragUndoDelay
-                        | crate::backend::wayland::toolbar::events::HitKind::DragRedoDelay
-                        | crate::backend::wayland::toolbar::events::HitKind::DragCustomUndoDelay
-                        | crate::backend::wayland::toolbar::events::HitKind::DragCustomRedoDelay
-                );
-                use crate::backend::wayland::toolbar::events::HitKind::*;
-                use crate::backend::wayland::toolbar_intent::ToolbarIntent;
-                use crate::ui::toolbar::ToolbarEvent;
-                let event = match hit.kind {
-                    DragSetThickness { min, max } => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let value = min + t * (max - min);
-                        ToolbarEvent::SetThickness(value)
-                    }
-                    DragSetMarkerOpacity { min, max } => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let value = min + t * (max - min);
-                        ToolbarEvent::SetMarkerOpacity(value)
-                    }
-                    DragSetFontSize => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let value = 8.0 + t * (72.0 - 8.0);
-                        ToolbarEvent::SetFontSize(value)
-                    }
-                    PickColor { x: px, y: py, w, h } => {
-                        let hue = ((x - px) / w).clamp(0.0, 1.0);
-                        let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-                        ToolbarEvent::SetColor(
-                            crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value),
-                        )
-                    }
-                    DragUndoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        ToolbarEvent::SetUndoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )
-                    }
-                    DragRedoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        ToolbarEvent::SetRedoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )
-                    }
-                    DragCustomUndoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        ToolbarEvent::SetCustomUndoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )
-                    }
-                    DragCustomRedoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        ToolbarEvent::SetCustomRedoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )
-                    }
-                    crate::backend::wayland::toolbar::events::HitKind::Click => hit.event.clone(),
-                };
-                return Some((ToolbarIntent(event), start_drag));
-            }
-        }
-        None
+        self.hit_regions
+            .iter()
+            .find_map(|hit| intent_for_hit(hit, x, y))
     }
 
     pub fn drag_at(
@@ -346,62 +317,8 @@ impl ToolbarSurface {
         x: f64,
         y: f64,
     ) -> Option<crate::backend::wayland::toolbar_intent::ToolbarIntent> {
-        use crate::backend::wayland::toolbar::events::HitKind::*;
-        use crate::backend::wayland::toolbar_intent::ToolbarIntent;
-        use crate::ui::toolbar::ToolbarEvent;
-        for hit in &self.hit_regions {
-            if hit.contains(x, y) {
-                match hit.kind {
-                    DragSetThickness { min, max } => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let value = min + t * (max - min);
-                        return Some(ToolbarIntent(ToolbarEvent::SetThickness(value)));
-                    }
-                    DragSetMarkerOpacity { min, max } => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let value = min + t * (max - min);
-                        return Some(ToolbarIntent(ToolbarEvent::SetMarkerOpacity(value)));
-                    }
-                    DragSetFontSize => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        let value = 8.0 + t * (72.0 - 8.0);
-                        return Some(ToolbarIntent(ToolbarEvent::SetFontSize(value)));
-                    }
-                    PickColor { x: px, y: py, w, h } => {
-                        let hue = ((x - px) / w).clamp(0.0, 1.0);
-                        let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-                        return Some(ToolbarIntent(ToolbarEvent::SetColor(
-                            crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value),
-                        )));
-                    }
-                    DragUndoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        return Some(ToolbarIntent(ToolbarEvent::SetUndoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )));
-                    }
-                    DragRedoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        return Some(ToolbarIntent(ToolbarEvent::SetRedoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )));
-                    }
-                    DragCustomUndoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        return Some(ToolbarIntent(ToolbarEvent::SetCustomUndoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )));
-                    }
-                    DragCustomRedoDelay => {
-                        let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-                        return Some(ToolbarIntent(ToolbarEvent::SetCustomRedoDelay(
-                            crate::backend::wayland::toolbar::events::delay_secs_from_t(t),
-                        )));
-                    }
-                    _ => {}
-                }
-            }
-        }
-        None
+        self.hit_regions
+            .iter()
+            .find_map(|hit| drag_intent_for_hit(hit, x, y))
     }
 }

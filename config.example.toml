@@ -202,6 +202,16 @@ show_delay_sliders = false
 # Enable to keep marker transparency control visible at all times
 show_marker_opacity_section = false
 
+# Initial toolbar offsets (layer-shell/inline)
+# Horizontal offset for the top toolbar
+top_offset = 0.0
+# Vertical offset for the top toolbar (move top bar down/up)
+top_offset_y = 0.0
+# Vertical offset for the side toolbar
+side_offset = 0.0
+# Horizontal offset for the side toolbar (move side bar left/right)
+side_offset_x = 0.0
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
 # ───────────────────────────────────────────────────────────────────────────────

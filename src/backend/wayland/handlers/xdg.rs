@@ -16,7 +16,7 @@ impl WindowHandler for WaylandState {
     fn configure(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         window: &Window,
         configure: WindowConfigure,
         _serial: u32,
@@ -94,6 +94,8 @@ impl WindowHandler for WaylandState {
         }
 
         self.input_state.needs_redraw = true;
+        // Surface is now sized; re-apply toolbar offsets so margins reflect configured bounds.
+        self.sync_toolbar_visibility(qh);
 
         // Fallback: xdg may not emit surface_enter before configure; attempt a session load once.
         if !self.session.is_loaded() {
