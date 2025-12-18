@@ -36,6 +36,7 @@ packaging/**
 .venv/
 
 docs/board
+docs/temp
 
 dist/
 
