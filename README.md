@@ -94,10 +94,13 @@ Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>C
 
 ## Quick Start
 
-**1. Install** (Debian/Ubuntu):
+**1. Install** (Debian/Ubuntu repo, auto-updates):
 ```bash
-wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
-sudo apt install ./wayscriber-amd64.deb
+sudo install -d /usr/share/keyrings
+curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | sudo gpg --dearmor -o /usr/share/keyrings/wayscriber.gpg
+echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
+sudo apt update
+sudo apt install wayscriber  # optional GUI: sudo apt install wayscriber-configurator
 ```
 
 **2. Run**:
@@ -113,27 +116,51 @@ For other distros or running as a daemon, see [Installation](#installation) and 
 
 ## Installation
 
-### Debian / Ubuntu
+### Debian / Ubuntu (repo – recommended)
+```bash
+sudo install -d /usr/share/keyrings
+curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | sudo gpg --dearmor -o /usr/share/keyrings/wayscriber.gpg
+echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
+sudo apt update
+sudo apt install wayscriber
+# Optional GUI configurator
+sudo apt install wayscriber-configurator
+```
 
+One-off .deb (no auto-updates):
 ```bash
 wget -O wayscriber-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb
 sudo apt install ./wayscriber-amd64.deb
 ```
-
-GUI configurator (optional):
+Configurator .deb (optional):
 ```bash
 wget -O wayscriber-configurator-amd64.deb https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb
 sudo apt install ./wayscriber-configurator-amd64.deb
 ```
 
-### Fedora / RHEL
+### Fedora / RHEL (repo – recommended)
+```bash
+cat <<'EOF' | sudo tee /etc/yum.repos.d/wayscriber.repo
+[wayscriber]
+name=Wayscriber Repo
+baseurl=https://wayscriber.com/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://wayscriber.com/rpm/RPM-GPG-KEY-wayscriber.asc
+EOF
+sudo dnf clean all
+sudo dnf install wayscriber
+# Optional GUI configurator
+sudo dnf install wayscriber-configurator
+```
 
+One-off .rpm (no auto-updates):
 ```bash
 wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
 sudo rpm -Uvh wayscriber-x86_64.rpm
 ```
-
-GUI configurator (optional):
+Configurator .rpm (optional):
 ```bash
 wget -O wayscriber-configurator-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm
 sudo rpm -Uvh wayscriber-configurator-x86_64.rpm
@@ -369,6 +396,9 @@ wayscriber --no-resume-session   # disable resume for this run
 wayscriber --session-info        # inspect saved sessions
 wayscriber --clear-session       # remove stored boards
 ```
+
+Notes:
+- When `restore_tool_state` is enabled (default), the last-used tool settings (including arrow head placement) override config defaults on startup. Disable it in the Session tab or clear the session to force config values.
 
 ### Tablet/Stylus Support
 

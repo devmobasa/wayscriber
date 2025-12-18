@@ -84,6 +84,9 @@ length = 20.0
 # 30 degrees gives a nice balanced arrow
 angle_degrees = 30.0
 
+# Place the arrowhead at the end of the line instead of the start
+head_at_end = false
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PERFORMANCE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -339,7 +342,9 @@ persist_blackboard = false
 # Persist undo/redo history alongside shapes (set false to save only visible drawings)
 persist_history = true
 
-# Restore pen colour/thickness/font size between runs
+# Restore pen colour/thickness/font size (and arrow placement) between runs.
+# When true, the last-used tool state overrides config defaults at startup.
+# Set to false if you always want to use the values above (e.g., arrow head placement).
 restore_tool_state = true
 
 # Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"

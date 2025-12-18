@@ -23,6 +23,7 @@ pub struct ConfigDraft {
 
     pub arrow_length: String,
     pub arrow_angle: String,
+    pub arrow_head_at_end: bool,
 
     pub performance_buffer_count: u32,
     pub performance_enable_vsync: bool,
@@ -100,6 +101,7 @@ impl ConfigDraft {
 
             arrow_length: format_float(config.arrow.length),
             arrow_angle: format_float(config.arrow.angle_degrees),
+            arrow_head_at_end: config.arrow.head_at_end,
 
             performance_buffer_count: config.performance.buffer_count,
             performance_enable_vsync: config.performance.enable_vsync,
@@ -208,6 +210,7 @@ impl ConfigDraft {
             &mut errors,
             |value| config.arrow.angle_degrees = value,
         );
+        config.arrow.head_at_end = self.arrow_head_at_end;
 
         config.performance.buffer_count = self.performance_buffer_count;
         config.performance.enable_vsync = self.performance_enable_vsync;
@@ -445,6 +448,9 @@ impl ConfigDraft {
             }
             ToggleField::SessionPerOutput => {
                 self.session_per_output = value;
+            }
+            ToggleField::ArrowHeadAtEnd => {
+                self.arrow_head_at_end = value;
             }
         }
     }

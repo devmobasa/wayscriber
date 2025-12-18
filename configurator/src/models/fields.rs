@@ -234,6 +234,7 @@ pub enum ToggleField {
     SessionPersistBlackboard,
     SessionRestoreToolState,
     SessionPerOutput,
+    ArrowHeadAtEnd,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -81,6 +81,8 @@ pub struct InputState {
     pub arrow_length: f64,
     /// Arrowhead angle in degrees (from config)
     pub arrow_angle: f64,
+    /// Whether the arrowhead is placed at the end of the line
+    pub arrow_head_at_end: bool,
     /// Current modifier key state
     pub modifiers: Modifiers,
     /// Current drawing mode state machine
@@ -213,6 +215,7 @@ impl InputState {
     /// * `text_background_enabled` - Whether to draw background behind text
     /// * `arrow_length` - Arrowhead length in pixels
     /// * `arrow_angle` - Arrowhead angle in degrees
+    /// * `arrow_head_at_end` - Whether arrowhead is drawn at the end
     /// * `show_status_bar` - Whether the status bar starts visible
     /// * `board_config` - Board mode configuration
     /// * `action_map` - Keybinding action map
@@ -228,6 +231,7 @@ impl InputState {
         text_background_enabled: bool,
         arrow_length: f64,
         arrow_angle: f64,
+        arrow_head_at_end: bool,
         show_status_bar: bool,
         board_config: BoardConfig,
         action_map: HashMap<KeyBinding, Action>,
@@ -254,6 +258,7 @@ impl InputState {
             text_background_enabled,
             arrow_length,
             arrow_angle,
+            arrow_head_at_end,
             modifiers: Modifiers::new(),
             state: DrawingState::Idle,
             should_exit: false,

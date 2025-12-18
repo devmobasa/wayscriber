@@ -103,6 +103,9 @@ pub enum Shape {
         arrow_length: f64,
         /// Arrowhead angle in degrees
         arrow_angle: f64,
+        /// Whether the arrowhead sits at the end of the line
+        #[serde(default = "default_arrow_head_at_end")]
+        head_at_end: bool,
     },
     /// Text annotation (activated with 'T' key)
     Text {
@@ -174,8 +177,18 @@ impl Shape {
                 thick,
                 arrow_length,
                 arrow_angle,
-                ..
-            } => bounding_box_for_arrow(*x1, *y1, *x2, *y2, *thick, *arrow_length, *arrow_angle),
+                head_at_end,
+                color: _,
+            } => bounding_box_for_arrow(
+                *x1,
+                *y1,
+                *x2,
+                *y2,
+                *thick,
+                *arrow_length,
+                *arrow_angle,
+                *head_at_end,
+            ),
             Shape::Text {
                 x,
                 y,
@@ -285,6 +298,7 @@ pub(crate) fn bounding_box_for_ellipse(
     ensure_positive_rect(min_x, min_y, max_x, max_y)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn bounding_box_for_arrow(
     x1: i32,
     y1: i32,
@@ -293,13 +307,21 @@ pub(crate) fn bounding_box_for_arrow(
     thick: f64,
     arrow_length: f64,
     arrow_angle: f64,
+    head_at_end: bool,
 ) -> Option<Rect> {
-    let arrow_points = util::calculate_arrowhead_custom(x1, y1, x2, y2, arrow_length, arrow_angle);
+    let (tip_x, tip_y, tail_x, tail_y) = if head_at_end {
+        (x2, y2, x1, y1)
+    } else {
+        (x1, y1, x2, y2)
+    };
 
-    let mut min_x = x1.min(x2) as f64;
-    let mut max_x = x1.max(x2) as f64;
-    let mut min_y = y1.min(y2) as f64;
-    let mut max_y = y1.max(y2) as f64;
+    let arrow_points =
+        util::calculate_arrowhead_custom(tip_x, tip_y, tail_x, tail_y, arrow_length, arrow_angle);
+
+    let mut min_x = tip_x.min(tail_x) as f64;
+    let mut max_x = tip_x.max(tail_x) as f64;
+    let mut min_y = tip_y.min(tail_y) as f64;
+    let mut max_y = tip_y.max(tail_y) as f64;
 
     for &(px, py) in &arrow_points {
         min_x = min_x.min(px);
@@ -417,6 +439,10 @@ pub(crate) fn bounding_box_for_eraser(points: &[(i32, i32)], diameter: f64) -> O
     ensure_positive_rect(min_x, min_y, max_x, max_y)
 }
 
+const fn default_arrow_head_at_end() -> bool {
+    false
+}
+
 fn ensure_positive_rect(min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Option<Rect> {
     let (min_x, max_x) = if min_x == max_x {
         (min_x, max_x + 1)
@@ -489,6 +515,7 @@ mod tests {
             thick: 3.0,
             arrow_length: 20.0,
             arrow_angle: 30.0,
+            head_at_end: false,
         };
 
         let rect = shape.bounding_box().expect("arrow should have bounds");

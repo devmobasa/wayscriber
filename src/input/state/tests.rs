@@ -31,6 +31,7 @@ fn create_test_input_state() -> InputState {
         false,                  // text_background_enabled
         20.0,                   // arrow_length
         30.0,                   // arrow_angle
+        false,                  // arrow_head_at_end
         true,                   // show_status_bar
         BoardConfig::default(), // board_config
         action_map,             // action_map

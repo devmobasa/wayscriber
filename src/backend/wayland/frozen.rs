@@ -663,6 +663,7 @@ mod tests {
             10.0,
             10.0,
             false,
+            false,
             crate::config::BoardConfig::default(),
             std::collections::HashMap::new(),
             usize::MAX,

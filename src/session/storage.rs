@@ -418,6 +418,7 @@ mod tests {
                 text_background_enabled: false,
                 arrow_length: 20.0,
                 arrow_angle: 30.0,
+                arrow_head_at_end: Some(false),
                 board_previous_color: None,
                 show_status_bar: true,
             }),
