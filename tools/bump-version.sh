@@ -45,16 +45,29 @@ if [[ -z "$current_version" ]]; then
 fi
 
 DRY_RUN=false
-if [[ "${1-}" == "--dry-run" ]]; then
-    DRY_RUN=true
-    shift
-fi
-
-# Allow --dry-run --help to show usage
-if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
-    usage
-    exit 0
-fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            usage
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 if [[ $# -gt 1 ]]; then
     usage
