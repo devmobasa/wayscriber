@@ -57,6 +57,8 @@ pub struct ToolStateSnapshot {
     pub text_background_enabled: bool,
     pub arrow_length: f64,
     pub arrow_angle: f64,
+    #[serde(default)]
+    pub arrow_head_at_end: Option<bool>,
     pub board_previous_color: Option<Color>,
     pub show_status_bar: bool,
 }
@@ -72,6 +74,7 @@ impl ToolStateSnapshot {
             text_background_enabled: input.text_background_enabled,
             arrow_length: input.arrow_length,
             arrow_angle: input.arrow_angle,
+            arrow_head_at_end: Some(input.arrow_head_at_end),
             board_previous_color: input.board_previous_color,
             show_status_bar: input.show_status_bar,
         }
@@ -541,6 +544,9 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
             input.text_background_enabled = tool_state.text_background_enabled;
             input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
             input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
+            if let Some(head_at_end) = tool_state.arrow_head_at_end {
+                input.arrow_head_at_end = head_at_end;
+            }
             input.board_previous_color = tool_state.board_previous_color;
             input.show_status_bar = tool_state.show_status_bar;
         }

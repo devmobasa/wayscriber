@@ -49,14 +49,21 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             thick,
             arrow_length,
             arrow_angle,
+            head_at_end,
             ..
         } => {
+            let (tip_x, tip_y, tail_x, tail_y) = if *head_at_end {
+                (*x2, *y2, *x1, *y1)
+            } else {
+                (*x1, *y1, *x2, *y2)
+            };
+
             segment_hit(*x1, *y1, *x2, *y2, *thick, point, tolerance)
                 || arrowhead_hit(
-                    *x1,
-                    *y1,
-                    *x2,
-                    *y2,
+                    tip_x,
+                    tip_y,
+                    tail_x,
+                    tail_y,
                     *arrow_length,
                     *arrow_angle,
                     point,

@@ -370,6 +370,9 @@ wayscriber --session-info        # inspect saved sessions
 wayscriber --clear-session       # remove stored boards
 ```
 
+Notes:
+- When `restore_tool_state` is enabled (default), the last-used tool settings (including arrow head placement) override config defaults on startup. Disable it in the Session tab or clear the session to force config values.
+
 ### Tablet/Stylus Support
 
 Tablet support (`zwp_tablet_v2`) is enabled by default:

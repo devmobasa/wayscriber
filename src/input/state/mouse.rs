@@ -293,6 +293,7 @@ impl InputState {
                         thick: self.current_thickness,
                         arrow_length: self.arrow_length,
                         arrow_angle: self.arrow_angle,
+                        head_at_end: self.arrow_head_at_end,
                     },
                     Tool::Marker => Shape::MarkerStroke {
                         points,

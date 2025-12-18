@@ -630,7 +630,13 @@ impl ConfiguratorApp {
                         TextField::ArrowAngle,
                     )
                 ]
-                .spacing(12)
+                .spacing(12),
+                toggle_row(
+                    "Place arrowhead at end of line",
+                    self.draft.arrow_head_at_end,
+                    self.defaults.arrow_head_at_end,
+                    ToggleField::ArrowHeadAtEnd,
+                )
             ]
             .spacing(12),
         )

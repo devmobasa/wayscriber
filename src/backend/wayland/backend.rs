@@ -380,6 +380,7 @@ impl WaylandBackend {
             config.drawing.text_background_enabled,
             config.arrow.length,
             config.arrow.angle_degrees,
+            config.arrow.head_at_end,
             config.ui.show_status_bar,
             config.board.clone(),
             action_map,

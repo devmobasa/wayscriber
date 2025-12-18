@@ -117,6 +117,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             thick,
             arrow_length,
             arrow_angle,
+            head_at_end,
             ..
         } => {
             render_arrow(
@@ -129,6 +130,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
                 thick + outline_width,
                 *arrow_length,
                 *arrow_angle,
+                *head_at_end,
             );
         }
         Shape::MarkerStroke { points, thick, .. } => {
@@ -216,6 +218,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             thick,
             arrow_length,
             arrow_angle,
+            head_at_end,
         } => {
             render_arrow(
                 ctx,
@@ -227,6 +230,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 *thick,
                 *arrow_length,
                 *arrow_angle,
+                *head_at_end,
             );
         }
         Shape::Text {
@@ -532,25 +536,34 @@ fn render_arrow(
     thick: f64,
     arrow_length: f64,
     arrow_angle: f64,
+    head_at_end: bool,
 ) {
     // Draw the main line
     render_line(ctx, x1, y1, x2, y2, color, thick);
 
-    // Draw arrowhead at (x1, y1) pointing towards start
+    // Determine where the arrowhead should sit
+    let (tip_x, tip_y, tail_x, tail_y) = if head_at_end {
+        (x2, y2, x1, y1)
+    } else {
+        (x1, y1, x2, y2)
+    };
+
+    // Draw arrowhead at the tip, pointing toward the tail
     // Returns [left_point, right_point]
-    let arrow_points = util::calculate_arrowhead_custom(x1, y1, x2, y2, arrow_length, arrow_angle);
+    let arrow_points =
+        util::calculate_arrowhead_custom(tip_x, tip_y, tail_x, tail_y, arrow_length, arrow_angle);
 
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
     ctx.set_line_width(thick);
     ctx.set_line_cap(cairo::LineCap::Round);
 
     // Draw left line of arrowhead (from start to left point)
-    ctx.move_to(x1 as f64, y1 as f64);
+    ctx.move_to(tip_x as f64, tip_y as f64);
     ctx.line_to(arrow_points[0].0, arrow_points[0].1);
     let _ = ctx.stroke();
 
     // Draw right line of arrowhead (from start to right point)
-    ctx.move_to(x1 as f64, y1 as f64);
+    ctx.move_to(tip_x as f64, tip_y as f64);
     ctx.line_to(arrow_points[1].0, arrow_points[1].1);
     let _ = ctx.stroke();
 }

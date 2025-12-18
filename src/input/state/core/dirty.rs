@@ -82,6 +82,7 @@ impl InputState {
                     self.current_thickness,
                     self.arrow_length,
                     self.arrow_angle,
+                    self.arrow_head_at_end,
                 ),
                 Tool::Highlight => None,
                 Tool::Select => None,

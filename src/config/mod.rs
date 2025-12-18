@@ -294,6 +294,7 @@ pub(super) fn primary_config_dir() -> Result<PathBuf> {
 /// [arrow]
 /// length = 20.0
 /// angle_degrees = 30.0
+/// head_at_end = false
 ///
 /// [performance]
 /// buffer_count = 3

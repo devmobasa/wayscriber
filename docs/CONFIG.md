@@ -73,11 +73,15 @@ length = 20.0
 # Arrowhead angle in degrees (15-60)
 # 30 degrees gives a nice balanced arrow
 angle_degrees = 30.0
+
+# Place the arrowhead at the end of the line instead of the start
+head_at_end = false
 ```
 
 **Defaults:**
 - Length: 20.0px
 - Angle: 30.0°
+- Head at end: false (head at the start)
 
 ### `[performance]` - Performance Tuning
 
@@ -355,7 +359,7 @@ backup_retention = 1
 
 - `persist_*` — choose which board modes (transparent/whiteboard/blackboard) survive restarts
 - `persist_history` — when `true`, persist undo/redo stacks so that history survives restarts; set to `false` to save only visible drawings
-- `restore_tool_state` — save pen colour, thickness, font size, arrow settings, and status bar visibility
+- `restore_tool_state` — save pen colour, thickness, font size, arrow settings (including head placement), and status bar visibility; when `true`, the last-used tool state overrides config defaults at startup
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
 - `per_output` — when `true` (default) keep a separate session file for each monitor; set to `false` to share one file per Wayland display as in earlier releases
