@@ -83,10 +83,10 @@ impl KeyboardHandler for WaylandState {
                         WaylandState::ZOOM_PAN_STEP
                     };
                     let (dx, dy) = match key {
-                        Key::Up => (0.0, -step),
-                        Key::Down => (0.0, step),
-                        Key::Left => (-step, 0.0),
-                        Key::Right => (step, 0.0),
+                        Key::Up => (0.0, step),
+                        Key::Down => (0.0, -step),
+                        Key::Left => (step, 0.0),
+                        Key::Right => (-step, 0.0),
                         _ => (0.0, 0.0),
                     };
                     self.zoom.pan_by_screen_delta(
@@ -179,10 +179,10 @@ impl KeyboardHandler for WaylandState {
                         WaylandState::ZOOM_PAN_STEP
                     };
                     let (dx, dy) = match key {
-                        Key::Up => (0.0, -step),
-                        Key::Down => (0.0, step),
-                        Key::Left => (-step, 0.0),
-                        Key::Right => (step, 0.0),
+                        Key::Up => (0.0, step),
+                        Key::Down => (0.0, -step),
+                        Key::Left => (step, 0.0),
+                        Key::Right => (-step, 0.0),
                         _ => (0.0, 0.0),
                     };
                     self.zoom.pan_by_screen_delta(
