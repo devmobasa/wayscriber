@@ -64,8 +64,8 @@ impl PointerHandler for WaylandState {
                     self.set_pointer_over_toolbar(on_toolbar);
                     self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
                     if !on_toolbar {
-                        let (mx, my) = self.current_mouse();
-                        self.input_state.update_pointer_position(mx, my);
+                        let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+                        self.input_state.update_pointer_position(wx, wy);
                     }
                     update_cursor(on_toolbar, conn, self);
                     if inline_active {
@@ -104,23 +104,23 @@ impl PointerHandler for WaylandState {
                     update_cursor(false, conn, self);
                 }
                 PointerEventKind::Motion { .. } => {
-                    if self.is_move_dragging() {
-                        if let Some(kind) = self.active_move_drag_kind() {
-                            debug!(
-                                "Move drag motion: kind={:?}, pos=({}, {}), on_toolbar={}",
-                                kind, event.position.0, event.position.1, on_toolbar
-                            );
-                            // On toolbar surface: coords are toolbar-local, need conversion
-                            // On main surface: coords are already screen-relative (fullscreen overlay)
-                            if on_toolbar {
-                                self.handle_toolbar_move(kind, event.position);
-                            } else {
-                                self.handle_toolbar_move_screen(kind, event.position);
-                            }
-                            self.input_state.needs_redraw = true;
-                            self.toolbar.mark_dirty();
-                            continue;
+                    if self.is_move_dragging()
+                        && let Some(kind) = self.active_move_drag_kind()
+                    {
+                        debug!(
+                            "Move drag motion: kind={:?}, pos=({}, {}), on_toolbar={}",
+                            kind, event.position.0, event.position.1, on_toolbar
+                        );
+                        // On toolbar surface: coords are toolbar-local, need conversion
+                        // On main surface: coords are already screen-relative (fullscreen overlay)
+                        if on_toolbar {
+                            self.handle_toolbar_move(kind, event.position);
+                        } else {
+                            self.handle_toolbar_move_screen(kind, event.position);
                         }
+                        self.input_state.needs_redraw = true;
+                        self.toolbar.mark_dirty();
+                        continue;
                     }
                     if inline_active && self.inline_toolbar_motion(event.position) {
                         update_cursor(true, conn, self);
@@ -180,10 +180,25 @@ impl PointerHandler for WaylandState {
                         }
                         continue;
                     }
+                    if self.zoom.panning {
+                        self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+                        let (dx, dy) = self
+                            .zoom
+                            .update_pan_position(event.position.0, event.position.1);
+                        self.zoom.pan_by_screen_delta(
+                            dx,
+                            dy,
+                            self.surface.width(),
+                            self.surface.height(),
+                        );
+                        self.input_state.dirty_tracker.mark_full();
+                        self.input_state.needs_redraw = true;
+                        continue;
+                    }
                     self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
-                    let (mx, my) = self.current_mouse();
-                    self.input_state.update_pointer_position(mx, my);
-                    self.input_state.on_mouse_motion(mx, my);
+                    let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+                    self.input_state.update_pointer_position(wx, wy);
+                    self.input_state.on_mouse_motion(wx, wy);
                 }
                 PointerEventKind::Press { button, .. } => {
                     if debug_toolbar_drag_logging_enabled() {
@@ -202,33 +217,32 @@ impl PointerHandler for WaylandState {
                         continue;
                     }
                     if on_toolbar {
-                        if button == BTN_LEFT {
-                            if let Some((intent, drag)) =
+                        if button == BTN_LEFT
+                            && let Some((intent, drag)) =
                                 self.toolbar.pointer_press(&event.surface, event.position)
+                        {
+                            let toolbar_event =
+                                intent_to_event(intent, self.toolbar.last_snapshot());
+                            if matches!(
+                                toolbar_event,
+                                ToolbarEvent::MoveTopToolbar { .. }
+                                    | ToolbarEvent::MoveSideToolbar { .. }
+                            ) && drag
                             {
-                                let toolbar_event =
-                                    intent_to_event(intent, self.toolbar.last_snapshot());
-                                if matches!(
-                                    toolbar_event,
-                                    ToolbarEvent::MoveTopToolbar { .. }
-                                        | ToolbarEvent::MoveSideToolbar { .. }
-                                ) && drag
-                                {
-                                    self.lock_pointer_for_drag(qh, &event.surface);
-                                }
-                                log::info!(
-                                    "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
-                                    drag,
-                                    surface_id(&event.surface),
-                                    self.current_seat_id(),
-                                    self.inline_toolbars_active()
-                                );
-                                self.set_toolbar_dragging(drag);
-                                self.handle_toolbar_event(toolbar_event);
-                                self.toolbar.mark_dirty();
-                                self.input_state.needs_redraw = true;
-                                self.refresh_keyboard_interactivity();
+                                self.lock_pointer_for_drag(qh, &event.surface);
                             }
+                            log::info!(
+                                "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
+                                drag,
+                                surface_id(&event.surface),
+                                self.current_seat_id(),
+                                self.inline_toolbars_active()
+                            );
+                            self.set_toolbar_dragging(drag);
+                            self.handle_toolbar_event(toolbar_event);
+                            self.toolbar.mark_dirty();
+                            self.input_state.needs_redraw = true;
+                            self.refresh_keyboard_interactivity();
                         }
                         continue;
                     } else if self.pointer_over_toolbar() {
@@ -239,6 +253,12 @@ impl PointerHandler for WaylandState {
                         "Button {} pressed at ({}, {})",
                         button, event.position.0, event.position.1
                     );
+                    if self.zoom.active && button == BTN_MIDDLE && !self.zoom.locked {
+                        self.zoom.start_pan(event.position.0, event.position.1);
+                        self.input_state.dirty_tracker.mark_full();
+                        self.input_state.needs_redraw = true;
+                        continue;
+                    }
 
                     let mb = match button {
                         BTN_LEFT => MouseButton::Left,
@@ -247,11 +267,8 @@ impl PointerHandler for WaylandState {
                         _ => continue,
                     };
 
-                    self.input_state.on_mouse_press(
-                        mb,
-                        event.position.0 as i32,
-                        event.position.1 as i32,
-                    );
+                    let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+                    self.input_state.on_mouse_press(mb, wx, wy);
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Release { button, .. } => {
@@ -293,6 +310,14 @@ impl PointerHandler for WaylandState {
                         continue;
                     }
                     debug!("Button {} released", button);
+                    if self.zoom.active && button == BTN_MIDDLE {
+                        if self.zoom.panning {
+                            self.zoom.stop_pan();
+                            self.input_state.dirty_tracker.mark_full();
+                            self.input_state.needs_redraw = true;
+                        }
+                        continue;
+                    }
 
                     let mb = match button {
                         BTN_LEFT => MouseButton::Left,
@@ -301,11 +326,8 @@ impl PointerHandler for WaylandState {
                         _ => continue,
                     };
 
-                    self.input_state.on_mouse_release(
-                        mb,
-                        event.position.0 as i32,
-                        event.position.1 as i32,
-                    );
+                    let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+                    self.input_state.on_mouse_release(mb, wx, wy);
                     self.input_state.needs_redraw = true;
                 }
                 PointerEventKind::Axis { vertical, .. } => {
@@ -319,6 +341,18 @@ impl PointerHandler for WaylandState {
                     } else {
                         0
                     };
+                    if self.input_state.modifiers.ctrl && self.input_state.modifiers.alt {
+                        if scroll_direction != 0 {
+                            let zoom_in = scroll_direction < 0;
+                            self.handle_zoom_scroll(
+                                zoom_in,
+                                event.position.0,
+                                event.position.1,
+                                qh,
+                            );
+                        }
+                        continue;
+                    }
 
                     match scroll_direction.cmp(&0) {
                         std::cmp::Ordering::Greater if self.input_state.modifiers.shift => {

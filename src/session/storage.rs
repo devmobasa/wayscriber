@@ -120,12 +120,14 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let mut session_identity = options.output_identity().map(|s| s.to_string());
     let mut metadata = fs::metadata(&session_path).ok();
 
-    if metadata.is_none() && options.per_output && options.output_identity().is_none() {
-        if let Some((path, identity)) = find_existing_variant(&options.base_dir, &prefix, ".json") {
-            metadata = fs::metadata(&path).ok();
-            session_path = path;
-            session_identity = identity;
-        }
+    if metadata.is_none()
+        && options.per_output
+        && options.output_identity().is_none()
+        && let Some((path, identity)) = find_existing_variant(&options.base_dir, &prefix, ".json")
+    {
+        metadata = fs::metadata(&path).ok();
+        session_path = path;
+        session_identity = identity;
     }
 
     let exists = metadata.is_some();
@@ -134,11 +136,13 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
 
     let mut backup_path = options.backup_file_path();
     let mut backup_meta = fs::metadata(&backup_path).ok();
-    if backup_meta.is_none() && options.per_output && options.output_identity().is_none() {
-        if let Some((path, _)) = find_existing_variant(&options.base_dir, &prefix, ".json.bak") {
-            backup_meta = fs::metadata(&path).ok();
-            backup_path = path;
-        }
+    if backup_meta.is_none()
+        && options.per_output
+        && options.output_identity().is_none()
+        && let Some((path, _)) = find_existing_variant(&options.base_dir, &prefix, ".json.bak")
+    {
+        backup_meta = fs::metadata(&path).ok();
+        backup_path = path;
     }
 
     let backup_exists = backup_meta.is_some();
@@ -240,12 +244,12 @@ fn remove_matching_files(dir: &Path, prefix: &str, suffix: &str) -> Result<bool>
                 .file_name()
                 .and_then(|n| n.to_str())
                 .map(|s| s.to_string())
+                && name.starts_with(prefix)
+                && name.ends_with(suffix)
             {
-                if name.starts_with(prefix) && name.ends_with(suffix) {
-                    fs::remove_file(&path)
-                        .with_context(|| format!("failed to remove {}", path.display()))?;
-                    removed = true;
-                }
+                fs::remove_file(&path)
+                    .with_context(|| format!("failed to remove {}", path.display()))?;
+                removed = true;
             }
         }
     }
@@ -281,10 +285,10 @@ fn find_existing_variant(
             .file_name()
             .and_then(|n| n.to_str())
             .map(|s| s.to_string())
+            && name.starts_with(prefix)
+            && name.ends_with(suffix)
         {
-            if name.starts_with(prefix) && name.ends_with(suffix) {
-                matches.push((path, extract_identity(&name, prefix, suffix)));
-            }
+            matches.push((path, extract_identity(&name, prefix, suffix)));
         }
     }
 

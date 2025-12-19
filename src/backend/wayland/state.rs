@@ -51,7 +51,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, ColorSpec, Config},
-    input::{DrawingState, InputState},
+    input::{DrawingState, InputState, ZoomAction},
     notification,
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
@@ -72,6 +72,7 @@ use super::{
         render::{render_side_palette, render_top_strip},
     },
     toolbar_intent::intent_to_event,
+    zoom::ZoomState,
 };
 
 mod data;
@@ -106,6 +107,7 @@ pub(super) struct WaylandState {
     // Capture manager
     pub(super) capture: CaptureState,
     pub(super) frozen: FrozenState,
+    pub(super) zoom: ZoomState,
 
     // Pointer cursor
     pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
@@ -169,6 +171,10 @@ impl WaylandState {
     const INLINE_SIDE_X: f64 = 24.0;
     const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
     const INLINE_TOP_PUSH: f64 = 16.0;
+    const ZOOM_STEP_KEY: f64 = 1.2;
+    const ZOOM_STEP_SCROLL: f64 = 1.1;
+    pub(super) const ZOOM_PAN_STEP: f64 = 32.0;
+    pub(super) const ZOOM_PAN_STEP_LARGE: f64 = 96.0;
 
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
@@ -227,6 +233,7 @@ impl WaylandState {
             data.toolbar_side_offset,
             data.toolbar_side_offset_x
         ));
+        let zoom_manager = screencopy_manager.clone();
 
         Self {
             registry_state,
@@ -246,6 +253,7 @@ impl WaylandState {
             input_state,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
+            zoom: ZoomState::new(zoom_manager),
             themed_pointer: None,
             locked_pointer: None,
             relative_pointer: None,
@@ -321,6 +329,150 @@ impl WaylandState {
     pub(super) fn set_current_mouse(&mut self, x: i32, y: i32) {
         self.data.current_mouse_x = x;
         self.data.current_mouse_y = y;
+    }
+
+    pub(super) fn zoomed_world_coords(&self, screen_x: f64, screen_y: f64) -> (i32, i32) {
+        if self.zoom.active {
+            let (wx, wy) = self.zoom.screen_to_world(screen_x, screen_y);
+            (wx.round() as i32, wy.round() as i32)
+        } else {
+            (screen_x.round() as i32, screen_y.round() as i32)
+        }
+    }
+
+    pub(super) fn handle_zoom_action(&mut self, action: ZoomAction, qh: &QueueHandle<Self>) {
+        let (sx, sy) = self.zoom_keyboard_anchor();
+        match action {
+            ZoomAction::In => {
+                self.apply_zoom_factor(Self::ZOOM_STEP_KEY, sx, sy, qh, true);
+            }
+            ZoomAction::Out => {
+                self.apply_zoom_factor(1.0 / Self::ZOOM_STEP_KEY, sx, sy, qh, false);
+            }
+            ZoomAction::Reset => {
+                if self.zoom.active {
+                    self.exit_zoom();
+                }
+            }
+            ZoomAction::ToggleLock => {
+                if self.zoom.active {
+                    self.zoom.locked = !self.zoom.locked;
+                    if self.zoom.locked && self.zoom.panning {
+                        self.zoom.stop_pan();
+                    }
+                    self.input_state.set_zoom_status(
+                        self.zoom.active,
+                        self.zoom.locked,
+                        self.zoom.scale,
+                    );
+                }
+            }
+            ZoomAction::RefreshCapture => {
+                if self.zoom.active
+                    && let Err(err) = self.start_zoom_capture(qh, true)
+                {
+                    warn!("Zoom capture refresh failed: {}", err);
+                }
+            }
+        }
+    }
+
+    fn zoom_keyboard_anchor(&self) -> (f64, f64) {
+        if self.has_pointer_focus() {
+            let (sx, sy) = self.current_mouse();
+            (sx as f64, sy as f64)
+        } else {
+            let cx = (self.surface.width() as f64) * 0.5;
+            let cy = (self.surface.height() as f64) * 0.5;
+            (cx, cy)
+        }
+    }
+
+    pub(super) fn handle_zoom_scroll(
+        &mut self,
+        zoom_in: bool,
+        screen_x: f64,
+        screen_y: f64,
+        qh: &QueueHandle<Self>,
+    ) {
+        let factor = if zoom_in {
+            Self::ZOOM_STEP_SCROLL
+        } else {
+            1.0 / Self::ZOOM_STEP_SCROLL
+        };
+        self.apply_zoom_factor(factor, screen_x, screen_y, qh, zoom_in);
+    }
+
+    pub(super) fn exit_zoom(&mut self) {
+        if self.zoom.active {
+            self.zoom
+                .deactivate(&mut self.surface, &mut self.input_state);
+        }
+    }
+
+    fn apply_zoom_factor(
+        &mut self,
+        factor: f64,
+        screen_x: f64,
+        screen_y: f64,
+        qh: &QueueHandle<Self>,
+        allow_activate: bool,
+    ) {
+        let screen_w = self.surface.width();
+        let screen_h = self.surface.height();
+
+        if !self.zoom.active {
+            if !allow_activate {
+                return;
+            }
+            self.zoom.activate();
+            self.zoom.locked = false;
+            self.zoom.reset_view();
+            self.input_state.close_context_menu();
+            self.input_state.close_properties_panel();
+        }
+
+        let changed = self
+            .zoom
+            .zoom_at_screen_point(factor, screen_x, screen_y, screen_w, screen_h);
+        if self.zoom.active && changed {
+            self.input_state
+                .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
+        }
+
+        if self.zoom.active
+            && let Err(err) = self.start_zoom_capture(qh, false)
+        {
+            warn!("Zoom capture failed to start: {}", err);
+            self.zoom
+                .deactivate(&mut self.surface, &mut self.input_state);
+        }
+    }
+
+    fn start_zoom_capture(&mut self, qh: &QueueHandle<Self>, force: bool) -> Result<()> {
+        if self.zoom.is_in_progress() {
+            return Ok(());
+        }
+        if !force && self.zoom.image().is_some() {
+            return Ok(());
+        }
+        if self.frozen.is_in_progress() {
+            warn!("Zoom capture requested while frozen capture is in progress; ignoring");
+            return Ok(());
+        }
+        let use_fallback = !self.zoom.manager_available();
+        if use_fallback {
+            warn!("Zoom: screencopy unavailable, using portal fallback");
+        } else {
+            log::info!("Zoom: using screencopy fast path");
+        }
+        self.zoom.start_capture(
+            &self.shm,
+            &mut self.surface,
+            qh,
+            use_fallback,
+            &self.tokio_handle,
+        )
     }
 
     #[allow(dead_code)]
@@ -522,14 +674,14 @@ impl WaylandState {
     }
 
     pub(super) fn preferred_fullscreen_output(&self) -> Option<wl_output::WlOutput> {
-        if let Some(preferred) = self.preferred_output_identity() {
-            if let Some(output) = self.output_state.outputs().find(|output| {
+        if let Some(preferred) = self.preferred_output_identity()
+            && let Some(output) = self.output_state.outputs().find(|output| {
                 self.output_identity_for(output)
                     .map(|id| id.eq_ignore_ascii_case(preferred))
                     .unwrap_or(false)
-            }) {
-                return Some(output);
-            }
+            })
+        {
+            return Some(output);
         }
 
         self.surface
@@ -678,7 +830,7 @@ impl WaylandState {
                 self.data.toolbar_configure_miss_count =
                     self.data.toolbar_configure_miss_count.saturating_add(1);
                 if debug_toolbar_drag_logging_enabled()
-                    && self.data.toolbar_configure_miss_count % 60 == 0
+                    && self.data.toolbar_configure_miss_count.is_multiple_of(60)
                 {
                     debug!(
                         "Toolbar configure pending: count={}, expected_top={}, configured_top={}, expected_side={}, configured_side={}",
@@ -752,10 +904,10 @@ impl WaylandState {
     /// Base X position for the top toolbar when laid out inline.
     /// When a drag is in progress we freeze this base to avoid shifting the top bar while moving the side bar.
     fn inline_top_base_x(&self, snapshot: &ToolbarSnapshot) -> f64 {
-        if self.is_move_dragging() {
-            if let Some(x) = self.data.drag_top_base_x {
-                return x;
-            }
+        if self.is_move_dragging()
+            && let Some(x) = self.data.drag_top_base_x
+        {
+            return x;
         }
         let side_visible = self.toolbar.is_side_visible();
         let side_size = side_size(snapshot);
@@ -774,10 +926,10 @@ impl WaylandState {
     }
 
     fn inline_top_base_y(&self) -> f64 {
-        if self.is_move_dragging() {
-            if let Some(y) = self.data.drag_top_base_y {
-                return y;
-            }
+        if self.is_move_dragging()
+            && let Some(y) = self.data.drag_top_base_y
+        {
+            return y;
         }
         Self::INLINE_TOP_Y
     }
@@ -1361,27 +1513,30 @@ impl WaylandState {
 
         let mut over_toolbar = false;
 
-        if let Some((x, y, w, h)) = self.data.inline_top_rect {
-            if self.point_in_rect(position.0, position.1, x, y, w, h) {
-                over_toolbar = true;
-                self.data.inline_top_hover = Some(position);
-            }
+        if let Some((x, y, w, h)) = self.data.inline_top_rect
+            && self.point_in_rect(position.0, position.1, x, y, w, h)
+        {
+            over_toolbar = true;
+            self.data.inline_top_hover = Some(position);
         }
 
-        if let Some((x, y, w, h)) = self.data.inline_side_rect {
-            if self.point_in_rect(position.0, position.1, x, y, w, h) {
-                over_toolbar = true;
-                self.data.inline_side_hover = Some(position);
-            }
+        if let Some((x, y, w, h)) = self.data.inline_side_rect
+            && self.point_in_rect(position.0, position.1, x, y, w, h)
+        {
+            over_toolbar = true;
+            self.data.inline_side_hover = Some(position);
         }
 
-        if self.toolbar_dragging() {
-            if let Some(intent) = self.inline_toolbar_drag_at(position) {
-                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                self.handle_toolbar_event(evt);
-                self.toolbar.mark_dirty();
-                self.input_state.needs_redraw = true;
-            } else if let Some(kind) = self.active_move_drag_kind() {
+        if self.toolbar_dragging()
+            && let Some(intent) = self.inline_toolbar_drag_at(position)
+        {
+            let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+            self.handle_toolbar_event(evt);
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+            over_toolbar = true;
+        } else if self.toolbar_dragging() {
+            if let Some(kind) = self.active_move_drag_kind() {
                 self.handle_toolbar_move(kind, position);
             }
             over_toolbar = true;
@@ -1444,13 +1599,13 @@ impl WaylandState {
             return false;
         }
         if self.pointer_over_toolbar() || self.toolbar_dragging() {
-            if self.toolbar_dragging() {
-                if let Some(intent) = self.inline_toolbar_drag_at(position) {
-                    let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                    self.handle_toolbar_event(evt);
-                    self.toolbar.mark_dirty();
-                    self.input_state.needs_redraw = true;
-                }
+            if self.toolbar_dragging()
+                && let Some(intent) = self.inline_toolbar_drag_at(position)
+            {
+                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+                self.handle_toolbar_event(evt);
+                self.toolbar.mark_dirty();
+                self.input_state.needs_redraw = true;
             }
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);
@@ -1611,7 +1766,20 @@ impl WaylandState {
         ctx.paint().context("Failed to clear background")?;
         ctx.set_operator(cairo::Operator::Over);
 
-        if let Some(image) = self.frozen.image() {
+        let zoom_render_image = if self.zoom.active {
+            self.zoom.image().or_else(|| self.frozen.image())
+        } else {
+            None
+        };
+        let zoom_render_active = self.zoom.active && zoom_render_image.is_some();
+        let zoom_transform_active = self.zoom.active;
+        let background_image = if zoom_render_active {
+            zoom_render_image
+        } else {
+            self.frozen.image()
+        };
+
+        if let Some(image) = background_image {
             // SAFETY: we create a Cairo surface borrowing our owned buffer; it is dropped
             // before commit, and we hold the buffer alive via `image.data`.
             let surface = unsafe {
@@ -1636,7 +1804,14 @@ impl WaylandState {
                 1.0
             };
             let _ = ctx.save();
-            if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
+            if zoom_render_active {
+                let scale_x_safe = scale_x.max(f64::MIN_POSITIVE);
+                let scale_y_safe = scale_y.max(f64::MIN_POSITIVE);
+                let offset_x = self.zoom.view_offset.0 * (scale as f64) / scale_x_safe;
+                let offset_y = self.zoom.view_offset.1 * (scale as f64) / scale_y_safe;
+                ctx.scale(scale_x * self.zoom.scale, scale_y * self.zoom.scale);
+                ctx.translate(-offset_x, -offset_y);
+            } else if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
                 ctx.scale(scale_x, scale_y);
             }
 
@@ -1673,6 +1848,13 @@ impl WaylandState {
         if scale > 1 {
             ctx.scale(scale as f64, scale as f64);
         }
+
+        if zoom_transform_active {
+            let _ = ctx.save();
+            ctx.scale(self.zoom.scale, self.zoom.scale);
+            ctx.translate(-self.zoom.view_offset.0, -self.zoom.view_offset.1);
+        }
+
         // Render all completed shapes from active frame
         debug!(
             "Rendering {} completed shapes",
@@ -1706,7 +1888,11 @@ impl WaylandState {
 
         // Render provisional shape if actively drawing
         // Use optimized method that avoids cloning for freehand
-        let (mx, my) = self.current_mouse();
+        let (mx, my) = if zoom_transform_active {
+            self.zoomed_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64)
+        } else {
+            self.current_mouse()
+        };
         if self.input_state.render_provisional_shape(&ctx, mx, my) {
             debug!("Rendered provisional shape");
         }
@@ -1733,9 +1919,26 @@ impl WaylandState {
         // Render click highlight overlays before UI so status/help remain legible
         self.input_state.render_click_highlights(&ctx, now);
 
+        if zoom_transform_active {
+            let _ = ctx.restore();
+        }
+
         // Render frozen badge even if status bar is hidden
-        if self.input_state.frozen_active() && self.config.ui.show_frozen_badge {
+        if self.input_state.frozen_active() && !self.zoom.active && self.config.ui.show_frozen_badge
+        {
             crate::ui::render_frozen_badge(&ctx, width, height);
+        }
+        // Render a zoom badge when the status bar is hidden or zoom is locked.
+        if self.input_state.zoom_active()
+            && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
+        {
+            crate::ui::render_zoom_badge(
+                &ctx,
+                width,
+                height,
+                self.input_state.zoom_scale(),
+                self.input_state.zoom_locked(),
+            );
         }
 
         // Render status bar if enabled
@@ -1761,17 +1964,21 @@ impl WaylandState {
             );
         }
 
-        crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
+        if !self.zoom.active {
+            crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
 
-        if self.input_state.is_context_menu_open() {
-            self.input_state
-                .update_context_menu_layout(&ctx, width, height);
+            if self.input_state.is_context_menu_open() {
+                self.input_state
+                    .update_context_menu_layout(&ctx, width, height);
+            } else {
+                self.input_state.clear_context_menu_layout();
+            }
+
+            // Render context menu if open
+            crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
         } else {
             self.input_state.clear_context_menu_layout();
         }
-
-        // Render context menu if open
-        crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
 
         // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.
         if self.toolbar.is_visible() && self.inline_toolbars_active() {
@@ -2117,10 +2324,12 @@ impl WaylandState {
 fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Vec<Rect> {
     regions.retain(Rect::is_valid);
 
-    if regions.is_empty() && width > 0 && height > 0 {
-        if let Some(full) = Rect::new(0, 0, width, height) {
-            regions.push(full);
-        }
+    if regions.is_empty()
+        && width > 0
+        && height > 0
+        && let Some(full) = Rect::new(0, 0, width, height)
+    {
+        regions.push(full);
     }
 
     regions
@@ -2155,7 +2364,7 @@ fn damage_summary(regions: &[Rect]) -> String {
         parts.push(format!("({},{}) {}x{}", r.x, r.y, r.width, r.height));
     }
     if regions.len() > 5 {
-        parts.push(format!("… +{} more", regions.len() - 5));
+        parts.push(format!("... +{} more", regions.len() - 5));
     }
     parts.join(", ")
 }

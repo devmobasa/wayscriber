@@ -1,4 +1,4 @@
-use super::base::InputState;
+use super::base::{InputState, ZoomAction};
 use crate::config::Action;
 use crate::config::Config;
 use crate::util::Rect;
@@ -68,6 +68,16 @@ impl InputState {
         self.pending_capture_action = Some(action);
     }
 
+    /// Stores a zoom action for retrieval by the backend.
+    pub(crate) fn request_zoom_action(&mut self, action: ZoomAction) {
+        self.pending_zoom_action = Some(action);
+    }
+
+    /// Takes and clears any pending zoom action.
+    pub fn take_pending_zoom_action(&mut self) -> Option<ZoomAction> {
+        self.pending_zoom_action.take()
+    }
+
     /// Marks a frozen-mode toggle request for the backend.
     pub(crate) fn request_frozen_toggle(&mut self) {
         self.pending_frozen_toggle = true;
@@ -92,6 +102,35 @@ impl InputState {
     /// Returns whether frozen mode is active.
     pub fn frozen_active(&self) -> bool {
         self.frozen_active
+    }
+
+    /// Updates cached zoom status and triggers a redraw when it changes.
+    pub fn set_zoom_status(&mut self, active: bool, locked: bool, scale: f64) {
+        let changed = self.zoom_active != active
+            || self.zoom_locked != locked
+            || (self.zoom_scale - scale).abs() > f64::EPSILON;
+        if changed {
+            self.zoom_active = active;
+            self.zoom_locked = locked;
+            self.zoom_scale = scale;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Returns whether zoom mode is active.
+    pub fn zoom_active(&self) -> bool {
+        self.zoom_active
+    }
+
+    /// Returns whether zoom view is locked.
+    pub fn zoom_locked(&self) -> bool {
+        self.zoom_locked
+    }
+
+    /// Returns the current zoom scale.
+    pub fn zoom_scale(&self) -> f64 {
+        self.zoom_scale
     }
 
     pub(crate) fn launch_configurator(&self) {

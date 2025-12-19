@@ -1,7 +1,7 @@
 # wayscriber
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org/)
 
 A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rust.
 
@@ -88,7 +88,14 @@ Opt-in per board/monitor storage that restores your canvas plus pen color & thic
 Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), icon or text modes, color picker, extended palettes, status bar, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
 
 ### Presenter Helpers
-Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running.
+Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running. Screen zoom (<kbd>Ctrl+Alt</kbd> + scroll) with lock/pan for callouts.
+
+### Zoom & Callouts
+Zoom is built-in for spotlighting details during demos, with controls that match ZoomIt muscle memory:
+- Zoom in/out: <kbd>Ctrl+Alt</kbd> + scroll or <kbd>Ctrl+Alt++</kbd>/<kbd>Ctrl+Alt+-</kbd>
+- Reset zoom: <kbd>Ctrl+Alt+0</kbd>
+- Lock zoom view: <kbd>Ctrl+Alt+L</kbd>
+- Pan zoom view: middle drag or arrow keys
 
 ---
 
@@ -349,6 +356,10 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
+| Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt++</kbd> / <kbd>Ctrl+Alt+-</kbd> |
+| Reset zoom | <kbd>Ctrl+Alt+0</kbd> |
+| Toggle zoom lock | <kbd>Ctrl+Alt+L</kbd> |
+| Pan zoom view | <kbd>Middle drag</kbd> / <kbd>Arrow keys</kbd> |
 | Exit | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd> |
 
 ---
@@ -527,7 +538,7 @@ wayscriber/
 | Custom fonts | ❌ | ✅ |
 | Config file | ❌ | ✅ |
 | Help overlay | ❌ | ✅ |
-| Zoom | ✅ | ❌ |
+| Zoom | ✅ | ✅ |
 | Break timer | ✅ | ❌ |
 
 ### Roadmap

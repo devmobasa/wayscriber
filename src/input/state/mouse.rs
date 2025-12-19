@@ -8,14 +8,17 @@ use super::{ContextMenuKind, DrawingState, InputState};
 impl InputState {
     fn handle_right_click(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
-        if !self.context_menu_enabled() {
-            return;
-        }
         if !matches!(self.state, DrawingState::Idle) {
             self.clear_provisional_dirty();
             self.last_provisional_bounds = None;
             self.state = DrawingState::Idle;
             self.needs_redraw = true;
+            return;
+        }
+        if self.zoom_active() {
+            return;
+        }
+        if !self.context_menu_enabled() {
             return;
         }
 
@@ -84,26 +87,24 @@ impl InputState {
                 match &mut self.state {
                     DrawingState::Idle => {
                         let selection_click = self.modifiers.alt;
-                        if selection_click {
-                            if let Some(hit_id) = self.hit_test_at(x, y) {
-                                if !self.selected_shape_ids().contains(&hit_id) {
-                                    if self.modifiers.shift {
-                                        self.extend_selection([hit_id]);
-                                    } else {
-                                        self.set_selection(vec![hit_id]);
-                                    }
+                        if selection_click && let Some(hit_id) = self.hit_test_at(x, y) {
+                            if !self.selected_shape_ids().contains(&hit_id) {
+                                if self.modifiers.shift {
+                                    self.extend_selection([hit_id]);
+                                } else {
+                                    self.set_selection(vec![hit_id]);
                                 }
+                            }
 
-                                let snapshots = self.capture_movable_selection_snapshots();
-                                if !snapshots.is_empty() {
-                                    self.state = DrawingState::MovingSelection {
-                                        last_x: x,
-                                        last_y: y,
-                                        snapshots,
-                                        moved: false,
-                                    };
-                                    return;
-                                }
+                            let snapshots = self.capture_movable_selection_snapshots();
+                            if !snapshots.is_empty() {
+                                self.state = DrawingState::MovingSelection {
+                                    last_x: x,
+                                    last_y: y,
+                                    snapshots,
+                                    moved: false,
+                                };
+                                return;
                             }
                         }
 
@@ -148,18 +149,18 @@ impl InputState {
         if let DrawingState::MovingSelection { last_x, last_y, .. } = &self.state {
             let dx = x - *last_x;
             let dy = y - *last_y;
-            if (dx != 0 || dy != 0) && self.apply_translation_to_selection(dx, dy) {
-                if let DrawingState::MovingSelection {
+            if (dx != 0 || dy != 0)
+                && self.apply_translation_to_selection(dx, dy)
+                && let DrawingState::MovingSelection {
                     last_x,
                     last_y,
                     moved,
                     ..
                 } = &mut self.state
-                {
-                    *last_x = x;
-                    *last_y = y;
-                    *moved = true;
-                }
+            {
+                *last_x = x;
+                *last_y = y;
+                *moved = true;
             }
             return;
         }

@@ -42,9 +42,8 @@ jobs:
             libx11-dev
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.92.0
         with:
-          toolchain: 1.85.0
           components: clippy, rustfmt
 
       - name: Cache cargo builds

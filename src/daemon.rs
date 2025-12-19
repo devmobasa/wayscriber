@@ -238,15 +238,15 @@ impl WayscriberTray {
     }
 
     fn dispatch_overlay_action(&self, action: &str) {
-        if let Some(parent) = self.tray_action_path.parent() {
-            if let Err(err) = fs::create_dir_all(parent) {
-                warn!(
-                    "Failed to prepare tray action directory {}: {}",
-                    parent.display(),
-                    err
-                );
-                return;
-            }
+        if let Some(parent) = self.tray_action_path.parent()
+            && let Err(err) = fs::create_dir_all(parent)
+        {
+            warn!(
+                "Failed to prepare tray action directory {}: {}",
+                parent.display(),
+                err
+            );
+            return;
         }
 
         if let Err(err) = fs::write(&self.tray_action_path, action) {

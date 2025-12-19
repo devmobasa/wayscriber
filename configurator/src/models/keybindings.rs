@@ -48,6 +48,12 @@ pub enum KeybindingField {
     CaptureFileSelection,
     CaptureClipboardRegion,
     CaptureFileRegion,
+    ToggleFrozenMode,
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
+    ToggleZoomLock,
+    RefreshZoomCapture,
 }
 
 impl KeybindingsDraft {
@@ -133,6 +139,12 @@ impl KeybindingField {
             Self::CaptureFileSelection,
             Self::CaptureClipboardRegion,
             Self::CaptureFileRegion,
+            Self::ToggleFrozenMode,
+            Self::ZoomIn,
+            Self::ZoomOut,
+            Self::ResetZoom,
+            Self::ToggleZoomLock,
+            Self::RefreshZoomCapture,
         ]
     }
 
@@ -171,6 +183,12 @@ impl KeybindingField {
             Self::CaptureFileSelection => "File selection",
             Self::CaptureClipboardRegion => "Clipboard region",
             Self::CaptureFileRegion => "File region",
+            Self::ToggleFrozenMode => "Toggle freeze",
+            Self::ZoomIn => "Zoom in",
+            Self::ZoomOut => "Zoom out",
+            Self::ResetZoom => "Reset zoom",
+            Self::ToggleZoomLock => "Toggle zoom lock",
+            Self::RefreshZoomCapture => "Refresh zoom snapshot",
         }
     }
 
@@ -209,6 +227,12 @@ impl KeybindingField {
             Self::CaptureFileSelection => "capture_file_selection",
             Self::CaptureClipboardRegion => "capture_clipboard_region",
             Self::CaptureFileRegion => "capture_file_region",
+            Self::ToggleFrozenMode => "toggle_frozen_mode",
+            Self::ZoomIn => "zoom_in",
+            Self::ZoomOut => "zoom_out",
+            Self::ResetZoom => "reset_zoom",
+            Self::ToggleZoomLock => "toggle_zoom_lock",
+            Self::RefreshZoomCapture => "refresh_zoom_capture",
         }
     }
 
@@ -247,6 +271,12 @@ impl KeybindingField {
             Self::CaptureFileSelection => &config.capture_file_selection,
             Self::CaptureClipboardRegion => &config.capture_clipboard_region,
             Self::CaptureFileRegion => &config.capture_file_region,
+            Self::ToggleFrozenMode => &config.toggle_frozen_mode,
+            Self::ZoomIn => &config.zoom_in,
+            Self::ZoomOut => &config.zoom_out,
+            Self::ResetZoom => &config.reset_zoom,
+            Self::ToggleZoomLock => &config.toggle_zoom_lock,
+            Self::RefreshZoomCapture => &config.refresh_zoom_capture,
         }
     }
 
@@ -285,6 +315,12 @@ impl KeybindingField {
             Self::CaptureFileSelection => config.capture_file_selection = value,
             Self::CaptureClipboardRegion => config.capture_clipboard_region = value,
             Self::CaptureFileRegion => config.capture_file_region = value,
+            Self::ToggleFrozenMode => config.toggle_frozen_mode = value,
+            Self::ZoomIn => config.zoom_in = value,
+            Self::ZoomOut => config.zoom_out = value,
+            Self::ResetZoom => config.reset_zoom = value,
+            Self::ToggleZoomLock => config.toggle_zoom_lock = value,
+            Self::RefreshZoomCapture => config.refresh_zoom_capture = value,
         }
     }
 }

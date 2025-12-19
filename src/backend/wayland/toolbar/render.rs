@@ -379,7 +379,7 @@ pub fn render_side_palette(
     });
     header_y += handle_h + 6.0;
 
-    let icons_w = 58.0;
+    let icons_w = 70.0;
     let icons_h = btn_size;
     let icons_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, header_y, icons_w, icons_h))
@@ -915,12 +915,12 @@ pub fn render_side_palette(
         if use_icons {
             let icon_btn_size = 42.0;
             let icon_gap = 6.0;
-            let icon_rows = 2;
+            let icon_rows = 3;
             (icon_btn_size + icon_gap) * icon_rows as f64
         } else {
             let action_h = 24.0;
             let action_gap = 5.0;
-            let action_rows = 5;
+            let action_rows = 8;
             (action_h + action_gap) * action_rows as f64
         }
     } else {
@@ -966,6 +966,11 @@ pub fn render_side_palette(
         let actions_start_y = actions_toggle_y + actions_checkbox_h + 6.0;
 
         type IconFn = fn(&cairo::Context, f64, f64, f64);
+        let lock_label = if snapshot.zoom_locked {
+            "Unlock Zoom"
+        } else {
+            "Lock Zoom"
+        };
         let all_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
             (
                 ToolbarEvent::Undo,
@@ -998,6 +1003,12 @@ pub fn render_side_palette(
                 snapshot.undo_available,
             ),
             (
+                ToolbarEvent::RedoAllDelayed,
+                toolbar_icons::draw_icon_redo_all_delay as IconFn,
+                "Redo All Delay",
+                snapshot.redo_available,
+            ),
+            (
                 ToolbarEvent::ClearCanvas,
                 toolbar_icons::draw_icon_clear as IconFn,
                 "Clear",
@@ -1018,6 +1029,34 @@ pub fn render_side_palette(
                 true,
             ),
             (
+                ToolbarEvent::ZoomIn,
+                toolbar_icons::draw_icon_zoom_in as IconFn,
+                "Zoom In",
+                true,
+            ),
+            (
+                ToolbarEvent::ZoomOut,
+                toolbar_icons::draw_icon_zoom_out as IconFn,
+                "Zoom Out",
+                true,
+            ),
+            (
+                ToolbarEvent::ResetZoom,
+                toolbar_icons::draw_icon_zoom_reset as IconFn,
+                "Reset Zoom",
+                snapshot.zoom_active,
+            ),
+            (
+                ToolbarEvent::ToggleZoomLock,
+                if snapshot.zoom_locked {
+                    toolbar_icons::draw_icon_lock as IconFn
+                } else {
+                    toolbar_icons::draw_icon_unlock as IconFn
+                },
+                lock_label,
+                snapshot.zoom_active,
+            ),
+            (
                 ToolbarEvent::OpenConfigurator,
                 toolbar_icons::draw_icon_settings as IconFn,
                 "Config UI",
@@ -1028,12 +1067,6 @@ pub fn render_side_palette(
                 toolbar_icons::draw_icon_file as IconFn,
                 "Config file",
                 true,
-            ),
-            (
-                ToolbarEvent::RedoAllDelayed,
-                toolbar_icons::draw_icon_redo_all_delay as IconFn,
-                "Redo All Delay",
-                snapshot.redo_available,
             ),
         ];
 
@@ -1105,6 +1138,8 @@ pub fn render_side_palette(
     y += actions_card_h + section_gap;
 
     let custom_toggle_h = 24.0;
+    let toggle_gap = 6.0;
+    let toggles_h = custom_toggle_h * 2.0 + toggle_gap;
     let custom_content_h = if snapshot.custom_section_enabled {
         120.0
     } else {
@@ -1115,63 +1150,55 @@ pub fn render_side_palette(
     } else {
         0.0
     };
-    let custom_card_h = 20.0 + custom_toggle_h + custom_content_h + delay_sliders_h;
+    let custom_card_h = 20.0 + toggles_h + custom_content_h + delay_sliders_h;
     draw_group_card(ctx, card_x, y, card_w, custom_card_h);
     draw_section_label(ctx, x, y + 14.0, "Step Undo/Redo");
 
     let custom_toggle_y = y + 22.0;
-    let half_w = (card_w - 12.0 - 6.0) / 2.0;
+    let toggle_w = card_w - 12.0;
 
     let step_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, custom_toggle_y, half_w, custom_toggle_h))
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, custom_toggle_y, toggle_w, custom_toggle_h))
         .unwrap_or(false);
     draw_checkbox(
         ctx,
         x,
         custom_toggle_y,
-        half_w,
+        toggle_w,
         custom_toggle_h,
         snapshot.custom_section_enabled,
         step_hover,
         "Step controls",
     );
     hits.push(HitRegion {
-        rect: (x, custom_toggle_y, half_w, custom_toggle_h),
+        rect: (x, custom_toggle_y, toggle_w, custom_toggle_h),
         event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
         kind: HitKind::Click,
         tooltip: None,
     });
 
+    let delay_toggle_y = custom_toggle_y + custom_toggle_h + toggle_gap;
     let delay_hover = hover
-        .map(|(hx, hy)| {
-            point_in_rect(
-                hx,
-                hy,
-                x + half_w + 6.0,
-                custom_toggle_y,
-                half_w,
-                custom_toggle_h,
-            )
-        })
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, delay_toggle_y, toggle_w, custom_toggle_h))
         .unwrap_or(false);
     draw_checkbox(
         ctx,
-        x + half_w + 6.0,
-        custom_toggle_y,
-        half_w,
+        x,
+        delay_toggle_y,
+        toggle_w,
         custom_toggle_h,
         snapshot.show_delay_sliders,
         delay_hover,
         "Delay sliders",
     );
     hits.push(HitRegion {
-        rect: (x + half_w + 6.0, custom_toggle_y, half_w, custom_toggle_h),
+        rect: (x, delay_toggle_y, toggle_w, custom_toggle_h),
         event: ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
         kind: HitKind::Click,
         tooltip: None,
     });
 
-    let mut custom_y = custom_toggle_y + custom_toggle_h + 6.0;
+    let mut custom_y = delay_toggle_y + custom_toggle_h + 6.0;
 
     if snapshot.custom_section_enabled {
         let render_custom_row = |ctx: &cairo::Context,
@@ -1345,7 +1372,7 @@ pub fn render_side_palette(
         let sliders_w = card_w - 12.0;
         let slider_h = 6.0;
         let slider_knob_r = 6.0;
-        let slider_start_y = y + 20.0 + custom_toggle_h + custom_content_h + 4.0;
+        let slider_start_y = y + 20.0 + toggles_h + custom_content_h + 4.0;
 
         let undo_label = format!(
             "Undo delay: {:.1}s",
@@ -1466,62 +1493,62 @@ fn draw_tooltip(
     let Some((hx, hy)) = hover else { return };
 
     for hit in hits {
-        if hit.contains(hx, hy) {
-            if let Some(text) = &hit.tooltip {
-                ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-                ctx.set_font_size(12.0);
+        if hit.contains(hx, hy)
+            && let Some(text) = &hit.tooltip
+        {
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            ctx.set_font_size(12.0);
 
-                if let Ok(ext) = ctx.text_extents(text) {
-                    let pad = 6.0;
-                    let tooltip_w = ext.width() + pad * 2.0;
-                    let tooltip_h = ext.height() + pad * 2.0;
+            if let Ok(ext) = ctx.text_extents(text) {
+                let pad = 6.0;
+                let tooltip_w = ext.width() + pad * 2.0;
+                let tooltip_h = ext.height() + pad * 2.0;
 
-                    let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
-                    let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
-                    let gap = 6.0;
-                    let tooltip_y = if above {
-                        hit.rect.1 - tooltip_h - gap
-                    } else {
-                        hit.rect.1 + hit.rect.3 + gap
-                    };
+                let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
+                let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
+                let gap = 6.0;
+                let tooltip_y = if above {
+                    hit.rect.1 - tooltip_h - gap
+                } else {
+                    hit.rect.1 + hit.rect.3 + gap
+                };
 
-                    if tooltip_x < 4.0 {
-                        tooltip_x = 4.0;
-                    }
-                    if tooltip_x + tooltip_w > panel_width - 4.0 {
-                        tooltip_x = panel_width - tooltip_w - 4.0;
-                    }
-
-                    let shadow_offset = 2.0;
-                    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
-                    draw_round_rect(
-                        ctx,
-                        tooltip_x + shadow_offset,
-                        tooltip_y + shadow_offset,
-                        tooltip_w,
-                        tooltip_h,
-                        4.0,
-                    );
-                    let _ = ctx.fill();
-
-                    ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
-                    draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
-                    let _ = ctx.fill();
-
-                    ctx.set_source_rgba(0.4, 0.4, 0.5, 0.8);
-                    ctx.set_line_width(1.0);
-                    draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
-                    let _ = ctx.stroke();
-
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                    ctx.move_to(
-                        tooltip_x + pad - ext.x_bearing(),
-                        tooltip_y + pad - ext.y_bearing(),
-                    );
-                    let _ = ctx.show_text(text);
+                if tooltip_x < 4.0 {
+                    tooltip_x = 4.0;
                 }
-                break;
+                if tooltip_x + tooltip_w > panel_width - 4.0 {
+                    tooltip_x = panel_width - tooltip_w - 4.0;
+                }
+
+                let shadow_offset = 2.0;
+                ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+                draw_round_rect(
+                    ctx,
+                    tooltip_x + shadow_offset,
+                    tooltip_y + shadow_offset,
+                    tooltip_w,
+                    tooltip_h,
+                    4.0,
+                );
+                let _ = ctx.fill();
+
+                ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
+                draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+                let _ = ctx.fill();
+
+                ctx.set_source_rgba(0.4, 0.4, 0.5, 0.8);
+                ctx.set_line_width(1.0);
+                draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+                let _ = ctx.stroke();
+
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                ctx.move_to(
+                    tooltip_x + pad - ext.x_bearing(),
+                    tooltip_y + pad - ext.y_bearing(),
+                );
+                let _ = ctx.show_text(text);
             }
+            break;
         }
     }
 }

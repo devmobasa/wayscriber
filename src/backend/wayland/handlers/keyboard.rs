@@ -62,7 +62,7 @@ impl KeyboardHandler for WaylandState {
     fn press_key(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
@@ -70,6 +70,41 @@ impl KeyboardHandler for WaylandState {
         #[cfg(tablet)]
         let prev_thickness = self.input_state.current_thickness;
         let key = keysym_to_key(event.keysym);
+        if self.zoom.active {
+            match key {
+                Key::Escape => {
+                    self.exit_zoom();
+                    return;
+                }
+                Key::Up | Key::Down | Key::Left | Key::Right => {
+                    if self.zoom.locked {
+                        return;
+                    }
+                    let step = if self.input_state.modifiers.shift {
+                        WaylandState::ZOOM_PAN_STEP_LARGE
+                    } else {
+                        WaylandState::ZOOM_PAN_STEP
+                    };
+                    let (dx, dy) = match key {
+                        Key::Up => (0.0, step),
+                        Key::Down => (0.0, -step),
+                        Key::Left => (step, 0.0),
+                        Key::Right => (-step, 0.0),
+                        _ => (0.0, 0.0),
+                    };
+                    self.zoom.pan_by_screen_delta(
+                        dx,
+                        dy,
+                        self.surface.width(),
+                        self.surface.height(),
+                    );
+                    self.input_state.dirty_tracker.mark_full();
+                    self.input_state.needs_redraw = true;
+                    return;
+                }
+                _ => {}
+            }
+        }
         debug!("Key pressed: {:?}", key);
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
@@ -88,6 +123,9 @@ impl KeyboardHandler for WaylandState {
 
         if let Some(action) = self.input_state.take_pending_capture_action() {
             self.handle_capture_action(action);
+        }
+        if let Some(action) = self.input_state.take_pending_zoom_action() {
+            self.handle_zoom_action(action, qh);
         }
     }
 
@@ -127,7 +165,7 @@ impl KeyboardHandler for WaylandState {
     fn repeat_key(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
@@ -135,6 +173,37 @@ impl KeyboardHandler for WaylandState {
         #[cfg(tablet)]
         let prev_thickness = self.input_state.current_thickness;
         let key = keysym_to_key(event.keysym);
+        if self.zoom.active {
+            match key {
+                Key::Up | Key::Down | Key::Left | Key::Right => {
+                    if self.zoom.locked {
+                        return;
+                    }
+                    let step = if self.input_state.modifiers.shift {
+                        WaylandState::ZOOM_PAN_STEP_LARGE
+                    } else {
+                        WaylandState::ZOOM_PAN_STEP
+                    };
+                    let (dx, dy) = match key {
+                        Key::Up => (0.0, step),
+                        Key::Down => (0.0, -step),
+                        Key::Left => (step, 0.0),
+                        Key::Right => (-step, 0.0),
+                        _ => (0.0, 0.0),
+                    };
+                    self.zoom.pan_by_screen_delta(
+                        dx,
+                        dy,
+                        self.surface.width(),
+                        self.surface.height(),
+                    );
+                    self.input_state.dirty_tracker.mark_full();
+                    self.input_state.needs_redraw = true;
+                    return;
+                }
+                _ => {}
+            }
+        }
         debug!("Key repeated: {:?}", key);
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
@@ -149,6 +218,10 @@ impl KeyboardHandler for WaylandState {
                 self.stylus_pressure_thickness = None;
                 self.stylus_peak_thickness = None;
             }
+        }
+
+        if let Some(action) = self.input_state.take_pending_zoom_action() {
+            self.handle_zoom_action(action, qh);
         }
     }
 }
@@ -175,6 +248,7 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::equal => Key::Char('='),
         Keysym::minus => Key::Char('-'),
         Keysym::underscore => Key::Char('_'),
+        Keysym::_0 | Keysym::KP_0 => Key::Char('0'),
         Keysym::t => Key::Char('t'),
         Keysym::T => Key::Char('T'),
         Keysym::e => Key::Char('e'),

@@ -24,6 +24,8 @@ impl CompositorHandler for WaylandState {
         let (phys_w, phys_h) = self.surface.physical_dimensions();
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
+        self.zoom
+            .handle_resize(phys_w, phys_h, &mut self.surface, &mut self.input_state);
         self.toolbar
             .maybe_update_scale(self.surface.current_output().as_ref(), scale);
         self.toolbar.mark_dirty();
@@ -91,13 +93,28 @@ impl CompositorHandler for WaylandState {
             ));
             self.frozen
                 .set_active_output(Some(output.clone()), Some(info.id));
+            self.zoom.set_active_geometry(Some(
+                crate::backend::wayland::frozen_geometry::OutputGeometry {
+                    logical_x,
+                    logical_y,
+                    logical_width: logical_w.max(0) as u32,
+                    logical_height: logical_h.max(0) as u32,
+                    scale,
+                },
+            ));
+            self.zoom
+                .set_active_output(Some(output.clone()), Some(info.id));
         }
         self.frozen.unfreeze(&mut self.input_state);
+        self.zoom
+            .deactivate(&mut self.surface, &mut self.input_state);
 
         // Update frozen buffer dimensions in case this output's scale differs
         let (phys_w, phys_h) = self.surface.physical_dimensions();
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
+        self.zoom
+            .handle_resize(phys_w, phys_h, &mut self.surface, &mut self.input_state);
 
         // If freeze-on-start was requested, trigger it once the surface is configured and active.
         if self.pending_freeze_on_start() {
@@ -114,14 +131,12 @@ impl CompositorHandler for WaylandState {
         if let Some(options) = self.session_options_mut() {
             let changed = options.set_output_identity(identity.as_deref());
 
-            if changed {
-                if let Some(id) = options.output_identity() {
-                    info!(
-                        "Persisting session using monitor identity '{}' (session file: {}).",
-                        id,
-                        options.session_file_path().display()
-                    );
-                }
+            if changed && let Some(id) = options.output_identity() {
+                info!(
+                    "Persisting session using monitor identity '{}' (session file: {}).",
+                    id,
+                    options.session_file_path().display()
+                );
             }
 
             if changed || !already_loaded {
@@ -180,5 +195,9 @@ impl CompositorHandler for WaylandState {
         self.frozen.set_active_output(None, None);
         self.frozen.set_active_geometry(None);
         self.frozen.unfreeze(&mut self.input_state);
+        self.zoom.set_active_output(None, None);
+        self.zoom.set_active_geometry(None);
+        self.zoom
+            .deactivate(&mut self.surface, &mut self.input_state);
     }
 }

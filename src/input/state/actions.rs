@@ -1,6 +1,6 @@
 use crate::config::Action;
 use crate::draw::Shape;
-use crate::input::{board_mode::BoardMode, events::Key, tool::Tool};
+use crate::input::{ZoomAction, board_mode::BoardMode, events::Key, tool::Tool};
 use crate::util;
 use log::{info, warn};
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
@@ -118,53 +118,53 @@ impl InputState {
                 };
 
                 // Check if this key combination triggers an action
-                if !key_str.is_empty() {
-                    if let Some(action) = self.find_action(&key_str) {
-                        // Actions work in text mode
-                        // Note: Exit action has special logic in handle_action - it cancels
-                        // text mode if in TextInput state, or exits app if in Idle state
-                        self.handle_action(action);
-                        return;
-                    }
+                if !key_str.is_empty()
+                    && let Some(action) = self.find_action(&key_str)
+                {
+                    // Actions work in text mode
+                    // Note: Exit action has special logic in handle_action - it cancels
+                    // text mode if in TextInput state, or exits app if in Idle state
+                    self.handle_action(action);
+                    return;
                 }
             }
 
             // No action triggered, handle as text input
             // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
             if matches!(key, Key::Return) && !self.modifiers.shift {
-                if let DrawingState::TextInput { x, y, buffer } = &self.state {
-                    if !buffer.is_empty() {
-                        let x = *x;
-                        let y = *y;
-                        let text = buffer.clone();
+                if let DrawingState::TextInput { x, y, buffer } = &self.state
+                    && !buffer.is_empty()
+                {
+                    let x = *x;
+                    let y = *y;
+                    let text = buffer.clone();
 
-                        let shape = Shape::Text {
-                            x,
-                            y,
-                            text,
-                            color: self.current_color,
-                            size: self.current_font_size,
-                            font_descriptor: self.font_descriptor.clone(),
-                            background_enabled: self.text_background_enabled,
-                        };
-                        let bounds = shape.bounding_box();
+                    let shape = Shape::Text {
+                        x,
+                        y,
+                        text,
+                        color: self.current_color,
+                        size: self.current_font_size,
+                        font_descriptor: self.font_descriptor.clone(),
+                        background_enabled: self.text_background_enabled,
+                    };
+                    let bounds = shape.bounding_box();
 
-                        self.clear_text_preview_dirty();
-                        self.last_text_preview_bounds = None;
+                    self.clear_text_preview_dirty();
+                    self.last_text_preview_bounds = None;
 
-                        let added = self
-                            .canvas_set
-                            .active_frame_mut()
-                            .try_add_shape(shape, self.max_shapes_per_frame);
-                        if added {
-                            self.dirty_tracker.mark_optional_rect(bounds);
-                            self.needs_redraw = true;
-                        } else {
-                            warn!(
-                                "Shape limit ({}) reached; new text not added",
-                                self.max_shapes_per_frame
-                            );
-                        }
+                    let added = self
+                        .canvas_set
+                        .active_frame_mut()
+                        .try_add_shape(shape, self.max_shapes_per_frame);
+                    if added {
+                        self.dirty_tracker.mark_optional_rect(bounds);
+                        self.needs_redraw = true;
+                    } else {
+                        warn!(
+                            "Shape limit ({}) reached; new text not added",
+                            self.max_shapes_per_frame
+                        );
                     }
                 }
                 self.state = DrawingState::Idle;
@@ -226,14 +226,13 @@ impl InputState {
         }
 
         // Handle Escape in Drawing state for canceling
-        if matches!(key, Key::Escape) {
-            if let DrawingState::Drawing { .. } = &self.state {
-                if let Some(Action::Exit) = self.find_action("Escape") {
-                    self.state = DrawingState::Idle;
-                    self.needs_redraw = true;
-                    return;
-                }
-            }
+        if matches!(key, Key::Escape)
+            && let DrawingState::Drawing { .. } = &self.state
+            && let Some(Action::Exit) = self.find_action("Escape")
+        {
+            self.state = DrawingState::Idle;
+            self.needs_redraw = true;
+            return;
         }
 
         // Convert key to string for action lookup
@@ -534,7 +533,9 @@ impl InputState {
                 info!("{}", message);
             }
             Action::OpenContextMenu => {
-                self.toggle_context_menu_via_keyboard();
+                if !self.zoom_active() {
+                    self.toggle_context_menu_via_keyboard();
+                }
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();
@@ -585,6 +586,26 @@ impl InputState {
             Action::ToggleFrozenMode => {
                 log::info!("Toggle frozen mode requested");
                 self.request_frozen_toggle();
+                self.reset_modifiers();
+            }
+            Action::ZoomIn => {
+                self.request_zoom_action(ZoomAction::In);
+                self.reset_modifiers();
+            }
+            Action::ZoomOut => {
+                self.request_zoom_action(ZoomAction::Out);
+                self.reset_modifiers();
+            }
+            Action::ResetZoom => {
+                self.request_zoom_action(ZoomAction::Reset);
+                self.reset_modifiers();
+            }
+            Action::ToggleZoomLock => {
+                self.request_zoom_action(ZoomAction::ToggleLock);
+                self.reset_modifiers();
+            }
+            Action::RefreshZoomCapture => {
+                self.request_zoom_action(ZoomAction::RefreshCapture);
                 self.reset_modifiers();
             }
         }

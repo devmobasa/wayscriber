@@ -27,6 +27,12 @@ pub enum ToolbarEvent {
     /// Toggle both highlight tool and click highlight together
     ToggleAllHighlight(bool),
     ToggleFreeze,
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
+    ToggleZoomLock,
+    #[allow(dead_code)]
+    RefreshZoomCapture,
     OpenConfigurator,
     OpenConfigFile,
     ToggleCustomSection(bool),
@@ -79,6 +85,8 @@ pub struct ToolbarSnapshot {
     pub font_size: f64,
     pub text_active: bool,
     pub frozen_active: bool,
+    pub zoom_active: bool,
+    pub zoom_locked: bool,
     pub fill_enabled: bool,
     pub undo_available: bool,
     pub redo_available: bool,
@@ -146,6 +154,8 @@ impl ToolbarSnapshot {
             font_size: state.current_font_size,
             text_active: matches!(state.state, crate::input::DrawingState::TextInput { .. }),
             frozen_active: state.frozen_active(),
+            zoom_active: state.zoom_active(),
+            zoom_locked: state.zoom_locked(),
             fill_enabled: state.fill_enabled,
             undo_available: frame.undo_stack_len() > 0,
             redo_available: frame.redo_stack_len() > 0,
@@ -343,6 +353,26 @@ impl InputState {
             ToolbarEvent::ToggleFreeze => {
                 self.request_frozen_toggle();
                 self.needs_redraw = true;
+                true
+            }
+            ToolbarEvent::ZoomIn => {
+                self.request_zoom_action(crate::input::ZoomAction::In);
+                true
+            }
+            ToolbarEvent::ZoomOut => {
+                self.request_zoom_action(crate::input::ZoomAction::Out);
+                true
+            }
+            ToolbarEvent::ResetZoom => {
+                self.request_zoom_action(crate::input::ZoomAction::Reset);
+                true
+            }
+            ToolbarEvent::ToggleZoomLock => {
+                self.request_zoom_action(crate::input::ZoomAction::ToggleLock);
+                true
+            }
+            ToolbarEvent::RefreshZoomCapture => {
+                self.request_zoom_action(crate::input::ZoomAction::RefreshCapture);
                 true
             }
             ToolbarEvent::ToggleCustomSection(enable) => {

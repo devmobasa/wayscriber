@@ -35,12 +35,12 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
         if snapshot.use_icons {
             let icon_btn_size = 42.0;
             let icon_gap = 6.0;
-            let icon_rows = 2.0;
+            let icon_rows = 3.0;
             (icon_btn_size + icon_gap) * icon_rows
         } else {
             let action_h = 24.0;
             let action_gap = 5.0;
-            let action_rows = 5.0;
+            let action_rows = 8.0;
             (action_h + action_gap) * action_rows
         }
     } else {
@@ -53,8 +53,11 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
     } else {
         0.0
     };
+    let toggle_h = 24.0;
+    let toggle_gap = 6.0;
+    let toggles_h = toggle_h * 2.0 + toggle_gap;
     let step_h = 20.0
-        + 24.0
+        + toggles_h
         + if snapshot.custom_section_enabled {
             120.0
         } else {

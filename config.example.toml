@@ -480,6 +480,16 @@ capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Shift+6"]
 
+# Toggle frozen mode
+toggle_frozen_mode = ["Ctrl+Shift+F"]
+
+# Zoom controls
+zoom_in = ["Ctrl+Alt++", "Ctrl+Alt+="]
+zoom_out = ["Ctrl+Alt+-", "Ctrl+Alt+_"]
+reset_zoom = ["Ctrl+Alt+0"]
+toggle_zoom_lock = ["Ctrl+Alt+L"]
+refresh_zoom_capture = ["Ctrl+Alt+R"]
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Keybinding Examples
 # ───────────────────────────────────────────────────────────────────────────────

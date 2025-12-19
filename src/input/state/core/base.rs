@@ -58,6 +58,15 @@ pub enum DrawingState {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoomAction {
+    In,
+    Out,
+    Reset,
+    ToggleLock,
+    RefreshCapture,
+}
+
 pub struct InputState {
     /// Multi-frame canvas management (transparent, whiteboard, blackboard)
     pub canvas_set: CanvasSet,
@@ -127,6 +136,8 @@ pub struct InputState {
     pub(super) action_map: HashMap<KeyBinding, Action>,
     /// Pending capture action (to be handled by WaylandState)
     pub(super) pending_capture_action: Option<Action>,
+    /// Pending zoom action (to be handled by WaylandState)
+    pub(super) pending_zoom_action: Option<ZoomAction>,
     /// Maximum number of shapes allowed per frame (0 = unlimited)
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
@@ -181,6 +192,12 @@ pub struct InputState {
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
     pub(super) pending_frozen_toggle: bool,
+    /// Whether zoom mode is currently active
+    pub(super) zoom_active: bool,
+    /// Whether zoom view is locked
+    pub(super) zoom_locked: bool,
+    /// Current zoom scale (1.0 = no zoom)
+    pub(super) zoom_scale: f64,
     /// Whether to show extended color palette
     pub show_more_colors: bool,
     /// Whether to show the Actions section (undo all, redo all, etc.)
@@ -281,6 +298,7 @@ impl InputState {
             last_text_preview_bounds: None,
             action_map,
             pending_capture_action: None,
+            pending_zoom_action: None,
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
@@ -308,6 +326,9 @@ impl InputState {
             shape_properties_panel: None,
             frozen_active: false,
             pending_frozen_toggle: false,
+            zoom_active: false,
+            zoom_locked: false,
+            zoom_scale: 1.0,
             show_more_colors: false,
             show_actions_section: true, // Show by default
         };
