@@ -1910,7 +1910,10 @@ impl WaylandState {
         {
             crate::ui::render_frozen_badge(&ctx, width, height);
         }
-        if self.input_state.zoom_active() && !self.input_state.show_status_bar {
+        // Render a zoom badge when the status bar is hidden or zoom is locked.
+        if self.input_state.zoom_active()
+            && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
+        {
             crate::ui::render_zoom_badge(
                 &ctx,
                 width,
