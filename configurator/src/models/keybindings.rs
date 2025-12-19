@@ -51,6 +51,7 @@ pub enum KeybindingField {
     ToggleFrozenMode,
     ZoomIn,
     ZoomOut,
+    ResetZoom,
     ToggleZoomLock,
     RefreshZoomCapture,
 }
@@ -141,6 +142,7 @@ impl KeybindingField {
             Self::ToggleFrozenMode,
             Self::ZoomIn,
             Self::ZoomOut,
+            Self::ResetZoom,
             Self::ToggleZoomLock,
             Self::RefreshZoomCapture,
         ]
@@ -184,6 +186,7 @@ impl KeybindingField {
             Self::ToggleFrozenMode => "Toggle freeze",
             Self::ZoomIn => "Zoom in",
             Self::ZoomOut => "Zoom out",
+            Self::ResetZoom => "Reset zoom",
             Self::ToggleZoomLock => "Toggle zoom lock",
             Self::RefreshZoomCapture => "Refresh zoom snapshot",
         }
@@ -227,6 +230,7 @@ impl KeybindingField {
             Self::ToggleFrozenMode => "toggle_frozen_mode",
             Self::ZoomIn => "zoom_in",
             Self::ZoomOut => "zoom_out",
+            Self::ResetZoom => "reset_zoom",
             Self::ToggleZoomLock => "toggle_zoom_lock",
             Self::RefreshZoomCapture => "refresh_zoom_capture",
         }
@@ -270,6 +274,7 @@ impl KeybindingField {
             Self::ToggleFrozenMode => &config.toggle_frozen_mode,
             Self::ZoomIn => &config.zoom_in,
             Self::ZoomOut => &config.zoom_out,
+            Self::ResetZoom => &config.reset_zoom,
             Self::ToggleZoomLock => &config.toggle_zoom_lock,
             Self::RefreshZoomCapture => &config.refresh_zoom_capture,
         }
@@ -313,6 +318,7 @@ impl KeybindingField {
             Self::ToggleFrozenMode => config.toggle_frozen_mode = value,
             Self::ZoomIn => config.zoom_in = value,
             Self::ZoomOut => config.zoom_out = value,
+            Self::ResetZoom => config.reset_zoom = value,
             Self::ToggleZoomLock => config.toggle_zoom_lock = value,
             Self::RefreshZoomCapture => config.refresh_zoom_capture = value,
         }

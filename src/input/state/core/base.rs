@@ -62,6 +62,7 @@ pub enum DrawingState {
 pub enum ZoomAction {
     In,
     Out,
+    Reset,
     ToggleLock,
     RefreshCapture,
 }

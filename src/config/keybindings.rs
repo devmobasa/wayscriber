@@ -88,6 +88,7 @@ pub enum Action {
     ToggleFrozenMode,
     ZoomIn,
     ZoomOut,
+    ResetZoom,
     ToggleZoomLock,
     RefreshZoomCapture,
 }
@@ -370,6 +371,9 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_zoom_out")]
     pub zoom_out: Vec<String>,
 
+    #[serde(default = "default_reset_zoom")]
+    pub reset_zoom: Vec<String>,
+
     #[serde(default = "default_toggle_zoom_lock")]
     pub toggle_zoom_lock: Vec<String>,
 
@@ -442,6 +446,7 @@ impl Default for KeybindingsConfig {
             toggle_frozen_mode: default_toggle_frozen_mode(),
             zoom_in: default_zoom_in(),
             zoom_out: default_zoom_out(),
+            reset_zoom: default_reset_zoom(),
             toggle_zoom_lock: default_toggle_zoom_lock(),
             refresh_zoom_capture: default_refresh_zoom_capture(),
         }
@@ -736,6 +741,10 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::ZoomOut)?;
         }
 
+        for binding_str in &self.reset_zoom {
+            insert_binding(binding_str, Action::ResetZoom)?;
+        }
+
         for binding_str in &self.toggle_zoom_lock {
             insert_binding(binding_str, Action::ToggleZoomLock)?;
         }
@@ -982,6 +991,10 @@ fn default_zoom_in() -> Vec<String> {
 
 fn default_zoom_out() -> Vec<String> {
     vec!["Ctrl+Alt+-".to_string(), "Ctrl+Alt+_".to_string()]
+}
+
+fn default_reset_zoom() -> Vec<String> {
+    vec!["Ctrl+Alt+0".to_string()]
 }
 
 fn default_toggle_zoom_lock() -> Vec<String> {

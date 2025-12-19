@@ -486,6 +486,7 @@ toggle_frozen_mode = ["Ctrl+Shift+F"]
 # Zoom controls
 zoom_in = ["Ctrl+Alt++", "Ctrl+Alt+="]
 zoom_out = ["Ctrl+Alt+-", "Ctrl+Alt+_"]
+reset_zoom = ["Ctrl+Alt+0"]
 toggle_zoom_lock = ["Ctrl+Alt+L"]
 refresh_zoom_capture = ["Ctrl+Alt+R"]
 

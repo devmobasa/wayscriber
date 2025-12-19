@@ -90,6 +90,14 @@ Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), icon or text mod
 ### Presenter Helpers
 Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running. Screen zoom (<kbd>Ctrl+Alt</kbd> + scroll) with lock/pan for callouts.
 
+### Zoom & Callouts
+Zoom is built-in for spotlighting details during demos, with controls that match ZoomIt muscle memory:
+- Zoom in/out: <kbd>Ctrl+Alt</kbd> + scroll or <kbd>Ctrl+Alt++</kbd>/<kbd>Ctrl+Alt+-</kbd>
+- Reset zoom: <kbd>Ctrl+Alt+0</kbd>
+- Lock zoom view: <kbd>Ctrl+Alt+L</kbd>
+- Pan zoom view: middle drag or arrow keys
+- Refresh zoom snapshot: <kbd>Ctrl+Alt+R</kbd>
+
 ---
 
 ## Quick Start
@@ -350,6 +358,7 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
 | Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt++</kbd> / <kbd>Ctrl+Alt+-</kbd> |
+| Reset zoom | <kbd>Ctrl+Alt+0</kbd> |
 | Toggle zoom lock | <kbd>Ctrl+Alt+L</kbd> |
 | Pan zoom view | <kbd>Middle drag</kbd> / <kbd>Arrow keys</kbd> |
 | Refresh zoom snapshot | <kbd>Ctrl+Alt+R</kbd> |

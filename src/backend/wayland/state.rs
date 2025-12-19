@@ -350,6 +350,11 @@ impl WaylandState {
             ZoomAction::Out => {
                 self.apply_zoom_factor(1.0 / Self::ZOOM_STEP_KEY, sx, sy, qh, false);
             }
+            ZoomAction::Reset => {
+                if self.zoom.active {
+                    self.exit_zoom();
+                }
+            }
             ZoomAction::ToggleLock => {
                 if self.zoom.active {
                     self.zoom.locked = !self.zoom.locked;

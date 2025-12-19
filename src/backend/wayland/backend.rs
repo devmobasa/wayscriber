@@ -718,6 +718,10 @@ impl WaylandBackend {
                 }
             }
 
+            if let Some(action) = state.input_state.take_pending_zoom_action() {
+                state.handle_zoom_action(action, &qh);
+            }
+
             // Check for completed capture operations
             if state.capture.is_in_progress() {
                 if let Some(outcome) = state.capture.manager_mut().try_take_result() {

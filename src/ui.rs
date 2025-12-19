@@ -374,6 +374,10 @@ pub fn render_help_overlay(
                     action: "Zoom in/out",
                 },
                 Row {
+                    key: "Ctrl+Alt+0",
+                    action: "Reset zoom",
+                },
+                Row {
                     key: "Ctrl+Alt+L",
                     action: "Lock zoom view",
                 },

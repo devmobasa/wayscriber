@@ -242,6 +242,7 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::equal => Key::Char('='),
         Keysym::minus => Key::Char('-'),
         Keysym::underscore => Key::Char('_'),
+        Keysym::_0 | Keysym::KP_0 => Key::Char('0'),
         Keysym::t => Key::Char('t'),
         Keysym::T => Key::Char('T'),
         Keysym::e => Key::Char('e'),

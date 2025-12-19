@@ -597,6 +597,10 @@ impl InputState {
                 self.request_zoom_action(ZoomAction::Out);
                 self.reset_modifiers();
             }
+            Action::ResetZoom => {
+                self.request_zoom_action(ZoomAction::Reset);
+                self.reset_modifiers();
+            }
             Action::ToggleZoomLock => {
                 self.request_zoom_action(ZoomAction::ToggleLock);
                 self.reset_modifiers();
