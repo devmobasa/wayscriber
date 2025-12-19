@@ -617,7 +617,9 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
     }
 
     let truncate = |frame: &mut Option<Frame>, mode: &str| {
-        if let Some(frame_data) = frame && frame_data.shapes.len() > max_shapes {
+        if let Some(frame_data) = frame
+            && frame_data.shapes.len() > max_shapes
+        {
             let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
             warn!(
                 "Session frame '{}' contains {} shapes which exceeds the limit of {}; truncating",
@@ -625,8 +627,7 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
                 frame_data.shapes.len() + removed.len(),
                 max_shapes
             );
-            let removed_ids: HashSet<ShapeId> =
-                removed.into_iter().map(|shape| shape.id).collect();
+            let removed_ids: HashSet<ShapeId> = removed.into_iter().map(|shape| shape.id).collect();
             if !removed_ids.is_empty() {
                 let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
                 if !stats.is_empty() {
@@ -675,7 +676,9 @@ fn apply_history_policies(frame: &mut Option<Frame>, mode: &str, depth_limit: Op
 fn max_history_depth(doc: &Value) -> usize {
     let mut max_depth = 0;
     for key in ["transparent", "whiteboard", "blackboard"] {
-        if let Some(frame) = doc.get(key) && let Some(obj) = frame.as_object() {
+        if let Some(frame) = doc.get(key)
+            && let Some(obj) = frame.as_object()
+        {
             for stack_key in ["undo_stack", "redo_stack"] {
                 if let Some(Value::Array(arr)) = obj.get(stack_key) {
                     max_depth = max_depth.max(depth_array(arr));

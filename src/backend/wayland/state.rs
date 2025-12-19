@@ -368,7 +368,9 @@ impl WaylandState {
                 }
             }
             ZoomAction::RefreshCapture => {
-                if self.zoom.active && let Err(err) = self.start_zoom_capture(qh, true) {
+                if self.zoom.active
+                    && let Err(err) = self.start_zoom_capture(qh, true)
+                {
                     warn!("Zoom capture refresh failed: {}", err);
                 }
             }
@@ -438,7 +440,9 @@ impl WaylandState {
                 .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
         }
 
-        if self.zoom.active && let Err(err) = self.start_zoom_capture(qh, false) {
+        if self.zoom.active
+            && let Err(err) = self.start_zoom_capture(qh, false)
+        {
             warn!("Zoom capture failed to start: {}", err);
             self.zoom
                 .deactivate(&mut self.surface, &mut self.input_state);
@@ -826,10 +830,7 @@ impl WaylandState {
                 self.data.toolbar_configure_miss_count =
                     self.data.toolbar_configure_miss_count.saturating_add(1);
                 if debug_toolbar_drag_logging_enabled()
-                    && self
-                        .data
-                        .toolbar_configure_miss_count
-                        .is_multiple_of(60)
+                    && self.data.toolbar_configure_miss_count.is_multiple_of(60)
                 {
                     debug!(
                         "Toolbar configure pending: count={}, expected_top={}, configured_top={}, expected_side={}, configured_side={}",
@@ -903,7 +904,9 @@ impl WaylandState {
     /// Base X position for the top toolbar when laid out inline.
     /// When a drag is in progress we freeze this base to avoid shifting the top bar while moving the side bar.
     fn inline_top_base_x(&self, snapshot: &ToolbarSnapshot) -> f64 {
-        if self.is_move_dragging() && let Some(x) = self.data.drag_top_base_x {
+        if self.is_move_dragging()
+            && let Some(x) = self.data.drag_top_base_x
+        {
             return x;
         }
         let side_visible = self.toolbar.is_side_visible();
@@ -923,7 +926,9 @@ impl WaylandState {
     }
 
     fn inline_top_base_y(&self) -> f64 {
-        if self.is_move_dragging() && let Some(y) = self.data.drag_top_base_y {
+        if self.is_move_dragging()
+            && let Some(y) = self.data.drag_top_base_y
+        {
             return y;
         }
         Self::INLINE_TOP_Y

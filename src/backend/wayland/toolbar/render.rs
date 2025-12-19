@@ -1493,7 +1493,9 @@ fn draw_tooltip(
     let Some((hx, hy)) = hover else { return };
 
     for hit in hits {
-        if hit.contains(hx, hy) && let Some(text) = &hit.tooltip {
+        if hit.contains(hx, hy)
+            && let Some(text) = &hit.tooltip
+        {
             ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
             ctx.set_font_size(12.0);
 
