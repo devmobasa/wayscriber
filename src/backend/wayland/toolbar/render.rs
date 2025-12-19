@@ -379,7 +379,7 @@ pub fn render_side_palette(
     });
     header_y += handle_h + 6.0;
 
-    let icons_w = 58.0;
+    let icons_w = 70.0;
     let icons_h = btn_size;
     let icons_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, header_y, icons_w, icons_h))
@@ -920,7 +920,7 @@ pub fn render_side_palette(
         } else {
             let action_h = 24.0;
             let action_gap = 5.0;
-            let action_rows = 7;
+            let action_rows = 8;
             (action_h + action_gap) * action_rows as f64
         }
     } else {
@@ -1054,6 +1054,12 @@ pub fn render_side_palette(
                     toolbar_icons::draw_icon_unlock as IconFn
                 },
                 lock_label,
+                snapshot.zoom_active,
+            ),
+            (
+                ToolbarEvent::RefreshZoomCapture,
+                toolbar_icons::draw_icon_refresh as IconFn,
+                "Refresh Zoom",
                 snapshot.zoom_active,
             ),
             (

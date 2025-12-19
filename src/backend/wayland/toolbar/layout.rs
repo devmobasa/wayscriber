@@ -40,7 +40,7 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
         } else {
             let action_h = 24.0;
             let action_gap = 5.0;
-            let action_rows = 7.0;
+            let action_rows = 8.0;
             (action_h + action_gap) * action_rows
         }
     } else {

@@ -730,6 +730,35 @@ pub fn draw_icon_delay(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw a refresh/reload icon (circular arrow).
+pub fn draw_icon_refresh(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.11).max(1.6);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    let cx = x + s * 0.5;
+    let cy = y + s * 0.5;
+    let r = s * 0.32;
+    let start = 0.25 * PI;
+    let end = 1.9 * PI;
+
+    ctx.arc(cx, cy, r, start, end);
+    let _ = ctx.stroke();
+
+    let arrow_x = cx + r * end.cos();
+    let arrow_y = cy + r * end.sin();
+    let head = s * 0.16;
+    let left = end + 0.7;
+    let right = end - 0.7;
+    ctx.move_to(arrow_x, arrow_y);
+    ctx.line_to(arrow_x - head * left.cos(), arrow_y - head * left.sin());
+    ctx.line_to(arrow_x - head * right.cos(), arrow_y - head * right.sin());
+    ctx.close_path();
+    let _ = ctx.fill();
+}
+
 /// Draw a zoom-in icon (magnifier with plus).
 pub fn draw_icon_zoom_in(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;

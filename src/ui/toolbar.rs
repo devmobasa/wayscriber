@@ -31,6 +31,7 @@ pub enum ToolbarEvent {
     ZoomOut,
     ResetZoom,
     ToggleZoomLock,
+    RefreshZoomCapture,
     OpenConfigurator,
     OpenConfigFile,
     ToggleCustomSection(bool),
@@ -367,6 +368,10 @@ impl InputState {
             }
             ToolbarEvent::ToggleZoomLock => {
                 self.request_zoom_action(crate::input::ZoomAction::ToggleLock);
+                true
+            }
+            ToolbarEvent::RefreshZoomCapture => {
+                self.request_zoom_action(crate::input::ZoomAction::RefreshCapture);
                 true
             }
             ToolbarEvent::ToggleCustomSection(enable) => {
