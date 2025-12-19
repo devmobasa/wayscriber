@@ -389,10 +389,6 @@ pub fn render_help_overlay(
                     key: "Arrow keys",
                     action: "Nudge zoom view",
                 },
-                Row {
-                    key: "Ctrl+Alt+R",
-                    action: "Refresh zoom snapshot",
-                },
             ],
             badges: Vec::new(),
         },

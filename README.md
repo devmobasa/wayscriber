@@ -96,7 +96,6 @@ Zoom is built-in for spotlighting details during demos, with controls that match
 - Reset zoom: <kbd>Ctrl+Alt+0</kbd>
 - Lock zoom view: <kbd>Ctrl+Alt+L</kbd>
 - Pan zoom view: middle drag or arrow keys
-- Refresh zoom snapshot: <kbd>Ctrl+Alt+R</kbd>
 
 ---
 
@@ -361,7 +360,6 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Reset zoom | <kbd>Ctrl+Alt+0</kbd> |
 | Toggle zoom lock | <kbd>Ctrl+Alt+L</kbd> |
 | Pan zoom view | <kbd>Middle drag</kbd> / <kbd>Arrow keys</kbd> |
-| Refresh zoom snapshot | <kbd>Ctrl+Alt+R</kbd> |
 | Exit | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd> |
 
 ---

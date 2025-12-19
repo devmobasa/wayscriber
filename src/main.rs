@@ -158,7 +158,7 @@ fn main() -> anyhow::Result<()> {
         log::info!("  - Decrease thickness: - or _ or scroll up");
         log::info!("  - Freeze screen: Ctrl+Shift+F (toggle frozen background)");
         log::info!(
-            "  - Zoom: Ctrl+Alt + scroll or +/- (Ctrl+Alt+0 reset, Ctrl+Alt+L lock, middle drag/arrow keys to pan, Ctrl+Alt+R refresh)"
+            "  - Zoom: Ctrl+Alt + scroll or +/- (Ctrl+Alt+0 reset, Ctrl+Alt+L lock, middle drag/arrow keys to pan)"
         );
         log::info!("  - Context menu: Right Click or Shift+F10");
         log::info!(

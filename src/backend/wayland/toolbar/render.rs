@@ -1057,12 +1057,6 @@ pub fn render_side_palette(
                 snapshot.zoom_active,
             ),
             (
-                ToolbarEvent::RefreshZoomCapture,
-                toolbar_icons::draw_icon_refresh as IconFn,
-                "Refresh Zoom",
-                snapshot.zoom_active,
-            ),
-            (
                 ToolbarEvent::OpenConfigurator,
                 toolbar_icons::draw_icon_settings as IconFn,
                 "Config UI",
