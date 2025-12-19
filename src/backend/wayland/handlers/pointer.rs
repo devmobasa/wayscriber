@@ -64,8 +64,7 @@ impl PointerHandler for WaylandState {
                     self.set_pointer_over_toolbar(on_toolbar);
                     self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
                     if !on_toolbar {
-                        let (wx, wy) =
-                            self.zoomed_world_coords(event.position.0, event.position.1);
+                        let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
                         self.input_state.update_pointer_position(wx, wy);
                     }
                     update_cursor(on_toolbar, conn, self);
@@ -183,10 +182,9 @@ impl PointerHandler for WaylandState {
                     }
                     if self.zoom.panning {
                         self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
-                        let (dx, dy) = self.zoom.update_pan_position(
-                            event.position.0,
-                            event.position.1,
-                        );
+                        let (dx, dy) = self
+                            .zoom
+                            .update_pan_position(event.position.0, event.position.1);
                         self.zoom.pan_by_screen_delta(
                             dx,
                             dy,
@@ -198,10 +196,7 @@ impl PointerHandler for WaylandState {
                         continue;
                     }
                     self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
-                    let (wx, wy) = self.zoomed_world_coords(
-                        event.position.0,
-                        event.position.1,
-                    );
+                    let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
                     self.input_state.update_pointer_position(wx, wy);
                     self.input_state.on_mouse_motion(wx, wy);
                 }
@@ -261,8 +256,7 @@ impl PointerHandler for WaylandState {
                     );
                     if self.zoom.active {
                         if button == BTN_MIDDLE && !self.zoom.locked {
-                            self.zoom
-                                .start_pan(event.position.0, event.position.1);
+                            self.zoom.start_pan(event.position.0, event.position.1);
                             self.input_state.dirty_tracker.mark_full();
                             self.input_state.needs_redraw = true;
                             continue;
@@ -276,8 +270,7 @@ impl PointerHandler for WaylandState {
                         _ => continue,
                     };
 
-                    let (wx, wy) =
-                        self.zoomed_world_coords(event.position.0, event.position.1);
+                    let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
                     self.input_state.on_mouse_press(mb, wx, wy);
                     self.input_state.needs_redraw = true;
                 }
@@ -338,8 +331,7 @@ impl PointerHandler for WaylandState {
                         _ => continue,
                     };
 
-                    let (wx, wy) =
-                        self.zoomed_world_coords(event.position.0, event.position.1);
+                    let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
                     self.input_state.on_mouse_release(mb, wx, wy);
                     self.input_state.needs_redraw = true;
                 }

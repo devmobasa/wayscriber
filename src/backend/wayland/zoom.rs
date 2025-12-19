@@ -424,9 +424,7 @@ impl ZoomState {
         let pool = capture.pool.as_mut().context("Zoom pool missing")?;
         let buffer = capture.buffer.as_ref().context("Zoom buffer missing")?;
 
-        let canvas = buffer
-            .canvas(pool)
-            .context("Unable to map zoom buffer")?;
+        let canvas = buffer.canvas(pool).context("Unable to map zoom buffer")?;
 
         let pixel_width = (capture.width * 4) as usize;
         let stride = capture.stride as usize;
@@ -464,7 +462,12 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn cancel(&mut self, surface: &mut SurfaceState, input_state: &mut InputState, force_reset: bool) {
+    pub fn cancel(
+        &mut self,
+        surface: &mut SurfaceState,
+        input_state: &mut InputState,
+        force_reset: bool,
+    ) {
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
         }
@@ -557,7 +560,11 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn poll_portal_capture(&mut self, surface: &mut SurfaceState, input_state: &mut InputState) {
+    pub fn poll_portal_capture(
+        &mut self,
+        surface: &mut SurfaceState,
+        input_state: &mut InputState,
+    ) {
         if !self.portal_in_progress {
             return;
         }

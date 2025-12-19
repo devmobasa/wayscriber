@@ -63,7 +63,6 @@ use self::data::{MoveDrag, StateData};
 use super::{
     capture::CaptureState,
     frozen::FrozenState,
-    zoom::ZoomState,
     session::SessionState,
     surface::SurfaceState,
     toolbar::{
@@ -73,6 +72,7 @@ use super::{
         render::{render_side_palette, render_top_strip},
     },
     toolbar_intent::intent_to_event,
+    zoom::ZoomState,
 };
 
 mod data;
@@ -360,8 +360,11 @@ impl WaylandState {
                     if self.zoom.locked && self.zoom.panning {
                         self.zoom.stop_pan();
                     }
-                    self.input_state
-                        .set_zoom_status(self.zoom.active, self.zoom.locked, self.zoom.scale);
+                    self.input_state.set_zoom_status(
+                        self.zoom.active,
+                        self.zoom.locked,
+                        self.zoom.scale,
+                    );
                 }
             }
             ZoomAction::RefreshCapture => {
@@ -402,7 +405,8 @@ impl WaylandState {
 
     pub(super) fn exit_zoom(&mut self) {
         if self.zoom.active {
-            self.zoom.deactivate(&mut self.surface, &mut self.input_state);
+            self.zoom
+                .deactivate(&mut self.surface, &mut self.input_state);
         }
     }
 
@@ -439,7 +443,8 @@ impl WaylandState {
         if self.zoom.active {
             if let Err(err) = self.start_zoom_capture(qh, false) {
                 warn!("Zoom capture failed to start: {}", err);
-                self.zoom.deactivate(&mut self.surface, &mut self.input_state);
+                self.zoom
+                    .deactivate(&mut self.surface, &mut self.input_state);
             }
         }
     }
@@ -461,8 +466,13 @@ impl WaylandState {
         } else {
             log::info!("Zoom: using screencopy fast path");
         }
-        self.zoom
-            .start_capture(&self.shm, &mut self.surface, qh, use_fallback, &self.tokio_handle)
+        self.zoom.start_capture(
+            &self.shm,
+            &mut self.surface,
+            qh,
+            use_fallback,
+            &self.tokio_handle,
+        )
     }
 
     #[allow(dead_code)]
@@ -1798,9 +1808,7 @@ impl WaylandState {
                 let offset_y = self.zoom.view_offset.1 * (scale as f64) / scale_y_safe;
                 ctx.scale(scale_x * self.zoom.scale, scale_y * self.zoom.scale);
                 ctx.translate(-offset_x, -offset_y);
-            } else if (scale_x - 1.0).abs() > f64::EPSILON
-                || (scale_y - 1.0).abs() > f64::EPSILON
-            {
+            } else if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
                 ctx.scale(scale_x, scale_y);
             }
 
@@ -1878,10 +1886,7 @@ impl WaylandState {
         // Render provisional shape if actively drawing
         // Use optimized method that avoids cloning for freehand
         let (mx, my) = if zoom_transform_active {
-            self.zoomed_world_coords(
-                self.current_mouse().0 as f64,
-                self.current_mouse().1 as f64,
-            )
+            self.zoomed_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64)
         } else {
             self.current_mouse()
         };

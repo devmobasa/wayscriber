@@ -106,8 +106,9 @@ impl InputState {
 
     /// Updates cached zoom status and triggers a redraw when it changes.
     pub fn set_zoom_status(&mut self, active: bool, locked: bool, scale: f64) {
-        let changed =
-            self.zoom_active != active || self.zoom_locked != locked || (self.zoom_scale - scale).abs() > f64::EPSILON;
+        let changed = self.zoom_active != active
+            || self.zoom_locked != locked
+            || (self.zoom_scale - scale).abs() > f64::EPSILON;
         if changed {
             self.zoom_active = active;
             self.zoom_locked = locked;

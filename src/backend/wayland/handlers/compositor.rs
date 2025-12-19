@@ -106,7 +106,8 @@ impl CompositorHandler for WaylandState {
                 .set_active_output(Some(output.clone()), Some(info.id));
         }
         self.frozen.unfreeze(&mut self.input_state);
-        self.zoom.deactivate(&mut self.surface, &mut self.input_state);
+        self.zoom
+            .deactivate(&mut self.surface, &mut self.input_state);
 
         // Update frozen buffer dimensions in case this output's scale differs
         let (phys_w, phys_h) = self.surface.physical_dimensions();
@@ -198,6 +199,7 @@ impl CompositorHandler for WaylandState {
         self.frozen.unfreeze(&mut self.input_state);
         self.zoom.set_active_output(None, None);
         self.zoom.set_active_geometry(None);
-        self.zoom.deactivate(&mut self.surface, &mut self.input_state);
+        self.zoom
+            .deactivate(&mut self.surface, &mut self.input_state);
     }
 }

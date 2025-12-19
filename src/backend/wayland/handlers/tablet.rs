@@ -422,7 +422,9 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.current_mouse().0 as f64,
                     state.current_mouse().1 as f64,
                 );
-                state.input_state.on_mouse_release(MouseButton::Left, wx, wy);
+                state
+                    .input_state
+                    .on_mouse_release(MouseButton::Left, wx, wy);
                 state.input_state.needs_redraw = true;
             }
             Event::Motion { x, y } => {
@@ -481,8 +483,10 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 let xf = x;
                 let yf = y;
                 state.stylus_last_pos = Some((xf, yf));
-                let (wx, wy) =
-                    state.zoomed_world_coords(state.current_mouse().0 as f64, state.current_mouse().1 as f64);
+                let (wx, wy) = state.zoomed_world_coords(
+                    state.current_mouse().0 as f64,
+                    state.current_mouse().1 as f64,
+                );
                 state.input_state.on_mouse_motion(wx, wy);
                 if state.stylus_tip_down {
                     state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
