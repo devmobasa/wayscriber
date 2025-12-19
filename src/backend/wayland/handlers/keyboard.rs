@@ -77,6 +77,9 @@ impl KeyboardHandler for WaylandState {
                     return;
                 }
                 Key::Up | Key::Down | Key::Left | Key::Right => {
+                    if self.zoom.locked {
+                        return;
+                    }
                     let step = if self.input_state.modifiers.shift {
                         WaylandState::ZOOM_PAN_STEP_LARGE
                     } else {
@@ -173,6 +176,9 @@ impl KeyboardHandler for WaylandState {
         if self.zoom.active {
             match key {
                 Key::Up | Key::Down | Key::Left | Key::Right => {
+                    if self.zoom.locked {
+                        return;
+                    }
                     let step = if self.input_state.modifiers.shift {
                         WaylandState::ZOOM_PAN_STEP_LARGE
                     } else {

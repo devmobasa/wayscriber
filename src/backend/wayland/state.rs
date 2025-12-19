@@ -358,6 +358,9 @@ impl WaylandState {
             ZoomAction::ToggleLock => {
                 if self.zoom.active {
                     self.zoom.locked = !self.zoom.locked;
+                    if self.zoom.locked && self.zoom.panning {
+                        self.zoom.stop_pan();
+                    }
                     self.input_state
                         .set_zoom_status(self.zoom.active, self.zoom.locked, self.zoom.scale);
                 }
