@@ -1,7 +1,7 @@
 # wayscriber
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org/)
 
 A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rust.
 
