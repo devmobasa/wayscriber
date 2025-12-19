@@ -341,8 +341,7 @@ impl WaylandState {
     }
 
     pub(super) fn handle_zoom_action(&mut self, action: ZoomAction, qh: &QueueHandle<Self>) {
-        let (sx, sy) = self.current_mouse();
-        let (sx, sy) = (sx as f64, sy as f64);
+        let (sx, sy) = self.zoom_keyboard_anchor();
         match action {
             ZoomAction::In => {
                 self.apply_zoom_factor(Self::ZOOM_STEP_KEY, sx, sy, qh, true);
@@ -372,6 +371,17 @@ impl WaylandState {
                     }
                 }
             }
+        }
+    }
+
+    fn zoom_keyboard_anchor(&self) -> (f64, f64) {
+        if self.has_pointer_focus() {
+            let (sx, sy) = self.current_mouse();
+            (sx as f64, sy as f64)
+        } else {
+            let cx = (self.surface.width() as f64) * 0.5;
+            let cy = (self.surface.height() as f64) * 0.5;
+            (cx, cy)
         }
     }
 
