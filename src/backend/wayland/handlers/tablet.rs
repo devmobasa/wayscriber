@@ -322,12 +322,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_on_toolbar = false;
                 state.set_toolbar_dragging(false);
                 state.end_toolbar_move_drag();
-                if let Some(surf) = state.stylus_surface.take() {
-                    if state.toolbar.is_toolbar_surface(&surf) {
-                        state.toolbar.pointer_leave(&surf);
-                        state.toolbar.mark_dirty();
-                        state.input_state.needs_redraw = true;
-                    }
+                if let Some(surf) = state.stylus_surface.take()
+                    && state.toolbar.is_toolbar_surface(&surf)
+                {
+                    state.toolbar.pointer_leave(&surf);
+                    state.toolbar.mark_dirty();
+                    state.input_state.needs_redraw = true;
                 }
                 state.stylus_pressure_thickness = None;
                 state.stylus_last_pos = None;
@@ -351,16 +351,15 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                         (mx as f64, my as f64)
                     });
                     state.set_current_mouse(sx as i32, sy as i32);
-                    if let Some(surface) = state.stylus_surface.as_ref() {
-                        if let Some((intent, drag)) = state.toolbar.pointer_press(surface, (sx, sy))
-                        {
-                            state.set_toolbar_dragging(drag);
-                            let evt = intent_to_event(intent, state.toolbar.last_snapshot());
-                            state.handle_toolbar_event(evt);
-                            state.toolbar.mark_dirty();
-                            state.input_state.needs_redraw = true;
-                            state.refresh_keyboard_interactivity();
-                        }
+                    if let Some(surface) = state.stylus_surface.as_ref()
+                        && let Some((intent, drag)) = state.toolbar.pointer_press(surface, (sx, sy))
+                    {
+                        state.set_toolbar_dragging(drag);
+                        let evt = intent_to_event(intent, state.toolbar.last_snapshot());
+                        state.handle_toolbar_event(evt);
+                        state.toolbar.mark_dirty();
+                        state.input_state.needs_redraw = true;
+                        state.refresh_keyboard_interactivity();
                     }
                     return;
                 }
@@ -428,20 +427,20 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.input_state.needs_redraw = true;
             }
             Event::Motion { x, y } => {
-                if state.is_move_dragging() {
-                    if let Some(kind) = state.active_move_drag_kind() {
-                        // On toolbar surface: coords are toolbar-local, need conversion
-                        // On main surface: coords are already screen-relative
-                        if state.stylus_on_toolbar {
-                            state.handle_toolbar_move(kind, (x, y));
-                        } else {
-                            state.handle_toolbar_move_screen(kind, (x, y));
-                        }
-                        state.toolbar.mark_dirty();
-                        state.input_state.needs_redraw = true;
-                        state.set_current_mouse(x as i32, y as i32);
-                        return;
+                if state.is_move_dragging()
+                    && let Some(kind) = state.active_move_drag_kind()
+                {
+                    // On toolbar surface: coords are toolbar-local, need conversion
+                    // On main surface: coords are already screen-relative
+                    if state.stylus_on_toolbar {
+                        state.handle_toolbar_move(kind, (x, y));
+                    } else {
+                        state.handle_toolbar_move_screen(kind, (x, y));
                     }
+                    state.toolbar.mark_dirty();
+                    state.input_state.needs_redraw = true;
+                    state.set_current_mouse(x as i32, y as i32);
+                    return;
                 }
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if state.stylus_on_toolbar {

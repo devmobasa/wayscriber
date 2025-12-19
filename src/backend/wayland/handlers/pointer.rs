@@ -104,23 +104,23 @@ impl PointerHandler for WaylandState {
                     update_cursor(false, conn, self);
                 }
                 PointerEventKind::Motion { .. } => {
-                    if self.is_move_dragging() {
-                        if let Some(kind) = self.active_move_drag_kind() {
-                            debug!(
-                                "Move drag motion: kind={:?}, pos=({}, {}), on_toolbar={}",
-                                kind, event.position.0, event.position.1, on_toolbar
-                            );
-                            // On toolbar surface: coords are toolbar-local, need conversion
-                            // On main surface: coords are already screen-relative (fullscreen overlay)
-                            if on_toolbar {
-                                self.handle_toolbar_move(kind, event.position);
-                            } else {
-                                self.handle_toolbar_move_screen(kind, event.position);
-                            }
-                            self.input_state.needs_redraw = true;
-                            self.toolbar.mark_dirty();
-                            continue;
+                    if self.is_move_dragging()
+                        && let Some(kind) = self.active_move_drag_kind()
+                    {
+                        debug!(
+                            "Move drag motion: kind={:?}, pos=({}, {}), on_toolbar={}",
+                            kind, event.position.0, event.position.1, on_toolbar
+                        );
+                        // On toolbar surface: coords are toolbar-local, need conversion
+                        // On main surface: coords are already screen-relative (fullscreen overlay)
+                        if on_toolbar {
+                            self.handle_toolbar_move(kind, event.position);
+                        } else {
+                            self.handle_toolbar_move_screen(kind, event.position);
                         }
+                        self.input_state.needs_redraw = true;
+                        self.toolbar.mark_dirty();
+                        continue;
                     }
                     if inline_active && self.inline_toolbar_motion(event.position) {
                         update_cursor(true, conn, self);
@@ -217,33 +217,32 @@ impl PointerHandler for WaylandState {
                         continue;
                     }
                     if on_toolbar {
-                        if button == BTN_LEFT {
-                            if let Some((intent, drag)) =
+                        if button == BTN_LEFT
+                            && let Some((intent, drag)) =
                                 self.toolbar.pointer_press(&event.surface, event.position)
+                        {
+                            let toolbar_event =
+                                intent_to_event(intent, self.toolbar.last_snapshot());
+                            if matches!(
+                                toolbar_event,
+                                ToolbarEvent::MoveTopToolbar { .. }
+                                    | ToolbarEvent::MoveSideToolbar { .. }
+                            ) && drag
                             {
-                                let toolbar_event =
-                                    intent_to_event(intent, self.toolbar.last_snapshot());
-                                if matches!(
-                                    toolbar_event,
-                                    ToolbarEvent::MoveTopToolbar { .. }
-                                        | ToolbarEvent::MoveSideToolbar { .. }
-                                ) && drag
-                                {
-                                    self.lock_pointer_for_drag(qh, &event.surface);
-                                }
-                                log::info!(
-                                    "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
-                                    drag,
-                                    surface_id(&event.surface),
-                                    self.current_seat_id(),
-                                    self.inline_toolbars_active()
-                                );
-                                self.set_toolbar_dragging(drag);
-                                self.handle_toolbar_event(toolbar_event);
-                                self.toolbar.mark_dirty();
-                                self.input_state.needs_redraw = true;
-                                self.refresh_keyboard_interactivity();
+                                self.lock_pointer_for_drag(qh, &event.surface);
                             }
+                            log::info!(
+                                "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
+                                drag,
+                                surface_id(&event.surface),
+                                self.current_seat_id(),
+                                self.inline_toolbars_active()
+                            );
+                            self.set_toolbar_dragging(drag);
+                            self.handle_toolbar_event(toolbar_event);
+                            self.toolbar.mark_dirty();
+                            self.input_state.needs_redraw = true;
+                            self.refresh_keyboard_interactivity();
                         }
                         continue;
                     } else if self.pointer_over_toolbar() {
@@ -254,13 +253,11 @@ impl PointerHandler for WaylandState {
                         "Button {} pressed at ({}, {})",
                         button, event.position.0, event.position.1
                     );
-                    if self.zoom.active {
-                        if button == BTN_MIDDLE && !self.zoom.locked {
-                            self.zoom.start_pan(event.position.0, event.position.1);
-                            self.input_state.dirty_tracker.mark_full();
-                            self.input_state.needs_redraw = true;
-                            continue;
-                        }
+                    if self.zoom.active && button == BTN_MIDDLE && !self.zoom.locked {
+                        self.zoom.start_pan(event.position.0, event.position.1);
+                        self.input_state.dirty_tracker.mark_full();
+                        self.input_state.needs_redraw = true;
+                        continue;
                     }
 
                     let mb = match button {
@@ -313,15 +310,13 @@ impl PointerHandler for WaylandState {
                         continue;
                     }
                     debug!("Button {} released", button);
-                    if self.zoom.active {
-                        if button == BTN_MIDDLE {
-                            if self.zoom.panning {
-                                self.zoom.stop_pan();
-                                self.input_state.dirty_tracker.mark_full();
-                                self.input_state.needs_redraw = true;
-                            }
-                            continue;
+                    if self.zoom.active && button == BTN_MIDDLE {
+                        if self.zoom.panning {
+                            self.zoom.stop_pan();
+                            self.input_state.dirty_tracker.mark_full();
+                            self.input_state.needs_redraw = true;
                         }
+                        continue;
                     }
 
                     let mb = match button {

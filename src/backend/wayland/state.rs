@@ -368,10 +368,8 @@ impl WaylandState {
                 }
             }
             ZoomAction::RefreshCapture => {
-                if self.zoom.active {
-                    if let Err(err) = self.start_zoom_capture(qh, true) {
-                        warn!("Zoom capture refresh failed: {}", err);
-                    }
+                if self.zoom.active && let Err(err) = self.start_zoom_capture(qh, true) {
+                    warn!("Zoom capture refresh failed: {}", err);
                 }
             }
         }
@@ -440,12 +438,10 @@ impl WaylandState {
                 .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
         }
 
-        if self.zoom.active {
-            if let Err(err) = self.start_zoom_capture(qh, false) {
-                warn!("Zoom capture failed to start: {}", err);
-                self.zoom
-                    .deactivate(&mut self.surface, &mut self.input_state);
-            }
+        if self.zoom.active && let Err(err) = self.start_zoom_capture(qh, false) {
+            warn!("Zoom capture failed to start: {}", err);
+            self.zoom
+                .deactivate(&mut self.surface, &mut self.input_state);
         }
     }
 
@@ -674,14 +670,14 @@ impl WaylandState {
     }
 
     pub(super) fn preferred_fullscreen_output(&self) -> Option<wl_output::WlOutput> {
-        if let Some(preferred) = self.preferred_output_identity() {
-            if let Some(output) = self.output_state.outputs().find(|output| {
+        if let Some(preferred) = self.preferred_output_identity()
+            && let Some(output) = self.output_state.outputs().find(|output| {
                 self.output_identity_for(output)
                     .map(|id| id.eq_ignore_ascii_case(preferred))
                     .unwrap_or(false)
-            }) {
-                return Some(output);
-            }
+            })
+        {
+            return Some(output);
         }
 
         self.surface
@@ -830,7 +826,10 @@ impl WaylandState {
                 self.data.toolbar_configure_miss_count =
                     self.data.toolbar_configure_miss_count.saturating_add(1);
                 if debug_toolbar_drag_logging_enabled()
-                    && self.data.toolbar_configure_miss_count % 60 == 0
+                    && self
+                        .data
+                        .toolbar_configure_miss_count
+                        .is_multiple_of(60)
                 {
                     debug!(
                         "Toolbar configure pending: count={}, expected_top={}, configured_top={}, expected_side={}, configured_side={}",
@@ -904,10 +903,8 @@ impl WaylandState {
     /// Base X position for the top toolbar when laid out inline.
     /// When a drag is in progress we freeze this base to avoid shifting the top bar while moving the side bar.
     fn inline_top_base_x(&self, snapshot: &ToolbarSnapshot) -> f64 {
-        if self.is_move_dragging() {
-            if let Some(x) = self.data.drag_top_base_x {
-                return x;
-            }
+        if self.is_move_dragging() && let Some(x) = self.data.drag_top_base_x {
+            return x;
         }
         let side_visible = self.toolbar.is_side_visible();
         let side_size = side_size(snapshot);
@@ -926,10 +923,8 @@ impl WaylandState {
     }
 
     fn inline_top_base_y(&self) -> f64 {
-        if self.is_move_dragging() {
-            if let Some(y) = self.data.drag_top_base_y {
-                return y;
-            }
+        if self.is_move_dragging() && let Some(y) = self.data.drag_top_base_y {
+            return y;
         }
         Self::INLINE_TOP_Y
     }
@@ -1513,27 +1508,30 @@ impl WaylandState {
 
         let mut over_toolbar = false;
 
-        if let Some((x, y, w, h)) = self.data.inline_top_rect {
-            if self.point_in_rect(position.0, position.1, x, y, w, h) {
-                over_toolbar = true;
-                self.data.inline_top_hover = Some(position);
-            }
+        if let Some((x, y, w, h)) = self.data.inline_top_rect
+            && self.point_in_rect(position.0, position.1, x, y, w, h)
+        {
+            over_toolbar = true;
+            self.data.inline_top_hover = Some(position);
         }
 
-        if let Some((x, y, w, h)) = self.data.inline_side_rect {
-            if self.point_in_rect(position.0, position.1, x, y, w, h) {
-                over_toolbar = true;
-                self.data.inline_side_hover = Some(position);
-            }
+        if let Some((x, y, w, h)) = self.data.inline_side_rect
+            && self.point_in_rect(position.0, position.1, x, y, w, h)
+        {
+            over_toolbar = true;
+            self.data.inline_side_hover = Some(position);
         }
 
-        if self.toolbar_dragging() {
-            if let Some(intent) = self.inline_toolbar_drag_at(position) {
-                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                self.handle_toolbar_event(evt);
-                self.toolbar.mark_dirty();
-                self.input_state.needs_redraw = true;
-            } else if let Some(kind) = self.active_move_drag_kind() {
+        if self.toolbar_dragging()
+            && let Some(intent) = self.inline_toolbar_drag_at(position)
+        {
+            let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+            self.handle_toolbar_event(evt);
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+            over_toolbar = true;
+        } else if self.toolbar_dragging() {
+            if let Some(kind) = self.active_move_drag_kind() {
                 self.handle_toolbar_move(kind, position);
             }
             over_toolbar = true;
@@ -1596,13 +1594,13 @@ impl WaylandState {
             return false;
         }
         if self.pointer_over_toolbar() || self.toolbar_dragging() {
-            if self.toolbar_dragging() {
-                if let Some(intent) = self.inline_toolbar_drag_at(position) {
-                    let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                    self.handle_toolbar_event(evt);
-                    self.toolbar.mark_dirty();
-                    self.input_state.needs_redraw = true;
-                }
+            if self.toolbar_dragging()
+                && let Some(intent) = self.inline_toolbar_drag_at(position)
+            {
+                let evt = intent_to_event(intent, self.toolbar.last_snapshot());
+                self.handle_toolbar_event(evt);
+                self.toolbar.mark_dirty();
+                self.input_state.needs_redraw = true;
             }
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);
@@ -2321,10 +2319,12 @@ impl WaylandState {
 fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Vec<Rect> {
     regions.retain(Rect::is_valid);
 
-    if regions.is_empty() && width > 0 && height > 0 {
-        if let Some(full) = Rect::new(0, 0, width, height) {
-            regions.push(full);
-        }
+    if regions.is_empty()
+        && width > 0
+        && height > 0
+        && let Some(full) = Rect::new(0, 0, width, height)
+    {
+        regions.push(full);
     }
 
     regions

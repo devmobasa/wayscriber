@@ -461,10 +461,10 @@ impl WaylandBackend {
                     info!("Starting in {} mode", initial_mode_str);
                     input_state.canvas_set.switch_mode(mode);
                     // Apply auto-color adjustment if enabled
-                    if config.board.auto_adjust_pen {
-                        if let Some(default_color) = mode.default_pen_color(&config.board) {
-                            input_state.current_color = default_color;
-                        }
+                    if config.board.auto_adjust_pen
+                        && let Some(default_color) = mode.default_pen_color(&config.board)
+                    {
+                        input_state.current_color = default_color;
                     }
                 }
             } else if !initial_mode_str.is_empty() {
@@ -723,61 +723,61 @@ impl WaylandBackend {
             }
 
             // Check for completed capture operations
-            if state.capture.is_in_progress() {
-                if let Some(outcome) = state.capture.manager_mut().try_take_result() {
-                    log::info!("Capture completed");
+            if state.capture.is_in_progress()
+                && let Some(outcome) = state.capture.manager_mut().try_take_result()
+            {
+                log::info!("Capture completed");
 
-                    // Restore overlay
-                    state.show_overlay();
-                    state.capture.clear_in_progress();
+                // Restore overlay
+                state.show_overlay();
+                state.capture.clear_in_progress();
 
-                    match outcome {
-                        CaptureOutcome::Success(result) => {
-                            // Build notification message
-                            let mut message_parts = Vec::new();
+                match outcome {
+                    CaptureOutcome::Success(result) => {
+                        // Build notification message
+                        let mut message_parts = Vec::new();
 
-                            if let Some(ref path) = result.saved_path {
-                                log::info!("Screenshot saved to: {}", path.display());
-                                if let Some(filename) = path.file_name() {
-                                    message_parts
-                                        .push(format!("Saved as {}", filename.to_string_lossy()));
-                                }
+                        if let Some(ref path) = result.saved_path {
+                            log::info!("Screenshot saved to: {}", path.display());
+                            if let Some(filename) = path.file_name() {
+                                message_parts
+                                    .push(format!("Saved as {}", filename.to_string_lossy()));
                             }
-
-                            if result.copied_to_clipboard {
-                                log::info!("Screenshot copied to clipboard");
-                                message_parts.push("Copied to clipboard".to_string());
-                            }
-
-                            // Send notification
-                            let notification_body = if message_parts.is_empty() {
-                                "Screenshot captured".to_string()
-                            } else {
-                                message_parts.join(" • ")
-                            };
-
-                            notification::send_notification_async(
-                                &state.tokio_handle,
-                                "Screenshot Captured".to_string(),
-                                notification_body,
-                                Some("camera-photo".to_string()),
-                            );
                         }
-                        CaptureOutcome::Failed(error) => {
-                            let friendly_error = friendly_capture_error(&error);
 
-                            log::warn!("Screenshot capture failed: {}", error);
+                        if result.copied_to_clipboard {
+                            log::info!("Screenshot copied to clipboard");
+                            message_parts.push("Copied to clipboard".to_string());
+                        }
 
-                            notification::send_notification_async(
-                                &state.tokio_handle,
-                                "Screenshot Failed".to_string(),
-                                friendly_error,
-                                Some("dialog-error".to_string()),
-                            );
-                        }
-                        CaptureOutcome::Cancelled(reason) => {
-                            log::info!("Capture cancelled: {}", reason);
-                        }
+                        // Send notification
+                        let notification_body = if message_parts.is_empty() {
+                            "Screenshot captured".to_string()
+                        } else {
+                            message_parts.join(" • ")
+                        };
+
+                        notification::send_notification_async(
+                            &state.tokio_handle,
+                            "Screenshot Captured".to_string(),
+                            notification_body,
+                            Some("camera-photo".to_string()),
+                        );
+                    }
+                    CaptureOutcome::Failed(error) => {
+                        let friendly_error = friendly_capture_error(&error);
+
+                        log::warn!("Screenshot capture failed: {}", error);
+
+                        notification::send_notification_async(
+                            &state.tokio_handle,
+                            "Screenshot Failed".to_string(),
+                            friendly_error,
+                            Some("dialog-error".to_string()),
+                        );
+                    }
+                    CaptureOutcome::Cancelled(reason) => {
+                        log::info!("Capture cancelled: {}", reason);
                     }
                 }
             }
@@ -838,18 +838,17 @@ impl WaylandBackend {
 
         info!("Wayland backend exiting");
 
-        if let Some(options) = state.session_options() {
-            if let Some(snapshot) = session::snapshot_from_input(&state.input_state, options) {
-                if let Err(err) = session::save_snapshot(&snapshot, options) {
-                    warn!("Failed to save session state: {}", err);
-                    notification::send_notification_async(
-                        &state.tokio_handle,
-                        "Failed to Save Session".to_string(),
-                        format!("Your drawings may not persist: {}", err),
-                        Some("dialog-error".to_string()),
-                    );
-                }
-            }
+        if let Some(options) = state.session_options()
+            && let Some(snapshot) = session::snapshot_from_input(&state.input_state, options)
+            && let Err(err) = session::save_snapshot(&snapshot, options)
+        {
+            warn!("Failed to save session state: {}", err);
+            notification::send_notification_async(
+                &state.tokio_handle,
+                "Failed to Save Session".to_string(),
+                format!("Your drawings may not persist: {}", err),
+                Some("dialog-error".to_string()),
+            );
         }
 
         // Return error if loop exited due to error, otherwise success

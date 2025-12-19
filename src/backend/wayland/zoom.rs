@@ -99,6 +99,9 @@ impl CaptureSession {
     }
 }
 
+type PortalCaptureResult = Result<(Option<u32>, FrozenImage), String>;
+type PortalCaptureRx = mpsc::Receiver<PortalCaptureResult>;
+
 /// Zoom state, capture logic, and pan/lock bookkeeping.
 pub struct ZoomState {
     manager: Option<ZwlrScreencopyManagerV1>,
@@ -108,7 +111,7 @@ pub struct ZoomState {
     capture: Option<CaptureSession>,
     image: Option<FrozenImage>,
     overlay_hidden: bool,
-    portal_rx: Option<mpsc::Receiver<Result<(Option<u32>, FrozenImage), String>>>,
+    portal_rx: Option<PortalCaptureRx>,
     portal_in_progress: bool,
     portal_target_output_id: Option<u32>,
     portal_started_at: Option<std::time::Instant>,
@@ -255,11 +258,11 @@ impl ZoomState {
         surface: &mut SurfaceState,
         input_state: &mut InputState,
     ) {
-        if let Some(img) = &self.image {
-            if img.width != phys_width || img.height != phys_height {
-                info!("Surface resized; clearing zoom image");
-                self.deactivate(surface, input_state);
-            }
+        if let Some(img) = &self.image
+            && (img.width != phys_width || img.height != phys_height)
+        {
+            info!("Surface resized; clearing zoom image");
+            self.deactivate(surface, input_state);
         }
     }
 
@@ -525,8 +528,11 @@ impl ZoomState {
                 if let Some(geo) = geo {
                     let (phys_w, phys_h) = geo.physical_size();
                     let (origin_x, origin_y) = geo.physical_origin();
-                    if origin_x >= 0 && origin_y >= 0 && phys_w > 0 && phys_h > 0 {
-                        if let Some(cropped) = crop_argb(
+                    if origin_x >= 0
+                        && origin_y >= 0
+                        && phys_w > 0
+                        && phys_h > 0
+                        && let Some(cropped) = crop_argb(
                             &data,
                             width,
                             height,
@@ -534,11 +540,11 @@ impl ZoomState {
                             origin_y as u32,
                             phys_w,
                             phys_h,
-                        ) {
-                            data = cropped;
-                            width = phys_w;
-                            height = phys_h;
-                        }
+                        )
+                    {
+                        data = cropped;
+                        width = phys_w;
+                        height = phys_h;
                     }
                 }
 
@@ -569,21 +575,21 @@ impl ZoomState {
             return;
         }
 
-        if let Some(start) = self.portal_started_at {
-            if start.elapsed() > std::time::Duration::from_secs(10) {
-                warn!("Portal zoom capture timed out; restoring overlay");
-                self.restore_overlay(surface);
-                self.portal_in_progress = false;
-                self.portal_rx = None;
-                self.portal_target_output_id = None;
-                self.portal_started_at = None;
-                if self.image.is_none() {
-                    self.active = false;
-                }
-                input_state.set_zoom_status(self.active, self.locked, self.scale);
-                input_state.needs_redraw = true;
-                return;
+        if let Some(start) = self.portal_started_at
+            && start.elapsed() > std::time::Duration::from_secs(10)
+        {
+            warn!("Portal zoom capture timed out; restoring overlay");
+            self.restore_overlay(surface);
+            self.portal_in_progress = false;
+            self.portal_rx = None;
+            self.portal_target_output_id = None;
+            self.portal_started_at = None;
+            if self.image.is_none() {
+                self.active = false;
             }
+            input_state.set_zoom_status(self.active, self.locked, self.scale);
+            input_state.needs_redraw = true;
+            return;
         }
 
         if let Some(rx) = self.portal_rx.as_ref() {

@@ -31,6 +31,7 @@ pub enum ToolbarEvent {
     ZoomOut,
     ResetZoom,
     ToggleZoomLock,
+    #[allow(dead_code)]
     RefreshZoomCapture,
     OpenConfigurator,
     OpenConfigFile,

@@ -731,6 +731,7 @@ pub fn draw_icon_delay(ctx: &Context, x: f64, y: f64, size: f64) {
 }
 
 /// Draw a refresh/reload icon (circular arrow).
+#[allow(dead_code)]
 pub fn draw_icon_refresh(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
     let stroke = (s * 0.11).max(1.6);

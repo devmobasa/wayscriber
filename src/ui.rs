@@ -728,7 +728,7 @@ pub fn render_help_overlay(
         rows.push(measured_sections);
     } else {
         let mut split = measured_sections;
-        let first_row_len = (split.len() + 1) / 2;
+        let first_row_len = split.len().div_ceil(2);
         let second_row = split.split_off(first_row_len);
         rows.push(split);
         rows.push(second_row);

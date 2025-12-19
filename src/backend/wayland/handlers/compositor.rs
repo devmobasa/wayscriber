@@ -131,14 +131,14 @@ impl CompositorHandler for WaylandState {
         if let Some(options) = self.session_options_mut() {
             let changed = options.set_output_identity(identity.as_deref());
 
-            if changed {
-                if let Some(id) = options.output_identity() {
-                    info!(
-                        "Persisting session using monitor identity '{}' (session file: {}).",
-                        id,
-                        options.session_file_path().display()
-                    );
-                }
+            if changed
+                && let Some(id) = options.output_identity()
+            {
+                info!(
+                    "Persisting session using monitor identity '{}' (session file: {}).",
+                    id,
+                    options.session_file_path().display()
+                );
             }
 
             if changed || !already_loaded {
