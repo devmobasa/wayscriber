@@ -1,6 +1,6 @@
 use crate::config::Action;
 use crate::draw::Shape;
-use crate::input::{board_mode::BoardMode, events::Key, tool::Tool};
+use crate::input::{ZoomAction, board_mode::BoardMode, events::Key, tool::Tool};
 use crate::util;
 use log::{info, warn};
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
@@ -534,7 +534,9 @@ impl InputState {
                 info!("{}", message);
             }
             Action::OpenContextMenu => {
-                self.toggle_context_menu_via_keyboard();
+                if !self.zoom_active() {
+                    self.toggle_context_menu_via_keyboard();
+                }
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();
@@ -585,6 +587,22 @@ impl InputState {
             Action::ToggleFrozenMode => {
                 log::info!("Toggle frozen mode requested");
                 self.request_frozen_toggle();
+                self.reset_modifiers();
+            }
+            Action::ZoomIn => {
+                self.request_zoom_action(ZoomAction::In);
+                self.reset_modifiers();
+            }
+            Action::ZoomOut => {
+                self.request_zoom_action(ZoomAction::Out);
+                self.reset_modifiers();
+            }
+            Action::ToggleZoomLock => {
+                self.request_zoom_action(ZoomAction::ToggleLock);
+                self.reset_modifiers();
+            }
+            Action::RefreshZoomCapture => {
+                self.request_zoom_action(ZoomAction::RefreshCapture);
                 self.reset_modifiers();
             }
         }

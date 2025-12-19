@@ -30,8 +30,14 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for WaylandState {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
     ) {
-        state
-            .frozen
-            .handle_frame_event(event, &mut state.surface, &mut state.input_state);
+        if state.zoom.is_in_progress() {
+            state
+                .zoom
+                .handle_frame_event(event, &mut state.surface, &mut state.input_state);
+        } else {
+            state
+                .frozen
+                .handle_frame_event(event, &mut state.surface, &mut state.input_state);
+        }
     }
 }

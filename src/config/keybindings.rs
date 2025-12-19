@@ -86,6 +86,10 @@ pub enum Action {
     CaptureClipboardRegion,
     CaptureFileRegion,
     ToggleFrozenMode,
+    ZoomIn,
+    ZoomOut,
+    ToggleZoomLock,
+    RefreshZoomCapture,
 }
 
 /// A single keybinding: a key character with optional modifiers.
@@ -359,6 +363,18 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_toggle_frozen_mode")]
     pub toggle_frozen_mode: Vec<String>,
+
+    #[serde(default = "default_zoom_in")]
+    pub zoom_in: Vec<String>,
+
+    #[serde(default = "default_zoom_out")]
+    pub zoom_out: Vec<String>,
+
+    #[serde(default = "default_toggle_zoom_lock")]
+    pub toggle_zoom_lock: Vec<String>,
+
+    #[serde(default = "default_refresh_zoom_capture")]
+    pub refresh_zoom_capture: Vec<String>,
 }
 
 impl Default for KeybindingsConfig {
@@ -424,6 +440,10 @@ impl Default for KeybindingsConfig {
             capture_clipboard_region: default_capture_clipboard_region(),
             capture_file_region: default_capture_file_region(),
             toggle_frozen_mode: default_toggle_frozen_mode(),
+            zoom_in: default_zoom_in(),
+            zoom_out: default_zoom_out(),
+            toggle_zoom_lock: default_toggle_zoom_lock(),
+            refresh_zoom_capture: default_refresh_zoom_capture(),
         }
     }
 }
@@ -708,6 +728,22 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::ToggleFrozenMode)?;
         }
 
+        for binding_str in &self.zoom_in {
+            insert_binding(binding_str, Action::ZoomIn)?;
+        }
+
+        for binding_str in &self.zoom_out {
+            insert_binding(binding_str, Action::ZoomOut)?;
+        }
+
+        for binding_str in &self.toggle_zoom_lock {
+            insert_binding(binding_str, Action::ToggleZoomLock)?;
+        }
+
+        for binding_str in &self.refresh_zoom_capture {
+            insert_binding(binding_str, Action::RefreshZoomCapture)?;
+        }
+
         Ok(map)
     }
 }
@@ -938,6 +974,22 @@ fn default_capture_file_region() -> Vec<String> {
 
 fn default_toggle_frozen_mode() -> Vec<String> {
     vec!["Ctrl+Shift+F".to_string()]
+}
+
+fn default_zoom_in() -> Vec<String> {
+    vec!["Ctrl+Alt++".to_string(), "Ctrl+Alt+=".to_string()]
+}
+
+fn default_zoom_out() -> Vec<String> {
+    vec!["Ctrl+Alt+-".to_string(), "Ctrl+Alt+_".to_string()]
+}
+
+fn default_toggle_zoom_lock() -> Vec<String> {
+    vec!["Ctrl+Alt+L".to_string()]
+}
+
+fn default_refresh_zoom_capture() -> Vec<String> {
+    vec!["Ctrl+Alt+R".to_string()]
 }
 
 #[cfg(test)]

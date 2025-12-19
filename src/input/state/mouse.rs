@@ -8,14 +8,17 @@ use super::{ContextMenuKind, DrawingState, InputState};
 impl InputState {
     fn handle_right_click(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
-        if !self.context_menu_enabled() {
-            return;
-        }
         if !matches!(self.state, DrawingState::Idle) {
             self.clear_provisional_dirty();
             self.last_provisional_bounds = None;
             self.state = DrawingState::Idle;
             self.needs_redraw = true;
+            return;
+        }
+        if self.zoom_active() {
+            return;
+        }
+        if !self.context_menu_enabled() {
             return;
         }
 

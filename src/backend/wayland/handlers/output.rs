@@ -28,7 +28,7 @@ impl OutputHandler for WaylandState {
         debug!("Output updated");
         // Refresh geometry only for the active output so fallback cropping stays correct.
         if let Some(info) = self.output_state.info(&_output) {
-            if !self.frozen.active_output_matches(info.id) {
+            if !self.frozen.active_output_matches(info.id) && !self.zoom.active_output_matches(info.id) {
                 return;
             }
 
@@ -38,8 +38,11 @@ impl OutputHandler for WaylandState {
                 (self.surface.width(), self.surface.height()),
                 info.scale_factor.max(1),
             ) {
-                self.frozen.set_active_geometry(Some(geo));
+                self.frozen.set_active_geometry(Some(geo.clone()));
                 self.frozen
+                    .set_active_output(Some(_output.clone()), Some(info.id));
+                self.zoom.set_active_geometry(Some(geo));
+                self.zoom
                     .set_active_output(Some(_output.clone()), Some(info.id));
             }
         }

@@ -644,6 +644,9 @@ impl WaylandBackend {
             state
                 .frozen
                 .poll_portal_capture(&mut state.surface, &mut state.input_state);
+            state
+                .zoom
+                .poll_portal_capture(&mut state.surface, &mut state.input_state);
 
             if tray_action_flag
                 .as_ref()

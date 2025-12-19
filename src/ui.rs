@@ -131,10 +131,21 @@ pub fn render_status_bar(
     } else {
         ""
     };
+    let zoom_badge = if input_state.zoom_active() {
+        let pct = (input_state.zoom_scale() * 100.0).round() as i32;
+        if input_state.zoom_locked() {
+            format!("[ZOOM {}% LOCKED] ", pct)
+        } else {
+            format!("[ZOOM {}%] ", pct)
+        }
+    } else {
+        String::new()
+    };
 
     let status_text = format!(
-        "{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
+        "{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
         frozen_badge,
+        zoom_badge,
         mode_badge,
         color_name,
         thickness as i32,
@@ -250,6 +261,48 @@ pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_heig
     let _ = ctx.show_text(label);
 }
 
+/// Render a small badge indicating zoom mode (visible even when status bar is hidden).
+pub fn render_zoom_badge(
+    ctx: &cairo::Context,
+    screen_width: u32,
+    _screen_height: u32,
+    scale: f64,
+    locked: bool,
+) {
+    let pct = (scale * 100.0).round() as i32;
+    let label = if locked {
+        format!("ZOOM {}% LOCKED", pct)
+    } else {
+        format!("ZOOM {}%", pct)
+    };
+    let padding = 12.0;
+    let radius = 8.0;
+    let font_size = 15.0;
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(font_size);
+
+    let extents = ctx
+        .text_extents(&label)
+        .unwrap_or_else(|_| fallback_text_extents(font_size, &label));
+
+    let width = extents.width() + padding * 1.4;
+    let height = extents.height() + padding;
+
+    let x = screen_width as f64 - width - padding;
+    let y = padding + height;
+
+    // Background with a contrasting cool tone.
+    ctx.set_source_rgba(0.22, 0.56, 0.86, 0.92);
+    draw_rounded_rect(ctx, x, y - height, width, height, radius);
+    let _ = ctx.fill();
+
+    // Text
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
+    let _ = ctx.show_text(&label);
+}
+
 /// Render help overlay showing all keybindings
 pub fn render_help_overlay(
     ctx: &cairo::Context,
@@ -307,6 +360,36 @@ pub fn render_help_overlay(
         Section {
             title: "Board Modes",
             rows: board_rows,
+            badges: Vec::new(),
+        },
+        Section {
+            title: "Zoom",
+            rows: vec![
+                Row {
+                    key: "Ctrl+Alt+Scroll",
+                    action: "Zoom in/out",
+                },
+                Row {
+                    key: "Ctrl+Alt++ / Ctrl+Alt+-",
+                    action: "Zoom in/out",
+                },
+                Row {
+                    key: "Ctrl+Alt+L",
+                    action: "Lock zoom view",
+                },
+                Row {
+                    key: "Middle drag",
+                    action: "Pan zoom view",
+                },
+                Row {
+                    key: "Arrow keys",
+                    action: "Nudge zoom view",
+                },
+                Row {
+                    key: "Ctrl+Alt+R",
+                    action: "Refresh zoom snapshot",
+                },
+            ],
             badges: Vec::new(),
         },
         Section {

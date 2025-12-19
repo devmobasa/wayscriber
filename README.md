@@ -88,7 +88,7 @@ Opt-in per board/monitor storage that restores your canvas plus pen color & thic
 Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), icon or text modes, color picker, extended palettes, status bar, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
 
 ### Presenter Helpers
-Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running.
+Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running. Screen zoom (<kbd>Ctrl+Alt</kbd> + scroll) with lock/pan for callouts.
 
 ---
 
@@ -349,6 +349,10 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
+| Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt++</kbd> / <kbd>Ctrl+Alt+-</kbd> |
+| Toggle zoom lock | <kbd>Ctrl+Alt+L</kbd> |
+| Pan zoom view | <kbd>Middle drag</kbd> / <kbd>Arrow keys</kbd> |
+| Refresh zoom snapshot | <kbd>Ctrl+Alt+R</kbd> |
 | Exit | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd> |
 
 ---
@@ -527,7 +531,7 @@ wayscriber/
 | Custom fonts | ❌ | ✅ |
 | Config file | ❌ | ✅ |
 | Help overlay | ❌ | ✅ |
-| Zoom | ✅ | ❌ |
+| Zoom | ✅ | ✅ |
 | Break timer | ✅ | ❌ |
 
 ### Roadmap
