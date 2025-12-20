@@ -35,7 +35,7 @@ use std::{
 };
 #[cfg(tablet)]
 const TABLET_MANAGER_MAX_VERSION: u32 = 2;
-use wayland_client::{Connection, globals::registry_queue_init};
+use wayland_client::{Connection, backend::WaylandError, globals::registry_queue_init};
 #[cfg(tablet)]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
@@ -661,15 +661,48 @@ impl WaylandBackend {
                 || state.zoom.is_in_progress()
                 || state.overlay_suppressed();
 
-            // Dispatch events, but avoid blocking while capture/portal flows are active.
-            let dispatch_result = if capture_active {
-                event_queue.dispatch_pending(&mut state)
-            } else {
-                event_queue.blocking_dispatch(&mut state)
-            };
+            let mut dispatch_error: Option<anyhow::Error> = None;
+            if capture_active {
+                if let Err(e) = event_queue.dispatch_pending(&mut state) {
+                    dispatch_error =
+                        Some(anyhow::anyhow!("Wayland event queue error: {}", e));
+                }
 
-            match dispatch_result {
-                Ok(_) => {
+                if dispatch_error.is_none() {
+                    if let Err(e) = event_queue.flush() {
+                        dispatch_error =
+                            Some(anyhow::anyhow!("Wayland flush error: {}", e));
+                    }
+                }
+
+                if dispatch_error.is_none() {
+                    if let Some(guard) = event_queue.prepare_read() {
+                        match guard.read() {
+                            Ok(_) => {
+                                if let Err(e) = event_queue.dispatch_pending(&mut state) {
+                                    dispatch_error = Some(anyhow::anyhow!(
+                                        "Wayland event queue error: {}",
+                                        e
+                                    ));
+                                }
+                            }
+                            Err(WaylandError::Io(err))
+                                if err.kind() == std::io::ErrorKind::WouldBlock => {}
+                            Err(err) => {
+                                dispatch_error = Some(anyhow::anyhow!(
+                                    "Wayland read error: {}",
+                                    err
+                                ));
+                            }
+                        }
+                    }
+                }
+            } else if let Err(e) = event_queue.blocking_dispatch(&mut state) {
+                dispatch_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
+            }
+
+            match dispatch_error {
+                None => {
                     // Check immediately after dispatch returns
                     if state.input_state.should_exit {
                         info!("Exit requested after dispatch, breaking event loop");
@@ -690,9 +723,9 @@ impl WaylandBackend {
                         state.input_state.needs_redraw = true;
                     }
                 }
-                Err(e) => {
+                Some(e) => {
                     warn!("Event queue error: {}", e);
-                    loop_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
+                    loop_error = Some(e);
                     break;
                 }
             }
