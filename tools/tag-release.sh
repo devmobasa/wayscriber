@@ -12,7 +12,7 @@ Requirements:
 - Tag must not already exist
 
 Examples:
-  tools/tag-release.sh 0.9.1
+  tools/tag-release.sh 0.9.2
 EOF
 }
 

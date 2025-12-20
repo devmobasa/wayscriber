@@ -5,7 +5,7 @@ usage() {
     cat <<'EOF'
 Usage: tools/bump-version.sh [--dry-run] [new_version]
 
-- If new_version is omitted, bumps the patch version (e.g., 0.9.1 -> 0.9.2).
+- If new_version is omitted, bumps the patch version (e.g., 0.9.2 -> 0.9.3).
 - Updates:
   * Cargo.toml (wayscriber)
   * configurator/Cargo.toml
