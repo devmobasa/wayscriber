@@ -584,6 +584,7 @@ impl Daemon {
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
             session_resume_override: override_state,
+            lock_file: None,
         }
     }
 
