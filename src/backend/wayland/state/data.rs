@@ -6,18 +6,13 @@ pub enum MoveDragKind {
     Side,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OverlaySuppression {
+    #[default]
     None,
     Capture,
     Frozen,
     Zoom,
-}
-
-impl Default for OverlaySuppression {
-    fn default() -> Self {
-        OverlaySuppression::None
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

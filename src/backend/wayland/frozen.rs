@@ -26,7 +26,6 @@ use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::capture::types::CaptureType;
 use crate::input::InputState;
 
-
 #[cfg(feature = "portal")]
 async fn portal_capture_bytes() -> Result<Vec<u8>, String> {
     use crate::capture::sources::portal::capture_via_portal_bytes;
@@ -223,11 +222,7 @@ impl FrozenState {
         Ok(())
     }
 
-    pub fn begin_screencopy<State>(
-        &mut self,
-        shm: &Shm,
-        qh: &QueueHandle<State>,
-    ) -> Result<()>
+    pub fn begin_screencopy<State>(&mut self, shm: &Shm, qh: &QueueHandle<State>) -> Result<()>
     where
         State:
             Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
@@ -261,11 +256,7 @@ impl FrozenState {
     }
 
     /// Handle screencopy frame events.
-    pub fn handle_frame_event(
-        &mut self,
-        event: FrameEvent,
-        input_state: &mut InputState,
-    ) {
+    pub fn handle_frame_event(&mut self, event: FrameEvent, input_state: &mut InputState) {
         match event {
             FrameEvent::Buffer {
                 format,
@@ -497,10 +488,7 @@ impl FrozenState {
     }
 
     /// Check for completed portal capture and apply result if present.
-    pub fn poll_portal_capture(
-        &mut self,
-        input_state: &mut InputState,
-    ) {
+    pub fn poll_portal_capture(&mut self, input_state: &mut InputState) {
         if !self.portal_in_progress {
             return;
         }

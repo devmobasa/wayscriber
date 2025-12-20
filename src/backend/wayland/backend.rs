@@ -641,12 +641,8 @@ impl WaylandBackend {
             }
 
             // Apply any completed portal fallback captures without blocking.
-            state
-                .frozen
-                .poll_portal_capture(&mut state.input_state);
-            state
-                .zoom
-                .poll_portal_capture(&mut state.input_state);
+            state.frozen.poll_portal_capture(&mut state.input_state);
+            state.zoom.poll_portal_capture(&mut state.input_state);
 
             if tray_action_flag
                 .as_ref()
@@ -664,36 +660,29 @@ impl WaylandBackend {
             let mut dispatch_error: Option<anyhow::Error> = None;
             if capture_active {
                 if let Err(e) = event_queue.dispatch_pending(&mut state) {
-                    dispatch_error =
-                        Some(anyhow::anyhow!("Wayland event queue error: {}", e));
+                    dispatch_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
                 }
 
-                if dispatch_error.is_none() {
-                    if let Err(e) = event_queue.flush() {
-                        dispatch_error =
-                            Some(anyhow::anyhow!("Wayland flush error: {}", e));
-                    }
+                if dispatch_error.is_none()
+                    && let Err(e) = event_queue.flush()
+                {
+                    dispatch_error = Some(anyhow::anyhow!("Wayland flush error: {}", e));
                 }
 
-                if dispatch_error.is_none() {
-                    if let Some(guard) = event_queue.prepare_read() {
-                        match guard.read() {
-                            Ok(_) => {
-                                if let Err(e) = event_queue.dispatch_pending(&mut state) {
-                                    dispatch_error = Some(anyhow::anyhow!(
-                                        "Wayland event queue error: {}",
-                                        e
-                                    ));
-                                }
+                if dispatch_error.is_none()
+                    && let Some(guard) = event_queue.prepare_read()
+                {
+                    match guard.read() {
+                        Ok(_) => {
+                            if let Err(e) = event_queue.dispatch_pending(&mut state) {
+                                dispatch_error =
+                                    Some(anyhow::anyhow!("Wayland event queue error: {}", e));
                             }
-                            Err(WaylandError::Io(err))
-                                if err.kind() == std::io::ErrorKind::WouldBlock => {}
-                            Err(err) => {
-                                dispatch_error = Some(anyhow::anyhow!(
-                                    "Wayland read error: {}",
-                                    err
-                                ));
-                            }
+                        }
+                        Err(WaylandError::Io(err))
+                            if err.kind() == std::io::ErrorKind::WouldBlock => {}
+                        Err(err) => {
+                            dispatch_error = Some(anyhow::anyhow!("Wayland read error: {}", err));
                         }
                     }
                 }
@@ -754,8 +743,9 @@ impl WaylandBackend {
                         log::info!("Frozen mode: using screencopy fast path");
                     }
                     state.enter_overlay_suppression(OverlaySuppression::Frozen);
-                    if let Err(err) =
-                        state.frozen.start_capture(use_fallback, &state.tokio_handle)
+                    if let Err(err) = state
+                        .frozen
+                        .start_capture(use_fallback, &state.tokio_handle)
                     {
                         warn!("Frozen capture failed to start: {}", err);
                         state.exit_overlay_suppression(OverlaySuppression::Frozen);

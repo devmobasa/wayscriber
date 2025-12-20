@@ -30,12 +30,12 @@ use std::time::{Duration, Instant};
 use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
 #[cfg(feature = "tray")]
 use crate::config::Config;
+use crate::paths::daemon_lock_file;
+use crate::session::try_lock_exclusive;
 use crate::{
     RESUME_SESSION_ENV, decode_session_override, encode_session_override, runtime_session_override,
     set_runtime_session_override,
 };
-use crate::paths::daemon_lock_file;
-use crate::session::try_lock_exclusive;
 #[cfg(feature = "tray")]
 use crate::{
     paths::{log_dir, tray_action_file},
@@ -625,6 +625,7 @@ impl Daemon {
             .create(true)
             .read(true)
             .write(true)
+            .truncate(false)
             .open(&lock_path)
             .with_context(|| format!("failed to open daemon lock {}", lock_path.display()))?;
 

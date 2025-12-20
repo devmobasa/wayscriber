@@ -58,8 +58,8 @@ use crate::{
     util::Rect,
 };
 
-pub use self::data::{MoveDragKind, OverlaySuppression};
 use self::data::{MoveDrag, StateData};
+pub use self::data::{MoveDragKind, OverlaySuppression};
 use super::{
     capture::CaptureState,
     frozen::FrozenState,
@@ -430,12 +430,7 @@ impl WaylandState {
         }
     }
 
-    pub(super) fn handle_zoom_scroll(
-        &mut self,
-        zoom_in: bool,
-        screen_x: f64,
-        screen_y: f64,
-    ) {
+    pub(super) fn handle_zoom_scroll(&mut self, zoom_in: bool, screen_x: f64, screen_y: f64) {
         let factor = if zoom_in {
             Self::ZOOM_STEP_SCROLL
         } else {
@@ -507,10 +502,7 @@ impl WaylandState {
             log::info!("Zoom: using screencopy fast path");
         }
         self.enter_overlay_suppression(OverlaySuppression::Zoom);
-        match self
-            .zoom
-            .start_capture(use_fallback, &self.tokio_handle)
-        {
+        match self.zoom.start_capture(use_fallback, &self.tokio_handle) {
             Ok(()) => Ok(()),
             Err(err) => {
                 self.exit_overlay_suppression(OverlaySuppression::Zoom);

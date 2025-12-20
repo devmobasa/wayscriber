@@ -55,18 +55,18 @@ impl CompositorHandler for WaylandState {
         );
         self.surface.set_frame_callback_pending(false);
 
-        if self.frozen.take_preflight_pending() {
-            if let Err(err) = self.frozen.begin_screencopy(&self.shm, qh) {
-                warn!("Frozen preflight capture failed: {}", err);
-                self.frozen.cancel(&mut self.input_state);
-            }
+        if self.frozen.take_preflight_pending()
+            && let Err(err) = self.frozen.begin_screencopy(&self.shm, qh)
+        {
+            warn!("Frozen preflight capture failed: {}", err);
+            self.frozen.cancel(&mut self.input_state);
         }
 
-        if self.zoom.take_preflight_pending() {
-            if let Err(err) = self.zoom.begin_screencopy(&self.shm, qh) {
-                warn!("Zoom preflight capture failed: {}", err);
-                self.zoom.cancel(&mut self.input_state, false);
-            }
+        if self.zoom.take_preflight_pending()
+            && let Err(err) = self.zoom.begin_screencopy(&self.shm, qh)
+        {
+            warn!("Zoom preflight capture failed: {}", err);
+            self.zoom.cancel(&mut self.input_state, false);
         }
 
         if self.input_state.needs_redraw {
@@ -120,8 +120,7 @@ impl CompositorHandler for WaylandState {
                 .set_active_output(Some(output.clone()), Some(info.id));
         }
         self.frozen.unfreeze(&mut self.input_state);
-        self.zoom
-            .deactivate(&mut self.input_state);
+        self.zoom.deactivate(&mut self.input_state);
 
         // Update frozen buffer dimensions in case this output's scale differs
         let (phys_w, phys_h) = self.surface.physical_dimensions();
@@ -211,7 +210,6 @@ impl CompositorHandler for WaylandState {
         self.frozen.unfreeze(&mut self.input_state);
         self.zoom.set_active_output(None, None);
         self.zoom.set_active_geometry(None);
-        self.zoom
-            .deactivate(&mut self.input_state);
+        self.zoom.deactivate(&mut self.input_state);
     }
 }

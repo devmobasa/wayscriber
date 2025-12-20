@@ -26,7 +26,6 @@ use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::capture::types::CaptureType;
 use crate::input::InputState;
 
-
 const MIN_ZOOM_SCALE: f64 = 1.0;
 const MAX_ZOOM_SCALE: f64 = 8.0;
 
@@ -309,11 +308,7 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn begin_screencopy<State>(
-        &mut self,
-        shm: &Shm,
-        qh: &QueueHandle<State>,
-    ) -> Result<()>
+    pub fn begin_screencopy<State>(&mut self, shm: &Shm, qh: &QueueHandle<State>) -> Result<()>
     where
         State:
             Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
@@ -343,11 +338,7 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn handle_frame_event(
-        &mut self,
-        event: FrameEvent,
-        input_state: &mut InputState,
-    ) {
+    pub fn handle_frame_event(&mut self, event: FrameEvent, input_state: &mut InputState) {
         match event {
             FrameEvent::Buffer {
                 format,
@@ -497,11 +488,7 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn cancel(
-        &mut self,
-        input_state: &mut InputState,
-        force_reset: bool,
-    ) {
+    pub fn cancel(&mut self, input_state: &mut InputState, force_reset: bool) {
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
         }
@@ -594,10 +581,7 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn poll_portal_capture(
-        &mut self,
-        input_state: &mut InputState,
-    ) {
+    pub fn poll_portal_capture(&mut self, input_state: &mut InputState) {
         if !self.portal_in_progress {
             return;
         }
@@ -685,7 +669,6 @@ impl ZoomState {
             }
         }
     }
-
 }
 
 fn crop_argb(
