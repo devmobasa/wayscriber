@@ -9,6 +9,7 @@ mod options;
 mod snapshot;
 mod storage;
 
+pub use lock::try_lock_exclusive;
 #[allow(unused_imports)]
 pub use options::{
     CompressionMode, DEFAULT_AUTO_COMPRESS_THRESHOLD_BYTES, SessionOptions, options_from_config,

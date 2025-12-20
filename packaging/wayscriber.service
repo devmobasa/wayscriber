@@ -2,13 +2,18 @@
 Description=Wayscriber - Screen annotation tool for Wayland
 Documentation=https://wayscriber.com
 PartOf=graphical-session.target
+After=graphical-session.target
+Wants=graphical-session.target
 
 [Service]
 Type=simple
+ExecStartPre=/bin/sh -c '[ -n "$WAYLAND_DISPLAY" ] && [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]'
 ExecStart=/usr/bin/wayscriber --daemon
 Restart=on-failure
 RestartSec=5
-# Ensure Wayland environment is available
+RestartPreventExitStatus=75
+SuccessExitStatus=75
+# Ensure consistent PATH for helper tools
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 
 [Install]

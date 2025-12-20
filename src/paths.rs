@@ -78,6 +78,11 @@ pub fn log_dir() -> PathBuf {
     runtime_root().join("logs")
 }
 
+/// Location for the daemon single-instance lock.
+pub fn daemon_lock_file() -> PathBuf {
+    runtime_root().join("wayscriber.lock")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

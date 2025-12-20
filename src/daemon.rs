@@ -12,8 +12,8 @@ use png::Decoder;
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
 use std::env;
-#[cfg(feature = "tray")]
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::ErrorKind;
 #[cfg(feature = "tray")]
 use std::path::PathBuf;
@@ -34,6 +34,8 @@ use crate::{
     RESUME_SESSION_ENV, decode_session_override, encode_session_override, runtime_session_override,
     set_runtime_session_override,
 };
+use crate::paths::daemon_lock_file;
+use crate::session::try_lock_exclusive;
 #[cfg(feature = "tray")]
 use crate::{
     paths::{log_dir, tray_action_file},
@@ -46,6 +48,17 @@ pub enum OverlayState {
     Hidden,  // Daemon running, overlay not visible
     Visible, // Overlay active, capturing input
 }
+
+#[derive(Debug)]
+pub struct AlreadyRunningError;
+
+impl std::fmt::Display for AlreadyRunningError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "wayscriber daemon is already running")
+    }
+}
+
+impl std::error::Error for AlreadyRunningError {}
 
 /// Daemon state manager
 type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
@@ -126,6 +139,7 @@ pub struct Daemon {
     overlay_child: Option<Child>,
     overlay_pid: Arc<AtomicU32>,
     session_resume_override: Arc<AtomicU8>,
+    lock_file: Option<std::fs::File>,
 }
 
 #[cfg(feature = "tray")]
@@ -549,6 +563,7 @@ impl Daemon {
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
             session_resume_override: override_state,
+            lock_file: None,
         }
     }
 
@@ -598,11 +613,38 @@ impl Daemon {
         }
     }
 
+    fn acquire_daemon_lock(&mut self) -> Result<()> {
+        let lock_path = daemon_lock_file();
+        if let Some(parent) = lock_path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create runtime directory {}", parent.display())
+            })?;
+        }
+
+        let lock_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .with_context(|| format!("failed to open daemon lock {}", lock_path.display()))?;
+
+        match try_lock_exclusive(&lock_file) {
+            Ok(()) => {
+                self.lock_file = Some(lock_file);
+                Ok(())
+            }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => Err(AlreadyRunningError.into()),
+            Err(err) => Err(err).context("failed to lock daemon instance"),
+        }
+    }
+
     /// Run daemon with signal handling
     pub fn run(&mut self) -> Result<()> {
         info!("Starting wayscriber daemon");
         info!("Send SIGUSR1 to toggle overlay (e.g., pkill -SIGUSR1 wayscriber)");
         info!("Configure Hyprland: bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber");
+
+        self.acquire_daemon_lock()?;
 
         // Set up signal handling
         let mut signals = Signals::new([SIGUSR1, SIGTERM, SIGINT])
