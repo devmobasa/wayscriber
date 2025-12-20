@@ -344,12 +344,7 @@ impl PointerHandler for WaylandState {
                     if self.input_state.modifiers.ctrl && self.input_state.modifiers.alt {
                         if scroll_direction != 0 {
                             let zoom_in = scroll_direction < 0;
-                            self.handle_zoom_scroll(
-                                zoom_in,
-                                event.position.0,
-                                event.position.1,
-                                qh,
-                            );
+                            self.handle_zoom_scroll(zoom_in, event.position.0, event.position.1);
                         }
                         continue;
                     }

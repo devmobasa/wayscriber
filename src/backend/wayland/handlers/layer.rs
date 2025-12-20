@@ -66,7 +66,7 @@ impl LayerShellHandler for WaylandState {
             self.frozen
                 .handle_resize(phys_w, phys_h, &mut self.input_state);
             self.zoom
-                .handle_resize(phys_w, phys_h, &mut self.surface, &mut self.input_state);
+                .handle_resize(phys_w, phys_h, &mut self.input_state);
 
             // Refresh active geometry for portal fallback cropping using latest logical size/scale.
             if let Some(geo) = crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
@@ -87,7 +87,7 @@ impl LayerShellHandler for WaylandState {
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
-            .handle_resize(phys_w, phys_h, &mut self.surface, &mut self.input_state);
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
 
         // Re-apply toolbar offsets now that we have a configured surface size; avoids clamping to 0
         // on startup before the compositor provides dimensions.

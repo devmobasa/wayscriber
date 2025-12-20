@@ -31,13 +31,11 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for WaylandState {
         _qh: &QueueHandle<Self>,
     ) {
         if state.zoom.is_in_progress() {
-            state
-                .zoom
-                .handle_frame_event(event, &mut state.surface, &mut state.input_state);
+            state.zoom.handle_frame_event(event, &mut state.input_state);
         } else {
             state
                 .frozen
-                .handle_frame_event(event, &mut state.surface, &mut state.input_state);
+                .handle_frame_event(event, &mut state.input_state);
         }
     }
 }

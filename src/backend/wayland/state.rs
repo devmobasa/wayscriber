@@ -58,11 +58,12 @@ use crate::{
     util::Rect,
 };
 
-pub use self::data::MoveDragKind;
 use self::data::{MoveDrag, StateData};
+pub use self::data::{MoveDragKind, OverlaySuppression};
 use super::{
     capture::CaptureState,
     frozen::FrozenState,
+    overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
     surface::SurfaceState,
     toolbar::{
@@ -331,6 +332,47 @@ impl WaylandState {
         self.data.current_mouse_y = y;
     }
 
+    pub(super) fn overlay_suppressed(&self) -> bool {
+        self.data.overlay_suppression != OverlaySuppression::None
+    }
+
+    fn apply_overlay_clickthrough(&mut self, clickthrough: bool) {
+        if let Some(wl_surface) = self.surface.wl_surface().cloned() {
+            set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough);
+        }
+        self.toolbar
+            .set_suppressed(&self.compositor_state, clickthrough);
+    }
+
+    pub(super) fn enter_overlay_suppression(&mut self, reason: OverlaySuppression) {
+        if self.data.overlay_suppression != OverlaySuppression::None {
+            return;
+        }
+        self.data.overlay_suppression = reason;
+        self.apply_overlay_clickthrough(true);
+        self.input_state.needs_redraw = true;
+        self.toolbar.mark_dirty();
+    }
+
+    pub(super) fn exit_overlay_suppression(&mut self, reason: OverlaySuppression) {
+        if self.data.overlay_suppression != reason {
+            return;
+        }
+        self.data.overlay_suppression = OverlaySuppression::None;
+        self.apply_overlay_clickthrough(false);
+        self.input_state.needs_redraw = true;
+        self.toolbar.mark_dirty();
+    }
+
+    pub(super) fn apply_capture_completion(&mut self) {
+        if self.frozen.take_capture_done() {
+            self.exit_overlay_suppression(OverlaySuppression::Frozen);
+        }
+        if self.zoom.take_capture_done() {
+            self.exit_overlay_suppression(OverlaySuppression::Zoom);
+        }
+    }
+
     pub(super) fn zoomed_world_coords(&self, screen_x: f64, screen_y: f64) -> (i32, i32) {
         if self.zoom.active {
             let (wx, wy) = self.zoom.screen_to_world(screen_x, screen_y);
@@ -340,17 +382,17 @@ impl WaylandState {
         }
     }
 
-    pub(super) fn handle_zoom_action(&mut self, action: ZoomAction, qh: &QueueHandle<Self>) {
+    pub(super) fn handle_zoom_action(&mut self, action: ZoomAction) {
         let (sx, sy) = self.zoom_keyboard_anchor();
         match action {
             ZoomAction::In => {
-                self.apply_zoom_factor(Self::ZOOM_STEP_KEY, sx, sy, qh, true);
+                self.apply_zoom_factor(Self::ZOOM_STEP_KEY, sx, sy, true);
             }
             ZoomAction::Out => {
-                self.apply_zoom_factor(1.0 / Self::ZOOM_STEP_KEY, sx, sy, qh, false);
+                self.apply_zoom_factor(1.0 / Self::ZOOM_STEP_KEY, sx, sy, false);
             }
             ZoomAction::Reset => {
-                if self.zoom.active {
+                if self.zoom.is_engaged() {
                     self.exit_zoom();
                 }
             }
@@ -369,7 +411,7 @@ impl WaylandState {
             }
             ZoomAction::RefreshCapture => {
                 if self.zoom.active
-                    && let Err(err) = self.start_zoom_capture(qh, true)
+                    && let Err(err) = self.start_zoom_capture(true)
                 {
                     warn!("Zoom capture refresh failed: {}", err);
                 }
@@ -388,25 +430,19 @@ impl WaylandState {
         }
     }
 
-    pub(super) fn handle_zoom_scroll(
-        &mut self,
-        zoom_in: bool,
-        screen_x: f64,
-        screen_y: f64,
-        qh: &QueueHandle<Self>,
-    ) {
+    pub(super) fn handle_zoom_scroll(&mut self, zoom_in: bool, screen_x: f64, screen_y: f64) {
         let factor = if zoom_in {
             Self::ZOOM_STEP_SCROLL
         } else {
             1.0 / Self::ZOOM_STEP_SCROLL
         };
-        self.apply_zoom_factor(factor, screen_x, screen_y, qh, zoom_in);
+        self.apply_zoom_factor(factor, screen_x, screen_y, zoom_in);
     }
 
     pub(super) fn exit_zoom(&mut self) {
-        if self.zoom.active {
-            self.zoom
-                .deactivate(&mut self.surface, &mut self.input_state);
+        if self.zoom.is_engaged() {
+            self.zoom.deactivate(&mut self.input_state);
+            self.exit_overlay_suppression(OverlaySuppression::Zoom);
         }
     }
 
@@ -415,17 +451,16 @@ impl WaylandState {
         factor: f64,
         screen_x: f64,
         screen_y: f64,
-        qh: &QueueHandle<Self>,
         allow_activate: bool,
     ) {
         let screen_w = self.surface.width();
         let screen_h = self.surface.height();
 
-        if !self.zoom.active {
+        if !self.zoom.is_engaged() {
             if !allow_activate {
                 return;
             }
-            self.zoom.activate();
+            self.zoom.request_activation();
             self.zoom.locked = false;
             self.zoom.reset_view();
             self.input_state.close_context_menu();
@@ -440,16 +475,16 @@ impl WaylandState {
                 .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
         }
 
-        if self.zoom.active
-            && let Err(err) = self.start_zoom_capture(qh, false)
+        if self.zoom.is_engaged()
+            && let Err(err) = self.start_zoom_capture(false)
         {
             warn!("Zoom capture failed to start: {}", err);
-            self.zoom
-                .deactivate(&mut self.surface, &mut self.input_state);
+            self.zoom.deactivate(&mut self.input_state);
+            self.exit_overlay_suppression(OverlaySuppression::Zoom);
         }
     }
 
-    fn start_zoom_capture(&mut self, qh: &QueueHandle<Self>, force: bool) -> Result<()> {
+    fn start_zoom_capture(&mut self, force: bool) -> Result<()> {
         if self.zoom.is_in_progress() {
             return Ok(());
         }
@@ -466,13 +501,14 @@ impl WaylandState {
         } else {
             log::info!("Zoom: using screencopy fast path");
         }
-        self.zoom.start_capture(
-            &self.shm,
-            &mut self.surface,
-            qh,
-            use_fallback,
-            &self.tokio_handle,
-        )
+        self.enter_overlay_suppression(OverlaySuppression::Zoom);
+        match self.zoom.start_capture(use_fallback, &self.tokio_handle) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                self.exit_overlay_suppression(OverlaySuppression::Zoom);
+                Err(err)
+            }
+        }
     }
 
     #[allow(dead_code)]
@@ -1703,11 +1739,7 @@ impl WaylandState {
 
     pub(super) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
         debug!("=== RENDER START ===");
-        if self.capture.is_overlay_hidden() {
-            debug!("Skipping render while overlay is hidden for capture");
-            self.input_state.needs_redraw = false;
-            return Ok(false);
-        }
+        let suppressed = self.overlay_suppressed();
 
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
@@ -1766,230 +1798,239 @@ impl WaylandState {
         ctx.paint().context("Failed to clear background")?;
         ctx.set_operator(cairo::Operator::Over);
 
-        let zoom_render_image = if self.zoom.active {
-            self.zoom.image().or_else(|| self.frozen.image())
-        } else {
-            None
-        };
-        let zoom_render_active = self.zoom.active && zoom_render_image.is_some();
-        let zoom_transform_active = self.zoom.active;
-        let background_image = if zoom_render_active {
-            zoom_render_image
-        } else {
-            self.frozen.image()
-        };
+        if !suppressed {
+            let zoom_render_image = if self.zoom.active {
+                self.zoom.image().or_else(|| self.frozen.image())
+            } else {
+                None
+            };
+            let zoom_render_active = self.zoom.active && zoom_render_image.is_some();
+            let zoom_transform_active = self.zoom.active;
+            let background_image = if zoom_render_active {
+                zoom_render_image
+            } else {
+                self.frozen.image()
+            };
 
-        if let Some(image) = background_image {
-            // SAFETY: we create a Cairo surface borrowing our owned buffer; it is dropped
-            // before commit, and we hold the buffer alive via `image.data`.
-            let surface = unsafe {
-                cairo::ImageSurface::create_for_data_unsafe(
-                    image.data.as_ptr() as *mut u8,
-                    cairo::Format::ARgb32,
-                    image.width as i32,
-                    image.height as i32,
-                    image.stride,
-                )
+            if let Some(image) = background_image {
+                // SAFETY: we create a Cairo surface borrowing our owned buffer; it is dropped
+                // before commit, and we hold the buffer alive via `image.data`.
+                let surface = unsafe {
+                    cairo::ImageSurface::create_for_data_unsafe(
+                        image.data.as_ptr() as *mut u8,
+                        cairo::Format::ARgb32,
+                        image.width as i32,
+                        image.height as i32,
+                        image.stride,
+                    )
+                }
+                .context("Failed to create frozen image surface")?;
+
+                let scale_x = if image.width > 0 {
+                    phys_width as f64 / image.width as f64
+                } else {
+                    1.0
+                };
+                let scale_y = if image.height > 0 {
+                    phys_height as f64 / image.height as f64
+                } else {
+                    1.0
+                };
+                let _ = ctx.save();
+                if zoom_render_active {
+                    let scale_x_safe = scale_x.max(f64::MIN_POSITIVE);
+                    let scale_y_safe = scale_y.max(f64::MIN_POSITIVE);
+                    let offset_x = self.zoom.view_offset.0 * (scale as f64) / scale_x_safe;
+                    let offset_y = self.zoom.view_offset.1 * (scale as f64) / scale_y_safe;
+                    ctx.scale(scale_x * self.zoom.scale, scale_y * self.zoom.scale);
+                    ctx.translate(-offset_x, -offset_y);
+                } else if (scale_x - 1.0).abs() > f64::EPSILON
+                    || (scale_y - 1.0).abs() > f64::EPSILON
+                {
+                    ctx.scale(scale_x, scale_y);
+                }
+
+                if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
+                    warn!("Failed to set frozen background surface: {}", err);
+                } else if let Err(err) = ctx.paint() {
+                    warn!("Failed to paint frozen background: {}", err);
+                }
+                let _ = ctx.restore();
+
+                let pattern = cairo::SurfacePattern::create(&surface);
+                pattern.set_extend(cairo::Extend::Pad);
+                let mut matrix = cairo::Matrix::identity();
+                let scale_x_inv = 1.0 / (scale as f64 * scale_x.max(f64::MIN_POSITIVE));
+                let scale_y_inv = 1.0 / (scale as f64 * scale_y.max(f64::MIN_POSITIVE));
+                matrix.scale(scale_x_inv, scale_y_inv);
+                pattern.set_matrix(matrix);
+                eraser_pattern = Some(pattern);
+            } else {
+                // Render board background if in board mode (whiteboard/blackboard)
+                crate::draw::render_board_background(
+                    &ctx,
+                    self.input_state.board_mode(),
+                    &self.input_state.board_config,
+                );
+                eraser_bg_color = self
+                    .input_state
+                    .board_mode()
+                    .background_color(&self.input_state.board_config);
             }
-            .context("Failed to create frozen image surface")?;
 
-            let scale_x = if image.width > 0 {
-                phys_width as f64 / image.width as f64
-            } else {
-                1.0
-            };
-            let scale_y = if image.height > 0 {
-                phys_height as f64 / image.height as f64
-            } else {
-                1.0
-            };
+            // Scale subsequent drawing to logical coordinates
             let _ = ctx.save();
-            if zoom_render_active {
-                let scale_x_safe = scale_x.max(f64::MIN_POSITIVE);
-                let scale_y_safe = scale_y.max(f64::MIN_POSITIVE);
-                let offset_x = self.zoom.view_offset.0 * (scale as f64) / scale_x_safe;
-                let offset_y = self.zoom.view_offset.1 * (scale as f64) / scale_y_safe;
-                ctx.scale(scale_x * self.zoom.scale, scale_y * self.zoom.scale);
-                ctx.translate(-offset_x, -offset_y);
-            } else if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
-                ctx.scale(scale_x, scale_y);
+            if scale > 1 {
+                ctx.scale(scale as f64, scale as f64);
             }
 
-            if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
-                warn!("Failed to set frozen background surface: {}", err);
-            } else if let Err(err) = ctx.paint() {
-                warn!("Failed to paint frozen background: {}", err);
+            if zoom_transform_active {
+                let _ = ctx.save();
+                ctx.scale(self.zoom.scale, self.zoom.scale);
+                ctx.translate(-self.zoom.view_offset.0, -self.zoom.view_offset.1);
             }
-            let _ = ctx.restore();
 
-            let pattern = cairo::SurfacePattern::create(&surface);
-            pattern.set_extend(cairo::Extend::Pad);
-            let mut matrix = cairo::Matrix::identity();
-            let scale_x_inv = 1.0 / (scale as f64 * scale_x.max(f64::MIN_POSITIVE));
-            let scale_y_inv = 1.0 / (scale as f64 * scale_y.max(f64::MIN_POSITIVE));
-            matrix.scale(scale_x_inv, scale_y_inv);
-            pattern.set_matrix(matrix);
-            eraser_pattern = Some(pattern);
-        } else {
-            // Render board background if in board mode (whiteboard/blackboard)
-            crate::draw::render_board_background(
-                &ctx,
-                self.input_state.board_mode(),
-                &self.input_state.board_config,
+            // Render all completed shapes from active frame
+            debug!(
+                "Rendering {} completed shapes",
+                self.input_state.canvas_set.active_frame().shapes.len()
             );
-            eraser_bg_color = self
-                .input_state
-                .board_mode()
-                .background_color(&self.input_state.board_config);
-        }
+            let eraser_ctx = crate::draw::EraserReplayContext {
+                pattern: eraser_pattern.as_ref().map(|p| p as &cairo::Pattern),
+                bg_color: eraser_bg_color,
+            };
+            crate::draw::render_shapes(
+                &ctx,
+                &self.input_state.canvas_set.active_frame().shapes,
+                Some(&eraser_ctx),
+            );
 
-        // Scale subsequent drawing to logical coordinates
-        let _ = ctx.save();
-        if scale > 1 {
-            ctx.scale(scale as f64, scale as f64);
-        }
-
-        if zoom_transform_active {
-            let _ = ctx.save();
-            ctx.scale(self.zoom.scale, self.zoom.scale);
-            ctx.translate(-self.zoom.view_offset.0, -self.zoom.view_offset.1);
-        }
-
-        // Render all completed shapes from active frame
-        debug!(
-            "Rendering {} completed shapes",
-            self.input_state.canvas_set.active_frame().shapes.len()
-        );
-        let eraser_ctx = crate::draw::EraserReplayContext {
-            pattern: eraser_pattern.as_ref().map(|p| p as &cairo::Pattern),
-            bg_color: eraser_bg_color,
-        };
-        crate::draw::render_shapes(
-            &ctx,
-            &self.input_state.canvas_set.active_frame().shapes,
-            Some(&eraser_ctx),
-        );
-
-        // Render selection halo overlays
-        if self.input_state.has_selection() {
-            let selected: HashSet<_> = self
-                .input_state
-                .selected_shape_ids()
-                .iter()
-                .copied()
-                .collect();
-            let frame = self.input_state.canvas_set.active_frame();
-            for drawn in &frame.shapes {
-                if selected.contains(&drawn.id) {
-                    crate::draw::render_selection_halo(&ctx, drawn);
+            // Render selection halo overlays
+            if self.input_state.has_selection() {
+                let selected: HashSet<_> = self
+                    .input_state
+                    .selected_shape_ids()
+                    .iter()
+                    .copied()
+                    .collect();
+                let frame = self.input_state.canvas_set.active_frame();
+                for drawn in &frame.shapes {
+                    if selected.contains(&drawn.id) {
+                        crate::draw::render_selection_halo(&ctx, drawn);
+                    }
                 }
             }
-        }
 
-        // Render provisional shape if actively drawing
-        // Use optimized method that avoids cloning for freehand
-        let (mx, my) = if zoom_transform_active {
-            self.zoomed_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64)
-        } else {
-            self.current_mouse()
-        };
-        if self.input_state.render_provisional_shape(&ctx, mx, my) {
-            debug!("Rendered provisional shape");
-        }
-
-        // Render text cursor/buffer if in text mode
-        if let DrawingState::TextInput { x, y, buffer } = &self.input_state.state {
-            let preview_text = if buffer.is_empty() {
-                "_".to_string() // Show cursor when buffer is empty
+            // Render provisional shape if actively drawing
+            // Use optimized method that avoids cloning for freehand
+            let (mx, my) = if zoom_transform_active {
+                self.zoomed_world_coords(
+                    self.current_mouse().0 as f64,
+                    self.current_mouse().1 as f64,
+                )
             } else {
-                format!("{}_", buffer)
+                self.current_mouse()
             };
-            crate::draw::render_text(
-                &ctx,
-                *x,
-                *y,
-                &preview_text,
-                self.input_state.current_color,
-                self.input_state.current_font_size,
-                &self.input_state.font_descriptor,
-                self.input_state.text_background_enabled,
-            );
-        }
+            if self.input_state.render_provisional_shape(&ctx, mx, my) {
+                debug!("Rendered provisional shape");
+            }
 
-        // Render click highlight overlays before UI so status/help remain legible
-        self.input_state.render_click_highlights(&ctx, now);
+            // Render text cursor/buffer if in text mode
+            if let DrawingState::TextInput { x, y, buffer } = &self.input_state.state {
+                let preview_text = if buffer.is_empty() {
+                    "_".to_string() // Show cursor when buffer is empty
+                } else {
+                    format!("{}_", buffer)
+                };
+                crate::draw::render_text(
+                    &ctx,
+                    *x,
+                    *y,
+                    &preview_text,
+                    self.input_state.current_color,
+                    self.input_state.current_font_size,
+                    &self.input_state.font_descriptor,
+                    self.input_state.text_background_enabled,
+                );
+            }
 
-        if zoom_transform_active {
-            let _ = ctx.restore();
-        }
+            // Render click highlight overlays before UI so status/help remain legible
+            self.input_state.render_click_highlights(&ctx, now);
 
-        // Render frozen badge even if status bar is hidden
-        if self.input_state.frozen_active() && !self.zoom.active && self.config.ui.show_frozen_badge
-        {
-            crate::ui::render_frozen_badge(&ctx, width, height);
-        }
-        // Render a zoom badge when the status bar is hidden or zoom is locked.
-        if self.input_state.zoom_active()
-            && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
-        {
-            crate::ui::render_zoom_badge(
-                &ctx,
-                width,
-                height,
-                self.input_state.zoom_scale(),
-                self.input_state.zoom_locked(),
-            );
-        }
+            if zoom_transform_active {
+                let _ = ctx.restore();
+            }
 
-        // Render status bar if enabled
-        if self.input_state.show_status_bar {
-            crate::ui::render_status_bar(
-                &ctx,
-                &self.input_state,
-                self.config.ui.status_bar_position,
-                &self.config.ui.status_bar_style,
-                width,
-                height,
-            );
-        }
+            // Render frozen badge even if status bar is hidden
+            if self.input_state.frozen_active()
+                && !self.zoom.active
+                && self.config.ui.show_frozen_badge
+            {
+                crate::ui::render_frozen_badge(&ctx, width, height);
+            }
+            // Render a zoom badge when the status bar is hidden or zoom is locked.
+            if self.input_state.zoom_active()
+                && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
+            {
+                crate::ui::render_zoom_badge(
+                    &ctx,
+                    width,
+                    height,
+                    self.input_state.zoom_scale(),
+                    self.input_state.zoom_locked(),
+                );
+            }
 
-        // Render help overlay if toggled
-        if self.input_state.show_help {
-            crate::ui::render_help_overlay(
-                &ctx,
-                &self.config.ui.help_overlay_style,
-                width,
-                height,
-                self.frozen_enabled(),
-            );
-        }
+            // Render status bar if enabled
+            if self.input_state.show_status_bar {
+                crate::ui::render_status_bar(
+                    &ctx,
+                    &self.input_state,
+                    self.config.ui.status_bar_position,
+                    &self.config.ui.status_bar_style,
+                    width,
+                    height,
+                );
+            }
 
-        if !self.zoom.active {
-            crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
+            // Render help overlay if toggled
+            if self.input_state.show_help {
+                crate::ui::render_help_overlay(
+                    &ctx,
+                    &self.config.ui.help_overlay_style,
+                    width,
+                    height,
+                    self.frozen_enabled(),
+                );
+            }
 
-            if self.input_state.is_context_menu_open() {
-                self.input_state
-                    .update_context_menu_layout(&ctx, width, height);
+            if !self.zoom.active {
+                crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
+
+                if self.input_state.is_context_menu_open() {
+                    self.input_state
+                        .update_context_menu_layout(&ctx, width, height);
+                } else {
+                    self.input_state.clear_context_menu_layout();
+                }
+
+                // Render context menu if open
+                crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
             } else {
                 self.input_state.clear_context_menu_layout();
             }
 
-            // Render context menu if open
-            crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
-        } else {
-            self.input_state.clear_context_menu_layout();
-        }
-
-        // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.
-        if self.toolbar.is_visible() && self.inline_toolbars_active() {
-            let snapshot = self.toolbar_snapshot();
-            if self.toolbar.update_snapshot(&snapshot) {
-                self.toolbar.mark_dirty();
+            // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.
+            if self.toolbar.is_visible() && self.inline_toolbars_active() {
+                let snapshot = self.toolbar_snapshot();
+                if self.toolbar.update_snapshot(&snapshot) {
+                    self.toolbar.mark_dirty();
+                }
+                self.render_inline_toolbars(&ctx, &snapshot);
             }
-            self.render_inline_toolbars(&ctx, &snapshot);
-        }
 
-        let _ = ctx.restore();
+            let _ = ctx.restore();
+        }
 
         // Flush Cairo
         debug!("Flushing Cairo surface");
@@ -2029,9 +2070,14 @@ impl WaylandState {
         // single accumulator.
         wl_surface.damage_buffer(0, 0, phys_width as i32, phys_height as i32);
 
+        let force_frame_callback = self.frozen.preflight_pending() || self.zoom.preflight_pending();
         if self.config.performance.enable_vsync {
             debug!("Requesting frame callback (vsync enabled)");
             wl_surface.frame(qh, wl_surface.clone());
+        } else if force_frame_callback {
+            debug!("Requesting frame callback (preflight)");
+            wl_surface.frame(qh, wl_surface.clone());
+            self.surface.set_frame_callback_pending(true);
         } else {
             debug!("Skipping frame callback (vsync disabled - allows back-to-back renders)");
         }
@@ -2195,10 +2241,7 @@ impl WaylandState {
     /// Re-maps the layer surface to its original size and forces a redraw.
     pub(super) fn show_overlay(&mut self) {
         self.input_state.clear_click_highlights();
-        if self.capture.show_overlay(&mut self.surface) {
-            // Force a redraw to show the overlay again
-            self.input_state.needs_redraw = true;
-        }
+        self.exit_overlay_suppression(OverlaySuppression::Capture);
     }
 
     /// Handles capture actions by delegating to the CaptureManager.
@@ -2300,8 +2343,8 @@ impl WaylandState {
             })
         };
 
-        // Hide overlay before capture to prevent capturing the overlay itself
-        self.capture.hide_overlay(&mut self.surface);
+        // Suppress overlay before capture to prevent capturing the overlay itself
+        self.enter_overlay_suppression(OverlaySuppression::Capture);
         self.capture.mark_in_progress();
 
         // Request capture

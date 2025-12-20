@@ -27,6 +27,7 @@ pub struct ToolbarSurfaceManager {
     top_visible: bool,
     /// Whether the side toolbar is visible
     side_visible: bool,
+    suppressed: bool,
     top: ToolbarSurface,
     side: ToolbarSurface,
     top_hover: Option<(f64, f64)>,
@@ -40,6 +41,7 @@ impl Default for ToolbarSurfaceManager {
             visible: false,
             top_visible: false,
             side_visible: false,
+            suppressed: false,
             // Anchor top/side toolbars to both axes they offset along so margins take effect.
             top: ToolbarSurface::new(
                 "wayscriber-toolbar-top",
@@ -126,6 +128,15 @@ impl ToolbarSurfaceManager {
 
     pub fn is_toolbar_surface(&self, surface: &wl_surface::WlSurface) -> bool {
         self.top.is_surface(surface) || self.side.is_surface(surface)
+    }
+
+    pub fn set_suppressed(&mut self, compositor: &CompositorState, suppressed: bool) {
+        if self.suppressed == suppressed {
+            return;
+        }
+        self.suppressed = suppressed;
+        self.top.set_suppressed(compositor, suppressed);
+        self.side.set_suppressed(compositor, suppressed);
     }
 
     pub fn set_top_margin_left(&mut self, left: i32) {
@@ -225,6 +236,11 @@ impl ToolbarSurfaceManager {
                 self.side.set_logical_size(side_size);
             }
             self.side.ensure_created(qh, compositor, layer_shell, scale);
+        }
+
+        if self.suppressed {
+            self.top.set_suppressed(compositor, true);
+            self.side.set_suppressed(compositor, true);
         }
     }
 

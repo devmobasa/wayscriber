@@ -45,6 +45,17 @@ pub fn lock_exclusive(file: &File) -> io::Result<()> {
     }
 }
 
+pub fn try_lock_exclusive(file: &File) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        flock(file, libc::LOCK_EX | libc::LOCK_NB)
+    }
+    #[cfg(not(unix))]
+    {
+        flock(file, 0)
+    }
+}
+
 pub fn unlock(file: &File) -> io::Result<()> {
     #[cfg(unix)]
     {

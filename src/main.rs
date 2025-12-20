@@ -105,9 +105,23 @@ struct Cli {
     no_resume_session: bool,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     env_logger::init();
 
+    if let Err(err) = run() {
+        let already_running = err
+            .chain()
+            .any(|cause| cause.is::<daemon::AlreadyRunningError>());
+        if already_running {
+            eprintln!("wayscriber daemon is already running");
+            std::process::exit(75);
+        }
+        eprintln!("{:#}", err);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let session_override = if cli.resume_session {
         Some(true)
