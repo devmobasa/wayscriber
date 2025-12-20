@@ -13,6 +13,7 @@ use wayland_client::{
     protocol::{wl_output, wl_surface},
 };
 
+use crate::backend::wayland::overlay_passthrough::set_surface_clickthrough;
 use crate::backend::wayland::state::WaylandState;
 use crate::backend::wayland::toolbar::hit::{HitRegion, drag_intent_for_hit, intent_for_hit};
 use crate::ui::toolbar::ToolbarSnapshot;
@@ -31,6 +32,7 @@ pub struct ToolbarSurface {
     pub scale: i32,
     pub configured: bool,
     pub dirty: bool,
+    pub suppressed: bool,
     pub hit_regions: Vec<HitRegion>,
     pub hover: Option<(f64, f64)>,
 }
@@ -50,6 +52,7 @@ impl ToolbarSurface {
             scale: 1,
             configured: false,
             dirty: false,
+            suppressed: false,
             hit_regions: Vec::new(),
             hover: None,
         }
@@ -121,6 +124,7 @@ impl ToolbarSurface {
         self.height = 0;
         self.configured = false;
         self.dirty = false;
+        self.suppressed = false;
         self.hit_regions.clear();
         self.hover = None;
     }
@@ -149,6 +153,18 @@ impl ToolbarSurface {
     }
 
     pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub fn set_suppressed(&mut self, compositor: &CompositorState, suppressed: bool) {
+        if self.suppressed == suppressed {
+            return;
+        }
+        self.suppressed = suppressed;
+        if let Some(surface) = self.wl_surface.as_ref() {
+            set_surface_clickthrough(compositor, surface, suppressed);
+        }
+        self.hit_regions.clear();
         self.dirty = true;
     }
 
@@ -274,19 +290,20 @@ impl ToolbarSurface {
         let _ = ctx.paint();
         ctx.set_operator(cairo::Operator::Over);
 
-        if self.scale > 1 {
-            ctx.scale(self.scale as f64, self.scale as f64);
-        }
-
         self.hit_regions.clear();
-        render_fn(
-            &ctx,
-            self.width as f64,
-            self.height as f64,
-            snapshot,
-            &mut self.hit_regions,
-            hover,
-        )?;
+        if !self.suppressed {
+            if self.scale > 1 {
+                ctx.scale(self.scale as f64, self.scale as f64);
+            }
+            render_fn(
+                &ctx,
+                self.width as f64,
+                self.height as f64,
+                snapshot,
+                &mut self.hit_regions,
+                hover,
+            )?;
+        }
 
         surface.flush();
 

@@ -348,7 +348,6 @@ impl PointerHandler for WaylandState {
                                 zoom_in,
                                 event.position.0,
                                 event.position.1,
-                                qh,
                             );
                         }
                         continue;

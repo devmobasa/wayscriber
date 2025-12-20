@@ -25,7 +25,7 @@ impl CompositorHandler for WaylandState {
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
-            .handle_resize(phys_w, phys_h, &mut self.surface, &mut self.input_state);
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.toolbar
             .maybe_update_scale(self.surface.current_output().as_ref(), scale);
         self.toolbar.mark_dirty();
@@ -45,7 +45,7 @@ impl CompositorHandler for WaylandState {
     fn frame(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         time: u32,
     ) {
@@ -54,6 +54,20 @@ impl CompositorHandler for WaylandState {
             time
         );
         self.surface.set_frame_callback_pending(false);
+
+        if self.frozen.take_preflight_pending() {
+            if let Err(err) = self.frozen.begin_screencopy(&self.shm, qh) {
+                warn!("Frozen preflight capture failed: {}", err);
+                self.frozen.cancel(&mut self.input_state);
+            }
+        }
+
+        if self.zoom.take_preflight_pending() {
+            if let Err(err) = self.zoom.begin_screencopy(&self.shm, qh) {
+                warn!("Zoom preflight capture failed: {}", err);
+                self.zoom.cancel(&mut self.input_state, false);
+            }
+        }
 
         if self.input_state.needs_redraw {
             debug!(
@@ -107,14 +121,14 @@ impl CompositorHandler for WaylandState {
         }
         self.frozen.unfreeze(&mut self.input_state);
         self.zoom
-            .deactivate(&mut self.surface, &mut self.input_state);
+            .deactivate(&mut self.input_state);
 
         // Update frozen buffer dimensions in case this output's scale differs
         let (phys_w, phys_h) = self.surface.physical_dimensions();
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
-            .handle_resize(phys_w, phys_h, &mut self.surface, &mut self.input_state);
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
 
         // If freeze-on-start was requested, trigger it once the surface is configured and active.
         if self.pending_freeze_on_start() {
@@ -198,6 +212,6 @@ impl CompositorHandler for WaylandState {
         self.zoom.set_active_output(None, None);
         self.zoom.set_active_geometry(None);
         self.zoom
-            .deactivate(&mut self.surface, &mut self.input_state);
+            .deactivate(&mut self.input_state);
     }
 }

@@ -84,7 +84,7 @@ impl WindowHandler for WaylandState {
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
-            .handle_resize(phys_w, phys_h, &mut self.surface, &mut self.input_state);
+            .handle_resize(phys_w, phys_h, &mut self.input_state);
 
         if let Some(geo) = crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
             None, // logical position is not available here

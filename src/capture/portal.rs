@@ -156,19 +156,15 @@ fn build_portal_options(
 
     match capture_type {
         CaptureType::FullScreen => {
-            // Modal = false means non-interactive (capture immediately)
-            options.insert("modal".to_string(), false.into());
             options.insert("interactive".to_string(), false.into());
         }
         CaptureType::ActiveWindow => {
             // Interactive = true lets user select window
             // TODO: Try to get active window first, fall back to interactive
-            options.insert("modal".to_string(), false.into());
             options.insert("interactive".to_string(), true.into());
         }
         CaptureType::Selection { .. } => {
             // Interactive mode for selection
-            options.insert("modal".to_string(), false.into());
             options.insert("interactive".to_string(), true.into());
         }
     }

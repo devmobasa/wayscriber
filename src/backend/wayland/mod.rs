@@ -3,6 +3,7 @@ mod capture;
 mod frozen;
 mod frozen_geometry;
 mod handlers;
+mod overlay_passthrough;
 mod session;
 mod state;
 mod surface;

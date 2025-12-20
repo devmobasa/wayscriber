@@ -5,12 +5,9 @@
 
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
-use smithay_client_toolkit::{
-    shell::WaylandSurface,
-    shm::{
-        Shm,
-        slot::{Buffer, SlotPool},
-    },
+use smithay_client_toolkit::shm::{
+    Shm,
+    slot::{Buffer, SlotPool},
 };
 use std::sync::mpsc;
 use wayland_client::{
@@ -29,7 +26,6 @@ use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::capture::types::CaptureType;
 use crate::input::InputState;
 
-use super::surface::SurfaceState;
 
 const MIN_ZOOM_SCALE: f64 = 1.0;
 const MAX_ZOOM_SCALE: f64 = 8.0;
@@ -110,11 +106,13 @@ pub struct ZoomState {
     active_geometry: Option<OutputGeometry>,
     capture: Option<CaptureSession>,
     image: Option<FrozenImage>,
-    overlay_hidden: bool,
     portal_rx: Option<PortalCaptureRx>,
     portal_in_progress: bool,
     portal_target_output_id: Option<u32>,
     portal_started_at: Option<std::time::Instant>,
+    preflight_pending: bool,
+    capture_done: bool,
+    pending_activation: bool,
     pub active: bool,
     pub locked: bool,
     pub scale: f64,
@@ -132,11 +130,13 @@ impl ZoomState {
             active_geometry: None,
             capture: None,
             image: None,
-            overlay_hidden: false,
             portal_rx: None,
             portal_in_progress: false,
             portal_target_output_id: None,
             portal_started_at: None,
+            preflight_pending: false,
+            capture_done: false,
+            pending_activation: false,
             active: false,
             locked: false,
             scale: MIN_ZOOM_SCALE,
@@ -168,15 +168,37 @@ impl ZoomState {
     }
 
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some() || self.portal_in_progress
+        self.capture.is_some() || self.portal_in_progress || self.preflight_pending
     }
 
-    pub fn activate(&mut self) {
-        self.active = true;
+    pub fn preflight_pending(&self) -> bool {
+        self.preflight_pending
     }
 
-    pub fn deactivate(&mut self, surface: &mut SurfaceState, input_state: &mut InputState) {
-        self.cancel(surface, input_state, true);
+    pub fn take_preflight_pending(&mut self) -> bool {
+        let pending = self.preflight_pending;
+        self.preflight_pending = false;
+        pending
+    }
+
+    pub fn take_capture_done(&mut self) -> bool {
+        let done = self.capture_done;
+        self.capture_done = false;
+        done
+    }
+
+    pub fn is_engaged(&self) -> bool {
+        self.active || self.pending_activation
+    }
+
+    pub fn request_activation(&mut self) {
+        if !self.active {
+            self.pending_activation = true;
+        }
+    }
+
+    pub fn deactivate(&mut self, input_state: &mut InputState) {
+        self.cancel(input_state, true);
     }
 
     pub fn reset_view(&mut self) {
@@ -255,44 +277,53 @@ impl ZoomState {
         &mut self,
         phys_width: u32,
         phys_height: u32,
-        surface: &mut SurfaceState,
         input_state: &mut InputState,
     ) {
         if let Some(img) = &self.image
             && (img.width != phys_width || img.height != phys_height)
         {
             info!("Surface resized; clearing zoom image");
-            self.deactivate(surface, input_state);
+            self.deactivate(input_state);
         }
     }
 
     /// Start a screencopy capture for the active output.
-    pub fn start_capture<State>(
+    pub fn start_capture(
         &mut self,
-        shm: &Shm,
-        surface: &mut SurfaceState,
-        qh: &QueueHandle<State>,
         use_fallback: bool,
         tokio_handle: &tokio::runtime::Handle,
+    ) -> Result<()> {
+        if self.capture.is_some() || self.portal_in_progress || self.preflight_pending {
+            warn!("Zoom capture already in progress; ignoring request");
+            return Ok(());
+        }
+
+        self.capture_done = false;
+
+        if use_fallback || self.manager.is_none() {
+            info!("Screencopy unavailable; using portal fallback for zoom capture");
+            return self.capture_via_portal(tokio_handle);
+        }
+
+        self.preflight_pending = true;
+        Ok(())
+    }
+
+    pub fn begin_screencopy<State>(
+        &mut self,
+        shm: &Shm,
+        qh: &QueueHandle<State>,
     ) -> Result<()>
     where
         State:
             Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
     {
-        if self.capture.is_some() {
-            warn!("Zoom capture already in progress; ignoring request");
-            return Ok(());
-        }
-
-        if use_fallback || self.manager.is_none() {
-            info!("Screencopy unavailable; using portal fallback for zoom capture");
-            return self.capture_via_portal(surface, tokio_handle);
-        }
-
         let manager = self
             .manager
             .clone()
             .context("zwlr_screencopy_manager_v1 not available")?;
+
+        self.capture_done = false;
 
         let output = match self.active_output.clone() {
             Some(out) => out,
@@ -300,8 +331,6 @@ impl ZoomState {
                 anyhow::bail!("No active output available for zoom capture");
             }
         };
-
-        self.hide_overlay(surface);
 
         debug!("Requesting screencopy frame for zoom");
         let frame = manager.capture_output(0, &output, qh, ());
@@ -317,7 +346,6 @@ impl ZoomState {
     pub fn handle_frame_event(
         &mut self,
         event: FrameEvent,
-        surface: &mut SurfaceState,
         input_state: &mut InputState,
     ) {
         match event {
@@ -329,7 +357,7 @@ impl ZoomState {
             } => {
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
                     warn!("Failed to prepare zoom buffer: {}", err);
-                    self.cancel(surface, input_state, false);
+                    self.cancel(input_state, false);
                 }
             }
             FrameEvent::LinuxDmabuf { .. } => {
@@ -338,7 +366,7 @@ impl ZoomState {
             FrameEvent::BufferDone => {
                 if let Err(err) = self.on_buffer_done() {
                     warn!("Failed to issue zoom copy: {}", err);
-                    self.cancel(surface, input_state, false);
+                    self.cancel(input_state, false);
                 }
             }
             FrameEvent::Flags { flags } => {
@@ -353,20 +381,24 @@ impl ZoomState {
                 }
             }
             FrameEvent::Ready { .. } => {
-                if let Err(err) = self.on_ready(input_state) {
+                if let Err(err) = self.on_ready() {
                     warn!("Zoom capture ready handling failed: {}", err);
-                    self.cancel(surface, input_state, false);
+                    self.cancel(input_state, false);
                     return;
                 }
 
-                self.restore_overlay(surface);
+                if self.pending_activation {
+                    self.active = true;
+                    self.pending_activation = false;
+                }
                 input_state.set_zoom_status(self.active, self.locked, self.scale);
                 input_state.dirty_tracker.mark_full();
                 input_state.needs_redraw = true;
+                self.capture_done = true;
             }
             FrameEvent::Failed => {
                 warn!("Zoom capture failed");
-                self.cancel(surface, input_state, false);
+                self.cancel(input_state, false);
             }
             _ => {}
         }
@@ -418,7 +450,7 @@ impl ZoomState {
         Ok(())
     }
 
-    fn on_ready(&mut self, _input_state: &mut InputState) -> Result<()> {
+    fn on_ready(&mut self) -> Result<()> {
         let mut capture = self
             .capture
             .take()
@@ -467,18 +499,19 @@ impl ZoomState {
 
     pub fn cancel(
         &mut self,
-        surface: &mut SurfaceState,
         input_state: &mut InputState,
         force_reset: bool,
     ) {
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
         }
-        self.restore_overlay(surface);
+        self.preflight_pending = false;
+        self.capture_done = true;
         self.portal_in_progress = false;
         self.portal_rx = None;
         self.portal_target_output_id = None;
         self.portal_started_at = None;
+        self.pending_activation = false;
 
         if force_reset || self.image.is_none() {
             self.active = false;
@@ -492,17 +525,12 @@ impl ZoomState {
         input_state.needs_redraw = true;
     }
 
-    fn capture_via_portal(
-        &mut self,
-        surface: &mut SurfaceState,
-        tokio_handle: &tokio::runtime::Handle,
-    ) -> Result<()> {
+    fn capture_via_portal(&mut self, tokio_handle: &tokio::runtime::Handle) -> Result<()> {
         if self.portal_in_progress {
             warn!("Zoom portal capture already running; ignoring new request");
             return Ok(());
         }
 
-        self.hide_overlay(surface);
         self.portal_in_progress = true;
         self.portal_started_at = Some(std::time::Instant::now());
 
@@ -568,7 +596,6 @@ impl ZoomState {
 
     pub fn poll_portal_capture(
         &mut self,
-        surface: &mut SurfaceState,
         input_state: &mut InputState,
     ) {
         if !self.portal_in_progress {
@@ -579,7 +606,6 @@ impl ZoomState {
             && start.elapsed() > std::time::Duration::from_secs(10)
         {
             warn!("Portal zoom capture timed out; restoring overlay");
-            self.restore_overlay(surface);
             self.portal_in_progress = false;
             self.portal_rx = None;
             self.portal_target_output_id = None;
@@ -587,8 +613,10 @@ impl ZoomState {
             if self.image.is_none() {
                 self.active = false;
             }
+            self.pending_activation = false;
             input_state.set_zoom_status(self.active, self.locked, self.scale);
             input_state.needs_redraw = true;
+            self.capture_done = true;
             return;
         }
 
@@ -608,22 +636,25 @@ impl ZoomState {
                         warn!("Portal zoom capture for inactive output discarded");
                     }
 
-                    self.restore_overlay(surface);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
                     self.portal_target_output_id = None;
                     self.portal_started_at = None;
 
+                    if self.pending_activation && self.image.is_some() {
+                        self.active = true;
+                    }
                     if self.image.is_none() {
                         self.active = false;
                     }
+                    self.pending_activation = false;
                     input_state.set_zoom_status(self.active, self.locked, self.scale);
                     input_state.dirty_tracker.mark_full();
                     input_state.needs_redraw = true;
+                    self.capture_done = true;
                 }
                 Ok(Err(err)) => {
                     warn!("Portal zoom capture failed: {}", err);
-                    self.restore_overlay(surface);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
                     self.portal_target_output_id = None;
@@ -631,13 +662,14 @@ impl ZoomState {
                     if self.image.is_none() {
                         self.active = false;
                     }
+                    self.pending_activation = false;
                     input_state.set_zoom_status(self.active, self.locked, self.scale);
                     input_state.needs_redraw = true;
+                    self.capture_done = true;
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
                     warn!("Portal zoom capture channel disconnected");
-                    self.restore_overlay(surface);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
                     self.portal_target_output_id = None;
@@ -645,51 +677,15 @@ impl ZoomState {
                     if self.image.is_none() {
                         self.active = false;
                     }
+                    self.pending_activation = false;
                     input_state.set_zoom_status(self.active, self.locked, self.scale);
                     input_state.needs_redraw = true;
+                    self.capture_done = true;
                 }
             }
         }
     }
 
-    fn hide_overlay(&mut self, surface: &mut SurfaceState) {
-        if self.overlay_hidden {
-            return;
-        }
-
-        if let Some(layer_surface) = surface.layer_surface_mut() {
-            layer_surface.set_size(0, 0);
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
-        } else if surface.is_xdg_window() {
-            if let Some(wl_surface) = surface.wl_surface() {
-                wl_surface.attach(None, 0, 0);
-                wl_surface.commit();
-            } else {
-                warn!("xdg-shell surface missing wl_surface; cannot hide zoom overlay");
-            }
-        }
-        self.overlay_hidden = true;
-    }
-
-    fn restore_overlay(&mut self, surface: &mut SurfaceState) {
-        if !self.overlay_hidden {
-            return;
-        }
-
-        let width = surface.width();
-        let height = surface.height();
-
-        if let Some(layer_surface) = surface.layer_surface_mut() {
-            layer_surface.set_size(width, height);
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
-        } else if surface.is_xdg_window() {
-            debug!("xdg-shell zoom overlay will be restored on next render");
-        }
-
-        self.overlay_hidden = false;
-    }
 }
 
 fn crop_argb(

@@ -6,12 +6,9 @@
 
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
-use smithay_client_toolkit::{
-    shell::WaylandSurface,
-    shm::{
-        Shm,
-        slot::{Buffer, SlotPool},
-    },
+use smithay_client_toolkit::shm::{
+    Shm,
+    slot::{Buffer, SlotPool},
 };
 use std::sync::mpsc;
 use wayland_client::{
@@ -29,7 +26,6 @@ use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::capture::types::CaptureType;
 use crate::input::InputState;
 
-use super::surface::SurfaceState;
 
 #[cfg(feature = "portal")]
 async fn portal_capture_bytes() -> Result<Vec<u8>, String> {
@@ -113,11 +109,12 @@ pub struct FrozenState {
     active_geometry: Option<OutputGeometry>,
     capture: Option<CaptureSession>,
     image: Option<FrozenImage>,
-    overlay_hidden: bool,
     portal_rx: Option<mpsc::Receiver<Result<(Option<u32>, FrozenImage), String>>>,
     portal_in_progress: bool,
     portal_target_output_id: Option<u32>,
     portal_started_at: Option<std::time::Instant>,
+    preflight_pending: bool,
+    capture_done: bool,
 }
 
 impl FrozenState {
@@ -129,11 +126,12 @@ impl FrozenState {
             active_geometry: None,
             capture: None,
             image: None,
-            overlay_hidden: false,
             portal_rx: None,
             portal_in_progress: false,
             portal_target_output_id: None,
             portal_started_at: None,
+            preflight_pending: false,
+            capture_done: false,
         }
     }
 
@@ -160,7 +158,23 @@ impl FrozenState {
     }
 
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some() || self.portal_in_progress
+        self.capture.is_some() || self.portal_in_progress || self.preflight_pending
+    }
+
+    pub fn preflight_pending(&self) -> bool {
+        self.preflight_pending
+    }
+
+    pub fn take_preflight_pending(&mut self) -> bool {
+        let pending = self.preflight_pending;
+        self.preflight_pending = false;
+        pending
+    }
+
+    pub fn take_capture_done(&mut self) -> bool {
+        let done = self.capture_done;
+        self.capture_done = false;
+        done
     }
 
     /// Drop frozen image if the surface size no longer matches.
@@ -188,33 +202,42 @@ impl FrozenState {
     }
 
     /// Start a screencopy capture for the active output.
-    pub fn start_capture<State>(
+    pub fn start_capture(
+        &mut self,
+        use_fallback: bool,
+        tokio_handle: &tokio::runtime::Handle,
+    ) -> Result<()> {
+        if self.capture.is_some() || self.portal_in_progress || self.preflight_pending {
+            warn!("Frozen-mode capture already in progress; ignoring toggle");
+            return Ok(());
+        }
+
+        self.capture_done = false;
+
+        if use_fallback || self.manager.is_none() {
+            info!("Screencopy unavailable; using fallback portal capture for frozen mode");
+            return self.capture_via_portal(tokio_handle);
+        }
+
+        self.preflight_pending = true;
+        Ok(())
+    }
+
+    pub fn begin_screencopy<State>(
         &mut self,
         shm: &Shm,
-        surface: &mut SurfaceState,
         qh: &QueueHandle<State>,
-        use_fallback: bool,
-        _input_state: &mut InputState,
-        tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()>
     where
         State:
             Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
     {
-        if self.capture.is_some() {
-            warn!("Frozen-mode capture already in progress; ignoring toggle");
-            return Ok(());
-        }
-
-        if use_fallback || self.manager.is_none() {
-            info!("Screencopy unavailable; using fallback portal capture for frozen mode");
-            return self.capture_via_portal(surface, tokio_handle);
-        }
-
         let manager = self
             .manager
             .clone()
             .context("zwlr_screencopy_manager_v1 not available")?;
+
+        self.capture_done = false;
 
         let output = match self.active_output.clone() {
             Some(out) => out,
@@ -222,8 +245,6 @@ impl FrozenState {
                 anyhow::bail!("No active output available for frozen capture");
             }
         };
-
-        self.hide_overlay(surface);
 
         debug!("Requesting screencopy frame for active output");
         let frame = manager.capture_output(0, &output, qh, ());
@@ -243,7 +264,6 @@ impl FrozenState {
     pub fn handle_frame_event(
         &mut self,
         event: FrameEvent,
-        surface: &mut SurfaceState,
         input_state: &mut InputState,
     ) {
         match event {
@@ -255,7 +275,7 @@ impl FrozenState {
             } => {
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
                     warn!("Failed to prepare screencopy buffer: {}", err);
-                    self.cancel(surface, input_state);
+                    self.cancel(input_state);
                 }
             }
             FrameEvent::LinuxDmabuf { .. } => {
@@ -265,7 +285,7 @@ impl FrozenState {
             FrameEvent::BufferDone => {
                 if let Err(err) = self.on_buffer_done() {
                     warn!("Failed to issue screencopy copy: {}", err);
-                    self.cancel(surface, input_state);
+                    self.cancel(input_state);
                 }
             }
             FrameEvent::Flags { flags } => {
@@ -280,20 +300,20 @@ impl FrozenState {
                 }
             }
             FrameEvent::Ready { .. } => {
-                if let Err(err) = self.on_ready(input_state) {
+                if let Err(err) = self.on_ready() {
                     warn!("Frozen capture ready handling failed: {}", err);
-                    self.cancel(surface, input_state);
+                    self.cancel(input_state);
                     return;
                 }
 
-                self.restore_overlay(surface);
                 input_state.set_frozen_active(true);
                 input_state.dirty_tracker.mark_full();
                 input_state.needs_redraw = true;
+                self.capture_done = true;
             }
             FrameEvent::Failed => {
                 warn!("Frozen capture failed");
-                self.cancel(surface, input_state);
+                self.cancel(input_state);
             }
             _ => {}
         }
@@ -346,7 +366,7 @@ impl FrozenState {
         Ok(())
     }
 
-    fn on_ready(&mut self, input_state: &mut InputState) -> Result<()> {
+    fn on_ready(&mut self) -> Result<()> {
         let mut capture = self
             .capture
             .take()
@@ -393,30 +413,25 @@ impl FrozenState {
             data,
         });
 
-        input_state.set_frozen_active(true);
-
         Ok(())
     }
 
-    pub fn cancel(&mut self, surface: &mut SurfaceState, input_state: &mut InputState) {
+    pub fn cancel(&mut self, input_state: &mut InputState) {
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
         }
-        self.restore_overlay(surface);
+        self.preflight_pending = false;
+        self.capture_done = true;
         input_state.set_frozen_active(false);
+        input_state.needs_redraw = true;
     }
 
-    fn capture_via_portal(
-        &mut self,
-        surface: &mut SurfaceState,
-        tokio_handle: &tokio::runtime::Handle,
-    ) -> Result<()> {
+    fn capture_via_portal(&mut self, tokio_handle: &tokio::runtime::Handle) -> Result<()> {
         if self.portal_in_progress {
             warn!("Portal capture already running; ignoring new request");
             return Ok(());
         }
 
-        self.hide_overlay(surface);
         self.portal_in_progress = true;
         self.portal_started_at = Some(std::time::Instant::now());
 
@@ -481,49 +496,9 @@ impl FrozenState {
         Ok(())
     }
 
-    fn hide_overlay(&mut self, surface: &mut SurfaceState) {
-        if self.overlay_hidden {
-            return;
-        }
-
-        if let Some(layer_surface) = surface.layer_surface_mut() {
-            layer_surface.set_size(0, 0);
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
-        } else if surface.is_xdg_window() {
-            if let Some(wl_surface) = surface.wl_surface() {
-                wl_surface.attach(None, 0, 0);
-                wl_surface.commit();
-            } else {
-                warn!("xdg-shell surface missing wl_surface; cannot hide frozen overlay");
-            }
-        }
-        self.overlay_hidden = true;
-    }
-
-    fn restore_overlay(&mut self, surface: &mut SurfaceState) {
-        if !self.overlay_hidden {
-            return;
-        }
-
-        let width = surface.width();
-        let height = surface.height();
-
-        if let Some(layer_surface) = surface.layer_surface_mut() {
-            layer_surface.set_size(width, height);
-            let wl_surface = layer_surface.wl_surface();
-            wl_surface.commit();
-        } else if surface.is_xdg_window() {
-            debug!("xdg-shell frozen overlay will be restored on next render");
-        }
-
-        self.overlay_hidden = false;
-    }
-
     /// Check for completed portal capture and apply result if present.
     pub fn poll_portal_capture(
         &mut self,
-        surface: &mut SurfaceState,
         input_state: &mut InputState,
     ) {
         if !self.portal_in_progress {
@@ -535,12 +510,12 @@ impl FrozenState {
             && start.elapsed() > std::time::Duration::from_secs(10)
         {
             warn!("Portal frozen capture timed out; restoring overlay");
-            self.restore_overlay(surface);
             input_state.set_frozen_active(false);
             self.portal_in_progress = false;
             self.portal_rx = None;
             self.portal_target_output_id = None;
             self.portal_started_at = None;
+            self.capture_done = true;
             return;
         }
 
@@ -564,30 +539,30 @@ impl FrozenState {
                         input_state.set_frozen_active(false);
                     }
 
-                    self.restore_overlay(surface);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
                     self.portal_target_output_id = None;
                     self.portal_started_at = None;
+                    self.capture_done = true;
                 }
                 Ok(Err(err)) => {
                     warn!("Portal frozen capture failed: {}", err);
-                    self.restore_overlay(surface);
                     input_state.set_frozen_active(false);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
                     self.portal_target_output_id = None;
                     self.portal_started_at = None;
+                    self.capture_done = true;
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
                     warn!("Portal frozen capture channel disconnected");
-                    self.restore_overlay(surface);
                     input_state.set_frozen_active(false);
                     self.portal_in_progress = false;
                     self.portal_rx = None;
                     self.portal_target_output_id = None;
                     self.portal_started_at = None;
+                    self.capture_done = true;
                 }
             }
         }
@@ -653,7 +628,6 @@ mod tests {
     #[test]
     fn poll_portal_applies_image() {
         let mut frozen = FrozenState::new(None);
-        let mut surface = SurfaceState::new();
         let mut input = InputState::with_defaults(
             crate::draw::color::RED,
             1.0,
@@ -695,15 +669,12 @@ mod tests {
         )))
         .unwrap();
 
-        frozen.hide_overlay(&mut surface);
-        assert!(frozen.overlay_hidden);
-
-        frozen.poll_portal_capture(&mut surface, &mut input);
+        frozen.poll_portal_capture(&mut input);
 
         assert!(input.frozen_active());
-        assert!(!frozen.overlay_hidden);
         assert!(!frozen.portal_in_progress);
         assert!(frozen.portal_rx.is_none());
         assert!(frozen.image.is_some());
+        assert!(frozen.take_capture_done());
     }
 }

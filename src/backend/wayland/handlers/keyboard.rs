@@ -62,7 +62,7 @@ impl KeyboardHandler for WaylandState {
     fn press_key(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
@@ -70,13 +70,16 @@ impl KeyboardHandler for WaylandState {
         #[cfg(tablet)]
         let prev_thickness = self.input_state.current_thickness;
         let key = keysym_to_key(event.keysym);
-        if self.zoom.active {
+        if self.zoom.is_engaged() {
             match key {
                 Key::Escape => {
                     self.exit_zoom();
                     return;
                 }
                 Key::Up | Key::Down | Key::Left | Key::Right => {
+                    if !self.zoom.active {
+                        return;
+                    }
                     if self.zoom.locked {
                         return;
                     }
@@ -125,7 +128,7 @@ impl KeyboardHandler for WaylandState {
             self.handle_capture_action(action);
         }
         if let Some(action) = self.input_state.take_pending_zoom_action() {
-            self.handle_zoom_action(action, qh);
+            self.handle_zoom_action(action);
         }
     }
 
@@ -165,7 +168,7 @@ impl KeyboardHandler for WaylandState {
     fn repeat_key(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
@@ -221,7 +224,7 @@ impl KeyboardHandler for WaylandState {
         }
 
         if let Some(action) = self.input_state.take_pending_zoom_action() {
-            self.handle_zoom_action(action, qh);
+            self.handle_zoom_action(action);
         }
     }
 }

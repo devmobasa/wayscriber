@@ -40,7 +40,7 @@ use wayland_client::{Connection, globals::registry_queue_init};
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
-use super::state::WaylandState;
+use super::state::{OverlaySuppression, WaylandState};
 use crate::{
     RESUME_SESSION_ENV,
     capture::{CaptureManager, CaptureOutcome},
@@ -643,10 +643,10 @@ impl WaylandBackend {
             // Apply any completed portal fallback captures without blocking.
             state
                 .frozen
-                .poll_portal_capture(&mut state.surface, &mut state.input_state);
+                .poll_portal_capture(&mut state.input_state);
             state
                 .zoom
-                .poll_portal_capture(&mut state.surface, &mut state.input_state);
+                .poll_portal_capture(&mut state.input_state);
 
             if tray_action_flag
                 .as_ref()
@@ -656,8 +656,19 @@ impl WaylandBackend {
                 process_tray_action(&mut state);
             }
 
-            // Dispatch all pending events (blocking) but check should_exit after each batch
-            match event_queue.blocking_dispatch(&mut state) {
+            let capture_active = state.capture.is_in_progress()
+                || state.frozen.is_in_progress()
+                || state.zoom.is_in_progress()
+                || state.overlay_suppressed();
+
+            // Dispatch events, but avoid blocking while capture/portal flows are active.
+            let dispatch_result = if capture_active {
+                event_queue.dispatch_pending(&mut state)
+            } else {
+                event_queue.blocking_dispatch(&mut state)
+            };
+
+            match dispatch_result {
                 Ok(_) => {
                     // Check immediately after dispatch returns
                     if state.input_state.should_exit {
@@ -686,6 +697,13 @@ impl WaylandBackend {
                 }
             }
 
+            if capture_active {
+                let _ = conn.flush();
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+
+            state.apply_capture_completion();
+
             if state.input_state.take_pending_frozen_toggle() {
                 if !state.frozen_enabled() {
                     warn!(
@@ -702,24 +720,19 @@ impl WaylandBackend {
                     } else {
                         log::info!("Frozen mode: using screencopy fast path");
                     }
-                    if let Err(err) = state.frozen.start_capture(
-                        &state.shm,
-                        &mut state.surface,
-                        &qh,
-                        use_fallback,
-                        &mut state.input_state,
-                        &state.tokio_handle,
-                    ) {
+                    state.enter_overlay_suppression(OverlaySuppression::Frozen);
+                    if let Err(err) =
+                        state.frozen.start_capture(use_fallback, &state.tokio_handle)
+                    {
                         warn!("Frozen capture failed to start: {}", err);
-                        state
-                            .frozen
-                            .cancel(&mut state.surface, &mut state.input_state);
+                        state.exit_overlay_suppression(OverlaySuppression::Frozen);
+                        state.frozen.cancel(&mut state.input_state);
                     }
                 }
             }
 
             if let Some(action) = state.input_state.take_pending_zoom_action() {
-                state.handle_zoom_action(action, &qh);
+                state.handle_zoom_action(action);
             }
 
             // Check for completed capture operations

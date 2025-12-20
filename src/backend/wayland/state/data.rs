@@ -6,6 +6,20 @@ pub enum MoveDragKind {
     Side,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlaySuppression {
+    None,
+    Capture,
+    Frozen,
+    Zoom,
+}
+
+impl Default for OverlaySuppression {
+    fn default() -> Self {
+        OverlaySuppression::None
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct MoveDrag {
     pub kind: MoveDragKind,
@@ -56,6 +70,7 @@ pub struct StateData {
     pub(super) frozen_enabled: bool,
     pub(super) preferred_output_identity: Option<String>,
     pub(super) xdg_fullscreen: bool,
+    pub(super) overlay_suppression: OverlaySuppression,
 }
 
 impl StateData {
@@ -98,6 +113,7 @@ impl StateData {
             frozen_enabled: false,
             preferred_output_identity: None,
             xdg_fullscreen: false,
+            overlay_suppression: OverlaySuppression::None,
         }
     }
 }
