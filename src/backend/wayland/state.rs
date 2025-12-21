@@ -398,12 +398,11 @@ impl WaylandState {
         if self.zoom.is_engaged()
             && self.zoom.image().is_none()
             && !self.zoom.is_in_progress()
+            && let Err(err) = self.start_zoom_capture(false)
         {
-            if let Err(err) = self.start_zoom_capture(false) {
-                warn!("Zoom capture failed to start: {}", err);
-                self.zoom.deactivate(&mut self.input_state);
-                self.exit_overlay_suppression(OverlaySuppression::Zoom);
-            }
+            warn!("Zoom capture failed to start: {}", err);
+            self.zoom.deactivate(&mut self.input_state);
+            self.exit_overlay_suppression(OverlaySuppression::Zoom);
         }
     }
 
