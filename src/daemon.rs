@@ -251,6 +251,35 @@ impl WayscriberTray {
         }
     }
 
+    fn launch_about(&self) {
+        let exe = match env::current_exe() {
+            Ok(path) => path,
+            Err(err) => {
+                warn!(
+                    "Failed to resolve current executable for About window: {}",
+                    err
+                );
+                return;
+            }
+        };
+
+        let mut command = Command::new(exe);
+        command
+            .arg("--about")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        match command.spawn() {
+            Ok(child) => {
+                info!("Launched About window (pid {})", child.id());
+            }
+            Err(err) => {
+                warn!("Failed to launch About window: {}", err);
+            }
+        }
+    }
+
     fn dispatch_overlay_action(&self, action: &str) {
         if let Some(parent) = self.tray_action_path.parent()
             && let Err(err) = fs::create_dir_all(parent)
@@ -422,6 +451,16 @@ impl ksni::Tray for WayscriberTray {
         use ksni::menu::*;
 
         vec![
+            StandardItem {
+                label: "About Wayscriber".to_string(),
+                icon_name: "help-about".into(),
+                activate: Box::new(|this: &mut Self| {
+                    this.launch_about();
+                }),
+                ..Default::default()
+            }
+            .into(),
+            MenuItem::Separator,
             StandardItem {
                 label: "Toggle Overlay".to_string(),
                 icon_name: "tool-pointer".into(),
