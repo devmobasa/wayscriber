@@ -166,6 +166,12 @@ impl ZoomState {
         self.image.as_ref()
     }
 
+    pub fn clear_image(&mut self) -> bool {
+        let had_image = self.image.is_some();
+        self.image = None;
+        had_image
+    }
+
     pub fn is_in_progress(&self) -> bool {
         self.capture.is_some() || self.portal_in_progress || self.preflight_pending
     }
@@ -194,6 +200,32 @@ impl ZoomState {
         if !self.active {
             self.pending_activation = true;
         }
+    }
+
+    pub fn activate_without_capture(&mut self) {
+        self.active = true;
+        self.pending_activation = false;
+    }
+
+    pub fn abort_capture(&mut self) -> bool {
+        let mut changed = false;
+        if let Some(capture) = self.capture.take() {
+            capture.frame.destroy();
+            changed = true;
+        }
+        if self.preflight_pending || self.portal_in_progress {
+            changed = true;
+        }
+        self.preflight_pending = false;
+        self.portal_in_progress = false;
+        self.portal_rx = None;
+        self.portal_target_output_id = None;
+        self.portal_started_at = None;
+        self.pending_activation = false;
+        if changed {
+            self.capture_done = true;
+        }
+        changed
     }
 
     pub fn deactivate(&mut self, input_state: &mut InputState) {

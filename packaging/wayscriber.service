@@ -3,7 +3,6 @@ Description=Wayscriber - Screen annotation tool for Wayland
 Documentation=https://wayscriber.com
 PartOf=graphical-session.target
 After=graphical-session.target
-Wants=graphical-session.target
 
 [Service]
 Type=simple
@@ -17,4 +16,4 @@ SuccessExitStatus=75
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

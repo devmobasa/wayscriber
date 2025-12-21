@@ -51,7 +51,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, ColorSpec, Config},
-    input::{DrawingState, InputState, ZoomAction},
+    input::{BoardMode, DrawingState, InputState, ZoomAction},
     notification,
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
@@ -373,6 +373,39 @@ impl WaylandState {
         }
     }
 
+    pub(super) fn sync_zoom_board_mode(&mut self) {
+        let board_mode = self.input_state.board_mode();
+        if board_mode != BoardMode::Transparent {
+            if self.data.overlay_suppression == OverlaySuppression::Zoom {
+                self.exit_overlay_suppression(OverlaySuppression::Zoom);
+            }
+            if self.zoom.abort_capture() {
+                self.input_state.dirty_tracker.mark_full();
+                self.input_state.needs_redraw = true;
+            }
+            if self.zoom.is_engaged() && !self.zoom.active {
+                self.zoom.activate_without_capture();
+                self.input_state
+                    .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
+            }
+            if self.zoom.clear_image() {
+                self.input_state.dirty_tracker.mark_full();
+                self.input_state.needs_redraw = true;
+            }
+            return;
+        }
+
+        if self.zoom.is_engaged()
+            && self.zoom.image().is_none()
+            && !self.zoom.is_in_progress()
+            && let Err(err) = self.start_zoom_capture(false)
+        {
+            warn!("Zoom capture failed to start: {}", err);
+            self.zoom.deactivate(&mut self.input_state);
+            self.exit_overlay_suppression(OverlaySuppression::Zoom);
+        }
+    }
+
     pub(super) fn zoomed_world_coords(&self, screen_x: f64, screen_y: f64) -> (i32, i32) {
         if self.zoom.active {
             let (wx, wy) = self.zoom.screen_to_world(screen_x, screen_y);
@@ -410,7 +443,9 @@ impl WaylandState {
                 }
             }
             ZoomAction::RefreshCapture => {
-                if self.zoom.active
+                if self.input_state.board_mode() != BoardMode::Transparent {
+                    info!("Zoom capture refresh ignored in board mode");
+                } else if self.zoom.active
                     && let Err(err) = self.start_zoom_capture(true)
                 {
                     warn!("Zoom capture refresh failed: {}", err);
@@ -455,16 +490,41 @@ impl WaylandState {
     ) {
         let screen_w = self.surface.width();
         let screen_h = self.surface.height();
+        let board_zoom = self.input_state.board_mode() != BoardMode::Transparent;
+        if board_zoom {
+            let mut cleared = false;
+            if self.zoom.abort_capture() {
+                cleared = true;
+                self.exit_overlay_suppression(OverlaySuppression::Zoom);
+            }
+            if self.zoom.clear_image() {
+                cleared = true;
+            }
+            if cleared {
+                self.input_state.dirty_tracker.mark_full();
+                self.input_state.needs_redraw = true;
+            }
+        }
 
         if !self.zoom.is_engaged() {
             if !allow_activate {
                 return;
             }
-            self.zoom.request_activation();
             self.zoom.locked = false;
             self.zoom.reset_view();
             self.input_state.close_context_menu();
             self.input_state.close_properties_panel();
+            if board_zoom {
+                self.zoom.activate_without_capture();
+                self.input_state
+                    .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
+            } else {
+                self.zoom.request_activation();
+            }
+        } else if board_zoom && !self.zoom.active {
+            self.zoom.activate_without_capture();
+            self.input_state
+                .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
         }
 
         let changed = self
@@ -476,6 +536,7 @@ impl WaylandState {
         }
 
         if self.zoom.is_engaged()
+            && !board_zoom
             && let Err(err) = self.start_zoom_capture(false)
         {
             warn!("Zoom capture failed to start: {}", err);
@@ -489,6 +550,10 @@ impl WaylandState {
             return Ok(());
         }
         if !force && self.zoom.image().is_some() {
+            return Ok(());
+        }
+        if self.input_state.board_mode() != BoardMode::Transparent {
+            debug!("Zoom capture skipped in board mode");
             return Ok(());
         }
         if self.frozen.is_in_progress() {
@@ -1739,7 +1804,10 @@ impl WaylandState {
 
     pub(super) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
         debug!("=== RENDER START ===");
-        let suppressed = self.overlay_suppressed();
+        let board_mode = self.input_state.board_mode();
+        let suppressed = self.overlay_suppressed()
+            && !(self.data.overlay_suppression == OverlaySuppression::Zoom
+                && board_mode != BoardMode::Transparent);
 
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
@@ -1799,7 +1867,9 @@ impl WaylandState {
         ctx.set_operator(cairo::Operator::Over);
 
         if !suppressed {
-            let zoom_render_image = if self.zoom.active {
+            let allow_background_image =
+                !(self.zoom.is_engaged() && board_mode != BoardMode::Transparent);
+            let zoom_render_image = if self.zoom.active && allow_background_image {
                 self.zoom.image().or_else(|| self.frozen.image())
             } else {
                 None
@@ -1808,8 +1878,10 @@ impl WaylandState {
             let zoom_transform_active = self.zoom.active;
             let background_image = if zoom_render_active {
                 zoom_render_image
-            } else {
+            } else if allow_background_image {
                 self.frozen.image()
+            } else {
+                None
             };
 
             if let Some(image) = background_image {

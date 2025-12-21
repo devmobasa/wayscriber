@@ -757,6 +757,7 @@ impl WaylandBackend {
             if let Some(action) = state.input_state.take_pending_zoom_action() {
                 state.handle_zoom_action(action);
             }
+            state.sync_zoom_board_mode();
 
             // Check for completed capture operations
             if state.capture.is_in_progress()
