@@ -32,6 +32,7 @@ pub fn runtime_session_override() -> Option<bool> {
     decode_session_override(SESSION_RESUME_OVERRIDE.load(Ordering::Acquire))
 }
 
+mod about_window;
 mod backend;
 mod capture;
 mod config;
@@ -103,6 +104,24 @@ struct Cli {
     /// Force session resume off (ignore persisted session data for this run)
     #[arg(long, action = ArgAction::SetTrue, conflicts_with = "resume_session")]
     no_resume_session: bool,
+
+    /// Show the About window
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "active",
+            "mode",
+            "no_tray",
+            "clear_session",
+            "session_info",
+            "freeze",
+            "resume_session",
+            "no_resume_session"
+        ]
+    )]
+    about: bool,
 }
 
 fn main() {
@@ -130,6 +149,11 @@ fn run() -> anyhow::Result<()> {
     } else {
         None
     };
+
+    if cli.about {
+        about_window::run_about_window()?;
+        return Ok(());
+    }
 
     if cli.clear_session || cli.session_info {
         run_session_cli_commands(&cli)?;
@@ -200,6 +224,7 @@ fn run() -> anyhow::Result<()> {
         );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
         println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
+        println!("  wayscriber --about           Show the About window");
         println!(
             "  wayscriber --resume-session  Force session resume on (all boards/history/tool state)"
         );
