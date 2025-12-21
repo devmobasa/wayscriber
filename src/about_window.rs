@@ -80,6 +80,7 @@ pub fn run_about_window() -> Result<()> {
 enum LinkAction {
     OpenUrl(String),
     CopyText(String),
+    Close,
 }
 
 struct LinkRegion {
@@ -423,6 +424,7 @@ impl PointerHandler for AboutWindowState {
                         match &link.action {
                             LinkAction::OpenUrl(url) => open_url(url),
                             LinkAction::CopyText(text) => copy_text_to_clipboard(text),
+                            LinkAction::Close => self.should_exit = true,
                         }
                     }
                 }
@@ -597,6 +599,23 @@ fn draw_about(
     ctx.set_font_size(13.0);
 
     let mut link_index = 0usize;
+    let close_size = 16.0;
+    let close_padding = 10.0;
+    let close_x = width - close_padding - close_size;
+    let close_y = close_padding;
+    let close_rect = draw_close_button(
+        ctx,
+        close_x,
+        close_y,
+        close_size,
+        hover_index == Some(link_index),
+    );
+    links.push(LinkRegion {
+        rect: close_rect,
+        action: LinkAction::Close,
+    });
+    link_index += 1;
+
     y = add_link_line(
         ctx,
         margin,
@@ -643,7 +662,7 @@ fn draw_about(
 
     ctx.set_source_rgb(0.4, 0.4, 0.4);
     ctx.set_font_size(11.0);
-    draw_text(ctx, margin, height - 16.0, "Press Esc to close");
+    draw_text(ctx, margin, height - 16.0, "Press Esc or click X to close");
 }
 
 struct LinkRenderState<'a> {
@@ -729,6 +748,41 @@ fn draw_copy_button(
     draw_rounded_rect(ctx, back.0, back.1, icon_size, icon_size, 2.0);
     let _ = ctx.stroke();
     draw_rounded_rect(ctx, front.0, front.1, icon_size, icon_size, 2.0);
+    let _ = ctx.stroke();
+
+    (x, y, size, size)
+}
+
+fn draw_close_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    size: f64,
+    hover: bool,
+) -> (f64, f64, f64, f64) {
+    let radius = 3.0;
+    let (bg_r, bg_g, bg_b) = if hover {
+        (0.98, 0.88, 0.88)
+    } else {
+        (0.96, 0.92, 0.92)
+    };
+    ctx.set_source_rgb(bg_r, bg_g, bg_b);
+    draw_rounded_rect(ctx, x, y, size, size, radius);
+    let _ = ctx.fill();
+
+    ctx.set_source_rgb(0.7, 0.55, 0.55);
+    ctx.set_line_width(1.0);
+    draw_rounded_rect(ctx, x, y, size, size, radius);
+    let _ = ctx.stroke();
+
+    ctx.set_source_rgb(0.4, 0.25, 0.25);
+    ctx.set_line_width(1.6);
+    let inset = 4.0;
+    ctx.move_to(x + inset, y + inset);
+    ctx.line_to(x + size - inset, y + size - inset);
+    let _ = ctx.stroke();
+    ctx.move_to(x + size - inset, y + inset);
+    ctx.line_to(x + inset, y + size - inset);
     let _ = ctx.stroke();
 
     (x, y, size, size)
