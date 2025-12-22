@@ -11,7 +11,7 @@ DRY_RUN=0
 
 usage() {
     cat <<'EOF'
-release-tag.sh [--version X.Y.Z] [--dry-run]
+publish-release-tag.sh [--version X.Y.Z] [--dry-run]
 
 Creates an annotated git tag "v<version>" and pushes it to origin.
 If --version is omitted, uses the wayscriber crate version from Cargo metadata.

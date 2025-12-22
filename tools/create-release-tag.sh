@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: tools/tag-release.sh <version>
+Usage: tools/create-release-tag.sh <version>
 
 Creates an annotated git tag "v<version>".
 
@@ -12,7 +12,7 @@ Requirements:
 - Tag must not already exist
 
 Examples:
-  tools/tag-release.sh 0.9.2
+  tools/create-release-tag.sh 0.9.2
 EOF
 }
 
