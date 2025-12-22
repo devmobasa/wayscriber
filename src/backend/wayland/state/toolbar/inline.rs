@@ -10,10 +10,6 @@ impl WaylandState {
         self.data.inline_side_hover = None;
     }
 
-    fn point_in_rect(&self, px: f64, py: f64, x: f64, y: f64, w: f64, h: f64) -> bool {
-        px >= x && px <= x + w && py >= y && py <= y + h
-    }
-
     pub(in crate::backend::wayland) fn render_inline_toolbars(
         &mut self,
         ctx: &cairo::Context,
@@ -188,14 +184,14 @@ impl WaylandState {
         let mut over_toolbar = false;
 
         if let Some((x, y, w, h)) = self.data.inline_top_rect
-            && self.point_in_rect(position.0, position.1, x, y, w, h)
+            && geometry::point_in_rect(position.0, position.1, x, y, w, h)
         {
             over_toolbar = true;
             self.data.inline_top_hover = Some(position);
         }
 
         if let Some((x, y, w, h)) = self.data.inline_side_rect
-            && self.point_in_rect(position.0, position.1, x, y, w, h)
+            && geometry::point_in_rect(position.0, position.1, x, y, w, h)
         {
             over_toolbar = true;
             self.data.inline_side_hover = Some(position);

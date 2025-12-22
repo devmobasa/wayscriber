@@ -14,15 +14,19 @@ impl WaylandState {
         let top_size = top_size(snapshot);
         let side_start_y = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
         let top_bottom_y = Self::INLINE_TOP_Y + self.data.toolbar_top_offset_y + top_size.1 as f64;
-        let side_overlaps_top = side_visible && side_start_y < top_bottom_y;
         let base = Self::INLINE_SIDE_X + self.data.toolbar_side_offset_x;
         // When dragging the side toolbar, don't push the top bar; keep its base stable so it
         // doesn't shift while moving the side bar.
-        if side_overlaps_top && self.active_move_drag_kind() != Some(MoveDragKind::Side) {
-            base + side_size.0 as f64 + Self::INLINE_TOP_PUSH
-        } else {
-            base
-        }
+        let allow_push = self.active_move_drag_kind() != Some(MoveDragKind::Side);
+        geometry::compute_inline_top_base_x(
+            base,
+            side_visible,
+            side_size.0 as f64,
+            side_start_y,
+            top_bottom_y,
+            Self::INLINE_TOP_PUSH,
+            allow_push,
+        )
     }
 
     pub(super) fn inline_top_base_y(&self) -> f64 {
@@ -66,39 +70,36 @@ impl WaylandState {
         let top_base_x = self.inline_top_base_x(snapshot);
         let top_base_y = self.inline_top_base_y();
 
-        let mut max_top_x = (width - top_w as f64 - top_base_x - Self::TOP_MARGIN_RIGHT).max(0.0);
-        let mut max_top_y = (height - top_h as f64 - top_base_y - Self::TOP_MARGIN_BOTTOM).max(0.0);
-        let mut max_side_y =
-            (height - side_h as f64 - Self::SIDE_BASE_MARGIN_TOP - Self::SIDE_MARGIN_BOTTOM)
-                .max(0.0);
-        let mut max_side_x =
-            (width - side_w as f64 - Self::SIDE_BASE_MARGIN_LEFT - Self::SIDE_MARGIN_RIGHT)
-                .max(0.0);
-
-        // Ensure max bounds remain non-negative.
-        max_top_x = max_top_x.max(0.0);
-        max_top_y = max_top_y.max(0.0);
-        max_side_x = max_side_x.max(0.0);
-        max_side_y = max_side_y.max(0.0);
-
-        // Allow negative offsets so toolbars can reach screen edges by cancelling base margins
-        let min_top_x = -top_base_x;
-        let min_top_y = -top_base_y;
-        let min_side_x = -Self::SIDE_BASE_MARGIN_LEFT;
-        let min_side_y = -Self::SIDE_BASE_MARGIN_TOP;
-
         let before_top = (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y);
         let before_side = (
             self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset,
         );
-        self.data.toolbar_top_offset = self.data.toolbar_top_offset.clamp(min_top_x, max_top_x);
-        self.data.toolbar_top_offset_y = self.data.toolbar_top_offset_y.clamp(min_top_y, max_top_y);
-        self.data.toolbar_side_offset = self.data.toolbar_side_offset.clamp(min_side_y, max_side_y);
-        self.data.toolbar_side_offset_x = self
-            .data
-            .toolbar_side_offset_x
-            .clamp(min_side_x, max_side_x);
+        let input = geometry::ToolbarClampInput {
+            width,
+            height,
+            top_size: (top_w, top_h),
+            side_size: (side_w, side_h),
+            top_base_x,
+            top_base_y,
+            top_margin_right: Self::TOP_MARGIN_RIGHT,
+            top_margin_bottom: Self::TOP_MARGIN_BOTTOM,
+            side_base_margin_left: Self::SIDE_BASE_MARGIN_LEFT,
+            side_base_margin_top: Self::SIDE_BASE_MARGIN_TOP,
+            side_margin_right: Self::SIDE_MARGIN_RIGHT,
+            side_margin_bottom: Self::SIDE_MARGIN_BOTTOM,
+        };
+        let offsets = geometry::ToolbarOffsets {
+            top_x: self.data.toolbar_top_offset,
+            top_y: self.data.toolbar_top_offset_y,
+            side_x: self.data.toolbar_side_offset_x,
+            side_y: self.data.toolbar_side_offset,
+        };
+        let (clamped, bounds) = geometry::clamp_toolbar_offsets(offsets, input);
+        self.data.toolbar_top_offset = clamped.top_x;
+        self.data.toolbar_top_offset_y = clamped.top_y;
+        self.data.toolbar_side_offset_x = clamped.side_x;
+        self.data.toolbar_side_offset = clamped.side_y;
         drag_log(format!(
             "clamp offsets: before=({:.3}, {:.3})/({:.3}, {:.3}), after=({:.3}, {:.3})/({:.3}, {:.3}), max=({:.3}, {:.3})/({:.3}, {:.3}), size=({}, {}), top_base_x={:.3}, top_base_y={:.3}",
             before_top.0,
@@ -109,10 +110,10 @@ impl WaylandState {
             self.data.toolbar_top_offset_y,
             self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset,
-            max_top_x,
-            max_top_y,
-            max_side_x,
-            max_side_y,
+            bounds.max_top_x,
+            bounds.max_top_y,
+            bounds.max_side_x,
+            bounds.max_side_y,
             width,
             height,
             top_base_x,
@@ -156,13 +157,19 @@ impl WaylandState {
         let _ = self.clamp_toolbar_offsets(snapshot);
         if self.layer_shell.is_some() {
             let top_base_x = self.inline_top_base_x(snapshot);
-            let top_margin_left = (top_base_x + self.data.toolbar_top_offset).round() as i32;
-            let top_margin_top =
-                (Self::TOP_BASE_MARGIN_TOP + self.data.toolbar_top_offset_y).round() as i32;
-            let side_margin_top =
-                (Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset).round() as i32;
-            let side_margin_left =
-                (Self::SIDE_BASE_MARGIN_LEFT + self.data.toolbar_side_offset_x).round() as i32;
+            let (top_margin_left, top_margin_top, side_margin_top, side_margin_left) =
+                geometry::compute_layer_margins(
+                    top_base_x,
+                    Self::TOP_BASE_MARGIN_TOP,
+                    Self::SIDE_BASE_MARGIN_LEFT,
+                    Self::SIDE_BASE_MARGIN_TOP,
+                    geometry::ToolbarOffsets {
+                        top_x: self.data.toolbar_top_offset,
+                        top_y: self.data.toolbar_top_offset_y,
+                        side_x: self.data.toolbar_side_offset_x,
+                        side_y: self.data.toolbar_side_offset,
+                    },
+                );
             drag_log(format!(
                 "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, side_margin_top={}, side_margin_left={}, offsets=({}, {})/({}, {}), scale={}, top_base_x={}",
                 top_margin_left,

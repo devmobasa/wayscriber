@@ -81,3 +81,46 @@ fn debug_damage_logging_env_parses_falsey() {
     assert!(parse_debug_damage_env("1"));
     assert!(parse_debug_damage_env("true"));
 }
+
+#[test]
+fn parse_boolish_env_handles_case_and_on() {
+    assert!(parse_boolish_env("ON"));
+    assert!(parse_boolish_env("yes"));
+    assert!(!parse_boolish_env("Off"));
+    assert!(!parse_boolish_env("0"));
+}
+
+#[test]
+fn damage_summary_truncates_after_five_regions() {
+    let mut regions = Vec::new();
+    for i in 0..6 {
+        regions.push(Rect {
+            x: i,
+            y: i,
+            width: 1,
+            height: 2,
+        });
+    }
+    let summary = damage_summary(&regions);
+    assert_eq!(
+        summary,
+        "(0,0) 1x2, (1,1) 1x2, (2,2) 1x2, (3,3) 1x2, (4,4) 1x2, ... +1 more"
+    );
+}
+
+#[test]
+fn resolve_then_scale_damage_regions_keeps_full_region() {
+    let regions = resolve_damage_regions(100, 50, Vec::new());
+    let scaled = scale_damage_regions(regions, 2);
+    assert_eq!(scaled.len(), 1);
+    assert_eq!(scaled[0], Rect::new(0, 0, 200, 100).unwrap());
+}
+
+#[test]
+fn force_inline_toolbars_requested_uses_config_or_env() {
+    let mut config = Config::default();
+    assert!(!force_inline_toolbars_requested_with_env(&config, false));
+    assert!(force_inline_toolbars_requested_with_env(&config, true));
+    config.ui.toolbar.force_inline = true;
+    assert!(force_inline_toolbars_requested_with_env(&config, false));
+}

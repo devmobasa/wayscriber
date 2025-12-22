@@ -1,5 +1,16 @@
 use super::*;
 
+fn desired_keyboard_interactivity_for(
+    layer_shell_available: bool,
+    toolbar_visible: bool,
+) -> KeyboardInteractivity {
+    if layer_shell_available && toolbar_visible {
+        KeyboardInteractivity::OnDemand
+    } else {
+        KeyboardInteractivity::Exclusive
+    }
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {
         self.data.pointer_over_toolbar
@@ -118,11 +129,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
         &self,
     ) -> KeyboardInteractivity {
-        if self.layer_shell.is_some() && self.toolbar.is_visible() {
-            KeyboardInteractivity::OnDemand
-        } else {
-            KeyboardInteractivity::Exclusive
-        }
+        desired_keyboard_interactivity_for(self.layer_shell.is_some(), self.toolbar.is_visible())
     }
 
     fn log_toolbar_layer_shell_missing_once(&mut self) {
@@ -322,5 +329,26 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {
         self.data.inline_toolbars
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn desired_keyboard_interactivity_requires_layer_shell_and_visibility() {
+        assert_eq!(
+            desired_keyboard_interactivity_for(true, true),
+            KeyboardInteractivity::OnDemand
+        );
+        assert_eq!(
+            desired_keyboard_interactivity_for(true, false),
+            KeyboardInteractivity::Exclusive
+        );
+        assert_eq!(
+            desired_keyboard_interactivity_for(false, true),
+            KeyboardInteractivity::Exclusive
+        );
     }
 }

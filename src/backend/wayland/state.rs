@@ -307,6 +307,10 @@ fn force_inline_env_enabled() -> bool {
     })
 }
 
+fn force_inline_toolbars_requested_with_env(config: &Config, env_force_inline: bool) -> bool {
+    config.ui.toolbar.force_inline || env_force_inline
+}
+
 fn force_inline_toolbars_requested(config: &Config) -> bool {
-    config.ui.toolbar.force_inline || force_inline_env_enabled()
+    force_inline_toolbars_requested_with_env(config, force_inline_env_enabled())
 }
