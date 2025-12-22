@@ -40,7 +40,7 @@ use wayland_client::{Connection, backend::WaylandError, globals::registry_queue_
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
-use super::state::{OverlaySuppression, WaylandState};
+use super::state::{OverlaySuppression, WaylandGlobals, WaylandState, WaylandStateInit};
 use crate::{
     RESUME_SESSION_ENV,
     capture::{CaptureManager, CaptureOutcome},
@@ -495,7 +495,7 @@ impl WaylandBackend {
         };
 
         // Create application state
-        let mut state = WaylandState::new(
+        let globals = WaylandGlobals {
             registry_state,
             compositor_state,
             layer_shell,
@@ -506,19 +506,22 @@ impl WaylandBackend {
             relative_pointer_state,
             output_state,
             seat_state,
+        };
+        let mut state = WaylandState::new(WaylandStateInit {
+            globals,
             config,
             input_state,
             capture_manager,
             session_options,
             tokio_handle,
-            frozen_supported,
+            frozen_enabled: frozen_supported,
             preferred_output_identity,
             xdg_fullscreen,
-            freeze_on_start,
+            pending_freeze_on_start: freeze_on_start,
             screencopy_manager,
             #[cfg(tablet)]
             tablet_manager,
-        );
+        });
 
         // Ensure pinned toolbars are created immediately if visible on startup.
         state.sync_toolbar_visibility(&qh);

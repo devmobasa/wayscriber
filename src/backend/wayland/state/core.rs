@@ -1,30 +1,35 @@
 use super::*;
 
 impl WaylandState {
-    #[allow(clippy::too_many_arguments)]
-    pub(in crate::backend::wayland) fn new(
-        registry_state: RegistryState,
-        compositor_state: CompositorState,
-        layer_shell: Option<LayerShell>,
-        xdg_shell: Option<XdgShell>,
-        activation: Option<ActivationState>,
-        shm: Shm,
-        pointer_constraints_state: PointerConstraintsState,
-        relative_pointer_state: RelativePointerState,
-        output_state: OutputState,
-        seat_state: SeatState,
-        config: Config,
-        input_state: InputState,
-        capture_manager: CaptureManager,
-        session_options: Option<SessionOptions>,
-        tokio_handle: tokio::runtime::Handle,
-        frozen_enabled: bool,
-        preferred_output_identity: Option<String>,
-        xdg_fullscreen: bool,
-        pending_freeze_on_start: bool,
-        screencopy_manager: Option<wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
-        #[cfg(tablet)] tablet_manager: Option<ZwpTabletManagerV2>,
-    ) -> Self {
+    pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
+        let WaylandStateInit {
+            globals,
+            config,
+            input_state,
+            capture_manager,
+            session_options,
+            tokio_handle,
+            frozen_enabled,
+            preferred_output_identity,
+            xdg_fullscreen,
+            pending_freeze_on_start,
+            screencopy_manager,
+            #[cfg(tablet)]
+            tablet_manager,
+        } = init;
+        let WaylandGlobals {
+            registry_state,
+            compositor_state,
+            layer_shell,
+            xdg_shell,
+            activation,
+            shm,
+            pointer_constraints_state,
+            relative_pointer_state,
+            output_state,
+            seat_state,
+        } = globals;
+
         #[cfg(tablet)]
         let tablet_settings = {
             TabletSettings {

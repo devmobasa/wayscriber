@@ -87,6 +87,37 @@ mod zoom;
 #[cfg(test)]
 mod tests;
 
+type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+
+pub(in crate::backend::wayland) struct WaylandGlobals {
+    pub registry_state: RegistryState,
+    pub compositor_state: CompositorState,
+    pub layer_shell: Option<LayerShell>,
+    pub xdg_shell: Option<XdgShell>,
+    pub activation: Option<ActivationState>,
+    pub shm: Shm,
+    pub pointer_constraints_state: PointerConstraintsState,
+    pub relative_pointer_state: RelativePointerState,
+    pub output_state: OutputState,
+    pub seat_state: SeatState,
+}
+
+pub(in crate::backend::wayland) struct WaylandStateInit {
+    pub globals: WaylandGlobals,
+    pub config: Config,
+    pub input_state: InputState,
+    pub capture_manager: CaptureManager,
+    pub session_options: Option<SessionOptions>,
+    pub tokio_handle: tokio::runtime::Handle,
+    pub frozen_enabled: bool,
+    pub preferred_output_identity: Option<String>,
+    pub xdg_fullscreen: bool,
+    pub pending_freeze_on_start: bool,
+    pub screencopy_manager: Option<ScreencopyManager>,
+    #[cfg(tablet)]
+    pub tablet_manager: Option<ZwpTabletManagerV2>,
+}
+
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
     // Wayland protocol objects
