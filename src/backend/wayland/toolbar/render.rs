@@ -27,6 +27,22 @@ pub fn render_top_strip(
     let use_icons = snapshot.use_icons;
     let gap = 8.0;
     let mut x = 16.0;
+    let tool_tooltip = |tool: Tool, label: &str| {
+        let default_hint = match tool {
+            Tool::Line => Some("Shift+Drag"),
+            Tool::Rect => Some("Ctrl+Drag"),
+            Tool::Ellipse => Some("Tab+Drag"),
+            Tool::Arrow => Some("Ctrl+Shift+Drag"),
+            _ => None,
+        };
+        let binding = match (snapshot.binding_hints.for_tool(tool), default_hint) {
+            (Some(binding), Some(fallback)) => Some(format!("{}, {}", binding, fallback)),
+            (Some(binding), None) => Some(binding.to_string()),
+            (None, Some(fallback)) => Some(fallback.to_string()),
+            (None, None) => None,
+        };
+        format_binding_label(label, binding.as_deref())
+    };
 
     // Drag handle (left)
     let handle_w = 18.0;
@@ -103,7 +119,7 @@ pub fn render_top_strip(
             let icon_y = y + (btn_size - icon_size) / 2.0;
             icon_fn(ctx, icon_x, icon_y, icon_size);
 
-            let tooltip = format_binding_label(label, snapshot.binding_hints.for_tool(*tool));
+            let tooltip = tool_tooltip(*tool, label);
             hits.push(HitRegion {
                 rect: (x, y, btn_size, btn_size),
                 event: ToolbarEvent::SelectTool(*tool),
@@ -244,7 +260,7 @@ pub fn render_top_strip(
                 .unwrap_or(false);
             draw_button(ctx, x, y, btn_w, btn_h, is_active, is_hover);
             draw_label_center(ctx, x, y, btn_w, btn_h, label);
-            let tooltip = format_binding_label(label, snapshot.binding_hints.for_tool(*tool));
+            let tooltip = tool_tooltip(*tool, label);
             hits.push(HitRegion {
                 rect: (x, y, btn_w, btn_h),
                 event: ToolbarEvent::SelectTool(*tool),
@@ -704,6 +720,10 @@ pub fn render_side_palette(
             toggle_hover,
             "Erase by stroke",
         );
+        let toggle_tooltip = format_binding_label(
+            "Erase by stroke",
+            snapshot.binding_hints.toggle_eraser_mode.as_deref(),
+        );
         hits.push(HitRegion {
             rect: (x, toggle_y, toggle_w, toggle_h),
             event: ToolbarEvent::SetEraserMode(if stroke_active {
@@ -712,7 +732,7 @@ pub fn render_side_palette(
                 EraserMode::Stroke
             }),
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(toggle_tooltip),
         });
         y += eraser_card_h + section_gap;
     }
