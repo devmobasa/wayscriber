@@ -1993,21 +1993,32 @@ impl WaylandState {
                 }
             }
 
-            if let DrawingState::Drawing {
-                tool: Tool::Eraser,
-                points,
-                ..
-            } = &self.input_state.state
-                && self.input_state.eraser_mode == EraserMode::Stroke
-            {
-                let radius = (self.input_state.eraser_size / 2.0).max(1.0);
-                let ids = self.input_state.hit_test_all_for_points(points, radius);
-                if !ids.is_empty() {
-                    let hover_ids: HashSet<_> = ids.into_iter().collect();
-                    let frame = self.input_state.canvas_set.active_frame();
-                    for drawn in &frame.shapes {
-                        if hover_ids.contains(&drawn.id) {
-                            crate::draw::render_selection_halo(&ctx, drawn);
+            let eraser_drawing = matches!(
+                self.input_state.state,
+                DrawingState::Drawing {
+                    tool: Tool::Eraser,
+                    ..
+                }
+            );
+            if self.input_state.eraser_mode == EraserMode::Stroke && eraser_drawing {
+                self.input_state.ensure_spatial_index_for_active_frame();
+                if let DrawingState::Drawing {
+                    tool: Tool::Eraser,
+                    points,
+                    ..
+                } = &self.input_state.state
+                {
+                    let ids = self.input_state.hit_test_all_for_points_cached(
+                        points,
+                        self.input_state.eraser_hit_radius(),
+                    );
+                    if !ids.is_empty() {
+                        let hover_ids: HashSet<_> = ids.into_iter().collect();
+                        let frame = self.input_state.canvas_set.active_frame();
+                        for drawn in &frame.shapes {
+                            if hover_ids.contains(&drawn.id) {
+                                crate::draw::render_selection_halo(&ctx, drawn);
+                            }
                         }
                     }
                 }

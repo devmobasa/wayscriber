@@ -60,8 +60,7 @@ impl InputState {
     }
 
     pub(crate) fn erase_strokes_by_points(&mut self, points: &[(i32, i32)]) -> bool {
-        let radius = (self.eraser_size / 2.0).max(1.0);
-        let ids = self.hit_test_all_for_points(points, radius);
+        let ids = self.hit_test_all_for_points(points, self.eraser_hit_radius());
         self.delete_shapes_by_ids(&ids)
     }
 

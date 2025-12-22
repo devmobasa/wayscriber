@@ -116,6 +116,10 @@ impl InputState {
         self.set_eraser_mode(next)
     }
 
+    pub(crate) fn eraser_hit_radius(&self) -> f64 {
+        (self.eraser_size / 2.0).max(1.0)
+    }
+
     /// Sets the font descriptor used for text rendering. Returns true if changed.
     #[allow(dead_code)]
     pub fn set_font_descriptor(&mut self, descriptor: FontDescriptor) -> bool {
