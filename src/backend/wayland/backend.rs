@@ -411,6 +411,7 @@ impl WaylandBackend {
             config.drawing.default_color.to_color(),
             config.drawing.default_thickness,
             config.drawing.default_eraser_size,
+            config.drawing.default_eraser_mode,
             config.drawing.marker_opacity,
             config.drawing.default_fill_enabled,
             config.drawing.default_font_size,

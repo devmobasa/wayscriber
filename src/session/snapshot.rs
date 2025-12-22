@@ -1,6 +1,7 @@
 use super::options::{CompressionMode, SessionOptions};
 use crate::draw::frame::{MAX_COMPOUND_DEPTH, ShapeId};
 use crate::draw::{Color, EraserKind, Frame};
+use crate::input::EraserMode;
 use crate::input::{
     InputState,
     board_mode::BoardMode,
@@ -53,6 +54,8 @@ pub struct ToolStateSnapshot {
     pub eraser_size: f64,
     #[serde(default = "default_eraser_kind_for_snapshot")]
     pub eraser_kind: EraserKind,
+    #[serde(default = "default_eraser_mode_for_snapshot")]
+    pub eraser_mode: EraserMode,
     pub current_font_size: f64,
     pub text_background_enabled: bool,
     pub arrow_length: f64,
@@ -70,6 +73,7 @@ impl ToolStateSnapshot {
             current_thickness: input.current_thickness,
             eraser_size: input.eraser_size,
             eraser_kind: input.eraser_kind,
+            eraser_mode: input.eraser_mode,
             current_font_size: input.current_font_size,
             text_background_enabled: input.text_background_enabled,
             arrow_length: input.arrow_length,
@@ -87,6 +91,10 @@ fn default_eraser_size_for_snapshot() -> f64 {
 
 fn default_eraser_kind_for_snapshot() -> EraserKind {
     EraserKind::Circle
+}
+
+fn default_eraser_mode_for_snapshot() -> EraserMode {
+    EraserMode::Brush
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -568,11 +576,12 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
             log::info!(
-                "Restoring tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}], font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}",
+                "Restoring tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}, mode={:?}], font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}",
                 tool_state.current_color,
                 tool_state.current_thickness,
                 tool_state.eraser_size,
                 tool_state.eraser_kind,
+                tool_state.eraser_mode,
                 tool_state.current_font_size,
                 tool_state.text_background_enabled,
                 tool_state.arrow_length,
@@ -588,6 +597,7 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
                 .eraser_size
                 .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
             input.eraser_kind = tool_state.eraser_kind;
+            input.eraser_mode = tool_state.eraser_mode;
             input.current_font_size = tool_state.current_font_size.clamp(8.0, 72.0);
             input.text_background_enabled = tool_state.text_background_enabled;
             input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);

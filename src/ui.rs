@@ -464,6 +464,10 @@ pub fn render_help_overlay(
                     action: "Adjust size (pen/eraser)",
                 },
                 Row {
+                    key: "Ctrl+Shift+E",
+                    action: "Toggle eraser mode",
+                },
+                Row {
                     key: "Ctrl+Shift+/-",
                     action: "Font size",
                 },

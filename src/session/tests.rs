@@ -3,7 +3,7 @@ use crate::config::{Action, BoardConfig, SessionConfig, SessionStorageMode};
 use crate::draw::FontDescriptor;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{Color, Shape};
-use crate::input::{ClickHighlightSettings, InputState, board_mode::BoardMode};
+use crate::input::{ClickHighlightSettings, EraserMode, InputState, board_mode::BoardMode};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -23,6 +23,7 @@ fn dummy_input_state() -> InputState {
         },
         3.0,
         12.0,
+        EraserMode::Brush,
         0.32,
         false,
         32.0,
@@ -536,6 +537,7 @@ fn save_snapshot_skips_when_payload_exceeds_max_file_size() {
             current_thickness: 3.0,
             eraser_size: 12.0,
             eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_mode: EraserMode::Brush,
             current_font_size: 24.0,
             text_background_enabled: false,
             arrow_length: 20.0,

@@ -2,7 +2,7 @@ use super::core::{ContextMenuKind, ContextMenuState, MenuCommand};
 use super::*;
 use crate::config::{Action, BoardConfig};
 use crate::draw::{Color, FontDescriptor, Shape, frame::UndoAction};
-use crate::input::{BoardMode, ClickHighlightSettings, Key, MouseButton, Tool};
+use crate::input::{BoardMode, ClickHighlightSettings, EraserMode, Key, MouseButton, Tool};
 use crate::util;
 
 fn create_test_input_state() -> InputState {
@@ -18,8 +18,9 @@ fn create_test_input_state() -> InputState {
             b: 0.0,
             a: 1.0,
         }, // Red
-        3.0,   // thickness
-        12.0,  // eraser size
+        3.0,  // thickness
+        12.0, // eraser size
+        EraserMode::Brush,
         0.32,  // marker_opacity
         false, // fill_enabled
         32.0,  // font_size

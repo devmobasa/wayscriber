@@ -5,7 +5,7 @@ use anyhow::Result;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar_icons;
 use crate::draw::{BLACK, BLUE, Color, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
-use crate::input::Tool;
+use crate::input::{EraserMode, Tool};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use super::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
@@ -681,6 +681,41 @@ pub fn render_side_palette(
         &thickness_text,
     );
     y += slider_card_h + section_gap;
+
+    if snapshot.thickness_targets_eraser {
+        let eraser_card_h = 44.0;
+        let toggle_h = 24.0;
+        let toggle_w = card_w - 12.0;
+        draw_group_card(ctx, card_x, y, card_w, eraser_card_h);
+        draw_section_label(ctx, x, y + 14.0, "Eraser mode");
+
+        let toggle_y = y + 22.0;
+        let toggle_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, toggle_y, toggle_w, toggle_h))
+            .unwrap_or(false);
+        let stroke_active = snapshot.eraser_mode == EraserMode::Stroke;
+        draw_checkbox(
+            ctx,
+            x,
+            toggle_y,
+            toggle_w,
+            toggle_h,
+            stroke_active,
+            toggle_hover,
+            "Erase by stroke",
+        );
+        hits.push(HitRegion {
+            rect: (x, toggle_y, toggle_w, toggle_h),
+            event: ToolbarEvent::SetEraserMode(if stroke_active {
+                EraserMode::Brush
+            } else {
+                EraserMode::Stroke
+            }),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+        y += eraser_card_h + section_gap;
+    }
 
     let show_marker_opacity =
         snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;

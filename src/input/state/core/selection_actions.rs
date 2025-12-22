@@ -2,21 +2,35 @@ use super::base::{DrawingState, InputState};
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{DrawnShape, Shape, ShapeId};
 use crate::util::Rect;
+use std::collections::HashSet;
 
 const SELECTION_HALO_PADDING: i32 = 6;
 
 impl InputState {
     pub(crate) fn delete_selection(&mut self) -> bool {
         let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
+        self.delete_shapes_by_ids(&ids)
+    }
+
+    pub(crate) fn delete_shapes_by_ids(&mut self, ids: &[ShapeId]) -> bool {
         if ids.is_empty() {
             return false;
         }
 
+        let id_set: HashSet<ShapeId> = ids.iter().copied().collect();
+        if id_set.is_empty() {
+            return false;
+        }
+
         let mut removed = Vec::new();
-        for id in ids {
-            if let Some((index, shape)) = self.canvas_set.active_frame_mut().remove_shape_by_id(id)
-            {
-                removed.push((index, shape));
+        let mut dirty = Vec::new();
+        {
+            let frame = self.canvas_set.active_frame();
+            for (index, shape) in frame.shapes.iter().enumerate() {
+                if id_set.contains(&shape.id) {
+                    dirty.push((shape.id, shape.shape.bounding_box()));
+                    removed.push((index, shape.clone()));
+                }
             }
         }
 
@@ -24,17 +38,31 @@ impl InputState {
             return false;
         }
 
-        for (_, shape) in &removed {
-            self.mark_selection_dirty_region(shape.shape.bounding_box());
-            self.invalidate_hit_cache_for(shape.id);
+        {
+            let frame = self.canvas_set.active_frame_mut();
+            for (index, _) in removed.iter().rev() {
+                frame.shapes.remove(*index);
+            }
+            frame.push_undo_action(
+                UndoAction::Delete { shapes: removed },
+                self.undo_stack_limit,
+            );
         }
 
-        self.canvas_set.active_frame_mut().push_undo_action(
-            UndoAction::Delete { shapes: removed },
-            self.undo_stack_limit,
-        );
+        for (shape_id, bounds) in dirty {
+            self.mark_selection_dirty_region(bounds);
+            self.invalidate_hit_cache_for(shape_id);
+        }
+
         self.clear_selection();
+        self.needs_redraw = true;
         true
+    }
+
+    pub(crate) fn erase_strokes_by_points(&mut self, points: &[(i32, i32)]) -> bool {
+        let radius = (self.eraser_size / 2.0).max(1.0);
+        let ids = self.hit_test_all_for_points(points, radius);
+        self.delete_shapes_by_ids(&ids)
     }
 
     pub(crate) fn duplicate_selection(&mut self) -> bool {

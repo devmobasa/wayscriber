@@ -28,6 +28,7 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
     let colors_h = 28.0 + picker_h + 8.0 + (swatch + swatch_gap) * (basic_rows + extended_rows);
 
     let slider_card_h = 52.0;
+    let eraser_mode_card_h = 44.0;
     let font_card_h = 50.0;
 
     let actions_checkbox_h = 24.0;
@@ -70,6 +71,9 @@ pub fn side_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
 
     let mut height: f64 = base_height + colors_h + section_gap;
     height += slider_card_h + section_gap; // Thickness
+    if snapshot.thickness_targets_eraser {
+        height += eraser_mode_card_h + section_gap; // Eraser mode
+    }
     if show_marker_opacity {
         height += slider_card_h + section_gap; // Marker opacity
     }

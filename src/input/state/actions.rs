@@ -445,6 +445,11 @@ impl InputState {
             Action::SelectEraserTool => {
                 self.set_tool_override(Some(Tool::Eraser));
             }
+            Action::ToggleEraserMode => {
+                if self.toggle_eraser_mode() {
+                    info!("Eraser mode set to {:?}", self.eraser_mode);
+                }
+            }
             Action::SelectPenTool => {
                 self.set_tool_override(Some(Tool::Pen));
             }

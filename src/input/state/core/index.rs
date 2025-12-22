@@ -13,6 +13,36 @@ pub(super) struct SpatialGrid {
 }
 
 impl InputState {
+    /// Returns all shapes intersecting any of the provided points within tolerance.
+    pub(crate) fn hit_test_all_for_points(
+        &self,
+        points: &[(i32, i32)],
+        tolerance: f64,
+    ) -> Vec<ShapeId> {
+        if points.is_empty() {
+            return Vec::new();
+        }
+
+        let mut hits = Vec::new();
+        let frame = self.canvas_set.active_frame();
+        for drawn in frame.shapes.iter().rev() {
+            let Some(bounds) = hit_test::compute_hit_bounds(drawn, tolerance) else {
+                continue;
+            };
+            let mut hit = false;
+            for &(x, y) in points {
+                if bounds.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance) {
+                    hit = true;
+                    break;
+                }
+            }
+            if hit {
+                hits.push(drawn.id);
+            }
+        }
+        hits
+    }
+
     /// Clears cached hit-test bounds.
     pub fn invalidate_hit_cache(&mut self) {
         self.hit_test_cache.clear();

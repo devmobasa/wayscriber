@@ -13,7 +13,10 @@ use crate::config::{Action, BoardConfig, KeyBinding};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
-use crate::input::{modifiers::Modifiers, tool::Tool};
+use crate::input::{
+    modifiers::Modifiers,
+    tool::{EraserMode, Tool},
+};
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -78,6 +81,8 @@ pub struct InputState {
     pub eraser_size: f64,
     /// Current eraser brush shape
     pub eraser_kind: EraserKind,
+    /// Current eraser behavior mode
+    pub eraser_mode: EraserMode,
     /// Opacity multiplier for marker tool strokes
     pub marker_opacity: f64,
     /// Current font size for text mode (from config)
@@ -227,6 +232,8 @@ impl InputState {
     /// # Arguments
     /// * `color` - Initial drawing color
     /// * `thickness` - Initial pen thickness in pixels
+    /// * `eraser_size` - Initial eraser size in pixels
+    /// * `eraser_mode` - Initial eraser behavior mode
     /// * `font_size` - Font size for text mode in points
     /// * `font_descriptor` - Font configuration for text rendering
     /// * `text_background_enabled` - Whether to draw background behind text
@@ -241,6 +248,7 @@ impl InputState {
         color: Color,
         thickness: f64,
         eraser_size: f64,
+        eraser_mode: EraserMode,
         marker_opacity: f64,
         fill_enabled: bool,
         font_size: f64,
@@ -269,6 +277,7 @@ impl InputState {
             current_thickness: thickness,
             eraser_size: clamped_eraser,
             eraser_kind: EraserKind::Circle,
+            eraser_mode,
             marker_opacity,
             current_font_size: font_size,
             font_descriptor,

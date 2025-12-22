@@ -20,7 +20,7 @@ pub use state::{ClickHighlightSettings, DrawingState, InputState, ZoomAction};
 #[cfg(tablet)]
 #[allow(unused_imports)]
 pub use tablet::TabletSettings;
-pub use tool::Tool;
+pub use tool::{EraserMode, Tool};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

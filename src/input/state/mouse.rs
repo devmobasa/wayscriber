@@ -1,5 +1,5 @@
 use crate::draw::{Shape, frame::UndoAction};
-use crate::input::{events::MouseButton, tool::Tool};
+use crate::input::{EraserMode, Tool, events::MouseButton};
 use crate::util;
 use log::warn;
 
@@ -301,13 +301,20 @@ impl InputState {
                         color: self.marker_color(),
                         thick: self.current_thickness,
                     },
-                    Tool::Eraser => Shape::EraserStroke {
-                        points,
-                        brush: crate::draw::shape::EraserBrush {
-                            size: self.eraser_size,
-                            kind: self.eraser_kind,
-                        },
-                    },
+                    Tool::Eraser => {
+                        if self.eraser_mode == EraserMode::Stroke {
+                            self.clear_provisional_dirty();
+                            self.erase_strokes_by_points(&points);
+                            return;
+                        }
+                        Shape::EraserStroke {
+                            points,
+                            brush: crate::draw::shape::EraserBrush {
+                                size: self.eraser_size,
+                                kind: self.eraser_kind,
+                            },
+                        }
+                    }
                     Tool::Highlight => {
                         self.clear_provisional_dirty();
                         return;

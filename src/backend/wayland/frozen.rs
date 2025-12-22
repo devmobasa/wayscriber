@@ -620,6 +620,7 @@ mod tests {
             crate::draw::color::RED,
             1.0,
             12.0,
+            crate::input::EraserMode::Brush,
             0.32,
             false,
             12.0,

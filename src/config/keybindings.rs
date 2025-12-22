@@ -39,6 +39,7 @@ pub enum Action {
     DecreaseMarkerOpacity,
     SelectMarkerTool,
     SelectEraserTool,
+    ToggleEraserMode,
     SelectPenTool,
     SelectLineTool,
     SelectRectTool,
@@ -257,6 +258,9 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_select_eraser_tool")]
     pub select_eraser_tool: Vec<String>,
 
+    #[serde(default = "default_toggle_eraser_mode")]
+    pub toggle_eraser_mode: Vec<String>,
+
     #[serde(default = "default_select_pen_tool")]
     pub select_pen_tool: Vec<String>,
 
@@ -407,6 +411,7 @@ impl Default for KeybindingsConfig {
             decrease_marker_opacity: default_decrease_marker_opacity(),
             select_marker_tool: default_select_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
+            toggle_eraser_mode: default_toggle_eraser_mode(),
             select_pen_tool: default_select_pen_tool(),
             select_line_tool: default_select_line_tool(),
             select_rect_tool: default_select_rect_tool(),
@@ -561,6 +566,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.select_eraser_tool {
             insert_binding(binding_str, Action::SelectEraserTool)?;
+        }
+
+        for binding_str in &self.toggle_eraser_mode {
+            insert_binding(binding_str, Action::ToggleEraserMode)?;
         }
 
         for binding_str in &self.select_pen_tool {
@@ -835,6 +844,10 @@ fn default_select_marker_tool() -> Vec<String> {
 
 fn default_select_eraser_tool() -> Vec<String> {
     vec!["D".to_string()]
+}
+
+fn default_toggle_eraser_mode() -> Vec<String> {
+    vec!["Ctrl+Shift+E".to_string()]
 }
 
 fn default_select_pen_tool() -> Vec<String> {
