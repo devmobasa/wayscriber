@@ -51,7 +51,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, ColorSpec, Config},
-    input::{BoardMode, DrawingState, InputState, ZoomAction},
+    input::{BoardMode, DrawingState, EraserMode, InputState, Tool, ZoomAction},
     notification,
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
@@ -1993,6 +1993,37 @@ impl WaylandState {
                 }
             }
 
+            let eraser_drawing = matches!(
+                self.input_state.state,
+                DrawingState::Drawing {
+                    tool: Tool::Eraser,
+                    ..
+                }
+            );
+            if self.input_state.eraser_mode == EraserMode::Stroke && eraser_drawing {
+                self.input_state.ensure_spatial_index_for_active_frame();
+                if let DrawingState::Drawing {
+                    tool: Tool::Eraser,
+                    points,
+                    ..
+                } = &self.input_state.state
+                {
+                    let ids = self.input_state.hit_test_all_for_points_cached(
+                        points,
+                        self.input_state.eraser_hit_radius(),
+                    );
+                    if !ids.is_empty() {
+                        let hover_ids: HashSet<_> = ids.into_iter().collect();
+                        let frame = self.input_state.canvas_set.active_frame();
+                        for drawn in &frame.shapes {
+                            if hover_ids.contains(&drawn.id) {
+                                crate::draw::render_selection_halo(&ctx, drawn);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Render provisional shape if actively drawing
             // Use optimized method that avoids cloning for freehand
             let (mx, my) = if zoom_transform_active {
@@ -2216,6 +2247,7 @@ impl WaylandState {
             ToolbarEvent::SetColor(_)
                 | ToolbarEvent::SetThickness(_)
                 | ToolbarEvent::SetMarkerOpacity(_)
+                | ToolbarEvent::SetEraserMode(_)
                 | ToolbarEvent::SetFont(_)
                 | ToolbarEvent::SetFontSize(_)
                 | ToolbarEvent::ToggleFill(_)
@@ -2296,6 +2328,7 @@ impl WaylandState {
     fn save_drawing_preferences(&mut self) {
         self.config.drawing.default_color = ColorSpec::from(self.input_state.current_color);
         self.config.drawing.default_thickness = self.input_state.current_thickness;
+        self.config.drawing.default_eraser_mode = self.input_state.eraser_mode;
         self.config.drawing.default_fill_enabled = self.input_state.fill_enabled;
         self.config.drawing.default_font_size = self.input_state.current_font_size;
         self.config.drawing.font_family = self.input_state.font_descriptor.family.clone();

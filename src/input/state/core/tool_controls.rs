@@ -1,7 +1,7 @@
 use super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::config::Action;
 use crate::draw::{Color, FontDescriptor};
-use crate::input::tool::Tool;
+use crate::input::tool::{EraserMode, Tool};
 
 impl InputState {
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
@@ -94,6 +94,30 @@ impl InputState {
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
+    }
+
+    /// Sets the eraser behavior mode. Returns true if changed.
+    pub fn set_eraser_mode(&mut self, mode: EraserMode) -> bool {
+        if self.eraser_mode == mode {
+            return false;
+        }
+        self.eraser_mode = mode;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    /// Toggles between brush and stroke eraser modes.
+    pub fn toggle_eraser_mode(&mut self) -> bool {
+        let next = match self.eraser_mode {
+            EraserMode::Brush => EraserMode::Stroke,
+            EraserMode::Stroke => EraserMode::Brush,
+        };
+        self.set_eraser_mode(next)
+    }
+
+    pub(crate) fn eraser_hit_radius(&self) -> f64 {
+        (self.eraser_size / 2.0).max(1.0)
     }
 
     /// Sets the font descriptor used for text rendering. Returns true if changed.

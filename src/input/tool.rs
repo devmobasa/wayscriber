@@ -1,5 +1,8 @@
 //! Drawing tool selection.
 
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
 /// Drawing tool selection.
 ///
 /// The active tool determines what shape is created when the user drags the mouse.
@@ -25,4 +28,15 @@ pub enum Tool {
     /// Eraser brush that removes content within its stroke
     Eraser,
     // Note: Text mode uses DrawingState::TextInput instead of Tool::Text
+}
+
+/// Eraser behavior mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum EraserMode {
+    /// Brush-style eraser that clears pixels along its stroke.
+    #[default]
+    Brush,
+    /// Stroke eraser that deletes any shape it touches.
+    Stroke,
 }

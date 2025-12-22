@@ -1,6 +1,7 @@
 //! Configuration type definitions.
 
 use super::enums::{ColorSpec, StatusPosition};
+use crate::input::EraserMode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,10 @@ pub struct DrawingConfig {
     /// Default eraser size in pixels (valid range: 1.0 - 50.0)
     #[serde(default = "default_eraser_size")]
     pub default_eraser_size: f64,
+
+    /// Default eraser behavior (brush or stroke)
+    #[serde(default = "default_eraser_mode")]
+    pub default_eraser_mode: EraserMode,
 
     /// Default marker opacity multiplier (0.05 - 0.9), applied to the current color alpha
     #[serde(default = "default_marker_opacity")]
@@ -73,6 +78,7 @@ impl Default for DrawingConfig {
             default_color: default_color(),
             default_thickness: default_thickness(),
             default_eraser_size: default_eraser_size(),
+            default_eraser_mode: default_eraser_mode(),
             marker_opacity: default_marker_opacity(),
             default_fill_enabled: default_fill_enabled(),
             default_font_size: default_font_size(),
@@ -465,6 +471,10 @@ fn default_thickness() -> f64 {
 
 fn default_eraser_size() -> f64 {
     12.0
+}
+
+fn default_eraser_mode() -> EraserMode {
+    EraserMode::Brush
 }
 
 fn default_marker_opacity() -> f64 {

@@ -1,7 +1,7 @@
 use cairo::{Context, ImageSurface};
 use wayscriber::config::{HelpOverlayStyle, KeybindingsConfig, StatusBarStyle, StatusPosition};
 use wayscriber::draw::Color;
-use wayscriber::input::{ClickHighlightSettings, InputState};
+use wayscriber::input::{ClickHighlightSettings, EraserMode, InputState};
 
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
@@ -15,6 +15,7 @@ fn make_input_state() -> InputState {
         },
         4.0,
         4.0,
+        EraserMode::Brush,
         0.32,
         false,
         32.0,

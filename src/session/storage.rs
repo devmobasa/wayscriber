@@ -418,6 +418,7 @@ mod tests {
                 current_thickness: 3.0,
                 eraser_size: 12.0,
                 eraser_kind: crate::draw::EraserKind::Circle,
+                eraser_mode: crate::input::EraserMode::Brush,
                 current_font_size: 24.0,
                 text_background_enabled: false,
                 arrow_length: 20.0,

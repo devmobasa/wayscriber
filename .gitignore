@@ -42,3 +42,5 @@ dist/
 
 # Performance testing scripts and results
 perf/
+
+scripts/

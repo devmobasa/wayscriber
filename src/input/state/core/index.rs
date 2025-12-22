@@ -13,6 +13,73 @@ pub(super) struct SpatialGrid {
 }
 
 impl InputState {
+    /// Returns all shapes intersecting any of the provided points within tolerance.
+    pub(crate) fn hit_test_all_for_points(
+        &mut self,
+        points: &[(i32, i32)],
+        tolerance: f64,
+    ) -> Vec<ShapeId> {
+        self.ensure_spatial_index_for_active_frame();
+        self.hit_test_all_for_points_cached(points, tolerance)
+    }
+
+    /// Returns all shapes intersecting any of the provided points using cached spatial data.
+    pub(crate) fn hit_test_all_for_points_cached(
+        &self,
+        points: &[(i32, i32)],
+        tolerance: f64,
+    ) -> Vec<ShapeId> {
+        if points.is_empty() {
+            return Vec::new();
+        }
+
+        let frame = self.canvas_set.active_frame();
+        let len = frame.shapes.len();
+        if len == 0 {
+            return Vec::new();
+        }
+
+        let candidate_indices: Vec<usize> = if let Some(grid) = self
+            .spatial_index
+            .as_ref()
+            .filter(|grid| grid.shape_count == len)
+        {
+            let mut unique = HashSet::new();
+            for &(x, y) in points {
+                for index in grid.query((x, y)) {
+                    unique.insert(index);
+                }
+            }
+            let mut indices: Vec<usize> = unique.into_iter().collect();
+            indices.sort_unstable_by(|a, b| b.cmp(a));
+            indices
+        } else {
+            (0..len).rev().collect()
+        };
+
+        let mut hits = Vec::new();
+        for index in candidate_indices {
+            let drawn = match frame.shapes.get(index) {
+                Some(shape) => shape,
+                None => continue,
+            };
+            let bounds = hit_test::compute_hit_bounds(drawn, tolerance);
+            let hit = bounds
+                .as_ref()
+                .map(|rect| {
+                    points.iter().any(|&(x, y)| {
+                        rect.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance)
+                    })
+                })
+                .unwrap_or(false);
+            if hit {
+                hits.push(drawn.id);
+            }
+        }
+
+        hits
+    }
+
     /// Clears cached hit-test bounds.
     pub fn invalidate_hit_cache(&mut self) {
         self.hit_test_cache.clear();
@@ -34,6 +101,20 @@ impl InputState {
     /// Updates the threshold used before building a spatial index.
     pub fn set_hit_test_threshold(&mut self, threshold: usize) {
         self.max_linear_hit_test = threshold.max(1);
+    }
+
+    pub(crate) fn ensure_spatial_index_for_active_frame(&mut self) {
+        let len = self.canvas_set.active_frame().shapes.len();
+        if len <= self.max_linear_hit_test {
+            self.spatial_index = None;
+            return;
+        }
+
+        let rebuild = !matches!(&self.spatial_index, Some(grid) if grid.shape_count == len);
+        if rebuild {
+            let frame = self.canvas_set.active_frame();
+            self.spatial_index = SpatialGrid::build(frame, SPATIAL_GRID_CELL_SIZE);
+        }
     }
 
     fn hit_test_single(&mut self, index: usize, x: i32, y: i32, tolerance: f64) -> Option<ShapeId> {

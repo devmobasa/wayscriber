@@ -1,6 +1,6 @@
 use crate::config::KeybindingsConfig;
 use crate::draw::{Color, EraserKind, FontDescriptor};
-use crate::input::{InputState, Tool};
+use crate::input::{EraserMode, InputState, Tool};
 
 /// Events emitted by the floating toolbar UI.
 #[derive(Debug, Clone)]
@@ -11,6 +11,7 @@ pub enum ToolbarEvent {
     NudgeThickness(f64),
     SetMarkerOpacity(f64),
     NudgeMarkerOpacity(f64),
+    SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
@@ -80,6 +81,7 @@ pub struct ToolbarSnapshot {
     pub thickness_targets_eraser: bool,
     pub thickness_targets_marker: bool,
     pub eraser_kind: EraserKind,
+    pub eraser_mode: EraserMode,
     pub marker_opacity: f64,
     pub font: FontDescriptor,
     pub font_size: f64,
@@ -135,6 +137,7 @@ impl ToolbarSnapshot {
         let thickness_targets_marker =
             active_tool == Tool::Marker || matches!(state.tool_override(), Some(Tool::Marker));
         let eraser_kind = state.eraser_kind;
+        let eraser_mode = state.eraser_mode;
         let thickness_value = if thickness_targets_eraser {
             state.eraser_size
         } else {
@@ -149,6 +152,7 @@ impl ToolbarSnapshot {
             thickness_targets_eraser,
             thickness_targets_marker,
             eraser_kind,
+            eraser_mode,
             marker_opacity: state.marker_opacity,
             font: state.font_descriptor.clone(),
             font_size: state.current_font_size,
@@ -248,6 +252,7 @@ impl InputState {
             ToolbarEvent::SetColor(color) => self.set_color(color),
             ToolbarEvent::SetThickness(value) => self.set_thickness_for_active_tool(value),
             ToolbarEvent::SetMarkerOpacity(value) => self.set_marker_opacity(value),
+            ToolbarEvent::SetEraserMode(mode) => self.set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.set_font_descriptor(descriptor),
             ToolbarEvent::SetFontSize(size) => self.set_font_size(size),
             ToolbarEvent::ToggleFill(enable) => self.set_fill_enabled(enable),
