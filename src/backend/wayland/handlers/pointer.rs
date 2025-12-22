@@ -7,7 +7,7 @@ use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
 use crate::backend::wayland::state::{debug_toolbar_drag_logging_enabled, surface_id};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
-use crate::input::{MouseButton, Tool};
+use crate::input::{EraserMode, MouseButton, Tool};
 use crate::ui::toolbar::ToolbarEvent;
 
 use super::super::state::WaylandState;
@@ -66,6 +66,11 @@ impl PointerHandler for WaylandState {
                     if !on_toolbar {
                         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
                         self.input_state.update_pointer_position(wx, wy);
+                        if self.input_state.eraser_mode == EraserMode::Stroke
+                            && self.input_state.active_tool() == Tool::Eraser
+                        {
+                            self.input_state.needs_redraw = true;
+                        }
                     }
                     update_cursor(on_toolbar, conn, self);
                     if inline_active {
@@ -93,6 +98,12 @@ impl PointerHandler for WaylandState {
                             debug!("Preserving move drag state on toolbar leave");
                         }
                         self.toolbar.mark_dirty();
+                        self.input_state.needs_redraw = true;
+                    }
+                    if !on_toolbar
+                        && self.input_state.eraser_mode == EraserMode::Stroke
+                        && self.input_state.active_tool() == Tool::Eraser
+                    {
                         self.input_state.needs_redraw = true;
                     }
                     if inline_active {

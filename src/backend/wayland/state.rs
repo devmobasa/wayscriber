@@ -1993,39 +1993,6 @@ impl WaylandState {
                 }
             }
 
-            let eraser_drawing = matches!(
-                self.input_state.state,
-                DrawingState::Drawing {
-                    tool: Tool::Eraser,
-                    ..
-                }
-            );
-            if self.input_state.eraser_mode == EraserMode::Stroke && eraser_drawing {
-                self.input_state.ensure_spatial_index_for_active_frame();
-                if let DrawingState::Drawing {
-                    tool: Tool::Eraser,
-                    points,
-                    ..
-                } = &self.input_state.state
-                {
-                    let ids = self.input_state.hit_test_all_for_points_cached(
-                        points,
-                        self.input_state.eraser_hit_radius(),
-                    );
-                    if !ids.is_empty() {
-                        let hover_ids: HashSet<_> = ids.into_iter().collect();
-                        let frame = self.input_state.canvas_set.active_frame();
-                        for drawn in &frame.shapes {
-                            if hover_ids.contains(&drawn.id) {
-                                crate::draw::render_selection_halo(&ctx, drawn);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Render provisional shape if actively drawing
-            // Use optimized method that avoids cloning for freehand
             let (mx, my) = if zoom_transform_active {
                 self.zoomed_world_coords(
                     self.current_mouse().0 as f64,
@@ -2034,6 +2001,83 @@ impl WaylandState {
             } else {
                 self.current_mouse()
             };
+
+            let eraser_drawing = matches!(
+                self.input_state.state,
+                DrawingState::Drawing {
+                    tool: Tool::Eraser,
+                    ..
+                }
+            );
+            let eraser_stroke = self.input_state.eraser_mode == EraserMode::Stroke;
+            let eraser_hover = eraser_stroke
+                && !eraser_drawing
+                && self.input_state.active_tool() == Tool::Eraser
+                && matches!(self.input_state.state, DrawingState::Idle)
+                && self.has_pointer_focus()
+                && !self.pointer_over_toolbar();
+            if eraser_stroke && (eraser_drawing || eraser_hover) {
+                self.input_state.ensure_spatial_index_for_active_frame();
+                let ids = if eraser_drawing {
+                    if let DrawingState::Drawing {
+                        tool: Tool::Eraser,
+                        points,
+                        ..
+                    } = &self.input_state.state
+                    {
+                        self.input_state.hit_test_all_for_points_cached(
+                            points,
+                            self.input_state.eraser_hit_radius(),
+                        )
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    let point = [(mx, my)];
+                    self.input_state.hit_test_all_for_points_cached(
+                        &point,
+                        self.input_state.eraser_hit_radius(),
+                    )
+                };
+                if !ids.is_empty() {
+                    let frame = self.input_state.canvas_set.active_frame();
+                    match ids.len() {
+                        1 => {
+                            if let Some(drawn) = frame.shape(ids[0]) {
+                                crate::draw::render_selection_halo(&ctx, drawn);
+                            }
+                        }
+                        2..=4 => {
+                            let mut indices = Vec::with_capacity(ids.len());
+                            for id in &ids {
+                                if let Some(index) = frame.find_index(*id) {
+                                    indices.push(index);
+                                }
+                            }
+                            if !indices.is_empty() {
+                                indices.sort_unstable();
+                                indices.dedup();
+                                for index in indices {
+                                    if let Some(drawn) = frame.shapes.get(index) {
+                                        crate::draw::render_selection_halo(&ctx, drawn);
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            let hover_ids: HashSet<_> = ids.into_iter().collect();
+                            for drawn in &frame.shapes {
+                                if hover_ids.contains(&drawn.id) {
+                                    crate::draw::render_selection_halo(&ctx, drawn);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Render provisional shape if actively drawing
+            // Use optimized method that avoids cloning for freehand
             if self.input_state.render_provisional_shape(&ctx, mx, my) {
                 debug!("Rendered provisional shape");
             }
