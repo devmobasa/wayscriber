@@ -181,6 +181,11 @@ impl InputState {
         if drawing {
             self.update_provisional_dirty(x, y);
             self.needs_redraw = true;
+        } else if self.eraser_mode == EraserMode::Stroke
+            && self.active_tool() == Tool::Eraser
+            && matches!(self.state, DrawingState::Idle)
+        {
+            self.needs_redraw = true;
         }
     }
 
