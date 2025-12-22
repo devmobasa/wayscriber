@@ -38,6 +38,9 @@ default_thickness = 3.0
 # Default eraser size in pixels (1.0 - 40.0)
 default_eraser_size = 12.0
 
+# Default eraser mode ("brush" or "stroke")
+default_eraser_mode = "brush"
+
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
@@ -53,12 +56,14 @@ default_font_size = 32.0
 **Runtime Adjustments:**
 - **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-40px)
 - **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-40px)
+- **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
 **Defaults:**
 - Color: Red
 - Thickness: 3.0px
 - Eraser size: 12.0px
+- Eraser mode: Brush
 - Font size: 32.0px
 
 ### `[arrow]` - Arrow Geometry
@@ -439,6 +444,9 @@ toggle_click_highlight = ["Ctrl+Shift+H"]
 
 # Toggle highlight-only drawing tool
 toggle_highlight_tool = ["Ctrl+Alt+H"]
+
+# Toggle eraser behavior (brush vs stroke)
+toggle_eraser_mode = ["Ctrl+Shift+E"]
 
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]

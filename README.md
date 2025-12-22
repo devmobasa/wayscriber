@@ -348,6 +348,7 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Undo | <kbd>Ctrl+Z</kbd> |
 | Redo | <kbd>Ctrl+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> |
 | Eraser | <kbd>D</kbd> |
+| Toggle eraser mode | <kbd>Ctrl+Shift+E</kbd> |
 | Clear all | <kbd>E</kbd> |
 | Cancel action | <kbd>Right-click</kbd> / <kbd>Escape</kbd> |
 | Toggle toolbars | <kbd>F2</kbd> / <kbd>F9</kbd> |
