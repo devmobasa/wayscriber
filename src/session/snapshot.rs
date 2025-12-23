@@ -1,9 +1,8 @@
 use super::options::{CompressionMode, SessionOptions};
 use crate::draw::frame::{MAX_COMPOUND_DEPTH, ShapeId};
 use crate::draw::{Color, EraserKind, Frame};
-use crate::input::EraserMode;
 use crate::input::{
-    InputState,
+    EraserMode, InputState, Tool,
     board_mode::BoardMode,
     state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
 };
@@ -56,6 +55,12 @@ pub struct ToolStateSnapshot {
     pub eraser_kind: EraserKind,
     #[serde(default = "default_eraser_mode_for_snapshot")]
     pub eraser_mode: EraserMode,
+    #[serde(default)]
+    pub marker_opacity: Option<f64>,
+    #[serde(default)]
+    pub fill_enabled: Option<bool>,
+    #[serde(default)]
+    pub tool_override: Option<Tool>,
     pub current_font_size: f64,
     pub text_background_enabled: bool,
     pub arrow_length: f64,
@@ -74,6 +79,9 @@ impl ToolStateSnapshot {
             eraser_size: input.eraser_size,
             eraser_kind: input.eraser_kind,
             eraser_mode: input.eraser_mode,
+            marker_opacity: Some(input.marker_opacity),
+            fill_enabled: Some(input.fill_enabled),
+            tool_override: input.tool_override(),
             current_font_size: input.current_font_size,
             text_background_enabled: input.text_background_enabled,
             arrow_length: input.arrow_length,
@@ -575,13 +583,18 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
+            let marker_opacity = tool_state.marker_opacity.unwrap_or(input.marker_opacity);
+            let fill_enabled = tool_state.fill_enabled.unwrap_or(input.fill_enabled);
             log::info!(
-                "Restoring tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}, mode={:?}], font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}",
+                "Restoring tool state: color={:?}, thickness={:.2}, eraser[size={:.2}, kind={:?}, mode={:?}], marker_opacity={:.2}, fill_enabled={}, tool_override={:?}, font_size={:.1}, text_bg={}, arrow[length={:.1}, angle={:.1}], status_bar={}, prev_color={:?}",
                 tool_state.current_color,
                 tool_state.current_thickness,
                 tool_state.eraser_size,
                 tool_state.eraser_kind,
                 tool_state.eraser_mode,
+                marker_opacity,
+                fill_enabled,
+                tool_state.tool_override,
                 tool_state.current_font_size,
                 tool_state.text_background_enabled,
                 tool_state.arrow_length,
@@ -589,16 +602,27 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
                 tool_state.show_status_bar,
                 tool_state.board_previous_color
             );
-            input.current_color = tool_state.current_color;
-            input.current_thickness = tool_state
-                .current_thickness
-                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-            input.eraser_size = tool_state
-                .eraser_size
-                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            let _ = input.set_color(tool_state.current_color);
+            let _ = input.set_thickness(
+                tool_state
+                    .current_thickness
+                    .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS),
+            );
+            let _ = input.set_eraser_size(
+                tool_state
+                    .eraser_size
+                    .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS),
+            );
             input.eraser_kind = tool_state.eraser_kind;
-            input.eraser_mode = tool_state.eraser_mode;
-            input.current_font_size = tool_state.current_font_size.clamp(8.0, 72.0);
+            let _ = input.set_eraser_mode(tool_state.eraser_mode);
+            if let Some(opacity) = tool_state.marker_opacity {
+                let _ = input.set_marker_opacity(opacity);
+            }
+            if let Some(fill_enabled) = tool_state.fill_enabled {
+                let _ = input.set_fill_enabled(fill_enabled);
+            }
+            let _ = input.set_tool_override(tool_state.tool_override);
+            let _ = input.set_font_size(tool_state.current_font_size.clamp(8.0, 72.0));
             input.text_background_enabled = tool_state.text_background_enabled;
             input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
             input.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
