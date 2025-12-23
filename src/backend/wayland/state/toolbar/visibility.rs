@@ -129,6 +129,9 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
         &self,
     ) -> KeyboardInteractivity {
+        if self.overlay_suppressed() {
+            return KeyboardInteractivity::None;
+        }
         desired_keyboard_interactivity_for(self.layer_shell.is_some(), self.toolbar.is_visible())
     }
 

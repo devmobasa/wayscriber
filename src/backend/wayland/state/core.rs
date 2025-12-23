@@ -9,6 +9,7 @@ impl WaylandState {
             capture_manager,
             session_options,
             tokio_handle,
+            exit_after_capture,
             frozen_enabled,
             preferred_output_identity,
             xdg_fullscreen,
@@ -84,6 +85,7 @@ impl WaylandState {
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
             zoom: ZoomState::new(zoom_manager),
+            exit_after_capture,
             themed_pointer: None,
             locked_pointer: None,
             relative_pointer: None,
@@ -158,6 +160,10 @@ impl WaylandState {
         }
         self.data.overlay_suppression = reason;
         self.apply_overlay_clickthrough(true);
+        if let Some(layer) = self.surface.layer_surface_mut() {
+            layer.set_keyboard_interactivity(KeyboardInteractivity::None);
+            self.set_current_keyboard_interactivity(Some(KeyboardInteractivity::None));
+        }
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
     }
@@ -171,6 +177,7 @@ impl WaylandState {
         }
         self.data.overlay_suppression = OverlaySuppression::None;
         self.apply_overlay_clickthrough(false);
+        self.refresh_keyboard_interactivity();
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
     }
