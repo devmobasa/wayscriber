@@ -566,7 +566,7 @@ See [Satty](https://github.com/gabm/Satty) for capture → annotate → save wor
 ### Acknowledgments
 
 - Inspired by [ZoomIt](https://learn.microsoft.com/en-us/sysinternals/downloads/zoomit) by Mark Russinovich
-- Built for [Hyprland](https://hyprland.org/) by vaxry
+- Built for Linux (distros that use Wayland)
 - Similar ideas from [Gromit-MPX](https://github.com/bk138/gromit-mpx)
 - Uses [Cairo](https://www.cairographics.org/) and [smithay-client-toolkit](https://github.com/Smithay/client-toolkit)
 
