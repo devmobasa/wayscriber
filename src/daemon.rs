@@ -41,12 +41,12 @@ use crate::{
     set_runtime_session_override,
 };
 #[cfg(feature = "tray")]
-use zbus::{Connection, Proxy};
-#[cfg(feature = "tray")]
 use crate::{
     paths::{log_dir, tray_action_file},
     session::{clear_session, options_from_config},
 };
+#[cfg(feature = "tray")]
+use zbus::{Connection, Proxy};
 
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -536,10 +536,7 @@ impl ksni::Tray for WayscriberTray {
             if let Some(next_retry_at) = error.next_retry_at {
                 let remaining = next_retry_at.saturating_duration_since(Instant::now());
                 if remaining > Duration::from_secs(0) {
-                    description.push_str(&format!(
-                        " (retry in {}s)",
-                        remaining.as_secs().max(1)
-                    ));
+                    description.push_str(&format!(" (retry in {}s)", remaining.as_secs().max(1)));
                 }
             }
         }
@@ -833,10 +830,11 @@ impl Daemon {
             backoff.as_secs().max(1)
         );
         #[cfg(feature = "tray")]
-        self.tray_status.set_overlay_error(Some(OverlaySpawnErrorInfo {
-            message,
-            next_retry_at: Some(next_retry_at),
-        }));
+        self.tray_status
+            .set_overlay_error(Some(OverlaySpawnErrorInfo {
+                message,
+                next_retry_at: Some(next_retry_at),
+            }));
     }
 
     fn clear_overlay_spawn_error(&mut self) {
@@ -1030,10 +1028,10 @@ impl Daemon {
             // Check for toggle request
             // Use Acquire ordering to ensure we see all memory operations
             // that happened before the flag was set
-            if self.toggle_requested.swap(false, Ordering::Acquire) {
-                if let Err(err) = self.toggle_overlay() {
-                    warn!("Toggle overlay failed: {}", err);
-                }
+            if self.toggle_requested.swap(false, Ordering::Acquire)
+                && let Err(err) = self.toggle_overlay()
+            {
+                warn!("Toggle overlay failed: {}", err);
             }
 
             // Small sleep to avoid busy-waiting
@@ -1373,10 +1371,7 @@ impl Daemon {
             }
         }
 
-        warn!(
-            "Overlay spawn attempts failed: {}",
-            failures.join("; ")
-        );
+        warn!("Overlay spawn attempts failed: {}", failures.join("; "));
         Err(anyhow!(
             "Unable to launch overlay process (tried current_exe/argv0/PATH)"
         ))
@@ -1468,7 +1463,10 @@ async fn log_status_notifier_state() {
     let conn = match Connection::session().await {
         Ok(conn) => conn,
         Err(err) => {
-            warn!("Failed to connect to session D-Bus for tray diagnostics: {}", err);
+            warn!(
+                "Failed to connect to session D-Bus for tray diagnostics: {}",
+                err
+            );
             return;
         }
     };
@@ -1483,10 +1481,7 @@ async fn log_status_notifier_state() {
     {
         Ok(proxy) => proxy,
         Err(err) => {
-            warn!(
-                "StatusNotifierWatcher unavailable (no tray host?): {}",
-                err
-            );
+            warn!("StatusNotifierWatcher unavailable (no tray host?): {}", err);
             return;
         }
     };
