@@ -1,6 +1,18 @@
 use super::*;
 
 impl WaylandState {
+    fn should_exit_after_capture(&self, destination: CaptureDestination) -> bool {
+        let is_clipboard = matches!(
+            destination,
+            CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile
+        );
+        match self.exit_after_capture_mode {
+            ExitAfterCaptureMode::Always => true,
+            ExitAfterCaptureMode::Never => false,
+            ExitAfterCaptureMode::Auto => is_clipboard,
+        }
+    }
+
     pub(in crate::backend::wayland) fn apply_capture_completion(&mut self) {
         if self.frozen.take_capture_done() {
             self.exit_overlay_suppression(OverlaySuppression::Frozen);
@@ -117,6 +129,9 @@ impl WaylandState {
             })
         };
 
+        let exit_on_success = self.should_exit_after_capture(destination);
+        self.capture.set_exit_on_success(exit_on_success);
+
         // Suppress overlay before capture to prevent capturing the overlay itself
         self.enter_overlay_suppression(OverlaySuppression::Capture);
         self.capture.mark_in_progress();
@@ -133,6 +148,7 @@ impl WaylandState {
             // Restore overlay on error
             self.show_overlay();
             self.capture.clear_in_progress();
+            self.capture.clear_exit_on_success();
         }
     }
 }

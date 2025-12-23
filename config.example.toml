@@ -332,7 +332,8 @@ format = "png"
 # Shortcut-specific actions may override this
 copy_to_clipboard = true
 
-# Exit overlay after a capture completes
+# Exit overlay after any capture completes (forces exit for all capture types)
+# When false, clipboard captures may still auto-exit depending on defaults.
 exit_after_capture = false
 
 # ═══════════════════════════════════════════════════════════════════════════════

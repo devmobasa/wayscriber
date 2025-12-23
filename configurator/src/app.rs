@@ -939,7 +939,7 @@ impl ConfiguratorApp {
                     ToggleField::CaptureCopyToClipboard,
                 ),
                 toggle_row(
-                    "Exit overlay after capture",
+                    "Always exit overlay after capture",
                     self.draft.capture_exit_after,
                     self.defaults.capture_exit_after,
                     ToggleField::CaptureExitAfter,

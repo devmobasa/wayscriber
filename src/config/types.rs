@@ -768,7 +768,7 @@ pub struct CaptureConfig {
     #[serde(default = "default_capture_clipboard")]
     pub copy_to_clipboard: bool,
 
-    /// Exit the overlay after a capture completes
+    /// Exit the overlay after any capture completes (forces exit for all capture types)
     #[serde(default = "default_capture_exit_after")]
     pub exit_after_capture: bool,
 }

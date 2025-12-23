@@ -1,3 +1,4 @@
+use crate::backend::ExitAfterCaptureMode;
 use clap::{ArgAction, Parser};
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -98,8 +99,12 @@ struct Cli {
     freeze: bool,
 
     /// Exit the overlay after a capture completes
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_exit_after_capture")]
     exit_after_capture: bool,
+
+    /// Keep the overlay open after a capture completes
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "exit_after_capture")]
+    no_exit_after_capture: bool,
 
     /// Force session resume on (persist/restore all boards + history/tool state)
     #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_resume_session")]
@@ -214,8 +219,16 @@ fn run() -> anyhow::Result<()> {
 
         set_runtime_session_override(session_override);
 
+        let exit_after_capture_mode = if cli.exit_after_capture {
+            ExitAfterCaptureMode::Always
+        } else if cli.no_exit_after_capture {
+            ExitAfterCaptureMode::Never
+        } else {
+            ExitAfterCaptureMode::Auto
+        };
+
         // Run Wayland backend
-        backend::run_wayland(cli.mode, cli.freeze, cli.exit_after_capture)?;
+        backend::run_wayland(cli.mode, cli.freeze, exit_after_capture_mode)?;
 
         log::info!("Annotation overlay closed.");
     } else {
@@ -229,6 +242,7 @@ fn run() -> anyhow::Result<()> {
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
         println!("  wayscriber --freeze          Start overlay already frozen");
         println!("  wayscriber --exit-after-capture  Exit overlay after a capture completes");
+        println!("  wayscriber --no-exit-after-capture  Keep overlay open after capture");
         println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
         println!("  wayscriber --about           Show the About window");
         println!(
