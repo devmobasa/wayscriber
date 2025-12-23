@@ -11,7 +11,9 @@ use log::{debug, info, warn};
 use png::Decoder;
 use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
 use signal_hook::iterator::Signals;
+use std::collections::HashSet;
 use std::env;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
@@ -22,6 +24,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 #[cfg(feature = "tray")]
 use std::sync::mpsc;
+#[cfg(feature = "tray")]
+use std::sync::{Mutex, atomic::AtomicU64};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -41,12 +45,83 @@ use crate::{
     paths::{log_dir, tray_action_file},
     session::{clear_session, options_from_config},
 };
+#[cfg(feature = "tray")]
+use zbus::{Connection, Proxy};
 
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayState {
     Hidden,  // Daemon running, overlay not visible
     Visible, // Overlay active, capturing input
+}
+
+#[derive(Debug, Clone)]
+struct OverlaySpawnErrorInfo {
+    message: String,
+    next_retry_at: Option<Instant>,
+}
+
+#[derive(Debug, Clone)]
+struct OverlaySpawnCandidate {
+    program: OsString,
+    source: &'static str,
+}
+
+#[cfg(feature = "tray")]
+#[derive(Debug, Default, Clone)]
+struct TrayStatus {
+    overlay_error: Option<OverlaySpawnErrorInfo>,
+    watcher_offline: bool,
+    watcher_reason: Option<String>,
+}
+
+#[cfg(feature = "tray")]
+#[derive(Debug)]
+struct TrayStatusShared {
+    inner: Mutex<TrayStatus>,
+    revision: AtomicU64,
+}
+
+#[cfg(feature = "tray")]
+impl TrayStatusShared {
+    fn new() -> Self {
+        Self {
+            inner: Mutex::new(TrayStatus::default()),
+            revision: AtomicU64::new(0),
+        }
+    }
+
+    fn snapshot(&self) -> TrayStatus {
+        self.inner.lock().unwrap().clone()
+    }
+
+    fn set_overlay_error(&self, error: Option<OverlaySpawnErrorInfo>) {
+        let mut status = self.inner.lock().unwrap();
+        status.overlay_error = error;
+        self.bump_revision();
+    }
+
+    fn set_watcher_offline(&self, reason: String) -> bool {
+        let mut status = self.inner.lock().unwrap();
+        let was_offline = status.watcher_offline;
+        status.watcher_offline = true;
+        status.watcher_reason = Some(reason);
+        self.bump_revision();
+        !was_offline
+    }
+
+    fn set_watcher_online(&self) -> bool {
+        let mut status = self.inner.lock().unwrap();
+        let was_offline = status.watcher_offline;
+        status.watcher_offline = false;
+        status.watcher_reason = None;
+        self.bump_revision();
+        was_offline
+    }
+
+    fn bump_revision(&self) {
+        self.revision.fetch_add(1, Ordering::Release);
+    }
 }
 
 #[derive(Debug)]
@@ -65,6 +140,8 @@ type BackendRunner = dyn Fn(Option<String>) -> Result<()> + Send + Sync;
 
 #[cfg(feature = "tray")]
 const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
+const OVERLAY_SPAWN_BACKOFF_BASE: Duration = Duration::from_secs(1);
+const OVERLAY_SPAWN_BACKOFF_MAX: Duration = Duration::from_secs(30);
 
 #[cfg(feature = "tray")]
 /// Tray-to-overlay IPC:
@@ -140,6 +217,11 @@ pub struct Daemon {
     overlay_pid: Arc<AtomicU32>,
     session_resume_override: Arc<AtomicU8>,
     lock_file: Option<std::fs::File>,
+    overlay_spawn_failures: u32,
+    overlay_spawn_next_retry: Option<Instant>,
+    overlay_spawn_backoff_logged: bool,
+    #[cfg(feature = "tray")]
+    tray_status: Arc<TrayStatusShared>,
 }
 
 #[cfg(feature = "tray")]
@@ -150,6 +232,7 @@ pub(crate) struct WayscriberTray {
     session_resume_enabled: bool,
     overlay_pid: Arc<AtomicU32>,
     tray_action_path: PathBuf,
+    tray_status: Arc<TrayStatusShared>,
 }
 
 #[cfg(feature = "tray")]
@@ -161,6 +244,7 @@ impl WayscriberTray {
         session_resume_enabled: bool,
         overlay_pid: Arc<AtomicU32>,
         tray_action_path: PathBuf,
+        tray_status: Arc<TrayStatusShared>,
     ) -> Self {
         Self {
             toggle_flag,
@@ -169,6 +253,7 @@ impl WayscriberTray {
             session_resume_enabled,
             overlay_pid,
             tray_action_path,
+            tray_status,
         }
     }
 
@@ -185,6 +270,7 @@ impl WayscriberTray {
             session_resume_enabled,
             Arc::new(AtomicU32::new(0)),
             tray_action_file(),
+            Arc::new(TrayStatusShared::new()),
         )
     }
 }
@@ -427,11 +513,39 @@ impl ksni::Tray for WayscriberTray {
     }
 
     fn tool_tip(&self) -> ksni::ToolTip {
+        let status = self.tray_status.snapshot();
+        let TrayStatus {
+            overlay_error,
+            watcher_offline,
+            watcher_reason,
+        } = status;
+        let mut description =
+            "Toggle overlay, open configurator, or quit from the tray".to_string();
+
+        if watcher_offline {
+            description.push_str("\nTray watcher offline");
+            if let Some(reason) = watcher_reason {
+                description.push_str(": ");
+                description.push_str(&reason);
+            }
+        }
+
+        if let Some(error) = overlay_error {
+            description.push_str("\nOverlay error: ");
+            description.push_str(&error.message);
+            if let Some(next_retry_at) = error.next_retry_at {
+                let remaining = next_retry_at.saturating_duration_since(Instant::now());
+                if remaining > Duration::from_secs(0) {
+                    description.push_str(&format!(" (retry in {}s)", remaining.as_secs().max(1)));
+                }
+            }
+        }
+
         ksni::ToolTip {
             icon_name: "wayscriber".into(),
             icon_pixmap: vec![],
             title: format!("Wayscriber {}", env!("CARGO_PKG_VERSION")),
-            description: "Toggle overlay, open configurator, or quit from the tray".into(),
+            description,
         }
     }
 
@@ -580,6 +694,20 @@ impl ksni::Tray for WayscriberTray {
             .into(),
         ]
     }
+
+    fn watcher_online(&self) {
+        if self.tray_status.set_watcher_online() {
+            info!("StatusNotifierWatcher is online");
+        }
+    }
+
+    fn watcher_offline(&self, reason: ksni::OfflineReason) -> bool {
+        let reason_text = format!("{reason:?}");
+        if self.tray_status.set_watcher_offline(reason_text.clone()) {
+            warn!("StatusNotifierWatcher is offline: {}", reason_text);
+        }
+        true
+    }
 }
 
 impl Daemon {
@@ -603,6 +731,11 @@ impl Daemon {
             overlay_pid: Arc::new(AtomicU32::new(0)),
             session_resume_override: override_state,
             lock_file: None,
+            overlay_spawn_failures: 0,
+            overlay_spawn_next_retry: None,
+            overlay_spawn_backoff_logged: false,
+            #[cfg(feature = "tray")]
+            tray_status: Arc::new(TrayStatusShared::new()),
         }
     }
 
@@ -624,6 +757,11 @@ impl Daemon {
             overlay_pid: Arc::new(AtomicU32::new(0)),
             session_resume_override: override_state,
             lock_file: None,
+            overlay_spawn_failures: 0,
+            overlay_spawn_next_retry: None,
+            overlay_spawn_backoff_logged: false,
+            #[cfg(feature = "tray")]
+            tray_status: Arc::new(TrayStatusShared::new()),
         }
     }
 
@@ -651,6 +789,127 @@ impl Daemon {
                 command.env_remove(RESUME_SESSION_ENV);
             }
         }
+    }
+
+    fn overlay_spawn_backoff_duration(&self) -> Duration {
+        let failures = self.overlay_spawn_failures.max(1);
+        let shift = failures.saturating_sub(1).min(5);
+        let base = OVERLAY_SPAWN_BACKOFF_BASE.as_secs().max(1);
+        let secs = base.saturating_mul(1_u64 << shift);
+        Duration::from_secs(secs.min(OVERLAY_SPAWN_BACKOFF_MAX.as_secs()))
+    }
+
+    fn overlay_spawn_allowed(&mut self) -> bool {
+        if let Some(next_retry) = self.overlay_spawn_next_retry {
+            let now = Instant::now();
+            if now < next_retry {
+                if !self.overlay_spawn_backoff_logged {
+                    let remaining = next_retry.saturating_duration_since(now);
+                    warn!(
+                        "Overlay spawn backoff active (retry in {}s)",
+                        remaining.as_secs().max(1)
+                    );
+                    self.overlay_spawn_backoff_logged = true;
+                }
+                return false;
+            }
+        }
+        self.overlay_spawn_backoff_logged = false;
+        true
+    }
+
+    fn record_overlay_spawn_failure(&mut self, message: String) {
+        self.overlay_spawn_failures = self.overlay_spawn_failures.saturating_add(1);
+        let backoff = self.overlay_spawn_backoff_duration();
+        let next_retry_at = Instant::now() + backoff;
+        self.overlay_spawn_next_retry = Some(next_retry_at);
+        self.overlay_spawn_backoff_logged = false;
+        warn!(
+            "Failed to spawn overlay process: {} (retry in {}s)",
+            message,
+            backoff.as_secs().max(1)
+        );
+        #[cfg(feature = "tray")]
+        self.tray_status
+            .set_overlay_error(Some(OverlaySpawnErrorInfo {
+                message,
+                next_retry_at: Some(next_retry_at),
+            }));
+    }
+
+    fn clear_overlay_spawn_error(&mut self) {
+        self.overlay_spawn_failures = 0;
+        self.overlay_spawn_next_retry = None;
+        self.overlay_spawn_backoff_logged = false;
+        #[cfg(feature = "tray")]
+        self.tray_status.set_overlay_error(None);
+    }
+
+    fn overlay_spawn_candidates(&self) -> Vec<OverlaySpawnCandidate> {
+        let mut candidates = Vec::new();
+        let mut seen = HashSet::<OsString>::new();
+
+        if let Ok(exe) = env::current_exe() {
+            if exe.is_file() {
+                Self::push_spawn_candidate(&mut candidates, &mut seen, exe.into(), "current_exe");
+            } else {
+                warn!(
+                    "Current executable path {} is not a file; falling back",
+                    exe.display()
+                );
+            }
+        } else {
+            warn!("Failed to resolve current executable; falling back to argv0/PATH");
+        }
+
+        if let Some(arg0) = env::args_os().next() {
+            let arg0_path = std::path::Path::new(&arg0);
+            if arg0_path.to_string_lossy().contains('/') {
+                if arg0_path.is_file() {
+                    Self::push_spawn_candidate(&mut candidates, &mut seen, arg0, "argv0");
+                } else {
+                    warn!(
+                        "argv0 path {} is not a file; falling back",
+                        arg0_path.display()
+                    );
+                }
+            } else {
+                Self::push_spawn_candidate(&mut candidates, &mut seen, arg0, "argv0");
+            }
+        }
+
+        Self::push_spawn_candidate(
+            &mut candidates,
+            &mut seen,
+            OsString::from("wayscriber"),
+            "PATH",
+        );
+
+        candidates
+    }
+
+    fn push_spawn_candidate(
+        candidates: &mut Vec<OverlaySpawnCandidate>,
+        seen: &mut HashSet<OsString>,
+        program: OsString,
+        source: &'static str,
+    ) {
+        if seen.insert(program.clone()) {
+            candidates.push(OverlaySpawnCandidate { program, source });
+        }
+    }
+
+    fn build_overlay_command(&self, program: &OsStr) -> Command {
+        let mut command = Command::new(program);
+        command.arg("--active");
+        self.apply_session_override_env(&mut command);
+        if let Some(mode) = &self.initial_mode {
+            command.arg("--mode").arg(mode);
+        }
+        command.stdin(Stdio::null());
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+        command
     }
 
     fn acquire_daemon_lock(&mut self) -> Result<()> {
@@ -733,7 +992,11 @@ impl Daemon {
             let tray_toggle = self.toggle_requested.clone();
             let tray_quit = self.should_quit.clone();
             let tray_overlay_pid = self.overlay_pid.clone();
-            match start_system_tray(tray_toggle, tray_quit, tray_overlay_pid) {
+            #[cfg(feature = "tray")]
+            let tray_status = self.tray_status.clone();
+            #[cfg(not(feature = "tray"))]
+            let tray_status = ();
+            match start_system_tray(tray_toggle, tray_quit, tray_overlay_pid, tray_status) {
                 Ok(tray_handle) => {
                     self.tray_thread = Some(tray_handle);
                 }
@@ -765,8 +1028,10 @@ impl Daemon {
             // Check for toggle request
             // Use Acquire ordering to ensure we see all memory operations
             // that happened before the flag was set
-            if self.toggle_requested.swap(false, Ordering::Acquire) {
-                self.toggle_overlay()?;
+            if self.toggle_requested.swap(false, Ordering::Acquire)
+                && let Err(err) = self.toggle_overlay()
+            {
+                warn!("Toggle overlay failed: {}", err);
             }
 
             // Small sleep to avoid busy-waiting
@@ -810,9 +1075,10 @@ impl Daemon {
             return Ok(());
         }
 
-        if let Some(runner) = &self.backend_runner {
+        if let Some(runner) = self.backend_runner.clone() {
             self.overlay_state = OverlayState::Visible;
             info!("Overlay state set to Visible");
+            self.clear_overlay_spawn_error();
             let previous_override = runtime_session_override();
             set_runtime_session_override(self.session_resume_override());
             let result = runner(self.initial_mode.clone());
@@ -822,7 +1088,15 @@ impl Daemon {
             return result;
         }
 
-        self.spawn_overlay_process()?;
+        if !self.overlay_spawn_allowed() {
+            return Ok(());
+        }
+
+        if let Err(err) = self.spawn_overlay_process() {
+            self.record_overlay_spawn_failure(err.to_string());
+            return Err(err);
+        }
+        self.clear_overlay_spawn_error();
         Ok(())
     }
 
@@ -952,6 +1226,7 @@ fn start_system_tray(
     toggle_flag: Arc<AtomicBool>,
     quit_flag: Arc<AtomicBool>,
     overlay_pid: Arc<AtomicU32>,
+    tray_status: Arc<TrayStatusShared>,
 ) -> Result<JoinHandle<()>> {
     let configurator_binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
         .unwrap_or_else(|_| "wayscriber-configurator".to_string());
@@ -965,6 +1240,7 @@ fn start_system_tray(
         session_resume_enabled,
         overlay_pid,
         tray_action_file(),
+        tray_status.clone(),
     );
     let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();
 
@@ -988,14 +1264,24 @@ fn start_system_tray(
         };
 
         rt.block_on(async {
-            match tray.spawn().await {
+            match tray.assume_sni_available(true).spawn().await {
                 Ok(handle) => {
                     info!("System tray spawned successfully");
                     report_tray_readiness(&ready_thread_tx, Ok(()));
+                    tokio::spawn(log_status_notifier_state());
+                    let mut last_revision = tray_status.revision.load(Ordering::Acquire);
 
                     // Monitor quit flag and shutdown gracefully
                     loop {
                         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        let revision = tray_status.revision.load(Ordering::Acquire);
+                        if revision != last_revision {
+                            if handle.update(|_| {}).await.is_none() {
+                                warn!("Tray service closed; stopping tray monitor");
+                                break;
+                            }
+                            last_revision = revision;
+                        }
                         if tray_quit_flag.load(Ordering::Acquire) {
                             info!("Quit signal received - shutting down system tray");
                             let _ = handle.shutdown().await;
@@ -1040,6 +1326,7 @@ fn start_system_tray(
     _toggle_flag: Arc<AtomicBool>,
     _quit_flag: Arc<AtomicBool>,
     _overlay_pid: Arc<AtomicU32>,
+    _tray_status: (),
 ) -> Result<JoinHandle<()>> {
     info!("Tray feature disabled; skipping system tray startup");
     Ok(thread::spawn(|| ()))
@@ -1047,25 +1334,47 @@ fn start_system_tray(
 
 impl Daemon {
     fn spawn_overlay_process(&mut self) -> Result<()> {
-        let exe = env::current_exe().context("Failed to determine current executable path")?;
-        let mut command = Command::new(exe);
-        command.arg("--active");
-        self.apply_session_override_env(&mut command);
-        if let Some(mode) = &self.initial_mode {
-            command.arg("--mode").arg(mode);
+        let candidates = self.overlay_spawn_candidates();
+        if candidates.is_empty() {
+            return Err(anyhow!("No overlay spawn candidates available"));
         }
-        command.stdin(Stdio::null());
-        command.stdout(Stdio::null());
-        command.stderr(Stdio::null());
 
-        info!("Spawning overlay process...");
-        let child = command.spawn().context("Failed to spawn overlay process")?;
-        let pid = child.id();
-        self.overlay_pid.store(pid, Ordering::Release);
-        self.overlay_child = Some(child);
-        self.overlay_state = OverlayState::Visible;
-        info!("Overlay process started (pid {pid})");
-        Ok(())
+        let mut failures = Vec::new();
+
+        for candidate in candidates {
+            debug!(
+                "Attempting overlay spawn via {} ({})",
+                candidate.source,
+                candidate.program.to_string_lossy()
+            );
+            let mut command = self.build_overlay_command(&candidate.program);
+            match command.spawn() {
+                Ok(child) => {
+                    let pid = child.id();
+                    self.overlay_pid.store(pid, Ordering::Release);
+                    self.overlay_child = Some(child);
+                    self.overlay_state = OverlayState::Visible;
+                    info!(
+                        "Overlay process started via {} (pid {pid})",
+                        candidate.source
+                    );
+                    return Ok(());
+                }
+                Err(err) => {
+                    failures.push(format!(
+                        "{} ({}) -> {}",
+                        candidate.source,
+                        candidate.program.to_string_lossy(),
+                        err
+                    ));
+                }
+            }
+        }
+
+        warn!("Overlay spawn attempts failed: {}", failures.join("; "));
+        Err(anyhow!(
+            "Unable to launch overlay process (tried current_exe/argv0/PATH)"
+        ))
     }
 
     fn terminate_overlay_process(&mut self) -> Result<()> {
@@ -1147,6 +1456,57 @@ fn report_tray_readiness(tx: &mpsc::Sender<Result<()>>, result: Result<()>) {
             err
         );
     }
+}
+
+#[cfg(feature = "tray")]
+async fn log_status_notifier_state() {
+    let conn = match Connection::session().await {
+        Ok(conn) => conn,
+        Err(err) => {
+            warn!(
+                "Failed to connect to session D-Bus for tray diagnostics: {}",
+                err
+            );
+            return;
+        }
+    };
+
+    let proxy = match Proxy::new(
+        &conn,
+        "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher",
+        "org.kde.StatusNotifierWatcher",
+    )
+    .await
+    {
+        Ok(proxy) => proxy,
+        Err(err) => {
+            warn!("StatusNotifierWatcher unavailable (no tray host?): {}", err);
+            return;
+        }
+    };
+
+    let host_registered: bool = match proxy.get_property("IsStatusNotifierHostRegistered").await {
+        Ok(value) => value,
+        Err(err) => {
+            warn!("Failed to query tray host registration: {}", err);
+            return;
+        }
+    };
+
+    let items: Vec<String> = match proxy.get_property("RegisteredStatusNotifierItems").await {
+        Ok(value) => value,
+        Err(err) => {
+            warn!("Failed to query registered tray items: {}", err);
+            return;
+        }
+    };
+
+    info!(
+        "StatusNotifierWatcher ready: host_registered={}, registered_items={}",
+        host_registered,
+        items.len()
+    );
 }
 
 #[cfg(all(test, feature = "tray"))]
