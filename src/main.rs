@@ -1,3 +1,4 @@
+use crate::backend::ExitAfterCaptureMode;
 use clap::{ArgAction, Parser};
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -96,6 +97,14 @@ struct Cli {
         conflicts_with_all = ["daemon", "clear_session", "session_info"]
     )]
     freeze: bool,
+
+    /// Exit the overlay after a capture completes (overrides auto clipboard exit)
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_exit_after_capture")]
+    exit_after_capture: bool,
+
+    /// Keep the overlay open after capture (disables auto clipboard exit)
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "exit_after_capture")]
+    no_exit_after_capture: bool,
 
     /// Force session resume on (persist/restore all boards + history/tool state)
     #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_resume_session")]
@@ -210,8 +219,16 @@ fn run() -> anyhow::Result<()> {
 
         set_runtime_session_override(session_override);
 
+        let exit_after_capture_mode = if cli.exit_after_capture {
+            ExitAfterCaptureMode::Always
+        } else if cli.no_exit_after_capture {
+            ExitAfterCaptureMode::Never
+        } else {
+            ExitAfterCaptureMode::Auto
+        };
+
         // Run Wayland backend
-        backend::run_wayland(cli.mode, cli.freeze)?;
+        backend::run_wayland(cli.mode, cli.freeze, exit_after_capture_mode)?;
 
         log::info!("Annotation overlay closed.");
     } else {
@@ -223,13 +240,19 @@ fn run() -> anyhow::Result<()> {
             "  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)"
         );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
+        println!("  wayscriber --freeze          Start overlay already frozen");
+        println!(
+            "  wayscriber --exit-after-capture  Exit overlay after a capture completes (override auto clipboard exit)"
+        );
+        println!(
+            "  wayscriber --no-exit-after-capture  Keep overlay open (disable auto clipboard exit)"
+        );
         println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
         println!("  wayscriber --about           Show the About window");
         println!(
             "  wayscriber --resume-session  Force session resume on (all boards/history/tool state)"
         );
         println!("  wayscriber --no-resume-session  Disable session resume for this run");
-        println!("  wayscriber --freeze          Start overlay already frozen");
         println!("  wayscriber -h, --help        Show help");
         println!();
         println!("Daemon mode (recommended). Example Hyprland setup:");

@@ -4,9 +4,18 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
         debug!("=== RENDER START ===");
         let board_mode = self.input_state.board_mode();
-        let suppressed = self.overlay_suppressed()
-            && !(self.data.overlay_suppression == OverlaySuppression::Zoom
-                && board_mode != BoardMode::Transparent);
+        let suppression = if self.data.overlay_suppression == OverlaySuppression::Zoom
+            && board_mode != BoardMode::Transparent
+        {
+            OverlaySuppression::None
+        } else {
+            self.data.overlay_suppression
+        };
+        let render_canvas = !matches!(
+            suppression,
+            OverlaySuppression::Frozen | OverlaySuppression::Zoom
+        );
+        let render_ui = suppression == OverlaySuppression::None;
 
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
@@ -65,7 +74,7 @@ impl WaylandState {
         ctx.paint().context("Failed to clear background")?;
         ctx.set_operator(cairo::Operator::Over);
 
-        if !suppressed {
+        if render_canvas {
             let allow_background_image =
                 !(self.zoom.is_engaged() && board_mode != BoardMode::Transparent);
             let zoom_render_image = if self.zoom.active && allow_background_image {
@@ -307,72 +316,76 @@ impl WaylandState {
                 let _ = ctx.restore();
             }
 
-            // Render frozen badge even if status bar is hidden
-            if self.input_state.frozen_active()
-                && !self.zoom.active
-                && self.config.ui.show_frozen_badge
-            {
-                crate::ui::render_frozen_badge(&ctx, width, height);
-            }
-            // Render a zoom badge when the status bar is hidden or zoom is locked.
-            if self.input_state.zoom_active()
-                && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
-            {
-                crate::ui::render_zoom_badge(
-                    &ctx,
-                    width,
-                    height,
-                    self.input_state.zoom_scale(),
-                    self.input_state.zoom_locked(),
-                );
-            }
+            if render_ui {
+                // Render frozen badge even if status bar is hidden
+                if self.input_state.frozen_active()
+                    && !self.zoom.active
+                    && self.config.ui.show_frozen_badge
+                {
+                    crate::ui::render_frozen_badge(&ctx, width, height);
+                }
+                // Render a zoom badge when the status bar is hidden or zoom is locked.
+                if self.input_state.zoom_active()
+                    && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
+                {
+                    crate::ui::render_zoom_badge(
+                        &ctx,
+                        width,
+                        height,
+                        self.input_state.zoom_scale(),
+                        self.input_state.zoom_locked(),
+                    );
+                }
 
-            // Render status bar if enabled
-            if self.input_state.show_status_bar {
-                crate::ui::render_status_bar(
-                    &ctx,
-                    &self.input_state,
-                    self.config.ui.status_bar_position,
-                    &self.config.ui.status_bar_style,
-                    width,
-                    height,
-                );
-            }
+                // Render status bar if enabled
+                if self.input_state.show_status_bar {
+                    crate::ui::render_status_bar(
+                        &ctx,
+                        &self.input_state,
+                        self.config.ui.status_bar_position,
+                        &self.config.ui.status_bar_style,
+                        width,
+                        height,
+                    );
+                }
 
-            // Render help overlay if toggled
-            if self.input_state.show_help {
-                crate::ui::render_help_overlay(
-                    &ctx,
-                    &self.config.ui.help_overlay_style,
-                    width,
-                    height,
-                    self.frozen_enabled(),
-                );
-            }
+                // Render help overlay if toggled
+                if self.input_state.show_help {
+                    crate::ui::render_help_overlay(
+                        &ctx,
+                        &self.config.ui.help_overlay_style,
+                        width,
+                        height,
+                        self.frozen_enabled(),
+                    );
+                }
 
-            if !self.zoom.active {
-                crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
+                if !self.zoom.active {
+                    crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
 
-                if self.input_state.is_context_menu_open() {
-                    self.input_state
-                        .update_context_menu_layout(&ctx, width, height);
+                    if self.input_state.is_context_menu_open() {
+                        self.input_state
+                            .update_context_menu_layout(&ctx, width, height);
+                    } else {
+                        self.input_state.clear_context_menu_layout();
+                    }
+
+                    // Render context menu if open
+                    crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
                 } else {
                     self.input_state.clear_context_menu_layout();
                 }
 
-                // Render context menu if open
-                crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
+                // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.
+                if self.toolbar.is_visible() && self.inline_toolbars_active() {
+                    let snapshot = self.toolbar_snapshot();
+                    if self.toolbar.update_snapshot(&snapshot) {
+                        self.toolbar.mark_dirty();
+                    }
+                    self.render_inline_toolbars(&ctx, &snapshot);
+                }
             } else {
                 self.input_state.clear_context_menu_layout();
-            }
-
-            // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.
-            if self.toolbar.is_visible() && self.inline_toolbars_active() {
-                let snapshot = self.toolbar_snapshot();
-                if self.toolbar.update_snapshot(&snapshot) {
-                    self.toolbar.mark_dirty();
-                }
-                self.render_inline_toolbars(&ctx, &snapshot);
             }
 
             let _ = ctx.restore();

@@ -66,6 +66,7 @@ pub struct ConfigDraft {
     pub capture_filename_template: String,
     pub capture_format: String,
     pub capture_copy_to_clipboard: bool,
+    pub capture_exit_after: bool,
 
     pub session_persist_transparent: bool,
     pub session_persist_whiteboard: bool,
@@ -151,6 +152,7 @@ impl ConfigDraft {
             capture_filename_template: config.capture.filename_template.clone(),
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
+            capture_exit_after: config.capture.exit_after_capture,
 
             session_persist_transparent: config.session.persist_transparent,
             session_persist_whiteboard: config.session.persist_whiteboard,
@@ -369,6 +371,7 @@ impl ConfigDraft {
         config.capture.filename_template = self.capture_filename_template.clone();
         config.capture.format = self.capture_format.clone();
         config.capture.copy_to_clipboard = self.capture_copy_to_clipboard;
+        config.capture.exit_after_capture = self.capture_exit_after;
 
         config.session.persist_transparent = self.session_persist_transparent;
         config.session.persist_whiteboard = self.session_persist_whiteboard;
@@ -434,6 +437,7 @@ impl ConfigDraft {
             ToggleField::BoardAutoAdjust => self.board_auto_adjust_pen = value,
             ToggleField::CaptureEnabled => self.capture_enabled = value,
             ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
+            ToggleField::CaptureExitAfter => self.capture_exit_after = value,
             ToggleField::SessionPersistTransparent => {
                 self.session_persist_transparent = value;
             }

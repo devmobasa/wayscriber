@@ -43,6 +43,7 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 use super::state::{OverlaySuppression, WaylandGlobals, WaylandState, WaylandStateInit};
 use crate::{
     RESUME_SESSION_ENV,
+    backend::ExitAfterCaptureMode,
     capture::{CaptureManager, CaptureOutcome},
     config::{Action, Config, ConfigSource},
     input::{BoardMode, ClickHighlightSettings, InputState},
@@ -139,17 +140,23 @@ fn resume_override_from_env() -> Option<bool> {
 pub struct WaylandBackend {
     initial_mode: Option<String>,
     freeze_on_start: bool,
+    exit_after_capture_mode: ExitAfterCaptureMode,
     /// Tokio runtime for async capture operations
     tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl WaylandBackend {
-    pub fn new(initial_mode: Option<String>, freeze_on_start: bool) -> Result<Self> {
+    pub fn new(
+        initial_mode: Option<String>,
+        freeze_on_start: bool,
+        exit_after_capture_mode: ExitAfterCaptureMode,
+    ) -> Result<Self> {
         let tokio_runtime = tokio::runtime::Runtime::new()
             .context("Failed to create Tokio runtime for capture operations")?;
         Ok(Self {
             initial_mode,
             freeze_on_start,
+            exit_after_capture_mode,
             tokio_runtime,
         })
     }
@@ -258,6 +265,12 @@ impl WaylandBackend {
                 warn!("Failed to load config: {}. Using defaults.", e);
                 (Config::default(), ConfigSource::Default)
             }
+        };
+        let exit_after_capture_mode = match self.exit_after_capture_mode {
+            ExitAfterCaptureMode::Auto if config.capture.exit_after_capture => {
+                ExitAfterCaptureMode::Always
+            }
+            other => other,
         };
 
         info!("Configuration loaded");
@@ -514,6 +527,7 @@ impl WaylandBackend {
             capture_manager,
             session_options,
             tokio_handle,
+            exit_after_capture_mode,
             frozen_enabled: frozen_supported,
             preferred_output_identity,
             xdg_fullscreen,
@@ -773,6 +787,8 @@ impl WaylandBackend {
                 state.show_overlay();
                 state.capture.clear_in_progress();
 
+                let exit_on_success = state.capture.take_exit_on_success()
+                    && matches!(&outcome, CaptureOutcome::Success(_));
                 match outcome {
                     CaptureOutcome::Success(result) => {
                         // Build notification message
@@ -820,6 +836,9 @@ impl WaylandBackend {
                     CaptureOutcome::Cancelled(reason) => {
                         log::info!("Capture cancelled: {}", reason);
                     }
+                }
+                if exit_on_success {
+                    state.input_state.should_exit = true;
                 }
             }
 

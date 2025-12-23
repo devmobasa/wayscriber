@@ -2,12 +2,12 @@
 
 use super::types::CaptureError;
 use std::process::{Command, Stdio};
-use wl_clipboard_rs::copy::{MimeType, Options, Source};
+use wl_clipboard_rs::copy::{MimeType, Options, ServeRequests, Source};
 
 /// Copy image data to the Wayland clipboard.
 ///
-/// Attempts to use wl-clipboard-rs library first, falls back to
-/// wl-copy command if the library fails.
+/// Attempts to use wl-copy first, falls back to wl-clipboard-rs
+/// if the command path fails.
 ///
 /// # Arguments
 /// * `image_data` - Raw PNG image bytes
@@ -20,7 +20,7 @@ pub fn copy_to_clipboard(image_data: &[u8]) -> Result<(), CaptureError> {
         image_data.len()
     );
 
-    // Prefer wl-copy CLI (provided by wl-clipboard package); fall back to library if unavailable.
+    // Prefer wl-copy CLI; fall back to wl-clipboard-rs if needed.
     match copy_via_command(image_data) {
         Ok(()) => {
             log::info!("Successfully copied to clipboard via wl-copy command");
@@ -50,13 +50,9 @@ pub fn copy_to_clipboard(image_data: &[u8]) -> Result<(), CaptureError> {
 
 /// Copy to clipboard using wl-clipboard-rs library.
 fn copy_via_library(image_data: &[u8]) -> Result<(), CaptureError> {
-    use wl_clipboard_rs::copy::ServeRequests;
-
     let mut opts = Options::new();
-
-    // Serve clipboard requests until paste or replacement
-    // This keeps the clipboard data available after our process exits
-    opts.serve_requests(ServeRequests::Only(1)); // Serve one paste then exit
+    // Serve requests until clipboard ownership changes.
+    opts.serve_requests(ServeRequests::Unlimited);
 
     opts.copy(
         Source::Bytes(image_data.into()),
@@ -92,21 +88,38 @@ fn copy_via_command(image_data: &[u8]) -> Result<(), CaptureError> {
         })?;
     }
 
-    // Wait for completion
-    let output = child
-        .wait_with_output()
-        .map_err(|e| CaptureError::ClipboardError(format!("Failed to wait for wl-copy: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(CaptureError::ClipboardError(format!(
-            "wl-copy failed: {}",
-            stderr
-        )));
+    match child.try_wait() {
+        Ok(Some(status)) => {
+            if !status.success() {
+                return Err(CaptureError::ClipboardError(
+                    "wl-copy exited unsuccessfully".to_string(),
+                ));
+            }
+            log::debug!("wl-copy command completed successfully");
+            Ok(())
+        }
+        Ok(None) => {
+            // Wait in the background so we don't block the capture pipeline.
+            std::thread::spawn(move || match child.wait_with_output() {
+                Ok(output) => {
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        log::warn!("wl-copy failed: {}", stderr.trim());
+                    } else {
+                        log::debug!("wl-copy command completed successfully");
+                    }
+                }
+                Err(err) => {
+                    log::warn!("Failed to wait for wl-copy: {}", err);
+                }
+            });
+            Ok(())
+        }
+        Err(err) => Err(CaptureError::ClipboardError(format!(
+            "Failed to poll wl-copy status: {}",
+            err
+        ))),
     }
-
-    log::debug!("wl-copy command completed successfully");
-    Ok(())
 }
 
 /// Check if clipboard functionality is available.
