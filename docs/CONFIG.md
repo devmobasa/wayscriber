@@ -333,6 +333,9 @@ format = "png"
 
 # Copy captures to clipboard in addition to saving files
 copy_to_clipboard = true
+
+# Exit the overlay after a capture completes
+exit_after_capture = false
 ```
 
 **Tips:**

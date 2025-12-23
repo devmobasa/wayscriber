@@ -139,17 +139,23 @@ fn resume_override_from_env() -> Option<bool> {
 pub struct WaylandBackend {
     initial_mode: Option<String>,
     freeze_on_start: bool,
+    exit_after_capture_override: bool,
     /// Tokio runtime for async capture operations
     tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl WaylandBackend {
-    pub fn new(initial_mode: Option<String>, freeze_on_start: bool) -> Result<Self> {
+    pub fn new(
+        initial_mode: Option<String>,
+        freeze_on_start: bool,
+        exit_after_capture_override: bool,
+    ) -> Result<Self> {
         let tokio_runtime = tokio::runtime::Runtime::new()
             .context("Failed to create Tokio runtime for capture operations")?;
         Ok(Self {
             initial_mode,
             freeze_on_start,
+            exit_after_capture_override,
             tokio_runtime,
         })
     }
@@ -259,6 +265,8 @@ impl WaylandBackend {
                 (Config::default(), ConfigSource::Default)
             }
         };
+        let exit_after_capture =
+            self.exit_after_capture_override || config.capture.exit_after_capture;
 
         info!("Configuration loaded");
         debug!("  Color: {:?}", config.drawing.default_color);
@@ -514,6 +522,7 @@ impl WaylandBackend {
             capture_manager,
             session_options,
             tokio_handle,
+            exit_after_capture,
             frozen_enabled: frozen_supported,
             preferred_output_identity,
             xdg_fullscreen,
@@ -773,6 +782,8 @@ impl WaylandBackend {
                 state.show_overlay();
                 state.capture.clear_in_progress();
 
+                let exit_on_success =
+                    state.exit_after_capture && matches!(&outcome, CaptureOutcome::Success(_));
                 match outcome {
                     CaptureOutcome::Success(result) => {
                         // Build notification message
@@ -820,6 +831,9 @@ impl WaylandBackend {
                     CaptureOutcome::Cancelled(reason) => {
                         log::info!("Capture cancelled: {}", reason);
                     }
+                }
+                if exit_on_success {
+                    state.input_state.should_exit = true;
                 }
             }
 

@@ -97,6 +97,10 @@ struct Cli {
     )]
     freeze: bool,
 
+    /// Exit the overlay after a capture completes
+    #[arg(long, action = ArgAction::SetTrue)]
+    exit_after_capture: bool,
+
     /// Force session resume on (persist/restore all boards + history/tool state)
     #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_resume_session")]
     resume_session: bool,
@@ -211,7 +215,7 @@ fn run() -> anyhow::Result<()> {
         set_runtime_session_override(session_override);
 
         // Run Wayland backend
-        backend::run_wayland(cli.mode, cli.freeze)?;
+        backend::run_wayland(cli.mode, cli.freeze, cli.exit_after_capture)?;
 
         log::info!("Annotation overlay closed.");
     } else {
@@ -223,13 +227,14 @@ fn run() -> anyhow::Result<()> {
             "  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)"
         );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
+        println!("  wayscriber --freeze          Start overlay already frozen");
+        println!("  wayscriber --exit-after-capture  Exit overlay after a capture completes");
         println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
         println!("  wayscriber --about           Show the About window");
         println!(
             "  wayscriber --resume-session  Force session resume on (all boards/history/tool state)"
         );
         println!("  wayscriber --no-resume-session  Disable session resume for this run");
-        println!("  wayscriber --freeze          Start overlay already frozen");
         println!("  wayscriber -h, --help        Show help");
         println!();
         println!("Daemon mode (recommended). Example Hyprland setup:");

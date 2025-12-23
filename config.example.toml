@@ -332,6 +332,9 @@ format = "png"
 # Shortcut-specific actions may override this
 copy_to_clipboard = true
 
+# Exit overlay after a capture completes
+exit_after_capture = false
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SESSION PERSISTENCE
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -767,6 +767,10 @@ pub struct CaptureConfig {
     /// Automatically copy screenshots to clipboard
     #[serde(default = "default_capture_clipboard")]
     pub copy_to_clipboard: bool,
+
+    /// Exit the overlay after a capture completes
+    #[serde(default = "default_capture_exit_after")]
+    pub exit_after_capture: bool,
 }
 
 impl Default for CaptureConfig {
@@ -777,6 +781,7 @@ impl Default for CaptureConfig {
             filename_template: default_capture_filename(),
             format: default_capture_format(),
             copy_to_clipboard: default_capture_clipboard(),
+            exit_after_capture: default_capture_exit_after(),
         }
     }
 }
@@ -800,6 +805,10 @@ fn default_capture_format() -> String {
 
 fn default_capture_clipboard() -> bool {
     true
+}
+
+fn default_capture_exit_after() -> bool {
+    false
 }
 
 /// Session persistence configuration.

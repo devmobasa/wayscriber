@@ -229,6 +229,7 @@ pub enum ToggleField {
     BoardAutoAdjust,
     CaptureEnabled,
     CaptureCopyToClipboard,
+    CaptureExitAfter,
     SessionPersistTransparent,
     SessionPersistWhiteboard,
     SessionPersistBlackboard,

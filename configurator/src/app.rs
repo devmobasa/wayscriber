@@ -937,6 +937,12 @@ impl ConfiguratorApp {
                     self.draft.capture_copy_to_clipboard,
                     self.defaults.capture_copy_to_clipboard,
                     ToggleField::CaptureCopyToClipboard,
+                ),
+                toggle_row(
+                    "Exit overlay after capture",
+                    self.draft.capture_exit_after,
+                    self.defaults.capture_exit_after,
+                    ToggleField::CaptureExitAfter,
                 )
             ]
             .spacing(12),

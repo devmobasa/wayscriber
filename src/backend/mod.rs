@@ -10,8 +10,14 @@ pub mod wayland;
 /// # Arguments
 /// * `initial_mode` - Optional board mode to start in (overrides config default)
 /// * `freeze_on_start` - Whether to start with the overlay frozen for immediate capture pause
-pub fn run_wayland(initial_mode: Option<String>, freeze_on_start: bool) -> Result<()> {
-    let mut backend = wayland::WaylandBackend::new(initial_mode, freeze_on_start)?;
+/// * `exit_after_capture` - Whether to exit the overlay after a capture completes
+pub fn run_wayland(
+    initial_mode: Option<String>,
+    freeze_on_start: bool,
+    exit_after_capture: bool,
+) -> Result<()> {
+    let mut backend =
+        wayland::WaylandBackend::new(initial_mode, freeze_on_start, exit_after_capture)?;
     backend.init()?;
     backend.show()?; // show() calls run() internally
     backend.hide()?;
@@ -27,6 +33,6 @@ mod tests {
             eprintln!("WAYLAND_DISPLAY not set; skipping Wayland smoke test");
             return;
         }
-        super::run_wayland(None, false).expect("Wayland backend should start");
+        super::run_wayland(None, false, false).expect("Wayland backend should start");
     }
 }

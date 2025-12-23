@@ -109,6 +109,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
     pub tokio_handle: tokio::runtime::Handle,
+    pub exit_after_capture: bool,
     pub frozen_enabled: bool,
     pub preferred_output_identity: Option<String>,
     pub xdg_fullscreen: bool,
@@ -149,6 +150,9 @@ pub(super) struct WaylandState {
     pub(super) capture: CaptureState,
     pub(super) frozen: FrozenState,
     pub(super) zoom: ZoomState,
+
+    // Overlay behavior
+    pub(super) exit_after_capture: bool,
 
     // Pointer cursor
     pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
