@@ -7,80 +7,97 @@ use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
 
 #[derive(Debug, Clone, Copy)]
-struct ToolbarLayoutSpec {
+pub(super) struct ToolbarLayoutSpec {
     use_icons: bool,
 }
 
 impl ToolbarLayoutSpec {
-    const TOP_SIZE_ICONS: (u32, u32) = (735, 80);
-    const TOP_SIZE_TEXT: (u32, u32) = (875, 56);
-    const SIDE_WIDTH: u32 = 260;
+    pub(super) const TOP_SIZE_ICONS: (u32, u32) = (735, 80);
+    pub(super) const TOP_SIZE_TEXT: (u32, u32) = (875, 56);
+    pub(super) const SIDE_WIDTH: u32 = 260;
 
-    const TOP_GAP: f64 = 8.0;
-    const TOP_START_X: f64 = 16.0;
-    const TOP_ICON_BUTTON: f64 = 42.0;
-    const TOP_ICON_BUTTON_Y: f64 = 6.0;
-    const TOP_ICON_FILL_HEIGHT: f64 = 18.0;
-    const TOP_ICON_FILL_OFFSET: f64 = 2.0;
-    const TOP_TEXT_BUTTON_W: f64 = 60.0;
-    const TOP_TEXT_BUTTON_H: f64 = 36.0;
-    const TOP_TEXT_FILL_W: f64 = 64.0;
-    const TOP_TOGGLE_WIDTH: f64 = 70.0;
-    const TOP_PIN_BUTTON_SIZE: f64 = 24.0;
-    const TOP_PIN_BUTTON_GAP: f64 = 6.0;
-    const TOP_PIN_BUTTON_MARGIN_RIGHT: f64 = 12.0;
-    const TOP_PIN_BUTTON_Y_ICON: f64 = 15.0;
+    pub(super) const TOP_GAP: f64 = 8.0;
+    pub(super) const TOP_START_X: f64 = 16.0;
+    pub(super) const TOP_HANDLE_SIZE: f64 = 18.0;
+    pub(super) const TOP_HANDLE_Y: f64 = 10.0;
+    pub(super) const TOP_ICON_BUTTON: f64 = 42.0;
+    pub(super) const TOP_ICON_BUTTON_Y: f64 = 6.0;
+    pub(super) const TOP_ICON_SIZE: f64 = 26.0;
+    pub(super) const TOP_ICON_FILL_HEIGHT: f64 = 18.0;
+    pub(super) const TOP_ICON_FILL_OFFSET: f64 = 2.0;
+    pub(super) const TOP_TEXT_BUTTON_W: f64 = 60.0;
+    pub(super) const TOP_TEXT_BUTTON_H: f64 = 36.0;
+    pub(super) const TOP_TEXT_FILL_W: f64 = 64.0;
+    pub(super) const TOP_TOGGLE_WIDTH: f64 = 70.0;
+    pub(super) const TOP_PIN_BUTTON_SIZE: f64 = 24.0;
+    pub(super) const TOP_PIN_BUTTON_GAP: f64 = 6.0;
+    pub(super) const TOP_PIN_BUTTON_MARGIN_RIGHT: f64 = 12.0;
+    pub(super) const TOP_PIN_BUTTON_Y_ICON: f64 = 15.0;
 
-    const SIDE_START_X: f64 = 16.0;
-    const SIDE_START_Y: f64 = 20.0;
-    const SIDE_HEADER_BUTTON_SIZE: f64 = 24.0;
-    const SIDE_HEADER_BUTTON_Y: f64 = 12.0;
-    const SIDE_HEADER_BUTTON_MARGIN_RIGHT: f64 = 12.0;
-    const SIDE_HEADER_BUTTON_GAP: f64 = 4.0;
-    const SIDE_CONTENT_PADDING_X: f64 = 32.0;
-    const SIDE_COLOR_PICKER_OFFSET_Y: f64 = 28.0;
-    const SIDE_COLOR_PICKER_HIT_HEIGHT: f64 = 30.0;
-    const SIDE_COLOR_PICKER_EXTRA_HEIGHT: f64 = 30.0;
-    const SIDE_THICKNESS_SECTION_OFFSET_Y: f64 = 120.0;
-    const SIDE_SLIDER_HEIGHT: f64 = 12.0;
-    const SIDE_SLIDER_STEP_Y: f64 = 24.0;
-    const SIDE_NUDGE_SIZE: f64 = 24.0;
-    const SIDE_TEXT_SECTION_OFFSET_Y: f64 = 40.0;
-    const SIDE_ACTIONS_SECTION_OFFSET_Y: f64 = 40.0;
-    const SIDE_ACTION_BUTTON_HEIGHT_ICON: f64 = 42.0;
-    const SIDE_ACTION_BUTTON_HEIGHT_TEXT: f64 = 24.0;
-    const SIDE_ACTION_BUTTON_GAP: f64 = 6.0;
-    const SIDE_ACTION_CONTENT_GAP_TEXT: f64 = 5.0;
-    const SIDE_ACTION_CONTENT_ROWS_ICON: f64 = 3.0;
-    const SIDE_ACTION_CONTENT_ROWS_TEXT: f64 = 8.0;
+    pub(super) const SIDE_START_X: f64 = 16.0;
+    pub(super) const SIDE_TOP_PADDING: f64 = 12.0;
+    pub(super) const SIDE_HEADER_HANDLE_SIZE: f64 = 18.0;
+    pub(super) const SIDE_HEADER_HANDLE_GAP: f64 = 6.0;
+    pub(super) const SIDE_HEADER_ROW_HEIGHT: f64 = 22.0;
+    pub(super) const SIDE_HEADER_BOTTOM_GAP: f64 = 12.0;
+    pub(super) const SIDE_HEADER_BUTTON_SIZE: f64 = 22.0;
+    pub(super) const SIDE_HEADER_BUTTON_MARGIN_RIGHT: f64 = 12.0;
+    pub(super) const SIDE_HEADER_BUTTON_GAP: f64 = 8.0;
+    pub(super) const SIDE_HEADER_TOGGLE_WIDTH: f64 = 70.0;
+    pub(super) const SIDE_CONTENT_PADDING_X: f64 = 32.0;
+    pub(super) const SIDE_CARD_INSET: f64 = 6.0;
+    pub(super) const SIDE_COLOR_PICKER_OFFSET_Y: f64 = 24.0;
+    pub(super) const SIDE_COLOR_PICKER_EXTRA_HEIGHT: f64 = 30.0;
+    pub(super) const SIDE_SLIDER_ROW_OFFSET: f64 = 26.0;
+    pub(super) const SIDE_NUDGE_SIZE: f64 = 24.0;
+    pub(super) const SIDE_ACTION_BUTTON_HEIGHT_ICON: f64 = 42.0;
+    pub(super) const SIDE_ACTION_BUTTON_HEIGHT_TEXT: f64 = 24.0;
+    pub(super) const SIDE_ACTION_BUTTON_GAP: f64 = 6.0;
+    pub(super) const SIDE_ACTION_CONTENT_GAP_TEXT: f64 = 5.0;
+    pub(super) const SIDE_ACTION_CONTENT_ROWS_ICON: f64 = 3.0;
+    pub(super) const SIDE_ACTION_CONTENT_ROWS_TEXT: f64 = 8.0;
 
-    const SIDE_HEADER_HEIGHT: f64 = 30.0;
-    const SIDE_DRAG_HANDLE_HEIGHT: f64 = 24.0;
-    const SIDE_SECTION_GAP: f64 = 12.0;
-    const SIDE_COLOR_SECTION_LABEL_HEIGHT: f64 = 28.0;
-    const SIDE_COLOR_PICKER_INPUT_HEIGHT: f64 = 24.0;
-    const SIDE_COLOR_SECTION_BOTTOM_PADDING: f64 = 8.0;
-    const SIDE_COLOR_SWATCH: f64 = 24.0;
-    const SIDE_COLOR_SWATCH_GAP: f64 = 6.0;
-    const SIDE_SLIDER_CARD_HEIGHT: f64 = 52.0;
-    const SIDE_ERASER_MODE_CARD_HEIGHT: f64 = 44.0;
-    const SIDE_FONT_CARD_HEIGHT: f64 = 50.0;
-    const SIDE_ACTIONS_HEADER_HEIGHT: f64 = 20.0;
-    const SIDE_ACTIONS_CHECKBOX_HEIGHT: f64 = 24.0;
-    const SIDE_DELAY_SECTION_HEIGHT: f64 = 55.0;
-    const SIDE_TOGGLE_HEIGHT: f64 = 24.0;
-    const SIDE_TOGGLE_GAP: f64 = 6.0;
-    const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
-    const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
-    const SIDE_FOOTER_PADDING: f64 = 20.0;
+    pub(super) const SIDE_SECTION_GAP: f64 = 12.0;
+    pub(super) const SIDE_SECTION_TOGGLE_OFFSET_Y: f64 = 22.0;
+    pub(super) const SIDE_COLOR_SECTION_LABEL_HEIGHT: f64 = 28.0;
+    pub(super) const SIDE_COLOR_PICKER_INPUT_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_COLOR_SECTION_BOTTOM_PADDING: f64 = 8.0;
+    pub(super) const SIDE_COLOR_SWATCH: f64 = 24.0;
+    pub(super) const SIDE_COLOR_SWATCH_GAP: f64 = 6.0;
+    pub(super) const SIDE_SECTION_LABEL_OFFSET_Y: f64 = 12.0;
+    pub(super) const SIDE_SECTION_LABEL_OFFSET_TALL: f64 = 14.0;
+    pub(super) const SIDE_FONT_BUTTON_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_FONT_BUTTON_GAP: f64 = 8.0;
+    pub(super) const SIDE_NUDGE_ICON_SIZE: f64 = 14.0;
+    pub(super) const SIDE_SLIDER_VALUE_WIDTH: f64 = 40.0;
+    pub(super) const SIDE_TRACK_HEIGHT: f64 = 8.0;
+    pub(super) const SIDE_TRACK_KNOB_RADIUS: f64 = 7.0;
+    pub(super) const SIDE_DELAY_SLIDER_HEIGHT: f64 = 6.0;
+    pub(super) const SIDE_DELAY_SLIDER_KNOB_RADIUS: f64 = 6.0;
+    pub(super) const SIDE_DELAY_SLIDER_HIT_PADDING: f64 = 4.0;
+    pub(super) const SIDE_DELAY_SLIDER_UNDO_OFFSET_Y: f64 = 16.0;
+    pub(super) const SIDE_DELAY_SLIDER_REDO_OFFSET_Y: f64 = 32.0;
+    pub(super) const SIDE_ACTION_ICON_SIZE: f64 = 22.0;
+    pub(super) const SIDE_STEP_SLIDER_TOP_PADDING: f64 = 4.0;
+    pub(super) const SIDE_SLIDER_CARD_HEIGHT: f64 = 52.0;
+    pub(super) const SIDE_ERASER_MODE_CARD_HEIGHT: f64 = 44.0;
+    pub(super) const SIDE_FONT_CARD_HEIGHT: f64 = 50.0;
+    pub(super) const SIDE_ACTIONS_HEADER_HEIGHT: f64 = 20.0;
+    pub(super) const SIDE_ACTIONS_CHECKBOX_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_DELAY_SECTION_HEIGHT: f64 = 55.0;
+    pub(super) const SIDE_TOGGLE_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_TOGGLE_GAP: f64 = 6.0;
+    pub(super) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
+    pub(super) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
+    pub(super) const SIDE_FOOTER_PADDING: f64 = 20.0;
 
-    fn new(snapshot: &ToolbarSnapshot) -> Self {
+    pub(super) fn new(snapshot: &ToolbarSnapshot) -> Self {
         Self {
             use_icons: snapshot.use_icons,
         }
     }
 
-    fn top_size(&self) -> (u32, u32) {
+    pub(super) fn top_size(&self) -> (u32, u32) {
         if self.use_icons {
             Self::TOP_SIZE_ICONS
         } else {
@@ -88,8 +105,8 @@ impl ToolbarLayoutSpec {
         }
     }
 
-    fn side_size(&self, snapshot: &ToolbarSnapshot) -> (u32, u32) {
-        let base_height = Self::SIDE_HEADER_HEIGHT + Self::SIDE_DRAG_HANDLE_HEIGHT;
+    pub(super) fn side_size(&self, snapshot: &ToolbarSnapshot) -> (u32, u32) {
+        let base_height = self.side_content_start_y();
         let colors_h = self.side_colors_height(snapshot);
         let actions_h = Self::SIDE_ACTIONS_HEADER_HEIGHT
             + Self::SIDE_ACTIONS_CHECKBOX_HEIGHT
@@ -116,7 +133,7 @@ impl ToolbarLayoutSpec {
         (Self::SIDE_WIDTH, height.ceil() as u32)
     }
 
-    fn top_button_size(&self) -> (f64, f64) {
+    pub(super) fn top_button_size(&self) -> (f64, f64) {
         if self.use_icons {
             (Self::TOP_ICON_BUTTON, Self::TOP_ICON_BUTTON)
         } else {
@@ -124,7 +141,7 @@ impl ToolbarLayoutSpec {
         }
     }
 
-    fn top_button_y(&self, height: f64) -> f64 {
+    pub(super) fn top_button_y(&self, height: f64) -> f64 {
         if self.use_icons {
             Self::TOP_ICON_BUTTON_Y
         } else {
@@ -133,7 +150,7 @@ impl ToolbarLayoutSpec {
         }
     }
 
-    fn top_pin_button_y(&self, height: f64) -> f64 {
+    pub(super) fn top_pin_button_y(&self, height: f64) -> f64 {
         if self.use_icons {
             Self::TOP_PIN_BUTTON_Y_ICON
         } else {
@@ -141,37 +158,37 @@ impl ToolbarLayoutSpec {
         }
     }
 
-    fn top_pin_x(&self, width: f64) -> f64 {
+    pub(super) fn top_pin_x(&self, width: f64) -> f64 {
         width
             - Self::TOP_PIN_BUTTON_SIZE * 2.0
             - Self::TOP_PIN_BUTTON_GAP
             - Self::TOP_PIN_BUTTON_MARGIN_RIGHT
     }
 
-    fn top_close_x(&self, width: f64) -> f64 {
+    pub(super) fn top_close_x(&self, width: f64) -> f64 {
         width - Self::TOP_PIN_BUTTON_SIZE - Self::TOP_PIN_BUTTON_MARGIN_RIGHT
     }
 
-    fn side_header_button_positions(&self, width: f64) -> (f64, f64, f64) {
+    pub(super) fn side_header_button_positions(&self, width: f64) -> (f64, f64, f64) {
         let close_x = width - Self::SIDE_HEADER_BUTTON_MARGIN_RIGHT - Self::SIDE_HEADER_BUTTON_SIZE;
         let pin_x = close_x - Self::SIDE_HEADER_BUTTON_SIZE - Self::SIDE_HEADER_BUTTON_GAP;
-        (pin_x, close_x, Self::SIDE_HEADER_BUTTON_Y)
+        (pin_x, close_x, self.side_header_y())
     }
 
-    fn side_content_width(&self, width: f64) -> f64 {
+    pub(super) fn side_content_width(&self, width: f64) -> f64 {
         width - Self::SIDE_CONTENT_PADDING_X
     }
 
-    fn side_color_picker_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
-        Self::SIDE_COLOR_PICKER_HIT_HEIGHT
-            + if snapshot.show_more_colors {
-                Self::SIDE_COLOR_PICKER_EXTRA_HEIGHT
-            } else {
-                0.0
-            }
+    pub(super) fn side_color_picker_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
+        let extra = if snapshot.show_more_colors {
+            Self::SIDE_COLOR_PICKER_EXTRA_HEIGHT
+        } else {
+            0.0
+        };
+        Self::SIDE_COLOR_PICKER_INPUT_HEIGHT + extra
     }
 
-    fn side_colors_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
+    pub(super) fn side_colors_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
         let rows = 1.0 + if snapshot.show_more_colors { 1.0 } else { 0.0 };
         Self::SIDE_COLOR_SECTION_LABEL_HEIGHT
             + Self::SIDE_COLOR_PICKER_INPUT_HEIGHT
@@ -179,7 +196,7 @@ impl ToolbarLayoutSpec {
             + (Self::SIDE_COLOR_SWATCH + Self::SIDE_COLOR_SWATCH_GAP) * rows
     }
 
-    fn side_actions_content_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
+    pub(super) fn side_actions_content_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
         if !snapshot.show_actions_section {
             return 0.0;
         }
@@ -192,7 +209,7 @@ impl ToolbarLayoutSpec {
         }
     }
 
-    fn side_step_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
+    pub(super) fn side_step_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
         let delay_h = if snapshot.show_delay_sliders {
             Self::SIDE_DELAY_SECTION_HEIGHT
         } else {
@@ -207,6 +224,22 @@ impl ToolbarLayoutSpec {
                 0.0
             }
             + delay_h
+    }
+
+    pub(super) fn side_header_y(&self) -> f64 {
+        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_HANDLE_SIZE + Self::SIDE_HEADER_HANDLE_GAP
+    }
+
+    pub(super) fn side_content_start_y(&self) -> f64 {
+        self.side_header_y() + Self::SIDE_HEADER_ROW_HEIGHT + Self::SIDE_HEADER_BOTTOM_GAP
+    }
+
+    pub(super) fn side_card_x(&self) -> f64 {
+        Self::SIDE_START_X - Self::SIDE_CARD_INSET
+    }
+
+    pub(super) fn side_card_width(&self, width: f64) -> f64 {
+        width - 2.0 * Self::SIDE_START_X + Self::SIDE_CARD_INSET * 2.0
     }
 }
 
@@ -428,11 +461,11 @@ pub fn build_side_hits(
 ) {
     let spec = ToolbarLayoutSpec::new(snapshot);
     let use_icons = spec.use_icons;
-    let mut y = ToolbarLayoutSpec::SIDE_START_Y;
     let x = ToolbarLayoutSpec::SIDE_START_X;
     let (pin_x, close_x, header_y) = spec.side_header_button_positions(width);
     let header_btn = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
     let content_width = spec.side_content_width(width);
+    let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
     hits.push(HitRegion {
         rect: (close_x, header_y, header_btn, header_btn),
         event: ToolbarEvent::CloseSideToolbar,
@@ -451,6 +484,8 @@ pub fn build_side_hits(
         }),
     });
 
+    let mut y = spec.side_content_start_y();
+
     // Color picker hit region
     let picker_y = y + ToolbarLayoutSpec::SIDE_COLOR_PICKER_OFFSET_Y;
     let picker_h = spec.side_color_picker_height(snapshot);
@@ -465,54 +500,74 @@ pub fn build_side_hits(
         },
         tooltip: None,
     });
+    y += spec.side_colors_height(snapshot) + section_gap;
 
     // Thickness slider
-    y += ToolbarLayoutSpec::SIDE_THICKNESS_SECTION_OFFSET_Y;
+    let slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
+    let slider_hit_h = ToolbarLayoutSpec::SIDE_NUDGE_SIZE;
     hits.push(HitRegion {
-        rect: (x, y, content_width, ToolbarLayoutSpec::SIDE_SLIDER_HEIGHT),
+        rect: (x, slider_row_y, content_width, slider_hit_h),
         event: ToolbarEvent::SetThickness(snapshot.thickness),
         kind: HitKind::DragSetThickness {
-            min: 0.05,
-            max: 10.0,
+            min: 1.0,
+            max: 50.0,
         },
         tooltip: None,
     });
-    y += ToolbarLayoutSpec::SIDE_SLIDER_STEP_Y;
     hits.push(HitRegion {
         rect: (
             x,
-            y,
+            slider_row_y,
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
         ),
-        event: ToolbarEvent::NudgeThickness(-0.25),
+        event: ToolbarEvent::NudgeThickness(-1.0),
         kind: HitKind::Click,
         tooltip: None,
     });
     hits.push(HitRegion {
         rect: (
             x + content_width - ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
-            y,
+            slider_row_y,
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
         ),
-        event: ToolbarEvent::NudgeThickness(0.25),
+        event: ToolbarEvent::NudgeThickness(1.0),
         kind: HitKind::Click,
         tooltip: None,
     });
+    y += ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + section_gap;
+
+    if snapshot.thickness_targets_eraser {
+        y += ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT + section_gap;
+    }
+
+    let show_marker_opacity =
+        snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
+    if show_marker_opacity {
+        y += ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + section_gap;
+    }
 
     // Text size slider
-    y += ToolbarLayoutSpec::SIDE_TEXT_SECTION_OFFSET_Y;
+    let text_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
     hits.push(HitRegion {
-        rect: (x, y, content_width, ToolbarLayoutSpec::SIDE_SLIDER_HEIGHT),
+        rect: (x, text_slider_row_y, content_width, slider_hit_h),
         event: ToolbarEvent::SetFontSize(snapshot.font_size),
         kind: HitKind::DragSetFontSize,
         tooltip: None,
     });
+    y += ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + section_gap;
+    y += ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT + section_gap;
 
     // Actions section
+    let actions_card_h = ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT
+        + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT
+        + spec.side_actions_content_height(snapshot);
     if snapshot.show_actions_section {
-        y += ToolbarLayoutSpec::SIDE_ACTIONS_SECTION_OFFSET_Y;
+        let mut action_y = y
+            + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y
+            + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT
+            + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
         let actions: &[(ToolbarEvent, bool)] = &[
             (ToolbarEvent::Undo, true),
             (ToolbarEvent::Redo, true),
@@ -529,28 +584,54 @@ pub fn build_side_hits(
         let btn_w = content_width;
         for (evt, _) in actions {
             hits.push(HitRegion {
-                rect: (x, y, btn_w, btn_h),
+                rect: (x, action_y, btn_w, btn_h),
                 event: evt.clone(),
                 kind: HitKind::Click,
                 tooltip: None,
             });
-            y += btn_h + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+            action_y += btn_h + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
         }
     }
+    y += actions_card_h + section_gap;
 
     // Delay sliders
     if snapshot.show_delay_sliders {
         let undo_t = delay_t_from_ms(snapshot.undo_all_delay_ms);
         let redo_t = delay_t_from_ms(snapshot.redo_all_delay_ms);
+        let toggles_h =
+            ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT * 2.0 + ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
+        let custom_h = if snapshot.custom_section_enabled {
+            ToolbarLayoutSpec::SIDE_CUSTOM_SECTION_HEIGHT
+        } else {
+            0.0
+        };
+        let slider_start_y = y
+            + ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT
+            + toggles_h
+            + custom_h
+            + ToolbarLayoutSpec::SIDE_STEP_SLIDER_TOP_PADDING;
+        let slider_hit_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT
+            + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING * 2.0;
+        let undo_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_UNDO_OFFSET_Y;
         hits.push(HitRegion {
-            rect: (x, y, content_width, ToolbarLayoutSpec::SIDE_SLIDER_HEIGHT),
+            rect: (
+                x,
+                undo_y - ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING,
+                content_width,
+                slider_hit_h,
+            ),
             event: ToolbarEvent::SetUndoDelay(delay_secs_from_t(undo_t)),
             kind: HitKind::DragUndoDelay,
             tooltip: None,
         });
-        y += ToolbarLayoutSpec::SIDE_SLIDER_STEP_Y;
+        let redo_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_REDO_OFFSET_Y;
         hits.push(HitRegion {
-            rect: (x, y, content_width, ToolbarLayoutSpec::SIDE_SLIDER_HEIGHT),
+            rect: (
+                x,
+                redo_y - ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING,
+                content_width,
+                slider_hit_h,
+            ),
             event: ToolbarEvent::SetRedoDelay(delay_secs_from_t(redo_t)),
             kind: HitKind::DragRedoDelay,
             tooltip: None,
@@ -659,7 +740,7 @@ mod tests {
                 None
             }
         });
-        assert_eq!(picker_height, Some(30.0));
+        assert_eq!(picker_height, Some(24.0));
 
         state.show_more_colors = true;
         let snapshot = snapshot_from_state(&state);
@@ -672,6 +753,6 @@ mod tests {
                 None
             }
         });
-        assert_eq!(picker_height, Some(60.0));
+        assert_eq!(picker_height, Some(54.0));
     }
 }

@@ -10,6 +10,7 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use super::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
 use super::hit::HitRegion;
+use super::layout::ToolbarLayoutSpec;
 
 pub fn render_top_strip(
     ctx: &cairo::Context,
@@ -24,9 +25,10 @@ pub fn render_top_strip(
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(14.0);
 
+    let spec = ToolbarLayoutSpec::new(snapshot);
     let use_icons = snapshot.use_icons;
-    let gap = 8.0;
-    let mut x = 16.0;
+    let gap = ToolbarLayoutSpec::TOP_GAP;
+    let mut x = ToolbarLayoutSpec::TOP_START_X;
     let tool_tooltip = |tool: Tool, label: &str| {
         let default_hint = match tool {
             Tool::Line => Some("Shift+Drag"),
@@ -45,9 +47,9 @@ pub fn render_top_strip(
     };
 
     // Drag handle (left)
-    let handle_w = 18.0;
-    let handle_h = 18.0;
-    let handle_y = 10.0;
+    let handle_w = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
+    let handle_h = ToolbarLayoutSpec::TOP_HANDLE_SIZE;
+    let handle_y = ToolbarLayoutSpec::TOP_HANDLE_Y;
     let handle_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, handle_y, handle_w, handle_h))
         .unwrap_or(false);
@@ -93,9 +95,9 @@ pub fn render_top_strip(
     ];
 
     if use_icons {
-        let btn_size = 42.0;
-        let y = 6.0;
-        let icon_size = 26.0;
+        let (btn_size, _) = spec.top_button_size();
+        let y = spec.top_button_y(height);
+        let icon_size = ToolbarLayoutSpec::TOP_ICON_SIZE;
 
         let mut rect_x = 0.0;
         let mut circle_end_x = 0.0;
@@ -129,9 +131,9 @@ pub fn render_top_strip(
             x += btn_size + gap;
         }
 
-        let fill_y = y + btn_size + 2.0;
+        let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
         let fill_w = circle_end_x - rect_x;
-        let fill_h = 18.0;
+        let fill_h = ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
         let fill_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, rect_x, fill_y, fill_w, fill_h))
             .unwrap_or(false);
@@ -237,7 +239,7 @@ pub fn render_top_strip(
         });
         x += btn_size + gap;
 
-        let icons_w = 70.0;
+        let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
         let icons_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_size))
             .unwrap_or(false);
@@ -249,9 +251,8 @@ pub fn render_top_strip(
             tooltip: None,
         });
     } else {
-        let btn_w = 60.0;
-        let btn_h = 36.0;
-        let y = (height - btn_h) / 2.0;
+        let (btn_w, btn_h) = spec.top_button_size();
+        let y = spec.top_button_y(height);
 
         for (tool, _icon_fn, label) in buttons {
             let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
@@ -270,7 +271,7 @@ pub fn render_top_strip(
             x += btn_w + gap;
         }
 
-        let fill_w = 64.0;
+        let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
         let fill_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, fill_w, btn_h))
             .unwrap_or(false);
@@ -308,7 +309,7 @@ pub fn render_top_strip(
         });
         x += btn_w + gap;
 
-        let icons_w = 70.0;
+        let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
         let icons_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_h))
             .unwrap_or(false);
@@ -321,15 +322,9 @@ pub fn render_top_strip(
         });
     }
 
-    let btn_size = 24.0;
-    let btn_gap = 6.0;
-    let btn_y = if use_icons {
-        15.0
-    } else {
-        (height - btn_size) / 2.0
-    };
-
-    let pin_x = width - btn_size * 2.0 - btn_gap - 12.0;
+    let btn_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
+    let btn_y = spec.top_pin_button_y(height);
+    let pin_x = spec.top_pin_x(width);
     let pin_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
@@ -345,7 +340,7 @@ pub fn render_top_strip(
         }),
     });
 
-    let close_x = width - btn_size - 12.0;
+    let close_x = spec.top_close_x(width);
     let close_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, close_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
@@ -371,31 +366,31 @@ pub fn render_side_palette(
 ) -> Result<()> {
     draw_panel_background(ctx, width, _height);
 
-    let mut y = 12.0;
-    let x = 16.0;
+    let spec = ToolbarLayoutSpec::new(snapshot);
+    let mut y = ToolbarLayoutSpec::SIDE_TOP_PADDING;
+    let x = ToolbarLayoutSpec::SIDE_START_X;
     let use_icons = snapshot.use_icons;
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(13.0);
 
-    let btn_size = 22.0;
-    let mut header_y = y;
-    let handle_w = 18.0;
-    let handle_h = 18.0;
+    let btn_size = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
+    let handle_w = ToolbarLayoutSpec::SIDE_HEADER_HANDLE_SIZE;
+    let handle_h = ToolbarLayoutSpec::SIDE_HEADER_HANDLE_SIZE;
 
     // Place handle above the header row to avoid widening the palette.
     let handle_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, header_y, handle_w, handle_h))
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, handle_w, handle_h))
         .unwrap_or(false);
-    draw_drag_handle(ctx, x, header_y, handle_w, handle_h, handle_hover);
+    draw_drag_handle(ctx, x, y, handle_w, handle_h, handle_hover);
     hits.push(HitRegion {
-        rect: (x, header_y, handle_w, handle_h),
+        rect: (x, y, handle_w, handle_h),
         event: ToolbarEvent::MoveSideToolbar { x: 0.0, y: 0.0 },
         kind: HitKind::DragMoveSide,
         tooltip: Some("Drag toolbar".to_string()),
     });
-    header_y += handle_h + 6.0;
+    let header_y = spec.side_header_y();
 
-    let icons_w = 70.0;
+    let icons_w = ToolbarLayoutSpec::SIDE_HEADER_TOGGLE_WIDTH;
     let icons_h = btn_size;
     let icons_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, header_y, icons_w, icons_h))
@@ -417,20 +412,20 @@ pub fn render_side_palette(
         tooltip: None,
     });
 
-    let pin_x = width - btn_size * 2.0 - 20.0;
+    let (pin_x, close_x, header_btn_y) = spec.side_header_button_positions(width);
     let pin_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, header_y, btn_size, btn_size))
+        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, header_btn_y, btn_size, btn_size))
         .unwrap_or(false);
     draw_pin_button(
         ctx,
         pin_x,
-        header_y,
+        header_btn_y,
         btn_size,
         snapshot.side_pinned,
         pin_hover,
     );
     hits.push(HitRegion {
-        rect: (pin_x, header_y, btn_size, btn_size),
+        rect: (pin_x, header_btn_y, btn_size, btn_size),
         event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
         kind: HitKind::Click,
         tooltip: Some(if snapshot.side_pinned {
@@ -440,23 +435,23 @@ pub fn render_side_palette(
         }),
     });
 
-    let close_x = width - btn_size - 12.0;
     let close_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, header_y, btn_size, btn_size))
+        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, header_btn_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_close_button(ctx, close_x, header_y, btn_size, close_hover);
+    draw_close_button(ctx, close_x, header_btn_y, btn_size, close_hover);
     hits.push(HitRegion {
-        rect: (close_x, header_y, btn_size, btn_size),
+        rect: (close_x, header_btn_y, btn_size, btn_size),
         event: ToolbarEvent::CloseSideToolbar,
         kind: HitKind::Click,
         tooltip: Some("Close".to_string()),
     });
 
-    y = header_y + btn_size + 12.0;
+    y = spec.side_content_start_y();
 
-    let card_x = x - 6.0;
-    let card_w = width - 2.0 * x + 12.0;
-    let section_gap = 12.0;
+    let card_x = spec.side_card_x();
+    let card_w = spec.side_card_width(width);
+    let content_width = spec.side_content_width(width);
+    let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
 
     let basic_colors: &[(Color, &str)] = &[
         (RED, "Red"),
@@ -498,19 +493,21 @@ pub fn render_side_palette(
         ),
     ];
 
-    let swatch = 24.0;
-    let swatch_gap = 6.0;
-    let basic_rows = 1;
-    let extended_rows = if snapshot.show_more_colors { 1 } else { 0 };
-    let picker_h = 24.0;
-    let colors_card_h =
-        28.0 + picker_h + 8.0 + (swatch + swatch_gap) * (basic_rows + extended_rows) as f64;
+    let swatch = ToolbarLayoutSpec::SIDE_COLOR_SWATCH;
+    let swatch_gap = ToolbarLayoutSpec::SIDE_COLOR_SWATCH_GAP;
+    let picker_h = ToolbarLayoutSpec::SIDE_COLOR_PICKER_INPUT_HEIGHT;
+    let colors_card_h = spec.side_colors_height(snapshot);
 
     draw_group_card(ctx, card_x, y, card_w, colors_card_h);
-    draw_section_label(ctx, x, y + 12.0, "Colors");
+    draw_section_label(
+        ctx,
+        x,
+        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+        "Colors",
+    );
 
-    let picker_y = y + 24.0;
-    let picker_w = card_w - 12.0;
+    let picker_y = y + ToolbarLayoutSpec::SIDE_COLOR_PICKER_OFFSET_Y;
+    let picker_w = content_width;
     draw_color_picker(ctx, x, picker_y, picker_w, picker_h);
     hits.push(HitRegion {
         rect: (x, picker_y, picker_w, picker_h),
@@ -592,21 +589,26 @@ pub fn render_side_palette(
 
     y += colors_card_h + section_gap;
 
-    let slider_card_h = 52.0;
+    let slider_card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
     draw_group_card(ctx, card_x, y, card_w, slider_card_h);
     let thickness_label = if snapshot.thickness_targets_eraser {
         "Eraser size"
     } else {
         "Thickness"
     };
-    draw_section_label(ctx, x, y + 12.0, thickness_label);
+    draw_section_label(
+        ctx,
+        x,
+        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+        thickness_label,
+    );
 
-    let btn_size = 24.0;
-    let nudge_icon_size = 14.0;
-    let value_w = 40.0;
-    let thickness_slider_row_y = y + 26.0;
-    let track_h = 8.0;
-    let knob_r = 7.0;
+    let btn_size = ToolbarLayoutSpec::SIDE_NUDGE_SIZE;
+    let nudge_icon_size = ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE;
+    let value_w = ToolbarLayoutSpec::SIDE_SLIDER_VALUE_WIDTH;
+    let thickness_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
+    let track_h = ToolbarLayoutSpec::SIDE_TRACK_HEIGHT;
+    let knob_r = ToolbarLayoutSpec::SIDE_TRACK_KNOB_RADIUS;
     let (min_thick, max_thick, nudge_step) = (1.0, 50.0, 1.0);
 
     let minus_x = x;
@@ -699,13 +701,18 @@ pub fn render_side_palette(
     y += slider_card_h + section_gap;
 
     if snapshot.thickness_targets_eraser {
-        let eraser_card_h = 44.0;
-        let toggle_h = 24.0;
-        let toggle_w = card_w - 12.0;
+        let eraser_card_h = ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT;
+        let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
+        let toggle_w = content_width;
         draw_group_card(ctx, card_x, y, card_w, eraser_card_h);
-        draw_section_label(ctx, x, y + 14.0, "Eraser mode");
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+            "Eraser mode",
+        );
 
-        let toggle_y = y + 22.0;
+        let toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
         let toggle_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, toggle_y, toggle_w, toggle_h))
             .unwrap_or(false);
@@ -740,9 +747,14 @@ pub fn render_side_palette(
     let show_marker_opacity =
         snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
     if show_marker_opacity {
-        let marker_slider_row_y = y + 26.0;
+        let marker_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
         draw_group_card(ctx, card_x, y, card_w, slider_card_h);
-        draw_section_label(ctx, x, y + 12.0, "Marker opacity");
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+            "Marker opacity",
+        );
 
         let minus_x = x;
         draw_button(
@@ -838,11 +850,16 @@ pub fn render_side_palette(
     }
 
     draw_group_card(ctx, card_x, y, card_w, slider_card_h);
-    draw_section_label(ctx, x, y + 12.0, "Text size");
+    draw_section_label(
+        ctx,
+        x,
+        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+        "Text size",
+    );
 
     let fs_min = 8.0;
     let fs_max = 72.0;
-    let fs_slider_row_y = y + 26.0;
+    let fs_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
 
     let fs_minus_x = x;
     draw_button(
@@ -930,13 +947,18 @@ pub fn render_side_palette(
 
     y += slider_card_h + section_gap;
 
-    let font_card_h = 50.0;
+    let font_card_h = ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT;
     draw_group_card(ctx, card_x, y, card_w, font_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Font");
+    draw_section_label(
+        ctx,
+        x,
+        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+        "Font",
+    );
 
-    let font_btn_h = 24.0;
-    let font_gap = 8.0;
-    let font_btn_w = (width - 2.0 * x - font_gap) / 2.0;
+    let font_btn_h = ToolbarLayoutSpec::SIDE_FONT_BUTTON_HEIGHT;
+    let font_gap = ToolbarLayoutSpec::SIDE_FONT_BUTTON_GAP;
+    let font_btn_w = (content_width - font_gap) / 2.0;
     let fonts = [
         FontDescriptor::new("Sans".to_string(), "bold".to_string(), "normal".to_string()),
         FontDescriptor::new(
@@ -946,7 +968,7 @@ pub fn render_side_palette(
         ),
     ];
     let mut fx = x;
-    let fy = y + 22.0;
+    let fy = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     for font in fonts {
         let is_active = font.family == snapshot.font.family;
         let font_hover = hover
@@ -965,29 +987,35 @@ pub fn render_side_palette(
 
     y += font_card_h + section_gap;
 
-    let actions_checkbox_h = 24.0;
+    let actions_checkbox_h = ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT;
     let actions_content_h = if snapshot.show_actions_section {
         if use_icons {
-            let icon_btn_size = 42.0;
-            let icon_gap = 6.0;
+            let icon_btn_size = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
+            let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
             let icon_rows = 3;
             (icon_btn_size + icon_gap) * icon_rows as f64
         } else {
-            let action_h = 24.0;
-            let action_gap = 5.0;
+            let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
+            let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
             let action_rows = 8;
             (action_h + action_gap) * action_rows as f64
         }
     } else {
         0.0
     };
-    let actions_card_h = 20.0 + actions_checkbox_h + actions_content_h;
+    let actions_card_h =
+        ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT + actions_checkbox_h + actions_content_h;
 
     draw_group_card(ctx, card_x, y, card_w, actions_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Actions");
+    draw_section_label(
+        ctx,
+        x,
+        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+        "Actions",
+    );
 
-    let actions_toggle_y = y + 22.0;
-    let actions_toggle_w = card_w - 12.0;
+    let actions_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+    let actions_toggle_w = content_width;
     let actions_toggle_hover = hover
         .map(|(hx, hy)| {
             point_in_rect(
@@ -1018,7 +1046,8 @@ pub fn render_side_palette(
     });
 
     if snapshot.show_actions_section {
-        let actions_start_y = actions_toggle_y + actions_checkbox_h + 6.0;
+        let actions_start_y =
+            actions_toggle_y + actions_checkbox_h + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
 
         type IconFn = fn(&cairo::Context, f64, f64, f64);
         let lock_label = if snapshot.zoom_locked {
@@ -1126,13 +1155,13 @@ pub fn render_side_palette(
         ];
 
         if use_icons {
-            let icon_btn_size = 42.0;
-            let icon_gap = 6.0;
+            let icon_btn_size = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
+            let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
             let icons_per_row = 5;
-            let icon_size = 22.0;
+            let icon_size = ToolbarLayoutSpec::SIDE_ACTION_ICON_SIZE;
             let total_icons_w =
                 icons_per_row as f64 * icon_btn_size + (icons_per_row - 1) as f64 * icon_gap;
-            let icons_start_x = x + (card_w - 12.0 - total_icons_w) / 2.0;
+            let icons_start_x = x + (content_width - total_icons_w) / 2.0;
 
             for (idx, (evt, icon_fn, label, enabled)) in all_actions.iter().enumerate() {
                 let row = idx / icons_per_row;
@@ -1163,10 +1192,10 @@ pub fn render_side_palette(
                 });
             }
         } else {
-            let action_h = 24.0;
-            let action_gap = 5.0;
-            let action_col_gap = 6.0;
-            let action_w = ((width - 2.0 * x) - action_col_gap) / 2.0;
+            let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
+            let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
+            let action_col_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+            let action_w = (content_width - action_col_gap) / 2.0;
 
             for (idx, (evt, _icon, label, enabled)) in all_actions.iter().enumerate() {
                 let row = idx / 2;
@@ -1192,25 +1221,31 @@ pub fn render_side_palette(
 
     y += actions_card_h + section_gap;
 
-    let custom_toggle_h = 24.0;
-    let toggle_gap = 6.0;
+    let custom_toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
+    let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let toggles_h = custom_toggle_h * 2.0 + toggle_gap;
     let custom_content_h = if snapshot.custom_section_enabled {
-        120.0
+        ToolbarLayoutSpec::SIDE_CUSTOM_SECTION_HEIGHT
     } else {
         0.0
     };
     let delay_sliders_h = if snapshot.show_delay_sliders {
-        55.0
+        ToolbarLayoutSpec::SIDE_DELAY_SECTION_HEIGHT
     } else {
         0.0
     };
-    let custom_card_h = 20.0 + toggles_h + custom_content_h + delay_sliders_h;
+    let custom_card_h =
+        ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT + toggles_h + custom_content_h + delay_sliders_h;
     draw_group_card(ctx, card_x, y, card_w, custom_card_h);
-    draw_section_label(ctx, x, y + 14.0, "Step Undo/Redo");
+    draw_section_label(
+        ctx,
+        x,
+        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+        "Step Undo/Redo",
+    );
 
-    let custom_toggle_y = y + 22.0;
-    let toggle_w = card_w - 12.0;
+    let custom_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+    let toggle_w = content_width;
 
     let step_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, custom_toggle_y, toggle_w, custom_toggle_h))
@@ -1253,7 +1288,7 @@ pub fn render_side_palette(
         tooltip: None,
     });
 
-    let mut custom_y = delay_toggle_y + custom_toggle_h + 6.0;
+    let mut custom_y = delay_toggle_y + custom_toggle_h + toggle_gap;
 
     if snapshot.custom_section_enabled {
         let render_custom_row = |ctx: &cairo::Context,
@@ -1334,9 +1369,9 @@ pub fn render_side_palette(
             set_icon_color(ctx, minus_hover);
             toolbar_icons::draw_icon_minus(
                 ctx,
-                steps_x + (steps_btn_w - 14.0) / 2.0,
-                y + (row_h - 14.0) / 2.0,
-                14.0,
+                steps_x + (steps_btn_w - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                y + (row_h - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
             );
             hits.push(HitRegion {
                 rect: (steps_x, y, steps_btn_w, row_h),
@@ -1367,9 +1402,9 @@ pub fn render_side_palette(
             set_icon_color(ctx, plus_hover);
             toolbar_icons::draw_icon_plus(
                 ctx,
-                steps_plus_x + (steps_btn_w - 14.0) / 2.0,
-                y + (row_h - 14.0) / 2.0,
-                14.0,
+                steps_plus_x + (steps_btn_w - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                y + (row_h - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
             );
             hits.push(HitRegion {
                 rect: (steps_plus_x, y, steps_btn_w, row_h),
@@ -1383,9 +1418,9 @@ pub fn render_side_palette(
             });
 
             let slider_y = y + row_h + 8.0;
-            let slider_h = 6.0;
-            let slider_r = 6.0;
-            let slider_w = w - 12.0;
+            let slider_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT;
+            let slider_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
+            let slider_w = w - ToolbarLayoutSpec::SIDE_CARD_INSET * 2.0;
             ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
             draw_round_rect(ctx, x, slider_y, slider_w, slider_h, 3.0);
             let _ = ctx.fill();
@@ -1400,8 +1435,9 @@ pub fn render_side_palette(
                 std::f64::consts::PI * 2.0,
             );
             let _ = ctx.fill();
+            let hit_pad = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING;
             hits.push(HitRegion {
-                rect: (x, slider_y - 4.0, slider_w, slider_h + 8.0),
+                rect: (x, slider_y - hit_pad, slider_w, slider_h + hit_pad * 2.0),
                 event: if is_undo {
                     ToolbarEvent::SetCustomUndoDelay(delay_secs_from_t(t))
                 } else {
@@ -1424,10 +1460,14 @@ pub fn render_side_palette(
     }
 
     if snapshot.show_delay_sliders {
-        let sliders_w = card_w - 12.0;
-        let slider_h = 6.0;
-        let slider_knob_r = 6.0;
-        let slider_start_y = y + 20.0 + toggles_h + custom_content_h + 4.0;
+        let sliders_w = content_width;
+        let slider_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT;
+        let slider_knob_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
+        let slider_start_y = y
+            + ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT
+            + toggles_h
+            + custom_content_h
+            + ToolbarLayoutSpec::SIDE_STEP_SLIDER_TOP_PADDING;
 
         let undo_label = format!(
             "Undo delay: {:.1}s",
@@ -1438,7 +1478,7 @@ pub fn render_side_palette(
         ctx.move_to(x, slider_start_y + 10.0);
         let _ = ctx.show_text(&undo_label);
 
-        let undo_slider_y = slider_start_y + 16.0;
+        let undo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_UNDO_OFFSET_Y;
         ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
         draw_round_rect(ctx, x, undo_slider_y, sliders_w, slider_h, 3.0);
         let _ = ctx.fill();
@@ -1453,8 +1493,14 @@ pub fn render_side_palette(
             std::f64::consts::PI * 2.0,
         );
         let _ = ctx.fill();
+        let hit_pad = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING;
         hits.push(HitRegion {
-            rect: (x, undo_slider_y - 4.0, sliders_w, slider_h + 8.0),
+            rect: (
+                x,
+                undo_slider_y - hit_pad,
+                sliders_w,
+                slider_h + hit_pad * 2.0,
+            ),
             event: ToolbarEvent::SetUndoDelay(delay_secs_from_t(undo_t)),
             kind: HitKind::DragUndoDelay,
             tooltip: None,
@@ -1468,7 +1514,7 @@ pub fn render_side_palette(
         ctx.move_to(x + sliders_w / 2.0 + 10.0, slider_start_y + 10.0);
         let _ = ctx.show_text(&redo_label);
 
-        let redo_slider_y = slider_start_y + 32.0;
+        let redo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_REDO_OFFSET_Y;
         ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
         draw_round_rect(ctx, x, redo_slider_y, sliders_w, slider_h, 3.0);
         let _ = ctx.fill();
@@ -1484,7 +1530,12 @@ pub fn render_side_palette(
         );
         let _ = ctx.fill();
         hits.push(HitRegion {
-            rect: (x, redo_slider_y - 4.0, sliders_w, slider_h + 8.0),
+            rect: (
+                x,
+                redo_slider_y - hit_pad,
+                sliders_w,
+                slider_h + hit_pad * 2.0,
+            ),
             event: ToolbarEvent::SetRedoDelay(delay_secs_from_t(redo_t)),
             kind: HitKind::DragRedoDelay,
             tooltip: None,
