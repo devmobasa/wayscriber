@@ -1,6 +1,6 @@
 [package]
 name = "wayscriber"
-version = "0.9.5"
+version = "0.9.6"
 edition = "2024"
 description = "Screen annotation tool for Wayland compositors"
 homepage = "https://wayscriber.com"
