@@ -2,14 +2,11 @@ use super::*;
 
 impl WaylandState {
     fn should_exit_after_capture(&self, destination: CaptureDestination) -> bool {
-        let is_clipboard = matches!(
-            destination,
-            CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile
-        );
+        let is_clipboard_only = matches!(destination, CaptureDestination::ClipboardOnly);
         match self.exit_after_capture_mode {
             ExitAfterCaptureMode::Always => true,
             ExitAfterCaptureMode::Never => false,
-            ExitAfterCaptureMode::Auto => is_clipboard,
+            ExitAfterCaptureMode::Auto => is_clipboard_only,
         }
     }
 

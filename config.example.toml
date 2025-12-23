@@ -333,7 +333,8 @@ format = "png"
 copy_to_clipboard = true
 
 # Exit overlay after any capture completes (forces exit for all capture types)
-# When false, clipboard captures may still auto-exit depending on defaults.
+# When false, clipboard-only captures still auto-exit by default.
+# Use --no-exit-after-capture to keep the overlay open for a run.
 exit_after_capture = false
 
 # ═══════════════════════════════════════════════════════════════════════════════

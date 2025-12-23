@@ -98,11 +98,11 @@ struct Cli {
     )]
     freeze: bool,
 
-    /// Exit the overlay after a capture completes
+    /// Exit the overlay after a capture completes (overrides auto clipboard exit)
     #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_exit_after_capture")]
     exit_after_capture: bool,
 
-    /// Keep the overlay open after a capture completes
+    /// Keep the overlay open after capture (disables auto clipboard exit)
     #[arg(long, action = ArgAction::SetTrue, conflicts_with = "exit_after_capture")]
     no_exit_after_capture: bool,
 
@@ -241,8 +241,12 @@ fn run() -> anyhow::Result<()> {
         );
         println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
         println!("  wayscriber --freeze          Start overlay already frozen");
-        println!("  wayscriber --exit-after-capture  Exit overlay after a capture completes");
-        println!("  wayscriber --no-exit-after-capture  Keep overlay open after capture");
+        println!(
+            "  wayscriber --exit-after-capture  Exit overlay after a capture completes (override auto clipboard exit)"
+        );
+        println!(
+            "  wayscriber --no-exit-after-capture  Keep overlay open (disable auto clipboard exit)"
+        );
         println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
         println!("  wayscriber --about           Show the About window");
         println!(
