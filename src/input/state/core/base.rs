@@ -9,7 +9,7 @@ use super::{
     properties::ShapePropertiesPanel,
     selection::SelectionState,
 };
-use crate::config::{Action, BoardConfig, KeyBinding};
+use crate::config::{Action, BoardConfig, KeyBinding, ToolPresetConfig, PRESET_SLOTS_MAX};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
@@ -68,6 +68,12 @@ pub enum ZoomAction {
     Reset,
     ToggleLock,
     RefreshCapture,
+}
+
+#[derive(Debug, Clone)]
+pub enum PresetAction {
+    Save { slot: usize, preset: ToolPresetConfig },
+    Clear { slot: usize },
 }
 
 pub struct InputState {
@@ -207,6 +213,12 @@ pub struct InputState {
     pub show_more_colors: bool,
     /// Whether to show the Actions section (undo all, redo all, etc.)
     pub show_actions_section: bool,
+    /// Number of preset slots to display
+    pub preset_slot_count: usize,
+    /// Preset slots for quick tool switching
+    pub presets: Vec<Option<ToolPresetConfig>>,
+    /// Pending preset save/clear action for backend persistence
+    pub(super) pending_preset_action: Option<PresetAction>,
 }
 
 /// Tracks in-progress delayed undo/redo playback.
@@ -340,6 +352,9 @@ impl InputState {
             zoom_scale: 1.0,
             show_more_colors: false,
             show_actions_section: true, // Show by default
+            preset_slot_count: PRESET_SLOTS_MAX,
+            presets: vec![None; PRESET_SLOTS_MAX],
+            pending_preset_action: None,
         };
 
         if state.click_highlight.uses_pen_color() {

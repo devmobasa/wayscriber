@@ -92,6 +92,23 @@ pub enum Action {
     ResetZoom,
     ToggleZoomLock,
     RefreshZoomCapture,
+
+    // Preset slots
+    ApplyPreset1,
+    ApplyPreset2,
+    ApplyPreset3,
+    ApplyPreset4,
+    ApplyPreset5,
+    SavePreset1,
+    SavePreset2,
+    SavePreset3,
+    SavePreset4,
+    SavePreset5,
+    ClearPreset1,
+    ClearPreset2,
+    ClearPreset3,
+    ClearPreset4,
+    ClearPreset5,
 }
 
 /// A single keybinding: a key character with optional modifiers.
@@ -383,6 +400,37 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_refresh_zoom_capture")]
     pub refresh_zoom_capture: Vec<String>,
+
+    #[serde(default)]
+    pub apply_preset_1: Vec<String>,
+    #[serde(default)]
+    pub apply_preset_2: Vec<String>,
+    #[serde(default)]
+    pub apply_preset_3: Vec<String>,
+    #[serde(default)]
+    pub apply_preset_4: Vec<String>,
+    #[serde(default)]
+    pub apply_preset_5: Vec<String>,
+    #[serde(default)]
+    pub save_preset_1: Vec<String>,
+    #[serde(default)]
+    pub save_preset_2: Vec<String>,
+    #[serde(default)]
+    pub save_preset_3: Vec<String>,
+    #[serde(default)]
+    pub save_preset_4: Vec<String>,
+    #[serde(default)]
+    pub save_preset_5: Vec<String>,
+    #[serde(default)]
+    pub clear_preset_1: Vec<String>,
+    #[serde(default)]
+    pub clear_preset_2: Vec<String>,
+    #[serde(default)]
+    pub clear_preset_3: Vec<String>,
+    #[serde(default)]
+    pub clear_preset_4: Vec<String>,
+    #[serde(default)]
+    pub clear_preset_5: Vec<String>,
 }
 
 impl Default for KeybindingsConfig {
@@ -454,6 +502,21 @@ impl Default for KeybindingsConfig {
             reset_zoom: default_reset_zoom(),
             toggle_zoom_lock: default_toggle_zoom_lock(),
             refresh_zoom_capture: default_refresh_zoom_capture(),
+            apply_preset_1: Vec::new(),
+            apply_preset_2: Vec::new(),
+            apply_preset_3: Vec::new(),
+            apply_preset_4: Vec::new(),
+            apply_preset_5: Vec::new(),
+            save_preset_1: Vec::new(),
+            save_preset_2: Vec::new(),
+            save_preset_3: Vec::new(),
+            save_preset_4: Vec::new(),
+            save_preset_5: Vec::new(),
+            clear_preset_1: Vec::new(),
+            clear_preset_2: Vec::new(),
+            clear_preset_3: Vec::new(),
+            clear_preset_4: Vec::new(),
+            clear_preset_5: Vec::new(),
         }
     }
 }
@@ -760,6 +823,52 @@ impl KeybindingsConfig {
 
         for binding_str in &self.refresh_zoom_capture {
             insert_binding(binding_str, Action::RefreshZoomCapture)?;
+        }
+
+        for binding_str in &self.apply_preset_1 {
+            insert_binding(binding_str, Action::ApplyPreset1)?;
+        }
+        for binding_str in &self.apply_preset_2 {
+            insert_binding(binding_str, Action::ApplyPreset2)?;
+        }
+        for binding_str in &self.apply_preset_3 {
+            insert_binding(binding_str, Action::ApplyPreset3)?;
+        }
+        for binding_str in &self.apply_preset_4 {
+            insert_binding(binding_str, Action::ApplyPreset4)?;
+        }
+        for binding_str in &self.apply_preset_5 {
+            insert_binding(binding_str, Action::ApplyPreset5)?;
+        }
+        for binding_str in &self.save_preset_1 {
+            insert_binding(binding_str, Action::SavePreset1)?;
+        }
+        for binding_str in &self.save_preset_2 {
+            insert_binding(binding_str, Action::SavePreset2)?;
+        }
+        for binding_str in &self.save_preset_3 {
+            insert_binding(binding_str, Action::SavePreset3)?;
+        }
+        for binding_str in &self.save_preset_4 {
+            insert_binding(binding_str, Action::SavePreset4)?;
+        }
+        for binding_str in &self.save_preset_5 {
+            insert_binding(binding_str, Action::SavePreset5)?;
+        }
+        for binding_str in &self.clear_preset_1 {
+            insert_binding(binding_str, Action::ClearPreset1)?;
+        }
+        for binding_str in &self.clear_preset_2 {
+            insert_binding(binding_str, Action::ClearPreset2)?;
+        }
+        for binding_str in &self.clear_preset_3 {
+            insert_binding(binding_str, Action::ClearPreset3)?;
+        }
+        for binding_str in &self.clear_preset_4 {
+            insert_binding(binding_str, Action::ClearPreset4)?;
+        }
+        for binding_str in &self.clear_preset_5 {
+            insert_binding(binding_str, Action::ClearPreset5)?;
         }
 
         Ok(map)

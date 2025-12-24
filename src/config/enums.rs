@@ -31,7 +31,7 @@ pub enum StatusPosition {
 /// # Custom RGB color (0-255 per component)
 /// default_color = [255, 128, 0]  # Orange
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum ColorSpec {
     /// Named color: red, green, blue, yellow, orange, pink, white, black

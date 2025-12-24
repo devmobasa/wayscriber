@@ -589,6 +589,132 @@ pub fn render_side_palette(
 
     y += colors_card_h + section_gap;
 
+    let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
+    draw_group_card(ctx, card_x, y, card_w, presets_card_h);
+    draw_section_label(
+        ctx,
+        x,
+        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+        "Presets",
+    );
+
+    let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
+    let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
+    let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
+    let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
+    let action_h = ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT;
+    let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
+    let action_w = (slot_size - action_gap) / 2.0;
+    let action_icon = 12.0;
+    let slot_count = snapshot
+        .preset_slot_count
+        .min(snapshot.presets.len());
+    let icon_size = 14.0;
+    let swatch_size = 10.0;
+    let number_box = 12.0;
+    for slot_index in 0..slot_count {
+        let slot = slot_index + 1;
+        let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
+        let preset = snapshot
+            .presets
+            .get(slot_index)
+            .and_then(|preset| preset.as_ref());
+        let preset_exists = preset.is_some();
+        let slot_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, slot_x, slot_row_y, slot_size, slot_size))
+            .unwrap_or(false)
+            && preset_exists;
+        draw_button(ctx, slot_x, slot_row_y, slot_size, slot_size, false, slot_hover);
+
+        if let Some(preset) = preset {
+            hits.push(HitRegion {
+                rect: (slot_x, slot_row_y, slot_size, slot_size),
+                event: ToolbarEvent::ApplyPreset(slot),
+                kind: HitKind::Click,
+                tooltip: Some(format!("Apply preset {}", slot)),
+            });
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+            draw_label_center(
+                ctx,
+                slot_x + 2.0,
+                slot_row_y + 2.0,
+                number_box,
+                number_box,
+                &slot.to_string(),
+            );
+
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+            let icon_x = slot_x + (slot_size - icon_size) / 2.0;
+            let icon_y = slot_row_y + (slot_size - icon_size) / 2.0;
+            match preset.tool {
+                Tool::Select => toolbar_icons::draw_icon_select(ctx, icon_x, icon_y, icon_size),
+                Tool::Pen => toolbar_icons::draw_icon_pen(ctx, icon_x, icon_y, icon_size),
+                Tool::Line => toolbar_icons::draw_icon_line(ctx, icon_x, icon_y, icon_size),
+                Tool::Rect => toolbar_icons::draw_icon_rect(ctx, icon_x, icon_y, icon_size),
+                Tool::Ellipse => toolbar_icons::draw_icon_circle(ctx, icon_x, icon_y, icon_size),
+                Tool::Arrow => toolbar_icons::draw_icon_arrow(ctx, icon_x, icon_y, icon_size),
+                Tool::Marker => toolbar_icons::draw_icon_marker(ctx, icon_x, icon_y, icon_size),
+                Tool::Highlight => toolbar_icons::draw_icon_highlight(ctx, icon_x, icon_y, icon_size),
+                Tool::Eraser => toolbar_icons::draw_icon_eraser(ctx, icon_x, icon_y, icon_size),
+            }
+
+            let swatch_x = slot_x + slot_size - swatch_size - 4.0;
+            let swatch_y = slot_row_y + slot_size - swatch_size - 4.0;
+            draw_swatch(ctx, swatch_x, swatch_y, swatch_size, preset.color, false);
+        } else {
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+            draw_label_center(
+                ctx,
+                slot_x + 2.0,
+                slot_row_y + 2.0,
+                number_box,
+                number_box,
+                &slot.to_string(),
+            );
+        }
+
+        let save_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, slot_x, action_row_y, action_w, action_h))
+            .unwrap_or(false);
+        draw_button(ctx, slot_x, action_row_y, action_w, action_h, false, save_hover);
+        set_icon_color(ctx, save_hover);
+        toolbar_icons::draw_icon_save(
+            ctx,
+            slot_x + (action_w - action_icon) / 2.0,
+            action_row_y + (action_h - action_icon) / 2.0,
+            action_icon,
+        );
+        hits.push(HitRegion {
+            rect: (slot_x, action_row_y, action_w, action_h),
+            event: ToolbarEvent::SavePreset(slot),
+            kind: HitKind::Click,
+            tooltip: Some(format!("Save preset {}", slot)),
+        });
+
+        let clear_x = slot_x + action_w + action_gap;
+        let clear_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, clear_x, action_row_y, action_w, action_h))
+            .unwrap_or(false)
+            && preset_exists;
+        draw_button(ctx, clear_x, action_row_y, action_w, action_h, false, clear_hover);
+        if preset_exists {
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+        } else {
+            ctx.set_source_rgba(0.7, 0.7, 0.7, 0.6);
+        }
+        draw_label_center(ctx, clear_x, action_row_y, action_w, action_h, "X");
+        if preset_exists {
+            hits.push(HitRegion {
+                rect: (clear_x, action_row_y, action_w, action_h),
+                event: ToolbarEvent::ClearPreset(slot),
+                kind: HitKind::Click,
+                tooltip: Some(format!("Clear preset {}", slot)),
+            });
+        }
+    }
+
+    y += presets_card_h + section_gap;
+
     let slider_card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
     draw_group_card(ctx, card_x, y, card_w, slider_card_h);
     let thickness_label = if snapshot.thickness_targets_eraser {

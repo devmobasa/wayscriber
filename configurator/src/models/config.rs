@@ -1,4 +1,4 @@
-use wayscriber::config::Config;
+use wayscriber::config::{Config, PresetSlotsConfig};
 
 use super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::error::FormError;
@@ -80,6 +80,8 @@ pub struct ConfigDraft {
     pub session_compression: SessionCompressionOption,
     pub session_auto_compress_threshold_kb: String,
     pub session_backup_retention: String,
+
+    pub presets: PresetSlotsConfig,
 
     pub keybindings: KeybindingsDraft,
 }
@@ -173,6 +175,8 @@ impl ConfigDraft {
                 .auto_compress_threshold_kb
                 .to_string(),
             session_backup_retention: config.session.backup_retention.to_string(),
+
+            presets: config.presets.clone(),
 
             keybindings: KeybindingsDraft::from_config(&config.keybindings),
         }
@@ -410,6 +414,8 @@ impl ConfigDraft {
             &mut errors,
             |value| config.session.backup_retention = value,
         );
+
+        config.presets = self.presets.clone();
 
         match self.keybindings.to_config() {
             Ok(cfg) => config.keybindings = cfg,

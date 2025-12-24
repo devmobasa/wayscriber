@@ -679,6 +679,48 @@ pub fn draw_icon_file(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw a floppy disk/save icon
+pub fn draw_icon_save(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    let pad = s * 0.15;
+    let body_x = x + pad;
+    let body_y = y + pad;
+    let body_w = s - pad * 2.0;
+    let body_h = s - pad * 2.0;
+    let notch_w = s * 0.22;
+    let notch_h = s * 0.18;
+
+    // Outer body with a top-right notch.
+    ctx.move_to(body_x, body_y);
+    ctx.line_to(body_x + body_w - notch_w, body_y);
+    ctx.line_to(body_x + body_w, body_y + notch_h);
+    ctx.line_to(body_x + body_w, body_y + body_h);
+    ctx.line_to(body_x, body_y + body_h);
+    ctx.close_path();
+    let _ = ctx.stroke();
+
+    // Shutter tab near the top.
+    let shutter_w = body_w * 0.4;
+    let shutter_h = body_h * 0.18;
+    let shutter_x = body_x + body_w * 0.1;
+    let shutter_y = body_y + body_h * 0.12;
+    ctx.rectangle(shutter_x, shutter_y, shutter_w, shutter_h);
+    let _ = ctx.stroke();
+
+    // Label window.
+    let label_w = body_w * 0.55;
+    let label_h = body_h * 0.22;
+    let label_x = body_x + (body_w - label_w) / 2.0;
+    let label_y = body_y + body_h - label_h - body_h * 0.12;
+    ctx.rectangle(label_x, label_y, label_w, label_h);
+    let _ = ctx.stroke();
+}
+
 /// Draw a minus icon
 pub fn draw_icon_minus(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;

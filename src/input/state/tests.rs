@@ -1,7 +1,7 @@
 use super::core::{ContextMenuKind, ContextMenuState, MenuCommand};
 use super::*;
-use crate::config::{Action, BoardConfig};
-use crate::draw::{Color, FontDescriptor, Shape, frame::UndoAction};
+use crate::config::{Action, BoardConfig, ColorSpec, ToolPresetConfig};
+use crate::draw::{Color, EraserKind, FontDescriptor, Shape, frame::UndoAction};
 use crate::input::{BoardMode, ClickHighlightSettings, EraserMode, Key, MouseButton, Tool};
 use crate::util;
 
@@ -56,6 +56,43 @@ fn test_adjust_font_size_increase() {
     state.adjust_font_size(2.0);
     assert_eq!(state.current_font_size, 34.0);
     assert!(state.needs_redraw);
+}
+
+#[test]
+fn apply_preset_updates_tool_and_settings() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+    state.presets[0] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::Marker,
+        color: ColorSpec::Name("blue".to_string()),
+        size: 12.0,
+        eraser_kind: Some(EraserKind::Rect),
+        eraser_mode: Some(EraserMode::Stroke),
+        marker_opacity: Some(0.6),
+        fill_enabled: Some(true),
+        font_size: Some(28.0),
+        text_background_enabled: Some(true),
+        arrow_length: Some(25.0),
+        arrow_angle: Some(45.0),
+        arrow_head_at_end: Some(true),
+        show_status_bar: Some(false),
+    });
+
+    assert!(state.apply_preset(1));
+    assert_eq!(state.active_tool(), Tool::Marker);
+    assert_eq!(state.current_color, ColorSpec::Name("blue".to_string()).to_color());
+    assert_eq!(state.current_thickness, 12.0);
+    assert_eq!(state.marker_opacity, 0.6);
+    assert!(state.fill_enabled);
+    assert_eq!(state.current_font_size, 28.0);
+    assert!(state.text_background_enabled);
+    assert_eq!(state.arrow_length, 25.0);
+    assert_eq!(state.arrow_angle, 45.0);
+    assert!(state.arrow_head_at_end);
+    assert_eq!(state.eraser_kind, EraserKind::Rect);
+    assert_eq!(state.eraser_mode, EraserMode::Stroke);
+    assert!(!state.show_status_bar);
 }
 
 #[test]

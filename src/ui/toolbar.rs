@@ -34,6 +34,9 @@ pub enum ToolbarEvent {
     ToggleZoomLock,
     #[allow(dead_code)]
     RefreshZoomCapture,
+    ApplyPreset(usize),
+    SavePreset(usize),
+    ClearPreset(usize),
     OpenConfigurator,
     OpenConfigFile,
     ToggleCustomSection(bool),
@@ -68,6 +71,15 @@ pub enum ToolbarEvent {
         x: f64,
         y: f64,
     },
+}
+
+/// Snapshot of a single preset slot for toolbar display.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresetSlotSnapshot {
+    pub name: Option<String>,
+    pub tool: Tool,
+    pub color: Color,
+    pub size: f64,
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -116,6 +128,10 @@ pub struct ToolbarSnapshot {
     pub show_actions_section: bool,
     /// Whether to show the marker opacity slider section
     pub show_marker_opacity_section: bool,
+    /// Number of preset slots to display
+    pub preset_slot_count: usize,
+    /// Preset slot previews
+    pub presets: Vec<Option<PresetSlotSnapshot>>,
     /// Binding hints for tooltips
     pub binding_hints: ToolbarBindingHints,
 }
@@ -143,6 +159,18 @@ impl ToolbarSnapshot {
         } else {
             state.current_thickness
         };
+        let presets = state
+            .presets
+            .iter()
+            .map(|preset| {
+                preset.as_ref().map(|preset| PresetSlotSnapshot {
+                    name: preset.name.clone(),
+                    tool: preset.tool,
+                    color: preset.color.to_color(),
+                    size: preset.size,
+                })
+            })
+            .collect();
         Self {
             active_tool,
             tool_override: state.tool_override(),
@@ -180,6 +208,8 @@ impl ToolbarSnapshot {
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
+            preset_slot_count: state.preset_slot_count,
+            presets,
             binding_hints,
         }
     }
@@ -456,6 +486,9 @@ impl InputState {
                     false
                 }
             }
+            ToolbarEvent::ApplyPreset(slot) => self.apply_preset(slot),
+            ToolbarEvent::SavePreset(slot) => self.save_preset(slot),
+            ToolbarEvent::ClearPreset(slot) => self.clear_preset(slot),
             ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. } => false,
         }
     }

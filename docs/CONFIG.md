@@ -88,6 +88,32 @@ head_at_end = false
 - Angle: 30.0°
 - Head at end: false (head at the start)
 
+### `[presets]` - Quick Tool Slots
+
+Configure 3-5 tool presets that you can apply or update via hotkeys or the toolbar strip.
+
+```toml
+[presets]
+slot_count = 5
+
+[presets.slot_1]
+name = "Red pen"
+tool = "pen"
+color = "red"
+size = 3.0
+marker_opacity = 0.32
+fill_enabled = false
+font_size = 32.0
+text_background_enabled = false
+arrow_length = 20.0
+arrow_angle = 30.0
+arrow_head_at_end = false
+show_status_bar = true
+```
+
+**Required fields:** `tool`, `color`, `size`  
+**Optional fields:** `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `show_status_bar`
+
 ### `[performance]` - Performance Tuning
 
 Controls rendering performance and smoothness.
@@ -488,6 +514,23 @@ zoom_out = ["Ctrl+Alt+-", "Ctrl+Alt+_"]
 reset_zoom = ["Ctrl+Alt+0"]
 toggle_zoom_lock = ["Ctrl+Alt+L"]
 refresh_zoom_capture = ["Ctrl+Alt+R"]
+
+# Preset slots
+apply_preset_1 = ["Alt+1"]
+apply_preset_2 = ["Alt+2"]
+apply_preset_3 = ["Alt+3"]
+apply_preset_4 = ["Alt+4"]
+apply_preset_5 = ["Alt+5"]
+save_preset_1 = ["Ctrl+Alt+1"]
+save_preset_2 = ["Ctrl+Alt+2"]
+save_preset_3 = ["Ctrl+Alt+3"]
+save_preset_4 = ["Ctrl+Alt+4"]
+save_preset_5 = ["Ctrl+Alt+5"]
+clear_preset_1 = ["Ctrl+Alt+Shift+1"]
+clear_preset_2 = ["Ctrl+Alt+Shift+2"]
+clear_preset_3 = ["Ctrl+Alt+Shift+3"]
+clear_preset_4 = ["Ctrl+Alt+Shift+4"]
+clear_preset_5 = ["Ctrl+Alt+Shift+5"]
 
 # Help overlay (press F10 while drawing for a full reference)
 ```

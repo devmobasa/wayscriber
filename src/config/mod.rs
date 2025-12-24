@@ -18,8 +18,9 @@ pub use types::TabletInputConfig;
 #[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
-    HistoryConfig, PerformanceConfig, SessionCompression, SessionConfig, SessionStorageMode,
-    StatusBarStyle, ToolbarConfig, UiConfig,
+    HistoryConfig, PerformanceConfig, PresetSlotsConfig, SessionCompression, SessionConfig,
+    SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig, UiConfig,
+    PRESET_SLOTS_MAX, PRESET_SLOTS_MIN,
 };
 
 // Re-export for public API (unused internally but part of public interface)
@@ -193,6 +194,38 @@ mod tests {
         assert_eq!(config.history.custom_redo_delay_ms, 5_000);
         assert_eq!(config.history.custom_undo_steps, 500);
         assert_eq!(config.history.custom_redo_steps, 500);
+    }
+
+    #[test]
+    fn validate_clamps_preset_fields() {
+        let mut config = Config::default();
+        config.presets.slot_count = 1;
+        config.presets.slot_1 = Some(ToolPresetConfig {
+            name: None,
+            tool: crate::input::Tool::Pen,
+            color: ColorSpec::Name("red".to_string()),
+            size: 120.0,
+            eraser_kind: None,
+            eraser_mode: None,
+            marker_opacity: Some(1.2),
+            fill_enabled: None,
+            font_size: Some(2.0),
+            text_background_enabled: None,
+            arrow_length: Some(100.0),
+            arrow_angle: Some(5.0),
+            arrow_head_at_end: None,
+            show_status_bar: None,
+        });
+
+        config.validate_and_clamp();
+
+        assert_eq!(config.presets.slot_count, PRESET_SLOTS_MIN);
+        let preset = config.presets.slot_1.as_ref().expect("slot_1 preset");
+        assert_eq!(preset.size, MAX_STROKE_THICKNESS);
+        assert_eq!(preset.marker_opacity, Some(0.9));
+        assert_eq!(preset.font_size, Some(8.0));
+        assert_eq!(preset.arrow_length, Some(50.0));
+        assert_eq!(preset.arrow_angle, Some(15.0));
     }
 
     #[test]
@@ -389,6 +422,10 @@ pub struct Config {
     #[serde(default)]
     pub drawing: DrawingConfig,
 
+    /// Preset slots for quick tool switching
+    #[serde(default)]
+    pub presets: PresetSlotsConfig,
+
     /// History playback settings
     #[serde(default)]
     pub history: HistoryConfig,
@@ -516,6 +553,94 @@ impl Config {
                 self.drawing.undo_stack_limit
             );
             self.drawing.undo_stack_limit = self.drawing.undo_stack_limit.clamp(10, 1000);
+        }
+
+        if !(PRESET_SLOTS_MIN..=PRESET_SLOTS_MAX).contains(&self.presets.slot_count) {
+            log::warn!(
+                "Invalid preset slot_count {}, clamping to {}-{} range",
+                self.presets.slot_count,
+                PRESET_SLOTS_MIN,
+                PRESET_SLOTS_MAX
+            );
+            self.presets.slot_count = self
+                .presets
+                .slot_count
+                .clamp(PRESET_SLOTS_MIN, PRESET_SLOTS_MAX);
+        }
+
+        let clamp_preset = |slot: usize, preset: &mut ToolPresetConfig| {
+            if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(&preset.size) {
+                log::warn!(
+                    "Invalid preset size {:.1} in slot {}, clamping to {:.1}-{:.1} range",
+                    preset.size,
+                    slot,
+                    MIN_STROKE_THICKNESS,
+                    MAX_STROKE_THICKNESS
+                );
+                preset.size = preset
+                    .size
+                    .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            }
+
+            if let Some(opacity) = preset.marker_opacity.as_mut() {
+                if !(0.05..=0.9).contains(opacity) {
+                    log::warn!(
+                        "Invalid marker_opacity {:.2} in preset slot {}, clamping to 0.05-0.90 range",
+                        *opacity,
+                        slot
+                    );
+                    *opacity = opacity.clamp(0.05, 0.9);
+                }
+            }
+
+            if let Some(size) = preset.font_size.as_mut() {
+                if !(8.0..=72.0).contains(size) {
+                    log::warn!(
+                        "Invalid font_size {:.1} in preset slot {}, clamping to 8.0-72.0 range",
+                        *size,
+                        slot
+                    );
+                    *size = size.clamp(8.0, 72.0);
+                }
+            }
+
+            if let Some(length) = preset.arrow_length.as_mut() {
+                if !(5.0..=50.0).contains(length) {
+                    log::warn!(
+                        "Invalid arrow_length {:.1} in preset slot {}, clamping to 5.0-50.0 range",
+                        *length,
+                        slot
+                    );
+                    *length = length.clamp(5.0, 50.0);
+                }
+            }
+
+            if let Some(angle) = preset.arrow_angle.as_mut() {
+                if !(15.0..=60.0).contains(angle) {
+                    log::warn!(
+                        "Invalid arrow_angle {:.1} in preset slot {}, clamping to 15.0-60.0 range",
+                        *angle,
+                        slot
+                    );
+                    *angle = angle.clamp(15.0, 60.0);
+                }
+            }
+        };
+
+        if let Some(preset) = self.presets.slot_1.as_mut() {
+            clamp_preset(1, preset);
+        }
+        if let Some(preset) = self.presets.slot_2.as_mut() {
+            clamp_preset(2, preset);
+        }
+        if let Some(preset) = self.presets.slot_3.as_mut() {
+            clamp_preset(3, preset);
+        }
+        if let Some(preset) = self.presets.slot_4.as_mut() {
+            clamp_preset(4, preset);
+        }
+        if let Some(preset) = self.presets.slot_5.as_mut() {
+            clamp_preset(5, preset);
         }
 
         #[cfg(tablet)]

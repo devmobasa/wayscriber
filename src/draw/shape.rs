@@ -3,6 +3,7 @@
 use super::color::Color;
 use super::font::FontDescriptor;
 use crate::util::{self, Rect};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Brush options for eraser strokes.
@@ -15,7 +16,7 @@ pub struct EraserBrush {
 }
 
 /// Shape of the eraser brush.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub enum EraserKind {
     Circle,
     Rect,

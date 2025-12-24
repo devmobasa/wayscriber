@@ -149,6 +149,9 @@ impl KeyboardHandler for WaylandState {
         if let Some(action) = self.input_state.take_pending_zoom_action() {
             self.handle_zoom_action(action);
         }
+        if let Some(action) = self.input_state.take_pending_preset_action() {
+            self.handle_preset_action(action);
+        }
     }
 
     fn release_key(

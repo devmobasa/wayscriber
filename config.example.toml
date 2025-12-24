@@ -76,6 +76,43 @@ font_style = "normal"
 text_background_enabled = false
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PRESET SLOTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[presets]
+# Number of visible preset slots (3-5)
+slot_count = 5
+
+# Each preset requires tool + color + size (thickness or eraser size).
+# Optional fields let you capture fill, marker opacity, font size, etc.
+
+[presets.slot_1]
+# Optional label shown in UI tooltips
+name = "Red pen"
+# Tool: "pen", "line", "rect", "ellipse", "arrow", "marker", "highlight", "eraser", "select"
+tool = "pen"
+# Color: name or RGB array
+color = "red"
+# Size: pen thickness or eraser size
+size = 3.0
+# Optional overrides
+marker_opacity = 0.32
+fill_enabled = false
+font_size = 32.0
+text_background_enabled = false
+arrow_length = 20.0
+arrow_angle = 30.0
+arrow_head_at_end = false
+show_status_bar = true
+
+# [presets.slot_2]
+# name = "Blue marker"
+# tool = "marker"
+# color = "blue"
+# size = 8.0
+# marker_opacity = 0.32
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # ARROW SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -499,6 +536,38 @@ zoom_out = ["Ctrl+Alt+-", "Ctrl+Alt+_"]
 reset_zoom = ["Ctrl+Alt+0"]
 toggle_zoom_lock = ["Ctrl+Alt+L"]
 refresh_zoom_capture = ["Ctrl+Alt+R"]
+
+# Preset slots (apply/save/clear). Suggested bindings are commented out.
+apply_preset_1 = []
+apply_preset_2 = []
+apply_preset_3 = []
+apply_preset_4 = []
+apply_preset_5 = []
+# apply_preset_1 = ["Alt+1"]
+# apply_preset_2 = ["Alt+2"]
+# apply_preset_3 = ["Alt+3"]
+# apply_preset_4 = ["Alt+4"]
+# apply_preset_5 = ["Alt+5"]
+save_preset_1 = []
+save_preset_2 = []
+save_preset_3 = []
+save_preset_4 = []
+save_preset_5 = []
+# save_preset_1 = ["Ctrl+Alt+1"]
+# save_preset_2 = ["Ctrl+Alt+2"]
+# save_preset_3 = ["Ctrl+Alt+3"]
+# save_preset_4 = ["Ctrl+Alt+4"]
+# save_preset_5 = ["Ctrl+Alt+5"]
+clear_preset_1 = []
+clear_preset_2 = []
+clear_preset_3 = []
+clear_preset_4 = []
+clear_preset_5 = []
+# clear_preset_1 = ["Ctrl+Alt+Shift+1"]
+# clear_preset_2 = ["Ctrl+Alt+Shift+2"]
+# clear_preset_3 = ["Ctrl+Alt+Shift+3"]
+# clear_preset_4 = ["Ctrl+Alt+Shift+4"]
+# clear_preset_5 = ["Ctrl+Alt+Shift+5"]
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Keybinding Examples

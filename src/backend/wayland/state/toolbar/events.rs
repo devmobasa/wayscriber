@@ -52,6 +52,7 @@ impl WaylandState {
                 | ToolbarEvent::SetFont(_)
                 | ToolbarEvent::SetFontSize(_)
                 | ToolbarEvent::ToggleFill(_)
+                | ToolbarEvent::ApplyPreset(_)
         );
 
         if self.input_state.apply_toolbar_event(event) {
@@ -76,6 +77,9 @@ impl WaylandState {
             if persist_drawing {
                 self.save_drawing_preferences();
             }
+        }
+        if let Some(action) = self.input_state.take_pending_preset_action() {
+            self.handle_preset_action(action);
         }
         self.refresh_keyboard_interactivity();
     }
@@ -139,6 +143,26 @@ impl WaylandState {
 
         if let Err(err) = self.config.save() {
             log::warn!("Failed to persist drawing preferences: {}", err);
+        }
+    }
+
+    pub(in crate::backend::wayland) fn handle_preset_action(
+        &mut self,
+        action: crate::input::state::PresetAction,
+    ) {
+        match action {
+            crate::input::state::PresetAction::Save { slot, preset } => {
+                self.config.presets.set_slot(slot, Some(preset));
+                if let Err(err) = self.config.save() {
+                    log::warn!("Failed to save preset slot {}: {}", slot, err);
+                }
+            }
+            crate::input::state::PresetAction::Clear { slot } => {
+                self.config.presets.set_slot(slot, None);
+                if let Err(err) = self.config.save() {
+                    log::warn!("Failed to clear preset slot {}: {}", slot, err);
+                }
+            }
         }
     }
 }

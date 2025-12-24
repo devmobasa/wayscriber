@@ -89,6 +89,13 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_TOGGLE_GAP: f64 = 6.0;
     pub(super) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
     pub(super) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
+    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 76.0;
+    pub(super) const SIDE_PRESET_SLOT_SIZE: f64 = 30.0;
+    pub(super) const SIDE_PRESET_SLOT_GAP: f64 = 6.0;
+    pub(super) const SIDE_PRESET_ROW_OFFSET_Y: f64 = 24.0;
+    pub(super) const SIDE_PRESET_ACTION_GAP: f64 = 6.0;
+    pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 16.0;
+    pub(super) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 2.0;
     pub(super) const SIDE_FOOTER_PADDING: f64 = 20.0;
 
     pub(super) fn new(snapshot: &ToolbarSnapshot) -> Self {
@@ -117,6 +124,7 @@ impl ToolbarLayoutSpec {
             snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
 
         let mut height: f64 = base_height + colors_h + Self::SIDE_SECTION_GAP;
+        height += Self::SIDE_PRESET_CARD_HEIGHT + Self::SIDE_SECTION_GAP;
         height += Self::SIDE_SLIDER_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Thickness
         if snapshot.thickness_targets_eraser {
             height += Self::SIDE_ERASER_MODE_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Eraser mode
@@ -501,6 +509,57 @@ pub fn build_side_hits(
         tooltip: None,
     });
     y += spec.side_colors_height(snapshot) + section_gap;
+
+    // Preset slots
+    let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
+    let slot_count = snapshot
+        .preset_slot_count
+        .min(snapshot.presets.len());
+    if slot_count > 0 {
+        let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
+        let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
+        let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
+        let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
+        let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
+        let action_w = (slot_size - action_gap) / 2.0;
+        for slot_index in 0..slot_count {
+            let slot = slot_index + 1;
+            let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
+            let preset_exists = snapshot
+                .presets
+                .get(slot_index)
+                .and_then(|preset| preset.as_ref())
+                .is_some();
+            if preset_exists {
+                hits.push(HitRegion {
+                    rect: (slot_x, slot_row_y, slot_size, slot_size),
+                    event: ToolbarEvent::ApplyPreset(slot),
+                    kind: HitKind::Click,
+                    tooltip: Some(format!("Apply preset {}", slot)),
+                });
+            }
+            hits.push(HitRegion {
+                rect: (slot_x, action_row_y, action_w, ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT),
+                event: ToolbarEvent::SavePreset(slot),
+                kind: HitKind::Click,
+                tooltip: Some(format!("Save preset {}", slot)),
+            });
+            if preset_exists {
+                hits.push(HitRegion {
+                    rect: (
+                        slot_x + action_w + action_gap,
+                        action_row_y,
+                        action_w,
+                        ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT,
+                    ),
+                    event: ToolbarEvent::ClearPreset(slot),
+                    kind: HitKind::Click,
+                    tooltip: Some(format!("Clear preset {}", slot)),
+                });
+            }
+        }
+        y += presets_card_h + section_gap;
+    }
 
     // Thickness slider
     let slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
