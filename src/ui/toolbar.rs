@@ -145,6 +145,8 @@ pub struct ToolbarSnapshot {
     pub preset_slot_count: usize,
     /// Preset slot previews
     pub presets: Vec<Option<PresetSlotSnapshot>>,
+    /// Currently active preset slot
+    pub active_preset_slot: Option<usize>,
     /// Transient preset feedback animations
     pub preset_feedback: Vec<Option<PresetFeedbackSnapshot>>,
     /// Binding hints for tooltips
@@ -246,6 +248,7 @@ impl ToolbarSnapshot {
             show_preset_toasts: state.show_preset_toasts,
             preset_slot_count: state.preset_slot_count,
             presets,
+            active_preset_slot: state.active_preset_slot,
             preset_feedback,
             binding_hints,
         }

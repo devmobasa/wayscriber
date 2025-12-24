@@ -16,6 +16,7 @@ impl InputState {
         }
 
         self.tool_override = tool;
+        self.active_preset_slot = None;
 
         // Ensure we are not mid-drawing with a stale tool
         if !matches!(
@@ -42,6 +43,7 @@ impl InputState {
         if self.presets.len() < PRESET_SLOTS_MAX {
             self.presets.resize_with(PRESET_SLOTS_MAX, || None);
         }
+        self.active_preset_slot = None;
     }
 
     pub fn apply_preset(&mut self, slot: usize) -> bool {
@@ -130,6 +132,7 @@ impl InputState {
             }
         }
 
+        self.active_preset_slot = Some(slot);
         self.set_preset_feedback(slot, PresetFeedbackKind::Apply);
         true
     }
@@ -173,6 +176,9 @@ impl InputState {
         }
         if had_preset {
             self.set_preset_feedback(slot, PresetFeedbackKind::Clear);
+        }
+        if self.active_preset_slot == Some(slot) {
+            self.active_preset_slot = None;
         }
         self.pending_preset_action = Some(super::base::PresetAction::Clear { slot });
         self.dirty_tracker.mark_full();
@@ -295,6 +301,7 @@ impl InputState {
         }
 
         self.current_color = color;
+        self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.sync_highlight_color();
@@ -309,6 +316,7 @@ impl InputState {
         }
 
         self.current_thickness = clamped;
+        self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
@@ -321,6 +329,7 @@ impl InputState {
             return false;
         }
         self.eraser_size = clamped;
+        self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true

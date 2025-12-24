@@ -234,6 +234,8 @@ pub struct InputState {
     pub preset_slot_count: usize,
     /// Preset slots for quick tool switching
     pub presets: Vec<Option<ToolPresetConfig>>,
+    /// Last applied preset slot (for UI highlight)
+    pub active_preset_slot: Option<usize>,
     /// Transient preset feedback for toolbar animations
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Pending preset save/clear action for backend persistence
@@ -374,6 +376,7 @@ impl InputState {
             show_actions_section: true, // Show by default
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],
+            active_preset_slot: None,
             preset_feedback: vec![None; PRESET_SLOTS_MAX],
             pending_preset_action: None,
         };

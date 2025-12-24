@@ -744,6 +744,19 @@ pub fn render_side_palette(
                 let _ = ctx.fill();
             }
         }
+        if preset_exists && snapshot.active_preset_slot == Some(slot) {
+            ctx.set_source_rgba(ORANGE.r, ORANGE.g, ORANGE.b, 0.95);
+            ctx.set_line_width(2.0);
+            draw_round_rect(
+                ctx,
+                slot_x + 1.0,
+                slot_row_y + 1.0,
+                slot_size - 2.0,
+                slot_size - 2.0,
+                7.0,
+            );
+            let _ = ctx.stroke();
+        }
 
         let save_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, slot_x, action_row_y, action_w, action_h))
