@@ -39,6 +39,7 @@ impl WaylandState {
                 | ToolbarEvent::ToggleIconMode(_)
                 | ToolbarEvent::ToggleMoreColors(_)
                 | ToolbarEvent::ToggleActionsSection(_)
+                | ToolbarEvent::TogglePresetToasts(_)
                 | ToolbarEvent::ToggleDelaySliders(_)
                 | ToolbarEvent::ToggleCustomSection(_)
         );
@@ -116,6 +117,7 @@ impl WaylandState {
         self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
         self.config.ui.toolbar.show_marker_opacity_section =
             self.input_state.show_marker_opacity_section;
+        self.config.ui.toolbar.show_preset_toasts = self.input_state.show_preset_toasts;
         self.config.ui.toolbar.top_offset = self.data.toolbar_top_offset;
         self.config.ui.toolbar.top_offset_y = self.data.toolbar_top_offset_y;
         self.config.ui.toolbar.side_offset = self.data.toolbar_side_offset;

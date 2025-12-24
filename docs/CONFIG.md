@@ -240,6 +240,9 @@ show_delay_sliders = false
 
 # Show the marker opacity slider at the bottom of the side toolbar even when the marker tool isn't selected
 show_marker_opacity_section = false
+
+# Show preset action toast notifications on apply/save/clear
+show_preset_toasts = true
 ```
 
 **Behavior:**
@@ -248,6 +251,7 @@ show_marker_opacity_section = false
 - **Actions**: `show_actions_section` hides/shows the undo/redo action buttons.
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
+- **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 
 **Defaults:** all set as above.

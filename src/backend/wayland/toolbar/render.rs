@@ -1140,6 +1140,7 @@ pub fn render_side_palette(
     y += font_card_h + section_gap;
 
     let actions_checkbox_h = ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT;
+    let actions_toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let actions_content_h = if snapshot.show_actions_section {
         if use_icons {
             let icon_btn_size = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
@@ -1155,8 +1156,9 @@ pub fn render_side_palette(
     } else {
         0.0
     };
+    let actions_toggle_h = actions_checkbox_h * 2.0 + actions_toggle_gap;
     let actions_card_h =
-        ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT + actions_checkbox_h + actions_content_h;
+        ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT + actions_toggle_h + actions_content_h;
 
     draw_group_card(ctx, card_x, y, card_w, actions_card_h);
     draw_section_label(
@@ -1197,9 +1199,39 @@ pub fn render_side_palette(
         tooltip: None,
     });
 
+    let toast_toggle_y = actions_toggle_y + actions_checkbox_h + actions_toggle_gap;
+    let toast_toggle_hover = hover
+        .map(|(hx, hy)| {
+            point_in_rect(
+                hx,
+                hy,
+                x,
+                toast_toggle_y,
+                actions_toggle_w,
+                actions_checkbox_h,
+            )
+        })
+        .unwrap_or(false);
+    draw_checkbox(
+        ctx,
+        x,
+        toast_toggle_y,
+        actions_toggle_w,
+        actions_checkbox_h,
+        snapshot.show_preset_toasts,
+        toast_toggle_hover,
+        "Preset toasts",
+    );
+    hits.push(HitRegion {
+        rect: (x, toast_toggle_y, actions_toggle_w, actions_checkbox_h),
+        event: ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+
     if snapshot.show_actions_section {
         let actions_start_y =
-            actions_toggle_y + actions_checkbox_h + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+            actions_toggle_y + actions_toggle_h + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
 
         type IconFn = fn(&cairo::Context, f64, f64, f64);
         let lock_label = if snapshot.zoom_locked {

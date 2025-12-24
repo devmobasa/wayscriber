@@ -361,6 +361,8 @@ impl WaylandState {
                     );
                 }
 
+                crate::ui::render_preset_toast(&ctx, &self.input_state, width, height);
+
                 if !self.zoom.active {
                     crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
 

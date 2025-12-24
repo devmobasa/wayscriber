@@ -115,8 +115,10 @@ impl ToolbarLayoutSpec {
     pub(super) fn side_size(&self, snapshot: &ToolbarSnapshot) -> (u32, u32) {
         let base_height = self.side_content_start_y();
         let colors_h = self.side_colors_height(snapshot);
+        let actions_toggle_h =
+            Self::SIDE_ACTIONS_CHECKBOX_HEIGHT * 2.0 + Self::SIDE_TOGGLE_GAP;
         let actions_h = Self::SIDE_ACTIONS_HEADER_HEIGHT
-            + Self::SIDE_ACTIONS_CHECKBOX_HEIGHT
+            + actions_toggle_h
             + self.side_actions_content_height(snapshot);
         let step_h = self.side_step_height(snapshot);
 
@@ -619,13 +621,42 @@ pub fn build_side_hits(
     y += ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT + section_gap;
 
     // Actions section
+    let actions_toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
+    let actions_toggle_h =
+        ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT * 2.0 + actions_toggle_gap;
     let actions_card_h = ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT
-        + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT
+        + actions_toggle_h
         + spec.side_actions_content_height(snapshot);
+    let actions_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+    let actions_toggle_w = content_width;
+    hits.push(HitRegion {
+        rect: (
+            x,
+            actions_toggle_y,
+            actions_toggle_w,
+            ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT,
+        ),
+        event: ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+    let toast_toggle_y =
+        actions_toggle_y + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT + actions_toggle_gap;
+    hits.push(HitRegion {
+        rect: (
+            x,
+            toast_toggle_y,
+            actions_toggle_w,
+            ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT,
+        ),
+        event: ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
     if snapshot.show_actions_section {
         let mut action_y = y
             + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y
-            + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT
+            + actions_toggle_h
             + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
         let actions: &[(ToolbarEvent, bool)] = &[
             (ToolbarEvent::Undo, true),

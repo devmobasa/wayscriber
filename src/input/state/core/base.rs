@@ -3,6 +3,7 @@
 pub const MIN_STROKE_THICKNESS: f64 = 1.0;
 pub const MAX_STROKE_THICKNESS: f64 = 50.0;
 pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
+pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 
 use super::{
     index::SpatialGrid,
@@ -201,6 +202,8 @@ pub struct InputState {
     pub show_delay_sliders: bool,
     /// Whether to show the marker opacity slider in the side toolbar
     pub show_marker_opacity_section: bool,
+    /// Whether to show preset action toast notifications
+    pub show_preset_toasts: bool,
     /// Pending delayed history playback state
     pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
@@ -355,6 +358,7 @@ impl InputState {
             custom_section_enabled,
             show_delay_sliders: false, // Default to hidden
             show_marker_opacity_section: false,
+            show_preset_toasts: true,
             pending_history: None,
             context_menu_layout: None,
             spatial_index: None,

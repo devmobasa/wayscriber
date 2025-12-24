@@ -1,6 +1,7 @@
 use super::base::{
     DrawingState, InputState, PresetFeedbackKind, PresetFeedbackState,
-    PRESET_FEEDBACK_DURATION_MS, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+    PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, MAX_STROKE_THICKNESS,
+    MIN_STROKE_THICKNESS,
 };
 use crate::config::{Action, PresetSlotsConfig, ToolPresetConfig, PRESET_SLOTS_MAX};
 use crate::draw::{Color, FontDescriptor};
@@ -180,7 +181,12 @@ impl InputState {
     }
 
     pub fn advance_preset_feedback(&mut self, now: Instant) -> bool {
-        let duration = Duration::from_millis(PRESET_FEEDBACK_DURATION_MS);
+        let duration_ms = if self.show_preset_toasts {
+            PRESET_TOAST_DURATION_MS
+        } else {
+            PRESET_FEEDBACK_DURATION_MS
+        };
+        let duration = Duration::from_millis(duration_ms);
         let mut active = false;
         for slot in &mut self.preset_feedback {
             let expired = slot
@@ -424,6 +430,7 @@ impl InputState {
         show_actions_section: bool,
         show_delay_sliders: bool,
         show_marker_opacity_section: bool,
+        show_preset_toasts: bool,
     ) {
         self.toolbar_top_pinned = top_pinned;
         self.toolbar_side_pinned = side_pinned;
@@ -435,6 +442,7 @@ impl InputState {
         self.show_actions_section = show_actions_section;
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
+        self.show_preset_toasts = show_preset_toasts;
     }
 
     /// Wrapper for undo that preserves existing action plumbing.

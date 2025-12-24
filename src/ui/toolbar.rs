@@ -63,6 +63,8 @@ pub enum ToolbarEvent {
     ToggleMoreColors(bool),
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
+    /// Toggle preset action toast notifications
+    TogglePresetToasts(bool),
     /// Drag handle for top toolbar (carries pointer position in toolbar coords)
     MoveTopToolbar {
         x: f64,
@@ -137,6 +139,8 @@ pub struct ToolbarSnapshot {
     pub show_actions_section: bool,
     /// Whether to show the marker opacity slider section
     pub show_marker_opacity_section: bool,
+    /// Whether to show preset action toasts
+    pub show_preset_toasts: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slot previews
@@ -239,6 +243,7 @@ impl ToolbarSnapshot {
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
+            show_preset_toasts: state.show_preset_toasts,
             preset_slot_count: state.preset_slot_count,
             presets,
             preset_feedback,
@@ -513,6 +518,14 @@ impl InputState {
             ToolbarEvent::ToggleActionsSection(show) => {
                 if self.show_actions_section != show {
                     self.show_actions_section = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::TogglePresetToasts(show) => {
+                if self.show_preset_toasts != show {
+                    self.show_preset_toasts = show;
                     true
                 } else {
                     false
