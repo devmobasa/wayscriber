@@ -269,6 +269,81 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn validate_and_clamp_clamps_ui_and_session_fields() {
+        let mut config = Config::default();
+        config.drawing.marker_opacity = 2.0;
+        config.drawing.hit_test_tolerance = 0.5;
+        config.drawing.hit_test_linear_threshold = 0;
+        config.drawing.undo_stack_limit = 5;
+        config.ui.click_highlight.radius = 5.0;
+        config.ui.click_highlight.outline_thickness = 50.0;
+        config.ui.click_highlight.duration_ms = 10;
+        config.ui.click_highlight.fill_color = [2.0, -1.0, 0.5, 0.5];
+        config.ui.click_highlight.outline_color = [-0.2, 2.0, 0.5, 1.2];
+        config.session.max_shapes_per_frame = 0;
+        config.session.max_file_size_mb = 2048;
+        config.session.auto_compress_threshold_kb = 0;
+        config.session.storage = SessionStorageMode::Custom;
+        config.session.custom_directory = Some("  ".to_string());
+        config.keybindings.exit = vec!["Ctrl+Shift".to_string()];
+
+        config.validate_and_clamp();
+
+        assert_eq!(config.drawing.marker_opacity, 0.9);
+        assert_eq!(config.drawing.hit_test_tolerance, 1.0);
+        assert_eq!(config.drawing.hit_test_linear_threshold, 400);
+        assert_eq!(config.drawing.undo_stack_limit, 10);
+        assert_eq!(config.ui.click_highlight.radius, 16.0);
+        assert_eq!(config.ui.click_highlight.outline_thickness, 12.0);
+        assert_eq!(config.ui.click_highlight.duration_ms, 150);
+        assert!(
+            config
+                .ui
+                .click_highlight
+                .fill_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert!(
+            config
+                .ui
+                .click_highlight
+                .outline_color
+                .iter()
+                .all(|c| (0.0..=1.0).contains(c))
+        );
+        assert_eq!(config.session.max_shapes_per_frame, 1);
+        assert_eq!(config.session.max_file_size_mb, 1024);
+        assert_eq!(config.session.auto_compress_threshold_kb, 1);
+        assert!(matches!(config.session.storage, SessionStorageMode::Auto));
+        assert!(config.session.custom_directory.is_none());
+        assert_eq!(config.keybindings.exit, KeybindingsConfig::default().exit);
+    }
+
+    #[test]
+    fn json_schema_includes_expected_sections() {
+        let schema = Config::json_schema();
+        let properties = schema
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .expect("schema should contain properties object");
+
+        for key in [
+            "drawing",
+            "history",
+            "arrow",
+            "performance",
+            "ui",
+            "board",
+            "keybindings",
+            "capture",
+            "session",
+        ] {
+            assert!(properties.contains_key(key), "missing schema field {key}");
+        }
+    }
 }
 
 pub(super) fn config_home_dir() -> Result<PathBuf> {
