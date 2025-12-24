@@ -459,4 +459,17 @@ mod tests {
         assert!(!inspection.persist_blackboard);
         assert!(inspection.persist_history);
     }
+
+    #[test]
+    fn extract_identity_parses_suffix_and_prefix() {
+        let identity =
+            extract_identity("session-display_1-DP_1.json", "session-display_1", ".json");
+        assert_eq!(identity.as_deref(), Some("DP_1"));
+    }
+
+    #[test]
+    fn extract_identity_rejects_missing_suffix_or_identity() {
+        assert!(extract_identity("session-display_1.json", "session-display_1", ".json").is_none());
+        assert!(extract_identity("other-display.json", "session-display_1", ".json").is_none());
+    }
 }
