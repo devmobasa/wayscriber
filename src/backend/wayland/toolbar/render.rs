@@ -8,6 +8,7 @@ use crate::draw::{BLACK, BLUE, Color, FontDescriptor, GREEN, ORANGE, PINK, RED, 
 use crate::input::{EraserMode, Tool};
 use crate::input::state::PresetFeedbackKind;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use crate::util::color_to_name;
 
 use super::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
 use super::hit::HitRegion;
@@ -613,6 +614,24 @@ pub fn render_side_palette(
     let icon_size = 14.0;
     let swatch_size = 10.0;
     let number_box = 12.0;
+    let tool_label = |tool: Tool| match tool {
+        Tool::Select => "Select",
+        Tool::Pen => "Pen",
+        Tool::Line => "Line",
+        Tool::Rect => "Rect",
+        Tool::Ellipse => "Circle",
+        Tool::Arrow => "Arrow",
+        Tool::Marker => "Marker",
+        Tool::Highlight => "Highlight",
+        Tool::Eraser => "Eraser",
+    };
+    let size_label = |size: f64| {
+        if (size - size.round()).abs() < 0.05 {
+            format!("{:.0}px", size)
+        } else {
+            format!("{:.1}px", size)
+        }
+    };
     for slot_index in 0..slot_count {
         let slot = slot_index + 1;
         let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
@@ -628,11 +647,25 @@ pub fn render_side_palette(
         draw_button(ctx, slot_x, slot_row_y, slot_size, slot_size, false, slot_hover);
 
         if let Some(preset) = preset {
+            let summary = format!(
+                "{}, {}, {}",
+                tool_label(preset.tool),
+                color_to_name(&preset.color),
+                size_label(preset.size)
+            );
+            let label = if let Some(name) = preset.name.as_deref() {
+                format!("Apply preset {}: {} ({})", slot, name, summary)
+            } else {
+                format!("Apply preset {} ({})", slot, summary)
+            };
             hits.push(HitRegion {
                 rect: (slot_x, slot_row_y, slot_size, slot_size),
                 event: ToolbarEvent::ApplyPreset(slot),
                 kind: HitKind::Click,
-                tooltip: Some(format!("Apply preset {}", slot)),
+                tooltip: Some(format_binding_label(
+                    &label,
+                    snapshot.binding_hints.apply_preset(slot),
+                )),
             });
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
             draw_label_center(
@@ -714,7 +747,10 @@ pub fn render_side_palette(
             rect: (slot_x, action_row_y, action_w, action_h),
             event: ToolbarEvent::SavePreset(slot),
             kind: HitKind::Click,
-            tooltip: Some(format!("Save preset {}", slot)),
+            tooltip: Some(format_binding_label(
+                &format!("Save preset {}", slot),
+                snapshot.binding_hints.save_preset(slot),
+            )),
         });
 
         let clear_x = slot_x + action_w + action_gap;
@@ -734,7 +770,10 @@ pub fn render_side_palette(
                 rect: (clear_x, action_row_y, action_w, action_h),
                 event: ToolbarEvent::ClearPreset(slot),
                 kind: HitKind::Click,
-                tooltip: Some(format!("Clear preset {}", slot)),
+                tooltip: Some(format_binding_label(
+                    &format!("Clear preset {}", slot),
+                    snapshot.binding_hints.clear_preset(slot),
+                )),
             });
         }
     }

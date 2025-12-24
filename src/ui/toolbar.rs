@@ -1,4 +1,4 @@
-use crate::config::KeybindingsConfig;
+use crate::config::{KeybindingsConfig, PRESET_SLOTS_MAX};
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::{EraserMode, InputState, Tool};
 use crate::input::state::{PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS};
@@ -267,6 +267,9 @@ pub struct ToolbarBindingHints {
     pub clear: Option<String>,
     pub fill: Option<String>,
     pub toggle_highlight: Option<String>,
+    pub apply_presets: Vec<Option<String>>,
+    pub save_presets: Vec<Option<String>>,
+    pub clear_presets: Vec<Option<String>>,
 }
 
 impl ToolbarBindingHints {
@@ -286,6 +289,34 @@ impl ToolbarBindingHints {
 
     pub fn from_keybindings(kb: &KeybindingsConfig) -> Self {
         let first = |v: &Vec<String>| v.first().cloned();
+        let mut apply_presets = vec![None; PRESET_SLOTS_MAX];
+        let mut save_presets = vec![None; PRESET_SLOTS_MAX];
+        let mut clear_presets = vec![None; PRESET_SLOTS_MAX];
+        if PRESET_SLOTS_MAX >= 1 {
+            apply_presets[0] = first(&kb.apply_preset_1);
+            save_presets[0] = first(&kb.save_preset_1);
+            clear_presets[0] = first(&kb.clear_preset_1);
+        }
+        if PRESET_SLOTS_MAX >= 2 {
+            apply_presets[1] = first(&kb.apply_preset_2);
+            save_presets[1] = first(&kb.save_preset_2);
+            clear_presets[1] = first(&kb.clear_preset_2);
+        }
+        if PRESET_SLOTS_MAX >= 3 {
+            apply_presets[2] = first(&kb.apply_preset_3);
+            save_presets[2] = first(&kb.save_preset_3);
+            clear_presets[2] = first(&kb.clear_preset_3);
+        }
+        if PRESET_SLOTS_MAX >= 4 {
+            apply_presets[3] = first(&kb.apply_preset_4);
+            save_presets[3] = first(&kb.save_preset_4);
+            clear_presets[3] = first(&kb.clear_preset_4);
+        }
+        if PRESET_SLOTS_MAX >= 5 {
+            apply_presets[4] = first(&kb.apply_preset_5);
+            save_presets[4] = first(&kb.save_preset_5);
+            clear_presets[4] = first(&kb.clear_preset_5);
+        }
         Self {
             pen: first(&kb.select_pen_tool),
             line: first(&kb.select_line_tool),
@@ -300,7 +331,29 @@ impl ToolbarBindingHints {
             clear: first(&kb.clear_canvas),
             fill: first(&kb.toggle_fill),
             toggle_highlight: first(&kb.toggle_highlight_tool),
+            apply_presets,
+            save_presets,
+            clear_presets,
         }
+    }
+
+    fn preset_binding<'a>(slots: &'a [Option<String>], slot: usize) -> Option<&'a str> {
+        if slot == 0 {
+            return None;
+        }
+        slots.get(slot - 1).and_then(|binding| binding.as_deref())
+    }
+
+    pub fn apply_preset(&self, slot: usize) -> Option<&str> {
+        Self::preset_binding(&self.apply_presets, slot)
+    }
+
+    pub fn save_preset(&self, slot: usize) -> Option<&str> {
+        Self::preset_binding(&self.save_presets, slot)
+    }
+
+    pub fn clear_preset(&self, slot: usize) -> Option<&str> {
+        Self::preset_binding(&self.clear_presets, slot)
     }
 }
 
