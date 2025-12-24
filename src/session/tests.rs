@@ -2,7 +2,7 @@ use super::*;
 use crate::config::{Action, BoardConfig, SessionConfig, SessionStorageMode};
 use crate::draw::FontDescriptor;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
-use crate::draw::{Color, Shape};
+use crate::draw::{Color, Frame, Shape};
 use crate::input::{ClickHighlightSettings, EraserMode, InputState, Tool, board_mode::BoardMode};
 use std::collections::HashMap;
 use std::fs;
@@ -619,6 +619,71 @@ fn save_snapshot_skips_when_payload_exceeds_max_file_size() {
         !session_path.exists(),
         "session file should not be created when payload exceeds max_file_size_bytes"
     );
+}
+
+#[test]
+fn save_snapshot_rotates_backup_when_enabled() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-backup");
+    options.persist_transparent = true;
+    options.backup_retention = 1;
+
+    let session_path = options.session_file_path();
+    fs::write(&session_path, b"old-session").expect("write old session");
+
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 10,
+        y2: 10,
+        color: Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 2.0,
+    });
+
+    let snapshot = SessionSnapshot {
+        active_mode: BoardMode::Transparent,
+        transparent: Some(frame),
+        whiteboard: None,
+        blackboard: None,
+        tool_state: None,
+    };
+
+    save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+
+    let backup_path = options.backup_file_path();
+    let backup = fs::read(&backup_path).expect("backup file present");
+    assert_eq!(backup, b"old-session");
+    let current = fs::read(&session_path).expect("session file present");
+    assert_ne!(current, b"old-session");
+}
+
+#[test]
+fn save_snapshot_skips_backup_when_disabled() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-no-backup");
+    options.persist_transparent = true;
+    options.backup_retention = 0;
+
+    let session_path = options.session_file_path();
+    fs::write(&session_path, b"old-session").expect("write old session");
+
+    let snapshot = SessionSnapshot {
+        active_mode: BoardMode::Transparent,
+        transparent: Some(Frame::new()),
+        whiteboard: None,
+        blackboard: None,
+        tool_state: None,
+    };
+
+    save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+    assert!(!options.backup_file_path().exists());
+    assert!(session_path.exists());
 }
 
 #[test]
