@@ -169,4 +169,38 @@ mod tests {
             "read_image_from_uri should delete the portal temp file"
         );
     }
+
+    #[test]
+    fn decode_file_uri_rejects_non_file_schemes() {
+        let err = decode_file_uri("http://example.com/file.png").expect_err("expected error");
+        match err {
+            CaptureError::InvalidResponse(msg) => {
+                assert!(msg.contains("Invalid file URI"));
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decode_file_uri_rejects_unsupported_hosts() {
+        let err = decode_file_uri("file://example.com/path.png").expect_err("expected error");
+        match err {
+            CaptureError::InvalidResponse(msg) => {
+                assert!(msg.contains("Unsupported file URI host"));
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn percent_decode_rejects_truncated_escape() {
+        let err = percent_decode("%").expect_err("expected error");
+        assert_eq!(err, "truncated percent escape");
+    }
+
+    #[test]
+    fn percent_decode_rejects_invalid_hex() {
+        let err = percent_decode("%ZZ").expect_err("expected error");
+        assert_eq!(err, "invalid hex digit");
+    }
 }
