@@ -148,4 +148,14 @@ mod tests {
                 .contains("Wayscriber")
         );
     }
+
+    #[test]
+    fn ensure_directory_exists_creates_missing_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("nested").join("shots");
+
+        let resolved = ensure_directory_exists(&target).expect("ensure_directory_exists");
+        assert!(target.exists());
+        assert_eq!(resolved, target.canonicalize().unwrap());
+    }
 }
