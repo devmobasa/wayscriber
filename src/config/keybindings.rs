@@ -1177,4 +1177,34 @@ mod tests {
         let err_msg = result.unwrap_err();
         assert!(err_msg.contains("Duplicate keybinding"));
     }
+
+    #[test]
+    fn test_parse_rejects_empty_and_modifiers_only() {
+        let err = KeyBinding::parse("   ").expect_err("expected empty error");
+        assert!(err.contains("Empty keybinding"));
+
+        let err = KeyBinding::parse("Ctrl+Shift").expect_err("expected missing key error");
+        assert!(err.contains("No key specified"));
+    }
+
+    #[test]
+    fn test_parse_plus_key_with_modifiers() {
+        let binding = KeyBinding::parse("Ctrl+Alt++").unwrap();
+        assert_eq!(binding.key, "+");
+        assert!(binding.ctrl);
+        assert!(binding.alt);
+    }
+
+    #[test]
+    fn test_build_action_map_reports_invalid_binding() {
+        let config = KeybindingsConfig {
+            exit: vec!["Ctrl+Shift".to_string()],
+            ..Default::default()
+        };
+
+        let err = config
+            .build_action_map()
+            .expect_err("expected invalid binding");
+        assert!(err.contains("No key specified"));
+    }
 }

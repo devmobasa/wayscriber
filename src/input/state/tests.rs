@@ -209,6 +209,60 @@ fn duplicate_selection_via_action_creates_offset_shape() {
 }
 
 #[test]
+fn duplicate_selection_skips_locked_shapes() {
+    let mut state = create_test_input_state();
+    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 20,
+        y: 20,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![unlocked_id, locked_id]);
+    state.handle_action(Action::DuplicateSelection);
+
+    let frame = state.canvas_set.active_frame();
+    assert_eq!(frame.shapes.len(), 3, "only one duplicate should be added");
+    assert!(
+        frame.shape(locked_id).unwrap().locked,
+        "locked shape should remain locked"
+    );
+}
+
+#[test]
+fn delete_shapes_by_ids_ignores_missing_ids() {
+    let mut state = create_test_input_state();
+    state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 5,
+        y2: 5,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    let removed = state.delete_shapes_by_ids(&[9999]);
+    assert!(!removed);
+    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+}
+
+#[test]
 fn clear_all_removes_shapes_even_when_marked_frozen() {
     let mut state = create_test_input_state();
     state.canvas_set.active_frame_mut().add_shape(Shape::Line {

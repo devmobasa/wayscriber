@@ -187,6 +187,125 @@ mod tests {
     }
 
     #[test]
+    fn data_dir_prefers_xdg_data_home_when_set() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let prev_home = env::var_os("HOME");
+        let prev_userprofile = env::var_os("USERPROFILE");
+        let prev_xdg = env::var_os("XDG_DATA_HOME");
+
+        unsafe {
+            env::set_var("XDG_DATA_HOME", tmp.path());
+            env::remove_var("HOME");
+            env::remove_var("USERPROFILE");
+        }
+
+        let dir = data_dir().expect("data_dir should resolve from XDG_DATA_HOME");
+        assert_eq!(dir, tmp.path());
+
+        match prev_xdg {
+            Some(v) => unsafe { env::set_var("XDG_DATA_HOME", v) },
+            None => unsafe { env::remove_var("XDG_DATA_HOME") },
+        }
+        match prev_home {
+            Some(v) => unsafe { env::set_var("HOME", v) },
+            None => unsafe { env::remove_var("HOME") },
+        }
+        match prev_userprofile {
+            Some(v) => unsafe { env::set_var("USERPROFILE", v) },
+            None => unsafe { env::remove_var("USERPROFILE") },
+        }
+    }
+
+    #[test]
+    fn pictures_dir_prefers_xdg_pictures_dir_when_set() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let prev_home = env::var_os("HOME");
+        let prev_userprofile = env::var_os("USERPROFILE");
+        let prev_xdg = env::var_os("XDG_PICTURES_DIR");
+
+        unsafe {
+            env::set_var("XDG_PICTURES_DIR", tmp.path());
+            env::remove_var("HOME");
+            env::remove_var("USERPROFILE");
+        }
+
+        let dir = pictures_dir().expect("pictures_dir should resolve from XDG_PICTURES_DIR");
+        assert_eq!(dir, tmp.path());
+
+        match prev_xdg {
+            Some(v) => unsafe { env::set_var("XDG_PICTURES_DIR", v) },
+            None => unsafe { env::remove_var("XDG_PICTURES_DIR") },
+        }
+        match prev_home {
+            Some(v) => unsafe { env::set_var("HOME", v) },
+            None => unsafe { env::remove_var("HOME") },
+        }
+        match prev_userprofile {
+            Some(v) => unsafe { env::set_var("USERPROFILE", v) },
+            None => unsafe { env::remove_var("USERPROFILE") },
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn runtime_root_prefers_xdg_runtime_dir_when_set() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let prev_runtime = env::var_os("XDG_RUNTIME_DIR");
+
+        unsafe {
+            env::set_var("XDG_RUNTIME_DIR", tmp.path());
+        }
+
+        let dir = runtime_root();
+        assert_eq!(dir, tmp.path().join("wayscriber"));
+
+        match prev_runtime {
+            Some(v) => unsafe { env::set_var("XDG_RUNTIME_DIR", v) },
+            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+        }
+    }
+
+    #[test]
+    fn runtime_root_falls_back_to_data_dir() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let prev_data = env::var_os("XDG_DATA_HOME");
+        let prev_runtime = env::var_os("XDG_RUNTIME_DIR");
+
+        unsafe {
+            env::set_var("XDG_DATA_HOME", tmp.path());
+            env::remove_var("XDG_RUNTIME_DIR");
+        }
+
+        let dir = runtime_root();
+        assert_eq!(dir, tmp.path().join("wayscriber"));
+
+        match prev_data {
+            Some(v) => unsafe { env::set_var("XDG_DATA_HOME", v) },
+            None => unsafe { env::remove_var("XDG_DATA_HOME") },
+        }
+        match prev_runtime {
+            Some(v) => unsafe { env::set_var("XDG_RUNTIME_DIR", v) },
+            None => unsafe { env::remove_var("XDG_RUNTIME_DIR") },
+        }
+    }
+
+    #[test]
     fn expand_tilde_expands_home_prefix() {
         let _guard = ENV_MUTEX
             .lock()

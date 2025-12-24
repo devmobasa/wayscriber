@@ -468,7 +468,7 @@ fn ensure_positive_rect_f64(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::draw::{FontDescriptor, color::WHITE};
+    use crate::draw::{EraserBrush, EraserKind, FontDescriptor, color::WHITE};
     use crate::util;
 
     #[test]
@@ -570,5 +570,37 @@ mod tests {
         assert!(rect.height > 0);
         assert!(rect.x <= 10);
         assert!(rect.y <= 20);
+    }
+
+    #[test]
+    fn marker_bounding_box_uses_inflated_thickness() {
+        let shape = Shape::MarkerStroke {
+            points: vec![(0, 0), (10, 0)],
+            color: WHITE,
+            thick: 4.0,
+        };
+
+        let rect = shape.bounding_box().expect("marker should have bounds");
+        assert_eq!(rect.x, -3);
+        assert_eq!(rect.y, -3);
+        assert_eq!(rect.width, 16);
+        assert_eq!(rect.height, 6);
+    }
+
+    #[test]
+    fn eraser_bounding_box_tracks_diameter() {
+        let shape = Shape::EraserStroke {
+            points: vec![(5, 5), (5, 5)],
+            brush: EraserBrush {
+                size: 6.0,
+                kind: EraserKind::Circle,
+            },
+        };
+
+        let rect = shape.bounding_box().expect("eraser should have bounds");
+        assert_eq!(rect.x, 2);
+        assert_eq!(rect.y, 2);
+        assert_eq!(rect.width, 6);
+        assert_eq!(rect.height, 6);
     }
 }
