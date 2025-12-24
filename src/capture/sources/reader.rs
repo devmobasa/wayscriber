@@ -203,4 +203,12 @@ mod tests {
         let err = percent_decode("%ZZ").expect_err("expected error");
         assert_eq!(err, "invalid hex digit");
     }
+
+    #[test]
+    #[cfg(unix)]
+    fn decode_file_uri_accepts_localhost() {
+        let path = decode_file_uri("file://localhost/tmp/test.png")
+            .expect("decode_file_uri should accept localhost");
+        assert_eq!(path, PathBuf::from("/tmp/test.png"));
+    }
 }
