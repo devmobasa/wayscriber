@@ -14,3 +14,22 @@ pub fn format_float(value: f64) -> String {
             .to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_f64_rejects_non_numeric() {
+        let err = parse_f64("not-a-number").expect_err("expected parse error");
+        assert_eq!(err, "Expected a numeric value");
+    }
+
+    #[test]
+    fn format_float_trims_trailing_zeroes() {
+        assert_eq!(format_float(12.0), "12");
+        assert_eq!(format_float(12.340), "12.34");
+        assert_eq!(format_float(12.300), "12.3");
+        assert_eq!(format_float(12.3456), "12.346");
+    }
+}

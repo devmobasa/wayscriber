@@ -567,3 +567,64 @@ where
         Err(err) => errors.push(FormError::new(field, err.to_string())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{ColorMode, NamedColorOption};
+    use wayscriber::config::Config;
+
+    #[test]
+    fn config_draft_to_config_reports_errors() {
+        let mut draft = ConfigDraft::from_config(&Config::default());
+        draft.drawing_default_thickness = "nope".to_string();
+        draft.click_highlight_duration_ms = "nan".to_string();
+        draft.drawing_color = ColorInput {
+            mode: ColorMode::Named,
+            name: " ".to_string(),
+            rgb: ["0".to_string(), "0".to_string(), "0".to_string()],
+            selected_named: NamedColorOption::Custom,
+        };
+
+        let errors = draft.to_config().expect_err("expected validation errors");
+        let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+        assert!(fields.contains(&"drawing.default_thickness"));
+        assert!(fields.contains(&"ui.click_highlight.duration_ms"));
+        assert!(fields.contains(&"drawing.default_color"));
+    }
+
+    #[test]
+    fn config_draft_to_config_trims_custom_directory() {
+        let mut draft = ConfigDraft::from_config(&Config::default());
+        draft.session_storage_mode = SessionStorageModeOption::Custom;
+        draft.session_custom_directory = "   ".to_string();
+
+        let config = draft.to_config().expect("to_config should succeed");
+        assert!(config.session.custom_directory.is_none());
+    }
+
+    #[test]
+    fn setters_update_draft_state() {
+        let mut draft = ConfigDraft::from_config(&Config::default());
+
+        draft.set_text(TextField::DrawingFontWeight, "weird".to_string());
+        assert_eq!(draft.drawing_font_weight, "weird");
+        assert_eq!(draft.drawing_font_weight_option, FontWeightOption::Custom);
+
+        draft.set_text(TextField::DrawingColorName, "green".to_string());
+        assert_eq!(draft.drawing_color.name, "green");
+        assert_eq!(draft.drawing_color.selected_named, NamedColorOption::Green);
+
+        draft.set_triplet(TripletField::BoardWhiteboard, 1, "0.5".to_string());
+        assert_eq!(draft.board_whiteboard_color.components[1], "0.5");
+
+        draft.set_quad(QuadField::StatusBarBg, 2, "0.75".to_string());
+        assert_eq!(draft.status_bar_bg_color.components[2], "0.75");
+
+        draft.set_toggle(ToggleField::BoardEnabled, true);
+        draft.set_toggle(ToggleField::ArrowHeadAtEnd, true);
+        assert!(draft.board_enabled);
+        assert!(draft.arrow_head_at_end);
+    }
+}
