@@ -309,7 +309,11 @@ impl InputState {
                     Tool::Eraser => {
                         if self.eraser_mode == EraserMode::Stroke {
                             self.clear_provisional_dirty();
-                            self.erase_strokes_by_points(&points);
+                            let mut path = points;
+                            if path.last().copied() != Some((x, y)) {
+                                path.push((x, y));
+                            }
+                            self.erase_strokes_by_points(&path);
                             return;
                         }
                         Shape::EraserStroke {
