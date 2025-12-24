@@ -673,9 +673,25 @@ fn save_snapshot_skips_backup_when_disabled() {
     let session_path = options.session_file_path();
     fs::write(&session_path, b"old-session").expect("write old session");
 
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 5,
+        h: 5,
+        fill: false,
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 1.0,
+    });
+
     let snapshot = SessionSnapshot {
         active_mode: BoardMode::Transparent,
-        transparent: Some(Frame::new()),
+        transparent: Some(frame),
         whiteboard: None,
         blackboard: None,
         tool_state: None,
