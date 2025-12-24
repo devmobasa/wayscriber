@@ -696,14 +696,27 @@ pub fn render_side_palette(
             let swatch_y = slot_row_y + slot_size - swatch_size - 4.0;
             draw_swatch(ctx, swatch_x, swatch_y, swatch_size, preset.color, false);
         } else {
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-            draw_label_center(
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+            ctx.set_line_width(1.0);
+            ctx.set_dash(&[3.0, 2.0], 0.0);
+            draw_round_rect(
+                ctx,
+                slot_x + 1.0,
+                slot_row_y + 1.0,
+                slot_size - 2.0,
+                slot_size - 2.0,
+                6.0,
+            );
+            let _ = ctx.stroke();
+            ctx.set_dash(&[], 0.0);
+            draw_label_center_color(
                 ctx,
                 slot_x + 2.0,
                 slot_row_y + 2.0,
                 number_box,
                 number_box,
                 &slot.to_string(),
+                (1.0, 1.0, 1.0, 0.6),
             );
         }
 
@@ -1950,6 +1963,24 @@ fn draw_label_center(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, text:
         let tx = x + (w - ext.width()) / 2.0 - ext.x_bearing();
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        ctx.move_to(tx, ty);
+        let _ = ctx.show_text(text);
+    }
+}
+
+fn draw_label_center_color(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    text: &str,
+    color: (f64, f64, f64, f64),
+) {
+    if let Ok(ext) = ctx.text_extents(text) {
+        let tx = x + (w - ext.width()) / 2.0 - ext.x_bearing();
+        let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
+        ctx.set_source_rgba(color.0, color.1, color.2, color.3);
         ctx.move_to(tx, ty);
         let _ = ctx.show_text(text);
     }
