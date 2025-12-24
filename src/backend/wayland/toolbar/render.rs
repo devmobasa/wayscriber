@@ -606,8 +606,8 @@ pub fn render_side_palette(
     let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
     let action_h = ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT;
     let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
-    let action_w = (slot_size - action_gap) / 2.0;
-    let action_icon = 12.0;
+    let action_w = slot_size;
+    let action_icon = 14.0;
     let slot_count = snapshot
         .preset_slot_count
         .min(snapshot.presets.len());
@@ -779,21 +779,22 @@ pub fn render_side_palette(
             )),
         });
 
-        let clear_x = slot_x + action_w + action_gap;
+        let clear_x = slot_x;
+        let clear_y = action_row_y + action_h + action_gap;
         let clear_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, clear_x, action_row_y, action_w, action_h))
+            .map(|(hx, hy)| point_in_rect(hx, hy, clear_x, clear_y, action_w, action_h))
             .unwrap_or(false)
             && preset_exists;
-        draw_button(ctx, clear_x, action_row_y, action_w, action_h, false, clear_hover);
+        draw_button(ctx, clear_x, clear_y, action_w, action_h, false, clear_hover);
         if preset_exists {
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
         } else {
             ctx.set_source_rgba(0.7, 0.7, 0.7, 0.6);
         }
-        draw_label_center(ctx, clear_x, action_row_y, action_w, action_h, "X");
+        draw_label_center(ctx, clear_x, clear_y, action_w, action_h, "X");
         if preset_exists {
             hits.push(HitRegion {
-                rect: (clear_x, action_row_y, action_w, action_h),
+                rect: (clear_x, clear_y, action_w, action_h),
                 event: ToolbarEvent::ClearPreset(slot),
                 kind: HitKind::Click,
                 tooltip: Some(format_binding_label(

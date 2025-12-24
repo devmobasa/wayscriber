@@ -89,13 +89,13 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_TOGGLE_GAP: f64 = 6.0;
     pub(super) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
     pub(super) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
-    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 76.0;
+    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 112.0;
     pub(super) const SIDE_PRESET_SLOT_SIZE: f64 = 30.0;
     pub(super) const SIDE_PRESET_SLOT_GAP: f64 = 6.0;
     pub(super) const SIDE_PRESET_ROW_OFFSET_Y: f64 = 24.0;
     pub(super) const SIDE_PRESET_ACTION_GAP: f64 = 6.0;
-    pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 16.0;
-    pub(super) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 2.0;
+    pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 4.0;
     pub(super) const SIDE_FOOTER_PADDING: f64 = 20.0;
 
     pub(super) fn new(snapshot: &ToolbarSnapshot) -> Self {
@@ -523,7 +523,7 @@ pub fn build_side_hits(
         let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
         let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
         let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
-        let action_w = (slot_size - action_gap) / 2.0;
+        let action_w = slot_size;
         for slot_index in 0..slot_count {
             let slot = slot_index + 1;
             let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
@@ -549,8 +549,8 @@ pub fn build_side_hits(
             if preset_exists {
                 hits.push(HitRegion {
                     rect: (
-                        slot_x + action_w + action_gap,
-                        action_row_y,
+                        slot_x,
+                        action_row_y + ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT + action_gap,
                         action_w,
                         ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT,
                     ),
