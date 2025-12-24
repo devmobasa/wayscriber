@@ -270,4 +270,24 @@ mod tests {
         let opts2 = options_from_config(&cfg, Path::new("/tmp"), Some("display")).unwrap();
         assert_eq!(opts2.max_persisted_undo_depth, Some(1_000));
     }
+
+    #[test]
+    fn effective_history_limit_respects_persist_history_flag() {
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+        options.persist_history = false;
+        options.max_persisted_undo_depth = Some(10);
+
+        let limit = options.effective_history_limit(50);
+        assert_eq!(limit, 0);
+    }
+
+    #[test]
+    fn effective_history_limit_clamps_to_runtime_limit() {
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+        options.persist_history = true;
+        options.max_persisted_undo_depth = Some(5);
+
+        let limit = options.effective_history_limit(3);
+        assert_eq!(limit, 3);
+    }
 }
