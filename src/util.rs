@@ -347,4 +347,19 @@ mod tests {
             "Custom"
         );
     }
+
+    #[test]
+    fn rect_contains_is_min_inclusive_max_exclusive() {
+        let rect = Rect::new(0, 0, 10, 10).unwrap();
+        assert!(rect.contains(0, 0));
+        assert!(rect.contains(9, 9));
+        assert!(!rect.contains(10, 10));
+        assert!(!rect.contains(-1, 0));
+    }
+
+    #[test]
+    fn rect_inflated_returns_none_when_degenerate() {
+        let rect = Rect::new(0, 0, 2, 2).unwrap();
+        assert!(rect.inflated(-2).is_none());
+    }
 }
