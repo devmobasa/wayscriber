@@ -290,4 +290,16 @@ mod tests {
         let limit = options.effective_history_limit(3);
         assert_eq!(limit, 3);
     }
+
+    #[test]
+    fn set_output_identity_reports_changes() {
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+        options.per_output = true;
+
+        assert!(options.set_output_identity(Some("DP-1")));
+        assert_eq!(options.output_identity.as_deref(), Some("DP_1"));
+        assert!(!options.set_output_identity(Some("DP-1")));
+        assert!(options.set_output_identity(None));
+        assert!(options.output_identity.is_none());
+    }
 }
