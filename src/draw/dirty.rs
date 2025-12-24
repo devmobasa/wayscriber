@@ -135,4 +135,27 @@ mod tests {
         assert_eq!(rects.len(), 1);
         assert_eq!(rects[0], Rect::new(0, 0, 200, 100).unwrap());
     }
+
+    #[test]
+    fn mark_rect_ignores_invalid_rectangles() {
+        let mut tracker = DirtyTracker::new();
+        tracker.mark_rect(Rect {
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 5,
+        });
+        let rects = tracker.take_regions(100, 100);
+        assert!(rects.is_empty());
+    }
+
+    #[test]
+    fn mark_optional_rect_only_adds_when_present() {
+        let mut tracker = DirtyTracker::new();
+        tracker.mark_optional_rect(None);
+        tracker.mark_optional_rect(Rect::new(1, 2, 3, 4));
+        let rects = tracker.take_regions(100, 100);
+        assert_eq!(rects.len(), 1);
+        assert_eq!(rects[0], Rect::new(1, 2, 3, 4).unwrap());
+    }
 }
