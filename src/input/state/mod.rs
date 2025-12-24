@@ -9,6 +9,7 @@ mod tests;
 #[allow(unused_imports)]
 pub use core::{
     ContextMenuEntry, ContextMenuKind, ContextMenuState, DrawingState, InputState, PresetAction,
-    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, SelectionState, ZoomAction,
+    PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+    SelectionState, ZoomAction,
 };
 pub use highlight::ClickHighlightSettings;

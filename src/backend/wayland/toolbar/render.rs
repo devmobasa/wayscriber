@@ -6,6 +6,7 @@ use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar_icons;
 use crate::draw::{BLACK, BLUE, Color, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::{EraserMode, Tool};
+use crate::input::state::PresetFeedbackKind;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use super::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
@@ -671,6 +672,31 @@ pub fn render_side_palette(
                 number_box,
                 &slot.to_string(),
             );
+        }
+
+        if let Some(feedback) = snapshot
+            .preset_feedback
+            .get(slot_index)
+            .and_then(|feedback| feedback.as_ref())
+        {
+            let fade = (1.0 - feedback.progress as f64).clamp(0.0, 1.0);
+            if fade > 0.0 {
+                let (r, g, b) = match feedback.kind {
+                    PresetFeedbackKind::Apply => (0.35, 0.55, 0.95),
+                    PresetFeedbackKind::Save => (0.25, 0.75, 0.4),
+                    PresetFeedbackKind::Clear => (0.9, 0.3, 0.3),
+                };
+                ctx.set_source_rgba(r, g, b, 0.35 * fade);
+                draw_round_rect(
+                    ctx,
+                    slot_x + 1.0,
+                    slot_row_y + 1.0,
+                    slot_size - 2.0,
+                    slot_size - 2.0,
+                    6.0,
+                );
+                let _ = ctx.fill();
+            }
         }
 
         let save_hover = hover

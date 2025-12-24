@@ -12,7 +12,8 @@ mod tool_controls;
 mod utility;
 
 pub use base::{
-    DrawingState, InputState, PresetAction, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, ZoomAction,
+    DrawingState, InputState, PresetAction, PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS,
+    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, ZoomAction,
 };
 #[allow(unused_imports)]
 pub use menus::{ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand};

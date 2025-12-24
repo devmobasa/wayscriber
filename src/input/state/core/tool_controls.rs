@@ -1,7 +1,11 @@
-use super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use super::base::{
+    DrawingState, InputState, PresetFeedbackKind, PresetFeedbackState,
+    PRESET_FEEDBACK_DURATION_MS, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+};
 use crate::config::{Action, PresetSlotsConfig, ToolPresetConfig, PRESET_SLOTS_MAX};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::tool::{EraserMode, Tool};
+use std::time::{Duration, Instant};
 
 impl InputState {
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
@@ -125,6 +129,7 @@ impl InputState {
             }
         }
 
+        self.set_preset_feedback(slot, PresetFeedbackKind::Apply);
         true
     }
 
@@ -145,6 +150,7 @@ impl InputState {
         if let Some(slot_ref) = self.presets.get_mut(index) {
             *slot_ref = Some(preset.clone());
         }
+        self.set_preset_feedback(slot, PresetFeedbackKind::Save);
         self.pending_preset_action = Some(super::base::PresetAction::Save { slot, preset });
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -164,10 +170,30 @@ impl InputState {
         if let Some(slot_ref) = self.presets.get_mut(index) {
             *slot_ref = None;
         }
+        if had_preset {
+            self.set_preset_feedback(slot, PresetFeedbackKind::Clear);
+        }
         self.pending_preset_action = Some(super::base::PresetAction::Clear { slot });
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         had_preset
+    }
+
+    pub fn advance_preset_feedback(&mut self, now: Instant) -> bool {
+        let duration = Duration::from_millis(PRESET_FEEDBACK_DURATION_MS);
+        let mut active = false;
+        for slot in &mut self.preset_feedback {
+            let expired = slot
+                .as_ref()
+                .map(|state| now.saturating_duration_since(state.started) >= duration)
+                .unwrap_or(false);
+            if expired {
+                *slot = None;
+            } else if slot.is_some() {
+                active = true;
+            }
+        }
+        active
     }
 
     fn preset_index(&self, slot: usize) -> Option<usize> {
@@ -178,6 +204,24 @@ impl InputState {
             return None;
         }
         Some(slot - 1)
+    }
+
+    fn set_preset_feedback(&mut self, slot: usize, kind: PresetFeedbackKind) {
+        let index = match self.preset_index(slot) {
+            Some(index) => index,
+            None => return,
+        };
+        if self.preset_feedback.len() < PRESET_SLOTS_MAX {
+            self.preset_feedback
+                .resize_with(PRESET_SLOTS_MAX, || None);
+        }
+        if let Some(slot_ref) = self.preset_feedback.get_mut(index) {
+            *slot_ref = Some(PresetFeedbackState {
+                kind,
+                started: Instant::now(),
+            });
+        }
+        self.needs_redraw = true;
     }
 
     fn capture_current_preset(&self) -> ToolPresetConfig {

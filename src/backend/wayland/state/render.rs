@@ -26,6 +26,7 @@ impl WaylandState {
         let phys_height = height.saturating_mul(scale as u32);
         let now = Instant::now();
         let highlight_active = self.input_state.advance_click_highlights(now);
+        let preset_feedback_active = self.input_state.advance_preset_feedback(now);
         let mut eraser_pattern: Option<cairo::SurfacePattern> = None;
         let mut eraser_bg_color: Option<Color> = None;
 
@@ -453,6 +454,6 @@ impl WaylandState {
             self.render_toolbars(&snapshot);
         }
 
-        Ok(highlight_active)
+        Ok(highlight_active || preset_feedback_active)
     }
 }

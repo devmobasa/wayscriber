@@ -1,6 +1,8 @@
 use crate::config::KeybindingsConfig;
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::{EraserMode, InputState, Tool};
+use crate::input::state::{PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS};
+use std::time::Instant;
 
 /// Events emitted by the floating toolbar UI.
 #[derive(Debug, Clone)]
@@ -82,6 +84,13 @@ pub struct PresetSlotSnapshot {
     pub size: f64,
 }
 
+/// Snapshot of an in-progress preset feedback animation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresetFeedbackSnapshot {
+    pub kind: PresetFeedbackKind,
+    pub progress: f32,
+}
+
 /// Snapshot of state mirrored to the toolbar UI.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolbarSnapshot {
@@ -132,6 +141,8 @@ pub struct ToolbarSnapshot {
     pub preset_slot_count: usize,
     /// Preset slot previews
     pub presets: Vec<Option<PresetSlotSnapshot>>,
+    /// Transient preset feedback animations
+    pub preset_feedback: Vec<Option<PresetFeedbackSnapshot>>,
     /// Binding hints for tooltips
     pub binding_hints: ToolbarBindingHints,
 }
@@ -168,6 +179,26 @@ impl ToolbarSnapshot {
                     tool: preset.tool,
                     color: preset.color.to_color(),
                     size: preset.size,
+                })
+            })
+            .collect();
+        let now = Instant::now();
+        let duration_secs = PRESET_FEEDBACK_DURATION_MS as f32 / 1000.0;
+        let preset_feedback = state
+            .preset_feedback
+            .iter()
+            .map(|entry| {
+                entry.as_ref().and_then(|feedback| {
+                    let elapsed = now.saturating_duration_since(feedback.started);
+                    let progress = (elapsed.as_secs_f32() / duration_secs).clamp(0.0, 1.0);
+                    if progress >= 1.0 {
+                        None
+                    } else {
+                        Some(PresetFeedbackSnapshot {
+                            kind: feedback.kind,
+                            progress,
+                        })
+                    }
                 })
             })
             .collect();
@@ -210,6 +241,7 @@ impl ToolbarSnapshot {
             show_marker_opacity_section: state.show_marker_opacity_section,
             preset_slot_count: state.preset_slot_count,
             presets,
+            preset_feedback,
             binding_hints,
         }
     }

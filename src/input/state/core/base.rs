@@ -2,6 +2,7 @@
 
 pub const MIN_STROKE_THICKNESS: f64 = 1.0;
 pub const MAX_STROKE_THICKNESS: f64 = 50.0;
+pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 
 use super::{
     index::SpatialGrid,
@@ -74,6 +75,19 @@ pub enum ZoomAction {
 pub enum PresetAction {
     Save { slot: usize, preset: ToolPresetConfig },
     Clear { slot: usize },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetFeedbackKind {
+    Apply,
+    Save,
+    Clear,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PresetFeedbackState {
+    pub kind: PresetFeedbackKind,
+    pub started: Instant,
 }
 
 pub struct InputState {
@@ -217,6 +231,8 @@ pub struct InputState {
     pub preset_slot_count: usize,
     /// Preset slots for quick tool switching
     pub presets: Vec<Option<ToolPresetConfig>>,
+    /// Transient preset feedback for toolbar animations
+    pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Pending preset save/clear action for backend persistence
     pub(super) pending_preset_action: Option<PresetAction>,
 }
@@ -354,6 +370,7 @@ impl InputState {
             show_actions_section: true, // Show by default
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],
+            preset_feedback: vec![None; PRESET_SLOTS_MAX],
             pending_preset_action: None,
         };
 
