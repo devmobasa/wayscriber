@@ -90,4 +90,29 @@ mod tests {
             _ => panic!("expected rgb variant"),
         }
     }
+
+    #[test]
+    fn color_spec_to_color_falls_back_to_red_for_unknown_name() {
+        let spec = ColorSpec::Name("chartreuse".to_string());
+        let color = spec.to_color();
+        assert_eq!(color, RED);
+    }
+
+    #[test]
+    fn color_spec_from_color_rounds_components() {
+        let spec = ColorSpec::from(Color {
+            r: 0.0,
+            g: 0.5,
+            b: 0.499,
+            a: 1.0,
+        });
+        match spec {
+            ColorSpec::Rgb([r, g, b]) => {
+                assert_eq!(r, 0);
+                assert_eq!(g, 128);
+                assert_eq!(b, 127);
+            }
+            _ => panic!("expected rgb variant"),
+        }
+    }
 }
