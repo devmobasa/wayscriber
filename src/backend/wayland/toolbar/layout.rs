@@ -290,9 +290,9 @@ impl ToolbarLayoutSpec {
             return 0.0;
         }
 
-        let basic_count = if show_actions_section { 3 } else { 0 };
+        let basic_count: usize = if show_actions_section { 3 } else { 0 };
         let show_delay_actions = snapshot.show_step_section && snapshot.show_delay_sliders;
-        let advanced_count = if show_actions_advanced {
+        let advanced_count: usize = if show_actions_advanced {
             if show_delay_actions { 9 } else { 7 }
         } else {
             0
@@ -304,7 +304,7 @@ impl ToolbarLayoutSpec {
             let total_icons = basic_count + advanced_count;
             let icons_per_row = 6usize;
             let rows = if total_icons > 0 {
-                (total_icons + icons_per_row - 1) / icons_per_row
+                total_icons.div_ceil(icons_per_row)
             } else {
                 0
             };
@@ -322,7 +322,7 @@ impl ToolbarLayoutSpec {
                 0.0
             };
             let advanced_rows = if advanced_count > 0 {
-                ((advanced_count + 1) / 2) as usize
+                advanced_count.div_ceil(2)
             } else {
                 0
             };
@@ -488,24 +488,25 @@ pub fn build_top_hits(
             fill_anchor = Some((rect_x, circle_end_x - rect_x));
         }
 
-        if fill_tool_active && !(is_simple && snapshot.shape_picker_open) {
-            if let Some((fill_x, fill_w)) = fill_anchor {
-                let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
-                hits.push(HitRegion {
-                    rect: (
-                        fill_x,
-                        fill_y,
-                        fill_w,
-                        ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
-                    ),
-                    event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-                    kind: HitKind::Click,
-                    tooltip: Some(super::format_binding_label(
-                        "Fill",
-                        snapshot.binding_hints.fill.as_deref(),
-                    )),
-                });
-            }
+        if fill_tool_active
+            && !(is_simple && snapshot.shape_picker_open)
+            && let Some((fill_x, fill_w)) = fill_anchor
+        {
+            let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+            hits.push(HitRegion {
+                rect: (
+                    fill_x,
+                    fill_y,
+                    fill_w,
+                    ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
+                ),
+                event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                kind: HitKind::Click,
+                tooltip: Some(super::format_binding_label(
+                    "Fill",
+                    snapshot.binding_hints.fill.as_deref(),
+                )),
+            });
         }
 
         hits.push(HitRegion {

@@ -394,7 +394,7 @@ impl ToolbarBindingHints {
         }
     }
 
-    fn preset_binding<'a>(slots: &'a [Option<String>], slot: usize) -> Option<&'a str> {
+    fn preset_binding(slots: &[Option<String>], slot: usize) -> Option<&str> {
         if slot == 0 {
             return None;
         }

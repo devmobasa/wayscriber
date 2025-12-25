@@ -208,32 +208,33 @@ pub fn render_top_strip(
             fill_anchor = Some((rect_x, circle_end_x - rect_x));
         }
 
-        if fill_tool_active && !(is_simple && snapshot.shape_picker_open) {
-            if let Some((fill_x, fill_w)) = fill_anchor {
-                let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
-                let fill_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, fill_x, fill_y, fill_w, fill_h))
-                    .unwrap_or(false);
-                draw_mini_checkbox(
-                    ctx,
-                    fill_x,
-                    fill_y,
-                    fill_w,
-                    fill_h,
-                    snapshot.fill_enabled,
-                    fill_hover,
+        if fill_tool_active
+            && !(is_simple && snapshot.shape_picker_open)
+            && let Some((fill_x, fill_w)) = fill_anchor
+        {
+            let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+            let fill_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, fill_x, fill_y, fill_w, fill_h))
+                .unwrap_or(false);
+            draw_mini_checkbox(
+                ctx,
+                fill_x,
+                fill_y,
+                fill_w,
+                fill_h,
+                snapshot.fill_enabled,
+                fill_hover,
+                "Fill",
+            );
+            hits.push(HitRegion {
+                rect: (fill_x, fill_y, fill_w, fill_h),
+                event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                kind: HitKind::Click,
+                tooltip: Some(format_binding_label(
                     "Fill",
-                );
-                hits.push(HitRegion {
-                    rect: (fill_x, fill_y, fill_w, fill_h),
-                    event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-                    kind: HitKind::Click,
-                    tooltip: Some(format_binding_label(
-                        "Fill",
-                        snapshot.binding_hints.fill.as_deref(),
-                    )),
-                });
-            }
+                    snapshot.binding_hints.fill.as_deref(),
+                )),
+            });
         }
 
         let is_hover = hover
@@ -887,7 +888,10 @@ pub fn render_side_palette(
             if value.chars().count() <= max_chars {
                 value.to_string()
             } else {
-                let mut truncated = value.chars().take(max_chars.saturating_sub(3)).collect::<String>();
+                let mut truncated = value
+                    .chars()
+                    .take(max_chars.saturating_sub(3))
+                    .collect::<String>();
                 truncated.push_str("...");
                 truncated
             }
@@ -1059,40 +1063,38 @@ pub fn render_side_palette(
                 draw_round_rect(ctx, swatch_x, swatch_y, swatch_size, swatch_size, 4.0);
                 let _ = ctx.stroke();
 
-                if slot_hover {
-                    if let Some(name) = preset_name {
-                        let display_name = truncate_label(name, 12);
-                        ctx.select_font_face(
-                            "Sans",
-                            cairo::FontSlant::Normal,
-                            cairo::FontWeight::Normal,
-                        );
-                        ctx.set_font_size(10.0);
-                        if let Ok(extents) = ctx.text_extents(&display_name) {
-                            let pad_x = 5.0;
-                            let pad_y = 2.0;
-                            let label_w = extents.width() + pad_x * 2.0;
-                            let label_h = extents.height() + pad_y * 2.0;
-                            let mut label_x = slot_x + (slot_size - label_w) / 2.0;
-                            let label_y = (slot_row_y - label_h - 2.0).max(y + 2.0);
-                            let min_x = card_x + 2.0;
-                            let max_x = card_x + card_w - label_w - 2.0;
-                            if label_x < min_x {
-                                label_x = min_x;
-                            }
-                            if label_x > max_x {
-                                label_x = max_x;
-                            }
-                            ctx.set_source_rgba(0.12, 0.12, 0.18, 0.92);
-                            draw_round_rect(ctx, label_x, label_y, label_w, label_h, 4.0);
-                            let _ = ctx.fill();
-                            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                            ctx.move_to(
-                                label_x + pad_x - extents.x_bearing(),
-                                label_y + pad_y - extents.y_bearing(),
-                            );
-                            let _ = ctx.show_text(&display_name);
+                if slot_hover && let Some(name) = preset_name {
+                    let display_name = truncate_label(name, 12);
+                    ctx.select_font_face(
+                        "Sans",
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Normal,
+                    );
+                    ctx.set_font_size(10.0);
+                    if let Ok(extents) = ctx.text_extents(&display_name) {
+                        let pad_x = 5.0;
+                        let pad_y = 2.0;
+                        let label_w = extents.width() + pad_x * 2.0;
+                        let label_h = extents.height() + pad_y * 2.0;
+                        let mut label_x = slot_x + (slot_size - label_w) / 2.0;
+                        let label_y = (slot_row_y - label_h - 2.0).max(y + 2.0);
+                        let min_x = card_x + 2.0;
+                        let max_x = card_x + card_w - label_w - 2.0;
+                        if label_x < min_x {
+                            label_x = min_x;
                         }
+                        if label_x > max_x {
+                            label_x = max_x;
+                        }
+                        ctx.set_source_rgba(0.12, 0.12, 0.18, 0.92);
+                        draw_round_rect(ctx, label_x, label_y, label_w, label_h, 4.0);
+                        let _ = ctx.fill();
+                        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                        ctx.move_to(
+                            label_x + pad_x - extents.x_bearing(),
+                            label_y + pad_y - extents.y_bearing(),
+                        );
+                        let _ = ctx.show_text(&display_name);
                     }
                 }
             } else {
@@ -1770,7 +1772,7 @@ pub fn render_side_palette(
             let icons_per_row = 6usize;
             let total_icons = actions.len();
             let rows = if total_icons > 0 {
-                (total_icons + icons_per_row - 1) / icons_per_row
+                total_icons.div_ceil(icons_per_row)
             } else {
                 0
             };
@@ -1778,8 +1780,8 @@ pub fn render_side_palette(
                 let row_start = row * icons_per_row;
                 let row_end = (row_start + icons_per_row).min(total_icons);
                 let icons_in_row = row_end - row_start;
-                let row_width = icons_in_row as f64 * icon_btn_size
-                    + (icons_in_row as f64 - 1.0) * icon_gap;
+                let row_width =
+                    icons_in_row as f64 * icon_btn_size + (icons_in_row as f64 - 1.0) * icon_gap;
                 let row_x = x + (content_width - row_width) / 2.0;
                 for col in 0..icons_in_row {
                     let idx = row_start + col;
@@ -2102,15 +2104,9 @@ pub fn render_side_palette(
                             HitKind::DragCustomRedoDelay
                         },
                         tooltip: Some(if is_undo {
-                            format!(
-                                "Undo step delay: {:.1}s (drag)",
-                                delay_ms as f64 / 1000.0
-                            )
+                            format!("Undo step delay: {:.1}s (drag)", delay_ms as f64 / 1000.0)
                         } else {
-                            format!(
-                                "Redo step delay: {:.1}s (drag)",
-                                delay_ms as f64 / 1000.0
-                            )
+                            format!("Redo step delay: {:.1}s (drag)", delay_ms as f64 / 1000.0)
                         }),
                     });
 
@@ -2272,7 +2268,7 @@ pub fn render_side_palette(
         let toggle_col_gap = toggle_gap;
         let toggle_col_w = (content_width - toggle_col_gap) / 2.0;
         ctx.set_font_size(12.0);
-        for row in 0..((toggles.len() + 1) / 2) {
+        for row in 0..toggles.len().div_ceil(2) {
             for col in 0..2 {
                 let idx = row * 2 + col;
                 if idx >= toggles.len() {
@@ -2281,7 +2277,9 @@ pub fn render_side_palette(
                 let (label, value, event, tooltip) = &toggles[idx];
                 let toggle_x = x + col as f64 * (toggle_col_w + toggle_col_gap);
                 let toggle_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, toggle_x, toggle_y, toggle_col_w, toggle_h))
+                    .map(|(hx, hy)| {
+                        point_in_rect(hx, hy, toggle_x, toggle_y, toggle_col_w, toggle_h)
+                    })
                     .unwrap_or(false);
                 draw_checkbox(
                     ctx,
@@ -2300,7 +2298,7 @@ pub fn render_side_palette(
                     tooltip: tooltip.map(|text| text.to_string()),
                 });
             }
-            if row + 1 < (toggles.len() + 1) / 2 {
+            if row + 1 < toggles.len().div_ceil(2) {
                 toggle_y += toggle_h + toggle_gap;
             } else {
                 toggle_y += toggle_h;
