@@ -846,7 +846,7 @@ pub fn render_side_palette(
         let action_w = slot_size;
         let action_icon = 14.0;
         let icon_size = 14.0;
-        let swatch_size = 10.0;
+        let swatch_size = 12.0;
         let number_box = 12.0;
         let tool_label = |tool: Tool| match tool {
             Tool::Select => "Select",
@@ -906,6 +906,40 @@ pub fn render_side_palette(
             draw_button(
                 ctx, slot_x, slot_row_y, slot_size, slot_size, false, slot_hover,
             );
+            if let Some(preset) = preset {
+                ctx.set_source_rgba(preset.color.r, preset.color.g, preset.color.b, 0.12);
+                draw_round_rect(
+                    ctx,
+                    slot_x + 1.0,
+                    slot_row_y + 1.0,
+                    slot_size - 2.0,
+                    slot_size - 2.0,
+                    6.0,
+                );
+                let _ = ctx.fill();
+                ctx.set_source_rgba(preset.color.r, preset.color.g, preset.color.b, 0.35);
+                ctx.set_line_width(1.0);
+                draw_round_rect(
+                    ctx,
+                    slot_x + 1.0,
+                    slot_row_y + 1.0,
+                    slot_size - 2.0,
+                    slot_size - 2.0,
+                    6.0,
+                );
+                let _ = ctx.stroke();
+            } else {
+                ctx.set_source_rgba(0.05, 0.05, 0.07, 0.35);
+                draw_round_rect(
+                    ctx,
+                    slot_x + 1.0,
+                    slot_row_y + 1.0,
+                    slot_size - 2.0,
+                    slot_size - 2.0,
+                    6.0,
+                );
+                let _ = ctx.fill();
+            }
 
             if let Some(preset) = preset {
                 let preset_name = preset
@@ -1008,6 +1042,10 @@ pub fn render_side_palette(
                 let swatch_x = slot_x + slot_size - swatch_size - 4.0;
                 let swatch_y = slot_row_y + slot_size - swatch_size - 4.0;
                 draw_swatch(ctx, swatch_x, swatch_y, swatch_size, preset.color, false);
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.75);
+                ctx.set_line_width(1.0);
+                draw_round_rect(ctx, swatch_x, swatch_y, swatch_size, swatch_size, 4.0);
+                let _ = ctx.stroke();
 
                 if slot_hover {
                     if let Some(name) = preset_name {
