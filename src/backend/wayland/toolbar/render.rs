@@ -1064,14 +1064,15 @@ pub fn render_side_palette(
                 } else {
                     format!("Apply preset {} ({})", slot, summary)
                 };
+                let tooltip = match snapshot.binding_hints.apply_preset(slot) {
+                    Some(binding) => format!("{label} (key: {binding})"),
+                    None => label,
+                };
                 hits.push(HitRegion {
                     rect: (slot_x, slot_row_y, slot_size, slot_size),
                     event: ToolbarEvent::ApplyPreset(slot),
                     kind: HitKind::Click,
-                    tooltip: Some(format_binding_label(
-                        &label,
-                        snapshot.binding_hints.apply_preset(slot),
-                    )),
+                    tooltip: Some(tooltip),
                 });
 
                 ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
