@@ -88,7 +88,10 @@ Full-screen saves, active-window grabs, and region capture to file or clipboard 
 Opt-in per board/monitor storage that restores your canvas plus pen color & thickness. One-off overrides via `--resume-session` / `--no-resume-session`; the tray checkmark flips the config on disk.
 
 ### Toolbars & UI
-Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), icon or text modes, color picker, extended palettes, status bar, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
+Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), preset slots, icon or text modes, color picker, extended palettes, status bar, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
+
+### Presets
+Save tool + color + size (plus optional fill/opacity/text settings) into 3-5 slots for fast recall. Apply with <kbd>1</kbd>-<kbd>5</kbd>, save with <kbd>Shift+1</kbd>-<kbd>Shift+5</kbd>.
 
 ### Presenter Helpers
 Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running. Screen zoom (<kbd>Ctrl+Alt</kbd> + scroll) with lock/pan for callouts.
@@ -358,6 +361,8 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
 | Configurator | <kbd>F11</kbd> |
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
+| Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
+| Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
 | Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt++</kbd> / <kbd>Ctrl+Alt+-</kbd> |
@@ -365,6 +370,8 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Toggle zoom lock | <kbd>Ctrl+Alt+L</kbd> |
 | Pan zoom view | <kbd>Middle drag</kbd> / <kbd>Arrow keys</kbd> |
 | Exit | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd> |
+
+Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`.
 
 ---
 
@@ -389,6 +396,16 @@ wayscriber-configurator   # or press F11
 [drawing]
 default_color = "red"
 default_thickness = 3.0
+
+[presets]
+# slot_count: 3-5
+slot_count = 5
+
+[presets.slot_1]
+name = "Red pen"
+tool = "pen"
+color = "red"
+size = 3.0
 
 [performance]
 buffer_count = 3
