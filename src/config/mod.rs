@@ -747,7 +747,8 @@ impl Config {
                 self.performance.ui_animation_fps,
                 MAX_UI_ANIMATION_FPS
             );
-            self.performance.ui_animation_fps = self.performance.ui_animation_fps.min(MAX_UI_ANIMATION_FPS);
+            self.performance.ui_animation_fps =
+                self.performance.ui_animation_fps.min(MAX_UI_ANIMATION_FPS);
         }
 
         // Validate font weight is reasonable

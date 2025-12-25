@@ -22,9 +22,9 @@ impl ToolbarLayoutSpec {
     pub(super) const TOP_START_X: f64 = 16.0;
     pub(super) const TOP_HANDLE_SIZE: f64 = 18.0;
     pub(super) const TOP_HANDLE_Y: f64 = 10.0;
-    pub(super) const TOP_ICON_BUTTON: f64 = 42.0;
+    pub(super) const TOP_ICON_BUTTON: f64 = 44.0;
     pub(super) const TOP_ICON_BUTTON_Y: f64 = 6.0;
-    pub(super) const TOP_ICON_SIZE: f64 = 26.0;
+    pub(super) const TOP_ICON_SIZE: f64 = 28.0;
     pub(super) const TOP_ICON_FILL_HEIGHT: f64 = 18.0;
     pub(super) const TOP_ICON_FILL_OFFSET: f64 = 2.0;
     pub(super) const TOP_TEXT_BUTTON_W: f64 = 60.0;
@@ -90,9 +90,9 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_TOGGLE_GAP: f64 = 6.0;
     pub(super) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
     pub(super) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
-    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 88.0;
-    pub(super) const SIDE_PRESET_SLOT_SIZE: f64 = 30.0;
-    pub(super) const SIDE_PRESET_SLOT_GAP: f64 = 6.0;
+    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 100.0;
+    pub(super) const SIDE_PRESET_SLOT_SIZE: f64 = 40.0;
+    pub(super) const SIDE_PRESET_SLOT_GAP: f64 = 8.0;
     pub(super) const SIDE_PRESET_ROW_OFFSET_Y: f64 = 24.0;
     pub(super) const SIDE_PRESET_ACTION_GAP: f64 = 6.0;
     pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 20.0;

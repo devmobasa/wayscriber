@@ -838,6 +838,34 @@ pub fn render_side_palette(
             y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
             "Presets",
         );
+        let apply_hint = {
+            let mut uses_digit_bindings = true;
+            for slot in 1..=slot_count {
+                let expected = slot.to_string();
+                if snapshot.binding_hints.apply_preset(slot) != Some(expected.as_str()) {
+                    uses_digit_bindings = false;
+                    break;
+                }
+            }
+            if uses_digit_bindings {
+                Some(format!("Keys 1-{} apply", slot_count))
+            } else {
+                Some("Keys apply presets".to_string())
+            }
+        };
+        if let Some(hint) = apply_hint {
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            ctx.set_font_size(10.0);
+            if let Ok(ext) = ctx.text_extents(&hint) {
+                let hint_x = card_x + card_w - ext.width() - 8.0 - ext.x_bearing();
+                let hint_y = y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y;
+                ctx.set_source_rgba(0.7, 0.7, 0.75, 0.8);
+                ctx.move_to(hint_x, hint_y);
+                let _ = ctx.show_text(&hint);
+            }
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            ctx.set_font_size(13.0);
+        }
 
         let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
         let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
@@ -846,10 +874,37 @@ pub fn render_side_palette(
         let action_h = ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT;
         let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
         let action_w = (slot_size - action_gap) / 2.0;
-        let action_icon = 10.0;
-        let icon_size = 14.0;
-        let swatch_size = 12.0;
-        let number_box = 12.0;
+        let action_icon = (action_h * 0.6).round();
+        let icon_size = (slot_size * 0.45).round();
+        let swatch_size = (slot_size * 0.35).round();
+        let number_box = (slot_size * 0.4).round();
+        let keycap_pad = (slot_size * 0.1).round().max(3.0);
+        let keycap_radius = (number_box * 0.25).max(3.0);
+        let draw_keycap = |ctx: &cairo::Context, key_x: f64, key_y: f64, label: &str, active| {
+            let (bg_alpha, border_alpha, text_alpha) = if active {
+                (0.75, 0.55, 0.95)
+            } else {
+                (0.4, 0.35, 0.6)
+            };
+            ctx.set_source_rgba(0.12, 0.12, 0.18, bg_alpha);
+            draw_round_rect(ctx, key_x, key_y, number_box, number_box, keycap_radius);
+            let _ = ctx.fill();
+            ctx.set_source_rgba(1.0, 1.0, 1.0, border_alpha);
+            ctx.set_line_width(1.0);
+            draw_round_rect(ctx, key_x, key_y, number_box, number_box, keycap_radius);
+            let _ = ctx.stroke();
+            ctx.set_font_size(11.0);
+            draw_label_center_color(
+                ctx,
+                key_x,
+                key_y,
+                number_box,
+                number_box,
+                label,
+                (1.0, 1.0, 1.0, text_alpha),
+            );
+            ctx.set_font_size(13.0);
+        };
         let tool_label = |tool: Tool| match tool {
             Tool::Select => "Select",
             Tool::Pen => "Pen",
@@ -1018,15 +1073,6 @@ pub fn render_side_palette(
                         snapshot.binding_hints.apply_preset(slot),
                     )),
                 });
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                draw_label_center(
-                    ctx,
-                    slot_x + 2.0,
-                    slot_row_y + 2.0,
-                    number_box,
-                    number_box,
-                    &slot.to_string(),
-                );
 
                 ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
                 let icon_x = slot_x + (slot_size - icon_size) / 2.0;
@@ -1111,16 +1157,11 @@ pub fn render_side_palette(
                 );
                 let _ = ctx.stroke();
                 ctx.set_dash(&[], 0.0);
-                draw_label_center_color(
-                    ctx,
-                    slot_x + 2.0,
-                    slot_row_y + 2.0,
-                    number_box,
-                    number_box,
-                    &slot.to_string(),
-                    (1.0, 1.0, 1.0, 0.6),
-                );
             }
+
+            let key_x = slot_x + keycap_pad;
+            let key_y = slot_row_y + keycap_pad;
+            draw_keycap(ctx, key_x, key_y, &slot.to_string(), preset_exists);
 
             if let Some(feedback) = snapshot
                 .preset_feedback
