@@ -15,9 +15,9 @@ use wayscriber::config::Config;
 use crate::messages::Message;
 use crate::models::{
     BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, FontStyleOption,
-    FontWeightOption, NamedColorOption, QuadField, SessionCompressionOption,
+    FontWeightOption, NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
     SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
-    ToolbarLayoutModeOption, TripletField,
+    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 
 pub fn run() -> iced::Result {
@@ -35,6 +35,7 @@ pub struct ConfiguratorApp {
     defaults: ConfigDraft,
     status: StatusMessage,
     active_tab: TabId,
+    override_mode: ToolbarLayoutModeOption,
     is_loading: bool,
     is_saving: bool,
     is_dirty: bool,
@@ -78,6 +79,7 @@ impl Application for ConfiguratorApp {
         let default_config = Config::default();
         let defaults = ConfigDraft::from_config(&default_config);
         let baseline = defaults.clone();
+        let override_mode = defaults.ui_toolbar_layout_mode;
         let config_path = Config::get_config_path().ok();
 
         let app = Self {
@@ -86,6 +88,7 @@ impl Application for ConfiguratorApp {
             defaults,
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Drawing,
+            override_mode,
             is_loading: true,
             is_saving: false,
             is_dirty: false,
@@ -118,6 +121,7 @@ impl Application for ConfiguratorApp {
                         let draft = ConfigDraft::from_config(config.as_ref());
                         self.draft = draft.clone();
                         self.baseline = draft;
+                        self.override_mode = self.draft.ui_toolbar_layout_mode;
                         self.is_dirty = false;
                         self.status = StatusMessage::success("Configuration loaded from disk.");
                     }
@@ -137,6 +141,7 @@ impl Application for ConfiguratorApp {
             Message::ResetToDefaults => {
                 if !self.is_loading {
                     self.draft = self.defaults.clone();
+                    self.override_mode = self.draft.ui_toolbar_layout_mode;
                     self.status = StatusMessage::info("Loaded default configuration (not saved).");
                     self.refresh_dirty_flag();
                 }
@@ -243,6 +248,15 @@ impl Application for ConfiguratorApp {
             Message::ToolbarLayoutModeChanged(option) => {
                 self.status = StatusMessage::idle();
                 self.draft.apply_toolbar_layout_mode(option);
+                self.refresh_dirty_flag();
+            }
+            Message::ToolbarOverrideModeChanged(option) => {
+                self.override_mode = option;
+            }
+            Message::ToolbarOverrideChanged(field, option) => {
+                self.status = StatusMessage::idle();
+                self.draft
+                    .set_toolbar_override(self.override_mode, field, option);
                 self.refresh_dirty_flag();
             }
             Message::BoardModeChanged(option) => {
@@ -712,6 +726,15 @@ impl ConfiguratorApp {
             Some(self.draft.ui_toolbar_layout_mode),
             Message::ToolbarLayoutModeChanged,
         );
+        let override_mode_pick = pick_list(
+            ToolbarLayoutModeOption::list(),
+            Some(self.override_mode),
+            Message::ToolbarOverrideModeChanged,
+        );
+        let overrides = self
+            .draft
+            .ui_toolbar_mode_overrides
+            .for_mode(self.override_mode);
 
         let column = column![
             text("UI Settings").size(20),
@@ -775,6 +798,32 @@ impl ConfiguratorApp {
                 self.draft.ui_toolbar_show_preset_toasts,
                 self.defaults.ui_toolbar_show_preset_toasts,
                 ToggleField::UiToolbarPresetToasts,
+            ),
+            text("Mode overrides").size(16),
+            row![text("Edit mode:"), override_mode_pick]
+                .spacing(12)
+                .align_items(iced::Alignment::Center),
+            text("Default keeps the mode preset.").size(12),
+            override_row(ToolbarOverrideField::ShowPresets, overrides.show_presets),
+            override_row(
+                ToolbarOverrideField::ShowActionsSection,
+                overrides.show_actions_section,
+            ),
+            override_row(
+                ToolbarOverrideField::ShowActionsAdvanced,
+                overrides.show_actions_advanced,
+            ),
+            override_row(
+                ToolbarOverrideField::ShowStepSection,
+                overrides.show_step_section
+            ),
+            override_row(
+                ToolbarOverrideField::ShowTextControls,
+                overrides.show_text_controls
+            ),
+            override_row(
+                ToolbarOverrideField::ShowSettingsSection,
+                overrides.show_settings_section,
             ),
             labeled_control(
                 "Status bar position",
@@ -1200,6 +1249,19 @@ fn labeled_control<'a>(
     ]
     .spacing(4)
     .width(Length::Fill)
+    .into()
+}
+
+fn override_row<'a>(field: ToolbarOverrideField, value: OverrideOption) -> Element<'a, Message> {
+    row![
+        text(field.label()).size(14),
+        pick_list(OverrideOption::list(), Some(value), move |opt| {
+            Message::ToolbarOverrideChanged(field, opt)
+        },)
+        .width(Length::Fixed(140.0)),
+    ]
+    .spacing(12)
+    .align_items(iced::Alignment::Center)
     .into()
 }
 

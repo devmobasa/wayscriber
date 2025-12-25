@@ -1,4 +1,6 @@
-use wayscriber::config::{SessionCompression, SessionStorageMode, StatusPosition, ToolbarLayoutMode};
+use wayscriber::config::{
+    SessionCompression, SessionStorageMode, StatusPosition, ToolbarLayoutMode,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontStyleOption {
@@ -213,6 +215,72 @@ impl ToolbarLayoutModeOption {
 impl std::fmt::Display for ToolbarLayoutModeOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverrideOption {
+    Default,
+    On,
+    Off,
+}
+
+impl OverrideOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::Default, Self::On, Self::Off]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::On => "On",
+            Self::Off => "Off",
+        }
+    }
+
+    pub fn from_option(value: Option<bool>) -> Self {
+        match value {
+            Some(true) => Self::On,
+            Some(false) => Self::Off,
+            None => Self::Default,
+        }
+    }
+
+    pub fn to_option(self) -> Option<bool> {
+        match self {
+            Self::Default => None,
+            Self::On => Some(true),
+            Self::Off => Some(false),
+        }
+    }
+}
+
+impl std::fmt::Display for OverrideOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarOverrideField {
+    ShowPresets,
+    ShowActionsSection,
+    ShowActionsAdvanced,
+    ShowStepSection,
+    ShowTextControls,
+    ShowSettingsSection,
+}
+
+impl ToolbarOverrideField {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::ShowPresets => "Presets",
+            Self::ShowActionsSection => "Actions (basic)",
+            Self::ShowActionsAdvanced => "Actions (advanced)",
+            Self::ShowStepSection => "Step controls",
+            Self::ShowTextControls => "Text controls",
+            Self::ShowSettingsSection => "Settings section",
+        }
     }
 }
 

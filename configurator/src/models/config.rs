@@ -1,11 +1,11 @@
-use wayscriber::config::{Config, PresetSlotsConfig};
+use wayscriber::config::{Config, PresetSlotsConfig, ToolbarModeOverride, ToolbarModeOverrides};
 
 use super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::error::FormError;
 use super::fields::{
-    BoardModeOption, FontStyleOption, FontWeightOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField, ToolbarLayoutModeOption,
-    TripletField,
+    BoardModeOption, FontStyleOption, FontWeightOption, OverrideOption, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
+    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 use super::keybindings::KeybindingsDraft;
 use super::util::{format_float, parse_f64};
@@ -39,6 +39,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_step_section: bool,
     pub ui_toolbar_show_text_controls: bool,
     pub ui_toolbar_show_settings_section: bool,
+    pub ui_toolbar_mode_overrides: ToolbarModeOverridesDraft,
     pub ui_status_position: StatusPositionOption,
     pub status_font_size: String,
     pub status_padding: String,
@@ -95,6 +96,92 @@ pub struct ConfigDraft {
     pub keybindings: KeybindingsDraft,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolbarModeOverrideDraft {
+    pub show_presets: OverrideOption,
+    pub show_actions_section: OverrideOption,
+    pub show_actions_advanced: OverrideOption,
+    pub show_step_section: OverrideOption,
+    pub show_text_controls: OverrideOption,
+    pub show_settings_section: OverrideOption,
+}
+
+impl ToolbarModeOverrideDraft {
+    fn from_override(override_cfg: &ToolbarModeOverride) -> Self {
+        Self {
+            show_presets: OverrideOption::from_option(override_cfg.show_presets),
+            show_actions_section: OverrideOption::from_option(override_cfg.show_actions_section),
+            show_actions_advanced: OverrideOption::from_option(override_cfg.show_actions_advanced),
+            show_step_section: OverrideOption::from_option(override_cfg.show_step_section),
+            show_text_controls: OverrideOption::from_option(override_cfg.show_text_controls),
+            show_settings_section: OverrideOption::from_option(override_cfg.show_settings_section),
+        }
+    }
+
+    fn to_override(&self) -> ToolbarModeOverride {
+        ToolbarModeOverride {
+            show_actions_section: self.show_actions_section.to_option(),
+            show_actions_advanced: self.show_actions_advanced.to_option(),
+            show_presets: self.show_presets.to_option(),
+            show_step_section: self.show_step_section.to_option(),
+            show_text_controls: self.show_text_controls.to_option(),
+            show_settings_section: self.show_settings_section.to_option(),
+        }
+    }
+
+    fn set(&mut self, field: ToolbarOverrideField, value: OverrideOption) {
+        match field {
+            ToolbarOverrideField::ShowPresets => self.show_presets = value,
+            ToolbarOverrideField::ShowActionsSection => self.show_actions_section = value,
+            ToolbarOverrideField::ShowActionsAdvanced => self.show_actions_advanced = value,
+            ToolbarOverrideField::ShowStepSection => self.show_step_section = value,
+            ToolbarOverrideField::ShowTextControls => self.show_text_controls = value,
+            ToolbarOverrideField::ShowSettingsSection => self.show_settings_section = value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolbarModeOverridesDraft {
+    pub simple: ToolbarModeOverrideDraft,
+    pub regular: ToolbarModeOverrideDraft,
+    pub advanced: ToolbarModeOverrideDraft,
+}
+
+impl ToolbarModeOverridesDraft {
+    fn from_config(config: &ToolbarModeOverrides) -> Self {
+        Self {
+            simple: ToolbarModeOverrideDraft::from_override(&config.simple),
+            regular: ToolbarModeOverrideDraft::from_override(&config.regular),
+            advanced: ToolbarModeOverrideDraft::from_override(&config.advanced),
+        }
+    }
+
+    fn to_config(&self) -> ToolbarModeOverrides {
+        ToolbarModeOverrides {
+            simple: self.simple.to_override(),
+            regular: self.regular.to_override(),
+            advanced: self.advanced.to_override(),
+        }
+    }
+
+    pub fn for_mode(&self, mode: ToolbarLayoutModeOption) -> &ToolbarModeOverrideDraft {
+        match mode {
+            ToolbarLayoutModeOption::Simple => &self.simple,
+            ToolbarLayoutModeOption::Regular => &self.regular,
+            ToolbarLayoutModeOption::Advanced => &self.advanced,
+        }
+    }
+
+    fn for_mode_mut(&mut self, mode: ToolbarLayoutModeOption) -> &mut ToolbarModeOverrideDraft {
+        match mode {
+            ToolbarLayoutModeOption::Simple => &mut self.simple,
+            ToolbarLayoutModeOption::Regular => &mut self.regular,
+            ToolbarLayoutModeOption::Advanced => &mut self.advanced,
+        }
+    }
+}
+
 impl ConfigDraft {
     pub fn from_config(config: &Config) -> Self {
         let (style_option, style_value) = FontStyleOption::from_value(&config.drawing.font_style);
@@ -130,6 +217,9 @@ impl ConfigDraft {
             ui_toolbar_show_step_section: config.ui.toolbar.show_step_section,
             ui_toolbar_show_text_controls: config.ui.toolbar.show_text_controls,
             ui_toolbar_show_settings_section: config.ui.toolbar.show_settings_section,
+            ui_toolbar_mode_overrides: ToolbarModeOverridesDraft::from_config(
+                &config.ui.toolbar.mode_overrides,
+            ),
             ui_status_position: StatusPositionOption::from_status_position(
                 config.ui.status_bar_position,
             ),
@@ -244,6 +334,7 @@ impl ConfigDraft {
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
+        config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
         config.ui.toolbar.show_presets = self.ui_toolbar_show_presets;
         config.ui.toolbar.show_actions_section = self.ui_toolbar_show_actions_section;
         config.ui.toolbar.show_actions_advanced = self.ui_toolbar_show_actions_advanced;
@@ -465,6 +556,17 @@ impl ConfigDraft {
         self.ui_toolbar_show_step_section = defaults.show_step_section;
         self.ui_toolbar_show_text_controls = defaults.show_text_controls;
         self.ui_toolbar_show_settings_section = defaults.show_settings_section;
+    }
+
+    pub fn set_toolbar_override(
+        &mut self,
+        mode: ToolbarLayoutModeOption,
+        field: ToolbarOverrideField,
+        value: OverrideOption,
+    ) {
+        self.ui_toolbar_mode_overrides
+            .for_mode_mut(mode)
+            .set(field, value);
     }
 
     pub fn set_toggle(&mut self, field: ToggleField, value: bool) {
