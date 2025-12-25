@@ -1,4 +1,4 @@
-use wayscriber::config::{SessionCompression, SessionStorageMode, StatusPosition};
+use wayscriber::config::{SessionCompression, SessionStorageMode, StatusPosition, ToolbarLayoutMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontStyleOption {
@@ -170,6 +170,53 @@ impl std::fmt::Display for StatusPositionOption {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarLayoutModeOption {
+    Simple,
+    Regular,
+    Advanced,
+}
+
+impl ToolbarLayoutModeOption {
+    pub fn list() -> Vec<Self> {
+        vec![
+            ToolbarLayoutModeOption::Simple,
+            ToolbarLayoutModeOption::Regular,
+            ToolbarLayoutModeOption::Advanced,
+        ]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            ToolbarLayoutModeOption::Simple => "Simple",
+            ToolbarLayoutModeOption::Regular => "Regular",
+            ToolbarLayoutModeOption::Advanced => "Advanced",
+        }
+    }
+
+    pub fn to_mode(&self) -> ToolbarLayoutMode {
+        match self {
+            ToolbarLayoutModeOption::Simple => ToolbarLayoutMode::Simple,
+            ToolbarLayoutModeOption::Regular => ToolbarLayoutMode::Regular,
+            ToolbarLayoutModeOption::Advanced => ToolbarLayoutMode::Advanced,
+        }
+    }
+
+    pub fn from_mode(mode: ToolbarLayoutMode) -> Self {
+        match mode {
+            ToolbarLayoutMode::Simple => ToolbarLayoutModeOption::Simple,
+            ToolbarLayoutMode::Regular => ToolbarLayoutModeOption::Regular,
+            ToolbarLayoutMode::Advanced => ToolbarLayoutModeOption::Advanced,
+        }
+    }
+}
+
+impl std::fmt::Display for ToolbarLayoutModeOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardModeOption {
     Transparent,
     Whiteboard,
@@ -224,6 +271,12 @@ pub enum ToggleField {
     UiShowStatusBar,
     UiShowFrozenBadge,
     UiToolbarPresetToasts,
+    UiToolbarShowPresets,
+    UiToolbarShowActionsSection,
+    UiToolbarShowActionsAdvanced,
+    UiToolbarShowStepSection,
+    UiToolbarShowTextControls,
+    UiToolbarShowSettingsSection,
     UiClickHighlightEnabled,
     UiClickHighlightUsePenColor,
     BoardEnabled,

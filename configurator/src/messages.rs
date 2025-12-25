@@ -6,7 +6,7 @@ use wayscriber::config::Config;
 use crate::models::{
     BoardModeOption, ColorMode, FontStyleOption, FontWeightOption, KeybindingField,
     NamedColorOption, QuadField, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, TabId, TextField, ToggleField, TripletField,
+    StatusPositionOption, TabId, TextField, ToggleField, ToolbarLayoutModeOption, TripletField,
 };
 
 #[derive(Debug, Clone)]
@@ -24,6 +24,7 @@ pub enum Message {
     ColorModeChanged(ColorMode),
     NamedColorSelected(NamedColorOption),
     StatusPositionChanged(StatusPositionOption),
+    ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
     BoardModeChanged(BoardModeOption),
     SessionStorageModeChanged(SessionStorageModeOption),
     SessionCompressionChanged(SessionCompressionOption),

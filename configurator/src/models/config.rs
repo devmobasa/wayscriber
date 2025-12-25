@@ -4,7 +4,8 @@ use super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::error::FormError;
 use super::fields::{
     BoardModeOption, FontStyleOption, FontWeightOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField, TripletField,
+    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField, ToolbarLayoutModeOption,
+    TripletField,
 };
 use super::keybindings::KeybindingsDraft;
 use super::util::{format_float, parse_f64};
@@ -31,6 +32,13 @@ pub struct ConfigDraft {
     pub ui_show_status_bar: bool,
     pub ui_show_frozen_badge: bool,
     pub ui_toolbar_show_preset_toasts: bool,
+    pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
+    pub ui_toolbar_show_presets: bool,
+    pub ui_toolbar_show_actions_section: bool,
+    pub ui_toolbar_show_actions_advanced: bool,
+    pub ui_toolbar_show_step_section: bool,
+    pub ui_toolbar_show_text_controls: bool,
+    pub ui_toolbar_show_settings_section: bool,
     pub ui_status_position: StatusPositionOption,
     pub status_font_size: String,
     pub status_padding: String,
@@ -113,6 +121,15 @@ impl ConfigDraft {
             ui_show_status_bar: config.ui.show_status_bar,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_toolbar_show_preset_toasts: config.ui.toolbar.show_preset_toasts,
+            ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
+                config.ui.toolbar.layout_mode,
+            ),
+            ui_toolbar_show_presets: config.ui.toolbar.show_presets,
+            ui_toolbar_show_actions_section: config.ui.toolbar.show_actions_section,
+            ui_toolbar_show_actions_advanced: config.ui.toolbar.show_actions_advanced,
+            ui_toolbar_show_step_section: config.ui.toolbar.show_step_section,
+            ui_toolbar_show_text_controls: config.ui.toolbar.show_text_controls,
+            ui_toolbar_show_settings_section: config.ui.toolbar.show_settings_section,
             ui_status_position: StatusPositionOption::from_status_position(
                 config.ui.status_bar_position,
             ),
@@ -226,6 +243,13 @@ impl ConfigDraft {
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
+        config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
+        config.ui.toolbar.show_presets = self.ui_toolbar_show_presets;
+        config.ui.toolbar.show_actions_section = self.ui_toolbar_show_actions_section;
+        config.ui.toolbar.show_actions_advanced = self.ui_toolbar_show_actions_advanced;
+        config.ui.toolbar.show_step_section = self.ui_toolbar_show_step_section;
+        config.ui.toolbar.show_text_controls = self.ui_toolbar_show_text_controls;
+        config.ui.toolbar.show_settings_section = self.ui_toolbar_show_settings_section;
         config.ui.status_bar_position = self.ui_status_position.to_status_position();
         parse_field(
             &self.status_font_size,
@@ -432,6 +456,17 @@ impl ConfigDraft {
         }
     }
 
+    pub fn apply_toolbar_layout_mode(&mut self, mode: ToolbarLayoutModeOption) {
+        self.ui_toolbar_layout_mode = mode;
+        let defaults = mode.to_mode().section_defaults();
+        self.ui_toolbar_show_actions_section = defaults.show_actions_section;
+        self.ui_toolbar_show_actions_advanced = defaults.show_actions_advanced;
+        self.ui_toolbar_show_presets = defaults.show_presets;
+        self.ui_toolbar_show_step_section = defaults.show_step_section;
+        self.ui_toolbar_show_text_controls = defaults.show_text_controls;
+        self.ui_toolbar_show_settings_section = defaults.show_settings_section;
+    }
+
     pub fn set_toggle(&mut self, field: ToggleField, value: bool) {
         match field {
             ToggleField::DrawingTextBackground => {
@@ -441,6 +476,18 @@ impl ConfigDraft {
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
             ToggleField::UiToolbarPresetToasts => self.ui_toolbar_show_preset_toasts = value,
+            ToggleField::UiToolbarShowPresets => self.ui_toolbar_show_presets = value,
+            ToggleField::UiToolbarShowActionsSection => {
+                self.ui_toolbar_show_actions_section = value;
+            }
+            ToggleField::UiToolbarShowActionsAdvanced => {
+                self.ui_toolbar_show_actions_advanced = value;
+            }
+            ToggleField::UiToolbarShowStepSection => self.ui_toolbar_show_step_section = value,
+            ToggleField::UiToolbarShowTextControls => self.ui_toolbar_show_text_controls = value,
+            ToggleField::UiToolbarShowSettingsSection => {
+                self.ui_toolbar_show_settings_section = value;
+            }
             ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
             ToggleField::UiClickHighlightUsePenColor => self.click_highlight_use_pen_color = value,
             ToggleField::BoardEnabled => self.board_enabled = value,

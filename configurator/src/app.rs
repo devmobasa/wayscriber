@@ -16,7 +16,8 @@ use crate::messages::Message;
 use crate::models::{
     BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, FontStyleOption,
     FontWeightOption, NamedColorOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField, TripletField,
+    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
+    ToolbarLayoutModeOption, TripletField,
 };
 
 pub fn run() -> iced::Result {
@@ -239,6 +240,11 @@ impl Application for ConfiguratorApp {
                 self.draft.ui_status_position = option;
                 self.refresh_dirty_flag();
             }
+            Message::ToolbarLayoutModeChanged(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.apply_toolbar_layout_mode(option);
+                self.refresh_dirty_flag();
+            }
             Message::BoardModeChanged(option) => {
                 self.status = StatusMessage::idle();
                 self.draft.board_default_mode = option;
@@ -385,7 +391,9 @@ impl ConfiguratorApp {
             TabId::Keybindings => self.keybindings_tab(),
         };
 
-        column![tab_bar, horizontal_rule(2), content]
+        let legend = self.defaults_legend();
+
+        column![tab_bar, horizontal_rule(2), legend, content]
             .spacing(12)
             .into()
     }
@@ -401,6 +409,21 @@ impl ConfiguratorApp {
         }
 
         info.into()
+    }
+
+    fn defaults_legend(&self) -> Element<'_, Message> {
+        row![
+            text("Default labels:").size(12),
+            text("blue = matches")
+                .size(12)
+                .style(theme::Text::Color(default_label_color(false))),
+            text("yellow = changed")
+                .size(12)
+                .style(theme::Text::Color(default_label_color(true))),
+        ]
+        .spacing(12)
+        .align_items(iced::Alignment::Center)
+        .into()
     }
 
     fn drawing_tab(&self) -> Element<'_, Message> {
@@ -505,12 +528,12 @@ impl ConfiguratorApp {
         let color_block = column![
             row![
                 text("Pen color").size(14),
-                Space::with_width(Length::Fill),
                 default_value_text(
                     self.defaults.drawing_color.summary(),
                     self.draft.drawing_color != self.defaults.drawing_color,
                 ),
             ]
+            .spacing(DEFAULT_LABEL_GAP)
             .align_items(iced::Alignment::Center),
             color_mode_picker,
             color_section
@@ -545,12 +568,12 @@ impl ConfiguratorApp {
                 column![
                     row![
                         text("Font weight").size(14),
-                        Space::with_width(Length::Fill),
                         default_value_text(
                             self.defaults.drawing_font_weight.clone(),
                             self.draft.drawing_font_weight != self.defaults.drawing_font_weight,
                         )
                     ]
+                    .spacing(DEFAULT_LABEL_GAP)
                     .align_items(iced::Alignment::Center),
                     pick_list(
                         FontWeightOption::list(),
@@ -570,12 +593,12 @@ impl ConfiguratorApp {
                     let mut column = column![
                         row![
                             text("Font style").size(14),
-                            Space::with_width(Length::Fill),
                             default_value_text(
                                 self.defaults.drawing_font_style.clone(),
                                 self.draft.drawing_font_style != self.defaults.drawing_font_style,
                             )
                         ]
+                        .spacing(DEFAULT_LABEL_GAP)
                         .align_items(iced::Alignment::Center),
                         pick_list(
                             FontStyleOption::list(),
@@ -649,23 +672,23 @@ impl ConfiguratorApp {
             Some(self.draft.performance_buffer_count),
             Message::BufferCountChanged,
         );
+        let buffer_control = row![
+            buffer_pick.width(Length::Fixed(120.0)),
+            text(self.draft.performance_buffer_count.to_string())
+        ]
+        .spacing(12)
+        .align_items(iced::Alignment::Center)
+        .into();
 
         scrollable(
             column![
                 text("Performance").size(20),
-                row![
-                    text("Buffer count:"),
-                    buffer_pick.width(Length::Fixed(120.0)),
-                    text(self.draft.performance_buffer_count.to_string()),
-                    Space::with_width(Length::Fill),
-                    default_value_text(
-                        self.defaults.performance_buffer_count.to_string(),
-                        self.draft.performance_buffer_count
-                            != self.defaults.performance_buffer_count,
-                    )
-                ]
-                .spacing(12)
-                .align_items(iced::Alignment::Center),
+                labeled_control(
+                    "Buffer count",
+                    buffer_control,
+                    self.defaults.performance_buffer_count.to_string(),
+                    self.draft.performance_buffer_count != self.defaults.performance_buffer_count,
+                ),
                 toggle_row(
                     "Enable VSync",
                     self.draft.performance_enable_vsync,
@@ -684,6 +707,11 @@ impl ConfiguratorApp {
             Some(self.draft.ui_status_position),
             Message::StatusPositionChanged,
         );
+        let toolbar_layout = pick_list(
+            ToolbarLayoutModeOption::list(),
+            Some(self.draft.ui_toolbar_layout_mode),
+            Message::ToolbarLayoutModeChanged,
+        );
 
         let column = column![
             text("UI Settings").size(20),
@@ -699,23 +727,61 @@ impl ConfiguratorApp {
                 self.defaults.ui_show_frozen_badge,
                 ToggleField::UiShowFrozenBadge,
             ),
+            text("Toolbar").size(18),
+            labeled_control(
+                "Layout mode",
+                toolbar_layout.width(Length::Fill).into(),
+                self.defaults.ui_toolbar_layout_mode.label().to_string(),
+                self.draft.ui_toolbar_layout_mode != self.defaults.ui_toolbar_layout_mode,
+            ),
+            toggle_row(
+                "Show presets",
+                self.draft.ui_toolbar_show_presets,
+                self.defaults.ui_toolbar_show_presets,
+                ToggleField::UiToolbarShowPresets,
+            ),
+            toggle_row(
+                "Show actions (basic)",
+                self.draft.ui_toolbar_show_actions_section,
+                self.defaults.ui_toolbar_show_actions_section,
+                ToggleField::UiToolbarShowActionsSection,
+            ),
+            toggle_row(
+                "Show advanced actions",
+                self.draft.ui_toolbar_show_actions_advanced,
+                self.defaults.ui_toolbar_show_actions_advanced,
+                ToggleField::UiToolbarShowActionsAdvanced,
+            ),
+            toggle_row(
+                "Show Step Undo/Redo",
+                self.draft.ui_toolbar_show_step_section,
+                self.defaults.ui_toolbar_show_step_section,
+                ToggleField::UiToolbarShowStepSection,
+            ),
+            toggle_row(
+                "Always show text controls",
+                self.draft.ui_toolbar_show_text_controls,
+                self.defaults.ui_toolbar_show_text_controls,
+                ToggleField::UiToolbarShowTextControls,
+            ),
+            toggle_row(
+                "Show settings section",
+                self.draft.ui_toolbar_show_settings_section,
+                self.defaults.ui_toolbar_show_settings_section,
+                ToggleField::UiToolbarShowSettingsSection,
+            ),
             toggle_row(
                 "Show preset action toasts",
                 self.draft.ui_toolbar_show_preset_toasts,
                 self.defaults.ui_toolbar_show_preset_toasts,
                 ToggleField::UiToolbarPresetToasts,
             ),
-            row![
-                text("Status bar position:"),
-                status_position,
-                Space::with_width(Length::Fill),
-                default_value_text(
-                    self.defaults.ui_status_position.label().to_string(),
-                    self.draft.ui_status_position != self.defaults.ui_status_position,
-                )
-            ]
-            .spacing(12)
-            .align_items(iced::Alignment::Center),
+            labeled_control(
+                "Status bar position",
+                status_position.width(Length::Fill).into(),
+                self.defaults.ui_status_position.label().to_string(),
+                self.draft.ui_status_position != self.defaults.ui_status_position,
+            ),
             text("Status Bar Style").size(18),
             color_quad_editor(
                 "Background RGBA (0-1)",
@@ -863,17 +929,12 @@ impl ConfiguratorApp {
                 self.defaults.board_enabled,
                 ToggleField::BoardEnabled,
             ),
-            row![
-                text("Default mode:"),
-                board_mode_pick,
-                Space::with_width(Length::Fill),
-                default_value_text(
-                    self.defaults.board_default_mode.label().to_string(),
-                    self.draft.board_default_mode != self.defaults.board_default_mode,
-                )
-            ]
-            .spacing(12)
-            .align_items(iced::Alignment::Center),
+            labeled_control(
+                "Default mode",
+                board_mode_pick.width(Length::Fill).into(),
+                self.defaults.board_default_mode.label().to_string(),
+                self.draft.board_default_mode != self.defaults.board_default_mode,
+            ),
             color_triplet_editor(
                 "Whiteboard color RGB (0-1)",
                 &self.draft.board_whiteboard_color,
@@ -1000,17 +1061,12 @@ impl ConfiguratorApp {
                 self.defaults.session_per_output,
                 ToggleField::SessionPerOutput,
             ),
-            row![
-                text("Storage mode:"),
-                storage_pick,
-                Space::with_width(Length::Fill),
-                default_value_text(
-                    self.defaults.session_storage_mode.label().to_string(),
-                    self.draft.session_storage_mode != self.defaults.session_storage_mode,
-                )
-            ]
-            .spacing(12)
-            .align_items(iced::Alignment::Center),
+            labeled_control(
+                "Storage mode",
+                storage_pick.width(Length::Fill).into(),
+                self.defaults.session_storage_mode.label().to_string(),
+                self.draft.session_storage_mode != self.defaults.session_storage_mode,
+            ),
         ]
         .spacing(12);
 
@@ -1024,19 +1080,12 @@ impl ConfiguratorApp {
         }
 
         column = column
-            .push(
-                row![
-                    text("Compression:"),
-                    compression_pick,
-                    Space::with_width(Length::Fill),
-                    default_value_text(
-                        self.defaults.session_compression.label().to_string(),
-                        self.draft.session_compression != self.defaults.session_compression,
-                    )
-                ]
-                .spacing(12)
-                .align_items(iced::Alignment::Center),
-            )
+            .push(labeled_control(
+                "Compression",
+                compression_pick.width(Length::Fill).into(),
+                self.defaults.session_compression.label().to_string(),
+                self.draft.session_compression != self.defaults.session_compression,
+            ))
             .push(labeled_input(
                 "Max shapes per frame",
                 &self.draft.session_max_shapes_per_frame,
@@ -1089,11 +1138,8 @@ impl ConfiguratorApp {
                                 move |value| Message::KeybindingChanged(field, value)
                             })
                             .width(Length::Fill),
-                        row![
-                            Space::with_width(Length::Fill),
-                            default_value_text(default_value.to_string(), changed)
-                        ]
-                        .align_items(iced::Alignment::Center)
+                        row![default_value_text(default_value.to_string(), changed)]
+                            .align_items(iced::Alignment::Center)
                     ]
                     .spacing(4)
                     .width(Length::Fill)
@@ -1130,13 +1176,27 @@ fn labeled_input<'a>(
 ) -> Element<'a, Message> {
     let changed = value.trim() != default.trim();
     column![
-        row![
-            text(label).size(14),
-            Space::with_width(Length::Fill),
-            default_value_text(default, changed),
-        ]
-        .align_items(iced::Alignment::Center),
+        row![text(label).size(14), default_value_text(default, changed)]
+            .spacing(DEFAULT_LABEL_GAP)
+            .align_items(iced::Alignment::Center),
         text_input(label, value).on_input(move |val| Message::TextChanged(field, val))
+    ]
+    .spacing(4)
+    .width(Length::Fill)
+    .into()
+}
+
+fn labeled_control<'a>(
+    label: &'static str,
+    control: Element<'a, Message>,
+    default: impl Into<String>,
+    changed: bool,
+) -> Element<'a, Message> {
+    column![
+        row![text(label).size(14), default_value_text(default, changed)]
+            .spacing(DEFAULT_LABEL_GAP)
+            .align_items(iced::Alignment::Center),
+        control
     ]
     .spacing(4)
     .width(Length::Fill)
@@ -1153,9 +1213,9 @@ fn color_triplet_editor<'a>(
     column![
         row![
             text(label).size(14),
-            Space::with_width(Length::Fill),
             default_value_text(default.summary(), changed),
         ]
+        .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center),
         row![
             text_input("R", &colors.components[0])
@@ -1181,9 +1241,9 @@ fn color_quad_editor<'a>(
     column![
         row![
             text(label).size(14),
-            Space::with_width(Length::Fill),
             default_value_text(default.summary(), changed),
         ]
+        .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center),
         row![
             text_input("R", &colors.components[0])
@@ -1217,14 +1277,21 @@ fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
         .into()
 }
 
-fn default_value_text<'a>(value: impl Into<String>, changed: bool) -> iced::widget::Text<'a> {
-    let label = format!("Default: {}", value.into());
-    let color = if changed {
+const DEFAULT_LABEL_GAP: f32 = 12.0;
+
+fn default_label_color(changed: bool) -> iced::Color {
+    if changed {
         iced::Color::from_rgb(0.95, 0.6, 0.2)
     } else {
         iced::Color::from_rgb(0.65, 0.74, 0.82)
-    };
-    text(label).size(12).style(theme::Text::Color(color))
+    }
+}
+
+fn default_value_text<'a>(value: impl Into<String>, changed: bool) -> iced::widget::Text<'a> {
+    let label = format!("Default: {}", value.into());
+    text(label)
+        .size(12)
+        .style(theme::Text::Color(default_label_color(changed)))
 }
 
 fn bool_label(value: bool) -> &'static str {
@@ -1240,9 +1307,9 @@ fn toggle_row<'a>(
     let changed = value != default;
     row![
         checkbox(label, value).on_toggle(move |val| Message::ToggleChanged(field, val)),
-        Space::with_width(Length::Fill),
         default_value_text(bool_label(default), changed),
     ]
+    .spacing(DEFAULT_LABEL_GAP)
     .align_items(iced::Alignment::Center)
     .into()
 }
