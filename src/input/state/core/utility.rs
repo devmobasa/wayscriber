@@ -1,9 +1,12 @@
-use super::base::{InputState, PresetAction, ZoomAction};
+use super::base::{
+    InputState, PresetAction, UiToastKind, UiToastState, ZoomAction, UI_TOAST_DURATION_MS,
+};
 use crate::config::Action;
 use crate::config::Config;
 use crate::util::Rect;
 use std::io::ErrorKind;
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 impl InputState {
     /// Updates the cached pointer location.
@@ -138,7 +141,7 @@ impl InputState {
         self.zoom_scale
     }
 
-    pub(crate) fn launch_configurator(&self) {
+    pub(crate) fn launch_configurator(&mut self) {
         let binary = std::env::var("WAYSCRIBER_CONFIGURATOR")
             .unwrap_or_else(|_| "wayscriber-configurator".to_string());
 
@@ -153,24 +156,54 @@ impl InputState {
                     "Launched wayscriber-configurator (binary: {binary}, pid: {})",
                     child.id()
                 );
+                self.should_exit = true;
             }
             Err(err) => {
                 if err.kind() == ErrorKind::NotFound {
                     log::error!(
                         "Configurator not found (looked for '{binary}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path."
                     );
+                    self.set_ui_toast(
+                        UiToastKind::Warning,
+                        format!("Configurator not found: {binary}"),
+                    );
                 } else {
                     log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
                     log::error!(
                         "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
+                    );
+                    self.set_ui_toast(
+                        UiToastKind::Error,
+                        "Failed to launch configurator (see logs).",
                     );
                 }
             }
         }
     }
 
+    pub(crate) fn set_ui_toast(&mut self, kind: UiToastKind, message: impl Into<String>) {
+        self.ui_toast = Some(UiToastState {
+            kind,
+            message: message.into(),
+            started: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
+    pub fn advance_ui_toast(&mut self, now: Instant) -> bool {
+        let duration = Duration::from_millis(UI_TOAST_DURATION_MS);
+        let Some(toast) = &self.ui_toast else {
+            return false;
+        };
+        if now.saturating_duration_since(toast.started) >= duration {
+            self.ui_toast = None;
+            return false;
+        }
+        true
+    }
+
     /// Opens the primary config file using the desktop default application.
-    pub(crate) fn open_config_file_default(&self) {
+    pub(crate) fn open_config_file_default(&mut self) {
         let path = match Config::get_config_path() {
             Ok(p) => p,
             Err(err) => {
@@ -201,6 +234,7 @@ impl InputState {
                     path.display(),
                     child.id()
                 );
+                self.should_exit = true;
             }
             Err(err) => {
                 log::error!("Failed to open config file at {}: {}", path.display(), err);

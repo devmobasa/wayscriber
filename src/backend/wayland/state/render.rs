@@ -27,6 +27,7 @@ impl WaylandState {
         let now = Instant::now();
         let highlight_active = self.input_state.advance_click_highlights(now);
         let preset_feedback_active = self.input_state.advance_preset_feedback(now);
+        let ui_toast_active = self.input_state.advance_ui_toast(now);
         let mut eraser_pattern: Option<cairo::SurfacePattern> = None;
         let mut eraser_bg_color: Option<Color> = None;
 
@@ -361,6 +362,7 @@ impl WaylandState {
                     );
                 }
 
+                crate::ui::render_ui_toast(&ctx, &self.input_state, width, height);
                 crate::ui::render_preset_toast(&ctx, &self.input_state, width, height);
 
                 if !self.zoom.active {
@@ -456,6 +458,6 @@ impl WaylandState {
             self.render_toolbars(&snapshot);
         }
 
-        Ok(highlight_active || preset_feedback_active)
+        Ok(highlight_active || preset_feedback_active || ui_toast_active)
     }
 }

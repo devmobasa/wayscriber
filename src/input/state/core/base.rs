@@ -4,6 +4,7 @@ pub const MIN_STROKE_THICKNESS: f64 = 1.0;
 pub const MAX_STROKE_THICKNESS: f64 = 50.0;
 pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
+pub const UI_TOAST_DURATION_MS: u64 = 5000;
 
 use super::{
     index::SpatialGrid,
@@ -90,9 +91,23 @@ pub enum PresetFeedbackKind {
     Clear,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiToastKind {
+    Info,
+    Warning,
+    Error,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PresetFeedbackState {
     pub kind: PresetFeedbackKind,
+    pub started: Instant,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct UiToastState {
+    pub kind: UiToastKind,
+    pub message: String,
     pub started: Instant,
 }
 
@@ -215,6 +230,8 @@ pub struct InputState {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toast notifications
     pub show_preset_toasts: bool,
+    /// Pending UI toast (errors/warnings/info)
+    pub(crate) ui_toast: Option<UiToastState>,
     /// Pending delayed history playback state
     pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
@@ -385,6 +402,7 @@ impl InputState {
             show_delay_sliders: false, // Default to hidden
             show_marker_opacity_section: false,
             show_preset_toasts: true,
+            ui_toast: None,
             pending_history: None,
             context_menu_layout: None,
             spatial_index: None,
