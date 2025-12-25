@@ -688,6 +688,7 @@ pub fn render_side_palette(
     let card_w = spec.side_card_width(width);
     let content_width = spec.side_content_width(width);
     let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
+    let mut hover_preset_color: Option<Color> = None;
     let show_text_controls = snapshot.text_active || snapshot.show_text_controls;
 
     let basic_colors: &[(Color, &str)] = &[
@@ -907,6 +908,9 @@ pub fn render_side_palette(
                 ctx, slot_x, slot_row_y, slot_size, slot_size, false, slot_hover,
             );
             if let Some(preset) = preset {
+                if slot_hover {
+                    hover_preset_color = Some(preset.color);
+                }
                 ctx.set_source_rgba(preset.color.r, preset.color.g, preset.color.b, 0.12);
                 draw_round_rect(
                     ctx,
@@ -1210,6 +1214,20 @@ pub fn render_side_palette(
         }
 
         y += presets_card_h + section_gap;
+    }
+
+    if let Some(color) = hover_preset_color {
+        ctx.set_source_rgba(color.r, color.g, color.b, 0.85);
+        ctx.set_line_width(2.0);
+        draw_round_rect(
+            ctx,
+            x - 2.0,
+            picker_y - 2.0,
+            picker_w + 4.0,
+            picker_h + 4.0,
+            6.0,
+        );
+        let _ = ctx.stroke();
     }
 
     let slider_card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
