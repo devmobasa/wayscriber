@@ -70,12 +70,12 @@ impl InputState {
             let _ = self.set_thickness(preset.size);
         }
 
-        if let Some(kind) = preset.eraser_kind {
-            if self.eraser_kind != kind {
-                self.eraser_kind = kind;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
+        if let Some(kind) = preset.eraser_kind
+            && self.eraser_kind != kind
+        {
+            self.eraser_kind = kind;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
         }
         if let Some(mode) = preset.eraser_mode {
             let _ = self.set_eraser_mode(mode);
@@ -89,12 +89,12 @@ impl InputState {
         if let Some(font_size) = preset.font_size {
             let _ = self.set_font_size(font_size);
         }
-        if let Some(text_background_enabled) = preset.text_background_enabled {
-            if self.text_background_enabled != text_background_enabled {
-                self.text_background_enabled = text_background_enabled;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
+        if let Some(text_background_enabled) = preset.text_background_enabled
+            && self.text_background_enabled != text_background_enabled
+        {
+            self.text_background_enabled = text_background_enabled;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
         }
         if let Some(length) = preset.arrow_length {
             let clamped = length.clamp(5.0, 50.0);
@@ -112,19 +112,19 @@ impl InputState {
                 self.needs_redraw = true;
             }
         }
-        if let Some(head_at_end) = preset.arrow_head_at_end {
-            if self.arrow_head_at_end != head_at_end {
-                self.arrow_head_at_end = head_at_end;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
+        if let Some(head_at_end) = preset.arrow_head_at_end
+            && self.arrow_head_at_end != head_at_end
+        {
+            self.arrow_head_at_end = head_at_end;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
         }
-        if let Some(show_status_bar) = preset.show_status_bar {
-            if self.show_status_bar != show_status_bar {
-                self.show_status_bar = show_status_bar;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
+        if let Some(show_status_bar) = preset.show_status_bar
+            && self.show_status_bar != show_status_bar
+        {
+            self.show_status_bar = show_status_bar;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
         }
 
         self.active_preset_slot = Some(slot);

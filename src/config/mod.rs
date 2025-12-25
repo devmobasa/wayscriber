@@ -582,48 +582,48 @@ impl Config {
                     .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
             }
 
-            if let Some(opacity) = preset.marker_opacity.as_mut() {
-                if !(0.05..=0.9).contains(opacity) {
-                    log::warn!(
-                        "Invalid marker_opacity {:.2} in preset slot {}, clamping to 0.05-0.90 range",
-                        *opacity,
-                        slot
-                    );
-                    *opacity = opacity.clamp(0.05, 0.9);
-                }
+            if let Some(opacity) = preset.marker_opacity.as_mut()
+                && !(0.05..=0.9).contains(opacity)
+            {
+                log::warn!(
+                    "Invalid marker_opacity {:.2} in preset slot {}, clamping to 0.05-0.90 range",
+                    *opacity,
+                    slot
+                );
+                *opacity = opacity.clamp(0.05, 0.9);
             }
 
-            if let Some(size) = preset.font_size.as_mut() {
-                if !(8.0..=72.0).contains(size) {
-                    log::warn!(
-                        "Invalid font_size {:.1} in preset slot {}, clamping to 8.0-72.0 range",
-                        *size,
-                        slot
-                    );
-                    *size = size.clamp(8.0, 72.0);
-                }
+            if let Some(size) = preset.font_size.as_mut()
+                && !(8.0..=72.0).contains(size)
+            {
+                log::warn!(
+                    "Invalid font_size {:.1} in preset slot {}, clamping to 8.0-72.0 range",
+                    *size,
+                    slot
+                );
+                *size = size.clamp(8.0, 72.0);
             }
 
-            if let Some(length) = preset.arrow_length.as_mut() {
-                if !(5.0..=50.0).contains(length) {
-                    log::warn!(
-                        "Invalid arrow_length {:.1} in preset slot {}, clamping to 5.0-50.0 range",
-                        *length,
-                        slot
-                    );
-                    *length = length.clamp(5.0, 50.0);
-                }
+            if let Some(length) = preset.arrow_length.as_mut()
+                && !(5.0..=50.0).contains(length)
+            {
+                log::warn!(
+                    "Invalid arrow_length {:.1} in preset slot {}, clamping to 5.0-50.0 range",
+                    *length,
+                    slot
+                );
+                *length = length.clamp(5.0, 50.0);
             }
 
-            if let Some(angle) = preset.arrow_angle.as_mut() {
-                if !(15.0..=60.0).contains(angle) {
-                    log::warn!(
-                        "Invalid arrow_angle {:.1} in preset slot {}, clamping to 15.0-60.0 range",
-                        *angle,
-                        slot
-                    );
-                    *angle = angle.clamp(15.0, 60.0);
-                }
+            if let Some(angle) = preset.arrow_angle.as_mut()
+                && !(15.0..=60.0).contains(angle)
+            {
+                log::warn!(
+                    "Invalid arrow_angle {:.1} in preset slot {}, clamping to 15.0-60.0 range",
+                    *angle,
+                    slot
+                );
+                *angle = angle.clamp(15.0, 60.0);
             }
         };
 

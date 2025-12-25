@@ -2,10 +2,10 @@ pub mod toolbar;
 
 /// UI rendering: status bar, help overlay, visual indicators
 use crate::config::StatusPosition;
-use crate::input::{BoardMode, DrawingState, InputState, Tool, state::ContextMenuState};
 use crate::input::state::{
-    PresetFeedbackKind, UiToastKind, PRESET_TOAST_DURATION_MS, UI_TOAST_DURATION_MS,
+    PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UI_TOAST_DURATION_MS, UiToastKind,
 };
+use crate::input::{BoardMode, DrawingState, InputState, Tool, state::ContextMenuState};
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::time::Instant;
 
@@ -360,8 +360,14 @@ pub fn render_preset_toast(
     let padding_y = 9.0;
     let radius = 10.0;
 
-    let extents =
-        text_extents_for(ctx, "Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size, &label);
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+        &label,
+    );
     let width = extents.width() + padding_x * 2.0;
     let height = extents.height() + padding_y * 2.0;
     let x = (screen_width as f64 - width) / 2.0;
@@ -432,7 +438,6 @@ pub fn render_ui_toast(
 
     let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
     let (r, g, b) = match toast.kind {
-        UiToastKind::Info => (0.22, 0.5, 0.9),
         UiToastKind::Warning => (0.92, 0.62, 0.18),
         UiToastKind::Error => (0.9, 0.3, 0.3),
     };

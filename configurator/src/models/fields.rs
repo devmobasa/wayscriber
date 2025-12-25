@@ -195,7 +195,7 @@ impl ToolbarLayoutModeOption {
         }
     }
 
-    pub fn to_mode(&self) -> ToolbarLayoutMode {
+    pub fn to_mode(self) -> ToolbarLayoutMode {
         match self {
             ToolbarLayoutModeOption::Simple => ToolbarLayoutMode::Simple,
             ToolbarLayoutModeOption::Regular => ToolbarLayoutMode::Regular,
@@ -262,6 +262,7 @@ impl std::fmt::Display for OverrideOption {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub enum ToolbarOverrideField {
     ShowPresets,
     ShowActionsSection,

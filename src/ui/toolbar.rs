@@ -97,6 +97,16 @@ pub struct PresetSlotSnapshot {
     pub tool: Tool,
     pub color: Color,
     pub size: f64,
+    pub eraser_kind: Option<EraserKind>,
+    pub eraser_mode: Option<EraserMode>,
+    pub marker_opacity: Option<f64>,
+    pub fill_enabled: Option<bool>,
+    pub font_size: Option<f64>,
+    pub text_background_enabled: Option<bool>,
+    pub arrow_length: Option<f64>,
+    pub arrow_angle: Option<f64>,
+    pub arrow_head_at_end: Option<bool>,
+    pub show_status_bar: Option<bool>,
 }
 
 /// Snapshot of an in-progress preset feedback animation.
@@ -212,6 +222,16 @@ impl ToolbarSnapshot {
                     tool: preset.tool,
                     color: preset.color.to_color(),
                     size: preset.size,
+                    eraser_kind: preset.eraser_kind,
+                    eraser_mode: preset.eraser_mode,
+                    marker_opacity: preset.marker_opacity,
+                    fill_enabled: preset.fill_enabled,
+                    font_size: preset.font_size,
+                    text_background_enabled: preset.text_background_enabled,
+                    arrow_length: preset.arrow_length,
+                    arrow_angle: preset.arrow_angle,
+                    arrow_head_at_end: preset.arrow_head_at_end,
+                    show_status_bar: preset.show_status_bar,
                 })
             })
             .collect();
@@ -374,7 +394,7 @@ impl ToolbarBindingHints {
         }
     }
 
-    fn preset_binding<'a>(slots: &'a [Option<String>], slot: usize) -> Option<&'a str> {
+    fn preset_binding(slots: &[Option<String>], slot: usize) -> Option<&str> {
         if slot == 0 {
             return None;
         }

@@ -1078,18 +1078,13 @@ fn default_persist_history() -> bool {
 }
 
 /// Toolbar layout complexity presets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum ToolbarLayoutMode {
     Simple,
+    #[default]
     Regular,
     Advanced,
-}
-
-impl Default for ToolbarLayoutMode {
-    fn default() -> Self {
-        Self::Regular
-    }
 }
 
 impl ToolbarLayoutMode {

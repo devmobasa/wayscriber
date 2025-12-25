@@ -55,7 +55,7 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_COLOR_PICKER_EXTRA_HEIGHT: f64 = 30.0;
     pub(super) const SIDE_SLIDER_ROW_OFFSET: f64 = 26.0;
     pub(super) const SIDE_NUDGE_SIZE: f64 = 24.0;
-    pub(super) const SIDE_ACTION_BUTTON_HEIGHT_ICON: f64 = 42.0;
+    pub(super) const SIDE_ACTION_BUTTON_HEIGHT_ICON: f64 = 32.0;
     pub(super) const SIDE_ACTION_BUTTON_HEIGHT_TEXT: f64 = 24.0;
     pub(super) const SIDE_ACTION_BUTTON_GAP: f64 = 6.0;
     pub(super) const SIDE_ACTION_CONTENT_GAP_TEXT: f64 = 5.0;
@@ -80,7 +80,7 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_DELAY_SLIDER_HIT_PADDING: f64 = 4.0;
     pub(super) const SIDE_DELAY_SLIDER_UNDO_OFFSET_Y: f64 = 16.0;
     pub(super) const SIDE_DELAY_SLIDER_REDO_OFFSET_Y: f64 = 32.0;
-    pub(super) const SIDE_ACTION_ICON_SIZE: f64 = 22.0;
+    pub(super) const SIDE_ACTION_ICON_SIZE: f64 = 18.0;
     pub(super) const SIDE_STEP_SLIDER_TOP_PADDING: f64 = 4.0;
     pub(super) const SIDE_SLIDER_CARD_HEIGHT: f64 = 52.0;
     pub(super) const SIDE_ERASER_MODE_CARD_HEIGHT: f64 = 44.0;
@@ -90,14 +90,14 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_TOGGLE_GAP: f64 = 6.0;
     pub(super) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
     pub(super) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
-    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 112.0;
+    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 88.0;
     pub(super) const SIDE_PRESET_SLOT_SIZE: f64 = 30.0;
     pub(super) const SIDE_PRESET_SLOT_GAP: f64 = 6.0;
     pub(super) const SIDE_PRESET_ROW_OFFSET_Y: f64 = 24.0;
     pub(super) const SIDE_PRESET_ACTION_GAP: f64 = 6.0;
-    pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 20.0;
     pub(super) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 4.0;
-    pub(super) const SIDE_FOOTER_PADDING: f64 = 20.0;
+    pub(super) const SIDE_FOOTER_PADDING: f64 = 10.0;
     pub(super) const SIDE_SETTINGS_BUTTON_HEIGHT: f64 = 24.0;
     pub(super) const SIDE_SETTINGS_BUTTON_GAP: f64 = 6.0;
 
@@ -290,34 +290,29 @@ impl ToolbarLayoutSpec {
             return 0.0;
         }
 
-        let basic_count = if show_actions_section { 3 } else { 0 };
-        let advanced_count = if show_actions_advanced { 9 } else { 0 };
-        let gap_between = if show_actions_section && show_actions_advanced {
-            Self::SIDE_ACTION_BUTTON_GAP
+        let basic_count: usize = if show_actions_section { 3 } else { 0 };
+        let show_delay_actions = snapshot.show_step_section && snapshot.show_delay_sliders;
+        let advanced_count: usize = if show_actions_advanced {
+            if show_delay_actions { 9 } else { 7 }
         } else {
-            0.0
+            0
         };
 
         if self.use_icons {
             let icon_btn = Self::SIDE_ACTION_BUTTON_HEIGHT_ICON;
             let icon_gap = Self::SIDE_ACTION_BUTTON_GAP;
-            let basic_rows = if basic_count > 0 { 1 } else { 0 };
-            let basic_h = if basic_rows > 0 {
-                icon_btn * basic_rows as f64
-            } else {
-                0.0
-            };
-            let advanced_rows = if advanced_count > 0 {
-                ((advanced_count + 4) / 5) as usize
+            let total_icons = basic_count + advanced_count;
+            let icons_per_row = 6usize;
+            let rows = if total_icons > 0 {
+                total_icons.div_ceil(icons_per_row)
             } else {
                 0
             };
-            let advanced_h = if advanced_rows > 0 {
-                icon_btn * advanced_rows as f64 + icon_gap * (advanced_rows as f64 - 1.0)
+            if rows > 0 {
+                icon_btn * rows as f64 + icon_gap * (rows as f64 - 1.0)
             } else {
                 0.0
-            };
-            basic_h + gap_between + advanced_h
+            }
         } else {
             let action_h = Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
             let action_gap = Self::SIDE_ACTION_CONTENT_GAP_TEXT;
@@ -327,12 +322,17 @@ impl ToolbarLayoutSpec {
                 0.0
             };
             let advanced_rows = if advanced_count > 0 {
-                ((advanced_count + 1) / 2) as usize
+                advanced_count.div_ceil(2)
             } else {
                 0
             };
             let advanced_h = if advanced_rows > 0 {
                 action_h * advanced_rows as f64 + action_gap * (advanced_rows as f64 - 1.0)
+            } else {
+                0.0
+            };
+            let gap_between = if show_actions_section && show_actions_advanced {
+                Self::SIDE_ACTION_BUTTON_GAP
             } else {
                 0.0
             };
@@ -369,10 +369,11 @@ impl ToolbarLayoutSpec {
     pub(super) fn side_settings_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
-        let mut rows = 1; // Preset toasts
+        let mut toggle_count = 1; // Preset toasts
         if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
-            rows += 5; // presets, actions, advanced actions, step section, text controls
+            toggle_count += 5; // presets, actions, advanced actions, step section, text controls
         }
+        let rows = (toggle_count + 1) / 2;
         let toggle_rows_h = if rows > 0 {
             toggle_h * rows as f64 + toggle_gap * (rows as f64 - 1.0)
         } else {
@@ -487,24 +488,25 @@ pub fn build_top_hits(
             fill_anchor = Some((rect_x, circle_end_x - rect_x));
         }
 
-        if fill_tool_active && !(is_simple && snapshot.shape_picker_open) {
-            if let Some((fill_x, fill_w)) = fill_anchor {
-                let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
-                hits.push(HitRegion {
-                    rect: (
-                        fill_x,
-                        fill_y,
-                        fill_w,
-                        ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
-                    ),
-                    event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-                    kind: HitKind::Click,
-                    tooltip: Some(super::format_binding_label(
-                        "Fill",
-                        snapshot.binding_hints.fill.as_deref(),
-                    )),
-                });
-            }
+        if fill_tool_active
+            && !(is_simple && snapshot.shape_picker_open)
+            && let Some((fill_x, fill_w)) = fill_anchor
+        {
+            let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+            hits.push(HitRegion {
+                rect: (
+                    fill_x,
+                    fill_y,
+                    fill_w,
+                    ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
+                ),
+                event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                kind: HitKind::Click,
+                tooltip: Some(super::format_binding_label(
+                    "Fill",
+                    snapshot.binding_hints.fill.as_deref(),
+                )),
+            });
         }
 
         hits.push(HitRegion {
@@ -790,7 +792,7 @@ pub fn build_side_hits(
         let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
         let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
         let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
-        let action_w = slot_size;
+        let action_w = (slot_size - action_gap) / 2.0;
         for slot_index in 0..slot_count {
             let slot = slot_index + 1;
             let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
@@ -821,8 +823,8 @@ pub fn build_side_hits(
             if preset_exists {
                 hits.push(HitRegion {
                     rect: (
-                        slot_x,
-                        action_row_y + ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT + action_gap,
+                        slot_x + action_w + action_gap,
+                        action_row_y,
                         action_w,
                         ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT,
                     ),

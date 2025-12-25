@@ -1,5 +1,5 @@
 use super::base::{
-    InputState, PresetAction, UiToastKind, UiToastState, ZoomAction, UI_TOAST_DURATION_MS,
+    InputState, PresetAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState, ZoomAction,
 };
 use crate::config::Action;
 use crate::config::Config;

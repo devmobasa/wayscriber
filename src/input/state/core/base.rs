@@ -93,7 +93,6 @@ pub enum PresetFeedbackKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiToastKind {
-    Info,
     Warning,
     Error,
 }
