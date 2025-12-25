@@ -35,7 +35,11 @@ use std::{
 };
 #[cfg(tablet)]
 const TABLET_MANAGER_MAX_VERSION: u32 = 2;
-use wayland_client::{Connection, backend::WaylandError, globals::registry_queue_init};
+use std::os::fd::AsRawFd;
+use wayland_client::{
+    Connection, EventQueue, backend::{ReadEventsGuard, WaylandError},
+    globals::registry_queue_init,
+};
 #[cfg(tablet)]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
@@ -111,6 +115,67 @@ fn process_tray_action(state: &mut WaylandState) {
     }
 
     let _ = fs::remove_file(&action_path);
+}
+
+fn read_events_with_timeout(
+    guard: ReadEventsGuard,
+    timeout: Option<std::time::Duration>,
+) -> Result<usize, WaylandError> {
+    let mut pollfd = libc::pollfd {
+        fd: guard.connection_fd().as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let timeout_ms = timeout
+        .map(|dur| dur.as_millis().min(i32::MAX as u128) as i32)
+        .unwrap_or(-1);
+
+    loop {
+        let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+        if ready == 0 {
+            // Dropping the guard cancels the prepared read.
+            return Ok(0);
+        }
+        if ready < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(WaylandError::Io(err));
+        }
+        break;
+    }
+
+    match guard.read() {
+        Ok(n) => Ok(n),
+        Err(WaylandError::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
+        Err(e) => Err(e),
+    }
+}
+
+fn dispatch_with_timeout(
+    event_queue: &mut EventQueue<WaylandState>,
+    state: &mut WaylandState,
+    timeout: Option<std::time::Duration>,
+) -> Result<(), anyhow::Error> {
+    let dispatched = event_queue
+        .dispatch_pending(state)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if dispatched > 0 {
+        return Ok(());
+    }
+
+    event_queue.flush().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+    if let Some(guard) = event_queue.prepare_read() {
+        let _ = read_events_with_timeout(guard, timeout)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        event_queue
+            .dispatch_pending(state)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    }
+
+    Ok(())
 }
 
 fn resume_override_from_env() -> Option<bool> {
@@ -683,6 +748,16 @@ impl WaylandBackend {
                 || state.frozen.is_in_progress()
                 || state.zoom.is_in_progress()
                 || state.overlay_suppressed();
+            let frame_callback_pending = state.surface.frame_callback_pending();
+            let vsync_enabled = state.config.performance.enable_vsync;
+            let animation_timeout = if capture_active
+                || !state.surface.is_configured()
+                || (vsync_enabled && frame_callback_pending)
+            {
+                None
+            } else {
+                state.ui_animation_timeout(std::time::Instant::now())
+            };
 
             let mut dispatch_error: Option<anyhow::Error> = None;
             if capture_active {
@@ -713,7 +788,9 @@ impl WaylandBackend {
                         }
                     }
                 }
-            } else if let Err(e) = event_queue.blocking_dispatch(&mut state) {
+            } else if let Err(e) =
+                dispatch_with_timeout(&mut event_queue, &mut state, animation_timeout)
+            {
                 dispatch_error = Some(anyhow::anyhow!("Wayland event queue error: {}", e));
             }
 
@@ -744,6 +821,10 @@ impl WaylandBackend {
                     loop_error = Some(e);
                     break;
                 }
+            }
+
+            if !capture_active && state.ui_animation_due(std::time::Instant::now()) {
+                state.input_state.needs_redraw = true;
             }
 
             if capture_active {

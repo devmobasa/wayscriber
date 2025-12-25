@@ -311,6 +311,11 @@ pub struct PerformanceConfig {
     /// Set to false for lower latency at the cost of potential screen tearing
     #[serde(default = "default_enable_vsync")]
     pub enable_vsync: bool,
+
+    /// Target UI animation frame rate (0 = unlimited)
+    /// Higher values make UI effects smoother at the cost of more redraws.
+    #[serde(default = "default_ui_animation_fps")]
+    pub ui_animation_fps: u32,
 }
 
 impl Default for PerformanceConfig {
@@ -318,6 +323,7 @@ impl Default for PerformanceConfig {
         Self {
             buffer_count: default_buffer_count(),
             enable_vsync: default_enable_vsync(),
+            ui_animation_fps: default_ui_animation_fps(),
         }
     }
 }
@@ -693,6 +699,10 @@ fn default_buffer_count() -> u32 {
 
 fn default_enable_vsync() -> bool {
     true
+}
+
+fn default_ui_animation_fps() -> u32 {
+    30
 }
 
 fn default_show_status() -> bool {

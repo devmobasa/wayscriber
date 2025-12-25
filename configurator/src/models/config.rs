@@ -28,6 +28,7 @@ pub struct ConfigDraft {
 
     pub performance_buffer_count: u32,
     pub performance_enable_vsync: bool,
+    pub performance_ui_animation_fps: String,
 
     pub ui_show_status_bar: bool,
     pub ui_show_frozen_badge: bool,
@@ -204,6 +205,7 @@ impl ConfigDraft {
 
             performance_buffer_count: config.performance.buffer_count,
             performance_enable_vsync: config.performance.enable_vsync,
+            performance_ui_animation_fps: config.performance.ui_animation_fps.to_string(),
 
             ui_show_status_bar: config.ui.show_status_bar,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
@@ -329,6 +331,12 @@ impl ConfigDraft {
 
         config.performance.buffer_count = self.performance_buffer_count;
         config.performance.enable_vsync = self.performance_enable_vsync;
+        parse_u32_field(
+            &self.performance_ui_animation_fps,
+            "performance.ui_animation_fps",
+            &mut errors,
+            |value| config.performance.ui_animation_fps = value,
+        );
 
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
@@ -637,6 +645,7 @@ impl ConfigDraft {
             }
             TextField::ArrowLength => self.arrow_length = value,
             TextField::ArrowAngle => self.arrow_angle = value,
+            TextField::PerformanceUiAnimationFps => self.performance_ui_animation_fps = value,
             TextField::StatusFontSize => self.status_font_size = value,
             TextField::StatusPadding => self.status_padding = value,
             TextField::StatusDotRadius => self.status_dot_radius = value,
@@ -722,6 +731,16 @@ where
     F: FnOnce(u64),
 {
     match value.trim().parse::<u64>() {
+        Ok(parsed) => apply(parsed),
+        Err(err) => errors.push(FormError::new(field, err.to_string())),
+    }
+}
+
+fn parse_u32_field<F>(value: &str, field: &'static str, errors: &mut Vec<FormError>, apply: F)
+where
+    F: FnOnce(u32),
+{
+    match value.trim().parse::<u32>() {
         Ok(parsed) => apply(parsed),
         Err(err) => errors.push(FormError::new(field, err.to_string())),
     }

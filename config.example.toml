@@ -142,6 +142,10 @@ buffer_count = 3
 # Prevents tearing and limits rendering to display refresh rate
 enable_vsync = true
 
+# UI animation frame rate (0 = unlimited)
+# Higher values smooth UI effects at the cost of more redraws
+ui_animation_fps = 30
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # UI SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
