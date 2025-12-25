@@ -129,6 +129,10 @@ buffer_count = 3
 # Enable vsync frame synchronization
 # Prevents tearing and limits rendering to display refresh rate
 enable_vsync = true
+
+# UI animation frame rate (0 = unlimited)
+# Higher values smooth UI effects at the cost of more redraws
+ui_animation_fps = 30
 ```
 
 **Buffer Count:**
@@ -140,9 +144,15 @@ enable_vsync = true
 - **true** (default): Synchronizes with display refresh rate, no tearing
 - **false**: Uncapped rendering, may cause tearing but lower latency
 
+**UI Animation FPS:**
+- **30** (default): Smooth enough for most effects
+- **0**: Unlimited (renders every frame while animations are active)
+- Higher values improve smoothness at the cost of extra redraws
+
 **Defaults:**
 - Buffer count: 3 (triple buffering)
 - VSync: true
+- UI animation FPS: 30
 
 ### `[ui]` - User Interface
 
@@ -759,6 +769,7 @@ default_font_size = 24.0
 [performance]
 buffer_count = 4
 enable_vsync = true
+ui_animation_fps = 30
 
 [ui]
 show_status_bar = false
@@ -783,6 +794,7 @@ status_bar_position = "top-right"
 [performance]
 buffer_count = 4
 enable_vsync = true
+ui_animation_fps = 120
 ```
 
 ## See Also
