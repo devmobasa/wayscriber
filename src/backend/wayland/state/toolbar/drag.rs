@@ -213,10 +213,10 @@ impl WaylandState {
             self.data.last_applied_side_margin = Some(side_margin_top);
             self.data.last_applied_top_margin_top = Some(top_margin_top);
             self.data.last_applied_side_margin_left = Some(side_margin_left);
-            self.toolbar.set_top_margin_left(top_margin_left);
-            self.toolbar.set_top_margin_top(top_margin_top);
-            self.toolbar.set_side_margin_top(side_margin_top);
-            self.toolbar.set_side_margin_left(side_margin_left);
+            self.toolbar
+                .set_top_margins(top_margin_top, top_margin_left);
+            self.toolbar
+                .set_side_margins(side_margin_top, side_margin_left);
             self.toolbar.mark_dirty();
         }
     }

@@ -172,28 +172,27 @@ impl ToolbarSurface {
         self.logical_size = size;
     }
 
-    pub fn set_left_margin(&mut self, left: i32) {
-        if self.margin.3 == left {
+    pub fn set_margins(&mut self, top: i32, right: i32, bottom: i32, left: i32) {
+        let next = (top, right, bottom, left);
+        if self.margin == next {
             return;
         }
-        self.margin.3 = left;
+        self.margin = next;
         if let Some(layer) = self.layer_surface.as_ref() {
             layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
-            // Commit immediately so the margin change takes effect
+            // Commit immediately so the margin change takes effect.
             layer.wl_surface().commit();
         }
     }
 
+    pub fn set_left_margin(&mut self, left: i32) {
+        let (top, right, bottom, _) = self.margin;
+        self.set_margins(top, right, bottom, left);
+    }
+
     pub fn set_top_margin(&mut self, top: i32) {
-        if self.margin.0 == top {
-            return;
-        }
-        self.margin.0 = top;
-        if let Some(layer) = self.layer_surface.as_ref() {
-            layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
-            // Commit immediately so the margin change takes effect
-            layer.wl_surface().commit();
-        }
+        let (_, right, bottom, left) = self.margin;
+        self.set_margins(top, right, bottom, left);
     }
 
     pub fn set_scale(&mut self, scale: i32) {
