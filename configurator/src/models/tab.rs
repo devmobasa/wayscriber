@@ -35,3 +35,29 @@ impl TabId {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiTabId {
+    Toolbar,
+    StatusBar,
+    HelpOverlay,
+    ClickHighlight,
+}
+
+impl UiTabId {
+    pub const ALL: [UiTabId; 4] = [
+        UiTabId::Toolbar,
+        UiTabId::StatusBar,
+        UiTabId::HelpOverlay,
+        UiTabId::ClickHighlight,
+    ];
+
+    pub fn title(&self) -> &'static str {
+        match self {
+            UiTabId::Toolbar => "Toolbar",
+            UiTabId::StatusBar => "Status Bar",
+            UiTabId::HelpOverlay => "Help Overlay",
+            UiTabId::ClickHighlight => "Click Highlight",
+        }
+    }
+}

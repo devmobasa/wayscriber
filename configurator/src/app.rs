@@ -17,7 +17,7 @@ use crate::models::{
     BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, FontStyleOption,
     FontWeightOption, NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
     SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 
 pub fn run() -> iced::Result {
@@ -35,6 +35,7 @@ pub struct ConfiguratorApp {
     defaults: ConfigDraft,
     status: StatusMessage,
     active_tab: TabId,
+    active_ui_tab: UiTabId,
     override_mode: ToolbarLayoutModeOption,
     is_loading: bool,
     is_saving: bool,
@@ -88,6 +89,7 @@ impl Application for ConfiguratorApp {
             defaults,
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Drawing,
+            active_ui_tab: UiTabId::Toolbar,
             override_mode,
             is_loading: true,
             is_saving: false,
@@ -193,6 +195,9 @@ impl Application for ConfiguratorApp {
             }
             Message::TabSelected(tab) => {
                 self.active_tab = tab;
+            }
+            Message::UiTabSelected(tab) => {
+                self.active_ui_tab = tab;
             }
             Message::ToggleChanged(field, value) => {
                 self.status = StatusMessage::idle();
@@ -716,11 +721,35 @@ impl ConfiguratorApp {
     }
 
     fn ui_tab(&self) -> Element<'_, Message> {
-        let status_position = pick_list(
-            StatusPositionOption::list(),
-            Some(self.draft.ui_status_position),
-            Message::StatusPositionChanged,
+        let tab_bar = UiTabId::ALL.iter().fold(
+            Row::new().spacing(8).align_items(iced::Alignment::Center),
+            |row, tab| {
+                let label = tab.title();
+                let button = button(label)
+                    .padding([4, 10])
+                    .style(if *tab == self.active_ui_tab {
+                        theme::Button::Primary
+                    } else {
+                        theme::Button::Secondary
+                    })
+                    .on_press(Message::UiTabSelected(*tab));
+                row.push(button)
+            },
         );
+
+        let content = match self.active_ui_tab {
+            UiTabId::Toolbar => self.ui_toolbar_tab(),
+            UiTabId::StatusBar => self.ui_status_bar_tab(),
+            UiTabId::HelpOverlay => self.ui_help_overlay_tab(),
+            UiTabId::ClickHighlight => self.ui_click_highlight_tab(),
+        };
+
+        column![text("UI Settings").size(20), tab_bar, content]
+            .spacing(12)
+            .into()
+    }
+
+    fn ui_toolbar_tab(&self) -> Element<'_, Message> {
         let toolbar_layout = pick_list(
             ToolbarLayoutModeOption::list(),
             Some(self.draft.ui_toolbar_layout_mode),
@@ -737,19 +766,6 @@ impl ConfiguratorApp {
             .for_mode(self.override_mode);
 
         let column = column![
-            text("UI Settings").size(20),
-            toggle_row(
-                "Show status bar",
-                self.draft.ui_show_status_bar,
-                self.defaults.ui_show_status_bar,
-                ToggleField::UiShowStatusBar,
-            ),
-            toggle_row(
-                "Show frozen badge",
-                self.draft.ui_show_frozen_badge,
-                self.defaults.ui_show_frozen_badge,
-                ToggleField::UiShowFrozenBadge,
-            ),
             text("Toolbar").size(18),
             labeled_control(
                 "Layout mode",
@@ -825,6 +841,33 @@ impl ConfiguratorApp {
                 ToolbarOverrideField::ShowSettingsSection,
                 overrides.show_settings_section,
             ),
+        ]
+        .spacing(12);
+
+        scrollable(column).into()
+    }
+
+    fn ui_status_bar_tab(&self) -> Element<'_, Message> {
+        let status_position = pick_list(
+            StatusPositionOption::list(),
+            Some(self.draft.ui_status_position),
+            Message::StatusPositionChanged,
+        );
+
+        let column = column![
+            text("Status Bar").size(18),
+            toggle_row(
+                "Show status bar",
+                self.draft.ui_show_status_bar,
+                self.defaults.ui_show_status_bar,
+                ToggleField::UiShowStatusBar,
+            ),
+            toggle_row(
+                "Show frozen badge",
+                self.draft.ui_show_frozen_badge,
+                self.defaults.ui_show_frozen_badge,
+                ToggleField::UiShowFrozenBadge,
+            ),
             labeled_control(
                 "Status bar position",
                 status_position.width(Length::Fill).into(),
@@ -865,6 +908,14 @@ impl ConfiguratorApp {
                 )
             ]
             .spacing(12),
+        ]
+        .spacing(12);
+
+        scrollable(column).into()
+    }
+
+    fn ui_help_overlay_tab(&self) -> Element<'_, Message> {
+        let column = column![
             text("Help Overlay Style").size(18),
             color_quad_editor(
                 "Background RGBA (0-1)",
@@ -911,6 +962,14 @@ impl ConfiguratorApp {
                 )
             ]
             .spacing(12),
+        ]
+        .spacing(12);
+
+        scrollable(column).into()
+    }
+
+    fn ui_click_highlight_tab(&self) -> Element<'_, Message> {
+        let column = column![
             text("Click Highlight").size(18),
             toggle_row(
                 "Enable click highlight",

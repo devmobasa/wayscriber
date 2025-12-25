@@ -7,7 +7,7 @@ use crate::models::{
     BoardModeOption, ColorMode, FontStyleOption, FontWeightOption, KeybindingField,
     NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
     SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 
 #[derive(Debug, Clone)]
@@ -18,6 +18,7 @@ pub enum Message {
     SaveRequested,
     ConfigSaved(Result<(Option<PathBuf>, Arc<Config>), String>),
     TabSelected(TabId),
+    UiTabSelected(UiTabId),
     ToggleChanged(ToggleField, bool),
     TextChanged(TextField, String),
     TripletChanged(TripletField, usize, String),
