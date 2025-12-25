@@ -450,13 +450,7 @@ impl WaylandState {
         debug!("=== RENDER COMPLETE ===");
 
         // Render toolbar overlays if visible, only when state/hover changed.
-        if self.toolbar.is_visible() && !self.inline_toolbars_active() {
-            let snapshot = self.toolbar_snapshot();
-            if self.toolbar.update_snapshot(&snapshot) {
-                self.toolbar.mark_dirty();
-            }
-            self.render_toolbars(&snapshot);
-        }
+        self.render_layer_toolbars_if_needed();
 
         Ok(highlight_active || preset_feedback_active || ui_toast_active)
     }

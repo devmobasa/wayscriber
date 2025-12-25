@@ -63,6 +63,10 @@ impl PointerHandler for WaylandState {
                     self.set_pointer_focus(true);
                     self.set_pointer_over_toolbar(on_toolbar);
                     self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+                    if on_toolbar {
+                        // Ensure pointer-driven visuals (e.g. eraser hover) update once on enter.
+                        self.input_state.needs_redraw = true;
+                    }
                     if !on_toolbar {
                         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
                         self.input_state.update_pointer_position(wx, wy);
@@ -98,6 +102,7 @@ impl PointerHandler for WaylandState {
                             debug!("Preserving move drag state on toolbar leave");
                         }
                         self.toolbar.mark_dirty();
+                        // Ensure pointer-driven visuals (e.g. eraser hover) update once on leave.
                         self.input_state.needs_redraw = true;
                     }
                     if !on_toolbar
@@ -129,8 +134,10 @@ impl PointerHandler for WaylandState {
                         } else {
                             self.handle_toolbar_move_screen(kind, event.position);
                         }
-                        self.input_state.needs_redraw = true;
                         self.toolbar.mark_dirty();
+                        if inline_active {
+                            self.input_state.needs_redraw = true;
+                        }
                         continue;
                     }
                     if inline_active && self.inline_toolbar_motion(event.position) {
@@ -153,7 +160,9 @@ impl PointerHandler for WaylandState {
                         } else {
                             self.toolbar.mark_dirty();
                         }
-                        self.input_state.needs_redraw = true;
+                        if inline_active {
+                            self.input_state.needs_redraw = true;
+                        }
                         self.refresh_keyboard_interactivity();
                         update_cursor(true, conn, self);
                         continue;
@@ -173,7 +182,9 @@ impl PointerHandler for WaylandState {
                         } else {
                             self.toolbar.mark_dirty();
                         }
-                        self.input_state.needs_redraw = true;
+                        if inline_active {
+                            self.input_state.needs_redraw = true;
+                        }
                         self.refresh_keyboard_interactivity();
                         update_cursor(true, conn, self);
                         continue;

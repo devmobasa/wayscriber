@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{debug, info};
+use log::{debug, info, warn};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     shell::{
@@ -156,6 +156,10 @@ impl ToolbarSurface {
         self.dirty = true;
     }
 
+    pub fn needs_render(&self) -> bool {
+        self.configured && self.dirty && self.width > 0 && self.height > 0
+    }
+
     pub fn set_suppressed(&mut self, compositor: &CompositorState, suppressed: bool) {
         if self.suppressed == suppressed {
             return;
@@ -305,7 +309,13 @@ impl ToolbarSurface {
         if let Some(layer) = self.layer_surface.as_ref() {
             let wl_surface = layer.wl_surface();
             wl_surface.set_buffer_scale(self.scale);
-            wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
+            if let Err(err) = buffer.attach_to(wl_surface) {
+                warn!(
+                    "Failed to attach toolbar buffer for '{}': {}",
+                    self.name, err
+                );
+                return Ok(());
+            }
             wl_surface.damage_buffer(0, 0, phys_w as i32, phys_h as i32);
             wl_surface.commit();
         }

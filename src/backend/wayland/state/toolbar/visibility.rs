@@ -342,6 +342,21 @@ impl WaylandState {
         self.toolbar.render(&self.shm, snapshot, None);
     }
 
+    pub(in crate::backend::wayland) fn render_layer_toolbars_if_needed(&mut self) {
+        if !self.toolbar.is_visible() || self.inline_toolbars_active() {
+            return;
+        }
+
+        let snapshot = self.toolbar_snapshot();
+        let changed = self.toolbar.update_snapshot(&snapshot);
+        if changed {
+            self.toolbar.mark_dirty();
+        }
+        if changed || self.toolbar.needs_render() {
+            self.render_toolbars(&snapshot);
+        }
+    }
+
     pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {
         self.data.inline_toolbars
     }

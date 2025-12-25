@@ -315,7 +315,9 @@ impl WaylandState {
             layer.wl_surface().commit();
         }
         self.toolbar.mark_dirty();
-        self.input_state.needs_redraw = true;
+        if self.inline_toolbars_active() {
+            self.input_state.needs_redraw = true;
+        }
         self.clamp_toolbar_offsets(&snapshot);
 
         if self.layer_shell.is_none() || self.inline_toolbars_active() {
@@ -389,7 +391,9 @@ impl WaylandState {
         });
         self.apply_toolbar_offsets(&snapshot);
         self.toolbar.mark_dirty();
-        self.input_state.needs_redraw = true;
+        if self.inline_toolbars_active() {
+            self.input_state.needs_redraw = true;
+        }
 
         // Ensure we don't drift off-screen.
         self.clamp_toolbar_offsets(&snapshot);
@@ -445,7 +449,9 @@ impl WaylandState {
         ));
 
         self.toolbar.mark_dirty();
-        self.input_state.needs_redraw = true;
+        if self.inline_toolbars_active() {
+            self.input_state.needs_redraw = true;
+        }
     }
 
     pub(in crate::backend::wayland) fn end_toolbar_move_drag(&mut self) {

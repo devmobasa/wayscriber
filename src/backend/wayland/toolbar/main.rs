@@ -294,6 +294,11 @@ impl ToolbarSurfaceManager {
         self.side.mark_dirty();
     }
 
+    pub fn needs_render(&self) -> bool {
+        (self.top_visible && self.top.needs_render())
+            || (self.side_visible && self.side.needs_render())
+    }
+
     /// Store the latest snapshot and report whether it differs from the previous one.
     pub fn update_snapshot(&mut self, snapshot: &ToolbarSnapshot) -> bool {
         let changed = self
