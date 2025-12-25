@@ -36,6 +36,14 @@ impl WaylandState {
         self.data.toolbar_needs_recreate = value;
     }
 
+    /// Clear cached margins so recreated/hidden toolbars reapply offsets once.
+    fn reset_toolbar_margin_cache(&mut self) {
+        self.data.last_applied_top_margin = None;
+        self.data.last_applied_top_margin_top = None;
+        self.data.last_applied_side_margin = None;
+        self.data.last_applied_side_margin_left = None;
+    }
+
     pub(in crate::backend::wayland) fn toolbar_top_offset(&self) -> f64 {
         self.data.toolbar_top_offset
     }
@@ -215,6 +223,7 @@ impl WaylandState {
         if !any_visible {
             self.set_pointer_over_toolbar(false);
             self.data.toolbar_configure_miss_count = 0;
+            self.reset_toolbar_margin_cache();
         }
 
         if any_visible {
@@ -253,6 +262,7 @@ impl WaylandState {
             if self.toolbar.top_created() || self.toolbar.side_created() {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(true);
+                self.reset_toolbar_margin_cache();
             }
             self.data.toolbar_configure_miss_count = 0;
         }
@@ -288,6 +298,7 @@ impl WaylandState {
                     self.data.toolbar_configure_miss_count
                 );
                 self.toolbar.destroy_all();
+                self.reset_toolbar_margin_cache();
                 self.data.inline_toolbars = true;
                 self.set_toolbar_needs_recreate(true);
                 self.data.toolbar_configure_miss_count = 0;
@@ -299,6 +310,7 @@ impl WaylandState {
             if self.toolbar_needs_recreate() {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(false);
+                self.reset_toolbar_margin_cache();
             }
             let snapshot = self.toolbar_snapshot();
             self.apply_toolbar_offsets(&snapshot);
