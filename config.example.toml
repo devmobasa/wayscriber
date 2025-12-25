@@ -219,6 +219,36 @@ enabled = true
 # ───────────────────────────────────────────────────────────────────────────────
 
 [ui.toolbar]
+# Toolbar layout preset (simple / regular / advanced)
+layout_mode = "regular"
+
+# Optional per-mode overrides for toolbar sections
+# Use true/false to override a section; omit to use the mode default.
+#
+# [ui.toolbar.mode_overrides.simple]
+# show_presets = false
+# show_actions_section = true
+# show_actions_advanced = false
+# show_step_section = false
+# show_text_controls = false
+# show_settings_section = false
+#
+# [ui.toolbar.mode_overrides.regular]
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = false
+# show_step_section = false
+# show_text_controls = false
+# show_settings_section = true
+#
+# [ui.toolbar.mode_overrides.advanced]
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = true
+# show_step_section = true
+# show_text_controls = true
+# show_settings_section = true
+
 # Show top toolbar on startup (pinned)
 top_pinned = true
 
@@ -233,9 +263,23 @@ use_icons = true
 # When enabled, displays additional color options beyond the basic 8
 show_more_colors = false
 
-# Show undo all / redo all action buttons in side toolbar
-# Provides quick access to clear undo/redo history
+# Show basic actions (undo/redo/clear) in side toolbar
 show_actions_section = true
+
+# Show advanced actions (undo all, zoom, freeze, etc.)
+show_actions_advanced = false
+
+# Show presets section in side toolbar
+show_presets = true
+
+# Show step undo/redo section
+show_step_section = false
+
+# Keep text controls visible even when text is inactive
+show_text_controls = false
+
+# Show settings section (config buttons and advanced toggles)
+show_settings_section = true
 
 # Show timing delay sliders in side toolbar
 # Allows configuring delayed undo/redo all timing

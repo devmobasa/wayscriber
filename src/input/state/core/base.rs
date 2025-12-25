@@ -11,7 +11,7 @@ use super::{
     properties::ShapePropertiesPanel,
     selection::SelectionState,
 };
-use crate::config::{Action, BoardConfig, KeyBinding, ToolPresetConfig, PRESET_SLOTS_MAX};
+use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
@@ -74,8 +74,13 @@ pub enum ZoomAction {
 
 #[derive(Debug, Clone)]
 pub enum PresetAction {
-    Save { slot: usize, preset: ToolPresetConfig },
-    Clear { slot: usize },
+    Save {
+        slot: usize,
+        preset: ToolPresetConfig,
+    },
+    Clear {
+        slot: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,6 +149,12 @@ pub struct InputState {
     pub toolbar_side_pinned: bool,
     /// Whether to use icons instead of text labels in toolbars
     pub toolbar_use_icons: bool,
+    /// Current toolbar layout complexity
+    pub toolbar_layout_mode: crate::config::ToolbarLayoutMode,
+    /// Optional per-mode overrides for toolbar sections
+    pub toolbar_mode_overrides: crate::config::ToolbarModeOverrides,
+    /// Whether the simple-mode shape picker is expanded
+    pub toolbar_shapes_expanded: bool,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -230,6 +241,16 @@ pub struct InputState {
     pub show_more_colors: bool,
     /// Whether to show the Actions section (undo all, redo all, etc.)
     pub show_actions_section: bool,
+    /// Whether to show advanced action buttons
+    pub show_actions_advanced: bool,
+    /// Whether to show the presets section
+    pub show_presets: bool,
+    /// Whether to show the Step Undo/Redo section
+    pub show_step_section: bool,
+    /// Whether to keep text controls visible when text is inactive
+    pub show_text_controls: bool,
+    /// Whether to show the Settings section
+    pub show_settings_section: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slots for quick tool switching
@@ -331,6 +352,9 @@ impl InputState {
             toolbar_top_pinned: false,
             toolbar_side_pinned: false,
             toolbar_use_icons: true, // Default to icon mode
+            toolbar_layout_mode: crate::config::ToolbarLayoutMode::Regular,
+            toolbar_mode_overrides: crate::config::ToolbarModeOverrides::default(),
+            toolbar_shapes_expanded: false,
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,
@@ -374,6 +398,11 @@ impl InputState {
             zoom_scale: 1.0,
             show_more_colors: false,
             show_actions_section: true, // Show by default
+            show_actions_advanced: false,
+            show_presets: true,
+            show_step_section: false,
+            show_text_controls: false,
+            show_settings_section: true,
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],
             active_preset_slot: None,

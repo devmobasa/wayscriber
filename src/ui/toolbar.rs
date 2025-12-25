@@ -1,7 +1,8 @@
+use crate::config::ToolbarLayoutMode;
 use crate::config::{KeybindingsConfig, PRESET_SLOTS_MAX};
 use crate::draw::{Color, EraserKind, FontDescriptor};
+use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, PresetFeedbackKind};
 use crate::input::{EraserMode, InputState, Tool};
-use crate::input::state::{PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS};
 use std::time::Instant;
 
 /// Events emitted by the floating toolbar UI.
@@ -63,8 +64,20 @@ pub enum ToolbarEvent {
     ToggleMoreColors(bool),
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
+    /// Toggle advanced action buttons
+    ToggleActionsAdvanced(bool),
+    /// Toggle presets section visibility
+    TogglePresets(bool),
+    /// Toggle Step Undo/Redo section visibility
+    ToggleStepSection(bool),
+    /// Toggle persistent text controls visibility
+    ToggleTextControls(bool),
     /// Toggle preset action toast notifications
     TogglePresetToasts(bool),
+    /// Set toolbar layout mode
+    SetToolbarLayoutMode(ToolbarLayoutMode),
+    /// Toggle the simple-mode shape picker
+    ToggleShapePicker(bool),
     /// Drag handle for top toolbar (carries pointer position in toolbar coords)
     MoveTopToolbar {
         x: f64,
@@ -133,14 +146,28 @@ pub struct ToolbarSnapshot {
     pub side_pinned: bool,
     /// Whether to use icons instead of text labels
     pub use_icons: bool,
+    /// Current toolbar layout mode
+    pub layout_mode: ToolbarLayoutMode,
     /// Whether to show extended color palette
     pub show_more_colors: bool,
     /// Whether to show the Actions section
     pub show_actions_section: bool,
+    /// Whether to show advanced action buttons
+    pub show_actions_advanced: bool,
     /// Whether to show the marker opacity slider section
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
     pub show_preset_toasts: bool,
+    /// Whether to show presets in the side toolbar
+    pub show_presets: bool,
+    /// Whether to show the Step Undo/Redo section
+    pub show_step_section: bool,
+    /// Whether to keep text controls visible when text is inactive
+    pub show_text_controls: bool,
+    /// Whether to show the Settings section
+    pub show_settings_section: bool,
+    /// Whether the simple-mode shape picker is expanded
+    pub shape_picker_open: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slot previews
@@ -242,14 +269,21 @@ impl ToolbarSnapshot {
             top_pinned: state.toolbar_top_pinned,
             side_pinned: state.toolbar_side_pinned,
             use_icons: state.toolbar_use_icons,
+            layout_mode: state.toolbar_layout_mode,
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
+            show_actions_advanced: state.show_actions_advanced,
             show_marker_opacity_section: state.show_marker_opacity_section,
             show_preset_toasts: state.show_preset_toasts,
+            show_presets: state.show_presets,
+            show_step_section: state.show_step_section,
+            show_text_controls: state.show_text_controls,
+            show_settings_section: state.show_settings_section,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,
             preset_feedback,
+            shape_picker_open: state.toolbar_shapes_expanded,
             binding_hints,
         }
     }
@@ -372,7 +406,14 @@ impl InputState {
                     self.last_text_preview_bounds = None;
                     self.state = crate::input::DrawingState::Idle;
                 }
-                self.set_tool_override(Some(tool))
+                let mut changed = self.set_tool_override(Some(tool));
+                if self.toolbar_layout_mode == ToolbarLayoutMode::Simple
+                    && self.toolbar_shapes_expanded
+                {
+                    self.toolbar_shapes_expanded = false;
+                    changed = true;
+                }
+                changed
             }
             ToolbarEvent::SetColor(color) => self.set_color(color),
             ToolbarEvent::SetThickness(value) => self.set_thickness_for_active_tool(value),
@@ -579,9 +620,63 @@ impl InputState {
                     false
                 }
             }
+            ToolbarEvent::ToggleActionsAdvanced(show) => {
+                if self.show_actions_advanced != show {
+                    self.show_actions_advanced = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::TogglePresets(show) => {
+                if self.show_presets != show {
+                    self.show_presets = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleStepSection(show) => {
+                if self.show_step_section != show {
+                    self.show_step_section = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleTextControls(show) => {
+                if self.show_text_controls != show {
+                    self.show_text_controls = show;
+                    true
+                } else {
+                    false
+                }
+            }
             ToolbarEvent::TogglePresetToasts(show) => {
                 if self.show_preset_toasts != show {
                     self.show_preset_toasts = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::SetToolbarLayoutMode(mode) => {
+                if self.toolbar_layout_mode != mode {
+                    self.toolbar_layout_mode = mode;
+                    self.apply_toolbar_mode_defaults(mode);
+                    if mode != ToolbarLayoutMode::Simple {
+                        self.toolbar_shapes_expanded = false;
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleShapePicker(open) => {
+                let allow = self.toolbar_layout_mode == ToolbarLayoutMode::Simple;
+                let next = allow && open;
+                if self.toolbar_shapes_expanded != next {
+                    self.toolbar_shapes_expanded = next;
                     true
                 } else {
                     false

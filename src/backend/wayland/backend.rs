@@ -454,11 +454,18 @@ impl WaylandBackend {
 
         // Initialize toolbar visibility from pinned config
         input_state.init_toolbar_from_config(
+            config.ui.toolbar.layout_mode,
+            config.ui.toolbar.mode_overrides.clone(),
             config.ui.toolbar.top_pinned,
             config.ui.toolbar.side_pinned,
             config.ui.toolbar.use_icons,
             config.ui.toolbar.show_more_colors,
             config.ui.toolbar.show_actions_section,
+            config.ui.toolbar.show_actions_advanced,
+            config.ui.toolbar.show_presets,
+            config.ui.toolbar.show_step_section,
+            config.ui.toolbar.show_text_controls,
+            config.ui.toolbar.show_settings_section,
             config.ui.toolbar.show_delay_sliders,
             config.ui.toolbar.show_marker_opacity_section,
             config.ui.toolbar.show_preset_toasts,

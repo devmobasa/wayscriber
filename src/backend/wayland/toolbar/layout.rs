@@ -1,14 +1,16 @@
+use crate::config::ToolbarLayoutMode;
 use crate::ui::toolbar::ToolbarSnapshot;
 
 use super::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
 use super::hit::HitRegion;
-use crate::backend::wayland::toolbar_icons;
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ToolbarLayoutSpec {
     use_icons: bool,
+    layout_mode: ToolbarLayoutMode,
+    shape_picker_open: bool,
 }
 
 impl ToolbarLayoutSpec {
@@ -33,6 +35,7 @@ impl ToolbarLayoutSpec {
     pub(super) const TOP_PIN_BUTTON_GAP: f64 = 6.0;
     pub(super) const TOP_PIN_BUTTON_MARGIN_RIGHT: f64 = 12.0;
     pub(super) const TOP_PIN_BUTTON_Y_ICON: f64 = 15.0;
+    pub(super) const TOP_SHAPE_ROW_GAP: f64 = 6.0;
 
     pub(super) const SIDE_START_X: f64 = 16.0;
     pub(super) const SIDE_TOP_PADDING: f64 = 12.0;
@@ -44,6 +47,8 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_HEADER_BUTTON_MARGIN_RIGHT: f64 = 12.0;
     pub(super) const SIDE_HEADER_BUTTON_GAP: f64 = 8.0;
     pub(super) const SIDE_HEADER_TOGGLE_WIDTH: f64 = 70.0;
+    pub(super) const SIDE_HEADER_MODE_WIDTH: f64 = 78.0;
+    pub(super) const SIDE_HEADER_MODE_GAP: f64 = 8.0;
     pub(super) const SIDE_CONTENT_PADDING_X: f64 = 32.0;
     pub(super) const SIDE_CARD_INSET: f64 = 6.0;
     pub(super) const SIDE_COLOR_PICKER_OFFSET_Y: f64 = 24.0;
@@ -54,8 +59,6 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_ACTION_BUTTON_HEIGHT_TEXT: f64 = 24.0;
     pub(super) const SIDE_ACTION_BUTTON_GAP: f64 = 6.0;
     pub(super) const SIDE_ACTION_CONTENT_GAP_TEXT: f64 = 5.0;
-    pub(super) const SIDE_ACTION_CONTENT_ROWS_ICON: f64 = 3.0;
-    pub(super) const SIDE_ACTION_CONTENT_ROWS_TEXT: f64 = 8.0;
 
     pub(super) const SIDE_SECTION_GAP: f64 = 12.0;
     pub(super) const SIDE_SECTION_TOGGLE_OFFSET_Y: f64 = 22.0;
@@ -82,8 +85,6 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_SLIDER_CARD_HEIGHT: f64 = 52.0;
     pub(super) const SIDE_ERASER_MODE_CARD_HEIGHT: f64 = 44.0;
     pub(super) const SIDE_FONT_CARD_HEIGHT: f64 = 50.0;
-    pub(super) const SIDE_ACTIONS_HEADER_HEIGHT: f64 = 20.0;
-    pub(super) const SIDE_ACTIONS_CHECKBOX_HEIGHT: f64 = 24.0;
     pub(super) const SIDE_DELAY_SECTION_HEIGHT: f64 = 55.0;
     pub(super) const SIDE_TOGGLE_HEIGHT: f64 = 24.0;
     pub(super) const SIDE_TOGGLE_GAP: f64 = 6.0;
@@ -97,47 +98,123 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 24.0;
     pub(super) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 4.0;
     pub(super) const SIDE_FOOTER_PADDING: f64 = 20.0;
+    pub(super) const SIDE_SETTINGS_BUTTON_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_SETTINGS_BUTTON_GAP: f64 = 6.0;
 
     pub(super) fn new(snapshot: &ToolbarSnapshot) -> Self {
         Self {
             use_icons: snapshot.use_icons,
+            layout_mode: snapshot.layout_mode,
+            shape_picker_open: snapshot.shape_picker_open,
         }
     }
 
-    pub(super) fn top_size(&self) -> (u32, u32) {
-        if self.use_icons {
-            Self::TOP_SIZE_ICONS
+    pub(super) fn top_size(&self, snapshot: &ToolbarSnapshot) -> (u32, u32) {
+        let base_height = if self.use_icons {
+            Self::TOP_SIZE_ICONS.1
         } else {
-            Self::TOP_SIZE_TEXT
+            Self::TOP_SIZE_TEXT.1
+        };
+        let mut height = base_height as f64;
+        if self.layout_mode == ToolbarLayoutMode::Simple && self.shape_picker_open {
+            let (_, btn_h) = if self.use_icons {
+                (Self::TOP_ICON_BUTTON, Self::TOP_ICON_BUTTON)
+            } else {
+                (Self::TOP_TEXT_BUTTON_W, Self::TOP_TEXT_BUTTON_H)
+            };
+            height += btn_h + Self::TOP_SHAPE_ROW_GAP;
         }
+
+        let gap = Self::TOP_GAP;
+        let btn_w = if self.use_icons {
+            Self::TOP_ICON_BUTTON
+        } else {
+            Self::TOP_TEXT_BUTTON_W
+        };
+        let tool_count = if self.layout_mode == ToolbarLayoutMode::Simple {
+            4
+        } else {
+            8
+        };
+        let mut x = Self::TOP_START_X + Self::TOP_HANDLE_SIZE + gap;
+        x += tool_count as f64 * (btn_w + gap);
+        if self.layout_mode == ToolbarLayoutMode::Simple {
+            x += btn_w + gap;
+        }
+        let fill_tool_active = matches!(snapshot.tool_override, Some(Tool::Rect | Tool::Ellipse))
+            || matches!(snapshot.active_tool, Tool::Rect | Tool::Ellipse);
+        let fill_visible = !self.use_icons
+            && fill_tool_active
+            && !(self.layout_mode == ToolbarLayoutMode::Simple && self.shape_picker_open);
+        if fill_visible {
+            x += Self::TOP_TEXT_FILL_W + gap;
+        }
+        x += btn_w + gap; // Text button
+        if self.layout_mode != ToolbarLayoutMode::Simple {
+            x += btn_w + gap; // Clear
+            if self.use_icons {
+                x += btn_w + gap; // Highlight
+            }
+        }
+        let left_end = x + Self::TOP_TOGGLE_WIDTH;
+        let right_controls = Self::TOP_PIN_BUTTON_SIZE * 2.0
+            + Self::TOP_PIN_BUTTON_GAP
+            + Self::TOP_PIN_BUTTON_MARGIN_RIGHT;
+        let width = left_end + gap + right_controls;
+
+        (width.ceil() as u32, height.ceil() as u32)
     }
 
     pub(super) fn side_size(&self, snapshot: &ToolbarSnapshot) -> (u32, u32) {
         let base_height = self.side_content_start_y();
         let colors_h = self.side_colors_height(snapshot);
-        let actions_toggle_h =
-            Self::SIDE_ACTIONS_CHECKBOX_HEIGHT * 2.0 + Self::SIDE_TOGGLE_GAP;
-        let actions_h = Self::SIDE_ACTIONS_HEADER_HEIGHT
-            + actions_toggle_h
-            + self.side_actions_content_height(snapshot);
-        let step_h = self.side_step_height(snapshot);
-
         let show_marker_opacity =
             snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
+        let show_text_controls = snapshot.text_active || snapshot.show_text_controls;
+        let show_actions = snapshot.show_actions_section || snapshot.show_actions_advanced;
+        let show_presets =
+            snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
+        let show_step_section = snapshot.show_step_section;
+        let show_settings_section = snapshot.show_settings_section;
 
-        let mut height: f64 = base_height + colors_h + Self::SIDE_SECTION_GAP;
-        height += Self::SIDE_PRESET_CARD_HEIGHT + Self::SIDE_SECTION_GAP;
-        height += Self::SIDE_SLIDER_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Thickness
+        let mut height: f64 = base_height;
+        let add_section = |section_height: f64, height: &mut f64| {
+            if section_height > 0.0 {
+                *height += section_height + Self::SIDE_SECTION_GAP;
+            }
+        };
+
+        add_section(colors_h, &mut height);
+        if show_presets {
+            add_section(Self::SIDE_PRESET_CARD_HEIGHT, &mut height);
+        }
+        add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Thickness
         if snapshot.thickness_targets_eraser {
-            height += Self::SIDE_ERASER_MODE_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Eraser mode
+            add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
         }
         if show_marker_opacity {
-            height += Self::SIDE_SLIDER_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Marker opacity
+            add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
         }
-        height += Self::SIDE_SLIDER_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Text size
-        height += Self::SIDE_FONT_CARD_HEIGHT + Self::SIDE_SECTION_GAP;
-        height += actions_h + Self::SIDE_SECTION_GAP;
-        height += step_h;
+        if show_text_controls {
+            add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Text size
+            add_section(Self::SIDE_FONT_CARD_HEIGHT, &mut height);
+        }
+
+        if show_actions {
+            let actions_card_h = self.side_actions_height(snapshot);
+            add_section(actions_card_h, &mut height);
+        }
+
+        if show_step_section {
+            let step_h = self.side_step_height(snapshot);
+            add_section(step_h, &mut height);
+        }
+
+        if show_settings_section {
+            let settings_h = self.side_settings_height(snapshot);
+            add_section(settings_h, &mut height);
+        }
+
         height += Self::SIDE_FOOTER_PADDING;
 
         (Self::SIDE_WIDTH, height.ceil() as u32)
@@ -207,15 +284,68 @@ impl ToolbarLayoutSpec {
     }
 
     pub(super) fn side_actions_content_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
-        if !snapshot.show_actions_section {
+        let show_actions_section = snapshot.show_actions_section;
+        let show_actions_advanced = snapshot.show_actions_advanced;
+        if !show_actions_section && !show_actions_advanced {
             return 0.0;
         }
-        if self.use_icons {
-            (Self::SIDE_ACTION_BUTTON_HEIGHT_ICON + Self::SIDE_ACTION_BUTTON_GAP)
-                * Self::SIDE_ACTION_CONTENT_ROWS_ICON
+
+        let basic_count = if show_actions_section { 3 } else { 0 };
+        let advanced_count = if show_actions_advanced { 9 } else { 0 };
+        let gap_between = if show_actions_section && show_actions_advanced {
+            Self::SIDE_ACTION_BUTTON_GAP
         } else {
-            (Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT + Self::SIDE_ACTION_CONTENT_GAP_TEXT)
-                * Self::SIDE_ACTION_CONTENT_ROWS_TEXT
+            0.0
+        };
+
+        if self.use_icons {
+            let icon_btn = Self::SIDE_ACTION_BUTTON_HEIGHT_ICON;
+            let icon_gap = Self::SIDE_ACTION_BUTTON_GAP;
+            let basic_rows = if basic_count > 0 { 1 } else { 0 };
+            let basic_h = if basic_rows > 0 {
+                icon_btn * basic_rows as f64
+            } else {
+                0.0
+            };
+            let advanced_rows = if advanced_count > 0 {
+                ((advanced_count + 4) / 5) as usize
+            } else {
+                0
+            };
+            let advanced_h = if advanced_rows > 0 {
+                icon_btn * advanced_rows as f64 + icon_gap * (advanced_rows as f64 - 1.0)
+            } else {
+                0.0
+            };
+            basic_h + gap_between + advanced_h
+        } else {
+            let action_h = Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
+            let action_gap = Self::SIDE_ACTION_CONTENT_GAP_TEXT;
+            let basic_h = if basic_count > 0 {
+                action_h * basic_count as f64 + action_gap * (basic_count as f64 - 1.0)
+            } else {
+                0.0
+            };
+            let advanced_rows = if advanced_count > 0 {
+                ((advanced_count + 1) / 2) as usize
+            } else {
+                0
+            };
+            let advanced_h = if advanced_rows > 0 {
+                action_h * advanced_rows as f64 + action_gap * (advanced_rows as f64 - 1.0)
+            } else {
+                0.0
+            };
+            basic_h + gap_between + advanced_h
+        }
+    }
+
+    pub(super) fn side_actions_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
+        let content = self.side_actions_content_height(snapshot);
+        if content <= 0.0 {
+            0.0
+        } else {
+            Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content + Self::SIDE_ACTION_BUTTON_GAP
         }
     }
 
@@ -234,6 +364,23 @@ impl ToolbarLayoutSpec {
                 0.0
             }
             + delay_h
+    }
+
+    pub(super) fn side_settings_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
+        let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
+        let toggle_gap = Self::SIDE_TOGGLE_GAP;
+        let mut rows = 1; // Preset toasts
+        if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
+            rows += 5; // presets, actions, advanced actions, step section, text controls
+        }
+        let toggle_rows_h = if rows > 0 {
+            toggle_h * rows as f64 + toggle_gap * (rows as f64 - 1.0)
+        } else {
+            0.0
+        };
+        let buttons_h = Self::SIDE_SETTINGS_BUTTON_HEIGHT;
+        let content_h = toggle_rows_h + toggle_gap + buttons_h;
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
     }
 
     pub(super) fn side_header_y(&self) -> f64 {
@@ -255,7 +402,7 @@ impl ToolbarLayoutSpec {
 
 /// Compute the target logical size for the top toolbar given snapshot state.
 pub fn top_size(snapshot: &ToolbarSnapshot) -> (u32, u32) {
-    ToolbarLayoutSpec::new(snapshot).top_size()
+    ToolbarLayoutSpec::new(snapshot).top_size(snapshot)
 }
 
 /// Compute the target logical size for the side toolbar given snapshot state.
@@ -276,53 +423,43 @@ pub fn build_top_hits(
     let gap = ToolbarLayoutSpec::TOP_GAP;
     let mut x = ToolbarLayoutSpec::TOP_START_X;
 
-    type IconFn = fn(&cairo::Context, f64, f64, f64);
-    let buttons: &[(Tool, IconFn, &str)] = &[
-        (
-            Tool::Select,
-            toolbar_icons::draw_icon_select as IconFn,
-            "Select",
-        ),
-        (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
-        (
-            Tool::Marker,
-            toolbar_icons::draw_icon_marker as IconFn,
-            "Marker",
-        ),
-        (
-            Tool::Eraser,
-            toolbar_icons::draw_icon_eraser as IconFn,
-            "Eraser",
-        ),
-        (Tool::Line, toolbar_icons::draw_icon_line as IconFn, "Line"),
-        (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn, "Rect"),
-        (
-            Tool::Ellipse,
-            toolbar_icons::draw_icon_circle as IconFn,
-            "Circle",
-        ),
-        (
-            Tool::Arrow,
-            toolbar_icons::draw_icon_arrow as IconFn,
-            "Arrow",
-        ),
-    ];
+    let is_simple = snapshot.layout_mode == ToolbarLayoutMode::Simple;
+    let fill_tool_active = matches!(snapshot.tool_override, Some(Tool::Rect | Tool::Ellipse))
+        || matches!(snapshot.active_tool, Tool::Rect | Tool::Ellipse);
 
     if use_icons {
         let (btn_size, _) = spec.top_button_size();
         let y = spec.top_button_y(height);
-        let _icon_size = 26.0;
-        let mut rect_x = 0.0;
-        let mut circle_end_x = 0.0;
+        let mut fill_anchor: Option<(f64, f64)> = None;
+        let tool_buttons: &[(Tool, &str)] = if is_simple {
+            &[
+                (Tool::Select, "Select"),
+                (Tool::Pen, "Pen"),
+                (Tool::Marker, "Marker"),
+                (Tool::Eraser, "Eraser"),
+            ]
+        } else {
+            &[
+                (Tool::Select, "Select"),
+                (Tool::Pen, "Pen"),
+                (Tool::Marker, "Marker"),
+                (Tool::Eraser, "Eraser"),
+                (Tool::Line, "Line"),
+                (Tool::Rect, "Rect"),
+                (Tool::Ellipse, "Circle"),
+                (Tool::Arrow, "Arrow"),
+            ]
+        };
 
-        for (tool, _icon_fn, label) in buttons {
+        let mut rect_x = None;
+        let mut circle_end_x = None;
+        for (tool, label) in tool_buttons {
             if *tool == Tool::Rect {
-                rect_x = x;
+                rect_x = Some(x);
             }
             if *tool == Tool::Ellipse {
-                circle_end_x = x + btn_size;
+                circle_end_x = Some(x + btn_size);
             }
-
             hits.push(HitRegion {
                 rect: (x, y, btn_size, btn_size),
                 event: ToolbarEvent::SelectTool(*tool),
@@ -335,24 +472,41 @@ pub fn build_top_hits(
             x += btn_size + gap;
         }
 
-        let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
-        let fill_w = circle_end_x - rect_x;
-        hits.push(HitRegion {
-            rect: (
-                rect_x,
-                fill_y,
-                fill_w,
-                ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
-            ),
-            event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-            kind: HitKind::Click,
-            tooltip: Some(super::format_binding_label(
-                "Fill",
-                snapshot.binding_hints.fill.as_deref(),
-            )),
-        });
+        if is_simple {
+            hits.push(HitRegion {
+                rect: (x, y, btn_size, btn_size),
+                event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
+                kind: HitKind::Click,
+                tooltip: Some("Shapes".to_string()),
+            });
+            if fill_tool_active && !snapshot.shape_picker_open {
+                fill_anchor = Some((x, btn_size));
+            }
+            x += btn_size + gap;
+        } else if let (Some(rect_x), Some(circle_end_x)) = (rect_x, circle_end_x) {
+            fill_anchor = Some((rect_x, circle_end_x - rect_x));
+        }
 
-        let (btn_size, _) = spec.top_button_size();
+        if fill_tool_active && !(is_simple && snapshot.shape_picker_open) {
+            if let Some((fill_x, fill_w)) = fill_anchor {
+                let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+                hits.push(HitRegion {
+                    rect: (
+                        fill_x,
+                        fill_y,
+                        fill_w,
+                        ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
+                    ),
+                    event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                    kind: HitKind::Click,
+                    tooltip: Some(super::format_binding_label(
+                        "Fill",
+                        snapshot.binding_hints.fill.as_deref(),
+                    )),
+                });
+            }
+        }
+
         hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::EnterTextMode,
@@ -364,27 +518,29 @@ pub fn build_top_hits(
         });
         x += btn_size + gap;
 
-        hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::ClearCanvas,
-            kind: HitKind::Click,
-            tooltip: Some(super::format_binding_label(
-                "Clear",
-                snapshot.binding_hints.clear.as_deref(),
-            )),
-        });
-        x += btn_size + gap;
+        if !is_simple {
+            hits.push(HitRegion {
+                rect: (x, y, btn_size, btn_size),
+                event: ToolbarEvent::ClearCanvas,
+                kind: HitKind::Click,
+                tooltip: Some(super::format_binding_label(
+                    "Clear",
+                    snapshot.binding_hints.clear.as_deref(),
+                )),
+            });
+            x += btn_size + gap;
 
-        hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
-            kind: HitKind::Click,
-            tooltip: Some(super::format_binding_label(
-                "Click highlight",
-                snapshot.binding_hints.toggle_highlight.as_deref(),
-            )),
-        });
-        x += btn_size + gap;
+            hits.push(HitRegion {
+                rect: (x, y, btn_size, btn_size),
+                event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
+                kind: HitKind::Click,
+                tooltip: Some(super::format_binding_label(
+                    "Click highlight",
+                    snapshot.binding_hints.toggle_highlight.as_deref(),
+                )),
+            });
+            x += btn_size + gap;
+        }
 
         hits.push(HitRegion {
             rect: (x, y, ToolbarLayoutSpec::TOP_TOGGLE_WIDTH, btn_size),
@@ -392,11 +548,53 @@ pub fn build_top_hits(
             kind: HitKind::Click,
             tooltip: None,
         });
+
+        if is_simple && snapshot.shape_picker_open {
+            let shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+            let mut shape_x =
+                ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
+            let shapes: &[(Tool, &str)] = &[
+                (Tool::Line, "Line"),
+                (Tool::Rect, "Rect"),
+                (Tool::Ellipse, "Circle"),
+                (Tool::Arrow, "Arrow"),
+            ];
+            for (tool, label) in shapes {
+                hits.push(HitRegion {
+                    rect: (shape_x, shape_y, btn_size, btn_size),
+                    event: ToolbarEvent::SelectTool(*tool),
+                    kind: HitKind::Click,
+                    tooltip: Some(super::format_binding_label(
+                        label,
+                        snapshot.binding_hints.for_tool(*tool),
+                    )),
+                });
+                shape_x += btn_size + gap;
+            }
+        }
     } else {
         let (btn_w, btn_h) = spec.top_button_size();
         let y = spec.top_button_y(height);
-
-        for (tool, _icon_fn, label) in buttons {
+        let tool_buttons: &[(Tool, &str)] = if is_simple {
+            &[
+                (Tool::Select, "Select"),
+                (Tool::Pen, "Pen"),
+                (Tool::Marker, "Marker"),
+                (Tool::Eraser, "Eraser"),
+            ]
+        } else {
+            &[
+                (Tool::Select, "Select"),
+                (Tool::Pen, "Pen"),
+                (Tool::Marker, "Marker"),
+                (Tool::Eraser, "Eraser"),
+                (Tool::Line, "Line"),
+                (Tool::Rect, "Rect"),
+                (Tool::Ellipse, "Circle"),
+                (Tool::Arrow, "Arrow"),
+            ]
+        };
+        for (tool, label) in tool_buttons {
             hits.push(HitRegion {
                 rect: (x, y, btn_w, btn_h),
                 event: ToolbarEvent::SelectTool(*tool),
@@ -409,17 +607,29 @@ pub fn build_top_hits(
             x += btn_w + gap;
         }
 
-        let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
-        hits.push(HitRegion {
-            rect: (x, y, fill_w, btn_h),
-            event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-            kind: HitKind::Click,
-            tooltip: Some(super::format_binding_label(
-                "Fill",
-                snapshot.binding_hints.fill.as_deref(),
-            )),
-        });
-        x += fill_w + gap;
+        if is_simple {
+            hits.push(HitRegion {
+                rect: (x, y, btn_w, btn_h),
+                event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
+                kind: HitKind::Click,
+                tooltip: Some("Shapes".to_string()),
+            });
+            x += btn_w + gap;
+        }
+
+        if fill_tool_active {
+            let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
+            hits.push(HitRegion {
+                rect: (x, y, fill_w, btn_h),
+                event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                kind: HitKind::Click,
+                tooltip: Some(super::format_binding_label(
+                    "Fill",
+                    snapshot.binding_hints.fill.as_deref(),
+                )),
+            });
+            x += fill_w + gap;
+        }
 
         hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
@@ -429,12 +639,49 @@ pub fn build_top_hits(
         });
         x += btn_w + gap;
 
+        if !is_simple {
+            hits.push(HitRegion {
+                rect: (x, y, btn_w, btn_h),
+                event: ToolbarEvent::ClearCanvas,
+                kind: HitKind::Click,
+                tooltip: Some(super::format_binding_label(
+                    "Clear",
+                    snapshot.binding_hints.clear.as_deref(),
+                )),
+            });
+            x += btn_w + gap;
+        }
+
         hits.push(HitRegion {
             rect: (x, y, ToolbarLayoutSpec::TOP_TOGGLE_WIDTH, btn_h),
             event: ToolbarEvent::ToggleIconMode(true),
             kind: HitKind::Click,
             tooltip: None,
         });
+
+        if is_simple && snapshot.shape_picker_open {
+            let shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+            let mut shape_x =
+                ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
+            let shapes: &[(Tool, &str)] = &[
+                (Tool::Line, "Line"),
+                (Tool::Rect, "Rect"),
+                (Tool::Ellipse, "Circle"),
+                (Tool::Arrow, "Arrow"),
+            ];
+            for (tool, label) in shapes {
+                hits.push(HitRegion {
+                    rect: (shape_x, shape_y, btn_w, btn_h),
+                    event: ToolbarEvent::SelectTool(*tool),
+                    kind: HitKind::Click,
+                    tooltip: Some(super::format_binding_label(
+                        label,
+                        snapshot.binding_hints.for_tool(*tool),
+                    )),
+                });
+                shape_x += btn_w + gap;
+            }
+        }
     }
 
     let btn_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
@@ -476,6 +723,28 @@ pub fn build_side_hits(
     let header_btn = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
     let content_width = spec.side_content_width(width);
     let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
+    let show_text_controls = snapshot.text_active || snapshot.show_text_controls;
+    let icons_w = ToolbarLayoutSpec::SIDE_HEADER_TOGGLE_WIDTH;
+    hits.push(HitRegion {
+        rect: (x, header_y, icons_w, header_btn),
+        event: ToolbarEvent::ToggleIconMode(!snapshot.use_icons),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+    let mode_w = ToolbarLayoutSpec::SIDE_HEADER_MODE_WIDTH;
+    let mode_x = x + icons_w + ToolbarLayoutSpec::SIDE_HEADER_MODE_GAP;
+    let mode_tooltip = format!(
+        "Mode: S/R/A = {}/{}/{}",
+        ToolbarLayoutMode::Simple.label(),
+        ToolbarLayoutMode::Regular.label(),
+        ToolbarLayoutMode::Advanced.label(),
+    );
+    hits.push(HitRegion {
+        rect: (mode_x, header_y, mode_w, header_btn),
+        event: ToolbarEvent::SetToolbarLayoutMode(snapshot.layout_mode.next()),
+        kind: HitKind::Click,
+        tooltip: Some(mode_tooltip),
+    });
     hits.push(HitRegion {
         rect: (close_x, header_y, header_btn, header_btn),
         event: ToolbarEvent::CloseSideToolbar,
@@ -514,10 +783,8 @@ pub fn build_side_hits(
 
     // Preset slots
     let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
-    let slot_count = snapshot
-        .preset_slot_count
-        .min(snapshot.presets.len());
-    if slot_count > 0 {
+    let slot_count = snapshot.preset_slot_count.min(snapshot.presets.len());
+    if snapshot.show_presets && slot_count > 0 {
         let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
         let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
         let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
@@ -541,7 +808,12 @@ pub fn build_side_hits(
                 });
             }
             hits.push(HitRegion {
-                rect: (slot_x, action_row_y, action_w, ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT),
+                rect: (
+                    slot_x,
+                    action_row_y,
+                    action_w,
+                    ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT,
+                ),
                 event: ToolbarEvent::SavePreset(slot),
                 kind: HitKind::Click,
                 tooltip: Some(format!("Save preset {}", slot)),
@@ -610,82 +882,124 @@ pub fn build_side_hits(
     }
 
     // Text size slider
-    let text_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
-    hits.push(HitRegion {
-        rect: (x, text_slider_row_y, content_width, slider_hit_h),
-        event: ToolbarEvent::SetFontSize(snapshot.font_size),
-        kind: HitKind::DragSetFontSize,
-        tooltip: None,
-    });
-    y += ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + section_gap;
-    y += ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT + section_gap;
+    if show_text_controls {
+        let text_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
+        hits.push(HitRegion {
+            rect: (x, text_slider_row_y, content_width, slider_hit_h),
+            event: ToolbarEvent::SetFontSize(snapshot.font_size),
+            kind: HitKind::DragSetFontSize,
+            tooltip: None,
+        });
+        y += ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + section_gap;
+        y += ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT + section_gap;
+    }
 
     // Actions section
-    let actions_toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-    let actions_toggle_h =
-        ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT * 2.0 + actions_toggle_gap;
-    let actions_card_h = ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT
-        + actions_toggle_h
-        + spec.side_actions_content_height(snapshot);
-    let actions_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
-    let actions_toggle_w = content_width;
-    hits.push(HitRegion {
-        rect: (
-            x,
-            actions_toggle_y,
-            actions_toggle_w,
-            ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT,
-        ),
-        event: ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
-    let toast_toggle_y =
-        actions_toggle_y + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT + actions_toggle_gap;
-    hits.push(HitRegion {
-        rect: (
-            x,
-            toast_toggle_y,
-            actions_toggle_w,
-            ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT,
-        ),
-        event: ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
-    if snapshot.show_actions_section {
-        let mut action_y = y
-            + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y
-            + actions_toggle_h
-            + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-        let actions: &[(ToolbarEvent, bool)] = &[
-            (ToolbarEvent::Undo, true),
-            (ToolbarEvent::Redo, true),
-            (ToolbarEvent::UndoAll, true),
-            (ToolbarEvent::RedoAll, true),
-            (ToolbarEvent::ClearCanvas, true),
-            (ToolbarEvent::ToggleFreeze, false),
+    let show_actions = snapshot.show_actions_section || snapshot.show_actions_advanced;
+    if show_actions {
+        let actions_card_h = spec.side_actions_height(snapshot);
+        let mut action_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+        let basic_actions = [
+            ToolbarEvent::Undo,
+            ToolbarEvent::Redo,
+            ToolbarEvent::ClearCanvas,
         ];
-        let btn_h = if use_icons {
-            ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON
-        } else {
-            ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
-        };
-        let btn_w = content_width;
-        for (evt, _) in actions {
-            hits.push(HitRegion {
-                rect: (x, action_y, btn_w, btn_h),
-                event: evt.clone(),
-                kind: HitKind::Click,
-                tooltip: None,
-            });
-            action_y += btn_h + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+        let advanced_actions = [
+            ToolbarEvent::UndoAll,
+            ToolbarEvent::RedoAll,
+            ToolbarEvent::UndoAllDelayed,
+            ToolbarEvent::RedoAllDelayed,
+            ToolbarEvent::ToggleFreeze,
+            ToolbarEvent::ZoomIn,
+            ToolbarEvent::ZoomOut,
+            ToolbarEvent::ResetZoom,
+            ToolbarEvent::ToggleZoomLock,
+        ];
+
+        if snapshot.show_actions_section {
+            if use_icons {
+                let icon_btn = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
+                let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+                let icons_per_row = basic_actions.len();
+                let total_icons_w =
+                    icons_per_row as f64 * icon_btn + (icons_per_row as f64 - 1.0) * icon_gap;
+                let icons_start_x = x + (content_width - total_icons_w) / 2.0;
+                for (idx, evt) in basic_actions.iter().enumerate() {
+                    let bx = icons_start_x + (icon_btn + icon_gap) * idx as f64;
+                    hits.push(HitRegion {
+                        rect: (bx, action_y, icon_btn, icon_btn),
+                        event: evt.clone(),
+                        kind: HitKind::Click,
+                        tooltip: None,
+                    });
+                }
+                action_y += icon_btn;
+            } else {
+                let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
+                let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
+                for (idx, evt) in basic_actions.iter().enumerate() {
+                    let by = action_y + (action_h + action_gap) * idx as f64;
+                    hits.push(HitRegion {
+                        rect: (x, by, content_width, action_h),
+                        event: evt.clone(),
+                        kind: HitKind::Click,
+                        tooltip: None,
+                    });
+                }
+                action_y += action_h * basic_actions.len() as f64
+                    + action_gap * (basic_actions.len() as f64 - 1.0);
+            }
         }
+
+        if snapshot.show_actions_section && snapshot.show_actions_advanced {
+            action_y += ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+        }
+
+        if snapshot.show_actions_advanced {
+            if use_icons {
+                let icon_btn = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
+                let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+                let icons_per_row = 5usize;
+                let total_icons_w =
+                    icons_per_row as f64 * icon_btn + (icons_per_row as f64 - 1.0) * icon_gap;
+                let icons_start_x = x + (content_width - total_icons_w) / 2.0;
+                for (idx, evt) in advanced_actions.iter().enumerate() {
+                    let row = idx / icons_per_row;
+                    let col = idx % icons_per_row;
+                    let bx = icons_start_x + (icon_btn + icon_gap) * col as f64;
+                    let by = action_y + (icon_btn + icon_gap) * row as f64;
+                    hits.push(HitRegion {
+                        rect: (bx, by, icon_btn, icon_btn),
+                        event: evt.clone(),
+                        kind: HitKind::Click,
+                        tooltip: None,
+                    });
+                }
+            } else {
+                let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
+                let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
+                let action_col_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+                let action_w = (content_width - action_col_gap) / 2.0;
+                for (idx, evt) in advanced_actions.iter().enumerate() {
+                    let row = idx / 2;
+                    let col = idx % 2;
+                    let bx = x + (action_w + action_col_gap) * col as f64;
+                    let by = action_y + (action_h + action_gap) * row as f64;
+                    hits.push(HitRegion {
+                        rect: (bx, by, action_w, action_h),
+                        event: evt.clone(),
+                        kind: HitKind::Click,
+                        tooltip: None,
+                    });
+                }
+            }
+        }
+
+        y += actions_card_h + section_gap;
     }
-    y += actions_card_h + section_gap;
 
     // Delay sliders
-    if snapshot.show_delay_sliders {
+    if snapshot.show_step_section && snapshot.show_delay_sliders {
         let undo_t = delay_t_from_ms(snapshot.undo_all_delay_ms);
         let redo_t = delay_t_from_ms(snapshot.redo_all_delay_ms);
         let toggles_h =
@@ -725,6 +1039,75 @@ pub fn build_side_hits(
             event: ToolbarEvent::SetRedoDelay(delay_secs_from_t(redo_t)),
             kind: HitKind::DragRedoDelay,
             tooltip: None,
+        });
+    }
+
+    if snapshot.show_step_section {
+        y += spec.side_step_height(snapshot) + section_gap;
+    }
+
+    if snapshot.show_settings_section {
+        let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
+        let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
+        let mut toggles: Vec<(ToolbarEvent, Option<&str>)> = vec![(
+            ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+            Some("Preset toasts: apply/save/clear."),
+        )];
+        if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
+            toggles.extend_from_slice(&[
+                (
+                    ToolbarEvent::TogglePresets(!snapshot.show_presets),
+                    Some("Presets: quick slots."),
+                ),
+                (
+                    ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
+                    Some("Actions: undo/redo/clear."),
+                ),
+                (
+                    ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
+                    Some("Advanced: undo-all/delay/zoom."),
+                ),
+                (
+                    ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
+                    Some("Step: step undo/redo."),
+                ),
+                (
+                    ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
+                    Some("Text: font size/family."),
+                ),
+            ]);
+        }
+
+        let mut toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+        for (idx, (evt, tooltip)) in toggles.iter().enumerate() {
+            hits.push(HitRegion {
+                rect: (x, toggle_y, content_width, toggle_h),
+                event: evt.clone(),
+                kind: HitKind::Click,
+                tooltip: tooltip.map(|text| text.to_string()),
+            });
+            if idx + 1 < toggles.len() {
+                toggle_y += toggle_h + toggle_gap;
+            } else {
+                toggle_y += toggle_h;
+            }
+        }
+
+        let buttons_y = toggle_y + toggle_gap;
+        let button_h = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_HEIGHT;
+        let button_gap = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_GAP;
+        let button_w = (content_width - button_gap) / 2.0;
+        hits.push(HitRegion {
+            rect: (x, buttons_y, button_w, button_h),
+            event: ToolbarEvent::OpenConfigurator,
+            kind: HitKind::Click,
+            tooltip: Some("Config UI".to_string()),
+        });
+        hits.push(HitRegion {
+            rect: (x + button_w + button_gap, buttons_y, button_w, button_h),
+            event: ToolbarEvent::OpenConfigFile,
+            kind: HitKind::Click,
+            tooltip: Some("Config file".to_string()),
         });
     }
 }
@@ -787,11 +1170,11 @@ mod tests {
         let mut state = create_test_input_state();
         state.toolbar_use_icons = true;
         let snapshot = snapshot_from_state(&state);
-        assert_eq!(top_size(&snapshot), (735, 80));
+        assert_eq!(top_size(&snapshot), (736, 80));
 
         state.toolbar_use_icons = false;
         let snapshot = snapshot_from_state(&state);
-        assert_eq!(top_size(&snapshot), (875, 56));
+        assert_eq!(top_size(&snapshot), (866, 56));
     }
 
     #[test]
@@ -800,7 +1183,8 @@ mod tests {
         state.toolbar_use_icons = true;
         let snapshot = snapshot_from_state(&state);
         let mut hits = Vec::new();
-        build_top_hits(735.0, 80.0, &snapshot, &mut hits);
+        let (w, h) = top_size(&snapshot);
+        build_top_hits(w as f64, h as f64, &snapshot, &mut hits);
 
         assert!(
             hits.iter()

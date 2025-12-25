@@ -39,9 +39,14 @@ impl WaylandState {
                 | ToolbarEvent::ToggleIconMode(_)
                 | ToolbarEvent::ToggleMoreColors(_)
                 | ToolbarEvent::ToggleActionsSection(_)
+                | ToolbarEvent::ToggleActionsAdvanced(_)
+                | ToolbarEvent::TogglePresets(_)
+                | ToolbarEvent::ToggleStepSection(_)
+                | ToolbarEvent::ToggleTextControls(_)
                 | ToolbarEvent::TogglePresetToasts(_)
                 | ToolbarEvent::ToggleDelaySliders(_)
                 | ToolbarEvent::ToggleCustomSection(_)
+                | ToolbarEvent::SetToolbarLayoutMode(_)
         );
 
         let persist_drawing = matches!(
@@ -109,11 +114,17 @@ impl WaylandState {
 
     /// Saves the current toolbar configuration to disk (pinned state, icon mode, section visibility).
     pub(super) fn save_toolbar_pin_config(&mut self) {
+        self.config.ui.toolbar.layout_mode = self.input_state.toolbar_layout_mode;
         self.config.ui.toolbar.top_pinned = self.input_state.toolbar_top_pinned;
         self.config.ui.toolbar.side_pinned = self.input_state.toolbar_side_pinned;
         self.config.ui.toolbar.use_icons = self.input_state.toolbar_use_icons;
         self.config.ui.toolbar.show_more_colors = self.input_state.show_more_colors;
         self.config.ui.toolbar.show_actions_section = self.input_state.show_actions_section;
+        self.config.ui.toolbar.show_actions_advanced = self.input_state.show_actions_advanced;
+        self.config.ui.toolbar.show_presets = self.input_state.show_presets;
+        self.config.ui.toolbar.show_step_section = self.input_state.show_step_section;
+        self.config.ui.toolbar.show_text_controls = self.input_state.show_text_controls;
+        self.config.ui.toolbar.show_settings_section = self.input_state.show_settings_section;
         self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
         self.config.ui.toolbar.show_marker_opacity_section =
             self.input_state.show_marker_opacity_section;

@@ -13,13 +13,13 @@ pub enum TabId {
 impl TabId {
     pub const ALL: [TabId; 8] = [
         TabId::Drawing,
-        TabId::Arrow,
-        TabId::Performance,
         TabId::Ui,
         TabId::Board,
+        TabId::Performance,
         TabId::Capture,
         TabId::Session,
         TabId::Keybindings,
+        TabId::Arrow,
     ];
 
     pub fn title(&self) -> &'static str {
