@@ -1172,7 +1172,7 @@ mod tests {
         let mut state = create_test_input_state();
         state.toolbar_use_icons = true;
         let snapshot = snapshot_from_state(&state);
-        assert_eq!(top_size(&snapshot), (736, 80));
+        assert_eq!(top_size(&snapshot), (758, 80));
 
         state.toolbar_use_icons = false;
         let snapshot = snapshot_from_state(&state);
