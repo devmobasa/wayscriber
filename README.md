@@ -5,6 +5,8 @@
 
 A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rust.
 
+Docs: https://wayscriber.com/docs/
+
 <details>
 <summary>Screenshots</summary>
 
@@ -38,6 +40,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [Additional Information](#additional-information)
+- [Docs](https://wayscriber.com/docs/)
 
 ---
 
@@ -216,7 +219,7 @@ sudo apt-get install wl-clipboard grim slurp   # Debian/Ubuntu
 sudo dnf install wl-clipboard grim slurp       # Fedora
 ```
 
-See **[docs/SETUP.md](docs/SETUP.md)** for detailed walkthroughs.
+See https://wayscriber.com/docs/ for the latest documentation.
 
 ---
 
@@ -427,7 +430,7 @@ max_thickness = 8.0
 
 To build without tablet support: `cargo build --release --no-default-features`
 
-See **[docs/CONFIG.md](docs/CONFIG.md)** for the full reference.
+See https://wayscriber.com/docs/ for the full reference.
 
 ---
 
