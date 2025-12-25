@@ -1128,63 +1128,63 @@ fn default_refresh_zoom_capture() -> Vec<String> {
 }
 
 fn default_apply_preset_1() -> Vec<String> {
-    vec!["Alt+1".to_string()]
+    vec!["1".to_string()]
 }
 
 fn default_apply_preset_2() -> Vec<String> {
-    vec!["Alt+2".to_string()]
+    vec!["2".to_string()]
 }
 
 fn default_apply_preset_3() -> Vec<String> {
-    vec!["Alt+3".to_string()]
+    vec!["3".to_string()]
 }
 
 fn default_apply_preset_4() -> Vec<String> {
-    vec!["Alt+4".to_string()]
+    vec!["4".to_string()]
 }
 
 fn default_apply_preset_5() -> Vec<String> {
-    vec!["Alt+5".to_string()]
+    vec!["5".to_string()]
 }
 
 fn default_save_preset_1() -> Vec<String> {
-    vec!["Ctrl+Alt+1".to_string()]
+    vec!["Shift+1".to_string()]
 }
 
 fn default_save_preset_2() -> Vec<String> {
-    vec!["Ctrl+Alt+2".to_string()]
+    vec!["Shift+2".to_string()]
 }
 
 fn default_save_preset_3() -> Vec<String> {
-    vec!["Ctrl+Alt+3".to_string()]
+    vec!["Shift+3".to_string()]
 }
 
 fn default_save_preset_4() -> Vec<String> {
-    vec!["Ctrl+Alt+4".to_string()]
+    vec!["Shift+4".to_string()]
 }
 
 fn default_save_preset_5() -> Vec<String> {
-    vec!["Ctrl+Alt+5".to_string()]
+    vec!["Shift+5".to_string()]
 }
 
 fn default_clear_preset_1() -> Vec<String> {
-    vec!["Ctrl+Alt+Shift+1".to_string()]
+    Vec::new()
 }
 
 fn default_clear_preset_2() -> Vec<String> {
-    vec!["Ctrl+Alt+Shift+2".to_string()]
+    Vec::new()
 }
 
 fn default_clear_preset_3() -> Vec<String> {
-    vec!["Ctrl+Alt+Shift+3".to_string()]
+    Vec::new()
 }
 
 fn default_clear_preset_4() -> Vec<String> {
-    vec!["Ctrl+Alt+Shift+4".to_string()]
+    Vec::new()
 }
 
 fn default_clear_preset_5() -> Vec<String> {
-    vec!["Ctrl+Alt+Shift+5".to_string()]
+    Vec::new()
 }
 
 #[cfg(test)]
