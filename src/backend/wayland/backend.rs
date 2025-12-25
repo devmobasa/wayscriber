@@ -900,8 +900,11 @@ impl WaylandBackend {
                         state.input_state.needs_redraw = false;
                     }
                 }
-            } else if state.input_state.needs_redraw && state.surface.frame_callback_pending() {
-                debug!("Main loop: Skipping render - frame callback already pending");
+            } else {
+                state.render_layer_toolbars_if_needed();
+                if state.input_state.needs_redraw && state.surface.frame_callback_pending() {
+                    debug!("Main loop: Skipping render - frame callback already pending");
+                }
             }
         }
 

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{debug, info};
+use log::{debug, info, warn};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     shell::{
@@ -156,6 +156,10 @@ impl ToolbarSurface {
         self.dirty = true;
     }
 
+    pub fn needs_render(&self) -> bool {
+        self.configured && self.dirty && self.width > 0 && self.height > 0
+    }
+
     pub fn set_suppressed(&mut self, compositor: &CompositorState, suppressed: bool) {
         if self.suppressed == suppressed {
             return;
@@ -172,20 +176,15 @@ impl ToolbarSurface {
         self.logical_size = size;
     }
 
-    pub fn set_left_margin(&mut self, left: i32) {
-        self.margin.3 = left;
-        if let Some(layer) = self.layer_surface.as_ref() {
-            layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
-            // Commit immediately so the margin change takes effect
-            layer.wl_surface().commit();
+    pub fn set_margins(&mut self, top: i32, right: i32, bottom: i32, left: i32) {
+        let next = (top, right, bottom, left);
+        if self.margin == next {
+            return;
         }
-    }
-
-    pub fn set_top_margin(&mut self, top: i32) {
-        self.margin.0 = top;
+        self.margin = next;
         if let Some(layer) = self.layer_surface.as_ref() {
             layer.set_margin(self.margin.0, self.margin.1, self.margin.2, self.margin.3);
-            // Commit immediately so the margin change takes effect
+            // Commit immediately so the margin change takes effect.
             layer.wl_surface().commit();
         }
     }
@@ -310,7 +309,13 @@ impl ToolbarSurface {
         if let Some(layer) = self.layer_surface.as_ref() {
             let wl_surface = layer.wl_surface();
             wl_surface.set_buffer_scale(self.scale);
-            wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
+            if let Err(err) = buffer.attach_to(wl_surface) {
+                warn!(
+                    "Failed to attach toolbar buffer for '{}': {}",
+                    self.name, err
+                );
+                return Ok(());
+            }
             wl_surface.damage_buffer(0, 0, phys_w as i32, phys_h as i32);
             wl_surface.commit();
         }
