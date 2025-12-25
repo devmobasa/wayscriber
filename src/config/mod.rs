@@ -407,6 +407,7 @@ pub(super) fn primary_config_dir() -> Result<PathBuf> {
 /// [performance]
 /// buffer_count = 3
 /// enable_vsync = true
+/// ui_animation_fps = 30
 ///
 /// [ui]
 /// show_status_bar = true
@@ -736,6 +737,17 @@ impl Config {
                 self.performance.buffer_count
             );
             self.performance.buffer_count = self.performance.buffer_count.clamp(2, 4);
+        }
+
+        // UI animation FPS: allow 0 (unlimited), otherwise clamp to 1 - 240.
+        const MAX_UI_ANIMATION_FPS: u32 = 240;
+        if self.performance.ui_animation_fps > MAX_UI_ANIMATION_FPS {
+            log::warn!(
+                "Invalid ui_animation_fps {}, clamping to 0-{} range",
+                self.performance.ui_animation_fps,
+                MAX_UI_ANIMATION_FPS
+            );
+            self.performance.ui_animation_fps = self.performance.ui_animation_fps.min(MAX_UI_ANIMATION_FPS);
         }
 
         // Validate font weight is reasonable

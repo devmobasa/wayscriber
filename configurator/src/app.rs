@@ -708,6 +708,12 @@ impl ConfiguratorApp {
                     self.defaults.performance_buffer_count.to_string(),
                     self.draft.performance_buffer_count != self.defaults.performance_buffer_count,
                 ),
+                labeled_input(
+                    "UI animation FPS (0 = unlimited)",
+                    &self.draft.performance_ui_animation_fps,
+                    &self.defaults.performance_ui_animation_fps,
+                    TextField::PerformanceUiAnimationFps,
+                ),
                 toggle_row(
                     "Enable VSync",
                     self.draft.performance_enable_vsync,

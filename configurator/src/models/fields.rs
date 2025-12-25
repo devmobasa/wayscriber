@@ -371,6 +371,7 @@ pub enum TextField {
     DrawingFontStyle,
     ArrowLength,
     ArrowAngle,
+    PerformanceUiAnimationFps,
     StatusFontSize,
     StatusPadding,
     StatusDotRadius,

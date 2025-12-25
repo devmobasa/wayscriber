@@ -148,6 +148,8 @@ pub(super) struct WaylandState {
     pub(super) input_state: InputState,
     // Next scheduled tick for UI animations (toasts/highlights/preset feedback).
     pub(super) ui_animation_next_tick: Option<Instant>,
+    // Animation interval; None means uncapped (render every frame while active).
+    pub(super) ui_animation_interval: Option<Duration>,
 
     // Capture manager
     pub(super) capture: CaptureState,
@@ -208,6 +210,14 @@ pub(super) struct WaylandState {
 }
 
 impl WaylandState {
+    fn ui_animation_interval_from_fps(fps: u32) -> Option<Duration> {
+        if fps == 0 {
+            None
+        } else {
+            Some(Duration::from_secs_f64(1.0 / fps as f64))
+        }
+    }
+
     const TOP_MARGIN_RIGHT: f64 = 12.0;
     const TOP_BASE_MARGIN_TOP: f64 = 12.0;
     const TOP_MARGIN_BOTTOM: f64 = 0.0;
@@ -223,25 +233,33 @@ impl WaylandState {
     const ZOOM_STEP_SCROLL: f64 = 1.1;
     pub(super) const ZOOM_PAN_STEP: f64 = 32.0;
     pub(super) const ZOOM_PAN_STEP_LARGE: f64 = 96.0;
-    const UI_ANIMATION_FRAME_INTERVAL_MS: u64 = 33;
 }
 
 impl WaylandState {
     pub(super) fn update_ui_animation_tick(&mut self, now: Instant, active: bool) {
-        if active {
-            self.ui_animation_next_tick =
-                Some(now + Duration::from_millis(Self::UI_ANIMATION_FRAME_INTERVAL_MS));
+        if !active {
+            self.ui_animation_next_tick = None;
+            return;
+        }
+        if let Some(interval) = self.ui_animation_interval {
+            self.ui_animation_next_tick = Some(now + interval);
         } else {
             self.ui_animation_next_tick = None;
         }
     }
 
     pub(super) fn ui_animation_timeout(&self, now: Instant) -> Option<Duration> {
+        if self.ui_animation_interval.is_none() {
+            return None;
+        }
         self.ui_animation_next_tick
             .map(|next| next.saturating_duration_since(now))
     }
 
     pub(super) fn ui_animation_due(&self, now: Instant) -> bool {
+        if self.ui_animation_interval.is_none() {
+            return false;
+        }
         self.ui_animation_next_tick
             .is_some_and(|next| now >= next)
     }

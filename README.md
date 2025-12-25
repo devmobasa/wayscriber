@@ -390,6 +390,7 @@ default_thickness = 3.0
 [performance]
 buffer_count = 3
 enable_vsync = true
+ui_animation_fps = 30
 
 [ui]
 # status bar visibility and position
@@ -471,6 +472,7 @@ RUST_LOG=info wayscriber --active   # watch for TOML errors
 [performance]
 buffer_count = 2
 enable_vsync = true
+ui_animation_fps = 30
 ```
 
 ---

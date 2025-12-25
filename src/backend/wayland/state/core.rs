@@ -65,6 +65,8 @@ impl WaylandState {
             data.toolbar_side_offset_x
         ));
         let zoom_manager = screencopy_manager.clone();
+        let ui_animation_interval =
+            WaylandState::ui_animation_interval_from_fps(config.performance.ui_animation_fps);
 
         Self {
             registry_state,
@@ -83,6 +85,7 @@ impl WaylandState {
             config,
             input_state,
             ui_animation_next_tick: None,
+            ui_animation_interval,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
             zoom: ZoomState::new(zoom_manager),
