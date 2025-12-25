@@ -1,4 +1,4 @@
-use wayscriber::config::Config;
+use wayscriber::config::{Config, PresetSlotsConfig};
 
 use super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::error::FormError;
@@ -30,6 +30,7 @@ pub struct ConfigDraft {
 
     pub ui_show_status_bar: bool,
     pub ui_show_frozen_badge: bool,
+    pub ui_toolbar_show_preset_toasts: bool,
     pub ui_status_position: StatusPositionOption,
     pub status_font_size: String,
     pub status_padding: String,
@@ -81,6 +82,8 @@ pub struct ConfigDraft {
     pub session_auto_compress_threshold_kb: String,
     pub session_backup_retention: String,
 
+    pub presets: PresetSlotsConfig,
+
     pub keybindings: KeybindingsDraft,
 }
 
@@ -109,6 +112,7 @@ impl ConfigDraft {
 
             ui_show_status_bar: config.ui.show_status_bar,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
+            ui_toolbar_show_preset_toasts: config.ui.toolbar.show_preset_toasts,
             ui_status_position: StatusPositionOption::from_status_position(
                 config.ui.status_bar_position,
             ),
@@ -174,6 +178,8 @@ impl ConfigDraft {
                 .to_string(),
             session_backup_retention: config.session.backup_retention.to_string(),
 
+            presets: config.presets.clone(),
+
             keybindings: KeybindingsDraft::from_config(&config.keybindings),
         }
     }
@@ -219,6 +225,7 @@ impl ConfigDraft {
 
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
+        config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.status_bar_position = self.ui_status_position.to_status_position();
         parse_field(
             &self.status_font_size,
@@ -411,6 +418,8 @@ impl ConfigDraft {
             |value| config.session.backup_retention = value,
         );
 
+        config.presets = self.presets.clone();
+
         match self.keybindings.to_config() {
             Ok(cfg) => config.keybindings = cfg,
             Err(errs) => errors.extend(errs),
@@ -431,6 +440,7 @@ impl ConfigDraft {
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
+            ToggleField::UiToolbarPresetToasts => self.ui_toolbar_show_preset_toasts = value,
             ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
             ToggleField::UiClickHighlightUsePenColor => self.click_highlight_use_pen_color = value,
             ToggleField::BoardEnabled => self.board_enabled = value,

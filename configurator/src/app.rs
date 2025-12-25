@@ -699,6 +699,12 @@ impl ConfiguratorApp {
                 self.defaults.ui_show_frozen_badge,
                 ToggleField::UiShowFrozenBadge,
             ),
+            toggle_row(
+                "Show preset action toasts",
+                self.draft.ui_toolbar_show_preset_toasts,
+                self.defaults.ui_toolbar_show_preset_toasts,
+                ToggleField::UiToolbarPresetToasts,
+            ),
             row![
                 text("Status bar position:"),
                 status_position,

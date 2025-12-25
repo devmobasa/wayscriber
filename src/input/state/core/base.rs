@@ -2,6 +2,8 @@
 
 pub const MIN_STROKE_THICKNESS: f64 = 1.0;
 pub const MAX_STROKE_THICKNESS: f64 = 50.0;
+pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
+pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 
 use super::{
     index::SpatialGrid,
@@ -9,7 +11,7 @@ use super::{
     properties::ShapePropertiesPanel,
     selection::SelectionState,
 };
-use crate::config::{Action, BoardConfig, KeyBinding};
+use crate::config::{Action, BoardConfig, KeyBinding, ToolPresetConfig, PRESET_SLOTS_MAX};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
@@ -68,6 +70,25 @@ pub enum ZoomAction {
     Reset,
     ToggleLock,
     RefreshCapture,
+}
+
+#[derive(Debug, Clone)]
+pub enum PresetAction {
+    Save { slot: usize, preset: ToolPresetConfig },
+    Clear { slot: usize },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetFeedbackKind {
+    Apply,
+    Save,
+    Clear,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PresetFeedbackState {
+    pub kind: PresetFeedbackKind,
+    pub started: Instant,
 }
 
 pub struct InputState {
@@ -181,6 +202,8 @@ pub struct InputState {
     pub show_delay_sliders: bool,
     /// Whether to show the marker opacity slider in the side toolbar
     pub show_marker_opacity_section: bool,
+    /// Whether to show preset action toast notifications
+    pub show_preset_toasts: bool,
     /// Pending delayed history playback state
     pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
@@ -207,6 +230,16 @@ pub struct InputState {
     pub show_more_colors: bool,
     /// Whether to show the Actions section (undo all, redo all, etc.)
     pub show_actions_section: bool,
+    /// Number of preset slots to display
+    pub preset_slot_count: usize,
+    /// Preset slots for quick tool switching
+    pub presets: Vec<Option<ToolPresetConfig>>,
+    /// Last applied preset slot (for UI highlight)
+    pub active_preset_slot: Option<usize>,
+    /// Transient preset feedback for toolbar animations
+    pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
+    /// Pending preset save/clear action for backend persistence
+    pub(super) pending_preset_action: Option<PresetAction>,
 }
 
 /// Tracks in-progress delayed undo/redo playback.
@@ -327,6 +360,7 @@ impl InputState {
             custom_section_enabled,
             show_delay_sliders: false, // Default to hidden
             show_marker_opacity_section: false,
+            show_preset_toasts: true,
             pending_history: None,
             context_menu_layout: None,
             spatial_index: None,
@@ -340,6 +374,11 @@ impl InputState {
             zoom_scale: 1.0,
             show_more_colors: false,
             show_actions_section: true, // Show by default
+            preset_slot_count: PRESET_SLOTS_MAX,
+            presets: vec![None; PRESET_SLOTS_MAX],
+            active_preset_slot: None,
+            preset_feedback: vec![None; PRESET_SLOTS_MAX],
+            pending_preset_action: None,
         };
 
         if state.click_highlight.uses_pen_color() {

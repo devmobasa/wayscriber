@@ -1,4 +1,4 @@
-use super::base::{InputState, ZoomAction};
+use super::base::{InputState, PresetAction, ZoomAction};
 use crate::config::Action;
 use crate::config::Config;
 use crate::util::Rect;
@@ -76,6 +76,11 @@ impl InputState {
     /// Takes and clears any pending zoom action.
     pub fn take_pending_zoom_action(&mut self) -> Option<ZoomAction> {
         self.pending_zoom_action.take()
+    }
+
+    /// Takes and clears any pending preset save/clear action.
+    pub fn take_pending_preset_action(&mut self) -> Option<PresetAction> {
+        self.pending_preset_action.take()
     }
 
     /// Marks a frozen-mode toggle request for the backend.

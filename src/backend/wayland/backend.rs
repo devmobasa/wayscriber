@@ -461,7 +461,9 @@ impl WaylandBackend {
             config.ui.toolbar.show_actions_section,
             config.ui.toolbar.show_delay_sliders,
             config.ui.toolbar.show_marker_opacity_section,
+            config.ui.toolbar.show_preset_toasts,
         );
+        input_state.init_presets_from_config(&config.presets);
 
         // Apply initial mode from CLI (if provided) or config default (only if board modes enabled)
         if config.board.enabled {

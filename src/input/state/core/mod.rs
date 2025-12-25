@@ -11,7 +11,10 @@ mod selection_actions;
 mod tool_controls;
 mod utility;
 
-pub use base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, ZoomAction};
+pub use base::{
+    DrawingState, InputState, PresetAction, PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS,
+    PRESET_TOAST_DURATION_MS, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, ZoomAction,
+};
 #[allow(unused_imports)]
 pub use menus::{ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand};
 pub use selection::SelectionState;

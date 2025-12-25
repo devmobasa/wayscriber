@@ -39,6 +39,7 @@ impl WaylandState {
                 | ToolbarEvent::ToggleIconMode(_)
                 | ToolbarEvent::ToggleMoreColors(_)
                 | ToolbarEvent::ToggleActionsSection(_)
+                | ToolbarEvent::TogglePresetToasts(_)
                 | ToolbarEvent::ToggleDelaySliders(_)
                 | ToolbarEvent::ToggleCustomSection(_)
         );
@@ -52,6 +53,7 @@ impl WaylandState {
                 | ToolbarEvent::SetFont(_)
                 | ToolbarEvent::SetFontSize(_)
                 | ToolbarEvent::ToggleFill(_)
+                | ToolbarEvent::ApplyPreset(_)
         );
 
         if self.input_state.apply_toolbar_event(event) {
@@ -76,6 +78,9 @@ impl WaylandState {
             if persist_drawing {
                 self.save_drawing_preferences();
             }
+        }
+        if let Some(action) = self.input_state.take_pending_preset_action() {
+            self.handle_preset_action(action);
         }
         self.refresh_keyboard_interactivity();
     }
@@ -112,6 +117,7 @@ impl WaylandState {
         self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
         self.config.ui.toolbar.show_marker_opacity_section =
             self.input_state.show_marker_opacity_section;
+        self.config.ui.toolbar.show_preset_toasts = self.input_state.show_preset_toasts;
         self.config.ui.toolbar.top_offset = self.data.toolbar_top_offset;
         self.config.ui.toolbar.top_offset_y = self.data.toolbar_top_offset_y;
         self.config.ui.toolbar.side_offset = self.data.toolbar_side_offset;
@@ -139,6 +145,26 @@ impl WaylandState {
 
         if let Err(err) = self.config.save() {
             log::warn!("Failed to persist drawing preferences: {}", err);
+        }
+    }
+
+    pub(in crate::backend::wayland) fn handle_preset_action(
+        &mut self,
+        action: crate::input::state::PresetAction,
+    ) {
+        match action {
+            crate::input::state::PresetAction::Save { slot, preset } => {
+                self.config.presets.set_slot(slot, Some(preset));
+                if let Err(err) = self.config.save() {
+                    log::warn!("Failed to save preset slot {}: {}", slot, err);
+                }
+            }
+            crate::input::state::PresetAction::Clear { slot } => {
+                self.config.presets.set_slot(slot, None);
+                if let Err(err) = self.config.save() {
+                    log::warn!("Failed to clear preset slot {}: {}", slot, err);
+                }
+            }
         }
     }
 }

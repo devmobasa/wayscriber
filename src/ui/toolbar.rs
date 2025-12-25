@@ -1,6 +1,8 @@
-use crate::config::KeybindingsConfig;
+use crate::config::{KeybindingsConfig, PRESET_SLOTS_MAX};
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::{EraserMode, InputState, Tool};
+use crate::input::state::{PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS};
+use std::time::Instant;
 
 /// Events emitted by the floating toolbar UI.
 #[derive(Debug, Clone)]
@@ -34,6 +36,9 @@ pub enum ToolbarEvent {
     ToggleZoomLock,
     #[allow(dead_code)]
     RefreshZoomCapture,
+    ApplyPreset(usize),
+    SavePreset(usize),
+    ClearPreset(usize),
     OpenConfigurator,
     OpenConfigFile,
     ToggleCustomSection(bool),
@@ -58,6 +63,8 @@ pub enum ToolbarEvent {
     ToggleMoreColors(bool),
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
+    /// Toggle preset action toast notifications
+    TogglePresetToasts(bool),
     /// Drag handle for top toolbar (carries pointer position in toolbar coords)
     MoveTopToolbar {
         x: f64,
@@ -68,6 +75,22 @@ pub enum ToolbarEvent {
         x: f64,
         y: f64,
     },
+}
+
+/// Snapshot of a single preset slot for toolbar display.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresetSlotSnapshot {
+    pub name: Option<String>,
+    pub tool: Tool,
+    pub color: Color,
+    pub size: f64,
+}
+
+/// Snapshot of an in-progress preset feedback animation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresetFeedbackSnapshot {
+    pub kind: PresetFeedbackKind,
+    pub progress: f32,
 }
 
 /// Snapshot of state mirrored to the toolbar UI.
@@ -116,6 +139,16 @@ pub struct ToolbarSnapshot {
     pub show_actions_section: bool,
     /// Whether to show the marker opacity slider section
     pub show_marker_opacity_section: bool,
+    /// Whether to show preset action toasts
+    pub show_preset_toasts: bool,
+    /// Number of preset slots to display
+    pub preset_slot_count: usize,
+    /// Preset slot previews
+    pub presets: Vec<Option<PresetSlotSnapshot>>,
+    /// Currently active preset slot
+    pub active_preset_slot: Option<usize>,
+    /// Transient preset feedback animations
+    pub preset_feedback: Vec<Option<PresetFeedbackSnapshot>>,
     /// Binding hints for tooltips
     pub binding_hints: ToolbarBindingHints,
 }
@@ -143,6 +176,38 @@ impl ToolbarSnapshot {
         } else {
             state.current_thickness
         };
+        let presets = state
+            .presets
+            .iter()
+            .map(|preset| {
+                preset.as_ref().map(|preset| PresetSlotSnapshot {
+                    name: preset.name.clone(),
+                    tool: preset.tool,
+                    color: preset.color.to_color(),
+                    size: preset.size,
+                })
+            })
+            .collect();
+        let now = Instant::now();
+        let duration_secs = PRESET_FEEDBACK_DURATION_MS as f32 / 1000.0;
+        let preset_feedback = state
+            .preset_feedback
+            .iter()
+            .map(|entry| {
+                entry.as_ref().and_then(|feedback| {
+                    let elapsed = now.saturating_duration_since(feedback.started);
+                    let progress = (elapsed.as_secs_f32() / duration_secs).clamp(0.0, 1.0);
+                    if progress >= 1.0 {
+                        None
+                    } else {
+                        Some(PresetFeedbackSnapshot {
+                            kind: feedback.kind,
+                            progress,
+                        })
+                    }
+                })
+            })
+            .collect();
         Self {
             active_tool,
             tool_override: state.tool_override(),
@@ -180,6 +245,11 @@ impl ToolbarSnapshot {
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
+            show_preset_toasts: state.show_preset_toasts,
+            preset_slot_count: state.preset_slot_count,
+            presets,
+            active_preset_slot: state.active_preset_slot,
+            preset_feedback,
             binding_hints,
         }
     }
@@ -200,6 +270,9 @@ pub struct ToolbarBindingHints {
     pub clear: Option<String>,
     pub fill: Option<String>,
     pub toggle_highlight: Option<String>,
+    pub apply_presets: Vec<Option<String>>,
+    pub save_presets: Vec<Option<String>>,
+    pub clear_presets: Vec<Option<String>>,
 }
 
 impl ToolbarBindingHints {
@@ -219,6 +292,34 @@ impl ToolbarBindingHints {
 
     pub fn from_keybindings(kb: &KeybindingsConfig) -> Self {
         let first = |v: &Vec<String>| v.first().cloned();
+        let mut apply_presets = vec![None; PRESET_SLOTS_MAX];
+        let mut save_presets = vec![None; PRESET_SLOTS_MAX];
+        let mut clear_presets = vec![None; PRESET_SLOTS_MAX];
+        if PRESET_SLOTS_MAX >= 1 {
+            apply_presets[0] = first(&kb.apply_preset_1);
+            save_presets[0] = first(&kb.save_preset_1);
+            clear_presets[0] = first(&kb.clear_preset_1);
+        }
+        if PRESET_SLOTS_MAX >= 2 {
+            apply_presets[1] = first(&kb.apply_preset_2);
+            save_presets[1] = first(&kb.save_preset_2);
+            clear_presets[1] = first(&kb.clear_preset_2);
+        }
+        if PRESET_SLOTS_MAX >= 3 {
+            apply_presets[2] = first(&kb.apply_preset_3);
+            save_presets[2] = first(&kb.save_preset_3);
+            clear_presets[2] = first(&kb.clear_preset_3);
+        }
+        if PRESET_SLOTS_MAX >= 4 {
+            apply_presets[3] = first(&kb.apply_preset_4);
+            save_presets[3] = first(&kb.save_preset_4);
+            clear_presets[3] = first(&kb.clear_preset_4);
+        }
+        if PRESET_SLOTS_MAX >= 5 {
+            apply_presets[4] = first(&kb.apply_preset_5);
+            save_presets[4] = first(&kb.save_preset_5);
+            clear_presets[4] = first(&kb.clear_preset_5);
+        }
         Self {
             pen: first(&kb.select_pen_tool),
             line: first(&kb.select_line_tool),
@@ -233,7 +334,29 @@ impl ToolbarBindingHints {
             clear: first(&kb.clear_canvas),
             fill: first(&kb.toggle_fill),
             toggle_highlight: first(&kb.toggle_highlight_tool),
+            apply_presets,
+            save_presets,
+            clear_presets,
         }
+    }
+
+    fn preset_binding<'a>(slots: &'a [Option<String>], slot: usize) -> Option<&'a str> {
+        if slot == 0 {
+            return None;
+        }
+        slots.get(slot - 1).and_then(|binding| binding.as_deref())
+    }
+
+    pub fn apply_preset(&self, slot: usize) -> Option<&str> {
+        Self::preset_binding(&self.apply_presets, slot)
+    }
+
+    pub fn save_preset(&self, slot: usize) -> Option<&str> {
+        Self::preset_binding(&self.save_presets, slot)
+    }
+
+    pub fn clear_preset(&self, slot: usize) -> Option<&str> {
+        Self::preset_binding(&self.clear_presets, slot)
     }
 }
 
@@ -456,6 +579,17 @@ impl InputState {
                     false
                 }
             }
+            ToolbarEvent::TogglePresetToasts(show) => {
+                if self.show_preset_toasts != show {
+                    self.show_preset_toasts = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ApplyPreset(slot) => self.apply_preset(slot),
+            ToolbarEvent::SavePreset(slot) => self.save_preset(slot),
+            ToolbarEvent::ClearPreset(slot) => self.clear_preset(slot),
             ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. } => false,
         }
     }

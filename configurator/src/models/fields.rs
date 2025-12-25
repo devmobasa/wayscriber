@@ -223,6 +223,7 @@ pub enum ToggleField {
     PerformanceVsync,
     UiShowStatusBar,
     UiShowFrozenBadge,
+    UiToolbarPresetToasts,
     UiClickHighlightEnabled,
     UiClickHighlightUsePenColor,
     BoardEnabled,

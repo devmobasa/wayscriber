@@ -92,6 +92,23 @@ pub enum Action {
     ResetZoom,
     ToggleZoomLock,
     RefreshZoomCapture,
+
+    // Preset slots
+    ApplyPreset1,
+    ApplyPreset2,
+    ApplyPreset3,
+    ApplyPreset4,
+    ApplyPreset5,
+    SavePreset1,
+    SavePreset2,
+    SavePreset3,
+    SavePreset4,
+    SavePreset5,
+    ClearPreset1,
+    ClearPreset2,
+    ClearPreset3,
+    ClearPreset4,
+    ClearPreset5,
 }
 
 /// A single keybinding: a key character with optional modifiers.
@@ -383,6 +400,37 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_refresh_zoom_capture")]
     pub refresh_zoom_capture: Vec<String>,
+
+    #[serde(default = "default_apply_preset_1")]
+    pub apply_preset_1: Vec<String>,
+    #[serde(default = "default_apply_preset_2")]
+    pub apply_preset_2: Vec<String>,
+    #[serde(default = "default_apply_preset_3")]
+    pub apply_preset_3: Vec<String>,
+    #[serde(default = "default_apply_preset_4")]
+    pub apply_preset_4: Vec<String>,
+    #[serde(default = "default_apply_preset_5")]
+    pub apply_preset_5: Vec<String>,
+    #[serde(default = "default_save_preset_1")]
+    pub save_preset_1: Vec<String>,
+    #[serde(default = "default_save_preset_2")]
+    pub save_preset_2: Vec<String>,
+    #[serde(default = "default_save_preset_3")]
+    pub save_preset_3: Vec<String>,
+    #[serde(default = "default_save_preset_4")]
+    pub save_preset_4: Vec<String>,
+    #[serde(default = "default_save_preset_5")]
+    pub save_preset_5: Vec<String>,
+    #[serde(default = "default_clear_preset_1")]
+    pub clear_preset_1: Vec<String>,
+    #[serde(default = "default_clear_preset_2")]
+    pub clear_preset_2: Vec<String>,
+    #[serde(default = "default_clear_preset_3")]
+    pub clear_preset_3: Vec<String>,
+    #[serde(default = "default_clear_preset_4")]
+    pub clear_preset_4: Vec<String>,
+    #[serde(default = "default_clear_preset_5")]
+    pub clear_preset_5: Vec<String>,
 }
 
 impl Default for KeybindingsConfig {
@@ -454,6 +502,21 @@ impl Default for KeybindingsConfig {
             reset_zoom: default_reset_zoom(),
             toggle_zoom_lock: default_toggle_zoom_lock(),
             refresh_zoom_capture: default_refresh_zoom_capture(),
+            apply_preset_1: default_apply_preset_1(),
+            apply_preset_2: default_apply_preset_2(),
+            apply_preset_3: default_apply_preset_3(),
+            apply_preset_4: default_apply_preset_4(),
+            apply_preset_5: default_apply_preset_5(),
+            save_preset_1: default_save_preset_1(),
+            save_preset_2: default_save_preset_2(),
+            save_preset_3: default_save_preset_3(),
+            save_preset_4: default_save_preset_4(),
+            save_preset_5: default_save_preset_5(),
+            clear_preset_1: default_clear_preset_1(),
+            clear_preset_2: default_clear_preset_2(),
+            clear_preset_3: default_clear_preset_3(),
+            clear_preset_4: default_clear_preset_4(),
+            clear_preset_5: default_clear_preset_5(),
         }
     }
 }
@@ -762,6 +825,52 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::RefreshZoomCapture)?;
         }
 
+        for binding_str in &self.apply_preset_1 {
+            insert_binding(binding_str, Action::ApplyPreset1)?;
+        }
+        for binding_str in &self.apply_preset_2 {
+            insert_binding(binding_str, Action::ApplyPreset2)?;
+        }
+        for binding_str in &self.apply_preset_3 {
+            insert_binding(binding_str, Action::ApplyPreset3)?;
+        }
+        for binding_str in &self.apply_preset_4 {
+            insert_binding(binding_str, Action::ApplyPreset4)?;
+        }
+        for binding_str in &self.apply_preset_5 {
+            insert_binding(binding_str, Action::ApplyPreset5)?;
+        }
+        for binding_str in &self.save_preset_1 {
+            insert_binding(binding_str, Action::SavePreset1)?;
+        }
+        for binding_str in &self.save_preset_2 {
+            insert_binding(binding_str, Action::SavePreset2)?;
+        }
+        for binding_str in &self.save_preset_3 {
+            insert_binding(binding_str, Action::SavePreset3)?;
+        }
+        for binding_str in &self.save_preset_4 {
+            insert_binding(binding_str, Action::SavePreset4)?;
+        }
+        for binding_str in &self.save_preset_5 {
+            insert_binding(binding_str, Action::SavePreset5)?;
+        }
+        for binding_str in &self.clear_preset_1 {
+            insert_binding(binding_str, Action::ClearPreset1)?;
+        }
+        for binding_str in &self.clear_preset_2 {
+            insert_binding(binding_str, Action::ClearPreset2)?;
+        }
+        for binding_str in &self.clear_preset_3 {
+            insert_binding(binding_str, Action::ClearPreset3)?;
+        }
+        for binding_str in &self.clear_preset_4 {
+            insert_binding(binding_str, Action::ClearPreset4)?;
+        }
+        for binding_str in &self.clear_preset_5 {
+            insert_binding(binding_str, Action::ClearPreset5)?;
+        }
+
         Ok(map)
     }
 }
@@ -1016,6 +1125,66 @@ fn default_toggle_zoom_lock() -> Vec<String> {
 
 fn default_refresh_zoom_capture() -> Vec<String> {
     vec!["Ctrl+Alt+R".to_string()]
+}
+
+fn default_apply_preset_1() -> Vec<String> {
+    vec!["Alt+1".to_string()]
+}
+
+fn default_apply_preset_2() -> Vec<String> {
+    vec!["Alt+2".to_string()]
+}
+
+fn default_apply_preset_3() -> Vec<String> {
+    vec!["Alt+3".to_string()]
+}
+
+fn default_apply_preset_4() -> Vec<String> {
+    vec!["Alt+4".to_string()]
+}
+
+fn default_apply_preset_5() -> Vec<String> {
+    vec!["Alt+5".to_string()]
+}
+
+fn default_save_preset_1() -> Vec<String> {
+    vec!["Ctrl+Alt+1".to_string()]
+}
+
+fn default_save_preset_2() -> Vec<String> {
+    vec!["Ctrl+Alt+2".to_string()]
+}
+
+fn default_save_preset_3() -> Vec<String> {
+    vec!["Ctrl+Alt+3".to_string()]
+}
+
+fn default_save_preset_4() -> Vec<String> {
+    vec!["Ctrl+Alt+4".to_string()]
+}
+
+fn default_save_preset_5() -> Vec<String> {
+    vec!["Ctrl+Alt+5".to_string()]
+}
+
+fn default_clear_preset_1() -> Vec<String> {
+    vec!["Ctrl+Alt+Shift+1".to_string()]
+}
+
+fn default_clear_preset_2() -> Vec<String> {
+    vec!["Ctrl+Alt+Shift+2".to_string()]
+}
+
+fn default_clear_preset_3() -> Vec<String> {
+    vec!["Ctrl+Alt+Shift+3".to_string()]
+}
+
+fn default_clear_preset_4() -> Vec<String> {
+    vec!["Ctrl+Alt+Shift+4".to_string()]
+}
+
+fn default_clear_preset_5() -> Vec<String> {
+    vec!["Ctrl+Alt+Shift+5".to_string()]
 }
 
 #[cfg(test)]

@@ -89,6 +89,13 @@ impl ToolbarLayoutSpec {
     pub(super) const SIDE_TOGGLE_GAP: f64 = 6.0;
     pub(super) const SIDE_CUSTOM_SECTION_HEIGHT: f64 = 120.0;
     pub(super) const SIDE_STEP_HEADER_HEIGHT: f64 = 20.0;
+    pub(super) const SIDE_PRESET_CARD_HEIGHT: f64 = 112.0;
+    pub(super) const SIDE_PRESET_SLOT_SIZE: f64 = 30.0;
+    pub(super) const SIDE_PRESET_SLOT_GAP: f64 = 6.0;
+    pub(super) const SIDE_PRESET_ROW_OFFSET_Y: f64 = 24.0;
+    pub(super) const SIDE_PRESET_ACTION_GAP: f64 = 6.0;
+    pub(super) const SIDE_PRESET_ACTION_HEIGHT: f64 = 24.0;
+    pub(super) const SIDE_PRESET_ACTION_BUTTON_GAP: f64 = 4.0;
     pub(super) const SIDE_FOOTER_PADDING: f64 = 20.0;
 
     pub(super) fn new(snapshot: &ToolbarSnapshot) -> Self {
@@ -108,8 +115,10 @@ impl ToolbarLayoutSpec {
     pub(super) fn side_size(&self, snapshot: &ToolbarSnapshot) -> (u32, u32) {
         let base_height = self.side_content_start_y();
         let colors_h = self.side_colors_height(snapshot);
+        let actions_toggle_h =
+            Self::SIDE_ACTIONS_CHECKBOX_HEIGHT * 2.0 + Self::SIDE_TOGGLE_GAP;
         let actions_h = Self::SIDE_ACTIONS_HEADER_HEIGHT
-            + Self::SIDE_ACTIONS_CHECKBOX_HEIGHT
+            + actions_toggle_h
             + self.side_actions_content_height(snapshot);
         let step_h = self.side_step_height(snapshot);
 
@@ -117,6 +126,7 @@ impl ToolbarLayoutSpec {
             snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
 
         let mut height: f64 = base_height + colors_h + Self::SIDE_SECTION_GAP;
+        height += Self::SIDE_PRESET_CARD_HEIGHT + Self::SIDE_SECTION_GAP;
         height += Self::SIDE_SLIDER_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Thickness
         if snapshot.thickness_targets_eraser {
             height += Self::SIDE_ERASER_MODE_CARD_HEIGHT + Self::SIDE_SECTION_GAP; // Eraser mode
@@ -502,6 +512,57 @@ pub fn build_side_hits(
     });
     y += spec.side_colors_height(snapshot) + section_gap;
 
+    // Preset slots
+    let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
+    let slot_count = snapshot
+        .preset_slot_count
+        .min(snapshot.presets.len());
+    if slot_count > 0 {
+        let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
+        let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
+        let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
+        let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
+        let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
+        let action_w = slot_size;
+        for slot_index in 0..slot_count {
+            let slot = slot_index + 1;
+            let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
+            let preset_exists = snapshot
+                .presets
+                .get(slot_index)
+                .and_then(|preset| preset.as_ref())
+                .is_some();
+            if preset_exists {
+                hits.push(HitRegion {
+                    rect: (slot_x, slot_row_y, slot_size, slot_size),
+                    event: ToolbarEvent::ApplyPreset(slot),
+                    kind: HitKind::Click,
+                    tooltip: Some(format!("Apply preset {}", slot)),
+                });
+            }
+            hits.push(HitRegion {
+                rect: (slot_x, action_row_y, action_w, ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT),
+                event: ToolbarEvent::SavePreset(slot),
+                kind: HitKind::Click,
+                tooltip: Some(format!("Save preset {}", slot)),
+            });
+            if preset_exists {
+                hits.push(HitRegion {
+                    rect: (
+                        slot_x,
+                        action_row_y + ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT + action_gap,
+                        action_w,
+                        ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT,
+                    ),
+                    event: ToolbarEvent::ClearPreset(slot),
+                    kind: HitKind::Click,
+                    tooltip: Some(format!("Clear preset {}", slot)),
+                });
+            }
+        }
+        y += presets_card_h + section_gap;
+    }
+
     // Thickness slider
     let slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
     let slider_hit_h = ToolbarLayoutSpec::SIDE_NUDGE_SIZE;
@@ -560,13 +621,42 @@ pub fn build_side_hits(
     y += ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT + section_gap;
 
     // Actions section
+    let actions_toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
+    let actions_toggle_h =
+        ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT * 2.0 + actions_toggle_gap;
     let actions_card_h = ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT
-        + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT
+        + actions_toggle_h
         + spec.side_actions_content_height(snapshot);
+    let actions_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+    let actions_toggle_w = content_width;
+    hits.push(HitRegion {
+        rect: (
+            x,
+            actions_toggle_y,
+            actions_toggle_w,
+            ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT,
+        ),
+        event: ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+    let toast_toggle_y =
+        actions_toggle_y + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT + actions_toggle_gap;
+    hits.push(HitRegion {
+        rect: (
+            x,
+            toast_toggle_y,
+            actions_toggle_w,
+            ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT,
+        ),
+        event: ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
     if snapshot.show_actions_section {
         let mut action_y = y
             + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y
-            + ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT
+            + actions_toggle_h
             + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
         let actions: &[(ToolbarEvent, bool)] = &[
             (ToolbarEvent::Undo, true),
