@@ -432,7 +432,6 @@ pub fn render_ui_toast(
 
     let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
     let (r, g, b) = match toast.kind {
-        UiToastKind::Info => (0.22, 0.5, 0.9),
         UiToastKind::Warning => (0.92, 0.62, 0.18),
         UiToastKind::Error => (0.9, 0.3, 0.3),
     };

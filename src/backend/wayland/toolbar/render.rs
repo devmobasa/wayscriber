@@ -4,7 +4,9 @@ use anyhow::Result;
 
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar_icons;
-use crate::draw::{BLACK, BLUE, Color, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
+use crate::draw::{
+    BLACK, BLUE, Color, EraserKind, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW,
+};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::{EraserMode, Tool};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
@@ -857,11 +859,36 @@ pub fn render_side_palette(
             Tool::Highlight => "Highlight",
             Tool::Eraser => "Eraser",
         };
-        let size_label = |size: f64| {
-            if (size - size.round()).abs() < 0.05 {
-                format!("{:.0}px", size)
+        let px_label = |value: f64| {
+            if (value - value.round()).abs() < 0.05 {
+                format!("{:.0}px", value)
             } else {
-                format!("{:.1}px", size)
+                format!("{:.1}px", value)
+            }
+        };
+        let angle_label = |value: f64| {
+            if (value - value.round()).abs() < 0.05 {
+                format!("{:.0}deg", value)
+            } else {
+                format!("{:.1}deg", value)
+            }
+        };
+        let on_off = |value: bool| if value { "on" } else { "off" };
+        let eraser_kind_label = |kind: EraserKind| match kind {
+            EraserKind::Circle => "circle",
+            EraserKind::Rect => "rect",
+        };
+        let eraser_mode_label = |mode: EraserMode| match mode {
+            EraserMode::Brush => "brush",
+            EraserMode::Stroke => "stroke",
+        };
+        let truncate_label = |value: &str, max_chars: usize| {
+            if value.chars().count() <= max_chars {
+                value.to_string()
+            } else {
+                let mut truncated = value.chars().take(max_chars.saturating_sub(3)).collect::<String>();
+                truncated.push_str("...");
+                truncated
             }
         };
         for slot_index in 0..slot_count {
@@ -881,13 +908,61 @@ pub fn render_side_palette(
             );
 
             if let Some(preset) = preset {
-                let summary = format!(
+                let preset_name = preset
+                    .name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty());
+                let mut extra_details = Vec::new();
+                if let Some(fill) = preset.fill_enabled {
+                    extra_details.push(format!("fill:{}", on_off(fill)));
+                }
+                if let Some(opacity) = preset.marker_opacity {
+                    let percent = (opacity * 100.0).round() as i32;
+                    extra_details.push(format!("opacity:{}%", percent));
+                }
+                if let Some(kind) = preset.eraser_kind {
+                    extra_details.push(format!("eraser:{}", eraser_kind_label(kind)));
+                }
+                if let Some(mode) = preset.eraser_mode {
+                    extra_details.push(format!("mode:{}", eraser_mode_label(mode)));
+                }
+                if let Some(font_size) = preset.font_size {
+                    extra_details.push(format!("font:{}", px_label(font_size)));
+                }
+                if let Some(text_bg) = preset.text_background_enabled {
+                    extra_details.push(format!("text bg:{}", on_off(text_bg)));
+                }
+                let mut arrow_bits = Vec::new();
+                if let Some(length) = preset.arrow_length {
+                    arrow_bits.push(format!("len {}", px_label(length)));
+                }
+                if let Some(angle) = preset.arrow_angle {
+                    arrow_bits.push(format!("ang {}", angle_label(angle)));
+                }
+                if let Some(head_at_end) = preset.arrow_head_at_end {
+                    let head = if head_at_end { "end" } else { "start" };
+                    arrow_bits.push(format!("head {}", head));
+                }
+                if !arrow_bits.is_empty() {
+                    extra_details.push(format!("arrow:{}", arrow_bits.join(", ")));
+                }
+                if let Some(show_status_bar) = preset.show_status_bar {
+                    extra_details.push(format!("status:{}", on_off(show_status_bar)));
+                }
+
+                let base_summary = format!(
                     "{}, {}, {}",
                     tool_label(preset.tool),
                     color_to_name(&preset.color),
-                    size_label(preset.size)
+                    px_label(preset.size)
                 );
-                let label = if let Some(name) = preset.name.as_deref() {
+                let summary = if extra_details.is_empty() {
+                    base_summary
+                } else {
+                    format!("{}; {}", base_summary, extra_details.join("; "))
+                };
+                let label = if let Some(name) = preset_name {
                     format!("Apply preset {}: {} ({})", slot, name, summary)
                 } else {
                     format!("Apply preset {} ({})", slot, summary)
@@ -933,6 +1008,43 @@ pub fn render_side_palette(
                 let swatch_x = slot_x + slot_size - swatch_size - 4.0;
                 let swatch_y = slot_row_y + slot_size - swatch_size - 4.0;
                 draw_swatch(ctx, swatch_x, swatch_y, swatch_size, preset.color, false);
+
+                if slot_hover {
+                    if let Some(name) = preset_name {
+                        let display_name = truncate_label(name, 12);
+                        ctx.select_font_face(
+                            "Sans",
+                            cairo::FontSlant::Normal,
+                            cairo::FontWeight::Normal,
+                        );
+                        ctx.set_font_size(10.0);
+                        if let Ok(extents) = ctx.text_extents(&display_name) {
+                            let pad_x = 5.0;
+                            let pad_y = 2.0;
+                            let label_w = extents.width() + pad_x * 2.0;
+                            let label_h = extents.height() + pad_y * 2.0;
+                            let mut label_x = slot_x + (slot_size - label_w) / 2.0;
+                            let label_y = (slot_row_y - label_h - 2.0).max(y + 2.0);
+                            let min_x = card_x + 2.0;
+                            let max_x = card_x + card_w - label_w - 2.0;
+                            if label_x < min_x {
+                                label_x = min_x;
+                            }
+                            if label_x > max_x {
+                                label_x = max_x;
+                            }
+                            ctx.set_source_rgba(0.12, 0.12, 0.18, 0.92);
+                            draw_round_rect(ctx, label_x, label_y, label_w, label_h, 4.0);
+                            let _ = ctx.fill();
+                            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                            ctx.move_to(
+                                label_x + pad_x - extents.x_bearing(),
+                                label_y + pad_y - extents.y_bearing(),
+                            );
+                            let _ = ctx.show_text(&display_name);
+                        }
+                    }
+                }
             } else {
                 ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
                 ctx.set_line_width(1.0);
@@ -1740,7 +1852,7 @@ pub fn render_side_palette(
             rect: (x, custom_toggle_y, toggle_w, custom_toggle_h),
             event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some("Step controls: multi-step undo/redo.".to_string()),
         });
 
         let delay_toggle_y = custom_toggle_y + custom_toggle_h + toggle_gap;
@@ -1761,7 +1873,7 @@ pub fn render_side_palette(
             rect: (x, delay_toggle_y, toggle_w, custom_toggle_h),
             event: ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some("Delay sliders: undo/redo delays.".to_string()),
         });
 
         let mut custom_y = delay_toggle_y + custom_toggle_h + toggle_gap;
@@ -1827,15 +1939,11 @@ pub fn render_side_palette(
                             ToolbarEvent::CustomRedo
                         },
                         kind: HitKind::Click,
-                        tooltip: if snapshot.use_icons {
-                            Some(if is_undo {
-                                "Step Undo".to_string()
-                            } else {
-                                "Step Redo".to_string()
-                            })
+                        tooltip: Some(if is_undo {
+                            "Step undo".to_string()
                         } else {
-                            None
-                        },
+                            "Step redo".to_string()
+                        }),
                     });
 
                     let steps_x = x + btn_w + gap;
@@ -1858,7 +1966,11 @@ pub fn render_side_palette(
                             ToolbarEvent::SetCustomRedoSteps(steps.saturating_sub(1).max(1))
                         },
                         kind: HitKind::Click,
-                        tooltip: None,
+                        tooltip: Some(if is_undo {
+                            "Decrease undo steps".to_string()
+                        } else {
+                            "Decrease redo steps".to_string()
+                        }),
                     });
 
                     let steps_val_x = steps_x + steps_btn_w + 4.0;
@@ -1892,7 +2004,11 @@ pub fn render_side_palette(
                             ToolbarEvent::SetCustomRedoSteps(steps.saturating_add(1))
                         },
                         kind: HitKind::Click,
-                        tooltip: None,
+                        tooltip: Some(if is_undo {
+                            "Increase undo steps".to_string()
+                        } else {
+                            "Increase redo steps".to_string()
+                        }),
                     });
 
                     let slider_y = y + row_h + 8.0;
@@ -1926,7 +2042,17 @@ pub fn render_side_palette(
                         } else {
                             HitKind::DragCustomRedoDelay
                         },
-                        tooltip: None,
+                        tooltip: Some(if is_undo {
+                            format!(
+                                "Undo step delay: {:.1}s (drag)",
+                                delay_ms as f64 / 1000.0
+                            )
+                        } else {
+                            format!(
+                                "Redo step delay: {:.1}s (drag)",
+                                delay_ms as f64 / 1000.0
+                            )
+                        }),
                     });
 
                     slider_y + slider_h + 10.0 - y
@@ -1983,7 +2109,10 @@ pub fn render_side_palette(
                 ),
                 event: ToolbarEvent::SetUndoDelay(delay_secs_from_t(undo_t)),
                 kind: HitKind::DragUndoDelay,
-                tooltip: None,
+                tooltip: Some(format!(
+                    "Undo-all delay: {:.1}s (drag)",
+                    snapshot.undo_all_delay_ms as f64 / 1000.0
+                )),
             });
 
             let redo_label = format!(
@@ -2018,7 +2147,10 @@ pub fn render_side_palette(
                 ),
                 event: ToolbarEvent::SetRedoDelay(delay_secs_from_t(redo_t)),
                 kind: HitKind::DragRedoDelay,
-                tooltip: None,
+                tooltip: Some(format!(
+                    "Redo-all delay: {:.1}s (drag)",
+                    snapshot.redo_all_delay_ms as f64 / 1000.0
+                )),
             });
         }
         y += custom_card_h + section_gap;
