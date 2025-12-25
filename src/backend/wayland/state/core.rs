@@ -82,6 +82,7 @@ impl WaylandState {
             data,
             config,
             input_state,
+            ui_animation_next_tick: None,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new(screencopy_manager),
             zoom: ZoomState::new(zoom_manager),

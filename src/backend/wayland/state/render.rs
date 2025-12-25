@@ -28,6 +28,8 @@ impl WaylandState {
         let highlight_active = self.input_state.advance_click_highlights(now);
         let preset_feedback_active = self.input_state.advance_preset_feedback(now);
         let ui_toast_active = self.input_state.advance_ui_toast(now);
+        let ui_animation_active = highlight_active || preset_feedback_active || ui_toast_active;
+        self.update_ui_animation_tick(now, ui_animation_active);
         let mut eraser_pattern: Option<cairo::SurfacePattern> = None;
         let mut eraser_bg_color: Option<Color> = None;
 
@@ -452,6 +454,6 @@ impl WaylandState {
         // Render toolbar overlays if visible, only when state/hover changed.
         self.render_layer_toolbars_if_needed();
 
-        Ok(highlight_active || preset_feedback_active || ui_toast_active)
+        Ok(false)
     }
 }
