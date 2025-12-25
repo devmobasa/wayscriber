@@ -3,7 +3,9 @@ pub mod toolbar;
 /// UI rendering: status bar, help overlay, visual indicators
 use crate::config::StatusPosition;
 use crate::input::{BoardMode, DrawingState, InputState, Tool, state::ContextMenuState};
-use crate::input::state::{PresetFeedbackKind, PRESET_TOAST_DURATION_MS};
+use crate::input::state::{
+    PresetFeedbackKind, UiToastKind, PRESET_TOAST_DURATION_MS, UI_TOAST_DURATION_MS,
+};
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::time::Instant;
 
@@ -21,6 +23,10 @@ const STATUS_BG_WIDTH_PAD: f64 = 10.0;
 const STATUS_BG_HEIGHT_PAD: f64 = 8.0;
 /// Color indicator dot X offset
 const STATUS_DOT_OFFSET_X: f64 = 3.0;
+/// Vertical position for UI toasts (percentage of screen height from top)
+const UI_TOAST_Y_RATIO: f64 = 0.12;
+/// Portion of toast lifetime to keep fully opaque before fading
+const UI_TOAST_HOLD_RATIO: f64 = 0.75;
 /// Vertical position for preset toast (percentage of screen height from top)
 const PRESET_TOAST_Y_RATIO: f64 = 0.2;
 
@@ -281,7 +287,7 @@ pub fn render_zoom_badge(
     };
     let padding = 12.0;
     let radius = 8.0;
-    let font_size = 15.0;
+    let font_size = 16.0;
 
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(font_size);
@@ -362,7 +368,12 @@ pub fn render_preset_toast(
     let center_y = screen_height as f64 * PRESET_TOAST_Y_RATIO;
     let y = center_y - height / 2.0;
 
-    let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
+    let fade = if (progress as f64) <= UI_TOAST_HOLD_RATIO {
+        1.0
+    } else {
+        let t = ((progress as f64) - UI_TOAST_HOLD_RATIO) / (1.0 - UI_TOAST_HOLD_RATIO);
+        (1.0 - t).clamp(0.0, 1.0)
+    };
     let (r, g, b) = match kind {
         PresetFeedbackKind::Apply => (0.22, 0.5, 0.9),
         PresetFeedbackKind::Save => (0.2, 0.7, 0.4),
@@ -378,6 +389,66 @@ pub fn render_preset_toast(
     let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
     ctx.move_to(text_x, text_y);
     let _ = ctx.show_text(&label);
+}
+
+/// Render a transient UI toast (warnings/errors/info).
+pub fn render_ui_toast(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    let Some(toast) = input_state.ui_toast.as_ref() else {
+        return;
+    };
+
+    let now = Instant::now();
+    let duration_secs = UI_TOAST_DURATION_MS as f32 / 1000.0;
+    let elapsed = now.saturating_duration_since(toast.started);
+    let progress = (elapsed.as_secs_f32() / duration_secs).clamp(0.0, 1.0);
+    if progress >= 1.0 {
+        return;
+    }
+
+    let label = toast.message.as_str();
+    let font_size = 15.0;
+    let padding_x = 16.0;
+    let padding_y = 9.0;
+    let radius = 10.0;
+
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+        label,
+    );
+    let width = extents.width() + padding_x * 2.0;
+    let height = extents.height() + padding_y * 2.0;
+    let x = (screen_width as f64 - width) / 2.0;
+    let center_y = screen_height as f64 * UI_TOAST_Y_RATIO;
+    let y = center_y - height / 2.0;
+
+    let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
+    let (r, g, b) = match toast.kind {
+        UiToastKind::Info => (0.22, 0.5, 0.9),
+        UiToastKind::Warning => (0.92, 0.62, 0.18),
+        UiToastKind::Error => (0.9, 0.3, 0.3),
+    };
+
+    ctx.set_source_rgba(r, g, b, 0.92 * fade);
+    draw_rounded_rect(ctx, x, y, width, height, radius);
+    let _ = ctx.fill();
+
+    let text_x = x + (width - extents.width()) / 2.0 - extents.x_bearing();
+    let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55 * fade);
+    ctx.move_to(text_x + 1.0, text_y + 1.0);
+    let _ = ctx.show_text(label);
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0 * fade);
+    ctx.move_to(text_x, text_y);
+    let _ = ctx.show_text(label);
 }
 
 /// Render help overlay showing all keybindings
