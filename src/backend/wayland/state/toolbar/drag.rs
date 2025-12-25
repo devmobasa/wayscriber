@@ -201,6 +201,14 @@ impl WaylandState {
                     top_base_x
                 );
             }
+            let margins_changed =
+                self.data.last_applied_top_margin != Some(top_margin_left)
+                    || self.data.last_applied_top_margin_top != Some(top_margin_top)
+                    || self.data.last_applied_side_margin != Some(side_margin_top)
+                    || self.data.last_applied_side_margin_left != Some(side_margin_left);
+            if !margins_changed {
+                return;
+            }
             self.data.last_applied_top_margin = Some(top_margin_left);
             self.data.last_applied_side_margin = Some(side_margin_top);
             self.data.last_applied_top_margin_top = Some(top_margin_top);
