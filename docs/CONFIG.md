@@ -220,6 +220,9 @@ Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
 
 ```toml
 [ui.toolbar]
+# Toolbar layout preset: "simple", "regular", or "advanced"
+layout_mode = "regular"
+
 # Show top toolbar on startup (pinned)
 top_pinned = true
 
@@ -232,8 +235,23 @@ use_icons = true
 # Show extended color palette in the top toolbar
 show_more_colors = false
 
-# Show undo all / redo all actions in the side toolbar
+# Show basic actions (undo/redo/clear) in the side toolbar
 show_actions_section = true
+
+# Show advanced actions (undo all, zoom, freeze, etc.)
+show_actions_advanced = false
+
+# Show presets section in the side toolbar
+show_presets = true
+
+# Show Step Undo/Redo section
+show_step_section = false
+
+# Keep text controls visible even when text is inactive
+show_text_controls = false
+
+# Show Settings section (config shortcuts + advanced toggles)
+show_settings_section = true
 
 # Show delayed undo/redo sliders in the side toolbar
 show_delay_sliders = false
@@ -248,7 +266,12 @@ show_preset_toasts = true
 **Behavior:**
 - **Icon/text mode**: `use_icons` switches between compact icons and labeled buttons.
 - **Colors**: `show_more_colors` toggles the extended palette row.
-- **Actions**: `show_actions_section` hides/shows the undo/redo action buttons.
+- **Layout**: `layout_mode` picks a preset complexity level; section toggles below can override.
+- **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
+- **Presets**: `show_presets` hides/shows the preset slots section.
+- **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
+- **Step controls**: `show_step_section` hides/shows the Step Undo/Redo section.
+- **Settings**: `show_settings_section` hides/shows the settings footer (config buttons and toggles).
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.

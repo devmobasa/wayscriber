@@ -183,11 +183,17 @@ fn toolbar_toggle_handles_partial_visibility() {
     let mut state = create_test_input_state();
     // Simulate config: top pinned, side not pinned
     state.init_toolbar_from_config(
+        crate::config::ToolbarLayoutMode::Regular,
         true,  // top_pinned
         false, // side_pinned
         true,  // use_icons
         false, // show_more_colors
         true,  // show_actions_section
+        false, // show_actions_advanced
+        true,  // show_presets
+        false, // show_step_section
+        false, // show_text_controls
+        true,  // show_settings_section
         false, // show_delay_sliders
         false, // show_marker_opacity_section
         true,  // show_preset_toasts

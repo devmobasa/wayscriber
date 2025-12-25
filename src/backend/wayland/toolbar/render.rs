@@ -5,8 +5,8 @@ use anyhow::Result;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar_icons;
 use crate::draw::{BLACK, BLUE, Color, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
-use crate::input::{EraserMode, Tool};
 use crate::input::state::PresetFeedbackKind;
+use crate::input::{EraserMode, Tool};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::util::color_to_name;
 
@@ -25,7 +25,9 @@ pub fn render_top_strip(
     draw_panel_background(ctx, width, height);
 
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(14.0);
+    const TOP_LABEL_FONT_SIZE: f64 = 14.0;
+    const ICON_TOGGLE_FONT_SIZE: f64 = 12.0;
+    ctx.set_font_size(TOP_LABEL_FONT_SIZE);
 
     let spec = ToolbarLayoutSpec::new(snapshot);
     let use_icons = snapshot.use_icons;
@@ -65,51 +67,92 @@ pub fn render_top_strip(
     x += handle_w + gap;
 
     type IconFn = fn(&cairo::Context, f64, f64, f64);
-    let buttons: &[(Tool, IconFn, &str)] = &[
-        (
-            Tool::Select,
-            toolbar_icons::draw_icon_select as IconFn,
-            "Select",
-        ),
-        (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
-        (
-            Tool::Marker,
-            toolbar_icons::draw_icon_marker as IconFn,
-            "Marker",
-        ),
-        (
-            Tool::Eraser,
-            toolbar_icons::draw_icon_eraser as IconFn,
-            "Eraser",
-        ),
-        (Tool::Line, toolbar_icons::draw_icon_line as IconFn, "Line"),
-        (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn, "Rect"),
-        (
-            Tool::Ellipse,
-            toolbar_icons::draw_icon_circle as IconFn,
-            "Circle",
-        ),
-        (
-            Tool::Arrow,
-            toolbar_icons::draw_icon_arrow as IconFn,
-            "Arrow",
-        ),
-    ];
+    let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
+    let current_shape_tool = match snapshot.tool_override {
+        Some(Tool::Line) => Some(Tool::Line),
+        Some(Tool::Rect) => Some(Tool::Rect),
+        Some(Tool::Ellipse) => Some(Tool::Ellipse),
+        Some(Tool::Arrow) => Some(Tool::Arrow),
+        _ => match snapshot.active_tool {
+            Tool::Line => Some(Tool::Line),
+            Tool::Rect => Some(Tool::Rect),
+            Tool::Ellipse => Some(Tool::Ellipse),
+            Tool::Arrow => Some(Tool::Arrow),
+            _ => None,
+        },
+    };
+    let shape_icon_tool = current_shape_tool.unwrap_or(Tool::Rect);
+    let fill_tool_active = matches!(snapshot.tool_override, Some(Tool::Rect | Tool::Ellipse))
+        || matches!(snapshot.active_tool, Tool::Rect | Tool::Ellipse);
 
     if use_icons {
         let (btn_size, _) = spec.top_button_size();
         let y = spec.top_button_y(height);
         let icon_size = ToolbarLayoutSpec::TOP_ICON_SIZE;
+        let fill_h = ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
 
-        let mut rect_x = 0.0;
-        let mut circle_end_x = 0.0;
+        let mut fill_anchor: Option<(f64, f64)> = None;
 
-        for (tool, icon_fn, label) in buttons {
+        let tool_buttons: &[(Tool, IconFn, &str)] = if is_simple {
+            &[
+                (
+                    Tool::Select,
+                    toolbar_icons::draw_icon_select as IconFn,
+                    "Select",
+                ),
+                (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
+                (
+                    Tool::Marker,
+                    toolbar_icons::draw_icon_marker as IconFn,
+                    "Marker",
+                ),
+                (
+                    Tool::Eraser,
+                    toolbar_icons::draw_icon_eraser as IconFn,
+                    "Eraser",
+                ),
+            ]
+        } else {
+            &[
+                (
+                    Tool::Select,
+                    toolbar_icons::draw_icon_select as IconFn,
+                    "Select",
+                ),
+                (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
+                (
+                    Tool::Marker,
+                    toolbar_icons::draw_icon_marker as IconFn,
+                    "Marker",
+                ),
+                (
+                    Tool::Eraser,
+                    toolbar_icons::draw_icon_eraser as IconFn,
+                    "Eraser",
+                ),
+                (Tool::Line, toolbar_icons::draw_icon_line as IconFn, "Line"),
+                (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn, "Rect"),
+                (
+                    Tool::Ellipse,
+                    toolbar_icons::draw_icon_circle as IconFn,
+                    "Circle",
+                ),
+                (
+                    Tool::Arrow,
+                    toolbar_icons::draw_icon_arrow as IconFn,
+                    "Arrow",
+                ),
+            ]
+        };
+
+        let mut rect_x = None;
+        let mut circle_end_x = None;
+        for (tool, icon_fn, label) in tool_buttons {
             if *tool == Tool::Rect {
-                rect_x = x;
+                rect_x = Some(x);
             }
             if *tool == Tool::Ellipse {
-                circle_end_x = x + btn_size;
+                circle_end_x = Some(x + btn_size);
             }
 
             let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
@@ -133,31 +176,63 @@ pub fn render_top_strip(
             x += btn_size + gap;
         }
 
-        let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
-        let fill_w = circle_end_x - rect_x;
-        let fill_h = ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
-        let fill_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, rect_x, fill_y, fill_w, fill_h))
-            .unwrap_or(false);
-        draw_mini_checkbox(
-            ctx,
-            rect_x,
-            fill_y,
-            fill_w,
-            fill_h,
-            snapshot.fill_enabled,
-            fill_hover,
-            "Fill",
-        );
-        hits.push(HitRegion {
-            rect: (rect_x, fill_y, fill_w, fill_h),
-            event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                "Fill",
-                snapshot.binding_hints.fill.as_deref(),
-            )),
-        });
+        if is_simple {
+            let shapes_active = snapshot.shape_picker_open || current_shape_tool.is_some();
+            let shapes_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                .unwrap_or(false);
+            draw_button(ctx, x, y, btn_size, btn_size, shapes_active, shapes_hover);
+            set_icon_color(ctx, shapes_hover);
+            let icon_x = x + (btn_size - icon_size) / 2.0;
+            let icon_y = y + (btn_size - icon_size) / 2.0;
+            match shape_icon_tool {
+                Tool::Line => toolbar_icons::draw_icon_line(ctx, icon_x, icon_y, icon_size),
+                Tool::Rect => toolbar_icons::draw_icon_rect(ctx, icon_x, icon_y, icon_size),
+                Tool::Ellipse => toolbar_icons::draw_icon_circle(ctx, icon_x, icon_y, icon_size),
+                Tool::Arrow => toolbar_icons::draw_icon_arrow(ctx, icon_x, icon_y, icon_size),
+                _ => toolbar_icons::draw_icon_rect(ctx, icon_x, icon_y, icon_size),
+            }
+            hits.push(HitRegion {
+                rect: (x, y, btn_size, btn_size),
+                event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
+                kind: HitKind::Click,
+                tooltip: Some("Shapes".to_string()),
+            });
+            if fill_tool_active && !snapshot.shape_picker_open {
+                fill_anchor = Some((x, btn_size));
+            }
+            x += btn_size + gap;
+        } else if let (Some(rect_x), Some(circle_end_x)) = (rect_x, circle_end_x) {
+            fill_anchor = Some((rect_x, circle_end_x - rect_x));
+        }
+
+        if fill_tool_active && !(is_simple && snapshot.shape_picker_open) {
+            if let Some((fill_x, fill_w)) = fill_anchor {
+                let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+                let fill_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, fill_x, fill_y, fill_w, fill_h))
+                    .unwrap_or(false);
+                draw_mini_checkbox(
+                    ctx,
+                    fill_x,
+                    fill_y,
+                    fill_w,
+                    fill_h,
+                    snapshot.fill_enabled,
+                    fill_hover,
+                    "Fill",
+                );
+                hits.push(HitRegion {
+                    rect: (fill_x, fill_y, fill_w, fill_h),
+                    event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        "Fill",
+                        snapshot.binding_hints.fill.as_deref(),
+                    )),
+                });
+            }
+        }
 
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
@@ -189,74 +264,139 @@ pub fn render_top_strip(
         });
         x += btn_size + gap;
 
-        let clear_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(ctx, x, y, btn_size, btn_size, false, clear_hover);
-        set_icon_color(ctx, clear_hover);
-        toolbar_icons::draw_icon_clear(
-            ctx,
-            x + (btn_size - icon_size) / 2.0,
-            y + (btn_size - icon_size) / 2.0,
-            icon_size,
-        );
-        hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::ClearCanvas,
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                "Clear",
-                snapshot.binding_hints.clear.as_deref(),
-            )),
-        });
-        x += btn_size + gap;
+        if !is_simple {
+            let clear_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                .unwrap_or(false);
+            draw_button(ctx, x, y, btn_size, btn_size, false, clear_hover);
+            set_icon_color(ctx, clear_hover);
+            toolbar_icons::draw_icon_clear(
+                ctx,
+                x + (btn_size - icon_size) / 2.0,
+                y + (btn_size - icon_size) / 2.0,
+                icon_size,
+            );
+            hits.push(HitRegion {
+                rect: (x, y, btn_size, btn_size),
+                event: ToolbarEvent::ClearCanvas,
+                kind: HitKind::Click,
+                tooltip: Some(format_binding_label(
+                    "Clear",
+                    snapshot.binding_hints.clear.as_deref(),
+                )),
+            });
+            x += btn_size + gap;
 
-        let highlight_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
-            .unwrap_or(false);
-        draw_button(
-            ctx,
-            x,
-            y,
-            btn_size,
-            btn_size,
-            snapshot.any_highlight_active,
-            highlight_hover,
-        );
-        set_icon_color(ctx, highlight_hover);
-        toolbar_icons::draw_icon_highlight(
-            ctx,
-            x + (btn_size - icon_size) / 2.0,
-            y + (btn_size - icon_size) / 2.0,
-            icon_size,
-        );
-        hits.push(HitRegion {
-            rect: (x, y, btn_size, btn_size),
-            event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                "Click highlight",
-                snapshot.binding_hints.toggle_highlight.as_deref(),
-            )),
-        });
-        x += btn_size + gap;
+            let highlight_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+                .unwrap_or(false);
+            draw_button(
+                ctx,
+                x,
+                y,
+                btn_size,
+                btn_size,
+                snapshot.any_highlight_active,
+                highlight_hover,
+            );
+            set_icon_color(ctx, highlight_hover);
+            toolbar_icons::draw_icon_highlight(
+                ctx,
+                x + (btn_size - icon_size) / 2.0,
+                y + (btn_size - icon_size) / 2.0,
+                icon_size,
+            );
+            hits.push(HitRegion {
+                rect: (x, y, btn_size, btn_size),
+                event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
+                kind: HitKind::Click,
+                tooltip: Some(format_binding_label(
+                    "Click highlight",
+                    snapshot.binding_hints.toggle_highlight.as_deref(),
+                )),
+            });
+            x += btn_size + gap;
+        }
 
         let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
         let icons_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_size))
             .unwrap_or(false);
+        ctx.set_font_size(ICON_TOGGLE_FONT_SIZE);
         draw_checkbox(ctx, x, y, icons_w, btn_size, true, icons_hover, "Icons");
+        ctx.set_font_size(TOP_LABEL_FONT_SIZE);
         hits.push(HitRegion {
             rect: (x, y, icons_w, btn_size),
             event: ToolbarEvent::ToggleIconMode(false),
             kind: HitKind::Click,
             tooltip: None,
         });
+
+        if is_simple && snapshot.shape_picker_open {
+            let shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+            let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + gap;
+            let shapes: &[(Tool, IconFn, &str)] = &[
+                (Tool::Line, toolbar_icons::draw_icon_line as IconFn, "Line"),
+                (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn, "Rect"),
+                (
+                    Tool::Ellipse,
+                    toolbar_icons::draw_icon_circle as IconFn,
+                    "Circle",
+                ),
+                (
+                    Tool::Arrow,
+                    toolbar_icons::draw_icon_arrow as IconFn,
+                    "Arrow",
+                ),
+            ];
+            for (tool, icon_fn, label) in shapes {
+                let is_active =
+                    snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, shape_x, shape_y, btn_size, btn_size))
+                    .unwrap_or(false);
+                draw_button(
+                    ctx, shape_x, shape_y, btn_size, btn_size, is_active, is_hover,
+                );
+                set_icon_color(ctx, is_hover);
+                let icon_x = shape_x + (btn_size - icon_size) / 2.0;
+                let icon_y = shape_y + (btn_size - icon_size) / 2.0;
+                icon_fn(ctx, icon_x, icon_y, icon_size);
+                let tooltip = tool_tooltip(*tool, label);
+                hits.push(HitRegion {
+                    rect: (shape_x, shape_y, btn_size, btn_size),
+                    event: ToolbarEvent::SelectTool(*tool),
+                    kind: HitKind::Click,
+                    tooltip: Some(tooltip),
+                });
+                shape_x += btn_size + gap;
+            }
+        }
     } else {
         let (btn_w, btn_h) = spec.top_button_size();
         let y = spec.top_button_y(height);
 
-        for (tool, _icon_fn, label) in buttons {
+        let tool_buttons: &[(Tool, &str)] = if is_simple {
+            &[
+                (Tool::Select, "Select"),
+                (Tool::Pen, "Pen"),
+                (Tool::Marker, "Marker"),
+                (Tool::Eraser, "Eraser"),
+            ]
+        } else {
+            &[
+                (Tool::Select, "Select"),
+                (Tool::Pen, "Pen"),
+                (Tool::Marker, "Marker"),
+                (Tool::Eraser, "Eraser"),
+                (Tool::Line, "Line"),
+                (Tool::Rect, "Rect"),
+                (Tool::Ellipse, "Circle"),
+                (Tool::Arrow, "Arrow"),
+            ]
+        };
+
+        for (tool, label) in tool_buttons {
             let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
             let is_hover = hover
                 .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
@@ -273,30 +413,48 @@ pub fn render_top_strip(
             x += btn_w + gap;
         }
 
-        let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
-        let fill_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, fill_w, btn_h))
-            .unwrap_or(false);
-        draw_checkbox(
-            ctx,
-            x,
-            y,
-            fill_w,
-            btn_h,
-            snapshot.fill_enabled,
-            fill_hover,
-            "Fill",
-        );
-        hits.push(HitRegion {
-            rect: (x, y, fill_w, btn_h),
-            event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
+        if is_simple {
+            let shapes_active = snapshot.shape_picker_open || current_shape_tool.is_some();
+            let shapes_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+                .unwrap_or(false);
+            draw_button(ctx, x, y, btn_w, btn_h, shapes_active, shapes_hover);
+            draw_label_center(ctx, x, y, btn_w, btn_h, "Shapes");
+            hits.push(HitRegion {
+                rect: (x, y, btn_w, btn_h),
+                event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
+                kind: HitKind::Click,
+                tooltip: Some("Shapes".to_string()),
+            });
+            x += btn_w + gap;
+        }
+
+        if fill_tool_active {
+            let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
+            let fill_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, x, y, fill_w, btn_h))
+                .unwrap_or(false);
+            draw_checkbox(
+                ctx,
+                x,
+                y,
+                fill_w,
+                btn_h,
+                snapshot.fill_enabled,
+                fill_hover,
                 "Fill",
-                snapshot.binding_hints.fill.as_deref(),
-            )),
-        });
-        x += fill_w + gap;
+            );
+            hits.push(HitRegion {
+                rect: (x, y, fill_w, btn_h),
+                event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+                kind: HitKind::Click,
+                tooltip: Some(format_binding_label(
+                    "Fill",
+                    snapshot.binding_hints.fill.as_deref(),
+                )),
+            });
+            x += fill_w + gap;
+        }
 
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
@@ -311,17 +469,65 @@ pub fn render_top_strip(
         });
         x += btn_w + gap;
 
+        if !is_simple {
+            let clear_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+                .unwrap_or(false);
+            draw_button(ctx, x, y, btn_w, btn_h, false, clear_hover);
+            draw_label_center(ctx, x, y, btn_w, btn_h, "Clear");
+            hits.push(HitRegion {
+                rect: (x, y, btn_w, btn_h),
+                event: ToolbarEvent::ClearCanvas,
+                kind: HitKind::Click,
+                tooltip: Some(format_binding_label(
+                    "Clear",
+                    snapshot.binding_hints.clear.as_deref(),
+                )),
+            });
+            x += btn_w + gap;
+        }
+
         let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
         let icons_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_h))
             .unwrap_or(false);
+        ctx.set_font_size(ICON_TOGGLE_FONT_SIZE);
         draw_checkbox(ctx, x, y, icons_w, btn_h, false, icons_hover, "Icons");
+        ctx.set_font_size(TOP_LABEL_FONT_SIZE);
         hits.push(HitRegion {
             rect: (x, y, icons_w, btn_h),
             event: ToolbarEvent::ToggleIconMode(true),
             kind: HitKind::Click,
             tooltip: None,
         });
+
+        if is_simple && snapshot.shape_picker_open {
+            let shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+            let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + gap;
+            let shapes: &[(Tool, &str)] = &[
+                (Tool::Line, "Line"),
+                (Tool::Rect, "Rect"),
+                (Tool::Ellipse, "Circle"),
+                (Tool::Arrow, "Arrow"),
+            ];
+            for (tool, label) in shapes {
+                let is_active =
+                    snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, shape_x, shape_y, btn_w, btn_h))
+                    .unwrap_or(false);
+                draw_button(ctx, shape_x, shape_y, btn_w, btn_h, is_active, is_hover);
+                draw_label_center(ctx, shape_x, shape_y, btn_w, btn_h, label);
+                let tooltip = tool_tooltip(*tool, label);
+                hits.push(HitRegion {
+                    rect: (shape_x, shape_y, btn_w, btn_h),
+                    event: ToolbarEvent::SelectTool(*tool),
+                    kind: HitKind::Click,
+                    tooltip: Some(tooltip),
+                });
+                shape_x += btn_w + gap;
+            }
+        }
     }
 
     let btn_size = ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE;
@@ -414,6 +620,32 @@ pub fn render_side_palette(
         tooltip: None,
     });
 
+    let mode_w = ToolbarLayoutSpec::SIDE_HEADER_MODE_WIDTH;
+    let mode_x = x + icons_w + ToolbarLayoutSpec::SIDE_HEADER_MODE_GAP;
+    let mode_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, mode_x, header_y, mode_w, icons_h))
+        .unwrap_or(false);
+    draw_button(ctx, mode_x, header_y, mode_w, icons_h, false, mode_hover);
+    let mode_label = match snapshot.layout_mode {
+        crate::config::ToolbarLayoutMode::Simple => "Mode: S",
+        crate::config::ToolbarLayoutMode::Regular => "Mode: R",
+        crate::config::ToolbarLayoutMode::Advanced => "Mode: A",
+    };
+    draw_label_center(ctx, mode_x, header_y, mode_w, icons_h, mode_label);
+    let next_mode = snapshot.layout_mode.next();
+    let mode_tooltip = format!(
+        "Mode: S/R/A = {}/{}/{}",
+        crate::config::ToolbarLayoutMode::Simple.label(),
+        crate::config::ToolbarLayoutMode::Regular.label(),
+        crate::config::ToolbarLayoutMode::Advanced.label(),
+    );
+    hits.push(HitRegion {
+        rect: (mode_x, header_y, mode_w, icons_h),
+        event: ToolbarEvent::SetToolbarLayoutMode(next_mode),
+        kind: HitKind::Click,
+        tooltip: Some(mode_tooltip),
+    });
+
     let (pin_x, close_x, header_btn_y) = spec.side_header_button_positions(width);
     let pin_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, header_btn_y, btn_size, btn_size))
@@ -454,6 +686,7 @@ pub fn render_side_palette(
     let card_w = spec.side_card_width(width);
     let content_width = spec.side_content_width(width);
     let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
+    let show_text_controls = snapshot.text_active || snapshot.show_text_controls;
 
     let basic_colors: &[(Color, &str)] = &[
         (RED, "Red"),
@@ -591,148 +824,119 @@ pub fn render_side_palette(
 
     y += colors_card_h + section_gap;
 
-    let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
-    draw_group_card(ctx, card_x, y, card_w, presets_card_h);
-    draw_section_label(
-        ctx,
-        x,
-        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
-        "Presets",
-    );
+    let slot_count = snapshot.preset_slot_count.min(snapshot.presets.len());
+    if snapshot.show_presets && slot_count > 0 {
+        let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
+        draw_group_card(ctx, card_x, y, card_w, presets_card_h);
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+            "Presets",
+        );
 
-    let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
-    let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
-    let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
-    let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
-    let action_h = ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT;
-    let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
-    let action_w = slot_size;
-    let action_icon = 14.0;
-    let slot_count = snapshot
-        .preset_slot_count
-        .min(snapshot.presets.len());
-    let icon_size = 14.0;
-    let swatch_size = 10.0;
-    let number_box = 12.0;
-    let tool_label = |tool: Tool| match tool {
-        Tool::Select => "Select",
-        Tool::Pen => "Pen",
-        Tool::Line => "Line",
-        Tool::Rect => "Rect",
-        Tool::Ellipse => "Circle",
-        Tool::Arrow => "Arrow",
-        Tool::Marker => "Marker",
-        Tool::Highlight => "Highlight",
-        Tool::Eraser => "Eraser",
-    };
-    let size_label = |size: f64| {
-        if (size - size.round()).abs() < 0.05 {
-            format!("{:.0}px", size)
-        } else {
-            format!("{:.1}px", size)
-        }
-    };
-    for slot_index in 0..slot_count {
-        let slot = slot_index + 1;
-        let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
-        let preset = snapshot
-            .presets
-            .get(slot_index)
-            .and_then(|preset| preset.as_ref());
-        let preset_exists = preset.is_some();
-        let slot_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, slot_x, slot_row_y, slot_size, slot_size))
-            .unwrap_or(false)
-            && preset_exists;
-        draw_button(ctx, slot_x, slot_row_y, slot_size, slot_size, false, slot_hover);
-
-        if let Some(preset) = preset {
-            let summary = format!(
-                "{}, {}, {}",
-                tool_label(preset.tool),
-                color_to_name(&preset.color),
-                size_label(preset.size)
-            );
-            let label = if let Some(name) = preset.name.as_deref() {
-                format!("Apply preset {}: {} ({})", slot, name, summary)
+        let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
+        let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
+        let slot_row_y = y + ToolbarLayoutSpec::SIDE_PRESET_ROW_OFFSET_Y;
+        let action_row_y = slot_row_y + slot_size + ToolbarLayoutSpec::SIDE_PRESET_ACTION_GAP;
+        let action_h = ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT;
+        let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
+        let action_w = slot_size;
+        let action_icon = 14.0;
+        let icon_size = 14.0;
+        let swatch_size = 10.0;
+        let number_box = 12.0;
+        let tool_label = |tool: Tool| match tool {
+            Tool::Select => "Select",
+            Tool::Pen => "Pen",
+            Tool::Line => "Line",
+            Tool::Rect => "Rect",
+            Tool::Ellipse => "Circle",
+            Tool::Arrow => "Arrow",
+            Tool::Marker => "Marker",
+            Tool::Highlight => "Highlight",
+            Tool::Eraser => "Eraser",
+        };
+        let size_label = |size: f64| {
+            if (size - size.round()).abs() < 0.05 {
+                format!("{:.0}px", size)
             } else {
-                format!("Apply preset {} ({})", slot, summary)
-            };
-            hits.push(HitRegion {
-                rect: (slot_x, slot_row_y, slot_size, slot_size),
-                event: ToolbarEvent::ApplyPreset(slot),
-                kind: HitKind::Click,
-                tooltip: Some(format_binding_label(
-                    &label,
-                    snapshot.binding_hints.apply_preset(slot),
-                )),
-            });
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-            draw_label_center(
-                ctx,
-                slot_x + 2.0,
-                slot_row_y + 2.0,
-                number_box,
-                number_box,
-                &slot.to_string(),
-            );
-
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-            let icon_x = slot_x + (slot_size - icon_size) / 2.0;
-            let icon_y = slot_row_y + (slot_size - icon_size) / 2.0;
-            match preset.tool {
-                Tool::Select => toolbar_icons::draw_icon_select(ctx, icon_x, icon_y, icon_size),
-                Tool::Pen => toolbar_icons::draw_icon_pen(ctx, icon_x, icon_y, icon_size),
-                Tool::Line => toolbar_icons::draw_icon_line(ctx, icon_x, icon_y, icon_size),
-                Tool::Rect => toolbar_icons::draw_icon_rect(ctx, icon_x, icon_y, icon_size),
-                Tool::Ellipse => toolbar_icons::draw_icon_circle(ctx, icon_x, icon_y, icon_size),
-                Tool::Arrow => toolbar_icons::draw_icon_arrow(ctx, icon_x, icon_y, icon_size),
-                Tool::Marker => toolbar_icons::draw_icon_marker(ctx, icon_x, icon_y, icon_size),
-                Tool::Highlight => toolbar_icons::draw_icon_highlight(ctx, icon_x, icon_y, icon_size),
-                Tool::Eraser => toolbar_icons::draw_icon_eraser(ctx, icon_x, icon_y, icon_size),
+                format!("{:.1}px", size)
             }
-
-            let swatch_x = slot_x + slot_size - swatch_size - 4.0;
-            let swatch_y = slot_row_y + slot_size - swatch_size - 4.0;
-            draw_swatch(ctx, swatch_x, swatch_y, swatch_size, preset.color, false);
-        } else {
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
-            ctx.set_line_width(1.0);
-            ctx.set_dash(&[3.0, 2.0], 0.0);
-            draw_round_rect(
-                ctx,
-                slot_x + 1.0,
-                slot_row_y + 1.0,
-                slot_size - 2.0,
-                slot_size - 2.0,
-                6.0,
+        };
+        for slot_index in 0..slot_count {
+            let slot = slot_index + 1;
+            let slot_x = x + slot_index as f64 * (slot_size + slot_gap);
+            let preset = snapshot
+                .presets
+                .get(slot_index)
+                .and_then(|preset| preset.as_ref());
+            let preset_exists = preset.is_some();
+            let slot_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, slot_x, slot_row_y, slot_size, slot_size))
+                .unwrap_or(false)
+                && preset_exists;
+            draw_button(
+                ctx, slot_x, slot_row_y, slot_size, slot_size, false, slot_hover,
             );
-            let _ = ctx.stroke();
-            ctx.set_dash(&[], 0.0);
-            draw_label_center_color(
-                ctx,
-                slot_x + 2.0,
-                slot_row_y + 2.0,
-                number_box,
-                number_box,
-                &slot.to_string(),
-                (1.0, 1.0, 1.0, 0.6),
-            );
-        }
 
-        if let Some(feedback) = snapshot
-            .preset_feedback
-            .get(slot_index)
-            .and_then(|feedback| feedback.as_ref())
-        {
-            let fade = (1.0 - feedback.progress as f64).clamp(0.0, 1.0);
-            if fade > 0.0 {
-                let (r, g, b) = match feedback.kind {
-                    PresetFeedbackKind::Apply => (0.35, 0.55, 0.95),
-                    PresetFeedbackKind::Save => (0.25, 0.75, 0.4),
-                    PresetFeedbackKind::Clear => (0.9, 0.3, 0.3),
+            if let Some(preset) = preset {
+                let summary = format!(
+                    "{}, {}, {}",
+                    tool_label(preset.tool),
+                    color_to_name(&preset.color),
+                    size_label(preset.size)
+                );
+                let label = if let Some(name) = preset.name.as_deref() {
+                    format!("Apply preset {}: {} ({})", slot, name, summary)
+                } else {
+                    format!("Apply preset {} ({})", slot, summary)
                 };
-                ctx.set_source_rgba(r, g, b, 0.35 * fade);
+                hits.push(HitRegion {
+                    rect: (slot_x, slot_row_y, slot_size, slot_size),
+                    event: ToolbarEvent::ApplyPreset(slot),
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        &label,
+                        snapshot.binding_hints.apply_preset(slot),
+                    )),
+                });
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                draw_label_center(
+                    ctx,
+                    slot_x + 2.0,
+                    slot_row_y + 2.0,
+                    number_box,
+                    number_box,
+                    &slot.to_string(),
+                );
+
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+                let icon_x = slot_x + (slot_size - icon_size) / 2.0;
+                let icon_y = slot_row_y + (slot_size - icon_size) / 2.0;
+                match preset.tool {
+                    Tool::Select => toolbar_icons::draw_icon_select(ctx, icon_x, icon_y, icon_size),
+                    Tool::Pen => toolbar_icons::draw_icon_pen(ctx, icon_x, icon_y, icon_size),
+                    Tool::Line => toolbar_icons::draw_icon_line(ctx, icon_x, icon_y, icon_size),
+                    Tool::Rect => toolbar_icons::draw_icon_rect(ctx, icon_x, icon_y, icon_size),
+                    Tool::Ellipse => {
+                        toolbar_icons::draw_icon_circle(ctx, icon_x, icon_y, icon_size)
+                    }
+                    Tool::Arrow => toolbar_icons::draw_icon_arrow(ctx, icon_x, icon_y, icon_size),
+                    Tool::Marker => toolbar_icons::draw_icon_marker(ctx, icon_x, icon_y, icon_size),
+                    Tool::Highlight => {
+                        toolbar_icons::draw_icon_highlight(ctx, icon_x, icon_y, icon_size)
+                    }
+                    Tool::Eraser => toolbar_icons::draw_icon_eraser(ctx, icon_x, icon_y, icon_size),
+                }
+
+                let swatch_x = slot_x + slot_size - swatch_size - 4.0;
+                let swatch_y = slot_row_y + slot_size - swatch_size - 4.0;
+                draw_swatch(ctx, swatch_x, swatch_y, swatch_size, preset.color, false);
+            } else {
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+                ctx.set_line_width(1.0);
+                ctx.set_dash(&[3.0, 2.0], 0.0);
                 draw_round_rect(
                     ctx,
                     slot_x + 1.0,
@@ -741,71 +945,122 @@ pub fn render_side_palette(
                     slot_size - 2.0,
                     6.0,
                 );
-                let _ = ctx.fill();
+                let _ = ctx.stroke();
+                ctx.set_dash(&[], 0.0);
+                draw_label_center_color(
+                    ctx,
+                    slot_x + 2.0,
+                    slot_row_y + 2.0,
+                    number_box,
+                    number_box,
+                    &slot.to_string(),
+                    (1.0, 1.0, 1.0, 0.6),
+                );
             }
-        }
-        if preset_exists && snapshot.active_preset_slot == Some(slot) {
-            ctx.set_source_rgba(ORANGE.r, ORANGE.g, ORANGE.b, 0.95);
-            ctx.set_line_width(2.0);
-            draw_round_rect(
+
+            if let Some(feedback) = snapshot
+                .preset_feedback
+                .get(slot_index)
+                .and_then(|feedback| feedback.as_ref())
+            {
+                let fade = (1.0 - feedback.progress as f64).clamp(0.0, 1.0);
+                if fade > 0.0 {
+                    let (r, g, b) = match feedback.kind {
+                        PresetFeedbackKind::Apply => (0.35, 0.55, 0.95),
+                        PresetFeedbackKind::Save => (0.25, 0.75, 0.4),
+                        PresetFeedbackKind::Clear => (0.9, 0.3, 0.3),
+                    };
+                    ctx.set_source_rgba(r, g, b, 0.35 * fade);
+                    draw_round_rect(
+                        ctx,
+                        slot_x + 1.0,
+                        slot_row_y + 1.0,
+                        slot_size - 2.0,
+                        slot_size - 2.0,
+                        6.0,
+                    );
+                    let _ = ctx.fill();
+                }
+            }
+            if preset_exists && snapshot.active_preset_slot == Some(slot) {
+                ctx.set_source_rgba(ORANGE.r, ORANGE.g, ORANGE.b, 0.95);
+                ctx.set_line_width(2.0);
+                draw_round_rect(
+                    ctx,
+                    slot_x + 1.0,
+                    slot_row_y + 1.0,
+                    slot_size - 2.0,
+                    slot_size - 2.0,
+                    7.0,
+                );
+                let _ = ctx.stroke();
+            }
+
+            let save_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, slot_x, action_row_y, action_w, action_h))
+                .unwrap_or(false);
+            draw_button(
                 ctx,
-                slot_x + 1.0,
-                slot_row_y + 1.0,
-                slot_size - 2.0,
-                slot_size - 2.0,
-                7.0,
+                slot_x,
+                action_row_y,
+                action_w,
+                action_h,
+                false,
+                save_hover,
             );
-            let _ = ctx.stroke();
-        }
-
-        let save_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, slot_x, action_row_y, action_w, action_h))
-            .unwrap_or(false);
-        draw_button(ctx, slot_x, action_row_y, action_w, action_h, false, save_hover);
-        set_icon_color(ctx, save_hover);
-        toolbar_icons::draw_icon_save(
-            ctx,
-            slot_x + (action_w - action_icon) / 2.0,
-            action_row_y + (action_h - action_icon) / 2.0,
-            action_icon,
-        );
-        hits.push(HitRegion {
-            rect: (slot_x, action_row_y, action_w, action_h),
-            event: ToolbarEvent::SavePreset(slot),
-            kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                &format!("Save preset {}", slot),
-                snapshot.binding_hints.save_preset(slot),
-            )),
-        });
-
-        let clear_x = slot_x;
-        let clear_y = action_row_y + action_h + action_gap;
-        let clear_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, clear_x, clear_y, action_w, action_h))
-            .unwrap_or(false)
-            && preset_exists;
-        draw_button(ctx, clear_x, clear_y, action_w, action_h, false, clear_hover);
-        if preset_exists {
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-        } else {
-            ctx.set_source_rgba(0.7, 0.7, 0.7, 0.6);
-        }
-        draw_label_center(ctx, clear_x, clear_y, action_w, action_h, "X");
-        if preset_exists {
+            set_icon_color(ctx, save_hover);
+            toolbar_icons::draw_icon_save(
+                ctx,
+                slot_x + (action_w - action_icon) / 2.0,
+                action_row_y + (action_h - action_icon) / 2.0,
+                action_icon,
+            );
             hits.push(HitRegion {
-                rect: (clear_x, clear_y, action_w, action_h),
-                event: ToolbarEvent::ClearPreset(slot),
+                rect: (slot_x, action_row_y, action_w, action_h),
+                event: ToolbarEvent::SavePreset(slot),
                 kind: HitKind::Click,
                 tooltip: Some(format_binding_label(
-                    &format!("Clear preset {}", slot),
-                    snapshot.binding_hints.clear_preset(slot),
+                    &format!("Save preset {}", slot),
+                    snapshot.binding_hints.save_preset(slot),
                 )),
             });
-        }
-    }
 
-    y += presets_card_h + section_gap;
+            let clear_x = slot_x;
+            let clear_y = action_row_y + action_h + action_gap;
+            let clear_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, clear_x, clear_y, action_w, action_h))
+                .unwrap_or(false)
+                && preset_exists;
+            draw_button(
+                ctx,
+                clear_x,
+                clear_y,
+                action_w,
+                action_h,
+                false,
+                clear_hover,
+            );
+            if preset_exists {
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+            } else {
+                ctx.set_source_rgba(0.7, 0.7, 0.7, 0.6);
+            }
+            draw_label_center(ctx, clear_x, clear_y, action_w, action_h, "X");
+            if preset_exists {
+                hits.push(HitRegion {
+                    rect: (clear_x, clear_y, action_w, action_h),
+                    event: ToolbarEvent::ClearPreset(slot),
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        &format!("Clear preset {}", slot),
+                        snapshot.binding_hints.clear_preset(slot),
+                    )),
+                });
+            }
+        }
+
+        y += presets_card_h + section_gap;
+    }
 
     let slider_card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
     draw_group_card(ctx, card_x, y, card_w, slider_card_h);
@@ -1067,245 +1322,160 @@ pub fn render_side_palette(
         y += slider_card_h + section_gap;
     }
 
-    draw_group_card(ctx, card_x, y, card_w, slider_card_h);
-    draw_section_label(
-        ctx,
-        x,
-        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
-        "Text size",
-    );
+    if show_text_controls {
+        draw_group_card(ctx, card_x, y, card_w, slider_card_h);
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+            "Text size",
+        );
 
-    let fs_min = 8.0;
-    let fs_max = 72.0;
-    let fs_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
+        let fs_min = 8.0;
+        let fs_max = 72.0;
+        let fs_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
 
-    let fs_minus_x = x;
-    draw_button(
-        ctx,
-        fs_minus_x,
-        fs_slider_row_y,
-        btn_size,
-        btn_size,
-        false,
-        false,
-    );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-    toolbar_icons::draw_icon_minus(
-        ctx,
-        fs_minus_x + (btn_size - nudge_icon_size) / 2.0,
-        fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
-        nudge_icon_size,
-    );
-    hits.push(HitRegion {
-        rect: (fs_minus_x, fs_slider_row_y, btn_size, btn_size),
-        event: ToolbarEvent::SetFontSize((snapshot.font_size - 2.0).max(fs_min)),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
-
-    let fs_plus_x = width - x - btn_size - value_w - 4.0;
-    draw_button(
-        ctx,
-        fs_plus_x,
-        fs_slider_row_y,
-        btn_size,
-        btn_size,
-        false,
-        false,
-    );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-    toolbar_icons::draw_icon_plus(
-        ctx,
-        fs_plus_x + (btn_size - nudge_icon_size) / 2.0,
-        fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
-        nudge_icon_size,
-    );
-    hits.push(HitRegion {
-        rect: (fs_plus_x, fs_slider_row_y, btn_size, btn_size),
-        event: ToolbarEvent::SetFontSize((snapshot.font_size + 2.0).min(fs_max)),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
-
-    let fs_track_x = fs_minus_x + btn_size + 6.0;
-    let fs_track_w = fs_plus_x - fs_track_x - 6.0;
-    let fs_track_y = fs_slider_row_y + (btn_size - track_h) / 2.0;
-    let fs_t = ((snapshot.font_size - fs_min) / (fs_max - fs_min)).clamp(0.0, 1.0);
-    let fs_knob_x = fs_track_x + fs_t * (fs_track_w - knob_r * 2.0) + knob_r;
-
-    ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
-    draw_round_rect(ctx, fs_track_x, fs_track_y, fs_track_w, track_h, 4.0);
-    let _ = ctx.fill();
-    ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-    ctx.arc(
-        fs_knob_x,
-        fs_track_y + track_h / 2.0,
-        knob_r,
-        0.0,
-        std::f64::consts::PI * 2.0,
-    );
-    let _ = ctx.fill();
-
-    hits.push(HitRegion {
-        rect: (fs_track_x, fs_track_y - 6.0, fs_track_w, track_h + 12.0),
-        event: ToolbarEvent::SetFontSize(snapshot.font_size),
-        kind: HitKind::DragSetFontSize,
-        tooltip: None,
-    });
-
-    let fs_text = format!("{:.0}pt", snapshot.font_size);
-    draw_label_center(
-        ctx,
-        width - x - value_w,
-        fs_slider_row_y,
-        value_w,
-        btn_size,
-        &fs_text,
-    );
-
-    y += slider_card_h + section_gap;
-
-    let font_card_h = ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT;
-    draw_group_card(ctx, card_x, y, card_w, font_card_h);
-    draw_section_label(
-        ctx,
-        x,
-        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Font",
-    );
-
-    let font_btn_h = ToolbarLayoutSpec::SIDE_FONT_BUTTON_HEIGHT;
-    let font_gap = ToolbarLayoutSpec::SIDE_FONT_BUTTON_GAP;
-    let font_btn_w = (content_width - font_gap) / 2.0;
-    let fonts = [
-        FontDescriptor::new("Sans".to_string(), "bold".to_string(), "normal".to_string()),
-        FontDescriptor::new(
-            "Monospace".to_string(),
-            "normal".to_string(),
-            "normal".to_string(),
-        ),
-    ];
-    let mut fx = x;
-    let fy = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
-    for font in fonts {
-        let is_active = font.family == snapshot.font.family;
-        let font_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, fx, fy, font_btn_w, font_btn_h))
-            .unwrap_or(false);
-        draw_button(ctx, fx, fy, font_btn_w, font_btn_h, is_active, font_hover);
-        draw_label_left(ctx, fx + 8.0, fy, font_btn_w, font_btn_h, &font.family);
+        let fs_minus_x = x;
+        draw_button(
+            ctx,
+            fs_minus_x,
+            fs_slider_row_y,
+            btn_size,
+            btn_size,
+            false,
+            false,
+        );
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_minus(
+            ctx,
+            fs_minus_x + (btn_size - nudge_icon_size) / 2.0,
+            fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+            nudge_icon_size,
+        );
         hits.push(HitRegion {
-            rect: (fx, fy, font_btn_w, font_btn_h),
-            event: ToolbarEvent::SetFont(font.clone()),
+            rect: (fs_minus_x, fs_slider_row_y, btn_size, btn_size),
+            event: ToolbarEvent::SetFontSize((snapshot.font_size - 2.0).max(fs_min)),
             kind: HitKind::Click,
             tooltip: None,
         });
-        fx += font_btn_w + font_gap;
+
+        let fs_plus_x = width - x - btn_size - value_w - 4.0;
+        draw_button(
+            ctx,
+            fs_plus_x,
+            fs_slider_row_y,
+            btn_size,
+            btn_size,
+            false,
+            false,
+        );
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        toolbar_icons::draw_icon_plus(
+            ctx,
+            fs_plus_x + (btn_size - nudge_icon_size) / 2.0,
+            fs_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
+            nudge_icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (fs_plus_x, fs_slider_row_y, btn_size, btn_size),
+            event: ToolbarEvent::SetFontSize((snapshot.font_size + 2.0).min(fs_max)),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+
+        let fs_track_x = fs_minus_x + btn_size + 6.0;
+        let fs_track_w = fs_plus_x - fs_track_x - 6.0;
+        let fs_track_y = fs_slider_row_y + (btn_size - track_h) / 2.0;
+        let fs_t = ((snapshot.font_size - fs_min) / (fs_max - fs_min)).clamp(0.0, 1.0);
+        let fs_knob_x = fs_track_x + fs_t * (fs_track_w - knob_r * 2.0) + knob_r;
+
+        ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+        draw_round_rect(ctx, fs_track_x, fs_track_y, fs_track_w, track_h, 4.0);
+        let _ = ctx.fill();
+        ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+        ctx.arc(
+            fs_knob_x,
+            fs_track_y + track_h / 2.0,
+            knob_r,
+            0.0,
+            std::f64::consts::PI * 2.0,
+        );
+        let _ = ctx.fill();
+
+        hits.push(HitRegion {
+            rect: (fs_track_x, fs_track_y - 6.0, fs_track_w, track_h + 12.0),
+            event: ToolbarEvent::SetFontSize(snapshot.font_size),
+            kind: HitKind::DragSetFontSize,
+            tooltip: None,
+        });
+
+        let fs_text = format!("{:.0}pt", snapshot.font_size);
+        draw_label_center(
+            ctx,
+            width - x - value_w,
+            fs_slider_row_y,
+            value_w,
+            btn_size,
+            &fs_text,
+        );
+
+        y += slider_card_h + section_gap;
+
+        let font_card_h = ToolbarLayoutSpec::SIDE_FONT_CARD_HEIGHT;
+        draw_group_card(ctx, card_x, y, card_w, font_card_h);
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+            "Font",
+        );
+
+        let font_btn_h = ToolbarLayoutSpec::SIDE_FONT_BUTTON_HEIGHT;
+        let font_gap = ToolbarLayoutSpec::SIDE_FONT_BUTTON_GAP;
+        let font_btn_w = (content_width - font_gap) / 2.0;
+        let fonts = [
+            FontDescriptor::new("Sans".to_string(), "bold".to_string(), "normal".to_string()),
+            FontDescriptor::new(
+                "Monospace".to_string(),
+                "normal".to_string(),
+                "normal".to_string(),
+            ),
+        ];
+        let mut fx = x;
+        let fy = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+        for font in fonts {
+            let is_active = font.family == snapshot.font.family;
+            let font_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, fx, fy, font_btn_w, font_btn_h))
+                .unwrap_or(false);
+            draw_button(ctx, fx, fy, font_btn_w, font_btn_h, is_active, font_hover);
+            draw_label_left(ctx, fx + 8.0, fy, font_btn_w, font_btn_h, &font.family);
+            hits.push(HitRegion {
+                rect: (fx, fy, font_btn_w, font_btn_h),
+                event: ToolbarEvent::SetFont(font.clone()),
+                kind: HitKind::Click,
+                tooltip: None,
+            });
+            fx += font_btn_w + font_gap;
+        }
+
+        y += font_card_h + section_gap;
     }
 
-    y += font_card_h + section_gap;
+    let show_actions = snapshot.show_actions_section || snapshot.show_actions_advanced;
+    if show_actions {
+        let actions_card_h = spec.side_actions_height(snapshot);
+        draw_group_card(ctx, card_x, y, card_w, actions_card_h);
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+            "Actions",
+        );
 
-    let actions_checkbox_h = ToolbarLayoutSpec::SIDE_ACTIONS_CHECKBOX_HEIGHT;
-    let actions_toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-    let actions_content_h = if snapshot.show_actions_section {
-        if use_icons {
-            let icon_btn_size = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
-            let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let icon_rows = 3;
-            (icon_btn_size + icon_gap) * icon_rows as f64
-        } else {
-            let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
-            let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
-            let action_rows = 8;
-            (action_h + action_gap) * action_rows as f64
-        }
-    } else {
-        0.0
-    };
-    let actions_toggle_h = actions_checkbox_h * 2.0 + actions_toggle_gap;
-    let actions_card_h =
-        ToolbarLayoutSpec::SIDE_ACTIONS_HEADER_HEIGHT + actions_toggle_h + actions_content_h;
-
-    draw_group_card(ctx, card_x, y, card_w, actions_card_h);
-    draw_section_label(
-        ctx,
-        x,
-        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Actions",
-    );
-
-    let actions_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
-    let actions_toggle_w = content_width;
-    let actions_toggle_hover = hover
-        .map(|(hx, hy)| {
-            point_in_rect(
-                hx,
-                hy,
-                x,
-                actions_toggle_y,
-                actions_toggle_w,
-                actions_checkbox_h,
-            )
-        })
-        .unwrap_or(false);
-    draw_checkbox(
-        ctx,
-        x,
-        actions_toggle_y,
-        actions_toggle_w,
-        actions_checkbox_h,
-        snapshot.show_actions_section,
-        actions_toggle_hover,
-        "Show actions",
-    );
-    hits.push(HitRegion {
-        rect: (x, actions_toggle_y, actions_toggle_w, actions_checkbox_h),
-        event: ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
-
-    let toast_toggle_y = actions_toggle_y + actions_checkbox_h + actions_toggle_gap;
-    let toast_toggle_hover = hover
-        .map(|(hx, hy)| {
-            point_in_rect(
-                hx,
-                hy,
-                x,
-                toast_toggle_y,
-                actions_toggle_w,
-                actions_checkbox_h,
-            )
-        })
-        .unwrap_or(false);
-    draw_checkbox(
-        ctx,
-        x,
-        toast_toggle_y,
-        actions_toggle_w,
-        actions_checkbox_h,
-        snapshot.show_preset_toasts,
-        toast_toggle_hover,
-        "Preset toasts",
-    );
-    hits.push(HitRegion {
-        rect: (x, toast_toggle_y, actions_toggle_w, actions_checkbox_h),
-        event: ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
-
-    if snapshot.show_actions_section {
-        let actions_start_y =
-            actions_toggle_y + actions_toggle_h + ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-
+        let mut actions_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
         type IconFn = fn(&cairo::Context, f64, f64, f64);
-        let lock_label = if snapshot.zoom_locked {
-            "Unlock Zoom"
-        } else {
-            "Lock Zoom"
-        };
-        let all_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
+        let basic_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
             (
                 ToolbarEvent::Undo,
                 toolbar_icons::draw_icon_undo as IconFn,
@@ -1318,6 +1488,19 @@ pub fn render_side_palette(
                 "Redo",
                 snapshot.redo_available,
             ),
+            (
+                ToolbarEvent::ClearCanvas,
+                toolbar_icons::draw_icon_clear as IconFn,
+                "Clear",
+                true,
+            ),
+        ];
+        let lock_label = if snapshot.zoom_locked {
+            "Unlock Zoom"
+        } else {
+            "Lock Zoom"
+        };
+        let advanced_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
             (
                 ToolbarEvent::UndoAll,
                 toolbar_icons::draw_icon_undo_all as IconFn,
@@ -1341,12 +1524,6 @@ pub fn render_side_palette(
                 toolbar_icons::draw_icon_redo_all_delay as IconFn,
                 "Redo All Delay",
                 snapshot.redo_available,
-            ),
-            (
-                ToolbarEvent::ClearCanvas,
-                toolbar_icons::draw_icon_clear as IconFn,
-                "Clear",
-                true,
             ),
             (
                 ToolbarEvent::ToggleFreeze,
@@ -1390,405 +1567,595 @@ pub fn render_side_palette(
                 lock_label,
                 snapshot.zoom_active,
             ),
-            (
-                ToolbarEvent::OpenConfigurator,
-                toolbar_icons::draw_icon_settings as IconFn,
-                "Config UI",
-                true,
-            ),
-            (
-                ToolbarEvent::OpenConfigFile,
-                toolbar_icons::draw_icon_file as IconFn,
-                "Config file",
-                true,
-            ),
         ];
 
-        if use_icons {
-            let icon_btn_size = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
-            let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let icons_per_row = 5;
-            let icon_size = ToolbarLayoutSpec::SIDE_ACTION_ICON_SIZE;
-            let total_icons_w =
-                icons_per_row as f64 * icon_btn_size + (icons_per_row - 1) as f64 * icon_gap;
-            let icons_start_x = x + (content_width - total_icons_w) / 2.0;
-
-            for (idx, (evt, icon_fn, label, enabled)) in all_actions.iter().enumerate() {
-                let row = idx / icons_per_row;
-                let col = idx % icons_per_row;
-                let bx = icons_start_x + (icon_btn_size + icon_gap) * col as f64;
-                let by = actions_start_y + (icon_btn_size + icon_gap) * row as f64;
-                let is_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
-                    .unwrap_or(false);
-
-                if *enabled {
-                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
-                    set_icon_color(ctx, is_hover);
-                } else {
-                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
-                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
-                }
-
-                let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
-                let icon_y = by + (icon_btn_size - icon_size) / 2.0;
-                icon_fn(ctx, icon_x, icon_y, icon_size);
-
-                hits.push(HitRegion {
-                    rect: (bx, by, icon_btn_size, icon_btn_size),
-                    event: evt.clone(),
-                    kind: HitKind::Click,
-                    tooltip: Some((*label).to_string()),
-                });
-            }
-        } else {
-            let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
-            let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
-            let action_col_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let action_w = (content_width - action_col_gap) / 2.0;
-
-            for (idx, (evt, _icon, label, enabled)) in all_actions.iter().enumerate() {
-                let row = idx / 2;
-                let col = idx % 2;
-                let bx = x + (action_w + action_col_gap) * col as f64;
-                let by = actions_start_y + (action_h + action_gap) * row as f64;
-                let is_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
-                    .unwrap_or(false);
-                draw_button(ctx, bx, by, action_w, action_h, *enabled, is_hover);
-                draw_label_center(ctx, bx, by, action_w, action_h, label);
-                if *enabled {
+        if snapshot.show_actions_section {
+            if use_icons {
+                let icon_btn_size = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
+                let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+                let icon_size = ToolbarLayoutSpec::SIDE_ACTION_ICON_SIZE;
+                let icons_per_row = basic_actions.len();
+                let total_icons_w =
+                    icons_per_row as f64 * icon_btn_size + (icons_per_row as f64 - 1.0) * icon_gap;
+                let icons_start_x = x + (content_width - total_icons_w) / 2.0;
+                for (idx, (evt, icon_fn, label, enabled)) in basic_actions.iter().enumerate() {
+                    let bx = icons_start_x + (icon_btn_size + icon_gap) * idx as f64;
+                    let by = actions_y;
+                    let is_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
+                        .unwrap_or(false);
+                    if *enabled {
+                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                        set_icon_color(ctx, is_hover);
+                    } else {
+                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
+                        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
+                    }
+                    let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
+                    let icon_y = by + (icon_btn_size - icon_size) / 2.0;
+                    icon_fn(ctx, icon_x, icon_y, icon_size);
                     hits.push(HitRegion {
-                        rect: (bx, by, action_w, action_h),
+                        rect: (bx, by, icon_btn_size, icon_btn_size),
                         event: evt.clone(),
                         kind: HitKind::Click,
-                        tooltip: None,
+                        tooltip: Some((*label).to_string()),
                     });
+                }
+                actions_y += icon_btn_size;
+            } else {
+                let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
+                let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
+                for (idx, (evt, _icon, label, enabled)) in basic_actions.iter().enumerate() {
+                    let by = actions_y + (action_h + action_gap) * idx as f64;
+                    let is_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, x, by, content_width, action_h))
+                        .unwrap_or(false);
+                    draw_button(ctx, x, by, content_width, action_h, *enabled, is_hover);
+                    draw_label_center(ctx, x, by, content_width, action_h, label);
+                    if *enabled {
+                        hits.push(HitRegion {
+                            rect: (x, by, content_width, action_h),
+                            event: evt.clone(),
+                            kind: HitKind::Click,
+                            tooltip: None,
+                        });
+                    }
+                }
+                actions_y += action_h * basic_actions.len() as f64
+                    + action_gap * (basic_actions.len() as f64 - 1.0);
+            }
+        }
+
+        if snapshot.show_actions_section && snapshot.show_actions_advanced {
+            actions_y += ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+        }
+
+        if snapshot.show_actions_advanced {
+            if use_icons {
+                let icon_btn_size = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
+                let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+                let icon_size = ToolbarLayoutSpec::SIDE_ACTION_ICON_SIZE;
+                let icons_per_row = 5;
+                let total_icons_w =
+                    icons_per_row as f64 * icon_btn_size + (icons_per_row - 1) as f64 * icon_gap;
+                let icons_start_x = x + (content_width - total_icons_w) / 2.0;
+                for (idx, (evt, icon_fn, label, enabled)) in advanced_actions.iter().enumerate() {
+                    let row = idx / icons_per_row;
+                    let col = idx % icons_per_row;
+                    let bx = icons_start_x + (icon_btn_size + icon_gap) * col as f64;
+                    let by = actions_y + (icon_btn_size + icon_gap) * row as f64;
+                    let is_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
+                        .unwrap_or(false);
+                    if *enabled {
+                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                        set_icon_color(ctx, is_hover);
+                    } else {
+                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
+                        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
+                    }
+                    let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
+                    let icon_y = by + (icon_btn_size - icon_size) / 2.0;
+                    icon_fn(ctx, icon_x, icon_y, icon_size);
+                    hits.push(HitRegion {
+                        rect: (bx, by, icon_btn_size, icon_btn_size),
+                        event: evt.clone(),
+                        kind: HitKind::Click,
+                        tooltip: Some((*label).to_string()),
+                    });
+                }
+            } else {
+                let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
+                let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
+                let action_col_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+                let action_w = (content_width - action_col_gap) / 2.0;
+                for (idx, (evt, _icon, label, enabled)) in advanced_actions.iter().enumerate() {
+                    let row = idx / 2;
+                    let col = idx % 2;
+                    let bx = x + (action_w + action_col_gap) * col as f64;
+                    let by = actions_y + (action_h + action_gap) * row as f64;
+                    let is_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
+                        .unwrap_or(false);
+                    draw_button(ctx, bx, by, action_w, action_h, *enabled, is_hover);
+                    draw_label_center(ctx, bx, by, action_w, action_h, label);
+                    if *enabled {
+                        hits.push(HitRegion {
+                            rect: (bx, by, action_w, action_h),
+                            event: evt.clone(),
+                            kind: HitKind::Click,
+                            tooltip: None,
+                        });
+                    }
                 }
             }
         }
+
+        y += actions_card_h + section_gap;
     }
 
-    y += actions_card_h + section_gap;
+    if snapshot.show_step_section {
+        let custom_toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
+        let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
+        let toggles_h = custom_toggle_h * 2.0 + toggle_gap;
+        let custom_content_h = if snapshot.custom_section_enabled {
+            ToolbarLayoutSpec::SIDE_CUSTOM_SECTION_HEIGHT
+        } else {
+            0.0
+        };
+        let delay_sliders_h = if snapshot.show_delay_sliders {
+            ToolbarLayoutSpec::SIDE_DELAY_SECTION_HEIGHT
+        } else {
+            0.0
+        };
+        let custom_card_h = ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT
+            + toggles_h
+            + custom_content_h
+            + delay_sliders_h;
+        draw_group_card(ctx, card_x, y, card_w, custom_card_h);
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+            "Step Undo/Redo",
+        );
 
-    let custom_toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
-    let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-    let toggles_h = custom_toggle_h * 2.0 + toggle_gap;
-    let custom_content_h = if snapshot.custom_section_enabled {
-        ToolbarLayoutSpec::SIDE_CUSTOM_SECTION_HEIGHT
-    } else {
-        0.0
-    };
-    let delay_sliders_h = if snapshot.show_delay_sliders {
-        ToolbarLayoutSpec::SIDE_DELAY_SECTION_HEIGHT
-    } else {
-        0.0
-    };
-    let custom_card_h =
-        ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT + toggles_h + custom_content_h + delay_sliders_h;
-    draw_group_card(ctx, card_x, y, card_w, custom_card_h);
-    draw_section_label(
-        ctx,
-        x,
-        y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Step Undo/Redo",
-    );
+        let custom_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+        let toggle_w = content_width;
 
-    let custom_toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
-    let toggle_w = content_width;
+        let step_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, custom_toggle_y, toggle_w, custom_toggle_h))
+            .unwrap_or(false);
+        draw_checkbox(
+            ctx,
+            x,
+            custom_toggle_y,
+            toggle_w,
+            custom_toggle_h,
+            snapshot.custom_section_enabled,
+            step_hover,
+            "Step controls",
+        );
+        hits.push(HitRegion {
+            rect: (x, custom_toggle_y, toggle_w, custom_toggle_h),
+            event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
 
-    let step_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, custom_toggle_y, toggle_w, custom_toggle_h))
-        .unwrap_or(false);
-    draw_checkbox(
-        ctx,
-        x,
-        custom_toggle_y,
-        toggle_w,
-        custom_toggle_h,
-        snapshot.custom_section_enabled,
-        step_hover,
-        "Step controls",
-    );
-    hits.push(HitRegion {
-        rect: (x, custom_toggle_y, toggle_w, custom_toggle_h),
-        event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
+        let delay_toggle_y = custom_toggle_y + custom_toggle_h + toggle_gap;
+        let delay_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, delay_toggle_y, toggle_w, custom_toggle_h))
+            .unwrap_or(false);
+        draw_checkbox(
+            ctx,
+            x,
+            delay_toggle_y,
+            toggle_w,
+            custom_toggle_h,
+            snapshot.show_delay_sliders,
+            delay_hover,
+            "Delay sliders",
+        );
+        hits.push(HitRegion {
+            rect: (x, delay_toggle_y, toggle_w, custom_toggle_h),
+            event: ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
+            kind: HitKind::Click,
+            tooltip: None,
+        });
 
-    let delay_toggle_y = custom_toggle_y + custom_toggle_h + toggle_gap;
-    let delay_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, delay_toggle_y, toggle_w, custom_toggle_h))
-        .unwrap_or(false);
-    draw_checkbox(
-        ctx,
-        x,
-        delay_toggle_y,
-        toggle_w,
-        custom_toggle_h,
-        snapshot.show_delay_sliders,
-        delay_hover,
-        "Delay sliders",
-    );
-    hits.push(HitRegion {
-        rect: (x, delay_toggle_y, toggle_w, custom_toggle_h),
-        event: ToolbarEvent::ToggleDelaySliders(!snapshot.show_delay_sliders),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
+        let mut custom_y = delay_toggle_y + custom_toggle_h + toggle_gap;
 
-    let mut custom_y = delay_toggle_y + custom_toggle_h + toggle_gap;
-
-    if snapshot.custom_section_enabled {
-        let render_custom_row = |ctx: &cairo::Context,
-                                 hits: &mut Vec<HitRegion>,
-                                 x: f64,
-                                 y: f64,
-                                 w: f64,
-                                 snapshot: &ToolbarSnapshot,
-                                 is_undo: bool,
-                                 hover: Option<(f64, f64)>| {
-            let row_h = 26.0;
-            let btn_w = if snapshot.use_icons { 42.0 } else { 90.0 };
-            let steps_btn_w = 26.0;
-            let gap = 6.0;
-            let label = if is_undo { "Step Undo" } else { "Step Redo" };
-            let steps = if is_undo {
-                snapshot.custom_undo_steps
-            } else {
-                snapshot.custom_redo_steps
-            };
-            let delay_ms = if is_undo {
-                snapshot.custom_undo_delay_ms
-            } else {
-                snapshot.custom_redo_delay_ms
-            };
-
-            let btn_hover = hover
-                .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, row_h))
-                .unwrap_or(false);
-
-            if snapshot.use_icons {
-                let icon_size = 20.0;
-                draw_button(ctx, x, y, btn_w, row_h, false, btn_hover);
-                set_icon_color(ctx, btn_hover);
-                if is_undo {
-                    toolbar_icons::draw_icon_step_undo(
-                        ctx,
-                        x + (btn_w - icon_size) / 2.0,
-                        y + (row_h - icon_size) / 2.0,
-                        icon_size,
-                    );
-                } else {
-                    toolbar_icons::draw_icon_step_redo(
-                        ctx,
-                        x + (btn_w - icon_size) / 2.0,
-                        y + (row_h - icon_size) / 2.0,
-                        icon_size,
-                    );
-                }
-            } else {
-                draw_button(ctx, x, y, btn_w, row_h, false, btn_hover);
-                draw_label_left(ctx, x + 10.0, y, btn_w - 20.0, row_h, label);
-            }
-            hits.push(HitRegion {
-                rect: (x, y, btn_w, row_h),
-                event: if is_undo {
-                    ToolbarEvent::CustomUndo
-                } else {
-                    ToolbarEvent::CustomRedo
-                },
-                kind: HitKind::Click,
-                tooltip: if snapshot.use_icons {
-                    Some(if is_undo {
-                        "Step Undo".to_string()
+        if snapshot.custom_section_enabled {
+            let render_custom_row =
+                |ctx: &cairo::Context,
+                 hits: &mut Vec<HitRegion>,
+                 x: f64,
+                 y: f64,
+                 w: f64,
+                 snapshot: &ToolbarSnapshot,
+                 is_undo: bool,
+                 hover: Option<(f64, f64)>| {
+                    let row_h = 26.0;
+                    let btn_w = if snapshot.use_icons { 42.0 } else { 90.0 };
+                    let steps_btn_w = 26.0;
+                    let gap = 6.0;
+                    let label = if is_undo { "Step Undo" } else { "Step Redo" };
+                    let steps = if is_undo {
+                        snapshot.custom_undo_steps
                     } else {
-                        "Step Redo".to_string()
-                    })
-                } else {
-                    None
-                },
-            });
+                        snapshot.custom_redo_steps
+                    };
+                    let delay_ms = if is_undo {
+                        snapshot.custom_undo_delay_ms
+                    } else {
+                        snapshot.custom_redo_delay_ms
+                    };
 
-            let steps_x = x + btn_w + gap;
-            let minus_hover = hover
-                .map(|(hx, hy)| point_in_rect(hx, hy, steps_x, y, steps_btn_w, row_h))
-                .unwrap_or(false);
-            draw_button(ctx, steps_x, y, steps_btn_w, row_h, false, minus_hover);
-            set_icon_color(ctx, minus_hover);
-            toolbar_icons::draw_icon_minus(
-                ctx,
-                steps_x + (steps_btn_w - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
-                y + (row_h - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
-                ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
-            );
-            hits.push(HitRegion {
-                rect: (steps_x, y, steps_btn_w, row_h),
-                event: if is_undo {
-                    ToolbarEvent::SetCustomUndoSteps(steps.saturating_sub(1).max(1))
-                } else {
-                    ToolbarEvent::SetCustomRedoSteps(steps.saturating_sub(1).max(1))
-                },
-                kind: HitKind::Click,
-                tooltip: None,
-            });
+                    let btn_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, row_h))
+                        .unwrap_or(false);
 
-            let steps_val_x = steps_x + steps_btn_w + 4.0;
-            draw_label_center(
-                ctx,
-                steps_val_x,
-                y,
-                54.0,
-                row_h,
-                &format!("{} steps", steps),
-            );
+                    if snapshot.use_icons {
+                        let icon_size = 20.0;
+                        draw_button(ctx, x, y, btn_w, row_h, false, btn_hover);
+                        set_icon_color(ctx, btn_hover);
+                        if is_undo {
+                            toolbar_icons::draw_icon_step_undo(
+                                ctx,
+                                x + (btn_w - icon_size) / 2.0,
+                                y + (row_h - icon_size) / 2.0,
+                                icon_size,
+                            );
+                        } else {
+                            toolbar_icons::draw_icon_step_redo(
+                                ctx,
+                                x + (btn_w - icon_size) / 2.0,
+                                y + (row_h - icon_size) / 2.0,
+                                icon_size,
+                            );
+                        }
+                    } else {
+                        draw_button(ctx, x, y, btn_w, row_h, false, btn_hover);
+                        draw_label_left(ctx, x + 10.0, y, btn_w - 20.0, row_h, label);
+                    }
+                    hits.push(HitRegion {
+                        rect: (x, y, btn_w, row_h),
+                        event: if is_undo {
+                            ToolbarEvent::CustomUndo
+                        } else {
+                            ToolbarEvent::CustomRedo
+                        },
+                        kind: HitKind::Click,
+                        tooltip: if snapshot.use_icons {
+                            Some(if is_undo {
+                                "Step Undo".to_string()
+                            } else {
+                                "Step Redo".to_string()
+                            })
+                        } else {
+                            None
+                        },
+                    });
 
-            let steps_plus_x = steps_val_x + 58.0;
-            let plus_hover = hover
-                .map(|(hx, hy)| point_in_rect(hx, hy, steps_plus_x, y, steps_btn_w, row_h))
-                .unwrap_or(false);
-            draw_button(ctx, steps_plus_x, y, steps_btn_w, row_h, false, plus_hover);
-            set_icon_color(ctx, plus_hover);
-            toolbar_icons::draw_icon_plus(
-                ctx,
-                steps_plus_x + (steps_btn_w - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
-                y + (row_h - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
-                ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
-            );
-            hits.push(HitRegion {
-                rect: (steps_plus_x, y, steps_btn_w, row_h),
-                event: if is_undo {
-                    ToolbarEvent::SetCustomUndoSteps(steps.saturating_add(1))
-                } else {
-                    ToolbarEvent::SetCustomRedoSteps(steps.saturating_add(1))
-                },
-                kind: HitKind::Click,
-                tooltip: None,
-            });
+                    let steps_x = x + btn_w + gap;
+                    let minus_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, steps_x, y, steps_btn_w, row_h))
+                        .unwrap_or(false);
+                    draw_button(ctx, steps_x, y, steps_btn_w, row_h, false, minus_hover);
+                    set_icon_color(ctx, minus_hover);
+                    toolbar_icons::draw_icon_minus(
+                        ctx,
+                        steps_x + (steps_btn_w - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                        y + (row_h - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                        ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
+                    );
+                    hits.push(HitRegion {
+                        rect: (steps_x, y, steps_btn_w, row_h),
+                        event: if is_undo {
+                            ToolbarEvent::SetCustomUndoSteps(steps.saturating_sub(1).max(1))
+                        } else {
+                            ToolbarEvent::SetCustomRedoSteps(steps.saturating_sub(1).max(1))
+                        },
+                        kind: HitKind::Click,
+                        tooltip: None,
+                    });
 
-            let slider_y = y + row_h + 8.0;
+                    let steps_val_x = steps_x + steps_btn_w + 4.0;
+                    draw_label_center(
+                        ctx,
+                        steps_val_x,
+                        y,
+                        54.0,
+                        row_h,
+                        &format!("{} steps", steps),
+                    );
+
+                    let steps_plus_x = steps_val_x + 58.0;
+                    let plus_hover = hover
+                        .map(|(hx, hy)| point_in_rect(hx, hy, steps_plus_x, y, steps_btn_w, row_h))
+                        .unwrap_or(false);
+                    draw_button(ctx, steps_plus_x, y, steps_btn_w, row_h, false, plus_hover);
+                    set_icon_color(ctx, plus_hover);
+                    toolbar_icons::draw_icon_plus(
+                        ctx,
+                        steps_plus_x
+                            + (steps_btn_w - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                        y + (row_h - ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE) / 2.0,
+                        ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE,
+                    );
+                    hits.push(HitRegion {
+                        rect: (steps_plus_x, y, steps_btn_w, row_h),
+                        event: if is_undo {
+                            ToolbarEvent::SetCustomUndoSteps(steps.saturating_add(1))
+                        } else {
+                            ToolbarEvent::SetCustomRedoSteps(steps.saturating_add(1))
+                        },
+                        kind: HitKind::Click,
+                        tooltip: None,
+                    });
+
+                    let slider_y = y + row_h + 8.0;
+                    let slider_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT;
+                    let slider_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
+                    let slider_w = w - ToolbarLayoutSpec::SIDE_CARD_INSET * 2.0;
+                    ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
+                    draw_round_rect(ctx, x, slider_y, slider_w, slider_h, 3.0);
+                    let _ = ctx.fill();
+                    let t = delay_t_from_ms(delay_ms);
+                    let knob_x = x + t * (slider_w - slider_r * 2.0) + slider_r;
+                    ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+                    ctx.arc(
+                        knob_x,
+                        slider_y + slider_h / 2.0,
+                        slider_r,
+                        0.0,
+                        std::f64::consts::PI * 2.0,
+                    );
+                    let _ = ctx.fill();
+                    let hit_pad = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING;
+                    hits.push(HitRegion {
+                        rect: (x, slider_y - hit_pad, slider_w, slider_h + hit_pad * 2.0),
+                        event: if is_undo {
+                            ToolbarEvent::SetCustomUndoDelay(delay_secs_from_t(t))
+                        } else {
+                            ToolbarEvent::SetCustomRedoDelay(delay_secs_from_t(t))
+                        },
+                        kind: if is_undo {
+                            HitKind::DragCustomUndoDelay
+                        } else {
+                            HitKind::DragCustomRedoDelay
+                        },
+                        tooltip: None,
+                    });
+
+                    slider_y + slider_h + 10.0 - y
+                };
+
+            let undo_row_h =
+                render_custom_row(ctx, hits, x, custom_y, card_w, snapshot, true, hover);
+            custom_y += undo_row_h + 8.0;
+            let _redo_row_h =
+                render_custom_row(ctx, hits, x, custom_y, card_w, snapshot, false, hover);
+        }
+
+        if snapshot.show_delay_sliders {
+            let sliders_w = content_width;
             let slider_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT;
-            let slider_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
-            let slider_w = w - ToolbarLayoutSpec::SIDE_CARD_INSET * 2.0;
+            let slider_knob_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
+            let slider_start_y = y
+                + ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT
+                + toggles_h
+                + custom_content_h
+                + ToolbarLayoutSpec::SIDE_STEP_SLIDER_TOP_PADDING;
+
+            let undo_label = format!(
+                "Undo delay: {:.1}s",
+                snapshot.undo_all_delay_ms as f64 / 1000.0
+            );
+            ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
+            ctx.set_font_size(11.0);
+            ctx.move_to(x, slider_start_y + 10.0);
+            let _ = ctx.show_text(&undo_label);
+
+            let undo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_UNDO_OFFSET_Y;
             ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
-            draw_round_rect(ctx, x, slider_y, slider_w, slider_h, 3.0);
+            draw_round_rect(ctx, x, undo_slider_y, sliders_w, slider_h, 3.0);
             let _ = ctx.fill();
-            let t = delay_t_from_ms(delay_ms);
-            let knob_x = x + t * (slider_w - slider_r * 2.0) + slider_r;
+            let undo_t = delay_t_from_ms(snapshot.undo_all_delay_ms);
+            let undo_knob_x = x + undo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
             ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
             ctx.arc(
-                knob_x,
-                slider_y + slider_h / 2.0,
-                slider_r,
+                undo_knob_x,
+                undo_slider_y + slider_h / 2.0,
+                slider_knob_r,
                 0.0,
                 std::f64::consts::PI * 2.0,
             );
             let _ = ctx.fill();
             let hit_pad = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING;
             hits.push(HitRegion {
-                rect: (x, slider_y - hit_pad, slider_w, slider_h + hit_pad * 2.0),
-                event: if is_undo {
-                    ToolbarEvent::SetCustomUndoDelay(delay_secs_from_t(t))
-                } else {
-                    ToolbarEvent::SetCustomRedoDelay(delay_secs_from_t(t))
-                },
-                kind: if is_undo {
-                    HitKind::DragCustomUndoDelay
-                } else {
-                    HitKind::DragCustomRedoDelay
-                },
+                rect: (
+                    x,
+                    undo_slider_y - hit_pad,
+                    sliders_w,
+                    slider_h + hit_pad * 2.0,
+                ),
+                event: ToolbarEvent::SetUndoDelay(delay_secs_from_t(undo_t)),
+                kind: HitKind::DragUndoDelay,
                 tooltip: None,
             });
 
-            slider_y + slider_h + 10.0 - y
-        };
+            let redo_label = format!(
+                "Redo delay: {:.1}s",
+                snapshot.redo_all_delay_ms as f64 / 1000.0
+            );
+            ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
+            ctx.move_to(x + sliders_w / 2.0 + 10.0, slider_start_y + 10.0);
+            let _ = ctx.show_text(&redo_label);
 
-        let undo_row_h = render_custom_row(ctx, hits, x, custom_y, card_w, snapshot, true, hover);
-        custom_y += undo_row_h + 8.0;
-        let _redo_row_h = render_custom_row(ctx, hits, x, custom_y, card_w, snapshot, false, hover);
+            let redo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_REDO_OFFSET_Y;
+            ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
+            draw_round_rect(ctx, x, redo_slider_y, sliders_w, slider_h, 3.0);
+            let _ = ctx.fill();
+            let redo_t = delay_t_from_ms(snapshot.redo_all_delay_ms);
+            let redo_knob_x = x + redo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
+            ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+            ctx.arc(
+                redo_knob_x,
+                redo_slider_y + slider_h / 2.0,
+                slider_knob_r,
+                0.0,
+                std::f64::consts::PI * 2.0,
+            );
+            let _ = ctx.fill();
+            hits.push(HitRegion {
+                rect: (
+                    x,
+                    redo_slider_y - hit_pad,
+                    sliders_w,
+                    slider_h + hit_pad * 2.0,
+                ),
+                event: ToolbarEvent::SetRedoDelay(delay_secs_from_t(redo_t)),
+                kind: HitKind::DragRedoDelay,
+                tooltip: None,
+            });
+        }
+        y += custom_card_h + section_gap;
     }
 
-    if snapshot.show_delay_sliders {
-        let sliders_w = content_width;
-        let slider_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT;
-        let slider_knob_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
-        let slider_start_y = y
-            + ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT
-            + toggles_h
-            + custom_content_h
-            + ToolbarLayoutSpec::SIDE_STEP_SLIDER_TOP_PADDING;
-
-        let undo_label = format!(
-            "Undo delay: {:.1}s",
-            snapshot.undo_all_delay_ms as f64 / 1000.0
+    if snapshot.show_settings_section {
+        let settings_card_h = spec.side_settings_height(snapshot);
+        draw_group_card(ctx, card_x, y, card_w, settings_card_h);
+        draw_section_label(
+            ctx,
+            x,
+            y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+            "Settings",
         );
-        ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
-        ctx.set_font_size(11.0);
-        ctx.move_to(x, slider_start_y + 10.0);
-        let _ = ctx.show_text(&undo_label);
 
-        let undo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_UNDO_OFFSET_Y;
-        ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
-        draw_round_rect(ctx, x, undo_slider_y, sliders_w, slider_h, 3.0);
-        let _ = ctx.fill();
-        let undo_t = delay_t_from_ms(snapshot.undo_all_delay_ms);
-        let undo_knob_x = x + undo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
-        ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-        ctx.arc(
-            undo_knob_x,
-            undo_slider_y + slider_h / 2.0,
-            slider_knob_r,
-            0.0,
-            std::f64::consts::PI * 2.0,
-        );
-        let _ = ctx.fill();
-        let hit_pad = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HIT_PADDING;
-        hits.push(HitRegion {
-            rect: (
+        let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
+        let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
+        let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![(
+            "Preset toasts",
+            snapshot.show_preset_toasts,
+            ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+            Some("Preset toasts: apply/save/clear."),
+        )];
+        if snapshot.layout_mode == crate::config::ToolbarLayoutMode::Advanced {
+            toggles.extend_from_slice(&[
+                (
+                    "Show presets",
+                    snapshot.show_presets,
+                    ToolbarEvent::TogglePresets(!snapshot.show_presets),
+                    Some("Presets: quick slots."),
+                ),
+                (
+                    "Show actions",
+                    snapshot.show_actions_section,
+                    ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
+                    Some("Actions: undo/redo/clear."),
+                ),
+                (
+                    "Advanced actions",
+                    snapshot.show_actions_advanced,
+                    ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
+                    Some("Advanced: undo-all/delay/zoom."),
+                ),
+                (
+                    "Step controls",
+                    snapshot.show_step_section,
+                    ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
+                    Some("Step: step undo/redo."),
+                ),
+                (
+                    "Text controls",
+                    snapshot.show_text_controls,
+                    ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
+                    Some("Text: font size/family."),
+                ),
+            ]);
+        }
+
+        let mut toggle_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+        for (idx, (label, value, event, tooltip)) in toggles.iter().enumerate() {
+            let toggle_hover = hover
+                .map(|(hx, hy)| point_in_rect(hx, hy, x, toggle_y, content_width, toggle_h))
+                .unwrap_or(false);
+            draw_checkbox(
+                ctx,
                 x,
-                undo_slider_y - hit_pad,
-                sliders_w,
-                slider_h + hit_pad * 2.0,
-            ),
-            event: ToolbarEvent::SetUndoDelay(delay_secs_from_t(undo_t)),
-            kind: HitKind::DragUndoDelay,
-            tooltip: None,
+                toggle_y,
+                content_width,
+                toggle_h,
+                *value,
+                toggle_hover,
+                label,
+            );
+            hits.push(HitRegion {
+                rect: (x, toggle_y, content_width, toggle_h),
+                event: event.clone(),
+                kind: HitKind::Click,
+                tooltip: tooltip.map(|text| text.to_string()),
+            });
+            if idx + 1 < toggles.len() {
+                toggle_y += toggle_h + toggle_gap;
+            } else {
+                toggle_y += toggle_h;
+            }
+        }
+
+        let buttons_y = toggle_y + toggle_gap;
+        let button_h = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_HEIGHT;
+        let button_gap = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_GAP;
+        let button_w = (content_width - button_gap) / 2.0;
+        let icon_size = 16.0;
+
+        let config_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, buttons_y, button_w, button_h))
+            .unwrap_or(false);
+        draw_button(ctx, x, buttons_y, button_w, button_h, false, config_hover);
+        if use_icons {
+            set_icon_color(ctx, config_hover);
+            toolbar_icons::draw_icon_settings(
+                ctx,
+                x + (button_w - icon_size) / 2.0,
+                buttons_y + (button_h - icon_size) / 2.0,
+                icon_size,
+            );
+        } else {
+            draw_label_center(ctx, x, buttons_y, button_w, button_h, "Config UI");
+        }
+        hits.push(HitRegion {
+            rect: (x, buttons_y, button_w, button_h),
+            event: ToolbarEvent::OpenConfigurator,
+            kind: HitKind::Click,
+            tooltip: Some("Config UI".to_string()),
         });
 
-        let redo_label = format!(
-            "Redo delay: {:.1}s",
-            snapshot.redo_all_delay_ms as f64 / 1000.0
+        let file_x = x + button_w + button_gap;
+        let file_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, file_x, buttons_y, button_w, button_h))
+            .unwrap_or(false);
+        draw_button(
+            ctx, file_x, buttons_y, button_w, button_h, false, file_hover,
         );
-        ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
-        ctx.move_to(x + sliders_w / 2.0 + 10.0, slider_start_y + 10.0);
-        let _ = ctx.show_text(&redo_label);
-
-        let redo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_REDO_OFFSET_Y;
-        ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
-        draw_round_rect(ctx, x, redo_slider_y, sliders_w, slider_h, 3.0);
-        let _ = ctx.fill();
-        let redo_t = delay_t_from_ms(snapshot.redo_all_delay_ms);
-        let redo_knob_x = x + redo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
-        ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
-        ctx.arc(
-            redo_knob_x,
-            redo_slider_y + slider_h / 2.0,
-            slider_knob_r,
-            0.0,
-            std::f64::consts::PI * 2.0,
-        );
-        let _ = ctx.fill();
+        if use_icons {
+            set_icon_color(ctx, file_hover);
+            toolbar_icons::draw_icon_file(
+                ctx,
+                file_x + (button_w - icon_size) / 2.0,
+                buttons_y + (button_h - icon_size) / 2.0,
+                icon_size,
+            );
+        } else {
+            draw_label_center(ctx, file_x, buttons_y, button_w, button_h, "Config file");
+        }
         hits.push(HitRegion {
-            rect: (
-                x,
-                redo_slider_y - hit_pad,
-                sliders_w,
-                slider_h + hit_pad * 2.0,
-            ),
-            event: ToolbarEvent::SetRedoDelay(delay_secs_from_t(redo_t)),
-            kind: HitKind::DragRedoDelay,
-            tooltip: None,
+            rect: (file_x, buttons_y, button_w, button_h),
+            event: ToolbarEvent::OpenConfigFile,
+            kind: HitKind::Click,
+            tooltip: Some("Config file".to_string()),
         });
     }
 

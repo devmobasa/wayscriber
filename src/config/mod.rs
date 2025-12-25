@@ -19,8 +19,8 @@ pub use types::TabletInputConfig;
 pub use types::{
     ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
     HistoryConfig, PerformanceConfig, PresetSlotsConfig, SessionCompression, SessionConfig,
-    SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig, UiConfig,
-    PRESET_SLOTS_MAX, PRESET_SLOTS_MIN,
+    SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig, ToolbarLayoutMode,
+    UiConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN,
 };
 
 // Re-export for public API (unused internally but part of public interface)

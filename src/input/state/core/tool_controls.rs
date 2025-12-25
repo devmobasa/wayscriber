@@ -33,13 +33,9 @@ impl InputState {
 
     pub fn init_presets_from_config(&mut self, presets: &PresetSlotsConfig) {
         self.preset_slot_count = presets.slot_count;
-        self.presets = vec![
-            presets.slot_1.clone(),
-            presets.slot_2.clone(),
-            presets.slot_3.clone(),
-            presets.slot_4.clone(),
-            presets.slot_5.clone(),
-        ];
+        self.presets = (1..=PRESET_SLOTS_MAX)
+            .map(|slot| presets.get_slot(slot).cloned())
+            .collect();
         if self.presets.len() < PRESET_SLOTS_MAX {
             self.presets.resize_with(PRESET_SLOTS_MAX, || None);
         }
@@ -432,11 +428,17 @@ impl InputState {
     #[allow(clippy::too_many_arguments)]
     pub fn init_toolbar_from_config(
         &mut self,
+        layout_mode: crate::config::ToolbarLayoutMode,
         top_pinned: bool,
         side_pinned: bool,
         use_icons: bool,
         show_more_colors: bool,
         show_actions_section: bool,
+        show_actions_advanced: bool,
+        show_presets: bool,
+        show_step_section: bool,
+        show_text_controls: bool,
+        show_settings_section: bool,
         show_delay_sliders: bool,
         show_marker_opacity_section: bool,
         show_preset_toasts: bool,
@@ -447,8 +449,14 @@ impl InputState {
         self.toolbar_side_visible = side_pinned;
         self.toolbar_visible = top_pinned || side_pinned;
         self.toolbar_use_icons = use_icons;
+        self.toolbar_layout_mode = layout_mode;
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;
+        self.show_actions_advanced = show_actions_advanced;
+        self.show_presets = show_presets;
+        self.show_step_section = show_step_section;
+        self.show_text_controls = show_text_controls;
+        self.show_settings_section = show_settings_section;
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
         self.show_preset_toasts = show_preset_toasts;
