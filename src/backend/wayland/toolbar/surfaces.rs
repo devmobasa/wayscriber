@@ -185,16 +185,6 @@ impl ToolbarSurface {
         }
     }
 
-    pub fn set_left_margin(&mut self, left: i32) {
-        let (top, right, bottom, _) = self.margin;
-        self.set_margins(top, right, bottom, left);
-    }
-
-    pub fn set_top_margin(&mut self, top: i32) {
-        let (_, right, bottom, left) = self.margin;
-        self.set_margins(top, right, bottom, left);
-    }
-
     pub fn set_scale(&mut self, scale: i32) {
         let scale = scale.max(1);
         if self.scale != scale {
