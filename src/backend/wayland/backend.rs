@@ -37,7 +37,8 @@ use std::{
 const TABLET_MANAGER_MAX_VERSION: u32 = 2;
 use std::os::fd::AsRawFd;
 use wayland_client::{
-    Connection, EventQueue, backend::{ReadEventsGuard, WaylandError},
+    Connection, EventQueue,
+    backend::{ReadEventsGuard, WaylandError},
     globals::registry_queue_init,
 };
 #[cfg(tablet)]
@@ -165,11 +166,13 @@ fn dispatch_with_timeout(
         return Ok(());
     }
 
-    event_queue.flush().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    event_queue
+        .flush()
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     if let Some(guard) = event_queue.prepare_read() {
-        let _ = read_events_with_timeout(guard, timeout)
-            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let _ =
+            read_events_with_timeout(guard, timeout).map_err(|e| anyhow::anyhow!(e.to_string()))?;
         event_queue
             .dispatch_pending(state)
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;

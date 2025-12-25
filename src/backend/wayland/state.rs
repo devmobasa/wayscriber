@@ -249,9 +249,7 @@ impl WaylandState {
     }
 
     pub(super) fn ui_animation_timeout(&self, now: Instant) -> Option<Duration> {
-        if self.ui_animation_interval.is_none() {
-            return None;
-        }
+        self.ui_animation_interval?;
         self.ui_animation_next_tick
             .map(|next| next.saturating_duration_since(now))
     }
@@ -260,8 +258,7 @@ impl WaylandState {
         if self.ui_animation_interval.is_none() {
             return false;
         }
-        self.ui_animation_next_tick
-            .is_some_and(|next| now >= next)
+        self.ui_animation_next_tick.is_some_and(|next| now >= next)
     }
 }
 

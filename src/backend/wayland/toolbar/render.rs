@@ -838,6 +838,34 @@ pub fn render_side_palette(
             y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
             "Presets",
         );
+        let apply_hint = {
+            let mut uses_digit_bindings = true;
+            for slot in 1..=slot_count {
+                let expected = slot.to_string();
+                if snapshot.binding_hints.apply_preset(slot) != Some(expected.as_str()) {
+                    uses_digit_bindings = false;
+                    break;
+                }
+            }
+            if uses_digit_bindings {
+                Some(format!("Keys 1-{} apply", slot_count))
+            } else {
+                Some("Keys apply presets".to_string())
+            }
+        };
+        if let Some(hint) = apply_hint {
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            ctx.set_font_size(10.0);
+            if let Ok(ext) = ctx.text_extents(&hint) {
+                let hint_x = card_x + card_w - ext.width() - 8.0 - ext.x_bearing();
+                let hint_y = y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y;
+                ctx.set_source_rgba(0.7, 0.7, 0.75, 0.8);
+                ctx.move_to(hint_x, hint_y);
+                let _ = ctx.show_text(&hint);
+            }
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            ctx.set_font_size(13.0);
+        }
 
         let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
         let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;
@@ -846,10 +874,37 @@ pub fn render_side_palette(
         let action_h = ToolbarLayoutSpec::SIDE_PRESET_ACTION_HEIGHT;
         let action_gap = ToolbarLayoutSpec::SIDE_PRESET_ACTION_BUTTON_GAP;
         let action_w = (slot_size - action_gap) / 2.0;
-        let action_icon = 10.0;
-        let icon_size = 14.0;
-        let swatch_size = 12.0;
-        let number_box = 12.0;
+        let action_icon = (action_h * 0.6).round();
+        let icon_size = (slot_size * 0.45).round();
+        let swatch_size = (slot_size * 0.35).round();
+        let number_box = (slot_size * 0.4).round();
+        let keycap_pad = (slot_size * 0.1).round().max(3.0);
+        let keycap_radius = (number_box * 0.25).max(3.0);
+        let draw_keycap = |ctx: &cairo::Context, key_x: f64, key_y: f64, label: &str, active| {
+            let (bg_alpha, border_alpha, text_alpha) = if active {
+                (0.75, 0.55, 0.95)
+            } else {
+                (0.4, 0.35, 0.6)
+            };
+            ctx.set_source_rgba(0.12, 0.12, 0.18, bg_alpha);
+            draw_round_rect(ctx, key_x, key_y, number_box, number_box, keycap_radius);
+            let _ = ctx.fill();
+            ctx.set_source_rgba(1.0, 1.0, 1.0, border_alpha);
+            ctx.set_line_width(1.0);
+            draw_round_rect(ctx, key_x, key_y, number_box, number_box, keycap_radius);
+            let _ = ctx.stroke();
+            ctx.set_font_size(11.0);
+            draw_label_center_color(
+                ctx,
+                key_x,
+                key_y,
+                number_box,
+                number_box,
+                label,
+                (1.0, 1.0, 1.0, text_alpha),
+            );
+            ctx.set_font_size(13.0);
+        };
         let tool_label = |tool: Tool| match tool {
             Tool::Select => "Select",
             Tool::Pen => "Pen",
@@ -1018,15 +1073,6 @@ pub fn render_side_palette(
                         snapshot.binding_hints.apply_preset(slot),
                     )),
                 });
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                draw_label_center(
-                    ctx,
-                    slot_x + 2.0,
-                    slot_row_y + 2.0,
-                    number_box,
-                    number_box,
-                    &slot.to_string(),
-                );
 
                 ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
                 let icon_x = slot_x + (slot_size - icon_size) / 2.0;
@@ -1111,16 +1157,11 @@ pub fn render_side_palette(
                 );
                 let _ = ctx.stroke();
                 ctx.set_dash(&[], 0.0);
-                draw_label_center_color(
-                    ctx,
-                    slot_x + 2.0,
-                    slot_row_y + 2.0,
-                    number_box,
-                    number_box,
-                    &slot.to_string(),
-                    (1.0, 1.0, 1.0, 0.6),
-                );
             }
+
+            let key_x = slot_x + keycap_pad;
+            let key_y = slot_row_y + keycap_pad;
+            draw_keycap(ctx, key_x, key_y, &slot.to_string(), preset_exists);
 
             if let Some(feedback) = snapshot
                 .preset_feedback
@@ -2423,58 +2464,144 @@ fn draw_tooltip(
             ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
             ctx.set_font_size(12.0);
 
-            if let Ok(ext) = ctx.text_extents(text) {
-                let pad = 6.0;
-                let tooltip_w = ext.width() + pad * 2.0;
-                let tooltip_h = ext.height() + pad * 2.0;
-
-                let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
-                let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
-                let gap = 6.0;
-                let tooltip_y = if above {
-                    hit.rect.1 - tooltip_h - gap
-                } else {
-                    hit.rect.1 + hit.rect.3 + gap
-                };
-
-                if tooltip_x < 4.0 {
-                    tooltip_x = 4.0;
+            let pad = 6.0;
+            let max_tooltip_w = (panel_width - 8.0).max(40.0);
+            let max_text_w = (max_tooltip_w - pad * 2.0).max(20.0);
+            let lines = wrap_tooltip_lines(ctx, text, max_text_w);
+            let mut max_line_w: f64 = 0.0;
+            for line in &lines {
+                if let Ok(ext) = ctx.text_extents(line) {
+                    max_line_w = max_line_w.max(ext.width() + ext.x_bearing().abs());
                 }
-                if tooltip_x + tooltip_w > panel_width - 4.0 {
-                    tooltip_x = panel_width - tooltip_w - 4.0;
+            }
+            let tooltip_w = (max_line_w + pad * 2.0).min(max_tooltip_w);
+            let font_extents = ctx.font_extents().ok();
+            let line_height = font_extents
+                .as_ref()
+                .map(|ext| ext.height())
+                .unwrap_or(12.0)
+                .max(12.0);
+            let line_gap = 2.0;
+            let text_h = if lines.is_empty() {
+                0.0
+            } else {
+                line_height * lines.len() as f64 + line_gap * (lines.len().saturating_sub(1)) as f64
+            };
+            let tooltip_h = text_h + pad * 2.0;
+
+            let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
+            let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
+            let gap = 6.0;
+            let tooltip_y = if above {
+                hit.rect.1 - tooltip_h - gap
+            } else {
+                hit.rect.1 + hit.rect.3 + gap
+            };
+
+            if tooltip_x < 4.0 {
+                tooltip_x = 4.0;
+            }
+            if tooltip_x + tooltip_w > panel_width - 4.0 {
+                tooltip_x = panel_width - tooltip_w - 4.0;
+            }
+
+            let shadow_offset = 2.0;
+            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+            draw_round_rect(
+                ctx,
+                tooltip_x + shadow_offset,
+                tooltip_y + shadow_offset,
+                tooltip_w,
+                tooltip_h,
+                4.0,
+            );
+            let _ = ctx.fill();
+
+            ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
+            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+            let _ = ctx.fill();
+
+            ctx.set_source_rgba(0.4, 0.4, 0.5, 0.8);
+            ctx.set_line_width(1.0);
+            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+            let _ = ctx.stroke();
+
+            let ascent = font_extents
+                .as_ref()
+                .map(|ext| ext.ascent())
+                .unwrap_or(line_height * 0.8);
+            for (idx, line) in lines.iter().enumerate() {
+                let line_y = tooltip_y + pad + ascent + idx as f64 * (line_height + line_gap);
+                if let Ok(ext) = ctx.text_extents(line) {
+                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                    ctx.move_to(tooltip_x + pad - ext.x_bearing(), line_y);
+                    let _ = ctx.show_text(line);
                 }
-
-                let shadow_offset = 2.0;
-                ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
-                draw_round_rect(
-                    ctx,
-                    tooltip_x + shadow_offset,
-                    tooltip_y + shadow_offset,
-                    tooltip_w,
-                    tooltip_h,
-                    4.0,
-                );
-                let _ = ctx.fill();
-
-                ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
-                draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
-                let _ = ctx.fill();
-
-                ctx.set_source_rgba(0.4, 0.4, 0.5, 0.8);
-                ctx.set_line_width(1.0);
-                draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
-                let _ = ctx.stroke();
-
-                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                ctx.move_to(
-                    tooltip_x + pad - ext.x_bearing(),
-                    tooltip_y + pad - ext.y_bearing(),
-                );
-                let _ = ctx.show_text(text);
             }
             break;
         }
     }
+}
+
+fn wrap_tooltip_lines(ctx: &cairo::Context, text: &str, max_width: f64) -> Vec<String> {
+    if max_width <= 0.0 {
+        return vec![text.to_string()];
+    }
+
+    let mut lines = Vec::new();
+    let mut current = String::new();
+
+    for word in text.split_whitespace() {
+        if let Ok(ext) = ctx.text_extents(word)
+            && ext.width() > max_width
+        {
+            if !current.is_empty() {
+                lines.push(std::mem::take(&mut current));
+            }
+            let mut part = String::new();
+            for ch in word.chars() {
+                let candidate = format!("{part}{ch}");
+                let width = ctx
+                    .text_extents(&candidate)
+                    .map(|ext| ext.width())
+                    .unwrap_or(0.0);
+                if width <= max_width || part.is_empty() {
+                    part = candidate;
+                } else {
+                    lines.push(std::mem::take(&mut part));
+                    part = ch.to_string();
+                }
+            }
+            if !part.is_empty() {
+                lines.push(part);
+            }
+            continue;
+        }
+
+        let candidate = if current.is_empty() {
+            word.to_string()
+        } else {
+            format!("{current} {word}")
+        };
+        let width = ctx
+            .text_extents(&candidate)
+            .map(|ext| ext.width())
+            .unwrap_or(0.0);
+        if width <= max_width || current.is_empty() {
+            current = candidate;
+        } else {
+            lines.push(std::mem::take(&mut current));
+            current = word.to_string();
+        }
+    }
+
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(text.to_string());
+    }
+    lines
 }
 
 fn draw_close_button(ctx: &cairo::Context, x: f64, y: f64, size: f64, hover: bool) {
