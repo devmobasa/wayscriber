@@ -1,8 +1,8 @@
+use crate::config::ToolbarLayoutMode;
 use crate::config::{KeybindingsConfig, PRESET_SLOTS_MAX};
 use crate::draw::{Color, EraserKind, FontDescriptor};
-use crate::config::ToolbarLayoutMode;
+use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, PresetFeedbackKind};
 use crate::input::{EraserMode, InputState, Tool};
-use crate::input::state::{PresetFeedbackKind, PRESET_FEEDBACK_DURATION_MS};
 use std::time::Instant;
 
 /// Events emitted by the floating toolbar UI.
@@ -663,13 +663,7 @@ impl InputState {
             ToolbarEvent::SetToolbarLayoutMode(mode) => {
                 if self.toolbar_layout_mode != mode {
                     self.toolbar_layout_mode = mode;
-                    let defaults = mode.section_defaults();
-                    self.show_actions_section = defaults.show_actions_section;
-                    self.show_actions_advanced = defaults.show_actions_advanced;
-                    self.show_presets = defaults.show_presets;
-                    self.show_step_section = defaults.show_step_section;
-                    self.show_text_controls = defaults.show_text_controls;
-                    self.show_settings_section = defaults.show_settings_section;
+                    self.apply_toolbar_mode_defaults(mode);
                     if mode != ToolbarLayoutMode::Simple {
                         self.toolbar_shapes_expanded = false;
                     }

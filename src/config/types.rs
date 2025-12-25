@@ -1149,6 +1149,55 @@ pub struct ToolbarSectionDefaults {
     pub show_settings_section: bool,
 }
 
+/// Optional per-mode overrides for toolbar sections.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
+pub struct ToolbarModeOverride {
+    /// Show the Actions section (undo/redo/clear)
+    #[serde(default)]
+    pub show_actions_section: Option<bool>,
+
+    /// Show advanced action buttons (undo all, zoom, freeze, etc.)
+    #[serde(default)]
+    pub show_actions_advanced: Option<bool>,
+
+    /// Show the presets section in the side toolbar
+    #[serde(default)]
+    pub show_presets: Option<bool>,
+
+    /// Show the Step Undo/Redo section
+    #[serde(default)]
+    pub show_step_section: Option<bool>,
+
+    /// Keep text controls visible even when text is not active
+    #[serde(default)]
+    pub show_text_controls: Option<bool>,
+
+    /// Show the Settings section (config shortcuts, layout controls)
+    #[serde(default)]
+    pub show_settings_section: Option<bool>,
+}
+
+/// Mode-specific overrides for toolbar layout presets.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct ToolbarModeOverrides {
+    #[serde(default)]
+    pub simple: ToolbarModeOverride,
+    #[serde(default)]
+    pub regular: ToolbarModeOverride,
+    #[serde(default)]
+    pub advanced: ToolbarModeOverride,
+}
+
+impl ToolbarModeOverrides {
+    pub fn for_mode(&self, mode: ToolbarLayoutMode) -> &ToolbarModeOverride {
+        match mode {
+            ToolbarLayoutMode::Simple => &self.simple,
+            ToolbarLayoutMode::Regular => &self.regular,
+            ToolbarLayoutMode::Advanced => &self.advanced,
+        }
+    }
+}
+
 /// Toolbar visibility and pinning configuration.
 ///
 /// Controls which toolbar panels are visible on startup and whether they
@@ -1158,6 +1207,10 @@ pub struct ToolbarConfig {
     /// Toolbar layout preset (simple, regular, advanced)
     #[serde(default = "default_toolbar_layout_mode")]
     pub layout_mode: ToolbarLayoutMode,
+
+    /// Optional per-mode overrides for toolbar sections
+    #[serde(default)]
+    pub mode_overrides: ToolbarModeOverrides,
 
     /// Show the top toolbar (tool selection) on startup
     #[serde(default = "default_toolbar_top_pinned")]
@@ -1236,6 +1289,7 @@ impl Default for ToolbarConfig {
     fn default() -> Self {
         Self {
             layout_mode: default_toolbar_layout_mode(),
+            mode_overrides: ToolbarModeOverrides::default(),
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
             use_icons: default_toolbar_use_icons(),

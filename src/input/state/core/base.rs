@@ -11,7 +11,7 @@ use super::{
     properties::ShapePropertiesPanel,
     selection::SelectionState,
 };
-use crate::config::{Action, BoardConfig, KeyBinding, ToolPresetConfig, PRESET_SLOTS_MAX};
+use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
@@ -74,8 +74,13 @@ pub enum ZoomAction {
 
 #[derive(Debug, Clone)]
 pub enum PresetAction {
-    Save { slot: usize, preset: ToolPresetConfig },
-    Clear { slot: usize },
+    Save {
+        slot: usize,
+        preset: ToolPresetConfig,
+    },
+    Clear {
+        slot: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +151,8 @@ pub struct InputState {
     pub toolbar_use_icons: bool,
     /// Current toolbar layout complexity
     pub toolbar_layout_mode: crate::config::ToolbarLayoutMode,
+    /// Optional per-mode overrides for toolbar sections
+    pub toolbar_mode_overrides: crate::config::ToolbarModeOverrides,
     /// Whether the simple-mode shape picker is expanded
     pub toolbar_shapes_expanded: bool,
     /// Screen width in pixels (set by backend after configuration)
@@ -346,6 +353,7 @@ impl InputState {
             toolbar_side_pinned: false,
             toolbar_use_icons: true, // Default to icon mode
             toolbar_layout_mode: crate::config::ToolbarLayoutMode::Regular,
+            toolbar_mode_overrides: crate::config::ToolbarModeOverrides::default(),
             toolbar_shapes_expanded: false,
             screen_width: 0,
             screen_height: 0,

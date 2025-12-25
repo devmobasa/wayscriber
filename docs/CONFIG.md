@@ -223,6 +223,33 @@ Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
 # Toolbar layout preset: "simple", "regular", or "advanced"
 layout_mode = "regular"
 
+# Optional per-mode overrides for toolbar sections
+# Use true/false to override a section; omit to use the mode default.
+#
+# [ui.toolbar.mode_overrides.simple]
+# show_presets = false
+# show_actions_section = true
+# show_actions_advanced = false
+# show_step_section = false
+# show_text_controls = false
+# show_settings_section = false
+#
+# [ui.toolbar.mode_overrides.regular]
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = false
+# show_step_section = false
+# show_text_controls = false
+# show_settings_section = true
+#
+# [ui.toolbar.mode_overrides.advanced]
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = true
+# show_step_section = true
+# show_text_controls = true
+# show_settings_section = true
+
 # Show top toolbar on startup (pinned)
 top_pinned = true
 
@@ -266,7 +293,7 @@ show_preset_toasts = true
 **Behavior:**
 - **Icon/text mode**: `use_icons` switches between compact icons and labeled buttons.
 - **Colors**: `show_more_colors` toggles the extended palette row.
-- **Layout**: `layout_mode` picks a preset complexity level; section toggles below can override.
+- **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
 - **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.

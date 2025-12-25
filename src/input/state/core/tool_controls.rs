@@ -1,9 +1,8 @@
 use super::base::{
-    DrawingState, InputState, PresetFeedbackKind, PresetFeedbackState,
-    PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, MAX_STROKE_THICKNESS,
-    MIN_STROKE_THICKNESS,
+    DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+    PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetFeedbackKind, PresetFeedbackState,
 };
-use crate::config::{Action, PresetSlotsConfig, ToolPresetConfig, PRESET_SLOTS_MAX};
+use crate::config::{Action, PRESET_SLOTS_MAX, PresetSlotsConfig, ToolPresetConfig};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::tool::{EraserMode, Tool};
 use std::time::{Duration, Instant};
@@ -220,8 +219,7 @@ impl InputState {
             None => return,
         };
         if self.preset_feedback.len() < PRESET_SLOTS_MAX {
-            self.preset_feedback
-                .resize_with(PRESET_SLOTS_MAX, || None);
+            self.preset_feedback.resize_with(PRESET_SLOTS_MAX, || None);
         }
         if let Some(slot_ref) = self.preset_feedback.get_mut(index) {
             *slot_ref = Some(PresetFeedbackState {
@@ -429,6 +427,7 @@ impl InputState {
     pub fn init_toolbar_from_config(
         &mut self,
         layout_mode: crate::config::ToolbarLayoutMode,
+        mode_overrides: crate::config::ToolbarModeOverrides,
         top_pinned: bool,
         side_pinned: bool,
         use_icons: bool,
@@ -450,6 +449,7 @@ impl InputState {
         self.toolbar_visible = top_pinned || side_pinned;
         self.toolbar_use_icons = use_icons;
         self.toolbar_layout_mode = layout_mode;
+        self.toolbar_mode_overrides = mode_overrides;
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;
         self.show_actions_advanced = show_actions_advanced;
@@ -460,6 +460,50 @@ impl InputState {
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
         self.show_preset_toasts = show_preset_toasts;
+        self.apply_toolbar_mode_overrides(layout_mode);
+    }
+
+    fn apply_toolbar_mode_overrides(&mut self, mode: crate::config::ToolbarLayoutMode) {
+        let overrides = self.toolbar_mode_overrides.for_mode(mode);
+        if let Some(value) = overrides.show_actions_section {
+            self.show_actions_section = value;
+        }
+        if let Some(value) = overrides.show_actions_advanced {
+            self.show_actions_advanced = value;
+        }
+        if let Some(value) = overrides.show_presets {
+            self.show_presets = value;
+        }
+        if let Some(value) = overrides.show_step_section {
+            self.show_step_section = value;
+        }
+        if let Some(value) = overrides.show_text_controls {
+            self.show_text_controls = value;
+        }
+        if let Some(value) = overrides.show_settings_section {
+            self.show_settings_section = value;
+        }
+    }
+
+    pub(crate) fn apply_toolbar_mode_defaults(&mut self, mode: crate::config::ToolbarLayoutMode) {
+        let defaults = mode.section_defaults();
+        let overrides = self.toolbar_mode_overrides.for_mode(mode);
+        self.show_actions_section = overrides
+            .show_actions_section
+            .unwrap_or(defaults.show_actions_section);
+        self.show_actions_advanced = overrides
+            .show_actions_advanced
+            .unwrap_or(defaults.show_actions_advanced);
+        self.show_presets = overrides.show_presets.unwrap_or(defaults.show_presets);
+        self.show_step_section = overrides
+            .show_step_section
+            .unwrap_or(defaults.show_step_section);
+        self.show_text_controls = overrides
+            .show_text_controls
+            .unwrap_or(defaults.show_text_controls);
+        self.show_settings_section = overrides
+            .show_settings_section
+            .unwrap_or(defaults.show_settings_section);
     }
 
     /// Wrapper for undo that preserves existing action plumbing.

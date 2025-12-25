@@ -81,7 +81,10 @@ fn apply_preset_updates_tool_and_settings() {
 
     assert!(state.apply_preset(1));
     assert_eq!(state.active_tool(), Tool::Marker);
-    assert_eq!(state.current_color, ColorSpec::Name("blue".to_string()).to_color());
+    assert_eq!(
+        state.current_color,
+        ColorSpec::Name("blue".to_string()).to_color()
+    );
     assert_eq!(state.current_thickness, 12.0);
     assert_eq!(state.marker_opacity, 0.6);
     assert!(state.fill_enabled);
@@ -184,6 +187,7 @@ fn toolbar_toggle_handles_partial_visibility() {
     // Simulate config: top pinned, side not pinned
     state.init_toolbar_from_config(
         crate::config::ToolbarLayoutMode::Regular,
+        crate::config::ToolbarModeOverrides::default(),
         true,  // top_pinned
         false, // side_pinned
         true,  // use_icons

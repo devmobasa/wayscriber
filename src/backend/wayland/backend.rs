@@ -455,6 +455,7 @@ impl WaylandBackend {
         // Initialize toolbar visibility from pinned config
         input_state.init_toolbar_from_config(
             config.ui.toolbar.layout_mode,
+            config.ui.toolbar.mode_overrides.clone(),
             config.ui.toolbar.top_pinned,
             config.ui.toolbar.side_pinned,
             config.ui.toolbar.use_icons,
