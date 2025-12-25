@@ -328,6 +328,7 @@ impl WaylandState {
 
         if !any_visible {
             self.clear_inline_toolbar_hits();
+            self.clear_inline_toolbar_hover();
         }
 
         self.refresh_keyboard_interactivity();

@@ -6,6 +6,9 @@ impl WaylandState {
         self.data.inline_side_hits.clear();
         self.data.inline_top_rect = None;
         self.data.inline_side_rect = None;
+    }
+
+    pub(super) fn clear_inline_toolbar_hover(&mut self) {
         self.data.inline_top_hover = None;
         self.data.inline_side_hover = None;
     }
@@ -17,6 +20,7 @@ impl WaylandState {
     ) {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             self.clear_inline_toolbar_hits();
+            self.clear_inline_toolbar_hover();
             return;
         }
 
