@@ -7,7 +7,7 @@ const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
 use super::{
-    DrawingState, InputState, SelectionAxis, TextInputMode, MAX_STROKE_THICKNESS,
+    DrawingState, InputState, SelectionAxis, TextInputMode, UiToastKind, MAX_STROKE_THICKNESS,
     MIN_STROKE_THICKNESS,
 };
 
@@ -383,8 +383,35 @@ impl InputState {
                 }
             }
             Action::ClearCanvas => {
+                let (has_locked, has_unlocked) = {
+                    let frame = self.canvas_set.active_frame();
+                    let mut has_locked = false;
+                    let mut has_unlocked = false;
+                    for shape in &frame.shapes {
+                        if shape.locked {
+                            has_locked = true;
+                        } else {
+                            has_unlocked = true;
+                        }
+                        if has_locked && has_unlocked {
+                            break;
+                        }
+                    }
+                    (has_locked, has_unlocked)
+                };
+
                 if self.clear_all() {
-                    info!("Cleared canvas via keybinding");
+                    if has_locked {
+                        self.set_ui_toast(
+                            UiToastKind::Warning,
+                            "Cleared unlocked shapes (locked shapes remain).",
+                        );
+                        info!("Cleared unlocked shapes; locked shapes remain");
+                    } else {
+                        info!("Cleared canvas");
+                    }
+                } else if has_locked && !has_unlocked {
+                    self.set_ui_toast(UiToastKind::Warning, "All shapes are locked.");
                 }
             }
             Action::Undo => {

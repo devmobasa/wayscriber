@@ -238,11 +238,30 @@ impl InputState {
 
     fn canvas_menu_entries(&self) -> Vec<ContextMenuEntry> {
         let mut entries = Vec::new();
+        let frame = self.canvas_set.active_frame();
+        let mut has_locked = false;
+        let mut has_unlocked = false;
+        for shape in &frame.shapes {
+            if shape.locked {
+                has_locked = true;
+            } else {
+                has_unlocked = true;
+            }
+            if has_locked && has_unlocked {
+                break;
+            }
+        }
+        let clear_label = if has_locked {
+            "Clear Unlocked"
+        } else {
+            "Clear All"
+        };
+        let clear_disabled = !has_unlocked;
         entries.push(ContextMenuEntry::new(
-            "Clear All",
+            clear_label,
             Some("E"),
             false,
-            false,
+            clear_disabled,
             Some(MenuCommand::ClearAll),
         ));
         entries.push(ContextMenuEntry::new(
