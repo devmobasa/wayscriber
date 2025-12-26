@@ -115,10 +115,10 @@ pub(crate) async fn perform_capture(
     };
 
     if matches!(request.destination, CaptureDestination::ClipboardAndFile)
-        && save_error.is_some()
         && !copied_to_clipboard
+        && let Some(save_error) = save_error
     {
-        return Err(save_error.expect("checked save_error"));
+        return Err(save_error);
     }
 
     Ok(CaptureResult {

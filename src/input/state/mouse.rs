@@ -1,13 +1,13 @@
-use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::Shape;
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::input::{EraserMode, Tool, events::MouseButton};
 use crate::util;
 use log::warn;
 use std::time::Instant;
 
-use super::{ContextMenuKind, DrawingState, InputState};
-use super::core::TextClickState;
 use super::core::MenuCommand;
+use super::core::TextClickState;
+use super::{ContextMenuKind, DrawingState, InputState};
 
 const TEXT_CLICK_DRAG_THRESHOLD: i32 = 4;
 const TEXT_DOUBLE_CLICK_MS: u64 = 400;
@@ -27,9 +27,7 @@ impl InputState {
                     self.state = DrawingState::Idle;
                 }
                 DrawingState::ResizingText {
-                    shape_id,
-                    snapshot,
-                    ..
+                    shape_id, snapshot, ..
                 } => {
                     self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                     self.state = DrawingState::Idle;
@@ -157,29 +155,27 @@ impl InputState {
                             }
                         }
 
-                        if !selection_click {
-                            if let Some(hit_id) = self.hit_test_at(x, y) {
-                                let is_text = self
-                                    .canvas_set
-                                    .active_frame()
-                                    .shape(hit_id)
-                                    .map(|shape| {
-                                        !shape.locked
-                                            && matches!(
-                                                shape.shape,
-                                                Shape::Text { .. } | Shape::StickyNote { .. }
-                                            )
-                                    })
-                                    .unwrap_or(false);
-                                if is_text {
-                                    self.state = DrawingState::PendingTextClick {
-                                        x,
-                                        y,
-                                        tool: self.active_tool(),
-                                        shape_id: hit_id,
-                                    };
-                                    return;
-                                }
+                        if !selection_click && let Some(hit_id) = self.hit_test_at(x, y) {
+                            let is_text = self
+                                .canvas_set
+                                .active_frame()
+                                .shape(hit_id)
+                                .map(|shape| {
+                                    !shape.locked
+                                        && matches!(
+                                            shape.shape,
+                                            Shape::Text { .. } | Shape::StickyNote { .. }
+                                        )
+                                })
+                                .unwrap_or(false);
+                            if is_text {
+                                self.state = DrawingState::PendingTextClick {
+                                    x,
+                                    y,
+                                    tool: self.active_tool(),
+                                    shape_id: hit_id,
+                                };
+                                return;
                             }
                         }
                         self.last_text_click = None;
@@ -380,9 +376,7 @@ impl InputState {
                 }
             }
             DrawingState::ResizingText {
-                shape_id,
-                snapshot,
-                ..
+                shape_id, snapshot, ..
             } => {
                 let frame = self.canvas_set.active_frame_mut();
                 if let Some(shape) = frame.shape(shape_id) {
@@ -391,13 +385,15 @@ impl InputState {
                         locked: shape.locked,
                     };
                     let before_wrap = match &snapshot.shape {
-                        Shape::Text { wrap_width, .. }
-                        | Shape::StickyNote { wrap_width, .. } => *wrap_width,
+                        Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
+                            *wrap_width
+                        }
                         _ => None,
                     };
                     let after_wrap = match &after_snapshot.shape {
-                        Shape::Text { wrap_width, .. }
-                        | Shape::StickyNote { wrap_width, .. } => *wrap_width,
+                        Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
+                            *wrap_width
+                        }
                         _ => None,
                     };
                     if before_wrap != after_wrap {

@@ -389,7 +389,10 @@ fn clear_all_skips_locked_shapes() {
     let frame = state.canvas_set.active_frame();
     assert!(frame.shape(unlocked_id).is_none());
     assert!(
-        frame.shape(locked_id).map(|shape| shape.locked).unwrap_or(false),
+        frame
+            .shape(locked_id)
+            .map(|shape| shape.locked)
+            .unwrap_or(false),
         "locked shape should remain after clear_all"
     );
 }
@@ -479,10 +482,7 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
     {
         let frame = state.canvas_set.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape
-            .shape
-            .bounding_box()
-            .expect("rect should have bounds");
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.x, 0);
     }
 
@@ -491,10 +491,7 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
     {
         let frame = state.canvas_set.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape
-            .shape
-            .bounding_box()
-            .expect("rect should have bounds");
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.x + bounds.width, 200);
     }
 }
@@ -520,10 +517,7 @@ fn move_selection_to_vertical_edges_uses_screen_bounds() {
     {
         let frame = state.canvas_set.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape
-            .shape
-            .bounding_box()
-            .expect("rect should have bounds");
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.y, 0);
     }
 
@@ -532,10 +526,7 @@ fn move_selection_to_vertical_edges_uses_screen_bounds() {
     {
         let frame = state.canvas_set.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape
-            .shape
-            .bounding_box()
-            .expect("rect should have bounds");
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.y + bounds.height, 100);
     }
 }
@@ -560,10 +551,7 @@ fn move_selection_to_vertical_edges_explicit_actions() {
     {
         let frame = state.canvas_set.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape
-            .shape
-            .bounding_box()
-            .expect("rect should have bounds");
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.y, 0);
     }
 
@@ -572,10 +560,7 @@ fn move_selection_to_vertical_edges_explicit_actions() {
     {
         let frame = state.canvas_set.active_frame();
         let shape = frame.shape(shape_id).unwrap();
-        let bounds = shape
-            .shape
-            .bounding_box()
-            .expect("rect should have bounds");
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
         assert_eq!(bounds.y + bounds.height, 100);
     }
 }
@@ -624,10 +609,7 @@ fn nudge_selection_clamps_left_and_top_edges() {
 
     let frame = state.canvas_set.active_frame();
     let shape = frame.shape(shape_id).unwrap();
-    let bounds = shape
-        .shape
-        .bounding_box()
-        .expect("rect should have bounds");
+    let bounds = shape.shape.bounding_box().expect("rect should have bounds");
     assert_eq!((bounds.x, bounds.y), (0, 0));
 }
 
@@ -651,11 +633,11 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
 
     let frame = state.canvas_set.active_frame();
     let shape = frame.shape(shape_id).unwrap();
-    let bounds = shape
-        .shape
-        .bounding_box()
-        .expect("rect should have bounds");
-    assert_eq!((bounds.x + bounds.width, bounds.y + bounds.height), (100, 100));
+    let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+    assert_eq!(
+        (bounds.x + bounds.width, bounds.y + bounds.height),
+        (100, 100)
+    );
 }
 
 #[test]
@@ -781,15 +763,18 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
         b: 0.2,
         a: 1.0,
     };
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
-        x: 100,
-        y: 100,
-        text: "Note".to_string(),
-        background,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        wrap_width: None,
-    });
+    let shape_id = state
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::StickyNote {
+            x: 100,
+            y: 100,
+            text: "Note".to_string(),
+            background,
+            size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            wrap_width: None,
+        });
 
     state.set_selection(vec![shape_id]);
     assert!(state.edit_selected_text());
@@ -847,15 +832,18 @@ fn edit_selected_sticky_note_cancel_restores_original() {
         b: 0.7,
         a: 1.0,
     };
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
-        x: 40,
-        y: 80,
-        text: "Original".to_string(),
-        background,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        wrap_width: None,
-    });
+    let shape_id = state
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::StickyNote {
+            x: 40,
+            y: 80,
+            text: "Original".to_string(),
+            background,
+            size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            wrap_width: None,
+        });
 
     state.set_selection(vec![shape_id]);
     assert!(state.edit_selected_text());
@@ -1018,15 +1006,18 @@ fn dragging_text_resize_handle_updates_wrap_width_within_screen() {
 #[test]
 fn enter_key_starts_edit_for_selected_sticky_note() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
-        x: 120,
-        y: 120,
-        text: "Note".to_string(),
-        background: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        wrap_width: None,
-    });
+    let shape_id = state
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::StickyNote {
+            x: 120,
+            y: 120,
+            text: "Note".to_string(),
+            background: state.current_color,
+            size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            wrap_width: None,
+        });
 
     state.set_selection(vec![shape_id]);
     state.on_key_press(Key::Return);
@@ -1711,7 +1702,12 @@ fn shape_menu_disables_edit_for_locked_text() {
     }
 
     state.set_selection(vec![shape_id]);
-    state.open_context_menu((0, 0), vec![shape_id], ContextMenuKind::Shape, Some(shape_id));
+    state.open_context_menu(
+        (0, 0),
+        vec![shape_id],
+        ContextMenuKind::Shape,
+        Some(shape_id),
+    );
 
     let entries = state.context_menu_entries();
     let edit_entry = entries

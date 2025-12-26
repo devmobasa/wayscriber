@@ -444,8 +444,7 @@ impl InputState {
                 }
                 let before = shape.shape.bounding_box();
                 match &mut shape.shape {
-                    Shape::Text { wrap_width, .. }
-                    | Shape::StickyNote { wrap_width, .. } => {
+                    Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
                         if *wrap_width == Some(new_width) {
                             return false;
                         }
@@ -670,10 +669,9 @@ impl InputState {
         let shape_id = self.selected_shape_ids()[0];
         if let (DrawingState::TextInput { .. }, Some((editing_id, _))) =
             (&self.state, self.text_edit_target.as_ref())
+            && *editing_id == shape_id
         {
-            if *editing_id == shape_id {
-                return true;
-            }
+            return true;
         }
         let (
             mode,
@@ -766,11 +764,7 @@ impl InputState {
         self.text_wrap_width = wrap_width;
 
         self.text_edit_target = Some((shape_id, snapshot));
-        self.state = DrawingState::TextInput {
-            x,
-            y,
-            buffer: text,
-        };
+        self.state = DrawingState::TextInput { x, y, buffer: text };
         self.last_text_preview_bounds = None;
         self.update_text_preview_dirty();
 

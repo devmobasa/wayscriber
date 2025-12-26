@@ -2436,15 +2436,15 @@ pub fn render_side_palette(
         } else {
             draw_label_center(ctx, x, buttons_y, button_w, button_h, "Config UI");
         }
-            hits.push(HitRegion {
-                rect: (x, buttons_y, button_w, button_h),
-                event: ToolbarEvent::OpenConfigurator,
-                kind: HitKind::Click,
-                tooltip: Some(format_binding_label(
-                    "Config UI",
-                    snapshot.binding_hints.open_configurator.as_deref(),
-                )),
-            });
+        hits.push(HitRegion {
+            rect: (x, buttons_y, button_w, button_h),
+            event: ToolbarEvent::OpenConfigurator,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                "Config UI",
+                snapshot.binding_hints.open_configurator.as_deref(),
+            )),
+        });
 
         let file_x = x + button_w + button_gap;
         let file_hover = hover

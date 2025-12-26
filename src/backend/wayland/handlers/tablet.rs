@@ -3,8 +3,8 @@
 use log::{debug, info, warn};
 use std::os::fd::OwnedFd;
 use std::sync::Arc;
-use wayland_client::backend::{Backend, ObjectData, ObjectId};
 use wayland_client::backend::protocol::Message;
+use wayland_client::backend::{Backend, ObjectData, ObjectId};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
@@ -92,10 +92,7 @@ impl Dispatch<ZwpTabletSeatV2, ()> for WaylandState {
             EVT_TOOL_ADDED_OPCODE => qhandle.make_data::<ZwpTabletToolV2, _>(()),
             EVT_PAD_ADDED_OPCODE => qhandle.make_data::<ZwpTabletPadV2, _>(()),
             _ => {
-                warn!(
-                    "Ignoring unknown tablet seat child opcode {}",
-                    opcode
-                );
+                warn!("Ignoring unknown tablet seat child opcode {}", opcode);
                 Arc::new(IgnoredObjectData)
             }
         }
@@ -186,10 +183,7 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
         match opcode {
             EVT_GROUP_OPCODE => qhandle.make_data::<ZwpTabletPadGroupV2, _>(()),
             _ => {
-                warn!(
-                    "Ignoring unknown tablet pad child opcode {}",
-                    opcode
-                );
+                warn!("Ignoring unknown tablet pad child opcode {}", opcode);
                 Arc::new(IgnoredObjectData)
             }
         }
@@ -244,10 +238,7 @@ impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
             EVT_RING_OPCODE => qhandle.make_data::<ZwpTabletPadRingV2, _>(()),
             EVT_STRIP_OPCODE => qhandle.make_data::<ZwpTabletPadStripV2, _>(()),
             _ => {
-                warn!(
-                    "Ignoring unknown tablet pad group child opcode {}",
-                    opcode
-                );
+                warn!("Ignoring unknown tablet pad group child opcode {}", opcode);
                 Arc::new(IgnoredObjectData)
             }
         }

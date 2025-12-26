@@ -2,7 +2,7 @@
 
 use super::color::Color;
 use super::frame::DrawnShape;
-use super::shape::{sticky_note_layout, sticky_note_text_layout, EraserBrush, EraserKind, Shape};
+use super::shape::{EraserBrush, EraserKind, Shape, sticky_note_layout, sticky_note_text_layout};
 use crate::config::BoardConfig;
 use crate::input::BoardMode;
 use crate::util;
@@ -667,8 +667,7 @@ pub fn render_text(
     layout.set_text(text);
     if let Some(width) = wrap_width {
         let width = width.max(1);
-        let width_pango =
-            (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
         layout.set_width(width_pango);
         layout.set_wrap(pango::WrapMode::WordChar);
     }

@@ -408,8 +408,7 @@ pub(crate) fn bounding_box_for_text(
     layout.set_text(text);
     if let Some(width) = wrap_width {
         let width = width.max(1);
-        let width_pango =
-            (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
         layout.set_width(width_pango);
         layout.set_wrap(pango::WrapMode::WordChar);
     }
@@ -540,8 +539,7 @@ pub(crate) fn sticky_note_text_layout(
     layout.set_text(text);
     if let Some(width) = wrap_width {
         let width = width.max(1);
-        let width_pango =
-            (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
         layout.set_width(width_pango);
         layout.set_wrap(pango::WrapMode::WordChar);
     }
@@ -787,7 +785,9 @@ mod tests {
             wrap_width: None,
         };
 
-        let rect = shape.bounding_box().expect("sticky note should have bounds");
+        let rect = shape
+            .bounding_box()
+            .expect("sticky note should have bounds");
         assert!(rect.width > 0);
         assert!(rect.height > 0);
         assert!(rect.x <= 10);

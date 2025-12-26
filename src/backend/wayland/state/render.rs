@@ -209,22 +209,21 @@ impl WaylandState {
             if matches!(
                 self.input_state.state,
                 DrawingState::Idle | DrawingState::ResizingText { .. }
-            ) {
-                if let Some((_shape_id, handle)) = self.input_state.selected_text_resize_handle() {
-                    let _ = ctx.save();
-                    ctx.rectangle(
-                        handle.x as f64,
-                        handle.y as f64,
-                        handle.width as f64,
-                        handle.height as f64,
-                    );
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-                    let _ = ctx.fill_preserve();
-                    ctx.set_source_rgba(0.2, 0.45, 1.0, 0.9);
-                    ctx.set_line_width(1.5);
-                    let _ = ctx.stroke();
-                    let _ = ctx.restore();
-                }
+            ) && let Some((_shape_id, handle)) = self.input_state.selected_text_resize_handle()
+            {
+                let _ = ctx.save();
+                ctx.rectangle(
+                    handle.x as f64,
+                    handle.y as f64,
+                    handle.width as f64,
+                    handle.height as f64,
+                );
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+                let _ = ctx.fill_preserve();
+                ctx.set_source_rgba(0.2, 0.45, 1.0, 0.9);
+                ctx.set_line_width(1.5);
+                let _ = ctx.stroke();
+                let _ = ctx.restore();
             }
 
             let (mx, my) = if zoom_transform_active {

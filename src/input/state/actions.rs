@@ -7,8 +7,8 @@ const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
 use super::{
-    DrawingState, InputState, SelectionAxis, TextInputMode, UiToastKind, MAX_STROKE_THICKNESS,
-    MIN_STROKE_THICKNESS,
+    DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, SelectionAxis,
+    TextInputMode, UiToastKind,
 };
 
 pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
@@ -315,9 +315,7 @@ impl InputState {
             && !self.modifiers.alt
             && matches!(self.state, DrawingState::Idle)
             && self.edit_selected_text()
-        {
-            return;
-        }
+        {}
     }
 
     fn push_text_char(buffer: &mut String, ch: char) -> bool {
@@ -357,9 +355,7 @@ impl InputState {
                         self.state = DrawingState::Idle;
                     }
                     DrawingState::ResizingText {
-                        shape_id,
-                        snapshot,
-                        ..
+                        shape_id, snapshot, ..
                     } => {
                         self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                         self.state = DrawingState::Idle;
@@ -538,7 +534,9 @@ impl InputState {
                 }
             }
             Action::MoveSelectionToStart => {
-                let axis = self.last_selection_axis.unwrap_or(SelectionAxis::Horizontal);
+                let axis = self
+                    .last_selection_axis
+                    .unwrap_or(SelectionAxis::Horizontal);
                 let moved = match axis {
                     SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(true),
                     SelectionAxis::Vertical => self.move_selection_to_vertical_edge(true),
@@ -548,7 +546,9 @@ impl InputState {
                 }
             }
             Action::MoveSelectionToEnd => {
-                let axis = self.last_selection_axis.unwrap_or(SelectionAxis::Horizontal);
+                let axis = self
+                    .last_selection_axis
+                    .unwrap_or(SelectionAxis::Horizontal);
                 let moved = match axis {
                     SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(false),
                     SelectionAxis::Vertical => self.move_selection_to_vertical_edge(false),
