@@ -50,7 +50,7 @@ use crate::{
     RESUME_SESSION_ENV,
     backend::ExitAfterCaptureMode,
     capture::{CaptureManager, CaptureOutcome},
-    config::{Action, Config, ConfigSource},
+    config::{Action, Config, ConfigSource, KeybindingsConfig},
     input::{BoardMode, ClickHighlightSettings, InputState},
     notification, paths, runtime_session_override, session,
 };
@@ -482,10 +482,24 @@ impl WaylandBackend {
         );
 
         // Build keybinding action map
-        let action_map = config
-            .keybindings
-            .build_action_map()
-            .expect("Failed to build keybinding action map");
+        let action_map = match config.keybindings.build_action_map() {
+            Ok(map) => map,
+            Err(err) => {
+                warn!(
+                    "Invalid keybindings config: {}. Falling back to defaults.",
+                    err
+                );
+                KeybindingsConfig::default()
+                    .build_action_map()
+                    .unwrap_or_else(|err| {
+                        warn!(
+                            "Failed to build default keybindings: {}. Continuing with no bindings.",
+                            err
+                        );
+                        std::collections::HashMap::new()
+                    })
+            }
+        };
 
         // Initialize input state with config defaults
         let mut input_state = InputState::with_defaults(
