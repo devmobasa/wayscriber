@@ -1,6 +1,10 @@
 //! Wayland tablet/stylus protocol handling (zwp_tablet_v2).
 
-use log::{debug, info};
+use log::{debug, info, warn};
+use std::os::fd::OwnedFd;
+use std::sync::Arc;
+use wayland_client::backend::{Backend, ObjectData, ObjectId};
+use wayland_client::backend::protocol::Message;
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
@@ -13,6 +17,21 @@ use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 
 use super::super::state::WaylandState;
+
+#[derive(Debug)]
+struct IgnoredObjectData;
+
+impl ObjectData for IgnoredObjectData {
+    fn event(
+        self: Arc<Self>,
+        _backend: &Backend,
+        _msg: Message<ObjectId, OwnedFd>,
+    ) -> Option<Arc<dyn ObjectData>> {
+        None
+    }
+
+    fn destroyed(&self, _object_id: ObjectId) {}
+}
 
 impl Dispatch<ZwpTabletManagerV2, ()> for WaylandState {
     fn event(
@@ -72,10 +91,13 @@ impl Dispatch<ZwpTabletSeatV2, ()> for WaylandState {
             EVT_TABLET_ADDED_OPCODE => qhandle.make_data::<ZwpTabletV2, _>(()),
             EVT_TOOL_ADDED_OPCODE => qhandle.make_data::<ZwpTabletToolV2, _>(()),
             EVT_PAD_ADDED_OPCODE => qhandle.make_data::<ZwpTabletPadV2, _>(()),
-            _ => panic!(
-                "Missing tablet seat child specialization for opcode {}",
-                opcode
-            ),
+            _ => {
+                warn!(
+                    "Ignoring unknown tablet seat child opcode {}",
+                    opcode
+                );
+                Arc::new(IgnoredObjectData)
+            }
         }
     }
 }
@@ -163,10 +185,13 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2::EVT_GROUP_OPCODE;
         match opcode {
             EVT_GROUP_OPCODE => qhandle.make_data::<ZwpTabletPadGroupV2, _>(()),
-            _ => panic!(
-                "Missing tablet pad child specialization for opcode {}",
-                opcode
-            ),
+            _ => {
+                warn!(
+                    "Ignoring unknown tablet pad child opcode {}",
+                    opcode
+                );
+                Arc::new(IgnoredObjectData)
+            }
         }
     }
 }
@@ -218,10 +243,13 @@ impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
         match opcode {
             EVT_RING_OPCODE => qhandle.make_data::<ZwpTabletPadRingV2, _>(()),
             EVT_STRIP_OPCODE => qhandle.make_data::<ZwpTabletPadStripV2, _>(()),
-            _ => panic!(
-                "Missing tablet pad group child specialization for opcode {}",
-                opcode
-            ),
+            _ => {
+                warn!(
+                    "Ignoring unknown tablet pad group child opcode {}",
+                    opcode
+                );
+                Arc::new(IgnoredObjectData)
+            }
         }
     }
 }
