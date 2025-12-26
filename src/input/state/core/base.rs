@@ -72,6 +72,12 @@ pub enum TextInputMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionAxis {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoomAction {
     In,
     Out,
@@ -206,6 +212,8 @@ pub struct InputState {
     pub(super) tool_override: Option<Tool>,
     /// Current selection information
     pub selection_state: SelectionState,
+    /// Last axis used for selection nudges (used to resolve Home/End axis)
+    pub last_selection_axis: Option<SelectionAxis>,
     /// Current context menu state
     pub context_menu_state: ContextMenuState,
     /// Whether context menu interactions are enabled
@@ -397,6 +405,7 @@ impl InputState {
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
             selection_state: SelectionState::None,
+            last_selection_axis: None,
             context_menu_state: ContextMenuState::Hidden,
             context_menu_enabled: true,
             hit_test_cache: HashMap::new(),

@@ -33,6 +33,10 @@ pub enum Key {
     Home,
     /// End key
     End,
+    /// Page up key
+    PageUp,
+    /// Page down key
+    PageDown,
     /// Shift modifier
     Shift,
     /// Ctrl modifier

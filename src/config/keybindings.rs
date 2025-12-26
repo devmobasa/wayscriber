@@ -31,6 +31,12 @@ pub enum Action {
     NudgeSelectionDown,
     NudgeSelectionLeft,
     NudgeSelectionRight,
+    NudgeSelectionUpLarge,
+    NudgeSelectionDownLarge,
+    MoveSelectionToStart,
+    MoveSelectionToEnd,
+    MoveSelectionToTop,
+    MoveSelectionToBottom,
     DeleteSelection,
 
     // Thickness controls
@@ -258,6 +264,24 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_nudge_selection_right")]
     pub nudge_selection_right: Vec<String>,
 
+    #[serde(default = "default_nudge_selection_up_large")]
+    pub nudge_selection_up_large: Vec<String>,
+
+    #[serde(default = "default_nudge_selection_down_large")]
+    pub nudge_selection_down_large: Vec<String>,
+
+    #[serde(default = "default_move_selection_to_start")]
+    pub move_selection_to_start: Vec<String>,
+
+    #[serde(default = "default_move_selection_to_end")]
+    pub move_selection_to_end: Vec<String>,
+
+    #[serde(default = "default_move_selection_to_top")]
+    pub move_selection_to_top: Vec<String>,
+
+    #[serde(default = "default_move_selection_to_bottom")]
+    pub move_selection_to_bottom: Vec<String>,
+
     #[serde(default = "default_delete_selection")]
     pub delete_selection: Vec<String>,
 
@@ -457,6 +481,12 @@ impl Default for KeybindingsConfig {
             nudge_selection_down: default_nudge_selection_down(),
             nudge_selection_left: default_nudge_selection_left(),
             nudge_selection_right: default_nudge_selection_right(),
+            nudge_selection_up_large: default_nudge_selection_up_large(),
+            nudge_selection_down_large: default_nudge_selection_down_large(),
+            move_selection_to_start: default_move_selection_to_start(),
+            move_selection_to_end: default_move_selection_to_end(),
+            move_selection_to_top: default_move_selection_to_top(),
+            move_selection_to_bottom: default_move_selection_to_bottom(),
             delete_selection: default_delete_selection(),
             increase_thickness: default_increase_thickness(),
             decrease_thickness: default_decrease_thickness(),
@@ -609,6 +639,30 @@ impl KeybindingsConfig {
 
         for binding_str in &self.nudge_selection_right {
             insert_binding(binding_str, Action::NudgeSelectionRight)?;
+        }
+
+        for binding_str in &self.nudge_selection_up_large {
+            insert_binding(binding_str, Action::NudgeSelectionUpLarge)?;
+        }
+
+        for binding_str in &self.nudge_selection_down_large {
+            insert_binding(binding_str, Action::NudgeSelectionDownLarge)?;
+        }
+
+        for binding_str in &self.move_selection_to_start {
+            insert_binding(binding_str, Action::MoveSelectionToStart)?;
+        }
+
+        for binding_str in &self.move_selection_to_end {
+            insert_binding(binding_str, Action::MoveSelectionToEnd)?;
+        }
+
+        for binding_str in &self.move_selection_to_top {
+            insert_binding(binding_str, Action::MoveSelectionToTop)?;
+        }
+
+        for binding_str in &self.move_selection_to_bottom {
+            insert_binding(binding_str, Action::MoveSelectionToBottom)?;
         }
 
         for binding_str in &self.delete_selection {
@@ -932,11 +986,35 @@ fn default_nudge_selection_down() -> Vec<String> {
 }
 
 fn default_nudge_selection_left() -> Vec<String> {
-    vec!["ArrowLeft".to_string()]
+    vec!["ArrowLeft".to_string(), "Shift+PageUp".to_string()]
 }
 
 fn default_nudge_selection_right() -> Vec<String> {
-    vec!["ArrowRight".to_string()]
+    vec!["ArrowRight".to_string(), "Shift+PageDown".to_string()]
+}
+
+fn default_nudge_selection_up_large() -> Vec<String> {
+    vec!["PageUp".to_string()]
+}
+
+fn default_nudge_selection_down_large() -> Vec<String> {
+    vec!["PageDown".to_string()]
+}
+
+fn default_move_selection_to_start() -> Vec<String> {
+    vec!["Home".to_string()]
+}
+
+fn default_move_selection_to_end() -> Vec<String> {
+    vec!["End".to_string()]
+}
+
+fn default_move_selection_to_top() -> Vec<String> {
+    vec!["Ctrl+Home".to_string()]
+}
+
+fn default_move_selection_to_bottom() -> Vec<String> {
+    vec!["Ctrl+End".to_string()]
 }
 
 fn default_delete_selection() -> Vec<String> {

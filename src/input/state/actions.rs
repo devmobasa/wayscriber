@@ -7,7 +7,8 @@ const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
 use super::{
-    DrawingState, InputState, TextInputMode, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+    DrawingState, InputState, SelectionAxis, TextInputMode, MAX_STROKE_THICKNESS,
+    MIN_STROKE_THICKNESS,
 };
 
 pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
@@ -88,7 +89,11 @@ impl InputState {
                 | Key::Down
                 | Key::Left
                 | Key::Right
-                | Key::Delete => true,
+                | Key::Delete
+                | Key::Home
+                | Key::End
+                | Key::PageUp
+                | Key::PageDown => true,
                 // Character keys only check if modifiers are held
                 Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
                 // Other keys can check as well
@@ -116,6 +121,10 @@ impl InputState {
                     Key::Left => "ArrowLeft".to_string(),
                     Key::Right => "ArrowRight".to_string(),
                     Key::Delete => "Delete".to_string(),
+                    Key::Home => "Home".to_string(),
+                    Key::End => "End".to_string(),
+                    Key::PageUp => "PageUp".to_string(),
+                    Key::PageDown => "PageDown".to_string(),
                     _ => String::new(),
                 };
 
@@ -282,6 +291,10 @@ impl InputState {
             Key::Left => "ArrowLeft".to_string(),
             Key::Right => "ArrowRight".to_string(),
             Key::Delete => "Delete".to_string(),
+            Key::Home => "Home".to_string(),
+            Key::End => "End".to_string(),
+            Key::PageUp => "PageUp".to_string(),
+            Key::PageDown => "PageDown".to_string(),
             _ => return,
         };
 
@@ -418,7 +431,10 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(0, -step) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                     info!("Moved selection up by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                 }
             }
             Action::NudgeSelectionDown => {
@@ -428,7 +444,10 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(0, step) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                     info!("Moved selection down by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                 }
             }
             Action::NudgeSelectionLeft => {
@@ -438,7 +457,10 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(-step, 0) {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
                     info!("Moved selection left by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
                 }
             }
             Action::NudgeSelectionRight => {
@@ -448,7 +470,56 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(step, 0) {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
                     info!("Moved selection right by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
+                }
+            }
+            Action::NudgeSelectionUpLarge => {
+                if self.translate_selection_with_undo(0, -KEYBOARD_NUDGE_LARGE) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                    info!("Moved selection up by {} px", KEYBOARD_NUDGE_LARGE);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                }
+            }
+            Action::NudgeSelectionDownLarge => {
+                if self.translate_selection_with_undo(0, KEYBOARD_NUDGE_LARGE) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                    info!("Moved selection down by {} px", KEYBOARD_NUDGE_LARGE);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                }
+            }
+            Action::MoveSelectionToStart => {
+                let axis = self.last_selection_axis.unwrap_or(SelectionAxis::Horizontal);
+                let moved = match axis {
+                    SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(true),
+                    SelectionAxis::Vertical => self.move_selection_to_vertical_edge(true),
+                };
+                if moved {
+                    info!("Moved selection to start");
+                }
+            }
+            Action::MoveSelectionToEnd => {
+                let axis = self.last_selection_axis.unwrap_or(SelectionAxis::Horizontal);
+                let moved = match axis {
+                    SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(false),
+                    SelectionAxis::Vertical => self.move_selection_to_vertical_edge(false),
+                };
+                if moved {
+                    info!("Moved selection to end");
+                }
+            }
+            Action::MoveSelectionToTop => {
+                if self.move_selection_to_vertical_edge(true) {
+                    info!("Moved selection to top");
+                }
+            }
+            Action::MoveSelectionToBottom => {
+                if self.move_selection_to_vertical_edge(false) {
+                    info!("Moved selection to bottom");
                 }
             }
             Action::DeleteSelection => {

@@ -284,6 +284,8 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::Delete => Key::Delete,
         Keysym::Home => Key::Home,
         Keysym::End => Key::End,
+        Keysym::Page_Up => Key::PageUp,
+        Keysym::Page_Down => Key::PageDown,
         Keysym::Shift_L | Keysym::Shift_R => Key::Shift,
         Keysym::Control_L | Keysym::Control_R => Key::Ctrl,
         Keysym::Alt_L | Keysym::Alt_R => Key::Alt,
