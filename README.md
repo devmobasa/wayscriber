@@ -316,6 +316,7 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Arrow | <kbd>Ctrl+Shift</kbd> + drag |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
+| Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
 ### Board Modes
 
@@ -356,7 +357,9 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Eraser | <kbd>D</kbd> |
 | Toggle eraser mode | <kbd>Ctrl+Shift+E</kbd> |
 | Clear all | <kbd>E</kbd> |
-| Cancel action | <kbd>Right-click</kbd> / <kbd>Escape</kbd> |
+| Cancel action | <kbd>Right-click</kbd> (while drawing) / <kbd>Escape</kbd> |
+| Context menu | <kbd>Right-click</kbd> (idle) / <kbd>Shift+F10</kbd> / <kbd>Menu</kbd>, <kbd>Arrow keys</kbd> + <kbd>Enter</kbd>/<kbd>Space</kbd> |
+| Edit selected text/note | <kbd>Enter</kbd> (single selection) |
 | Toggle toolbars | <kbd>F2</kbd> / <kbd>F9</kbd> |
 | Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
 | Configurator | <kbd>F11</kbd> |
