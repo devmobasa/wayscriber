@@ -321,6 +321,7 @@ fn locked_shape_blocks_edit_and_delete() {
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         background_enabled: state.text_background_enabled,
+        wrap_width: None,
     });
 
     if let Some(index) = state.canvas_set.active_frame().find_index(shape_id) {
@@ -667,6 +668,7 @@ fn restore_selection_snapshots_reverts_translation() {
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         background_enabled: state.text_background_enabled,
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -697,6 +699,7 @@ fn edit_selected_text_commit_updates_and_undo() {
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         background_enabled: state.text_background_enabled,
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -743,6 +746,7 @@ fn edit_selected_text_cancel_restores_original() {
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         background_enabled: state.text_background_enabled,
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -777,6 +781,7 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
         background: state.current_color,
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -822,6 +827,7 @@ fn edit_selected_sticky_note_cancel_restores_original() {
         background: state.current_color,
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -856,6 +862,7 @@ fn enter_key_starts_edit_for_selected_sticky_note() {
         background: state.current_color,
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -879,6 +886,7 @@ fn enter_key_starts_edit_for_selected_text() {
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         background_enabled: state.text_background_enabled,
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -1532,6 +1540,7 @@ fn shape_menu_disables_edit_for_locked_text() {
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         background_enabled: state.text_background_enabled,
+        wrap_width: None,
     });
 
     if let Some(index) = state.canvas_set.active_frame().find_index(shape_id) {

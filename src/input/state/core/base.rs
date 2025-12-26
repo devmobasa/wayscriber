@@ -144,6 +144,8 @@ pub struct InputState {
     pub font_descriptor: FontDescriptor,
     /// Whether to draw background behind text
     pub text_background_enabled: bool,
+    /// Optional wrap width for text input (None = auto)
+    pub text_wrap_width: Option<i32>,
     /// Which text input style is active (plain vs sticky note)
     pub text_input_mode: TextInputMode,
     /// Arrowhead length in pixels (from config)
@@ -371,6 +373,7 @@ impl InputState {
             current_font_size: font_size,
             font_descriptor,
             text_background_enabled,
+            text_wrap_width: None,
             text_input_mode: TextInputMode::Plain,
             arrow_length,
             arrow_angle,

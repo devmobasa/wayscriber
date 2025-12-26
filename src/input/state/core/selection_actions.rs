@@ -592,6 +592,7 @@ impl InputState {
             size,
             font_descriptor,
             background_enabled,
+            wrap_width,
             snapshot,
             locked,
         ) = {
@@ -612,6 +613,7 @@ impl InputState {
                     size,
                     font_descriptor,
                     background_enabled,
+                    wrap_width,
                 } => (
                     TextInputMode::Plain,
                     *x,
@@ -621,6 +623,7 @@ impl InputState {
                     *size,
                     font_descriptor.clone(),
                     Some(*background_enabled),
+                    *wrap_width,
                     snapshot,
                     drawn.locked,
                 ),
@@ -631,6 +634,7 @@ impl InputState {
                     background,
                     size,
                     font_descriptor,
+                    wrap_width,
                 } => (
                     TextInputMode::StickyNote,
                     *x,
@@ -640,6 +644,7 @@ impl InputState {
                     *size,
                     font_descriptor.clone(),
                     None,
+                    *wrap_width,
                     snapshot,
                     drawn.locked,
                 ),
@@ -666,6 +671,7 @@ impl InputState {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
+        self.text_wrap_width = wrap_width;
 
         self.text_edit_target = Some((shape_id, snapshot));
         self.state = DrawingState::TextInput {

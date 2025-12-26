@@ -313,6 +313,7 @@ impl WaylandState {
                             self.input_state.current_font_size,
                             &self.input_state.font_descriptor,
                             self.input_state.text_background_enabled,
+                            self.input_state.text_wrap_width,
                         );
                     }
                     crate::input::TextInputMode::StickyNote => {
@@ -324,6 +325,7 @@ impl WaylandState {
                             self.input_state.current_color,
                             self.input_state.current_font_size,
                             &self.input_state.font_descriptor,
+                            self.input_state.text_wrap_width,
                         );
                     }
                 }

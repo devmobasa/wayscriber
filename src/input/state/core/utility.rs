@@ -34,6 +34,7 @@ impl InputState {
         self.cancel_text_edit();
         self.clear_text_preview_dirty();
         self.last_text_preview_bounds = None;
+        self.text_wrap_width = None;
         self.state = DrawingState::Idle;
         self.needs_redraw = true;
     }

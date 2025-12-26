@@ -262,6 +262,7 @@ fn session_roundtrip_preserves_shapes_across_frames() {
         size: 24.0,
         font_descriptor: FontDescriptor::default(),
         background_enabled: false,
+        wrap_width: None,
     });
 
     input.canvas_set.switch_mode(BoardMode::Blackboard);

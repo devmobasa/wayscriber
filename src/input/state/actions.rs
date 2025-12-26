@@ -155,6 +155,7 @@ impl InputState {
                     } else {
                         self.clear_text_preview_dirty();
                         self.last_text_preview_bounds = None;
+                        self.text_wrap_width = None;
                         self.state = DrawingState::Idle;
                         self.needs_redraw = true;
                     }
@@ -170,6 +171,7 @@ impl InputState {
                         size: self.current_font_size,
                         font_descriptor: self.font_descriptor.clone(),
                         background_enabled: self.text_background_enabled,
+                        wrap_width: self.text_wrap_width,
                     },
                     TextInputMode::StickyNote => Shape::StickyNote {
                         x,
@@ -178,6 +180,7 @@ impl InputState {
                         background: self.current_color,
                         size: self.current_font_size,
                         font_descriptor: self.font_descriptor.clone(),
+                        wrap_width: self.text_wrap_width,
                     },
                 };
                 let bounds = shape.bounding_box();
@@ -186,6 +189,7 @@ impl InputState {
                 self.last_text_preview_bounds = None;
 
                 if self.commit_text_edit(shape.clone()) {
+                    self.text_wrap_width = None;
                     self.state = DrawingState::Idle;
                     return;
                 }
@@ -203,6 +207,7 @@ impl InputState {
                         self.max_shapes_per_frame
                     );
                 }
+                self.text_wrap_width = None;
                 self.state = DrawingState::Idle;
                 return;
             }
@@ -358,6 +363,7 @@ impl InputState {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::Plain;
                     self.text_edit_target = None;
+                    self.text_wrap_width = None;
                     self.state = DrawingState::TextInput {
                         x: (self.screen_width / 2) as i32,
                         y: (self.screen_height / 2) as i32,
@@ -372,6 +378,7 @@ impl InputState {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::StickyNote;
                     self.text_edit_target = None;
+                    self.text_wrap_width = None;
                     self.state = DrawingState::TextInput {
                         x: (self.screen_width / 2) as i32,
                         y: (self.screen_height / 2) as i32,

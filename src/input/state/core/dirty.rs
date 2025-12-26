@@ -131,6 +131,7 @@ impl InputState {
                     self.current_font_size,
                     &self.font_descriptor,
                     self.text_background_enabled,
+                    self.text_wrap_width,
                 ),
                 TextInputMode::StickyNote => bounding_box_for_sticky_note(
                     *x,
@@ -138,6 +139,7 @@ impl InputState {
                     &preview,
                     self.current_font_size,
                     &self.font_descriptor,
+                    self.text_wrap_width,
                 ),
             }
         } else {

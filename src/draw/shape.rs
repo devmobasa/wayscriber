@@ -124,6 +124,9 @@ pub enum Shape {
         font_descriptor: FontDescriptor,
         /// Whether to draw background box behind text
         background_enabled: bool,
+        /// Optional wrap width in pixels (None = auto)
+        #[serde(default)]
+        wrap_width: Option<i32>,
     },
     /// Sticky note with filled background and drop shadow
     StickyNote {
@@ -139,6 +142,9 @@ pub enum Shape {
         size: f64,
         /// Font descriptor (family, weight, style)
         font_descriptor: FontDescriptor,
+        /// Optional wrap width in pixels (None = auto)
+        #[serde(default)]
+        wrap_width: Option<i32>,
     },
     /// Highlighter-style stroke with translucent ink
     MarkerStroke {
@@ -212,16 +218,26 @@ impl Shape {
                 size,
                 font_descriptor,
                 background_enabled,
+                wrap_width,
                 ..
-            } => bounding_box_for_text(*x, *y, text, *size, font_descriptor, *background_enabled),
+            } => bounding_box_for_text(
+                *x,
+                *y,
+                text,
+                *size,
+                font_descriptor,
+                *background_enabled,
+                *wrap_width,
+            ),
             Shape::StickyNote {
                 x,
                 y,
                 text,
                 size,
                 font_descriptor,
+                wrap_width,
                 ..
-            } => bounding_box_for_sticky_note(*x, *y, text, *size, font_descriptor),
+            } => bounding_box_for_sticky_note(*x, *y, text, *size, font_descriptor, *wrap_width),
             Shape::MarkerStroke { points, thick, .. } => {
                 let inflated = (*thick * 1.35).max(*thick + 1.0);
                 bounding_box_for_points(points, inflated)
@@ -372,6 +388,7 @@ pub(crate) fn bounding_box_for_text(
     size: f64,
     font_descriptor: &FontDescriptor,
     background_enabled: bool,
+    wrap_width: Option<i32>,
 ) -> Option<Rect> {
     if text.is_empty() {
         return None;
@@ -389,6 +406,13 @@ pub(crate) fn bounding_box_for_text(
     let font_desc = pango::FontDescription::from_string(&font_desc_str);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);
+    if let Some(width) = wrap_width {
+        let width = width.max(1);
+        let width_pango =
+            (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        layout.set_width(width_pango);
+        layout.set_wrap(pango::WrapMode::WordChar);
+    }
 
     let (ink_rect, _logical_rect) = layout.extents();
 
@@ -402,12 +426,20 @@ pub(crate) fn bounding_box_for_text(
 
     let base_x = x as f64;
     let base_y = y as f64 - baseline;
+    let ink_max = ink_x + ink_width;
+    let effective_max = if let Some(width) = wrap_width {
+        ink_max.max(width.max(1) as f64)
+    } else {
+        ink_max
+    };
 
     // Text fill bounds (before outline expansion)
     let mut min_x = base_x + ink_x;
-    let mut max_x = min_x + ink_width;
+    let mut max_x = base_x + effective_max;
     let mut min_y = base_y + ink_y;
     let mut max_y = min_y + ink_height;
+
+    let effective_ink_width = effective_max - ink_x;
 
     // Stroke outline expands half the stroke width around text
     let stroke_padding = (size * 0.06) / 2.0;
@@ -420,14 +452,14 @@ pub(crate) fn bounding_box_for_text(
     let shadow_offset = size * 0.04;
     min_x = min_x.min(base_x + ink_x + shadow_offset - stroke_padding);
     min_y = min_y.min(base_y + ink_y + shadow_offset - stroke_padding);
-    max_x = max_x.max(base_x + ink_x + ink_width + shadow_offset + stroke_padding);
+    max_x = max_x.max(base_x + effective_max + shadow_offset + stroke_padding);
     max_y = max_y.max(base_y + ink_y + ink_height + shadow_offset + stroke_padding);
 
-    if background_enabled && ink_width > 0.0 && ink_height > 0.0 {
+    if background_enabled && effective_ink_width > 0.0 && ink_height > 0.0 {
         let padding = size * 0.15;
         let bg_min_x = base_x + ink_x - padding;
         let bg_min_y = base_y + ink_y - padding;
-        let bg_max_x = base_x + ink_x + ink_width + padding;
+        let bg_max_x = base_x + effective_max + padding;
         let bg_max_y = base_y + ink_y + ink_height + padding;
 
         min_x = min_x.min(bg_min_x);
@@ -499,12 +531,20 @@ pub(crate) fn sticky_note_text_layout(
     text: &str,
     size: f64,
     font_descriptor: &FontDescriptor,
+    wrap_width: Option<i32>,
 ) -> StickyNoteTextLayout {
     let layout = pangocairo::functions::create_layout(ctx);
     let font_desc_str = font_descriptor.to_pango_string(size);
     let font_desc = pango::FontDescription::from_string(&font_desc_str);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);
+    if let Some(width) = wrap_width {
+        let width = width.max(1);
+        let width_pango =
+            (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        layout.set_width(width_pango);
+        layout.set_wrap(pango::WrapMode::WordChar);
+    }
 
     let (ink_rect, _logical_rect) = layout.extents();
     let scale = pango::SCALE as f64;
@@ -527,6 +567,7 @@ pub(crate) fn bounding_box_for_sticky_note(
     text: &str,
     size: f64,
     font_descriptor: &FontDescriptor,
+    wrap_width: Option<i32>,
 ) -> Option<Rect> {
     if text.is_empty() {
         return None;
@@ -537,15 +578,22 @@ pub(crate) fn bounding_box_for_sticky_note(
 
     ctx.set_antialias(cairo::Antialias::Best);
 
-    let text_layout = sticky_note_text_layout(&ctx, text, size, font_descriptor);
+    let text_layout = sticky_note_text_layout(&ctx, text, size, font_descriptor, wrap_width);
     let base_x = x as f64;
     let base_y = y as f64 - text_layout.baseline;
+    let ink_max = text_layout.ink_x + text_layout.ink_width;
+    let effective_max = if let Some(width) = wrap_width {
+        ink_max.max(width.max(1) as f64)
+    } else {
+        ink_max
+    };
+    let effective_ink_width = effective_max - text_layout.ink_x;
     let layout = sticky_note_layout(
         base_x,
         base_y,
         text_layout.ink_x,
         text_layout.ink_y,
-        text_layout.ink_width,
+        effective_ink_width,
         text_layout.ink_height,
         size,
     );
@@ -717,6 +765,7 @@ mod tests {
             size: 24.0,
             font_descriptor: FontDescriptor::default(),
             background_enabled: true,
+            wrap_width: None,
         };
 
         let rect = shape.bounding_box().expect("text should have bounds");
@@ -735,6 +784,7 @@ mod tests {
             background: WHITE,
             size: 24.0,
             font_descriptor: FontDescriptor::default(),
+            wrap_width: None,
         };
 
         let rect = shape.bounding_box().expect("sticky note should have bounds");
