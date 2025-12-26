@@ -704,11 +704,25 @@ impl InputState {
             self.set_context_menu_focus(None);
             self.focus_first_context_menu_entry();
         } else {
+            let focus_edit = selection.len() == 1
+                && self
+                    .canvas_set
+                    .active_frame()
+                    .shape(selection[0])
+                    .map(|shape| {
+                        matches!(
+                            shape.shape,
+                            crate::draw::Shape::Text { .. } | crate::draw::Shape::StickyNote { .. }
+                        )
+                    })
+                    .unwrap_or(false);
             let anchor = self.keyboard_shape_menu_anchor(&selection);
             self.update_pointer_position(anchor.0, anchor.1);
             self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
             self.pending_menu_hover_recalc = false;
-            self.focus_first_context_menu_entry();
+            if !focus_edit || !self.focus_context_menu_command(MenuCommand::EditText) {
+                self.focus_first_context_menu_entry();
+            }
         }
         self.needs_redraw = true;
     }

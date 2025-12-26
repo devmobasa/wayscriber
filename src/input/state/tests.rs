@@ -775,11 +775,17 @@ fn edit_selected_text_cancel_restores_original() {
 #[test]
 fn edit_selected_sticky_note_commit_updates_and_undo() {
     let mut state = create_test_input_state();
+    let background = Color {
+        r: 0.9,
+        g: 0.8,
+        b: 0.2,
+        a: 1.0,
+    };
     let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
         x: 100,
         y: 100,
         text: "Note".to_string(),
-        background: state.current_color,
+        background,
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         wrap_width: None,
@@ -801,7 +807,14 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
     let frame = state.canvas_set.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
-        Shape::StickyNote { text, .. } => assert_eq!(text, "Note updated"),
+        Shape::StickyNote {
+            text,
+            background: bg,
+            ..
+        } => {
+            assert_eq!(text, "Note updated");
+            assert_eq!(*bg, background);
+        }
         _ => panic!("Expected sticky note shape"),
     }
     assert_eq!(frame.undo_stack_len(), 1);
@@ -813,7 +826,14 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
     let frame = state.canvas_set.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
-        Shape::StickyNote { text, .. } => assert_eq!(text, "Note"),
+        Shape::StickyNote {
+            text,
+            background: bg,
+            ..
+        } => {
+            assert_eq!(text, "Note");
+            assert_eq!(*bg, background);
+        }
         _ => panic!("Expected sticky note shape"),
     }
 }
@@ -821,11 +841,17 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
 #[test]
 fn edit_selected_sticky_note_cancel_restores_original() {
     let mut state = create_test_input_state();
+    let background = Color {
+        r: 0.3,
+        g: 0.4,
+        b: 0.7,
+        a: 1.0,
+    };
     let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
         x: 40,
         y: 80,
         text: "Original".to_string(),
-        background: state.current_color,
+        background,
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         wrap_width: None,
@@ -847,7 +873,14 @@ fn edit_selected_sticky_note_cancel_restores_original() {
     let frame = state.canvas_set.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
-        Shape::StickyNote { text, .. } => assert_eq!(text, "Original"),
+        Shape::StickyNote {
+            text,
+            background: bg,
+            ..
+        } => {
+            assert_eq!(text, "Original");
+            assert_eq!(*bg, background);
+        }
         _ => panic!("Expected sticky note shape"),
     }
     assert_eq!(frame.undo_stack_len(), 0);
@@ -1785,6 +1818,34 @@ fn keyboard_context_menu_sets_initial_focus() {
         }
         ContextMenuState::Hidden => panic!("Context menu should be open"),
     }
+}
+
+#[test]
+fn keyboard_context_menu_focuses_edit_for_selected_text() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 60,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.toggle_context_menu_via_keyboard();
+
+    let focus_index = match &state.context_menu_state {
+        ContextMenuState::Open {
+            keyboard_focus: Some(index),
+            ..
+        } => *index,
+        _ => panic!("Context menu should be open with focus"),
+    };
+    let entries = state.context_menu_entries();
+    assert_eq!(entries[focus_index].command, Some(MenuCommand::EditText));
 }
 
 #[test]
