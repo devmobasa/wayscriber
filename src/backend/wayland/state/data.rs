@@ -1,4 +1,4 @@
-use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::backend::wayland::toolbar::{ToolbarFocusTarget, hit::HitRegion};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveDragKind {
@@ -47,6 +47,9 @@ pub struct StateData {
     pub(super) inline_side_rect: Option<(f64, f64, f64, f64)>,
     pub(super) inline_top_hover: Option<(f64, f64)>,
     pub(super) inline_side_hover: Option<(f64, f64)>,
+    pub(super) inline_top_focus_index: Option<usize>,
+    pub(super) inline_side_focus_index: Option<usize>,
+    pub(super) toolbar_focus_target: Option<ToolbarFocusTarget>,
     pub(super) toolbar_top_offset: f64,
     pub(super) toolbar_top_offset_y: f64,
     pub(super) toolbar_side_offset: f64,
@@ -90,6 +93,9 @@ impl StateData {
             inline_side_rect: None,
             inline_top_hover: None,
             inline_side_hover: None,
+            inline_top_focus_index: None,
+            inline_side_focus_index: None,
+            toolbar_focus_target: None,
             toolbar_top_offset: 0.0,
             toolbar_top_offset_y: 0.0,
             toolbar_side_offset: 0.0,

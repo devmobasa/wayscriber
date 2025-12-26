@@ -1,7 +1,6 @@
+use crate::backend::wayland::toolbar::events::HitKind;
+use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
-use crate::{
-    backend::wayland::toolbar::events::HitKind, backend::wayland::toolbar_intent::ToolbarIntent,
-};
 
 #[derive(Clone, Debug)]
 pub struct HitRegion {
@@ -154,4 +153,42 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
         DragMoveSide => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
         _ => None,
     }
+}
+
+fn focusable_indices(hits: &[HitRegion]) -> Vec<usize> {
+    hits.iter()
+        .enumerate()
+        .filter(|(_, hit)| matches!(hit.kind, HitKind::Click))
+        .map(|(idx, _)| idx)
+        .collect()
+}
+
+pub fn next_focus_index(
+    hits: &[HitRegion],
+    current: Option<usize>,
+    reverse: bool,
+) -> Option<usize> {
+    let indices = focusable_indices(hits);
+    if indices.is_empty() {
+        return None;
+    }
+    let pos = current.and_then(|idx| indices.iter().position(|entry| *entry == idx));
+    let next_pos = match (pos, reverse) {
+        (Some(pos), false) => (pos + 1) % indices.len(),
+        (Some(pos), true) => (pos + indices.len() - 1) % indices.len(),
+        (None, false) => 0,
+        (None, true) => indices.len() - 1,
+    };
+    indices.get(next_pos).copied()
+}
+
+pub fn focus_hover_point(hits: &[HitRegion], focus: Option<usize>) -> Option<(f64, f64)> {
+    let hit = focus.and_then(|idx| hits.get(idx))?;
+    Some((hit.rect.0 + hit.rect.2 / 2.0, hit.rect.1 + hit.rect.3 / 2.0))
+}
+
+pub fn focused_event(hits: &[HitRegion], focus: Option<usize>) -> Option<ToolbarEvent> {
+    focus
+        .and_then(|idx| hits.get(idx))
+        .map(|hit| hit.event.clone())
 }

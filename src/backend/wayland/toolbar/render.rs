@@ -498,7 +498,10 @@ pub fn render_top_strip(
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::EnterTextMode,
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(format_binding_label(
+                "Text",
+                snapshot.binding_hints.text.as_deref(),
+            )),
         });
         x += btn_w + gap;
 
@@ -511,7 +514,10 @@ pub fn render_top_strip(
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::EnterStickyNoteMode,
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(format_binding_label(
+                "Note",
+                snapshot.binding_hints.note.as_deref(),
+            )),
         });
         x += btn_w + gap;
 
@@ -1891,7 +1897,10 @@ pub fn render_side_palette(
                         rect: (bx, by, icon_btn_size, icon_btn_size),
                         event: evt.clone(),
                         kind: HitKind::Click,
-                        tooltip: Some((*label).to_string()),
+                        tooltip: Some(format_binding_label(
+                            label,
+                            snapshot.binding_hints.binding_for_event(evt),
+                        )),
                     });
                 }
             }
@@ -1911,7 +1920,10 @@ pub fn render_side_palette(
                             rect: (x, by, content_width, action_h),
                             event: evt.clone(),
                             kind: HitKind::Click,
-                            tooltip: None,
+                            tooltip: Some(format_binding_label(
+                                label,
+                                snapshot.binding_hints.binding_for_event(evt),
+                            )),
                         });
                     }
                 }
@@ -1943,7 +1955,10 @@ pub fn render_side_palette(
                             rect: (bx, by, action_w, action_h),
                             event: evt.clone(),
                             kind: HitKind::Click,
-                            tooltip: None,
+                            tooltip: Some(format_binding_label(
+                                label,
+                                snapshot.binding_hints.binding_for_event(evt),
+                            )),
                         });
                     }
                 }
@@ -2413,12 +2428,15 @@ pub fn render_side_palette(
         } else {
             draw_label_center(ctx, x, buttons_y, button_w, button_h, "Config UI");
         }
-        hits.push(HitRegion {
-            rect: (x, buttons_y, button_w, button_h),
-            event: ToolbarEvent::OpenConfigurator,
-            kind: HitKind::Click,
-            tooltip: Some("Config UI".to_string()),
-        });
+            hits.push(HitRegion {
+                rect: (x, buttons_y, button_w, button_h),
+                event: ToolbarEvent::OpenConfigurator,
+                kind: HitKind::Click,
+                tooltip: Some(format_binding_label(
+                    "Config UI",
+                    snapshot.binding_hints.open_configurator.as_deref(),
+                )),
+            });
 
         let file_x = x + button_w + button_gap;
         let file_hover = hover

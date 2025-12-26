@@ -15,8 +15,11 @@ use wayland_client::{
 
 use crate::backend::wayland::overlay_passthrough::set_surface_clickthrough;
 use crate::backend::wayland::state::WaylandState;
-use crate::backend::wayland::toolbar::hit::{HitRegion, drag_intent_for_hit, intent_for_hit};
-use crate::ui::toolbar::ToolbarSnapshot;
+use crate::backend::wayland::toolbar::hit::{
+    HitRegion, drag_intent_for_hit, focus_hover_point, focused_event, intent_for_hit,
+    next_focus_index,
+};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 #[derive(Debug)]
 pub struct ToolbarSurface {
@@ -35,6 +38,7 @@ pub struct ToolbarSurface {
     pub suppressed: bool,
     pub hit_regions: Vec<HitRegion>,
     pub hover: Option<(f64, f64)>,
+    pub focus_index: Option<usize>,
 }
 
 impl ToolbarSurface {
@@ -55,6 +59,7 @@ impl ToolbarSurface {
             suppressed: false,
             hit_regions: Vec::new(),
             hover: None,
+            focus_index: None,
         }
     }
 
@@ -127,6 +132,7 @@ impl ToolbarSurface {
         self.suppressed = false;
         self.hit_regions.clear();
         self.hover = None;
+        self.focus_index = None;
     }
 
     pub fn handle_configure(&mut self, configure: &LayerSurfaceConfigure) -> bool {
@@ -154,6 +160,31 @@ impl ToolbarSurface {
 
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+    }
+
+    pub fn clear_focus(&mut self) {
+        if self.focus_index.is_some() {
+            self.focus_index = None;
+            self.dirty = true;
+        }
+    }
+
+    pub fn focus_next(&mut self, reverse: bool) -> bool {
+        let next = next_focus_index(&self.hit_regions, self.focus_index, reverse);
+        if next != self.focus_index {
+            self.focus_index = next;
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    pub fn focused_hover(&self) -> Option<(f64, f64)> {
+        focus_hover_point(&self.hit_regions, self.focus_index)
+    }
+
+    pub fn focused_event(&self) -> Option<ToolbarEvent> {
+        focused_event(&self.hit_regions, self.focus_index)
     }
 
     pub fn needs_render(&self) -> bool {
