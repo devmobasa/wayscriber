@@ -201,6 +201,7 @@ fn toolbar_toggle_handles_partial_visibility() {
         false, // show_delay_sliders
         false, // show_marker_opacity_section
         true,  // show_preset_toasts
+        false, // show_tool_preview
     );
     assert!(state.toolbar_top_visible());
     assert!(!state.toolbar_side_visible());
@@ -311,6 +312,33 @@ fn delete_shapes_by_ids_ignores_missing_ids() {
 }
 
 #[test]
+fn locked_shape_blocks_edit_and_delete() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 50,
+        text: "Locked".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(shape_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![shape_id]);
+    assert!(!state.edit_selected_text());
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    assert!(!state.delete_selection());
+    assert!(state.canvas_set.active_frame().shape(shape_id).is_some());
+}
+
+#[test]
 fn clear_all_removes_shapes_even_when_marked_frozen() {
     let mut state = create_test_input_state();
     state.canvas_set.active_frame_mut().add_shape(Shape::Line {
@@ -329,6 +357,66 @@ fn clear_all_removes_shapes_even_when_marked_frozen() {
     assert!(state.clear_all());
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
     assert!(state.needs_redraw);
+}
+
+#[test]
+fn clear_all_skips_locked_shapes() {
+    let mut state = create_test_input_state();
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 40,
+        y: 40,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    assert!(state.clear_all());
+    let frame = state.canvas_set.active_frame();
+    assert!(frame.shape(unlocked_id).is_none());
+    assert!(
+        frame
+            .shape(locked_id)
+            .map(|shape| shape.locked)
+            .unwrap_or(false),
+        "locked shape should remain after clear_all"
+    );
+}
+
+#[test]
+fn clear_all_returns_false_when_all_locked() {
+    let mut state = create_test_input_state();
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    assert!(!state.clear_all());
+    let frame = state.canvas_set.active_frame();
+    assert!(frame.shape(locked_id).is_some());
 }
 
 #[test]
@@ -375,6 +463,184 @@ fn translate_selection_with_undo_moves_shape() {
 }
 
 #[test]
+fn move_selection_to_horizontal_edges_uses_screen_bounds() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(200, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 50,
+        y: 20,
+        w: 20,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::MoveSelectionToStart);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        assert_eq!(bounds.x, 0);
+    }
+
+    state.handle_action(Action::MoveSelectionToEnd);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        assert_eq!(bounds.x + bounds.width, 200);
+    }
+}
+
+#[test]
+fn move_selection_to_vertical_edges_uses_screen_bounds() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(200, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 50,
+        y: 20,
+        w: 20,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionUp);
+    state.handle_action(Action::MoveSelectionToStart);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        assert_eq!(bounds.y, 0);
+    }
+
+    state.handle_action(Action::MoveSelectionToEnd);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        assert_eq!(bounds.y + bounds.height, 100);
+    }
+}
+
+#[test]
+fn move_selection_to_vertical_edges_explicit_actions() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(200, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 50,
+        y: 20,
+        w: 20,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::MoveSelectionToTop);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        assert_eq!(bounds.y, 0);
+    }
+
+    state.handle_action(Action::MoveSelectionToBottom);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+        assert_eq!(bounds.y + bounds.height, 100);
+    }
+}
+
+#[test]
+fn nudge_selection_large_uses_large_step() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionDownLarge);
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Rect { y, .. } => assert_eq!(*y, 42),
+        _ => panic!("Expected rect shape"),
+    }
+}
+
+#[test]
+fn nudge_selection_clamps_left_and_top_edges() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(100, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 4,
+        y: 3,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionLeft);
+    state.handle_action(Action::NudgeSelectionUp);
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+    assert_eq!((bounds.x, bounds.y), (0, 0));
+}
+
+#[test]
+fn nudge_selection_clamps_right_and_bottom_edges() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(100, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 90,
+        y: 90,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionRight);
+    state.handle_action(Action::NudgeSelectionDown);
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    let bounds = shape.shape.bounding_box().expect("rect should have bounds");
+    assert_eq!(
+        (bounds.x + bounds.width, bounds.y + bounds.height),
+        (100, 100)
+    );
+}
+
+#[test]
 fn restore_selection_snapshots_reverts_translation() {
     let mut state = create_test_input_state();
     let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
@@ -385,6 +651,7 @@ fn restore_selection_snapshots_reverts_translation() {
         size: state.current_font_size,
         font_descriptor: state.font_descriptor.clone(),
         background_enabled: state.text_background_enabled,
+        wrap_width: None,
     });
 
     state.set_selection(vec![shape_id]);
@@ -402,6 +669,390 @@ fn restore_selection_snapshots_reverts_translation() {
         }
         _ => panic!("Expected text shape"),
     }
+}
+
+#[test]
+fn edit_selected_text_commit_updates_and_undo() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 100,
+        y: 100,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" world");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.on_key_press(Key::Return);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, "Hello world"),
+        _ => panic!("Expected text shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 1);
+
+    if let Some(action) = state.canvas_set.active_frame_mut().undo_last() {
+        state.apply_action_side_effects(&action);
+    }
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, "Hello"),
+        _ => panic!("Expected text shape"),
+    }
+}
+
+#[test]
+fn edit_selected_text_cancel_restores_original() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 80,
+        text: "Original".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" edit");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.cancel_text_input();
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, "Original"),
+        _ => panic!("Expected text shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 0);
+}
+
+#[test]
+fn edit_selected_sticky_note_commit_updates_and_undo() {
+    let mut state = create_test_input_state();
+    let background = Color {
+        r: 0.9,
+        g: 0.8,
+        b: 0.2,
+        a: 1.0,
+    };
+    let shape_id = state
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::StickyNote {
+            x: 100,
+            y: 100,
+            text: "Note".to_string(),
+            background,
+            size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            wrap_width: None,
+        });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" updated");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.on_key_press(Key::Return);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::StickyNote {
+            text,
+            background: bg,
+            ..
+        } => {
+            assert_eq!(text, "Note updated");
+            assert_eq!(*bg, background);
+        }
+        _ => panic!("Expected sticky note shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 1);
+
+    if let Some(action) = state.canvas_set.active_frame_mut().undo_last() {
+        state.apply_action_side_effects(&action);
+    }
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::StickyNote {
+            text,
+            background: bg,
+            ..
+        } => {
+            assert_eq!(text, "Note");
+            assert_eq!(*bg, background);
+        }
+        _ => panic!("Expected sticky note shape"),
+    }
+}
+
+#[test]
+fn edit_selected_sticky_note_cancel_restores_original() {
+    let mut state = create_test_input_state();
+    let background = Color {
+        r: 0.3,
+        g: 0.4,
+        b: 0.7,
+        a: 1.0,
+    };
+    let shape_id = state
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::StickyNote {
+            x: 40,
+            y: 80,
+            text: "Original".to_string(),
+            background,
+            size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            wrap_width: None,
+        });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" edit");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.cancel_text_input();
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::StickyNote {
+            text,
+            background: bg,
+            ..
+        } => {
+            assert_eq!(text, "Original");
+            assert_eq!(*bg, background);
+        }
+        _ => panic!("Expected sticky note shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 0);
+}
+
+#[test]
+fn double_click_edit_enters_text_input() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 120,
+        y: 120,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    let bounds = state
+        .canvas_set
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .shape
+        .bounding_box()
+        .expect("text bounds");
+    let click_x = bounds.x + 1;
+    let click_y = bounds.y + 1;
+
+    state.on_mouse_press(MouseButton::Left, click_x, click_y);
+    state.on_mouse_release(MouseButton::Left, click_x, click_y);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    state.on_mouse_press(MouseButton::Left, click_x, click_y);
+    state.on_mouse_release(MouseButton::Left, click_x, click_y);
+
+    match &state.state {
+        DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Hello"),
+        _ => panic!("Expected text input state"),
+    }
+    assert!(state.text_edit_target.is_some());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert!(text.is_empty()),
+        _ => panic!("Expected text shape"),
+    }
+}
+
+#[test]
+fn right_click_clears_double_click_tracking() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 80,
+        y: 80,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    let bounds = state
+        .canvas_set
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .shape
+        .bounding_box()
+        .expect("text bounds");
+    let click_x = bounds.x + 1;
+    let click_y = bounds.y + 1;
+
+    state.on_mouse_press(MouseButton::Left, click_x, click_y);
+    state.on_mouse_release(MouseButton::Left, click_x, click_y);
+    assert!(state.last_text_click.is_some());
+
+    state.set_context_menu_enabled(false);
+    state.on_mouse_press(MouseButton::Right, click_x, click_y);
+    assert!(state.last_text_click.is_none());
+
+    state.on_mouse_press(MouseButton::Left, click_x, click_y);
+    state.on_mouse_release(MouseButton::Left, click_x, click_y);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, "Hello"),
+        _ => panic!("Expected text shape"),
+    }
+}
+
+#[test]
+fn dragging_text_resize_handle_updates_wrap_width_within_screen() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(300, 200);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 250,
+        y: 120,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    let (_, handle) = state
+        .selected_text_resize_handle()
+        .expect("expected resize handle");
+    let handle_x = handle.x + handle.width / 2;
+    let handle_y = handle.y + handle.height / 2;
+
+    state.on_mouse_press(MouseButton::Left, handle_x, handle_y);
+    let drag_x = 1000;
+    state.on_mouse_motion(drag_x, handle_y);
+    state.on_mouse_release(MouseButton::Left, drag_x, handle_y);
+    assert!(matches!(state.state, DrawingState::Idle));
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { wrap_width, .. } => assert_eq!(*wrap_width, Some(50)),
+        _ => panic!("Expected text shape"),
+    }
+}
+
+#[test]
+fn enter_key_starts_edit_for_selected_sticky_note() {
+    let mut state = create_test_input_state();
+    let shape_id = state
+        .canvas_set
+        .active_frame_mut()
+        .add_shape(Shape::StickyNote {
+            x: 120,
+            y: 120,
+            text: "Note".to_string(),
+            background: state.current_color,
+            size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            wrap_width: None,
+        });
+
+    state.set_selection(vec![shape_id]);
+    state.on_key_press(Key::Return);
+
+    match &state.state {
+        DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Note"),
+        _ => panic!("Expected text input state"),
+    }
+    assert!(matches!(state.text_input_mode, TextInputMode::StickyNote));
+}
+
+#[test]
+fn enter_key_starts_edit_for_selected_text() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 60,
+        y: 70,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.on_key_press(Key::Return);
+
+    match &state.state {
+        DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Hello"),
+        _ => panic!("Expected text input state"),
+    }
+    assert!(matches!(state.text_input_mode, TextInputMode::Plain));
+    let edit_id = state.text_edit_target.as_ref().map(|(id, _)| *id);
+    assert_eq!(edit_id, Some(shape_id));
 }
 
 #[test]
@@ -1033,6 +1684,127 @@ fn properties_command_opens_panel() {
 }
 
 #[test]
+fn shape_menu_disables_edit_for_locked_text() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 15,
+        y: 25,
+        text: "Locked".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(shape_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![shape_id]);
+    state.open_context_menu(
+        (0, 0),
+        vec![shape_id],
+        ContextMenuKind::Shape,
+        Some(shape_id),
+    );
+
+    let entries = state.context_menu_entries();
+    let edit_entry = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::EditText))
+        .expect("expected edit entry");
+    assert!(edit_entry.disabled);
+}
+
+#[test]
+fn shape_menu_disables_delete_when_all_locked() {
+    let mut state = create_test_input_state();
+    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 5,
+        y: 5,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 25,
+        y: 25,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(first) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+    if let Some(index) = state.canvas_set.active_frame().find_index(second) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![first, second]);
+    state.open_context_menu(
+        (0, 0),
+        vec![first, second],
+        ContextMenuKind::Shape,
+        Some(first),
+    );
+
+    let entries = state.context_menu_entries();
+    let delete_entry = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::Delete))
+        .expect("expected delete entry");
+    assert!(delete_entry.disabled);
+}
+
+#[test]
+fn shape_menu_allows_delete_when_mixed_lock_state() {
+    let mut state = create_test_input_state();
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 30,
+        y: 30,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![locked_id, unlocked_id]);
+    state.open_context_menu(
+        (0, 0),
+        vec![locked_id, unlocked_id],
+        ContextMenuKind::Shape,
+        Some(locked_id),
+    );
+
+    let entries = state.context_menu_entries();
+    let delete_entry = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::Delete))
+        .expect("expected delete entry");
+    assert!(!delete_entry.disabled);
+}
+
+#[test]
 fn keyboard_context_menu_sets_initial_focus() {
     let mut state = create_test_input_state();
     state.toggle_context_menu_via_keyboard();
@@ -1042,6 +1814,34 @@ fn keyboard_context_menu_sets_initial_focus() {
         }
         ContextMenuState::Hidden => panic!("Context menu should be open"),
     }
+}
+
+#[test]
+fn keyboard_context_menu_focuses_edit_for_selected_text() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 60,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.toggle_context_menu_via_keyboard();
+
+    let focus_index = match &state.context_menu_state {
+        ContextMenuState::Open {
+            keyboard_focus: Some(index),
+            ..
+        } => *index,
+        _ => panic!("Context menu should be open with focus"),
+    };
+    let entries = state.context_menu_entries();
+    assert_eq!(entries[focus_index].command, Some(MenuCommand::EditText));
 }
 
 #[test]
@@ -1094,6 +1894,49 @@ fn erase_stroke_includes_release_segment() {
     state.on_mouse_release(MouseButton::Left, 100, 10);
 
     assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+}
+
+#[test]
+fn erase_stroke_skips_locked_shapes() {
+    let mut state = create_test_input_state();
+    state.eraser_size = 4.0;
+    state.eraser_mode = EraserMode::Stroke;
+
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 1.0,
+    });
+    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 1.0,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
+    assert!(erased, "eraser should remove unlocked shapes");
+    assert!(state.canvas_set.active_frame().shape(unlocked_id).is_none());
+    assert!(state.canvas_set.active_frame().shape(locked_id).is_some());
 }
 
 #[test]

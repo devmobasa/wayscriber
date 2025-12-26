@@ -2,7 +2,7 @@
 
 use super::color::Color;
 use super::frame::DrawnShape;
-use super::shape::{sticky_note_layout, sticky_note_text_layout, EraserBrush, EraserKind, Shape};
+use super::shape::{EraserBrush, EraserKind, Shape, sticky_note_layout, sticky_note_text_layout};
 use crate::config::BoardConfig;
 use crate::input::BoardMode;
 use crate::util;
@@ -258,6 +258,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             size,
             font_descriptor,
             background_enabled,
+            wrap_width,
         } => {
             render_text(
                 ctx,
@@ -268,6 +269,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 *size,
                 font_descriptor,
                 *background_enabled,
+                *wrap_width,
             );
         }
         Shape::StickyNote {
@@ -277,8 +279,18 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             background,
             size,
             font_descriptor,
+            wrap_width,
         } => {
-            render_sticky_note(ctx, *x, *y, text, *background, *size, font_descriptor);
+            render_sticky_note(
+                ctx,
+                *x,
+                *y,
+                text,
+                *background,
+                *size,
+                font_descriptor,
+                *wrap_width,
+            );
         }
         Shape::MarkerStroke {
             points,
@@ -634,6 +646,7 @@ pub fn render_text(
     size: f64,
     font_descriptor: &super::FontDescriptor,
     background_enabled: bool,
+    wrap_width: Option<i32>,
 ) {
     // Save context state to prevent settings from leaking to other drawing operations
     ctx.save().ok();
@@ -652,6 +665,12 @@ pub fn render_text(
 
     // Set the text (Pango handles newlines automatically)
     layout.set_text(text);
+    if let Some(width) = wrap_width {
+        let width = width.max(1);
+        let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        layout.set_width(width_pango);
+        layout.set_wrap(pango::WrapMode::WordChar);
+    }
 
     // Get layout extents for background and effects
     let (ink_rect, _logical_rect) = layout.extents();
@@ -724,6 +743,7 @@ pub fn render_sticky_note(
     background: Color,
     size: f64,
     font_descriptor: &super::FontDescriptor,
+    wrap_width: Option<i32>,
 ) {
     if text.is_empty() {
         return;
@@ -732,15 +752,22 @@ pub fn render_sticky_note(
     ctx.save().ok();
     ctx.set_antialias(cairo::Antialias::Best);
 
-    let text_layout = sticky_note_text_layout(ctx, text, size, font_descriptor);
+    let text_layout = sticky_note_text_layout(ctx, text, size, font_descriptor, wrap_width);
     let base_x = x as f64;
     let base_y = y as f64 - text_layout.baseline;
+    let ink_max = text_layout.ink_x + text_layout.ink_width;
+    let effective_max = if let Some(width) = wrap_width {
+        ink_max.max(width.max(1) as f64)
+    } else {
+        ink_max
+    };
+    let effective_ink_width = effective_max - text_layout.ink_x;
     let note_layout = sticky_note_layout(
         base_x,
         base_y,
         text_layout.ink_x,
         text_layout.ink_y,
-        text_layout.ink_width,
+        effective_ink_width,
         text_layout.ink_height,
         size,
     );

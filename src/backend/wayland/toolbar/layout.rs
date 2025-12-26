@@ -371,7 +371,7 @@ impl ToolbarLayoutSpec {
     pub(super) fn side_settings_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
-        let mut toggle_count = 1; // Preset toasts
+        let mut toggle_count = 2; // Tool preview + preset toasts
         if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
             toggle_count += 5; // presets, actions, advanced actions, step section, text controls
         }
@@ -650,7 +650,10 @@ pub fn build_top_hits(
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::EnterTextMode,
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(super::format_binding_label(
+                "Text",
+                snapshot.binding_hints.text.as_deref(),
+            )),
         });
         x += btn_w + gap;
 
@@ -658,7 +661,10 @@ pub fn build_top_hits(
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::EnterStickyNoteMode,
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(super::format_binding_label(
+                "Note",
+                snapshot.binding_hints.note.as_deref(),
+            )),
         });
         x += btn_w + gap;
 
@@ -939,6 +945,33 @@ pub fn build_side_hits(
             ToolbarEvent::ResetZoom,
             ToolbarEvent::ToggleZoomLock,
         ];
+        let action_label = |event: &ToolbarEvent| match event {
+            ToolbarEvent::Undo => "Undo",
+            ToolbarEvent::Redo => "Redo",
+            ToolbarEvent::ClearCanvas => "Clear",
+            ToolbarEvent::UndoAll => "Undo All",
+            ToolbarEvent::RedoAll => "Redo All",
+            ToolbarEvent::UndoAllDelayed => "Undo All Delay",
+            ToolbarEvent::RedoAllDelayed => "Redo All Delay",
+            ToolbarEvent::ToggleFreeze => {
+                if snapshot.frozen_active {
+                    "Unfreeze"
+                } else {
+                    "Freeze"
+                }
+            }
+            ToolbarEvent::ZoomIn => "Zoom In",
+            ToolbarEvent::ZoomOut => "Zoom Out",
+            ToolbarEvent::ResetZoom => "Reset Zoom",
+            ToolbarEvent::ToggleZoomLock => {
+                if snapshot.zoom_locked {
+                    "Unlock Zoom"
+                } else {
+                    "Lock Zoom"
+                }
+            }
+            _ => "Action",
+        };
 
         if snapshot.show_actions_section {
             if use_icons {
@@ -954,7 +987,10 @@ pub fn build_side_hits(
                         rect: (bx, action_y, icon_btn, icon_btn),
                         event: evt.clone(),
                         kind: HitKind::Click,
-                        tooltip: None,
+                        tooltip: Some(super::format_binding_label(
+                            action_label(evt),
+                            snapshot.binding_hints.binding_for_event(evt),
+                        )),
                     });
                 }
                 action_y += icon_btn;
@@ -967,7 +1003,10 @@ pub fn build_side_hits(
                         rect: (x, by, content_width, action_h),
                         event: evt.clone(),
                         kind: HitKind::Click,
-                        tooltip: None,
+                        tooltip: Some(super::format_binding_label(
+                            action_label(evt),
+                            snapshot.binding_hints.binding_for_event(evt),
+                        )),
                     });
                 }
                 action_y += action_h * basic_actions.len() as f64
@@ -996,7 +1035,10 @@ pub fn build_side_hits(
                         rect: (bx, by, icon_btn, icon_btn),
                         event: evt.clone(),
                         kind: HitKind::Click,
-                        tooltip: None,
+                        tooltip: Some(super::format_binding_label(
+                            action_label(evt),
+                            snapshot.binding_hints.binding_for_event(evt),
+                        )),
                     });
                 }
             } else {
@@ -1013,7 +1055,10 @@ pub fn build_side_hits(
                         rect: (bx, by, action_w, action_h),
                         event: evt.clone(),
                         kind: HitKind::Click,
-                        tooltip: None,
+                        tooltip: Some(super::format_binding_label(
+                            action_label(evt),
+                            snapshot.binding_hints.binding_for_event(evt),
+                        )),
                     });
                 }
             }
@@ -1073,10 +1118,16 @@ pub fn build_side_hits(
     if snapshot.show_settings_section {
         let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-        let mut toggles: Vec<(ToolbarEvent, Option<&str>)> = vec![(
-            ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-            Some("Preset toasts: apply/save/clear."),
-        )];
+        let mut toggles: Vec<(ToolbarEvent, Option<&str>)> = vec![
+            (
+                ToolbarEvent::ToggleToolPreview(!snapshot.show_tool_preview),
+                Some("Tool preview: cursor bubble."),
+            ),
+            (
+                ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+                Some("Preset toasts: apply/save/clear."),
+            ),
+        ];
         if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
             toggles.extend_from_slice(&[
                 (
@@ -1125,7 +1176,10 @@ pub fn build_side_hits(
             rect: (x, buttons_y, button_w, button_h),
             event: ToolbarEvent::OpenConfigurator,
             kind: HitKind::Click,
-            tooltip: Some("Config UI".to_string()),
+            tooltip: Some(super::format_binding_label(
+                "Config UI",
+                snapshot.binding_hints.open_configurator.as_deref(),
+            )),
         });
         hits.push(HitRegion {
             rect: (x + button_w + button_gap, buttons_y, button_w, button_h),

@@ -55,8 +55,9 @@ pub(crate) async fn perform_capture(
     );
 
     // Step 3: Save to file (if requested)
+    let mut save_error = None;
     let saved_path = match request.destination {
-        CaptureDestination::FileOnly | CaptureDestination::ClipboardAndFile => {
+        CaptureDestination::FileOnly => {
             if let Some(save_config) = request.save_config.clone() {
                 if !save_config.save_directory.as_os_str().is_empty() {
                     Some(
@@ -67,6 +68,30 @@ pub(crate) async fn perform_capture(
                         )
                         .await?,
                     )
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        CaptureDestination::ClipboardAndFile => {
+            if let Some(save_config) = request.save_config.clone() {
+                if !save_config.save_directory.as_os_str().is_empty() {
+                    match save_image(
+                        Arc::clone(&dependencies.saver),
+                        image_data.clone(),
+                        save_config,
+                    )
+                    .await
+                    {
+                        Ok(path) => Some(path),
+                        Err(err) => {
+                            log::warn!("Failed to save screenshot: {}", err);
+                            save_error = Some(err);
+                            None
+                        }
+                    }
                 } else {
                     None
                 }
@@ -88,6 +113,13 @@ pub(crate) async fn perform_capture(
             false
         }
     };
+
+    if matches!(request.destination, CaptureDestination::ClipboardAndFile)
+        && !copied_to_clipboard
+        && let Some(save_error) = save_error
+    {
+        return Err(save_error);
+    }
 
     Ok(CaptureResult {
         image_data,

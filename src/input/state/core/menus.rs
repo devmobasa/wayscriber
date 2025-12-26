@@ -238,11 +238,30 @@ impl InputState {
 
     fn canvas_menu_entries(&self) -> Vec<ContextMenuEntry> {
         let mut entries = Vec::new();
+        let frame = self.canvas_set.active_frame();
+        let mut has_locked = false;
+        let mut has_unlocked = false;
+        for shape in &frame.shapes {
+            if shape.locked {
+                has_locked = true;
+            } else {
+                has_unlocked = true;
+            }
+            if has_locked && has_unlocked {
+                break;
+            }
+        }
+        let clear_label = if has_locked {
+            "Clear Unlocked"
+        } else {
+            "Clear All"
+        };
+        let clear_disabled = !has_unlocked;
         entries.push(ContextMenuEntry::new(
-            "Clear All",
+            clear_label,
             Some("E"),
             false,
-            false,
+            clear_disabled,
             Some(MenuCommand::ClearAll),
         ));
         entries.push(ContextMenuEntry::new(
@@ -685,11 +704,25 @@ impl InputState {
             self.set_context_menu_focus(None);
             self.focus_first_context_menu_entry();
         } else {
+            let focus_edit = selection.len() == 1
+                && self
+                    .canvas_set
+                    .active_frame()
+                    .shape(selection[0])
+                    .map(|shape| {
+                        matches!(
+                            shape.shape,
+                            crate::draw::Shape::Text { .. } | crate::draw::Shape::StickyNote { .. }
+                        )
+                    })
+                    .unwrap_or(false);
             let anchor = self.keyboard_shape_menu_anchor(&selection);
             self.update_pointer_position(anchor.0, anchor.1);
             self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
             self.pending_menu_hover_recalc = false;
-            self.focus_first_context_menu_entry();
+            if !focus_edit || !self.focus_context_menu_command(MenuCommand::EditText) {
+                self.focus_first_context_menu_entry();
+            }
         }
         self.needs_redraw = true;
     }

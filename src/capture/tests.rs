@@ -344,6 +344,42 @@ async fn test_perform_capture_clipboard_and_file_success() {
     assert_eq!(*clipboard.calls.lock().unwrap(), 1);
 }
 
+#[tokio::test]
+async fn test_perform_capture_clipboard_and_file_save_failure_still_copies() {
+    let source = MockSource {
+        data: vec![21, 22, 23],
+        error: Arc::new(Mutex::new(None)),
+        captured_types: Arc::new(Mutex::new(Vec::new())),
+    };
+    let saver = MockSaver {
+        should_fail: true,
+        path: PathBuf::from("/tmp/combined_fail.png"),
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let saver_handle = saver.clone();
+    let clipboard = MockClipboard {
+        should_fail: false,
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let clipboard_handle = clipboard.clone();
+    let deps = CaptureDependencies {
+        source: Arc::new(source),
+        saver: Arc::new(saver),
+        clipboard: Arc::new(clipboard),
+    };
+    let request = CaptureRequest {
+        capture_type: CaptureType::FullScreen,
+        destination: CaptureDestination::ClipboardAndFile,
+        save_config: Some(FileSaveConfig::default()),
+    };
+
+    let result = perform_capture(request, Arc::new(deps)).await.unwrap();
+    assert!(result.saved_path.is_none());
+    assert!(result.copied_to_clipboard);
+    assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
+    assert_eq!(*clipboard_handle.calls.lock().unwrap(), 1);
+}
+
 #[test]
 fn request_capture_returns_error_when_channel_closed() {
     let manager = CaptureManager::with_closed_channel_for_test();

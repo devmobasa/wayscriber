@@ -51,6 +51,17 @@ pub enum DrawingState {
         /// Accumulated text buffer
         buffer: String,
     },
+    /// Pending click on text/note to detect double-click editing
+    PendingTextClick {
+        /// Starting X coordinate
+        x: i32,
+        /// Starting Y coordinate
+        y: i32,
+        /// Active tool when the click began
+        tool: Tool,
+        /// Shape id that was clicked
+        shape_id: ShapeId,
+    },
     /// Selection move mode - user is dragging selected shapes
     MovingSelection {
         /// Last pointer X coordinate applied
@@ -62,6 +73,17 @@ pub enum DrawingState {
         /// Whether any translation has been applied
         moved: bool,
     },
+    /// Resize text/note wrap width by dragging a handle
+    ResizingText {
+        /// Shape id being resized
+        shape_id: ShapeId,
+        /// Snapshot of the shape prior to resizing (for undo/cancel)
+        snapshot: ShapeSnapshot,
+        /// Text baseline X coordinate (wrap width is measured from here)
+        base_x: i32,
+        /// Font size used to set minimum width
+        size: f64,
+    },
 }
 
 /// Describes which kind of text input is active.
@@ -69,6 +91,12 @@ pub enum DrawingState {
 pub enum TextInputMode {
     Plain,
     StickyNote,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionAxis {
+    Horizontal,
+    Vertical,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +145,14 @@ pub(crate) struct UiToastState {
     pub started: Instant,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TextClickState {
+    pub shape_id: ShapeId,
+    pub x: i32,
+    pub y: i32,
+    pub at: Instant,
+}
+
 pub struct InputState {
     /// Multi-frame canvas management (transparent, whiteboard, blackboard)
     pub canvas_set: CanvasSet,
@@ -138,6 +174,8 @@ pub struct InputState {
     pub font_descriptor: FontDescriptor,
     /// Whether to draw background behind text
     pub text_background_enabled: bool,
+    /// Optional wrap width for text input (None = auto)
+    pub text_wrap_width: Option<i32>,
     /// Which text input style is active (plain vs sticky note)
     pub text_input_mode: TextInputMode,
     /// Arrowhead length in pixels (from config)
@@ -206,6 +244,8 @@ pub struct InputState {
     pub(super) tool_override: Option<Tool>,
     /// Current selection information
     pub selection_state: SelectionState,
+    /// Last axis used for selection nudges (used to resolve Home/End axis)
+    pub last_selection_axis: Option<SelectionAxis>,
     /// Current context menu state
     pub context_menu_state: ContextMenuState,
     /// Whether context menu interactions are enabled
@@ -238,8 +278,12 @@ pub struct InputState {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toast notifications
     pub show_preset_toasts: bool,
+    /// Whether to show the cursor tool preview bubble
+    pub show_tool_preview: bool,
     /// Pending UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
+    /// Last text/note click used for double-click detection
+    pub(crate) last_text_click: Option<TextClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     /// Pending delayed history playback state
@@ -363,6 +407,7 @@ impl InputState {
             current_font_size: font_size,
             font_descriptor,
             text_background_enabled,
+            text_wrap_width: None,
             text_input_mode: TextInputMode::Plain,
             arrow_length,
             arrow_angle,
@@ -397,6 +442,7 @@ impl InputState {
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
             selection_state: SelectionState::None,
+            last_selection_axis: None,
             context_menu_state: ContextMenuState::Hidden,
             context_menu_enabled: true,
             hit_test_cache: HashMap::new(),
@@ -413,7 +459,9 @@ impl InputState {
             show_delay_sliders: false, // Default to hidden
             show_marker_opacity_section: false,
             show_preset_toasts: true,
+            show_tool_preview: false,
             ui_toast: None,
+            last_text_click: None,
             text_edit_target: None,
             pending_history: None,
             context_menu_layout: None,

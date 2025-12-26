@@ -224,6 +224,7 @@ impl WaylandState {
             self.set_pointer_over_toolbar(false);
             self.data.toolbar_configure_miss_count = 0;
             self.reset_toolbar_margin_cache();
+            self.clear_toolbar_focus();
         }
 
         if any_visible {

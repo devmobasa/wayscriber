@@ -9,8 +9,8 @@ mod tests;
 #[allow(unused_imports)]
 pub use core::{
     ContextMenuEntry, ContextMenuKind, ContextMenuState, DrawingState, InputState,
-    TextInputMode, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS,
-    PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind, SelectionState,
-    UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS,
+    PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind, SelectionAxis, SelectionState,
+    TextInputMode, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub use highlight::ClickHighlightSettings;

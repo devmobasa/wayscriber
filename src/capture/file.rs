@@ -44,6 +44,35 @@ pub fn generate_filename(template: &str, format: &str) -> String {
     format!("{}.{}", filename, format)
 }
 
+const UNIQUE_NAME_ATTEMPTS: u32 = 100;
+
+fn generate_file_path(directory: &Path, template: &str, format: &str) -> PathBuf {
+    let filename = generate_filename(template, format);
+    let base = Path::new(&filename)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("screenshot");
+    let mut path = directory.join(&filename);
+    if path.exists() {
+        for suffix in 1..=UNIQUE_NAME_ATTEMPTS {
+            let candidate = directory.join(format!("{}-{}.{}", base, suffix, format));
+            if !candidate.exists() {
+                log::info!(
+                    "Screenshot filename exists; using {} instead",
+                    candidate.display()
+                );
+                path = candidate;
+                return path;
+            }
+        }
+        log::warn!(
+            "Screenshot filename already exists; overwriting {}",
+            path.display()
+        );
+    }
+    path
+}
+
 /// Ensure the save directory exists, creating it if necessary.
 ///
 /// # Arguments
@@ -81,8 +110,7 @@ pub fn save_screenshot(
     let directory = ensure_directory_exists(&config.save_directory)?;
 
     // Generate filename
-    let filename = generate_filename(&config.filename_template, &config.format);
-    let file_path = directory.join(&filename);
+    let file_path = generate_file_path(&directory, &config.filename_template, &config.format);
 
     log::info!(
         "Saving screenshot to: {} ({} bytes)",

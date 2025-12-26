@@ -75,6 +75,8 @@ pub enum ToolbarEvent {
     ToggleTextControls(bool),
     /// Toggle preset action toast notifications
     TogglePresetToasts(bool),
+    /// Toggle cursor tool preview bubble
+    ToggleToolPreview(bool),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),
     /// Toggle the simple-mode shape picker
@@ -178,6 +180,7 @@ pub struct ToolbarSnapshot {
     pub show_text_controls: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
+    pub show_tool_preview: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
     /// Number of preset slots to display
@@ -306,6 +309,7 @@ impl ToolbarSnapshot {
             show_step_section: state.show_step_section,
             show_text_controls: state.show_text_controls,
             show_settings_section: state.show_settings_section,
+            show_tool_preview: state.show_tool_preview,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,
@@ -332,6 +336,18 @@ pub struct ToolbarBindingHints {
     pub clear: Option<String>,
     pub fill: Option<String>,
     pub toggle_highlight: Option<String>,
+    pub undo: Option<String>,
+    pub redo: Option<String>,
+    pub undo_all: Option<String>,
+    pub redo_all: Option<String>,
+    pub undo_all_delayed: Option<String>,
+    pub redo_all_delayed: Option<String>,
+    pub toggle_freeze: Option<String>,
+    pub zoom_in: Option<String>,
+    pub zoom_out: Option<String>,
+    pub reset_zoom: Option<String>,
+    pub toggle_zoom_lock: Option<String>,
+    pub open_configurator: Option<String>,
     pub apply_presets: Vec<Option<String>>,
     pub save_presets: Vec<Option<String>>,
     pub clear_presets: Vec<Option<String>>,
@@ -397,6 +413,18 @@ impl ToolbarBindingHints {
             clear: first(&kb.clear_canvas),
             fill: first(&kb.toggle_fill),
             toggle_highlight: first(&kb.toggle_highlight_tool),
+            undo: first(&kb.undo),
+            redo: first(&kb.redo),
+            undo_all: first(&kb.undo_all),
+            redo_all: first(&kb.redo_all),
+            undo_all_delayed: first(&kb.undo_all_delayed),
+            redo_all_delayed: first(&kb.redo_all_delayed),
+            toggle_freeze: first(&kb.toggle_frozen_mode),
+            zoom_in: first(&kb.zoom_in),
+            zoom_out: first(&kb.zoom_out),
+            reset_zoom: first(&kb.reset_zoom),
+            toggle_zoom_lock: first(&kb.toggle_zoom_lock),
+            open_configurator: first(&kb.open_configurator),
             apply_presets,
             save_presets,
             clear_presets,
@@ -420,6 +448,26 @@ impl ToolbarBindingHints {
 
     pub fn clear_preset(&self, slot: usize) -> Option<&str> {
         Self::preset_binding(&self.clear_presets, slot)
+    }
+
+    pub fn binding_for_event(&self, event: &ToolbarEvent) -> Option<&str> {
+        match event {
+            ToolbarEvent::Undo => self.undo.as_deref(),
+            ToolbarEvent::Redo => self.redo.as_deref(),
+            ToolbarEvent::UndoAll => self.undo_all.as_deref(),
+            ToolbarEvent::RedoAll => self.redo_all.as_deref(),
+            ToolbarEvent::UndoAllDelayed => self.undo_all_delayed.as_deref(),
+            ToolbarEvent::RedoAllDelayed => self.redo_all_delayed.as_deref(),
+            ToolbarEvent::ToggleFreeze => self.toggle_freeze.as_deref(),
+            ToolbarEvent::ZoomIn => self.zoom_in.as_deref(),
+            ToolbarEvent::ZoomOut => self.zoom_out.as_deref(),
+            ToolbarEvent::ResetZoom => self.reset_zoom.as_deref(),
+            ToolbarEvent::ToggleZoomLock => self.toggle_zoom_lock.as_deref(),
+            ToolbarEvent::OpenConfigurator => self.open_configurator.as_deref(),
+            ToolbarEvent::ClearCanvas => self.clear.as_deref(),
+            ToolbarEvent::ToggleAllHighlight(_) => self.toggle_highlight.as_deref(),
+            _ => None,
+        }
     }
 }
 
@@ -687,6 +735,15 @@ impl InputState {
             ToolbarEvent::TogglePresetToasts(show) => {
                 if self.show_preset_toasts != show {
                     self.show_preset_toasts = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleToolPreview(show) => {
+                if self.show_tool_preview != show {
+                    self.show_tool_preview = show;
+                    self.needs_redraw = true;
                     true
                 } else {
                     false

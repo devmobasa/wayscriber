@@ -23,12 +23,14 @@ impl InputState {
 
     pub fn clear_selection(&mut self) {
         self.selection_state = SelectionState::None;
+        self.last_selection_axis = None;
         self.close_properties_panel();
     }
 
     pub fn set_selection(&mut self, ids: Vec<ShapeId>) {
         if ids.is_empty() {
             self.selection_state = SelectionState::None;
+            self.last_selection_axis = None;
             self.close_properties_panel();
             return;
         }
@@ -41,6 +43,7 @@ impl InputState {
             }
         }
         self.selection_state = SelectionState::Active { shape_ids: ordered };
+        self.last_selection_axis = None;
         self.close_properties_panel();
     }
 
@@ -56,6 +59,7 @@ impl InputState {
                         shape_ids.push(id);
                     }
                 }
+                self.last_selection_axis = None;
                 self.close_properties_panel();
             }
             _ => {

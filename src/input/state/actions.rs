@@ -7,7 +7,8 @@ const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
 use super::{
-    DrawingState, InputState, TextInputMode, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+    DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, SelectionAxis,
+    TextInputMode, UiToastKind,
 };
 
 pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
@@ -88,7 +89,11 @@ impl InputState {
                 | Key::Down
                 | Key::Left
                 | Key::Right
-                | Key::Delete => true,
+                | Key::Delete
+                | Key::Home
+                | Key::End
+                | Key::PageUp
+                | Key::PageDown => true,
                 // Character keys only check if modifiers are held
                 Key::Char(_) => self.modifiers.ctrl || self.modifiers.alt,
                 // Other keys can check as well
@@ -116,6 +121,10 @@ impl InputState {
                     Key::Left => "ArrowLeft".to_string(),
                     Key::Right => "ArrowRight".to_string(),
                     Key::Delete => "Delete".to_string(),
+                    Key::Home => "Home".to_string(),
+                    Key::End => "End".to_string(),
+                    Key::PageUp => "PageUp".to_string(),
+                    Key::PageDown => "PageDown".to_string(),
                     _ => String::new(),
                 };
 
@@ -146,6 +155,7 @@ impl InputState {
                     } else {
                         self.clear_text_preview_dirty();
                         self.last_text_preview_bounds = None;
+                        self.text_wrap_width = None;
                         self.state = DrawingState::Idle;
                         self.needs_redraw = true;
                     }
@@ -161,6 +171,7 @@ impl InputState {
                         size: self.current_font_size,
                         font_descriptor: self.font_descriptor.clone(),
                         background_enabled: self.text_background_enabled,
+                        wrap_width: self.text_wrap_width,
                     },
                     TextInputMode::StickyNote => Shape::StickyNote {
                         x,
@@ -169,6 +180,7 @@ impl InputState {
                         background: self.current_color,
                         size: self.current_font_size,
                         font_descriptor: self.font_descriptor.clone(),
+                        wrap_width: self.text_wrap_width,
                     },
                 };
                 let bounds = shape.bounding_box();
@@ -177,6 +189,7 @@ impl InputState {
                 self.last_text_preview_bounds = None;
 
                 if self.commit_text_edit(shape.clone()) {
+                    self.text_wrap_width = None;
                     self.state = DrawingState::Idle;
                     return;
                 }
@@ -194,6 +207,7 @@ impl InputState {
                         self.max_shapes_per_frame
                     );
                 }
+                self.text_wrap_width = None;
                 self.state = DrawingState::Idle;
                 return;
             }
@@ -282,6 +296,10 @@ impl InputState {
             Key::Left => "ArrowLeft".to_string(),
             Key::Right => "ArrowRight".to_string(),
             Key::Delete => "Delete".to_string(),
+            Key::Home => "Home".to_string(),
+            Key::End => "End".to_string(),
+            Key::PageUp => "PageUp".to_string(),
+            Key::PageDown => "PageDown".to_string(),
             _ => return,
         };
 
@@ -297,9 +315,7 @@ impl InputState {
             && !self.modifiers.alt
             && matches!(self.state, DrawingState::Idle)
             && self.edit_selected_text()
-        {
-            return;
-        }
+        {}
     }
 
     fn push_text_char(buffer: &mut String, ch: char) -> bool {
@@ -325,6 +341,9 @@ impl InputState {
                     DrawingState::TextInput { .. } => {
                         self.cancel_text_input();
                     }
+                    DrawingState::PendingTextClick { .. } => {
+                        self.state = DrawingState::Idle;
+                    }
                     DrawingState::Drawing { .. } => {
                         self.clear_provisional_dirty();
                         self.last_provisional_bounds = None;
@@ -333,6 +352,12 @@ impl InputState {
                     }
                     DrawingState::MovingSelection { snapshots, .. } => {
                         self.restore_selection_from_snapshots(snapshots.clone());
+                        self.state = DrawingState::Idle;
+                    }
+                    DrawingState::ResizingText {
+                        shape_id, snapshot, ..
+                    } => {
+                        self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                         self.state = DrawingState::Idle;
                     }
                     DrawingState::Idle => {
@@ -345,6 +370,7 @@ impl InputState {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::Plain;
                     self.text_edit_target = None;
+                    self.text_wrap_width = None;
                     self.state = DrawingState::TextInput {
                         x: (self.screen_width / 2) as i32,
                         y: (self.screen_height / 2) as i32,
@@ -359,6 +385,7 @@ impl InputState {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::StickyNote;
                     self.text_edit_target = None;
+                    self.text_wrap_width = None;
                     self.state = DrawingState::TextInput {
                         x: (self.screen_width / 2) as i32,
                         y: (self.screen_height / 2) as i32,
@@ -370,8 +397,35 @@ impl InputState {
                 }
             }
             Action::ClearCanvas => {
+                let (has_locked, has_unlocked) = {
+                    let frame = self.canvas_set.active_frame();
+                    let mut has_locked = false;
+                    let mut has_unlocked = false;
+                    for shape in &frame.shapes {
+                        if shape.locked {
+                            has_locked = true;
+                        } else {
+                            has_unlocked = true;
+                        }
+                        if has_locked && has_unlocked {
+                            break;
+                        }
+                    }
+                    (has_locked, has_unlocked)
+                };
+
                 if self.clear_all() {
-                    info!("Cleared canvas via keybinding");
+                    if has_locked {
+                        self.set_ui_toast(
+                            UiToastKind::Warning,
+                            "Cleared unlocked shapes (locked shapes remain).",
+                        );
+                        info!("Cleared unlocked shapes; locked shapes remain");
+                    } else {
+                        info!("Cleared canvas");
+                    }
+                } else if has_locked && !has_unlocked {
+                    self.set_ui_toast(UiToastKind::Warning, "All shapes are locked.");
                 }
             }
             Action::Undo => {
@@ -418,7 +472,10 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(0, -step) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                     info!("Moved selection up by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                 }
             }
             Action::NudgeSelectionDown => {
@@ -428,7 +485,10 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(0, step) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                     info!("Moved selection down by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
                 }
             }
             Action::NudgeSelectionLeft => {
@@ -438,7 +498,10 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(-step, 0) {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
                     info!("Moved selection left by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
                 }
             }
             Action::NudgeSelectionRight => {
@@ -448,7 +511,60 @@ impl InputState {
                     KEYBOARD_NUDGE_SMALL
                 };
                 if self.translate_selection_with_undo(step, 0) {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
                     info!("Moved selection right by {} px", step);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
+                }
+            }
+            Action::NudgeSelectionUpLarge => {
+                if self.translate_selection_with_undo(0, -KEYBOARD_NUDGE_LARGE) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                    info!("Moved selection up by {} px", KEYBOARD_NUDGE_LARGE);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                }
+            }
+            Action::NudgeSelectionDownLarge => {
+                if self.translate_selection_with_undo(0, KEYBOARD_NUDGE_LARGE) {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                    info!("Moved selection down by {} px", KEYBOARD_NUDGE_LARGE);
+                } else if self.has_selection() {
+                    self.last_selection_axis = Some(SelectionAxis::Vertical);
+                }
+            }
+            Action::MoveSelectionToStart => {
+                let axis = self
+                    .last_selection_axis
+                    .unwrap_or(SelectionAxis::Horizontal);
+                let moved = match axis {
+                    SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(true),
+                    SelectionAxis::Vertical => self.move_selection_to_vertical_edge(true),
+                };
+                if moved {
+                    info!("Moved selection to start");
+                }
+            }
+            Action::MoveSelectionToEnd => {
+                let axis = self
+                    .last_selection_axis
+                    .unwrap_or(SelectionAxis::Horizontal);
+                let moved = match axis {
+                    SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(false),
+                    SelectionAxis::Vertical => self.move_selection_to_vertical_edge(false),
+                };
+                if moved {
+                    info!("Moved selection to end");
+                }
+            }
+            Action::MoveSelectionToTop => {
+                if self.move_selection_to_vertical_edge(true) {
+                    info!("Moved selection to top");
+                }
+            }
+            Action::MoveSelectionToBottom => {
+                if self.move_selection_to_vertical_edge(false) {
+                    info!("Moved selection to bottom");
                 }
             }
             Action::DeleteSelection => {

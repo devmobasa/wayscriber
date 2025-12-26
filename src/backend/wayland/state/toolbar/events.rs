@@ -44,6 +44,7 @@ impl WaylandState {
                 | ToolbarEvent::ToggleStepSection(_)
                 | ToolbarEvent::ToggleTextControls(_)
                 | ToolbarEvent::TogglePresetToasts(_)
+                | ToolbarEvent::ToggleToolPreview(_)
                 | ToolbarEvent::ToggleDelaySliders(_)
                 | ToolbarEvent::ToggleCustomSection(_)
                 | ToolbarEvent::SetToolbarLayoutMode(_)

@@ -12,9 +12,9 @@ use wayland_client::{
     protocol::{wl_output, wl_surface},
 };
 
-use crate::backend::wayland::toolbar::surfaces::ToolbarSurface;
+use crate::backend::wayland::toolbar::{ToolbarFocusTarget, surfaces::ToolbarSurface};
 use crate::backend::wayland::toolbar_intent::ToolbarIntent;
-use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use crate::backend::wayland::state::WaylandState;
 
@@ -255,7 +255,7 @@ impl ToolbarSurfaceManager {
     pub fn render(&mut self, shm: &Shm, snapshot: &ToolbarSnapshot, hover: Option<(f64, f64)>) {
         // Render top toolbar if visible
         if self.is_top_visible() {
-            let top_hover = hover.or(self.top_hover);
+            let top_hover = hover.or(self.top_hover).or(self.top.focused_hover());
             if let Err(err) =
                 self.top
                     .render(shm, snapshot, top_hover, |ctx, w, h, snap, hits, hov| {
@@ -270,7 +270,7 @@ impl ToolbarSurfaceManager {
 
         // Render side toolbar if visible
         if self.is_side_visible() {
-            let side_hover = hover.or(self.side_hover);
+            let side_hover = hover.or(self.side_hover).or(self.side.focused_hover());
             if let Err(err) =
                 self.side
                     .render(shm, snapshot, side_hover, |ctx, w, h, snap, hits, hov| {
@@ -357,6 +357,48 @@ impl ToolbarSurfaceManager {
         } else if self.side.is_surface(surface) {
             self.side_hover = None;
             self.side.mark_dirty();
+        }
+    }
+
+    pub fn focus_target_for_surface(
+        &self,
+        surface: &wl_surface::WlSurface,
+    ) -> Option<ToolbarFocusTarget> {
+        if self.top.is_surface(surface) {
+            Some(ToolbarFocusTarget::Top)
+        } else if self.side.is_surface(surface) {
+            Some(ToolbarFocusTarget::Side)
+        } else {
+            None
+        }
+    }
+
+    pub fn hovered_target(&self) -> Option<ToolbarFocusTarget> {
+        if self.top_hover.is_some() {
+            Some(ToolbarFocusTarget::Top)
+        } else if self.side_hover.is_some() {
+            Some(ToolbarFocusTarget::Side)
+        } else {
+            None
+        }
+    }
+
+    pub fn clear_focus(&mut self) {
+        self.top.clear_focus();
+        self.side.clear_focus();
+    }
+
+    pub fn focus_next(&mut self, target: ToolbarFocusTarget, reverse: bool) -> bool {
+        match target {
+            ToolbarFocusTarget::Top => self.top.focus_next(reverse),
+            ToolbarFocusTarget::Side => self.side.focus_next(reverse),
+        }
+    }
+
+    pub fn focused_event(&self, target: ToolbarFocusTarget) -> Option<ToolbarEvent> {
+        match target {
+            ToolbarFocusTarget::Top => self.top.focused_event(),
+            ToolbarFocusTarget::Side => self.side.focused_event(),
         }
     }
 }

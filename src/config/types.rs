@@ -1269,6 +1269,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_preset_toasts")]
     pub show_preset_toasts: bool,
 
+    /// Show the cursor tool preview bubble
+    #[serde(default = "default_show_tool_preview")]
+    pub show_tool_preview: bool,
+
     /// Saved horizontal offset for the top toolbar (layer-shell/inline)
     #[serde(default)]
     pub top_offset: f64,
@@ -1308,6 +1312,7 @@ impl Default for ToolbarConfig {
             show_delay_sliders: default_show_delay_sliders(),
             show_marker_opacity_section: default_show_marker_opacity_section(),
             show_preset_toasts: default_show_preset_toasts(),
+            show_tool_preview: default_show_tool_preview(),
             top_offset: 0.0,
             top_offset_y: 0.0,
             side_offset: 0.0,
@@ -1371,4 +1376,8 @@ fn default_show_marker_opacity_section() -> bool {
 
 fn default_show_preset_toasts() -> bool {
     true
+}
+
+fn default_show_tool_preview() -> bool {
+    false
 }

@@ -18,7 +18,7 @@ impl KeyboardHandler for WaylandState {
         _conn: &Connection,
         qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         serial: u32,
         _raw: &[u32],
         _keysyms: &[Keysym],
@@ -27,6 +27,11 @@ impl KeyboardHandler for WaylandState {
         self.set_keyboard_focus(true);
         self.set_last_activation_serial(Some(serial));
         self.maybe_retry_activation(qh);
+        if let Some(target) = self.toolbar.focus_target_for_surface(surface) {
+            self.set_toolbar_focus_target(Some(target));
+        } else {
+            self.clear_toolbar_focus();
+        }
     }
 
     fn leave(
@@ -39,6 +44,7 @@ impl KeyboardHandler for WaylandState {
     ) {
         debug!("Keyboard focus left");
         self.set_keyboard_focus(false);
+        self.clear_toolbar_focus();
 
         // When the compositor moves focus away from our surface (e.g. to a portal
         // dialog, another layer surface, or a different window), it's possible for
@@ -109,6 +115,9 @@ impl KeyboardHandler for WaylandState {
             }
         }
         debug!("Key pressed: {:?}", key);
+        if self.handle_toolbar_key(key) {
+            return;
+        }
         let prefs_before = (
             self.input_state.current_color,
             self.input_state.current_thickness,
@@ -229,6 +238,9 @@ impl KeyboardHandler for WaylandState {
                 _ => {}
             }
         }
+        if self.handle_toolbar_key(key) {
+            return;
+        }
         debug!("Key repeated: {:?}", key);
         let prefs_before = (
             self.input_state.current_color,
@@ -284,6 +296,8 @@ fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::Delete => Key::Delete,
         Keysym::Home => Key::Home,
         Keysym::End => Key::End,
+        Keysym::Page_Up => Key::PageUp,
+        Keysym::Page_Down => Key::PageDown,
         Keysym::Shift_L | Keysym::Shift_R => Key::Shift,
         Keysym::Control_L | Keysym::Control_R => Key::Ctrl,
         Keysym::Alt_L | Keysym::Alt_R => Key::Alt,

@@ -1,22 +1,46 @@
-use crate::draw::{Shape, frame::UndoAction};
+use crate::draw::Shape;
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::input::{EraserMode, Tool, events::MouseButton};
 use crate::util;
 use log::warn;
+use std::time::Instant;
 
-use super::{ContextMenuKind, DrawingState, InputState};
 use super::core::MenuCommand;
+use super::core::TextClickState;
+use super::{ContextMenuKind, DrawingState, InputState};
+
+const TEXT_CLICK_DRAG_THRESHOLD: i32 = 4;
+const TEXT_DOUBLE_CLICK_MS: u64 = 400;
+const TEXT_DOUBLE_CLICK_DISTANCE: i32 = 6;
 
 impl InputState {
     fn handle_right_click(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
+        self.last_text_click = None;
         if !matches!(self.state, DrawingState::Idle) {
-            if matches!(self.state, DrawingState::TextInput { .. }) {
-                self.cancel_text_input();
-            } else {
-                self.clear_provisional_dirty();
-                self.last_provisional_bounds = None;
-                self.state = DrawingState::Idle;
-                self.needs_redraw = true;
+            match &self.state {
+                DrawingState::TextInput { .. } => {
+                    self.cancel_text_input();
+                }
+                DrawingState::MovingSelection { snapshots, .. } => {
+                    self.restore_selection_from_snapshots(snapshots.clone());
+                    self.state = DrawingState::Idle;
+                }
+                DrawingState::ResizingText {
+                    shape_id, snapshot, ..
+                } => {
+                    self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                    self.state = DrawingState::Idle;
+                }
+                DrawingState::PendingTextClick { .. } => {
+                    self.state = DrawingState::Idle;
+                }
+                _ => {
+                    self.clear_provisional_dirty();
+                    self.last_provisional_bounds = None;
+                    self.state = DrawingState::Idle;
+                    self.needs_redraw = true;
+                }
             }
             return;
         }
@@ -93,6 +117,7 @@ impl InputState {
                 self.trigger_click_highlight(x, y);
 
                 if self.is_context_menu_open() {
+                    self.last_text_click = None;
                     if self.is_point_in_context_menu(x, y) {
                         self.update_context_menu_hover_from_pointer(x, y);
                     } else {
@@ -105,6 +130,55 @@ impl InputState {
                 match &mut self.state {
                     DrawingState::Idle => {
                         let selection_click = self.modifiers.alt;
+                        if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
+                            let snapshot = {
+                                let frame = self.canvas_set.active_frame();
+                                frame.shape(shape_id).map(|shape| ShapeSnapshot {
+                                    shape: shape.shape.clone(),
+                                    locked: shape.locked,
+                                })
+                            };
+                            if let Some(snapshot) = snapshot {
+                                let (base_x, size) = match &snapshot.shape {
+                                    Shape::Text { x, size, .. } => (*x, *size),
+                                    Shape::StickyNote { x, size, .. } => (*x, *size),
+                                    _ => return,
+                                };
+                                self.last_text_click = None;
+                                self.state = DrawingState::ResizingText {
+                                    shape_id,
+                                    snapshot,
+                                    base_x,
+                                    size,
+                                };
+                                return;
+                            }
+                        }
+
+                        if !selection_click && let Some(hit_id) = self.hit_test_at(x, y) {
+                            let is_text = self
+                                .canvas_set
+                                .active_frame()
+                                .shape(hit_id)
+                                .map(|shape| {
+                                    !shape.locked
+                                        && matches!(
+                                            shape.shape,
+                                            Shape::Text { .. } | Shape::StickyNote { .. }
+                                        )
+                                })
+                                .unwrap_or(false);
+                            if is_text {
+                                self.state = DrawingState::PendingTextClick {
+                                    x,
+                                    y,
+                                    tool: self.active_tool(),
+                                    shape_id: hit_id,
+                                };
+                                return;
+                            }
+                        }
+                        self.last_text_click = None;
                         if selection_click && let Some(hit_id) = self.hit_test_at(x, y) {
                             if !self.selected_shape_ids().contains(&hit_id) {
                                 if self.modifiers.shift {
@@ -145,7 +219,10 @@ impl InputState {
                         self.update_text_preview_dirty();
                         self.needs_redraw = true;
                     }
-                    DrawingState::Drawing { .. } | DrawingState::MovingSelection { .. } => {}
+                    DrawingState::Drawing { .. }
+                    | DrawingState::MovingSelection { .. }
+                    | DrawingState::PendingTextClick { .. }
+                    | DrawingState::ResizingText { .. } => {}
                 }
             }
             MouseButton::Middle => {}
@@ -163,6 +240,49 @@ impl InputState {
     /// - When drawing with other tools: Triggers redraw for live preview
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
+
+        if let DrawingState::ResizingText {
+            shape_id,
+            base_x,
+            size,
+            ..
+        } = &self.state
+        {
+            let new_width = self.clamp_text_wrap_width(*base_x, x, *size);
+            let _ = self.update_text_wrap_width(*shape_id, new_width);
+            return;
+        }
+
+        if let DrawingState::PendingTextClick {
+            x: start_x,
+            y: start_y,
+            tool,
+            ..
+        } = &self.state
+        {
+            let dx = x - *start_x;
+            let dy = y - *start_y;
+            if dx.abs() >= TEXT_CLICK_DRAG_THRESHOLD || dy.abs() >= TEXT_CLICK_DRAG_THRESHOLD {
+                let tool = *tool;
+                if tool != Tool::Highlight && tool != Tool::Select {
+                    let mut points = vec![(*start_x, *start_y)];
+                    if tool == Tool::Pen || tool == Tool::Marker || tool == Tool::Eraser {
+                        points.push((x, y));
+                    }
+                    self.state = DrawingState::Drawing {
+                        tool,
+                        start_x: *start_x,
+                        start_y: *start_y,
+                        points,
+                    };
+                    self.last_text_click = None;
+                    self.last_provisional_bounds = None;
+                    self.update_provisional_dirty(x, y);
+                    self.needs_redraw = true;
+                }
+            }
+            return;
+        }
 
         if let DrawingState::MovingSelection { last_x, last_y, .. } = &self.state {
             let dx = x - *last_x;
@@ -253,6 +373,39 @@ impl InputState {
             } => {
                 if moved {
                     self.push_translation_undo(snapshots);
+                }
+            }
+            DrawingState::ResizingText {
+                shape_id, snapshot, ..
+            } => {
+                let frame = self.canvas_set.active_frame_mut();
+                if let Some(shape) = frame.shape(shape_id) {
+                    let after_snapshot = ShapeSnapshot {
+                        shape: shape.shape.clone(),
+                        locked: shape.locked,
+                    };
+                    let before_wrap = match &snapshot.shape {
+                        Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
+                            *wrap_width
+                        }
+                        _ => None,
+                    };
+                    let after_wrap = match &after_snapshot.shape {
+                        Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
+                            *wrap_width
+                        }
+                        _ => None,
+                    };
+                    if before_wrap != after_wrap {
+                        frame.push_undo_action(
+                            UndoAction::Modify {
+                                shape_id,
+                                before: snapshot,
+                                after: after_snapshot,
+                            },
+                            self.undo_stack_limit,
+                        );
+                    }
                 }
             }
             DrawingState::Drawing {
@@ -394,6 +547,32 @@ impl InputState {
                         "Shape limit ({}) reached; discarding new shape",
                         self.max_shapes_per_frame
                     );
+                }
+            }
+            DrawingState::PendingTextClick { x, y, shape_id, .. } => {
+                let now = Instant::now();
+                let is_double = self
+                    .last_text_click
+                    .map(|last| {
+                        last.shape_id == shape_id
+                            && now.duration_since(last.at).as_millis()
+                                <= TEXT_DOUBLE_CLICK_MS as u128
+                            && (x - last.x).abs() <= TEXT_DOUBLE_CLICK_DISTANCE
+                            && (y - last.y).abs() <= TEXT_DOUBLE_CLICK_DISTANCE
+                    })
+                    .unwrap_or(false);
+
+                if is_double {
+                    self.last_text_click = None;
+                    self.set_selection(vec![shape_id]);
+                    let _ = self.edit_selected_text();
+                } else {
+                    self.last_text_click = Some(TextClickState {
+                        shape_id,
+                        x,
+                        y,
+                        at: now,
+                    });
                 }
             }
             other_state => {

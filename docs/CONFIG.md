@@ -512,8 +512,20 @@ duplicate_selection = ["Ctrl+D"]
 # Nudge selection (hold Shift for a larger step)
 nudge_selection_up = ["ArrowUp"]
 nudge_selection_down = ["ArrowDown"]
-nudge_selection_left = ["ArrowLeft"]
-nudge_selection_right = ["ArrowRight"]
+nudge_selection_left = ["ArrowLeft", "Shift+PageUp"]
+nudge_selection_right = ["ArrowRight", "Shift+PageDown"]
+
+# Nudge selection (large step)
+nudge_selection_up_large = ["PageUp"]
+nudge_selection_down_large = ["PageDown"]
+
+# Move selection to edges (left/right by default; top/bottom after a vertical nudge)
+move_selection_to_start = ["Home"]
+move_selection_to_end = ["End"]
+
+# Move selection to vertical edges
+move_selection_to_top = ["Ctrl+Home"]
+move_selection_to_bottom = ["Ctrl+End"]
 
 # Delete selection
 delete_selection = ["Delete"]
@@ -607,7 +619,7 @@ clear_preset_5 = []
 Keybindings are specified as strings with modifiers and keys separated by `+`:
 - Simple keys: `"E"`, `"T"`, `"Escape"`, `"F10"`
 - With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`
-- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"+"`, `"-"`, `"="`, `"_"`
+- Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"Home"`, `"End"`, `"PageUp"`, `"PageDown"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"+"`, `"-"`, `"="`, `"_"`
 
 **Supported Modifiers:**
 - `Ctrl` (or `Control`)

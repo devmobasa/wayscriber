@@ -498,7 +498,10 @@ pub fn render_top_strip(
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::EnterTextMode,
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(format_binding_label(
+                "Text",
+                snapshot.binding_hints.text.as_deref(),
+            )),
         });
         x += btn_w + gap;
 
@@ -511,7 +514,10 @@ pub fn render_top_strip(
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::EnterStickyNoteMode,
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(format_binding_label(
+                "Note",
+                snapshot.binding_hints.note.as_deref(),
+            )),
         });
         x += btn_w + gap;
 
@@ -1891,7 +1897,10 @@ pub fn render_side_palette(
                         rect: (bx, by, icon_btn_size, icon_btn_size),
                         event: evt.clone(),
                         kind: HitKind::Click,
-                        tooltip: Some((*label).to_string()),
+                        tooltip: Some(format_binding_label(
+                            label,
+                            snapshot.binding_hints.binding_for_event(evt),
+                        )),
                     });
                 }
             }
@@ -1911,7 +1920,10 @@ pub fn render_side_palette(
                             rect: (x, by, content_width, action_h),
                             event: evt.clone(),
                             kind: HitKind::Click,
-                            tooltip: None,
+                            tooltip: Some(format_binding_label(
+                                label,
+                                snapshot.binding_hints.binding_for_event(evt),
+                            )),
                         });
                     }
                 }
@@ -1943,7 +1955,10 @@ pub fn render_side_palette(
                             rect: (bx, by, action_w, action_h),
                             event: evt.clone(),
                             kind: HitKind::Click,
-                            tooltip: None,
+                            tooltip: Some(format_binding_label(
+                                label,
+                                snapshot.binding_hints.binding_for_event(evt),
+                            )),
                         });
                     }
                 }
@@ -2309,12 +2324,20 @@ pub fn render_side_palette(
 
         let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-        let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![(
-            "Preset toasts",
-            snapshot.show_preset_toasts,
-            ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-            Some("Preset toasts: apply/save/clear."),
-        )];
+        let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![
+            (
+                "Tool preview",
+                snapshot.show_tool_preview,
+                ToolbarEvent::ToggleToolPreview(!snapshot.show_tool_preview),
+                Some("Tool preview: cursor bubble."),
+            ),
+            (
+                "Preset toasts",
+                snapshot.show_preset_toasts,
+                ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+                Some("Preset toasts: apply/save/clear."),
+            ),
+        ];
         if snapshot.layout_mode == crate::config::ToolbarLayoutMode::Advanced {
             toggles.extend_from_slice(&[
                 (
@@ -2417,7 +2440,10 @@ pub fn render_side_palette(
             rect: (x, buttons_y, button_w, button_h),
             event: ToolbarEvent::OpenConfigurator,
             kind: HitKind::Click,
-            tooltip: Some("Config UI".to_string()),
+            tooltip: Some(format_binding_label(
+                "Config UI",
+                snapshot.binding_hints.open_configurator.as_deref(),
+            )),
         });
 
         let file_x = x + button_w + button_gap;

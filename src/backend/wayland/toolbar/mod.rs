@@ -14,6 +14,12 @@ pub use render::{render_side_palette, render_top_strip};
 #[allow(unused_imports)]
 pub use surfaces::ToolbarSurface;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarFocusTarget {
+    Top,
+    Side,
+}
+
 pub fn format_binding_label(label: &str, binding: Option<&str>) -> String {
     if let Some(binding) = binding {
         format!("{label} ({binding})")
