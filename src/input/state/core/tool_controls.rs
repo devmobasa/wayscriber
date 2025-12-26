@@ -439,6 +439,7 @@ impl InputState {
         show_delay_sliders: bool,
         show_marker_opacity_section: bool,
         show_preset_toasts: bool,
+        show_tool_preview: bool,
     ) {
         self.toolbar_top_pinned = top_pinned;
         self.toolbar_side_pinned = side_pinned;
@@ -458,6 +459,7 @@ impl InputState {
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
         self.show_preset_toasts = show_preset_toasts;
+        self.show_tool_preview = show_tool_preview;
         self.apply_toolbar_mode_overrides(layout_mode);
     }
 

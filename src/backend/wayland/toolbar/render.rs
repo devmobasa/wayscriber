@@ -2324,12 +2324,20 @@ pub fn render_side_palette(
 
         let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-        let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![(
-            "Preset toasts",
-            snapshot.show_preset_toasts,
-            ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-            Some("Preset toasts: apply/save/clear."),
-        )];
+        let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![
+            (
+                "Tool preview",
+                snapshot.show_tool_preview,
+                ToolbarEvent::ToggleToolPreview(!snapshot.show_tool_preview),
+                Some("Tool preview: cursor bubble."),
+            ),
+            (
+                "Preset toasts",
+                snapshot.show_preset_toasts,
+                ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+                Some("Preset toasts: apply/save/clear."),
+            ),
+        ];
         if snapshot.layout_mode == crate::config::ToolbarLayoutMode::Advanced {
             toggles.extend_from_slice(&[
                 (

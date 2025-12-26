@@ -360,7 +360,8 @@ impl WaylandState {
             }
 
             if render_ui {
-                if self.has_pointer_focus()
+                if self.input_state.show_tool_preview
+                    && self.has_pointer_focus()
                     && !self.pointer_over_toolbar()
                     && matches!(
                         self.input_state.state,

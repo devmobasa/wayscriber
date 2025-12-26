@@ -278,6 +278,8 @@ pub struct InputState {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toast notifications
     pub show_preset_toasts: bool,
+    /// Whether to show the cursor tool preview bubble
+    pub show_tool_preview: bool,
     /// Pending UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
     /// Last text/note click used for double-click detection
@@ -457,6 +459,7 @@ impl InputState {
             show_delay_sliders: false, // Default to hidden
             show_marker_opacity_section: false,
             show_preset_toasts: true,
+            show_tool_preview: false,
             ui_toast: None,
             last_text_click: None,
             text_edit_target: None,

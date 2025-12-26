@@ -296,6 +296,9 @@ show_marker_opacity_section = false
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
 
+# Show cursor tool preview bubble near the pointer
+show_tool_preview = false
+
 # Initial toolbar offsets (layer-shell/inline)
 # Horizontal offset for the top toolbar
 top_offset = 0.0

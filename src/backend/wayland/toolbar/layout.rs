@@ -371,7 +371,7 @@ impl ToolbarLayoutSpec {
     pub(super) fn side_settings_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
-        let mut toggle_count = 1; // Preset toasts
+        let mut toggle_count = 2; // Tool preview + preset toasts
         if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
             toggle_count += 5; // presets, actions, advanced actions, step section, text controls
         }
@@ -1118,10 +1118,16 @@ pub fn build_side_hits(
     if snapshot.show_settings_section {
         let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-        let mut toggles: Vec<(ToolbarEvent, Option<&str>)> = vec![(
-            ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-            Some("Preset toasts: apply/save/clear."),
-        )];
+        let mut toggles: Vec<(ToolbarEvent, Option<&str>)> = vec![
+            (
+                ToolbarEvent::ToggleToolPreview(!snapshot.show_tool_preview),
+                Some("Tool preview: cursor bubble."),
+            ),
+            (
+                ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
+                Some("Preset toasts: apply/save/clear."),
+            ),
+        ];
         if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
             toggles.extend_from_slice(&[
                 (

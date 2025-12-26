@@ -201,6 +201,7 @@ fn toolbar_toggle_handles_partial_visibility() {
         false, // show_delay_sliders
         false, // show_marker_opacity_section
         true,  // show_preset_toasts
+        false, // show_tool_preview
     );
     assert!(state.toolbar_top_visible());
     assert!(!state.toolbar_side_visible());

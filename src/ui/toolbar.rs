@@ -75,6 +75,8 @@ pub enum ToolbarEvent {
     ToggleTextControls(bool),
     /// Toggle preset action toast notifications
     TogglePresetToasts(bool),
+    /// Toggle cursor tool preview bubble
+    ToggleToolPreview(bool),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),
     /// Toggle the simple-mode shape picker
@@ -178,6 +180,7 @@ pub struct ToolbarSnapshot {
     pub show_text_controls: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
+    pub show_tool_preview: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
     /// Number of preset slots to display
@@ -306,6 +309,7 @@ impl ToolbarSnapshot {
             show_step_section: state.show_step_section,
             show_text_controls: state.show_text_controls,
             show_settings_section: state.show_settings_section,
+            show_tool_preview: state.show_tool_preview,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,
@@ -731,6 +735,15 @@ impl InputState {
             ToolbarEvent::TogglePresetToasts(show) => {
                 if self.show_preset_toasts != show {
                     self.show_preset_toasts = show;
+                    true
+                } else {
+                    false
+                }
+            }
+            ToolbarEvent::ToggleToolPreview(show) => {
+                if self.show_tool_preview != show {
+                    self.show_tool_preview = show;
+                    self.needs_redraw = true;
                     true
                 } else {
                     false
