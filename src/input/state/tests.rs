@@ -311,6 +311,32 @@ fn delete_shapes_by_ids_ignores_missing_ids() {
 }
 
 #[test]
+fn locked_shape_blocks_edit_and_delete() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 50,
+        text: "Locked".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(shape_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![shape_id]);
+    assert!(!state.edit_selected_text());
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    assert!(!state.delete_selection());
+    assert!(state.canvas_set.active_frame().shape(shape_id).is_some());
+}
+
+#[test]
 fn clear_all_removes_shapes_even_when_marked_frozen() {
     let mut state = create_test_input_state();
     state.canvas_set.active_frame_mut().add_shape(Shape::Line {
@@ -329,6 +355,41 @@ fn clear_all_removes_shapes_even_when_marked_frozen() {
     assert!(state.clear_all());
     assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
     assert!(state.needs_redraw);
+}
+
+#[test]
+fn clear_all_skips_locked_shapes() {
+    let mut state = create_test_input_state();
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 40,
+        y: 40,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    assert!(state.clear_all());
+    let frame = state.canvas_set.active_frame();
+    assert!(frame.shape(unlocked_id).is_none());
+    assert!(
+        frame.shape(locked_id).map(|shape| shape.locked).unwrap_or(false),
+        "locked shape should remain after clear_all"
+    );
 }
 
 #[test]
@@ -402,6 +463,134 @@ fn restore_selection_snapshots_reverts_translation() {
         }
         _ => panic!("Expected text shape"),
     }
+}
+
+#[test]
+fn edit_selected_text_commit_updates_and_undo() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 100,
+        y: 100,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+    });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" world");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.on_key_press(Key::Return);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, "Hello world"),
+        _ => panic!("Expected text shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 1);
+
+    if let Some(action) = state.canvas_set.active_frame_mut().undo_last() {
+        state.apply_action_side_effects(&action);
+    }
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, "Hello"),
+        _ => panic!("Expected text shape"),
+    }
+}
+
+#[test]
+fn edit_selected_text_cancel_restores_original() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 80,
+        text: "Original".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+    });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" edit");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.cancel_text_input();
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, "Original"),
+        _ => panic!("Expected text shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 0);
+}
+
+#[test]
+fn enter_key_starts_edit_for_selected_sticky_note() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
+        x: 120,
+        y: 120,
+        text: "Note".to_string(),
+        background: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.on_key_press(Key::Return);
+
+    match &state.state {
+        DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Note"),
+        _ => panic!("Expected text input state"),
+    }
+    assert!(matches!(state.text_input_mode, TextInputMode::StickyNote));
+}
+
+#[test]
+fn enter_key_starts_edit_for_selected_text() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 60,
+        y: 70,
+        text: "Hello".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.on_key_press(Key::Return);
+
+    match &state.state {
+        DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Hello"),
+        _ => panic!("Expected text input state"),
+    }
+    assert!(matches!(state.text_input_mode, TextInputMode::Plain));
+    let edit_id = state.text_edit_target.as_ref().map(|(id, _)| *id);
+    assert_eq!(edit_id, Some(shape_id));
 }
 
 #[test]
@@ -1033,6 +1222,79 @@ fn properties_command_opens_panel() {
 }
 
 #[test]
+fn shape_menu_disables_edit_for_locked_text() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+        x: 15,
+        y: 25,
+        text: "Locked".to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(shape_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![shape_id]);
+    state.open_context_menu((0, 0), vec![shape_id], ContextMenuKind::Shape, Some(shape_id));
+
+    let entries = state.context_menu_entries();
+    let edit_entry = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::EditText))
+        .expect("expected edit entry");
+    assert!(edit_entry.disabled);
+}
+
+#[test]
+fn shape_menu_disables_delete_when_all_locked() {
+    let mut state = create_test_input_state();
+    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 5,
+        y: 5,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 25,
+        y: 25,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(first) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+    if let Some(index) = state.canvas_set.active_frame().find_index(second) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![first, second]);
+    state.open_context_menu(
+        (0, 0),
+        vec![first, second],
+        ContextMenuKind::Shape,
+        Some(first),
+    );
+
+    let entries = state.context_menu_entries();
+    let delete_entry = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::Delete))
+        .expect("expected delete entry");
+    assert!(delete_entry.disabled);
+}
+
+#[test]
 fn keyboard_context_menu_sets_initial_focus() {
     let mut state = create_test_input_state();
     state.toggle_context_menu_via_keyboard();
@@ -1094,6 +1356,49 @@ fn erase_stroke_includes_release_segment() {
     state.on_mouse_release(MouseButton::Left, 100, 10);
 
     assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+}
+
+#[test]
+fn erase_stroke_skips_locked_shapes() {
+    let mut state = create_test_input_state();
+    state.eraser_size = 4.0;
+    state.eraser_mode = EraserMode::Stroke;
+
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 1.0,
+    });
+    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 1.0,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
+    assert!(erased, "eraser should remove unlocked shapes");
+    assert!(state.canvas_set.active_frame().shape(unlocked_id).is_none());
+    assert!(state.canvas_set.active_frame().shape(locked_id).is_some());
 }
 
 #[test]
