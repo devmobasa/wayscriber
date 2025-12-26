@@ -4,15 +4,20 @@ use crate::util;
 use log::warn;
 
 use super::{ContextMenuKind, DrawingState, InputState};
+use super::core::MenuCommand;
 
 impl InputState {
     fn handle_right_click(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
         if !matches!(self.state, DrawingState::Idle) {
-            self.clear_provisional_dirty();
-            self.last_provisional_bounds = None;
-            self.state = DrawingState::Idle;
-            self.needs_redraw = true;
+            if matches!(self.state, DrawingState::TextInput { .. }) {
+                self.cancel_text_input();
+            } else {
+                self.clear_provisional_dirty();
+                self.last_provisional_bounds = None;
+                self.state = DrawingState::Idle;
+                self.needs_redraw = true;
+            }
             return;
         }
         if self.zoom_active() {
@@ -23,6 +28,7 @@ impl InputState {
         }
 
         let hit_shape = self.hit_test_at(x, y);
+        let mut focus_edit = false;
         if let Some(id) = hit_shape {
             if self.modifiers.shift {
                 self.extend_selection([id]);
@@ -30,6 +36,15 @@ impl InputState {
                 self.set_selection(vec![id]);
             }
             let selection = self.selected_shape_ids().to_vec();
+            focus_edit = selection.len() == 1
+                && self
+                    .canvas_set
+                    .active_frame()
+                    .shape(selection[0])
+                    .map(|shape| {
+                        matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
+                    })
+                    .unwrap_or(false);
             self.open_context_menu((x, y), selection, ContextMenuKind::Shape, hit_shape);
         } else {
             self.clear_selection();
@@ -37,6 +52,9 @@ impl InputState {
         }
 
         self.update_context_menu_hover_from_pointer(x, y);
+        if focus_edit {
+            self.focus_context_menu_command(MenuCommand::EditText);
+        }
         self.needs_redraw = true;
     }
 

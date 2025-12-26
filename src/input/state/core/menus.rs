@@ -327,13 +327,14 @@ impl InputState {
         hovered_shape_id: Option<ShapeId>,
     ) -> Vec<ContextMenuEntry> {
         let mut entries = Vec::new();
-        let locked = ids.iter().any(|id| {
-            self.canvas_set
-                .active_frame()
-                .shape(*id)
-                .map(|shape| shape.locked)
-                .unwrap_or(false)
-        });
+        let frame = self.canvas_set.active_frame();
+        let locked = ids
+            .iter()
+            .any(|id| frame.shape(*id).map(|shape| shape.locked).unwrap_or(false));
+        let all_locked = !ids.is_empty()
+            && ids
+                .iter()
+                .all(|id| frame.shape(*id).map(|shape| shape.locked).unwrap_or(false));
 
         if hovered_shape_id.is_some() {
             entries.push(ContextMenuEntry::new(
@@ -349,7 +350,7 @@ impl InputState {
             "Delete",
             Some("Del"),
             false,
-            false,
+            all_locked,
             Some(MenuCommand::Delete),
         ));
         entries.push(ContextMenuEntry::new(
@@ -394,21 +395,21 @@ impl InputState {
 
         if ids.len() == 1 {
             let shape_id = ids[0];
-            let label = self.canvas_set.active_frame().shape(shape_id).and_then(|shape| {
-                match shape.shape {
+            if let Some(drawn) = frame.shape(shape_id) {
+                let label = match drawn.shape {
                     crate::draw::Shape::Text { .. } => Some("Edit Text"),
                     crate::draw::Shape::StickyNote { .. } => Some("Edit Note"),
                     _ => None,
+                };
+                if let Some(label) = label {
+                    entries.push(ContextMenuEntry::new(
+                        label,
+                        Some("Enter"),
+                        false,
+                        drawn.locked,
+                        Some(MenuCommand::EditText),
+                    ));
                 }
-            });
-            if let Some(label) = label {
-                entries.push(ContextMenuEntry::new(
-                    label,
-                    Some("Enter"),
-                    false,
-                    false,
-                    Some(MenuCommand::EditText),
-                ));
             }
         }
 
@@ -509,8 +510,17 @@ impl InputState {
         });
 
         if self.pending_menu_hover_recalc {
-            let (px, py) = self.last_pointer_position;
-            self.update_context_menu_hover_from_pointer_internal(px, py, false);
+            let focus_set = matches!(
+                self.context_menu_state,
+                ContextMenuState::Open {
+                    keyboard_focus: Some(_),
+                    ..
+                }
+            );
+            if !focus_set {
+                let (px, py) = self.last_pointer_position;
+                self.update_context_menu_hover_from_pointer_internal(px, py, false);
+            }
             self.pending_menu_hover_recalc = false;
         }
 
@@ -597,6 +607,23 @@ impl InputState {
                 self.needs_redraw = true;
             }
         }
+    }
+
+    pub(crate) fn focus_context_menu_command(&mut self, command: MenuCommand) -> bool {
+        if !self.is_context_menu_open() {
+            return false;
+        }
+        let entries = self.context_menu_entries();
+        for (index, entry) in entries.iter().enumerate() {
+            if entry.disabled {
+                continue;
+            }
+            if entry.command == Some(command) {
+                self.set_context_menu_focus(Some(index));
+                return true;
+            }
+        }
+        false
     }
 
     /// Closes the currently open context menu.

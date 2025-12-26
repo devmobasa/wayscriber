@@ -134,50 +134,65 @@ impl InputState {
             // No action triggered, handle as text input
             // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
             if matches!(key, Key::Return) && !self.modifiers.shift {
-                if let DrawingState::TextInput { x, y, buffer } = &self.state
-                    && !buffer.is_empty()
-                {
-                    let x = *x;
-                    let y = *y;
-                    let text = buffer.clone();
+                let (x, y, text) = if let DrawingState::TextInput { x, y, buffer } = &self.state {
+                    (*x, *y, buffer.clone())
+                } else {
+                    (0, 0, String::new())
+                };
 
-                    let shape = match self.text_input_mode {
-                        TextInputMode::Plain => Shape::Text {
-                            x,
-                            y,
-                            text,
-                            color: self.current_color,
-                            size: self.current_font_size,
-                            font_descriptor: self.font_descriptor.clone(),
-                            background_enabled: self.text_background_enabled,
-                        },
-                        TextInputMode::StickyNote => Shape::StickyNote {
-                            x,
-                            y,
-                            text,
-                            background: self.current_color,
-                            size: self.current_font_size,
-                            font_descriptor: self.font_descriptor.clone(),
-                        },
-                    };
-                    let bounds = shape.bounding_box();
-
-                    self.clear_text_preview_dirty();
-                    self.last_text_preview_bounds = None;
-
-                    let added = self
-                        .canvas_set
-                        .active_frame_mut()
-                        .try_add_shape(shape, self.max_shapes_per_frame);
-                    if added {
-                        self.dirty_tracker.mark_optional_rect(bounds);
-                        self.needs_redraw = true;
+                if text.is_empty() {
+                    if self.text_edit_target.is_some() {
+                        self.cancel_text_input();
                     } else {
-                        warn!(
-                            "Shape limit ({}) reached; new text not added",
-                            self.max_shapes_per_frame
-                        );
+                        self.clear_text_preview_dirty();
+                        self.last_text_preview_bounds = None;
+                        self.state = DrawingState::Idle;
+                        self.needs_redraw = true;
                     }
+                    return;
+                }
+
+                let shape = match self.text_input_mode {
+                    TextInputMode::Plain => Shape::Text {
+                        x,
+                        y,
+                        text,
+                        color: self.current_color,
+                        size: self.current_font_size,
+                        font_descriptor: self.font_descriptor.clone(),
+                        background_enabled: self.text_background_enabled,
+                    },
+                    TextInputMode::StickyNote => Shape::StickyNote {
+                        x,
+                        y,
+                        text,
+                        background: self.current_color,
+                        size: self.current_font_size,
+                        font_descriptor: self.font_descriptor.clone(),
+                    },
+                };
+                let bounds = shape.bounding_box();
+
+                self.clear_text_preview_dirty();
+                self.last_text_preview_bounds = None;
+
+                if self.commit_text_edit(shape.clone()) {
+                    self.state = DrawingState::Idle;
+                    return;
+                }
+
+                let added = self
+                    .canvas_set
+                    .active_frame_mut()
+                    .try_add_shape(shape, self.max_shapes_per_frame);
+                if added {
+                    self.dirty_tracker.mark_optional_rect(bounds);
+                    self.needs_redraw = true;
+                } else {
+                    warn!(
+                        "Shape limit ({}) reached; new text not added",
+                        self.max_shapes_per_frame
+                    );
                 }
                 self.state = DrawingState::Idle;
                 return;
@@ -273,6 +288,17 @@ impl InputState {
         // Look up action based on keybinding
         if let Some(action) = self.find_action(&key_str) {
             self.handle_action(action);
+            return;
+        }
+
+        if matches!(key, Key::Return)
+            && !self.modifiers.ctrl
+            && !self.modifiers.shift
+            && !self.modifiers.alt
+            && matches!(self.state, DrawingState::Idle)
+            && self.edit_selected_text()
+        {
+            return;
         }
     }
 
@@ -297,10 +323,7 @@ impl InputState {
                 // Exit drawing mode or cancel current action
                 match &self.state {
                     DrawingState::TextInput { .. } => {
-                        self.clear_text_preview_dirty();
-                        self.last_text_preview_bounds = None;
-                        self.state = DrawingState::Idle;
-                        self.needs_redraw = true;
+                        self.cancel_text_input();
                     }
                     DrawingState::Drawing { .. } => {
                         self.clear_provisional_dirty();
@@ -321,6 +344,7 @@ impl InputState {
             Action::EnterTextMode => {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::Plain;
+                    self.text_edit_target = None;
                     self.state = DrawingState::TextInput {
                         x: (self.screen_width / 2) as i32,
                         y: (self.screen_height / 2) as i32,
@@ -334,6 +358,7 @@ impl InputState {
             Action::EnterStickyNoteMode => {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::StickyNote;
+                    self.text_edit_target = None;
                     self.state = DrawingState::TextInput {
                         x: (self.screen_width / 2) as i32,
                         y: (self.screen_height / 2) as i32,
