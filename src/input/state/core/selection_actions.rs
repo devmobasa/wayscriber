@@ -1,4 +1,4 @@
-use super::base::{DrawingState, InputState};
+use super::base::{DrawingState, InputState, TextInputMode};
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{DrawnShape, Shape, ShapeId};
 use crate::util::Rect;
@@ -440,16 +440,30 @@ impl InputState {
         }
         let shape_id = self.selected_shape_ids()[0];
         let frame = self.canvas_set.active_frame();
-        if let Some(shape) = frame.shape(shape_id)
-            && let Shape::Text { x, y, text, .. } = &shape.shape
-        {
-            self.state = DrawingState::TextInput {
-                x: *x,
-                y: *y,
-                buffer: text.clone(),
-            };
-            self.update_text_preview_dirty();
-            return true;
+        if let Some(shape) = frame.shape(shape_id) {
+            match &shape.shape {
+                Shape::Text { x, y, text, .. } => {
+                    self.text_input_mode = TextInputMode::Plain;
+                    self.state = DrawingState::TextInput {
+                        x: *x,
+                        y: *y,
+                        buffer: text.clone(),
+                    };
+                    self.update_text_preview_dirty();
+                    return true;
+                }
+                Shape::StickyNote { x, y, text, .. } => {
+                    self.text_input_mode = TextInputMode::StickyNote;
+                    self.state = DrawingState::TextInput {
+                        x: *x,
+                        y: *y,
+                        buffer: text.clone(),
+                    };
+                    self.update_text_preview_dirty();
+                    return true;
+                }
+                _ => {}
+            }
         }
         false
     }
@@ -483,6 +497,10 @@ impl InputState {
                 *y2 += dy;
             }
             Shape::Text { x, y, .. } => {
+                *x += dx;
+                *y += dy;
+            }
+            Shape::StickyNote { x, y, .. } => {
                 *x += dx;
                 *y += dy;
             }

@@ -2,10 +2,11 @@
 
 use super::color::Color;
 use super::frame::DrawnShape;
-use super::shape::{EraserBrush, EraserKind, Shape};
+use super::shape::{sticky_note_layout, EraserBrush, EraserKind, Shape};
 use crate::config::BoardConfig;
 use crate::input::BoardMode;
 use crate::util;
+use std::f64::consts::{FRAC_PI_2, PI};
 
 /// Background replay context for eraser strokes.
 pub struct EraserReplayContext<'a> {
@@ -156,6 +157,22 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
                 let _ = ctx.stroke();
             }
         }
+        Shape::StickyNote { .. } => {
+            if let Some(bounds) = drawn.shape.bounding_box() {
+                let padding = 4.0;
+                let x = bounds.x as f64 - padding;
+                let y = bounds.y as f64 - padding;
+                let w = bounds.width as f64 + padding * 2.0;
+                let h = bounds.height as f64 + padding * 2.0;
+                ctx.set_source_rgba(glow.r, glow.g, glow.b, glow.a * 0.6);
+                ctx.rectangle(x, y, w, h);
+                let _ = ctx.fill();
+                ctx.set_source_rgba(glow.r, glow.g, glow.b, glow.a);
+                ctx.set_line_width(2.0);
+                ctx.rectangle(x, y, w, h);
+                let _ = ctx.stroke();
+            }
+        }
     }
     let _ = ctx.restore();
 }
@@ -253,6 +270,16 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 *background_enabled,
             );
         }
+        Shape::StickyNote {
+            x,
+            y,
+            text,
+            background,
+            size,
+            font_descriptor,
+        } => {
+            render_sticky_note(ctx, *x, *y, text, *background, *size, font_descriptor);
+        }
         Shape::MarkerStroke {
             points,
             color,
@@ -310,6 +337,16 @@ pub fn render_click_highlight(
     }
 
     let _ = ctx.restore();
+}
+
+fn draw_round_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
+    let radius = r.min(w / 2.0).min(h / 2.0);
+    ctx.new_sub_path();
+    ctx.arc(x + w - radius, y + radius, radius, -FRAC_PI_2, 0.0);
+    ctx.arc(x + w - radius, y + h - radius, radius, 0.0, FRAC_PI_2);
+    ctx.arc(x + radius, y + h - radius, radius, FRAC_PI_2, PI);
+    ctx.arc(x + radius, y + radius, radius, PI, 3.0 * FRAC_PI_2);
+    ctx.close_path();
 }
 
 /// Render freehand stroke (polyline through points)
@@ -674,6 +711,78 @@ pub fn render_text(
     let _ = ctx.fill();
 
     // Restore context state
+    ctx.restore().ok();
+}
+
+/// Renders a sticky note with a filled background and drop shadow.
+#[allow(clippy::too_many_arguments)]
+pub fn render_sticky_note(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    background: Color,
+    size: f64,
+    font_descriptor: &super::FontDescriptor,
+) {
+    if text.is_empty() {
+        return;
+    }
+
+    ctx.save().ok();
+    ctx.set_antialias(cairo::Antialias::Best);
+
+    let layout = pangocairo::functions::create_layout(ctx);
+    let font_desc_str = font_descriptor.to_pango_string(size);
+    let font_desc = pango::FontDescription::from_string(&font_desc_str);
+    layout.set_font_description(Some(&font_desc));
+    layout.set_text(text);
+
+    let (ink_rect, _logical_rect) = layout.extents();
+    let scale = pango::SCALE as f64;
+    let ink_x = ink_rect.x() as f64 / scale;
+    let ink_y = ink_rect.y() as f64 / scale;
+    let ink_width = ink_rect.width() as f64 / scale;
+    let ink_height = ink_rect.height() as f64 / scale;
+    let baseline = layout.baseline() as f64 / scale;
+
+    let base_x = x as f64;
+    let base_y = y as f64 - baseline;
+    let note_layout = sticky_note_layout(base_x, base_y, ink_x, ink_y, ink_width, ink_height, size);
+
+    let shadow_alpha = (0.25 * background.a).clamp(0.0, 0.35);
+    ctx.set_source_rgba(0.0, 0.0, 0.0, shadow_alpha);
+    draw_round_rect(
+        ctx,
+        note_layout.note_x + note_layout.shadow_offset,
+        note_layout.note_y + note_layout.shadow_offset,
+        note_layout.note_width,
+        note_layout.note_height,
+        note_layout.corner_radius,
+    );
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(background.r, background.g, background.b, background.a);
+    draw_round_rect(
+        ctx,
+        note_layout.note_x,
+        note_layout.note_y,
+        note_layout.note_width,
+        note_layout.note_height,
+        note_layout.corner_radius,
+    );
+    let _ = ctx.fill();
+
+    let brightness = background.r * 0.299 + background.g * 0.587 + background.b * 0.114;
+    let (text_r, text_g, text_b) = if brightness > 0.6 {
+        (0.12, 0.12, 0.12)
+    } else {
+        (0.98, 0.98, 0.98)
+    };
+    ctx.move_to(base_x, base_y);
+    ctx.set_source_rgba(text_r, text_g, text_b, 1.0);
+    pangocairo::functions::show_layout(ctx, &layout);
+
     ctx.restore().ok();
 }
 

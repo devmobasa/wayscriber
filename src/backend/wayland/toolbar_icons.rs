@@ -171,6 +171,31 @@ pub fn draw_icon_text(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
+/// Draw a sticky note icon (square with folded corner)
+pub fn draw_icon_note(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.08).max(1.4);
+    let margin = s * 0.18;
+    let fold = s * 0.22;
+
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    ctx.move_to(x + margin, y + margin);
+    ctx.line_to(x + s - margin - fold, y + margin);
+    ctx.line_to(x + s - margin, y + margin + fold);
+    ctx.line_to(x + s - margin, y + s - margin);
+    ctx.line_to(x + margin, y + s - margin);
+    ctx.close_path();
+    let _ = ctx.stroke();
+
+    ctx.move_to(x + s - margin - fold, y + margin);
+    ctx.line_to(x + s - margin - fold, y + margin + fold);
+    ctx.line_to(x + s - margin, y + margin + fold);
+    let _ = ctx.stroke();
+}
+
 /// Draw a highlighter tool icon (cursor with click ripple effect)
 #[allow(dead_code)]
 pub fn draw_icon_highlight(ctx: &Context, x: f64, y: f64, size: f64) {

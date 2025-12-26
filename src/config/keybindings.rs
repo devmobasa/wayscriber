@@ -16,6 +16,7 @@ pub enum Action {
 
     // Drawing actions
     EnterTextMode,
+    EnterStickyNoteMode,
     ClearCanvas,
     Undo,
     Redo,
@@ -211,6 +212,9 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_enter_text_mode")]
     pub enter_text_mode: Vec<String>,
+
+    #[serde(default = "default_enter_sticky_note_mode")]
+    pub enter_sticky_note_mode: Vec<String>,
 
     #[serde(default = "default_clear_canvas")]
     pub clear_canvas: Vec<String>,
@@ -438,6 +442,7 @@ impl Default for KeybindingsConfig {
         Self {
             exit: default_exit(),
             enter_text_mode: default_enter_text_mode(),
+            enter_sticky_note_mode: default_enter_sticky_note_mode(),
             clear_canvas: default_clear_canvas(),
             undo: default_undo(),
             redo: default_redo(),
@@ -545,6 +550,9 @@ impl KeybindingsConfig {
 
         for binding_str in &self.enter_text_mode {
             insert_binding(binding_str, Action::EnterTextMode)?;
+        }
+        for binding_str in &self.enter_sticky_note_mode {
+            insert_binding(binding_str, Action::EnterStickyNoteMode)?;
         }
 
         for binding_str in &self.clear_canvas {
@@ -885,6 +893,10 @@ fn default_exit() -> Vec<String> {
 
 fn default_enter_text_mode() -> Vec<String> {
     vec!["T".to_string()]
+}
+
+fn default_enter_sticky_note_mode() -> Vec<String> {
+    vec!["N".to_string()]
 }
 
 fn default_clear_canvas() -> Vec<String> {

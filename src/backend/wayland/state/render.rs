@@ -302,16 +302,31 @@ impl WaylandState {
                 } else {
                     format!("{}_", buffer)
                 };
-                crate::draw::render_text(
-                    &ctx,
-                    *x,
-                    *y,
-                    &preview_text,
-                    self.input_state.current_color,
-                    self.input_state.current_font_size,
-                    &self.input_state.font_descriptor,
-                    self.input_state.text_background_enabled,
-                );
+                match self.input_state.text_input_mode {
+                    crate::input::TextInputMode::Plain => {
+                        crate::draw::render_text(
+                            &ctx,
+                            *x,
+                            *y,
+                            &preview_text,
+                            self.input_state.current_color,
+                            self.input_state.current_font_size,
+                            &self.input_state.font_descriptor,
+                            self.input_state.text_background_enabled,
+                        );
+                    }
+                    crate::input::TextInputMode::StickyNote => {
+                        crate::draw::render_sticky_note(
+                            &ctx,
+                            *x,
+                            *y,
+                            &preview_text,
+                            self.input_state.current_color,
+                            self.input_state.current_font_size,
+                            &self.input_state.font_descriptor,
+                        );
+                    }
+                }
             }
 
             // Render click highlight overlays before UI so status/help remain legible

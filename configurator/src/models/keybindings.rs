@@ -17,6 +17,7 @@ pub struct KeybindingEntry {
 pub enum KeybindingField {
     Exit,
     EnterTextMode,
+    EnterStickyNoteMode,
     ClearCanvas,
     Undo,
     IncreaseThickness,
@@ -124,6 +125,7 @@ impl KeybindingField {
         vec![
             Self::Exit,
             Self::EnterTextMode,
+            Self::EnterStickyNoteMode,
             Self::ClearCanvas,
             Self::Undo,
             Self::IncreaseThickness,
@@ -184,6 +186,7 @@ impl KeybindingField {
         match self {
             Self::Exit => "Exit",
             Self::EnterTextMode => "Enter text mode",
+            Self::EnterStickyNoteMode => "Enter sticky note mode",
             Self::ClearCanvas => "Clear canvas",
             Self::Undo => "Undo",
             Self::IncreaseThickness => "Increase thickness",
@@ -244,6 +247,7 @@ impl KeybindingField {
         match self {
             Self::Exit => "exit",
             Self::EnterTextMode => "enter_text_mode",
+            Self::EnterStickyNoteMode => "enter_sticky_note_mode",
             Self::ClearCanvas => "clear_canvas",
             Self::Undo => "undo",
             Self::IncreaseThickness => "increase_thickness",
@@ -304,6 +308,7 @@ impl KeybindingField {
         match self {
             Self::Exit => &config.exit,
             Self::EnterTextMode => &config.enter_text_mode,
+            Self::EnterStickyNoteMode => &config.enter_sticky_note_mode,
             Self::ClearCanvas => &config.clear_canvas,
             Self::Undo => &config.undo,
             Self::IncreaseThickness => &config.increase_thickness,
@@ -364,6 +369,7 @@ impl KeybindingField {
         match self {
             Self::Exit => config.exit = value,
             Self::EnterTextMode => config.enter_text_mode = value,
+            Self::EnterStickyNoteMode => config.enter_sticky_note_mode = value,
             Self::ClearCanvas => config.clear_canvas = value,
             Self::Undo => config.undo = value,
             Self::IncreaseThickness => config.increase_thickness = value,

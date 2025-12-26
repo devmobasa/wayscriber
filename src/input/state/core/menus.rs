@@ -394,15 +394,16 @@ impl InputState {
 
         if ids.len() == 1 {
             let shape_id = ids[0];
-            if self
-                .canvas_set
-                .active_frame()
-                .shape(shape_id)
-                .map(|shape| matches!(shape.shape, crate::draw::Shape::Text { .. }))
-                .unwrap_or(false)
-            {
+            let label = self.canvas_set.active_frame().shape(shape_id).and_then(|shape| {
+                match shape.shape {
+                    crate::draw::Shape::Text { .. } => Some("Edit Text"),
+                    crate::draw::Shape::StickyNote { .. } => Some("Edit Note"),
+                    _ => None,
+                }
+            });
+            if let Some(label) = label {
                 entries.push(ContextMenuEntry::new(
-                    "Edit Text",
+                    label,
                     Some("Enter"),
                     false,
                     false,

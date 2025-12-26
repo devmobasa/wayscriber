@@ -150,6 +150,7 @@ impl ToolbarLayoutSpec {
             x += Self::TOP_TEXT_FILL_W + gap;
         }
         x += btn_w + gap; // Text button
+        x += btn_w + gap; // Note button
         if self.layout_mode != ToolbarLayoutMode::Simple {
             x += btn_w + gap; // Clear
             if self.use_icons {
@@ -170,7 +171,8 @@ impl ToolbarLayoutSpec {
         let colors_h = self.side_colors_height(snapshot);
         let show_marker_opacity =
             snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
-        let show_text_controls = snapshot.text_active || snapshot.show_text_controls;
+        let show_text_controls =
+            snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
         let show_actions = snapshot.show_actions_section || snapshot.show_actions_advanced;
         let show_presets =
             snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
@@ -520,6 +522,17 @@ pub fn build_top_hits(
         });
         x += btn_size + gap;
 
+        hits.push(HitRegion {
+            rect: (x, y, btn_size, btn_size),
+            event: ToolbarEvent::EnterStickyNoteMode,
+            kind: HitKind::Click,
+            tooltip: Some(super::format_binding_label(
+                "Note",
+                snapshot.binding_hints.note.as_deref(),
+            )),
+        });
+        x += btn_size + gap;
+
         if !is_simple {
             hits.push(HitRegion {
                 rect: (x, y, btn_size, btn_size),
@@ -641,6 +654,14 @@ pub fn build_top_hits(
         });
         x += btn_w + gap;
 
+        hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::EnterStickyNoteMode,
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+        x += btn_w + gap;
+
         if !is_simple {
             hits.push(HitRegion {
                 rect: (x, y, btn_w, btn_h),
@@ -725,7 +746,8 @@ pub fn build_side_hits(
     let header_btn = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
     let content_width = spec.side_content_width(width);
     let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
-    let show_text_controls = snapshot.text_active || snapshot.show_text_controls;
+    let show_text_controls =
+        snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
     let icons_w = ToolbarLayoutSpec::SIDE_HEADER_TOGGLE_WIDTH;
     hits.push(HitRegion {
         rect: (x, header_y, icons_w, header_btn),
@@ -1172,11 +1194,11 @@ mod tests {
         let mut state = create_test_input_state();
         state.toolbar_use_icons = true;
         let snapshot = snapshot_from_state(&state);
-        assert_eq!(top_size(&snapshot), (758, 80));
+        assert_eq!(top_size(&snapshot), (810, 80));
 
         state.toolbar_use_icons = false;
         let snapshot = snapshot_from_state(&state);
-        assert_eq!(top_size(&snapshot), (866, 56));
+        assert_eq!(top_size(&snapshot), (934, 56));
     }
 
     #[test]

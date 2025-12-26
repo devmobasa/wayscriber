@@ -28,6 +28,7 @@ pub enum ToolbarEvent {
     Redo,
     ClearCanvas,
     EnterTextMode,
+    EnterStickyNoteMode,
     /// Toggle both highlight tool and click highlight together
     ToggleAllHighlight(bool),
     ToggleFreeze,
@@ -132,6 +133,7 @@ pub struct ToolbarSnapshot {
     pub font: FontDescriptor,
     pub font_size: f64,
     pub text_active: bool,
+    pub note_active: bool,
     pub frozen_active: bool,
     pub zoom_active: bool,
     pub zoom_locked: bool,
@@ -202,6 +204,10 @@ impl ToolbarSnapshot {
     ) -> Self {
         let frame = state.canvas_set.active_frame();
         let active_tool = state.active_tool();
+        let text_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
+            && state.text_input_mode == crate::input::TextInputMode::Plain;
+        let note_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
+            && state.text_input_mode == crate::input::TextInputMode::StickyNote;
         let thickness_targets_eraser =
             active_tool == Tool::Eraser || matches!(state.tool_override(), Some(Tool::Eraser));
         let thickness_targets_marker =
@@ -268,7 +274,8 @@ impl ToolbarSnapshot {
             marker_opacity: state.marker_opacity,
             font: state.font_descriptor.clone(),
             font_size: state.current_font_size,
-            text_active: matches!(state.state, crate::input::DrawingState::TextInput { .. }),
+            text_active,
+            note_active,
             frozen_active: state.frozen_active(),
             zoom_active: state.zoom_active(),
             zoom_locked: state.zoom_locked(),
@@ -321,6 +328,7 @@ pub struct ToolbarBindingHints {
     pub eraser: Option<String>,
     pub toggle_eraser_mode: Option<String>,
     pub text: Option<String>,
+    pub note: Option<String>,
     pub clear: Option<String>,
     pub fill: Option<String>,
     pub toggle_highlight: Option<String>,
@@ -385,6 +393,7 @@ impl ToolbarBindingHints {
             eraser: first(&kb.select_eraser_tool),
             toggle_eraser_mode: first(&kb.toggle_eraser_mode),
             text: first(&kb.enter_text_mode),
+            note: first(&kb.enter_sticky_note_mode),
             clear: first(&kb.clear_canvas),
             fill: first(&kb.toggle_fill),
             toggle_highlight: first(&kb.toggle_highlight_tool),
@@ -527,6 +536,11 @@ impl InputState {
             ToolbarEvent::EnterTextMode => {
                 let _ = self.set_tool_override(None);
                 self.toolbar_enter_text_mode();
+                true
+            }
+            ToolbarEvent::EnterStickyNoteMode => {
+                let _ = self.set_tool_override(None);
+                self.toolbar_enter_sticky_note_mode();
                 true
             }
             ToolbarEvent::ToggleAllHighlight(enable) => {

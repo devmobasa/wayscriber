@@ -64,6 +64,13 @@ pub enum DrawingState {
     },
 }
 
+/// Describes which kind of text input is active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextInputMode {
+    Plain,
+    StickyNote,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoomAction {
     In,
@@ -131,6 +138,8 @@ pub struct InputState {
     pub font_descriptor: FontDescriptor,
     /// Whether to draw background behind text
     pub text_background_enabled: bool,
+    /// Which text input style is active (plain vs sticky note)
+    pub text_input_mode: TextInputMode,
     /// Arrowhead length in pixels (from config)
     pub arrow_length: f64,
     /// Arrowhead angle in degrees (from config)
@@ -352,6 +361,7 @@ impl InputState {
             current_font_size: font_size,
             font_descriptor,
             text_background_enabled,
+            text_input_mode: TextInputMode::Plain,
             arrow_length,
             arrow_angle,
             arrow_head_at_end,

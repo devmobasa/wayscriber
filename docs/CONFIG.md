@@ -494,6 +494,9 @@ exit = ["Escape", "Ctrl+Q"]
 # Enter text mode
 enter_text_mode = ["T"]
 
+# Enter sticky note mode
+enter_sticky_note_mode = ["N"]
+
 # Clear all annotations on current canvas
 clear_canvas = ["E"]
 
