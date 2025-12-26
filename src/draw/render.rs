@@ -2,7 +2,7 @@
 
 use super::color::Color;
 use super::frame::DrawnShape;
-use super::shape::{sticky_note_layout, EraserBrush, EraserKind, Shape};
+use super::shape::{sticky_note_layout, sticky_note_text_layout, EraserBrush, EraserKind, Shape};
 use crate::config::BoardConfig;
 use crate::input::BoardMode;
 use crate::util;
@@ -732,23 +732,18 @@ pub fn render_sticky_note(
     ctx.save().ok();
     ctx.set_antialias(cairo::Antialias::Best);
 
-    let layout = pangocairo::functions::create_layout(ctx);
-    let font_desc_str = font_descriptor.to_pango_string(size);
-    let font_desc = pango::FontDescription::from_string(&font_desc_str);
-    layout.set_font_description(Some(&font_desc));
-    layout.set_text(text);
-
-    let (ink_rect, _logical_rect) = layout.extents();
-    let scale = pango::SCALE as f64;
-    let ink_x = ink_rect.x() as f64 / scale;
-    let ink_y = ink_rect.y() as f64 / scale;
-    let ink_width = ink_rect.width() as f64 / scale;
-    let ink_height = ink_rect.height() as f64 / scale;
-    let baseline = layout.baseline() as f64 / scale;
-
+    let text_layout = sticky_note_text_layout(ctx, text, size, font_descriptor);
     let base_x = x as f64;
-    let base_y = y as f64 - baseline;
-    let note_layout = sticky_note_layout(base_x, base_y, ink_x, ink_y, ink_width, ink_height, size);
+    let base_y = y as f64 - text_layout.baseline;
+    let note_layout = sticky_note_layout(
+        base_x,
+        base_y,
+        text_layout.ink_x,
+        text_layout.ink_y,
+        text_layout.ink_width,
+        text_layout.ink_height,
+        size,
+    );
 
     let shadow_alpha = (0.25 * background.a).clamp(0.0, 0.35);
     ctx.set_source_rgba(0.0, 0.0, 0.0, shadow_alpha);
@@ -781,7 +776,7 @@ pub fn render_sticky_note(
     };
     ctx.move_to(base_x, base_y);
     ctx.set_source_rgba(text_r, text_g, text_b, 1.0);
-    pangocairo::functions::show_layout(ctx, &layout);
+    pangocairo::functions::show_layout(ctx, &text_layout.layout);
 
     ctx.restore().ok();
 }

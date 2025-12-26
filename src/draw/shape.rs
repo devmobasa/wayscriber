@@ -457,6 +457,15 @@ pub(crate) struct StickyNoteLayout {
     pub corner_radius: f64,
 }
 
+pub(crate) struct StickyNoteTextLayout {
+    pub layout: pango::Layout,
+    pub ink_x: f64,
+    pub ink_y: f64,
+    pub ink_width: f64,
+    pub ink_height: f64,
+    pub baseline: f64,
+}
+
 pub(crate) fn sticky_note_layout(
     base_x: f64,
     base_y: f64,
@@ -485,6 +494,33 @@ pub(crate) fn sticky_note_layout(
     }
 }
 
+pub(crate) fn sticky_note_text_layout(
+    ctx: &cairo::Context,
+    text: &str,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+) -> StickyNoteTextLayout {
+    let layout = pangocairo::functions::create_layout(ctx);
+    let font_desc_str = font_descriptor.to_pango_string(size);
+    let font_desc = pango::FontDescription::from_string(&font_desc_str);
+    layout.set_font_description(Some(&font_desc));
+    layout.set_text(text);
+
+    let (ink_rect, _logical_rect) = layout.extents();
+    let scale = pango::SCALE as f64;
+
+    let baseline = layout.baseline() as f64 / scale;
+
+    StickyNoteTextLayout {
+        layout,
+        ink_x: ink_rect.x() as f64 / scale,
+        ink_y: ink_rect.y() as f64 / scale,
+        ink_width: ink_rect.width() as f64 / scale,
+        ink_height: ink_rect.height() as f64 / scale,
+        baseline,
+    }
+}
+
 pub(crate) fn bounding_box_for_sticky_note(
     x: i32,
     y: i32,
@@ -501,23 +537,18 @@ pub(crate) fn bounding_box_for_sticky_note(
 
     ctx.set_antialias(cairo::Antialias::Best);
 
-    let layout = pangocairo::functions::create_layout(&ctx);
-    let font_desc_str = font_descriptor.to_pango_string(size);
-    let font_desc = pango::FontDescription::from_string(&font_desc_str);
-    layout.set_font_description(Some(&font_desc));
-    layout.set_text(text);
-
-    let (ink_rect, _logical_rect) = layout.extents();
-    let scale = pango::SCALE as f64;
-    let ink_x = ink_rect.x() as f64 / scale;
-    let ink_y = ink_rect.y() as f64 / scale;
-    let ink_width = ink_rect.width() as f64 / scale;
-    let ink_height = ink_rect.height() as f64 / scale;
-    let baseline = layout.baseline() as f64 / scale;
-
+    let text_layout = sticky_note_text_layout(&ctx, text, size, font_descriptor);
     let base_x = x as f64;
-    let base_y = y as f64 - baseline;
-    let layout = sticky_note_layout(base_x, base_y, ink_x, ink_y, ink_width, ink_height, size);
+    let base_y = y as f64 - text_layout.baseline;
+    let layout = sticky_note_layout(
+        base_x,
+        base_y,
+        text_layout.ink_x,
+        text_layout.ink_y,
+        text_layout.ink_width,
+        text_layout.ink_height,
+        size,
+    );
 
     let note_min_x = layout.note_x;
     let note_min_y = layout.note_y;
