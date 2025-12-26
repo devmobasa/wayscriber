@@ -6,7 +6,9 @@ use log::{info, warn};
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
-use super::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use super::{
+    DrawingState, InputState, TextInputMode, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+};
 
 pub(super) const MAX_TEXT_LENGTH: usize = 10_000;
 impl InputState {
@@ -139,14 +141,24 @@ impl InputState {
                     let y = *y;
                     let text = buffer.clone();
 
-                    let shape = Shape::Text {
-                        x,
-                        y,
-                        text,
-                        color: self.current_color,
-                        size: self.current_font_size,
-                        font_descriptor: self.font_descriptor.clone(),
-                        background_enabled: self.text_background_enabled,
+                    let shape = match self.text_input_mode {
+                        TextInputMode::Plain => Shape::Text {
+                            x,
+                            y,
+                            text,
+                            color: self.current_color,
+                            size: self.current_font_size,
+                            font_descriptor: self.font_descriptor.clone(),
+                            background_enabled: self.text_background_enabled,
+                        },
+                        TextInputMode::StickyNote => Shape::StickyNote {
+                            x,
+                            y,
+                            text,
+                            background: self.current_color,
+                            size: self.current_font_size,
+                            font_descriptor: self.font_descriptor.clone(),
+                        },
                     };
                     let bounds = shape.bounding_box();
 
@@ -308,6 +320,20 @@ impl InputState {
             }
             Action::EnterTextMode => {
                 if matches!(self.state, DrawingState::Idle) {
+                    self.text_input_mode = TextInputMode::Plain;
+                    self.state = DrawingState::TextInput {
+                        x: (self.screen_width / 2) as i32,
+                        y: (self.screen_height / 2) as i32,
+                        buffer: String::new(),
+                    };
+                    self.last_text_preview_bounds = None;
+                    self.update_text_preview_dirty();
+                    self.needs_redraw = true;
+                }
+            }
+            Action::EnterStickyNoteMode => {
+                if matches!(self.state, DrawingState::Idle) {
+                    self.text_input_mode = TextInputMode::StickyNote;
                     self.state = DrawingState::TextInput {
                         x: (self.screen_width / 2) as i32,
                         y: (self.screen_height / 2) as i32,

@@ -125,6 +125,21 @@ pub enum Shape {
         /// Whether to draw background box behind text
         background_enabled: bool,
     },
+    /// Sticky note with filled background and drop shadow
+    StickyNote {
+        /// Baseline X coordinate
+        x: i32,
+        /// Baseline Y coordinate
+        y: i32,
+        /// Note text content
+        text: String,
+        /// Background fill color for the note
+        background: Color,
+        /// Font size in points
+        size: f64,
+        /// Font descriptor (family, weight, style)
+        font_descriptor: FontDescriptor,
+    },
     /// Highlighter-style stroke with translucent ink
     MarkerStroke {
         /// Sequence of (x, y) coordinates traced by the marker
@@ -199,6 +214,14 @@ impl Shape {
                 background_enabled,
                 ..
             } => bounding_box_for_text(*x, *y, text, *size, font_descriptor, *background_enabled),
+            Shape::StickyNote {
+                x,
+                y,
+                text,
+                size,
+                font_descriptor,
+                ..
+            } => bounding_box_for_sticky_note(*x, *y, text, *size, font_descriptor),
             Shape::MarkerStroke { points, thick, .. } => {
                 let inflated = (*thick * 1.35).max(*thick + 1.0);
                 bounding_box_for_points(points, inflated)
@@ -216,6 +239,7 @@ impl Shape {
             Shape::Ellipse { .. } => "Ellipse",
             Shape::Arrow { .. } => "Arrow",
             Shape::Text { .. } => "Text",
+            Shape::StickyNote { .. } => "Sticky Note",
             Shape::MarkerStroke { .. } => "Marker",
             Shape::EraserStroke { .. } => "Eraser",
         }
@@ -415,6 +439,104 @@ pub(crate) fn bounding_box_for_text(
     ensure_positive_rect_f64(min_x, min_y, max_x, max_y)
 }
 
+const NOTE_PADDING_X_RATIO: f64 = 0.55;
+const NOTE_PADDING_Y_RATIO: f64 = 0.4;
+const NOTE_PADDING_MIN_X: f64 = 6.0;
+const NOTE_PADDING_MIN_Y: f64 = 4.0;
+const NOTE_SHADOW_OFFSET_RATIO: f64 = 0.18;
+const NOTE_SHADOW_OFFSET_MIN: f64 = 3.0;
+const NOTE_CORNER_RADIUS_RATIO: f64 = 0.2;
+const NOTE_CORNER_RADIUS_MIN: f64 = 4.0;
+
+pub(crate) struct StickyNoteLayout {
+    pub note_x: f64,
+    pub note_y: f64,
+    pub note_width: f64,
+    pub note_height: f64,
+    pub shadow_offset: f64,
+    pub corner_radius: f64,
+}
+
+pub(crate) fn sticky_note_layout(
+    base_x: f64,
+    base_y: f64,
+    ink_x: f64,
+    ink_y: f64,
+    ink_width: f64,
+    ink_height: f64,
+    size: f64,
+) -> StickyNoteLayout {
+    let padding_x = (size * NOTE_PADDING_X_RATIO).max(NOTE_PADDING_MIN_X);
+    let padding_y = (size * NOTE_PADDING_Y_RATIO).max(NOTE_PADDING_MIN_Y);
+    let note_x = base_x + ink_x - padding_x;
+    let note_y = base_y + ink_y - padding_y;
+    let note_width = ink_width + padding_x * 2.0;
+    let note_height = ink_height + padding_y * 2.0;
+    let shadow_offset = (size * NOTE_SHADOW_OFFSET_RATIO).max(NOTE_SHADOW_OFFSET_MIN);
+    let corner_radius = (size * NOTE_CORNER_RADIUS_RATIO).max(NOTE_CORNER_RADIUS_MIN);
+
+    StickyNoteLayout {
+        note_x,
+        note_y,
+        note_width,
+        note_height,
+        shadow_offset,
+        corner_radius,
+    }
+}
+
+pub(crate) fn bounding_box_for_sticky_note(
+    x: i32,
+    y: i32,
+    text: &str,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+) -> Option<Rect> {
+    if text.is_empty() {
+        return None;
+    }
+
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
+    let ctx = cairo::Context::new(&surface).ok()?;
+
+    ctx.set_antialias(cairo::Antialias::Best);
+
+    let layout = pangocairo::functions::create_layout(&ctx);
+    let font_desc_str = font_descriptor.to_pango_string(size);
+    let font_desc = pango::FontDescription::from_string(&font_desc_str);
+    layout.set_font_description(Some(&font_desc));
+    layout.set_text(text);
+
+    let (ink_rect, _logical_rect) = layout.extents();
+    let scale = pango::SCALE as f64;
+    let ink_x = ink_rect.x() as f64 / scale;
+    let ink_y = ink_rect.y() as f64 / scale;
+    let ink_width = ink_rect.width() as f64 / scale;
+    let ink_height = ink_rect.height() as f64 / scale;
+    let baseline = layout.baseline() as f64 / scale;
+
+    let base_x = x as f64;
+    let base_y = y as f64 - baseline;
+    let layout = sticky_note_layout(base_x, base_y, ink_x, ink_y, ink_width, ink_height, size);
+
+    let note_min_x = layout.note_x;
+    let note_min_y = layout.note_y;
+    let note_max_x = layout.note_x + layout.note_width;
+    let note_max_y = layout.note_y + layout.note_height;
+
+    let shadow_min_x = note_min_x + layout.shadow_offset;
+    let shadow_min_y = note_min_y + layout.shadow_offset;
+    let shadow_max_x = note_max_x + layout.shadow_offset;
+    let shadow_max_y = note_max_y + layout.shadow_offset;
+
+    let min_x = note_min_x.min(shadow_min_x);
+    let min_y = note_min_y.min(shadow_min_y);
+    let max_x = note_max_x.max(shadow_max_x);
+    let max_y = note_max_y.max(shadow_max_y);
+
+    ensure_positive_rect_f64(min_x, min_y, max_x, max_y)
+}
+
 pub(crate) fn bounding_box_for_eraser(points: &[(i32, i32)], diameter: f64) -> Option<Rect> {
     if points.is_empty() {
         return None;
@@ -567,6 +689,24 @@ mod tests {
         };
 
         let rect = shape.bounding_box().expect("text should have bounds");
+        assert!(rect.width > 0);
+        assert!(rect.height > 0);
+        assert!(rect.x <= 10);
+        assert!(rect.y <= 20);
+    }
+
+    #[test]
+    fn sticky_note_bounding_box_is_non_zero() {
+        let shape = Shape::StickyNote {
+            x: 10,
+            y: 20,
+            text: "Note".to_string(),
+            background: WHITE,
+            size: 24.0,
+            font_descriptor: FontDescriptor::default(),
+        };
+
+        let rect = shape.bounding_box().expect("sticky note should have bounds");
         assert!(rect.width > 0);
         assert!(rect.height > 0);
         assert!(rect.x <= 10);

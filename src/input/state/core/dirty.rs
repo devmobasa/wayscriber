@@ -1,7 +1,8 @@
-use super::base::{DrawingState, InputState};
+use super::base::{DrawingState, InputState, TextInputMode};
 use crate::draw::shape::{
     bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_eraser,
-    bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect, bounding_box_for_text,
+    bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
+    bounding_box_for_sticky_note, bounding_box_for_text,
 };
 use crate::input::tool::Tool;
 use crate::util::{self, Rect};
@@ -122,14 +123,23 @@ impl InputState {
         if let DrawingState::TextInput { x, y, buffer } = &self.state {
             let mut preview = buffer.clone();
             preview.push('_');
-            bounding_box_for_text(
-                *x,
-                *y,
-                &preview,
-                self.current_font_size,
-                &self.font_descriptor,
-                self.text_background_enabled,
-            )
+            match self.text_input_mode {
+                TextInputMode::Plain => bounding_box_for_text(
+                    *x,
+                    *y,
+                    &preview,
+                    self.current_font_size,
+                    &self.font_descriptor,
+                    self.text_background_enabled,
+                ),
+                TextInputMode::StickyNote => bounding_box_for_sticky_note(
+                    *x,
+                    *y,
+                    &preview,
+                    self.current_font_size,
+                    &self.font_descriptor,
+                ),
+            }
         } else {
             None
         }

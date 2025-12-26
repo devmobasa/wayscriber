@@ -5,7 +5,9 @@ use crate::config::StatusPosition;
 use crate::input::state::{
     PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UI_TOAST_DURATION_MS, UiToastKind,
 };
-use crate::input::{BoardMode, DrawingState, InputState, Tool, state::ContextMenuState};
+use crate::input::{
+    BoardMode, DrawingState, InputState, TextInputMode, Tool, state::ContextMenuState,
+};
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::time::Instant;
 
@@ -87,7 +89,10 @@ pub fn render_status_bar(
 
     // Determine tool name
     let tool_name = match &input_state.state {
-        DrawingState::TextInput { .. } => "Text",
+        DrawingState::TextInput { .. } => match input_state.text_input_mode {
+            TextInputMode::Plain => "Text",
+            TextInputMode::StickyNote => "Sticky Note",
+        },
         DrawingState::Drawing { tool, .. } => match tool {
             Tool::Select => "Select",
             Tool::Pen => "Pen",
@@ -597,6 +602,10 @@ pub fn render_help_overlay(
                 Row {
                     key: "T",
                     action: "Text mode",
+                },
+                Row {
+                    key: "N",
+                    action: "Sticky note",
                 },
                 Row {
                     key: "D",

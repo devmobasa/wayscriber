@@ -267,6 +267,36 @@ pub fn render_top_strip(
         });
         x += btn_size + gap;
 
+        let note_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+            .unwrap_or(false);
+        draw_button(
+            ctx,
+            x,
+            y,
+            btn_size,
+            btn_size,
+            snapshot.note_active,
+            note_hover,
+        );
+        set_icon_color(ctx, note_hover);
+        toolbar_icons::draw_icon_note(
+            ctx,
+            x + (btn_size - icon_size) / 2.0,
+            y + (btn_size - icon_size) / 2.0,
+            icon_size,
+        );
+        hits.push(HitRegion {
+            rect: (x, y, btn_size, btn_size),
+            event: ToolbarEvent::EnterStickyNoteMode,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                "Note",
+                snapshot.binding_hints.note.as_deref(),
+            )),
+        });
+        x += btn_size + gap;
+
         if !is_simple {
             let clear_hover = hover
                 .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
@@ -467,6 +497,19 @@ pub fn render_top_strip(
         hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::EnterTextMode,
+            kind: HitKind::Click,
+            tooltip: None,
+        });
+        x += btn_w + gap;
+
+        let note_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
+            .unwrap_or(false);
+        draw_button(ctx, x, y, btn_w, btn_h, snapshot.note_active, note_hover);
+        draw_label_center(ctx, x, y, btn_w, btn_h, "Note");
+        hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::EnterStickyNoteMode,
             kind: HitKind::Click,
             tooltip: None,
         });
@@ -690,7 +733,8 @@ pub fn render_side_palette(
     let content_width = spec.side_content_width(width);
     let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
     let mut hover_preset_color: Option<Color> = None;
-    let show_text_controls = snapshot.text_active || snapshot.show_text_controls;
+    let show_text_controls =
+        snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
 
     let basic_colors: &[(Color, &str)] = &[
         (RED, "Red"),

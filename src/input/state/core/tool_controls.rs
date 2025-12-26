@@ -525,4 +525,9 @@ impl InputState {
     pub fn toolbar_enter_text_mode(&mut self) {
         self.handle_action(Action::EnterTextMode);
     }
+
+    /// Wrapper for entering sticky note mode.
+    pub fn toolbar_enter_sticky_note_mode(&mut self) {
+        self.handle_action(Action::EnterStickyNoteMode);
+    }
 }
