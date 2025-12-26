@@ -105,7 +105,8 @@ pub fn render_status_bar(
             Tool::Eraser => "Eraser",
         },
         DrawingState::MovingSelection { .. } => "Move",
-        DrawingState::Idle => match tool {
+        DrawingState::ResizingText { .. } => "Resize",
+        DrawingState::PendingTextClick { .. } | DrawingState::Idle => match tool {
             Tool::Select => "Select",
             Tool::Pen => "Pen",
             Tool::Line => "Line",

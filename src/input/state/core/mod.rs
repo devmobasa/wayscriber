@@ -16,6 +16,7 @@ pub use base::{
     MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction,
     PresetFeedbackKind, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
+pub(crate) use base::TextClickState;
 #[allow(unused_imports)]
 pub use menus::{ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand};
 pub use selection::SelectionState;

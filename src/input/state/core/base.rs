@@ -51,6 +51,17 @@ pub enum DrawingState {
         /// Accumulated text buffer
         buffer: String,
     },
+    /// Pending click on text/note to detect double-click editing
+    PendingTextClick {
+        /// Starting X coordinate
+        x: i32,
+        /// Starting Y coordinate
+        y: i32,
+        /// Active tool when the click began
+        tool: Tool,
+        /// Shape id that was clicked
+        shape_id: ShapeId,
+    },
     /// Selection move mode - user is dragging selected shapes
     MovingSelection {
         /// Last pointer X coordinate applied
@@ -61,6 +72,17 @@ pub enum DrawingState {
         snapshots: Vec<(ShapeId, ShapeSnapshot)>,
         /// Whether any translation has been applied
         moved: bool,
+    },
+    /// Resize text/note wrap width by dragging a handle
+    ResizingText {
+        /// Shape id being resized
+        shape_id: ShapeId,
+        /// Snapshot of the shape prior to resizing (for undo/cancel)
+        snapshot: ShapeSnapshot,
+        /// Text baseline X coordinate (wrap width is measured from here)
+        base_x: i32,
+        /// Font size used to set minimum width
+        size: f64,
     },
 }
 
@@ -121,6 +143,14 @@ pub(crate) struct UiToastState {
     pub kind: UiToastKind,
     pub message: String,
     pub started: Instant,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TextClickState {
+    pub shape_id: ShapeId,
+    pub x: i32,
+    pub y: i32,
+    pub at: Instant,
 }
 
 pub struct InputState {
@@ -250,6 +280,8 @@ pub struct InputState {
     pub show_preset_toasts: bool,
     /// Pending UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
+    /// Last text/note click used for double-click detection
+    pub(crate) last_text_click: Option<TextClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     /// Pending delayed history playback state
@@ -426,6 +458,7 @@ impl InputState {
             show_marker_opacity_section: false,
             show_preset_toasts: true,
             ui_toast: None,
+            last_text_click: None,
             text_edit_target: None,
             pending_history: None,
             context_menu_layout: None,

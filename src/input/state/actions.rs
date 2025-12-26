@@ -343,6 +343,9 @@ impl InputState {
                     DrawingState::TextInput { .. } => {
                         self.cancel_text_input();
                     }
+                    DrawingState::PendingTextClick { .. } => {
+                        self.state = DrawingState::Idle;
+                    }
                     DrawingState::Drawing { .. } => {
                         self.clear_provisional_dirty();
                         self.last_provisional_bounds = None;
@@ -351,6 +354,14 @@ impl InputState {
                     }
                     DrawingState::MovingSelection { snapshots, .. } => {
                         self.restore_selection_from_snapshots(snapshots.clone());
+                        self.state = DrawingState::Idle;
+                    }
+                    DrawingState::ResizingText {
+                        shape_id,
+                        snapshot,
+                        ..
+                    } => {
+                        self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                         self.state = DrawingState::Idle;
                     }
                     DrawingState::Idle => {
