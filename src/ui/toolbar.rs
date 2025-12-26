@@ -431,9 +431,7 @@ impl InputState {
         match event {
             ToolbarEvent::SelectTool(tool) => {
                 if matches!(self.state, crate::input::DrawingState::TextInput { .. }) {
-                    self.clear_text_preview_dirty();
-                    self.last_text_preview_bounds = None;
-                    self.state = crate::input::DrawingState::Idle;
+                    self.cancel_text_input();
                 }
                 let mut changed = self.set_tool_override(Some(tool));
                 if self.toolbar_layout_mode == ToolbarLayoutMode::Simple

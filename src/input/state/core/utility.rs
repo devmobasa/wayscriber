@@ -1,5 +1,6 @@
 use super::base::{
-    InputState, PresetAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState, ZoomAction,
+    DrawingState, InputState, PresetAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
+    ZoomAction,
 };
 use crate::config::Action;
 use crate::config::Config;
@@ -26,6 +27,15 @@ impl InputState {
     pub fn update_screen_dimensions(&mut self, width: u32, height: u32) {
         self.screen_width = width;
         self.screen_height = height;
+    }
+
+    /// Cancels the current text input session and restores any edited shape.
+    pub(crate) fn cancel_text_input(&mut self) {
+        self.cancel_text_edit();
+        self.clear_text_preview_dirty();
+        self.last_text_preview_bounds = None;
+        self.state = DrawingState::Idle;
+        self.needs_redraw = true;
     }
 
     /// Drains pending dirty rectangles for the current surface size.

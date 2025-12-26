@@ -240,6 +240,8 @@ pub struct InputState {
     pub show_preset_toasts: bool,
     /// Pending UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
+    /// Tracks an in-progress text edit target (existing shape to replace)
+    pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     /// Pending delayed history playback state
     pub(super) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
@@ -412,6 +414,7 @@ impl InputState {
             show_marker_opacity_section: false,
             show_preset_toasts: true,
             ui_toast: None,
+            text_edit_target: None,
             pending_history: None,
             context_menu_layout: None,
             spatial_index: None,

@@ -1,6 +1,6 @@
 use super::base::{DrawingState, InputState, TextInputMode};
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
-use crate::draw::{DrawnShape, Shape, ShapeId};
+use crate::draw::{Shape, ShapeId};
 use crate::util::Rect;
 use std::collections::HashSet;
 
@@ -28,6 +28,9 @@ impl InputState {
             let frame = self.canvas_set.active_frame();
             for (index, shape) in frame.shapes.iter().enumerate() {
                 if id_set.contains(&shape.id) {
+                    if shape.locked {
+                        continue;
+                    }
                     dirty.push((shape.id, shape.shape.bounding_box()));
                     removed.push((index, shape.clone()));
                 }
@@ -416,17 +419,33 @@ impl InputState {
     }
 
     pub(crate) fn clear_all(&mut self) -> bool {
-        let frame = self.canvas_set.active_frame_mut();
-        if frame.shapes.is_empty() {
+        let removed = {
+            let frame = self.canvas_set.active_frame();
+            if frame.shapes.is_empty() {
+                return false;
+            }
+            frame
+                .shapes
+                .iter()
+                .cloned()
+                .enumerate()
+                .filter(|(_, shape)| !shape.locked)
+                .collect::<Vec<_>>()
+        };
+        if removed.is_empty() {
             return false;
         }
 
-        let removed: Vec<(usize, DrawnShape)> = frame.shapes.iter().cloned().enumerate().collect();
-        frame.shapes.clear();
-        frame.push_undo_action(
-            UndoAction::Delete { shapes: removed },
-            self.undo_stack_limit,
-        );
+        {
+            let frame = self.canvas_set.active_frame_mut();
+            for (index, _) in removed.iter().rev() {
+                frame.shapes.remove(*index);
+            }
+            frame.push_undo_action(
+                UndoAction::Delete { shapes: removed },
+                self.undo_stack_limit,
+            );
+        }
         self.invalidate_hit_cache();
         self.clear_selection();
         self.dirty_tracker.mark_full();
@@ -439,33 +458,205 @@ impl InputState {
             return false;
         }
         let shape_id = self.selected_shape_ids()[0];
-        let frame = self.canvas_set.active_frame();
-        if let Some(shape) = frame.shape(shape_id) {
-            match &shape.shape {
-                Shape::Text { x, y, text, .. } => {
-                    self.text_input_mode = TextInputMode::Plain;
-                    self.state = DrawingState::TextInput {
-                        x: *x,
-                        y: *y,
-                        buffer: text.clone(),
-                    };
-                    self.update_text_preview_dirty();
-                    return true;
-                }
-                Shape::StickyNote { x, y, text, .. } => {
-                    self.text_input_mode = TextInputMode::StickyNote;
-                    self.state = DrawingState::TextInput {
-                        x: *x,
-                        y: *y,
-                        buffer: text.clone(),
-                    };
-                    self.update_text_preview_dirty();
-                    return true;
-                }
-                _ => {}
+        if let (DrawingState::TextInput { .. }, Some((editing_id, _))) =
+            (&self.state, self.text_edit_target.as_ref())
+        {
+            if *editing_id == shape_id {
+                return true;
             }
         }
-        false
+        let (
+            mode,
+            x,
+            y,
+            text,
+            color,
+            size,
+            font_descriptor,
+            background_enabled,
+            snapshot,
+            locked,
+        ) = {
+            let frame = self.canvas_set.active_frame();
+            let Some(drawn) = frame.shape(shape_id) else {
+                return false;
+            };
+            let snapshot = ShapeSnapshot {
+                shape: drawn.shape.clone(),
+                locked: drawn.locked,
+            };
+            match &drawn.shape {
+                Shape::Text {
+                    x,
+                    y,
+                    text,
+                    color,
+                    size,
+                    font_descriptor,
+                    background_enabled,
+                } => (
+                    TextInputMode::Plain,
+                    *x,
+                    *y,
+                    text.clone(),
+                    *color,
+                    *size,
+                    font_descriptor.clone(),
+                    Some(*background_enabled),
+                    snapshot,
+                    drawn.locked,
+                ),
+                Shape::StickyNote {
+                    x,
+                    y,
+                    text,
+                    background,
+                    size,
+                    font_descriptor,
+                } => (
+                    TextInputMode::StickyNote,
+                    *x,
+                    *y,
+                    text.clone(),
+                    *background,
+                    *size,
+                    font_descriptor.clone(),
+                    None,
+                    snapshot,
+                    drawn.locked,
+                ),
+                _ => return false,
+            }
+        };
+
+        if locked {
+            return false;
+        }
+
+        if matches!(self.state, DrawingState::TextInput { .. }) {
+            self.cancel_text_input();
+        }
+
+        self.text_input_mode = mode;
+        let _ = self.set_color(color);
+        let _ = self.set_font_size(size);
+        let _ = self.set_font_descriptor(font_descriptor);
+        if let Some(background_enabled) = background_enabled
+            && self.text_background_enabled != background_enabled
+        {
+            self.text_background_enabled = background_enabled;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+        }
+
+        self.text_edit_target = Some((shape_id, snapshot));
+        self.state = DrawingState::TextInput {
+            x,
+            y,
+            buffer: text,
+        };
+        self.last_text_preview_bounds = None;
+        self.update_text_preview_dirty();
+
+        let cleared = {
+            let frame = self.canvas_set.active_frame_mut();
+            if let Some(shape) = frame.shape_mut(shape_id) {
+                let before = shape.shape.bounding_box();
+                match &mut shape.shape {
+                    Shape::Text { text, .. } => {
+                        text.clear();
+                    }
+                    Shape::StickyNote { text, .. } => {
+                        text.clear();
+                    }
+                    _ => {}
+                }
+                let after = shape.shape.bounding_box();
+                Some((before, after))
+            } else {
+                None
+            }
+        };
+
+        if let Some((before, after)) = cleared {
+            self.dirty_tracker.mark_optional_rect(before);
+            self.dirty_tracker.mark_optional_rect(after);
+            self.invalidate_hit_cache_for(shape_id);
+            self.needs_redraw = true;
+        } else {
+            self.text_edit_target = None;
+        }
+
+        true
+    }
+
+    pub(crate) fn cancel_text_edit(&mut self) -> bool {
+        let Some((shape_id, snapshot)) = self.text_edit_target.take() else {
+            return false;
+        };
+
+        let restored = {
+            let frame = self.canvas_set.active_frame_mut();
+            if let Some(shape) = frame.shape_mut(shape_id) {
+                let before = shape.shape.bounding_box();
+                shape.shape = snapshot.shape.clone();
+                shape.locked = snapshot.locked;
+                let after = shape.shape.bounding_box();
+                Some((before, after))
+            } else {
+                None
+            }
+        };
+
+        if let Some((before, after)) = restored {
+            self.dirty_tracker.mark_optional_rect(before);
+            self.dirty_tracker.mark_optional_rect(after);
+            self.invalidate_hit_cache_for(shape_id);
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn commit_text_edit(&mut self, new_shape: Shape) -> bool {
+        let Some((shape_id, before_snapshot)) = self.text_edit_target.take() else {
+            return false;
+        };
+
+        let updated = {
+            let frame = self.canvas_set.active_frame_mut();
+            if let Some(shape) = frame.shape_mut(shape_id) {
+                let before_bounds = shape.shape.bounding_box();
+                shape.shape = new_shape;
+                let after_bounds = shape.shape.bounding_box();
+                let after_snapshot = ShapeSnapshot {
+                    shape: shape.shape.clone(),
+                    locked: shape.locked,
+                };
+                frame.push_undo_action(
+                    UndoAction::Modify {
+                        shape_id,
+                        before: before_snapshot,
+                        after: after_snapshot,
+                    },
+                    self.undo_stack_limit,
+                );
+                Some((before_bounds, after_bounds))
+            } else {
+                None
+            }
+        };
+
+        if let Some((before_bounds, after_bounds)) = updated {
+            self.dirty_tracker.mark_optional_rect(before_bounds);
+            self.dirty_tracker.mark_optional_rect(after_bounds);
+            self.invalidate_hit_cache_for(shape_id);
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
     }
 
     fn translate_shape(shape: &mut Shape, dx: i32, dy: i32) {
