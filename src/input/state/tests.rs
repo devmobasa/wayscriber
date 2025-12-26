@@ -1295,6 +1295,48 @@ fn shape_menu_disables_delete_when_all_locked() {
 }
 
 #[test]
+fn shape_menu_allows_delete_when_mixed_lock_state() {
+    let mut state = create_test_input_state();
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 30,
+        y: 30,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    state.set_selection(vec![locked_id, unlocked_id]);
+    state.open_context_menu(
+        (0, 0),
+        vec![locked_id, unlocked_id],
+        ContextMenuKind::Shape,
+        Some(locked_id),
+    );
+
+    let entries = state.context_menu_entries();
+    let delete_entry = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::Delete))
+        .expect("expected delete entry");
+    assert!(!delete_entry.disabled);
+}
+
+#[test]
 fn keyboard_context_menu_sets_initial_focus() {
     let mut state = create_test_input_state();
     state.toggle_context_menu_via_keyboard();
