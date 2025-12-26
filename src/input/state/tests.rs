@@ -393,6 +393,28 @@ fn clear_all_skips_locked_shapes() {
 }
 
 #[test]
+fn clear_all_returns_false_when_all_locked() {
+    let mut state = create_test_input_state();
+    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
+        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    }
+
+    assert!(!state.clear_all());
+    let frame = state.canvas_set.active_frame();
+    assert!(frame.shape(locked_id).is_some());
+}
+
+#[test]
 fn translate_selection_with_undo_moves_shape() {
     let mut state = create_test_input_state();
     let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
@@ -741,6 +763,85 @@ fn edit_selected_text_cancel_restores_original() {
     match &shape.shape {
         Shape::Text { text, .. } => assert_eq!(text, "Original"),
         _ => panic!("Expected text shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 0);
+}
+
+#[test]
+fn edit_selected_sticky_note_commit_updates_and_undo() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
+        x: 100,
+        y: 100,
+        text: "Note".to_string(),
+        background: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+    });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" updated");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.on_key_press(Key::Return);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::StickyNote { text, .. } => assert_eq!(text, "Note updated"),
+        _ => panic!("Expected sticky note shape"),
+    }
+    assert_eq!(frame.undo_stack_len(), 1);
+
+    if let Some(action) = state.canvas_set.active_frame_mut().undo_last() {
+        state.apply_action_side_effects(&action);
+    }
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::StickyNote { text, .. } => assert_eq!(text, "Note"),
+        _ => panic!("Expected sticky note shape"),
+    }
+}
+
+#[test]
+fn edit_selected_sticky_note_cancel_restores_original() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::StickyNote {
+        x: 40,
+        y: 80,
+        text: "Original".to_string(),
+        background: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+    });
+
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+
+    if let DrawingState::TextInput { buffer, .. } = &mut state.state {
+        buffer.push_str(" edit");
+    } else {
+        panic!("Expected text input state");
+    }
+
+    state.cancel_text_input();
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::StickyNote { text, .. } => assert_eq!(text, "Original"),
+        _ => panic!("Expected sticky note shape"),
     }
     assert_eq!(frame.undo_stack_len(), 0);
 }
