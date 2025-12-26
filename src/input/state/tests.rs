@@ -436,6 +436,205 @@ fn translate_selection_with_undo_moves_shape() {
 }
 
 #[test]
+fn move_selection_to_horizontal_edges_uses_screen_bounds() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(200, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 50,
+        y: 20,
+        w: 20,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::MoveSelectionToStart);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape
+            .shape
+            .bounding_box()
+            .expect("rect should have bounds");
+        assert_eq!(bounds.x, 0);
+    }
+
+    state.handle_action(Action::MoveSelectionToEnd);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape
+            .shape
+            .bounding_box()
+            .expect("rect should have bounds");
+        assert_eq!(bounds.x + bounds.width, 200);
+    }
+}
+
+#[test]
+fn move_selection_to_vertical_edges_uses_screen_bounds() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(200, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 50,
+        y: 20,
+        w: 20,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionUp);
+    state.handle_action(Action::MoveSelectionToStart);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape
+            .shape
+            .bounding_box()
+            .expect("rect should have bounds");
+        assert_eq!(bounds.y, 0);
+    }
+
+    state.handle_action(Action::MoveSelectionToEnd);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape
+            .shape
+            .bounding_box()
+            .expect("rect should have bounds");
+        assert_eq!(bounds.y + bounds.height, 100);
+    }
+}
+
+#[test]
+fn move_selection_to_vertical_edges_explicit_actions() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(200, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 50,
+        y: 20,
+        w: 20,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::MoveSelectionToTop);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape
+            .shape
+            .bounding_box()
+            .expect("rect should have bounds");
+        assert_eq!(bounds.y, 0);
+    }
+
+    state.handle_action(Action::MoveSelectionToBottom);
+
+    {
+        let frame = state.canvas_set.active_frame();
+        let shape = frame.shape(shape_id).unwrap();
+        let bounds = shape
+            .shape
+            .bounding_box()
+            .expect("rect should have bounds");
+        assert_eq!(bounds.y + bounds.height, 100);
+    }
+}
+
+#[test]
+fn nudge_selection_large_uses_large_step() {
+    let mut state = create_test_input_state();
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionDownLarge);
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    match &shape.shape {
+        Shape::Rect { y, .. } => assert_eq!(*y, 42),
+        _ => panic!("Expected rect shape"),
+    }
+}
+
+#[test]
+fn nudge_selection_clamps_left_and_top_edges() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(100, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 4,
+        y: 3,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionLeft);
+    state.handle_action(Action::NudgeSelectionUp);
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    let bounds = shape
+        .shape
+        .bounding_box()
+        .expect("rect should have bounds");
+    assert_eq!((bounds.x, bounds.y), (0, 0));
+}
+
+#[test]
+fn nudge_selection_clamps_right_and_bottom_edges() {
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(100, 100);
+    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        x: 90,
+        y: 90,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.handle_action(Action::NudgeSelectionRight);
+    state.handle_action(Action::NudgeSelectionDown);
+
+    let frame = state.canvas_set.active_frame();
+    let shape = frame.shape(shape_id).unwrap();
+    let bounds = shape
+        .shape
+        .bounding_box()
+        .expect("rect should have bounds");
+    assert_eq!((bounds.x + bounds.width, bounds.y + bounds.height), (100, 100));
+}
+
+#[test]
 fn restore_selection_snapshots_reverts_translation() {
     let mut state = create_test_input_state();
     let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
