@@ -105,6 +105,7 @@ pub fn render_status_bar(
             Tool::Eraser => "Eraser",
         },
         DrawingState::MovingSelection { .. } => "Move",
+        DrawingState::Selecting { .. } => "Select",
         DrawingState::ResizingText { .. } => "Resize",
         DrawingState::PendingTextClick { .. } | DrawingState::Idle => match tool {
             Tool::Select => "Select",
@@ -564,6 +565,10 @@ pub fn render_help_overlay(
                     action: "Add to selection",
                 },
                 Row {
+                    key: "Alt+Drag",
+                    action: "Box select",
+                },
+                Row {
                     key: "Delete",
                     action: "Delete selection",
                 },
@@ -578,6 +583,10 @@ pub fn render_help_overlay(
                 Row {
                     key: "Ctrl+Alt+V",
                     action: "Paste selection",
+                },
+                Row {
+                    key: "Ctrl+A",
+                    action: "Select all",
                 },
             ],
             badges: Vec::new(),

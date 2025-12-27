@@ -513,6 +513,9 @@ duplicate_selection = ["Ctrl+D"]
 copy_selection = ["Ctrl+Alt+C"]
 paste_selection = ["Ctrl+Alt+V"]
 
+# Select all annotations
+select_all = ["Ctrl+A"]
+
 # Nudge selection (hold Shift for a larger step)
 nudge_selection_up = ["ArrowUp"]
 nudge_selection_down = ["ArrowDown"]
@@ -523,7 +526,7 @@ nudge_selection_right = ["ArrowRight", "Shift+PageDown"]
 nudge_selection_up_large = ["PageUp"]
 nudge_selection_down_large = ["PageDown"]
 
-# Move selection to edges (left/right by default; top/bottom after a vertical nudge)
+# Move selection to horizontal edges (left/right)
 move_selection_to_start = ["Home"]
 move_selection_to_end = ["End"]
 

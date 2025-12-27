@@ -357,6 +357,7 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Redo | <kbd>Ctrl+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> |
 | Copy selection | <kbd>Ctrl+Alt+C</kbd> |
 | Paste selection | <kbd>Ctrl+Alt+V</kbd> |
+| Select all | <kbd>Ctrl+A</kbd> |
 | Eraser | <kbd>D</kbd> |
 | Toggle eraser mode | <kbd>Ctrl+Shift+E</kbd> |
 | Clear all | <kbd>E</kbd> |

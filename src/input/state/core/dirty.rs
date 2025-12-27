@@ -35,14 +35,13 @@ impl InputState {
     }
 
     fn compute_provisional_bounds(&self, current_x: i32, current_y: i32) -> Option<Rect> {
-        if let DrawingState::Drawing {
-            tool,
-            start_x,
-            start_y,
-            points,
-        } = &self.state
-        {
-            match tool {
+        match &self.state {
+            DrawingState::Drawing {
+                tool,
+                start_x,
+                start_y,
+                points,
+            } => match tool {
                 Tool::Pen => bounding_box_for_points(points, self.current_thickness),
                 Tool::Marker => {
                     let inflated =
@@ -87,9 +86,15 @@ impl InputState {
                 ),
                 Tool::Highlight => None,
                 Tool::Select => None,
-            }
-        } else {
-            None
+            },
+            DrawingState::Selecting { start_x, start_y, .. } => Self::selection_rect_from_points(
+                *start_x,
+                *start_y,
+                current_x,
+                current_y,
+            )
+            .and_then(|rect| rect.inflated(2)),
+            _ => None,
         }
     }
 

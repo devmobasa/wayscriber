@@ -74,6 +74,15 @@ pub enum DrawingState {
         /// Whether any translation has been applied
         moved: bool,
     },
+    /// Selection box mode - user is dragging a rectangle to select shapes
+    Selecting {
+        /// Starting X coordinate
+        start_x: i32,
+        /// Starting Y coordinate
+        start_y: i32,
+        /// Whether the selection should be additive
+        additive: bool,
+    },
     /// Resize text/note wrap width by dragging a handle
     ResizingText {
         /// Shape id being resized

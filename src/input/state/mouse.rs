@@ -12,6 +12,7 @@ use super::{ContextMenuKind, DrawingState, InputState};
 const TEXT_CLICK_DRAG_THRESHOLD: i32 = 4;
 const TEXT_DOUBLE_CLICK_MS: u64 = 400;
 const TEXT_DOUBLE_CLICK_DISTANCE: i32 = 6;
+const SELECTION_DRAG_THRESHOLD: i32 = 4;
 
 impl InputState {
     fn handle_right_click(&mut self, x: i32, y: i32) {
@@ -25,6 +26,12 @@ impl InputState {
                 DrawingState::MovingSelection { snapshots, .. } => {
                     self.restore_selection_from_snapshots(snapshots.clone());
                     self.state = DrawingState::Idle;
+                }
+                DrawingState::Selecting { .. } => {
+                    self.clear_provisional_dirty();
+                    self.last_provisional_bounds = None;
+                    self.state = DrawingState::Idle;
+                    self.needs_redraw = true;
                 }
                 DrawingState::ResizingText {
                     shape_id, snapshot, ..
@@ -129,7 +136,8 @@ impl InputState {
 
                 match &mut self.state {
                     DrawingState::Idle => {
-                        let selection_click = self.modifiers.alt;
+                        let selection_click =
+                            self.modifiers.alt || self.active_tool() == Tool::Select;
                         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
                             let snapshot = {
                                 let frame = self.canvas_set.active_frame();
@@ -179,23 +187,35 @@ impl InputState {
                             }
                         }
                         self.last_text_click = None;
-                        if selection_click && let Some(hit_id) = self.hit_test_at(x, y) {
-                            if !self.selected_shape_ids().contains(&hit_id) {
-                                if self.modifiers.shift {
-                                    self.extend_selection([hit_id]);
-                                } else {
-                                    self.set_selection(vec![hit_id]);
+                        if selection_click {
+                            if let Some(hit_id) = self.hit_test_at(x, y) {
+                                if !self.selected_shape_ids().contains(&hit_id) {
+                                    if self.modifiers.shift {
+                                        self.extend_selection([hit_id]);
+                                    } else {
+                                        self.set_selection(vec![hit_id]);
+                                    }
                                 }
-                            }
 
-                            let snapshots = self.capture_movable_selection_snapshots();
-                            if !snapshots.is_empty() {
-                                self.state = DrawingState::MovingSelection {
-                                    last_x: x,
-                                    last_y: y,
-                                    snapshots,
-                                    moved: false,
+                                let snapshots = self.capture_movable_selection_snapshots();
+                                if !snapshots.is_empty() {
+                                    self.state = DrawingState::MovingSelection {
+                                        last_x: x,
+                                        last_y: y,
+                                        snapshots,
+                                        moved: false,
+                                    };
+                                    return;
+                                }
+                            } else {
+                                self.state = DrawingState::Selecting {
+                                    start_x: x,
+                                    start_y: y,
+                                    additive: self.modifiers.shift,
                                 };
+                                self.last_provisional_bounds = None;
+                                self.update_provisional_dirty(x, y);
+                                self.needs_redraw = true;
                                 return;
                             }
                         }
@@ -221,6 +241,7 @@ impl InputState {
                     }
                     DrawingState::Drawing { .. }
                     | DrawingState::MovingSelection { .. }
+                    | DrawingState::Selecting { .. }
                     | DrawingState::PendingTextClick { .. }
                     | DrawingState::ResizingText { .. } => {}
                 }
@@ -303,6 +324,12 @@ impl InputState {
             return;
         }
 
+        if matches!(self.state, DrawingState::Selecting { .. }) {
+            self.update_provisional_dirty(x, y);
+            self.needs_redraw = true;
+            return;
+        }
+
         if self.is_context_menu_open() {
             self.update_context_menu_hover_from_pointer(x, y);
             return;
@@ -373,6 +400,34 @@ impl InputState {
             } => {
                 if moved {
                     self.push_translation_undo(snapshots);
+                }
+            }
+            DrawingState::Selecting {
+                start_x,
+                start_y,
+                additive,
+            } => {
+                self.clear_provisional_dirty();
+                let dx = (x - start_x).abs();
+                let dy = (y - start_y).abs();
+                if dx < SELECTION_DRAG_THRESHOLD && dy < SELECTION_DRAG_THRESHOLD {
+                    if !additive {
+                        let bounds = self.selection_bounding_box(self.selected_shape_ids());
+                        self.clear_selection();
+                        self.mark_selection_dirty_region(bounds);
+                        self.needs_redraw = true;
+                    }
+                    return;
+                }
+
+                if let Some(rect) = Self::selection_rect_from_points(start_x, start_y, x, y) {
+                    let ids = self.shape_ids_in_rect(rect);
+                    if additive {
+                        self.extend_selection(ids);
+                    } else {
+                        self.set_selection(ids);
+                    }
+                    self.needs_redraw = true;
                 }
             }
             DrawingState::ResizingText {

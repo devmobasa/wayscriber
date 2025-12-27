@@ -27,6 +27,7 @@ pub enum Action {
     DuplicateSelection,
     CopySelection,
     PasteSelection,
+    SelectAll,
     MoveSelectionToFront,
     MoveSelectionToBack,
     NudgeSelectionUp,
@@ -254,6 +255,9 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_paste_selection")]
     pub paste_selection: Vec<String>,
+
+    #[serde(default = "default_select_all")]
+    pub select_all: Vec<String>,
 
     #[serde(default = "default_move_selection_to_front")]
     pub move_selection_to_front: Vec<String>,
@@ -489,6 +493,7 @@ impl Default for KeybindingsConfig {
             duplicate_selection: default_duplicate_selection(),
             copy_selection: default_copy_selection(),
             paste_selection: default_paste_selection(),
+            select_all: default_select_all(),
             move_selection_to_front: default_move_selection_to_front(),
             move_selection_to_back: default_move_selection_to_back(),
             nudge_selection_up: default_nudge_selection_up(),
@@ -638,6 +643,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.paste_selection {
             insert_binding(binding_str, Action::PasteSelection)?;
+        }
+
+        for binding_str in &self.select_all {
+            insert_binding(binding_str, Action::SelectAll)?;
         }
 
         for binding_str in &self.move_selection_to_front {
@@ -1002,6 +1011,10 @@ fn default_copy_selection() -> Vec<String> {
 
 fn default_paste_selection() -> Vec<String> {
     vec!["Ctrl+Alt+V".to_string()]
+}
+
+fn default_select_all() -> Vec<String> {
+    vec!["Ctrl+A".to_string()]
 }
 
 fn default_move_selection_to_front() -> Vec<String> {
@@ -1438,6 +1451,9 @@ mod tests {
             map.get(&capture_selection),
             Some(&Action::CaptureClipboardSelection)
         );
+
+        let select_all = KeyBinding::parse("Ctrl+A").unwrap();
+        assert_eq!(map.get(&select_all), Some(&Action::SelectAll));
 
         let toggle_highlight = KeyBinding::parse("Ctrl+Shift+H").unwrap();
         assert_eq!(
