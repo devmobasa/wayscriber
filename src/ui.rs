@@ -444,6 +444,7 @@ pub fn render_ui_toast(
 
     let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
     let (r, g, b) = match toast.kind {
+        UiToastKind::Info => (0.25, 0.7, 0.9),
         UiToastKind::Warning => (0.92, 0.62, 0.18),
         UiToastKind::Error => (0.9, 0.3, 0.3),
     };
@@ -569,6 +570,14 @@ pub fn render_help_overlay(
                 Row {
                     key: "Ctrl+D",
                     action: "Duplicate selection",
+                },
+                Row {
+                    key: "Ctrl+Alt+C",
+                    action: "Copy selection",
+                },
+                Row {
+                    key: "Ctrl+Alt+V",
+                    action: "Paste selection",
                 },
             ],
             badges: Vec::new(),
@@ -742,6 +751,10 @@ pub fn render_help_overlay(
                 Row {
                     key: "Ctrl+Shift+I",
                     action: "Selection (capture defaults)",
+                },
+                Row {
+                    key: "Ctrl+Alt+O",
+                    action: "Open capture folder",
                 },
             ],
             badges: Vec::new(),

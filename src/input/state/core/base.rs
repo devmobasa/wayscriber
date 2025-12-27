@@ -14,7 +14,7 @@ use super::{
 };
 use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, ShapeId};
+use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{
     modifiers::Modifiers,
@@ -22,6 +22,7 @@ use crate::input::{
 };
 use crate::util::Rect;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Instant;
 /// Current drawing mode state machine.
 ///
@@ -128,6 +129,7 @@ pub enum PresetFeedbackKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiToastKind {
+    Info,
     Warning,
     Error,
 }
@@ -282,6 +284,12 @@ pub struct InputState {
     pub show_tool_preview: bool,
     /// Pending UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
+    /// Copied selection shapes for paste operations
+    pub(super) selection_clipboard: Option<Vec<Shape>>,
+    /// Offset applied to successive paste operations
+    pub(super) clipboard_paste_offset: i32,
+    /// Last capture path (for quick open-folder action)
+    pub(super) last_capture_path: Option<PathBuf>,
     /// Last text/note click used for double-click detection
     pub(crate) last_text_click: Option<TextClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)
@@ -461,6 +469,9 @@ impl InputState {
             show_preset_toasts: true,
             show_tool_preview: false,
             ui_toast: None,
+            selection_clipboard: None,
+            clipboard_paste_offset: 0,
+            last_capture_path: None,
             last_text_click: None,
             text_edit_target: None,
             pending_history: None,

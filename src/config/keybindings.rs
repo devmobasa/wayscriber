@@ -25,6 +25,8 @@ pub enum Action {
     UndoAllDelayed,
     RedoAllDelayed,
     DuplicateSelection,
+    CopySelection,
+    PasteSelection,
     MoveSelectionToFront,
     MoveSelectionToBack,
     NudgeSelectionUp,
@@ -93,6 +95,7 @@ pub enum Action {
     CaptureFileSelection,
     CaptureClipboardRegion,
     CaptureFileRegion,
+    OpenCaptureFolder,
     ToggleFrozenMode,
     ZoomIn,
     ZoomOut,
@@ -245,6 +248,12 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_duplicate_selection")]
     pub duplicate_selection: Vec<String>,
+
+    #[serde(default = "default_copy_selection")]
+    pub copy_selection: Vec<String>,
+
+    #[serde(default = "default_paste_selection")]
+    pub paste_selection: Vec<String>,
 
     #[serde(default = "default_move_selection_to_front")]
     pub move_selection_to_front: Vec<String>,
@@ -411,6 +420,9 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_capture_file_region")]
     pub capture_file_region: Vec<String>,
 
+    #[serde(default = "default_open_capture_folder")]
+    pub open_capture_folder: Vec<String>,
+
     #[serde(default = "default_toggle_frozen_mode")]
     pub toggle_frozen_mode: Vec<String>,
 
@@ -475,6 +487,8 @@ impl Default for KeybindingsConfig {
             undo_all_delayed: Vec::new(),
             redo_all_delayed: Vec::new(),
             duplicate_selection: default_duplicate_selection(),
+            copy_selection: default_copy_selection(),
+            paste_selection: default_paste_selection(),
             move_selection_to_front: default_move_selection_to_front(),
             move_selection_to_back: default_move_selection_to_back(),
             nudge_selection_up: default_nudge_selection_up(),
@@ -531,6 +545,7 @@ impl Default for KeybindingsConfig {
             capture_file_selection: default_capture_file_selection(),
             capture_clipboard_region: default_capture_clipboard_region(),
             capture_file_region: default_capture_file_region(),
+            open_capture_folder: default_open_capture_folder(),
             toggle_frozen_mode: default_toggle_frozen_mode(),
             zoom_in: default_zoom_in(),
             zoom_out: default_zoom_out(),
@@ -615,6 +630,14 @@ impl KeybindingsConfig {
 
         for binding_str in &self.duplicate_selection {
             insert_binding(binding_str, Action::DuplicateSelection)?;
+        }
+
+        for binding_str in &self.copy_selection {
+            insert_binding(binding_str, Action::CopySelection)?;
+        }
+
+        for binding_str in &self.paste_selection {
+            insert_binding(binding_str, Action::PasteSelection)?;
         }
 
         for binding_str in &self.move_selection_to_front {
@@ -863,6 +886,10 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::CaptureFileRegion)?;
         }
 
+        for binding_str in &self.open_capture_folder {
+            insert_binding(binding_str, Action::OpenCaptureFolder)?;
+        }
+
         for binding_str in &self.toggle_frozen_mode {
             insert_binding(binding_str, Action::ToggleFrozenMode)?;
         }
@@ -967,6 +994,14 @@ fn default_redo() -> Vec<String> {
 
 fn default_duplicate_selection() -> Vec<String> {
     vec!["Ctrl+D".to_string()]
+}
+
+fn default_copy_selection() -> Vec<String> {
+    vec!["Ctrl+Alt+C".to_string()]
+}
+
+fn default_paste_selection() -> Vec<String> {
+    vec!["Ctrl+Alt+V".to_string()]
 }
 
 fn default_move_selection_to_front() -> Vec<String> {
@@ -1193,6 +1228,10 @@ fn default_capture_file_region() -> Vec<String> {
     vec!["Ctrl+Shift+6".to_string()]
 }
 
+fn default_open_capture_folder() -> Vec<String> {
+    vec!["Ctrl+Alt+O".to_string()]
+}
+
 fn default_toggle_frozen_mode() -> Vec<String> {
     vec!["Ctrl+Shift+F".to_string()]
 }
@@ -1390,6 +1429,15 @@ mod tests {
 
         let move_back = KeyBinding::parse("[").unwrap();
         assert_eq!(map.get(&move_back), Some(&Action::MoveSelectionToBack));
+
+        let copy_selection = KeyBinding::parse("Ctrl+Alt+C").unwrap();
+        assert_eq!(map.get(&copy_selection), Some(&Action::CopySelection));
+
+        let capture_selection = KeyBinding::parse("Ctrl+Shift+C").unwrap();
+        assert_eq!(
+            map.get(&capture_selection),
+            Some(&Action::CaptureClipboardSelection)
+        );
 
         let toggle_highlight = KeyBinding::parse("Ctrl+Shift+H").unwrap();
         assert_eq!(

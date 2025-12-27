@@ -450,6 +450,30 @@ impl InputState {
             Action::RedoAllDelayed => {
                 self.start_redo_all_delayed(self.redo_all_delay_ms);
             }
+            Action::CopySelection => {
+                let copied = self.copy_selection();
+                if copied > 0 {
+                    info!("Copied selection ({} shape(s))", copied);
+                } else if self.has_selection() {
+                    self.set_ui_toast(
+                        UiToastKind::Warning,
+                        "No unlocked shapes to copy; clipboard unchanged.",
+                    );
+                } else {
+                    self.set_ui_toast(
+                        UiToastKind::Warning,
+                        "No selection to copy; clipboard unchanged.",
+                    );
+                }
+            }
+            Action::PasteSelection => {
+                let pasted = self.paste_selection();
+                if pasted > 0 {
+                    info!("Pasted selection ({} shape(s))", pasted);
+                } else if self.selection_clipboard_is_empty() {
+                    self.set_ui_toast(UiToastKind::Warning, "Clipboard is empty.");
+                }
+            }
             Action::DuplicateSelection => {
                 if self.duplicate_selection() {
                     info!("Duplicated selection");
@@ -711,6 +735,9 @@ impl InputState {
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();
+            }
+            Action::OpenCaptureFolder => {
+                self.open_capture_folder();
             }
             Action::SetColorRed => {
                 let _ = self.set_color(util::key_to_color('r').unwrap());
