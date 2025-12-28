@@ -120,7 +120,7 @@ impl PointerHandler for WaylandState {
                     if (on_toolbar || inline_active) && !self.is_move_dragging() {
                         self.end_toolbar_move_drag();
                     }
-                    update_cursor(false, conn, self);
+                    self.current_pointer_shape = None;
                 }
                 PointerEventKind::Motion { .. } => {
                     if self.is_move_dragging()
