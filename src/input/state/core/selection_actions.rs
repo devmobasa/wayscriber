@@ -232,7 +232,7 @@ impl InputState {
     pub(crate) fn selection_clipboard_is_empty(&self) -> bool {
         self.selection_clipboard
             .as_ref()
-            .map_or(true, |clipboard| clipboard.is_empty())
+            .is_none_or(|clipboard| clipboard.is_empty())
     }
 
     pub(crate) fn paste_selection(&mut self) -> usize {

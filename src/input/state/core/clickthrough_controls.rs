@@ -1,4 +1,4 @@
-use super::base::{DrawingState, InputState};
+use super::base::InputState;
 use crate::input::tool::Tool;
 use crate::util::Rect;
 

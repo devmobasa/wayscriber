@@ -652,6 +652,10 @@ pub fn render_help_overlay(
             title: "Drawing Tools",
             rows: vec![
                 Row {
+                    key: "V",
+                    action: "Select tool",
+                },
+                Row {
                     key: "F / Drag",
                     action: "Freehand pen",
                 },

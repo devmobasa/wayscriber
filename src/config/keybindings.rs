@@ -50,6 +50,7 @@ pub enum Action {
     SelectMarkerTool,
     SelectEraserTool,
     ToggleEraserMode,
+    SelectCursorTool,
     SelectPenTool,
     SelectLineTool,
     SelectRectTool,
@@ -324,6 +325,9 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_select_pen_tool")]
     pub select_pen_tool: Vec<String>,
 
+    #[serde(default = "default_select_cursor_tool")]
+    pub select_cursor_tool: Vec<String>,
+
     #[serde(default = "default_select_line_tool")]
     pub select_line_tool: Vec<String>,
 
@@ -523,6 +527,7 @@ impl Default for KeybindingsConfig {
             select_eraser_tool: default_select_eraser_tool(),
             toggle_eraser_mode: default_toggle_eraser_mode(),
             select_pen_tool: default_select_pen_tool(),
+            select_cursor_tool: default_select_cursor_tool(),
             select_line_tool: default_select_line_tool(),
             select_rect_tool: default_select_rect_tool(),
             select_ellipse_tool: default_select_ellipse_tool(),
@@ -741,6 +746,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.select_pen_tool {
             insert_binding(binding_str, Action::SelectPenTool)?;
+        }
+
+        for binding_str in &self.select_cursor_tool {
+            insert_binding(binding_str, Action::SelectCursorTool)?;
         }
 
         for binding_str in &self.select_line_tool {
@@ -1117,6 +1126,10 @@ fn default_toggle_eraser_mode() -> Vec<String> {
 
 fn default_select_pen_tool() -> Vec<String> {
     vec!["F".to_string()]
+}
+
+fn default_select_cursor_tool() -> Vec<String> {
+    vec!["V".to_string()]
 }
 
 fn default_select_line_tool() -> Vec<String> {
