@@ -30,8 +30,9 @@ impl PointerHandler for WaylandState {
                 if this.current_pointer_shape.map_or(true, |s| s != icon) {
                     if let Err(err) = pointer.set_cursor(conn, icon) {
                         warn!("Failed to set cursor icon: {}", err);
+                    } else {
+                        this.current_pointer_shape = Some(icon);
                     }
-                    this.current_pointer_shape = Some(icon);
                 }
             }
         };
