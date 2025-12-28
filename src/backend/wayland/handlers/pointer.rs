@@ -27,7 +27,7 @@ impl PointerHandler for WaylandState {
                 } else {
                     CursorIcon::Crosshair
                 };
-                if this.current_pointer_shape.map_or(true, |s| s != icon) {
+                if this.current_pointer_shape != Some(icon) {
                     if let Err(err) = pointer.set_cursor(conn, icon) {
                         warn!("Failed to set cursor icon: {}", err);
                     } else {
