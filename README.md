@@ -504,16 +504,19 @@ ui_animation_fps = 30
 
 Pull requests and bug reports welcome. Priority areas:
 - Compositor compatibility testing
+- Click-through option ( while overlay is active, an option to click around )
 - Multi-monitor support
 - New drawing tools
 
 ### Development
 
 ```bash
-cargo fmt
-cargo clippy
-cargo test
 cargo run -- --active
+```
+
+Before submitting a PR, run the local CI script to ensure all checks pass:
+```bash
+./tools/lint-and-test.sh  # runs fmt, clippy, and tests (stops on first failure)
 ```
 
 Use `./tools/fetch-all-deps.sh` to prefetch crates before offline builds.
