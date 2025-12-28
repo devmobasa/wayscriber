@@ -1,21 +1,11 @@
 use super::base::{DrawingState, InputState};
 use crate::input::tool::Tool;
+use crate::util::Rect;
+
+const CLICKTHROUGH_HOTSPOT_SIZE: i32 = 32;
+const CLICKTHROUGH_HOTSPOT_MARGIN: i32 = 12;
 
 impl InputState {
-    /// Toggle click-through with Select tool semantics.
-    pub fn toggle_clickthrough_mode(&mut self) {
-        if self.tool_override() != Some(Tool::Select) {
-            if matches!(self.state, DrawingState::TextInput { .. }) {
-                self.cancel_text_input();
-            }
-            self.set_tool_override(Some(Tool::Select));
-            self.clear_hold_to_draw();
-            self.clear_clickthrough_override();
-        } else {
-            self.toggle_clickthrough_override();
-        }
-    }
-
     /// Returns whether the hold-to-draw modifier is active.
     pub fn hold_to_draw_active(&self) -> bool {
         !self.hold_to_draw_keys.is_empty()
@@ -24,6 +14,24 @@ impl InputState {
     /// Returns whether click-through is currently active on the main overlay.
     pub fn clickthrough_active(&self) -> bool {
         self.clickthrough_eligible() && !self.clickthrough_override && !self.hold_to_draw_active()
+    }
+
+    /// Returns the click-through escape hatch area (bottom-right hot corner).
+    pub fn clickthrough_hotspot_rect(&self) -> Option<Rect> {
+        let screen_width = self.screen_width as i32;
+        let screen_height = self.screen_height as i32;
+        if screen_width <= CLICKTHROUGH_HOTSPOT_MARGIN
+            || screen_height <= CLICKTHROUGH_HOTSPOT_MARGIN
+        {
+            return None;
+        }
+
+        let size = CLICKTHROUGH_HOTSPOT_SIZE
+            .min(screen_width - CLICKTHROUGH_HOTSPOT_MARGIN)
+            .min(screen_height - CLICKTHROUGH_HOTSPOT_MARGIN);
+        let x = screen_width - CLICKTHROUGH_HOTSPOT_MARGIN - size;
+        let y = screen_height - CLICKTHROUGH_HOTSPOT_MARGIN - size;
+        Rect::new(x, y, size, size)
     }
 
     /// Returns whether click-through is eligible but overridden by interactive mode.

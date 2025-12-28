@@ -87,13 +87,10 @@ impl InputState {
                 Tool::Highlight => None,
                 Tool::Select => None,
             },
-            DrawingState::Selecting { start_x, start_y, .. } => Self::selection_rect_from_points(
-                *start_x,
-                *start_y,
-                current_x,
-                current_y,
-            )
-            .and_then(|rect| rect.inflated(2)),
+            DrawingState::Selecting {
+                start_x, start_y, ..
+            } => Self::selection_rect_from_points(*start_x, *start_y, current_x, current_y)
+                .and_then(|rect| rect.inflated(2)),
             _ => None,
         }
     }

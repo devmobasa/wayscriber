@@ -5,8 +5,8 @@ use super::base::{
 use crate::config::Action;
 use crate::config::Config;
 use crate::util::Rect;
-use std::path::Path;
 use std::io::ErrorKind;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 

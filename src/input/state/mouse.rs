@@ -115,6 +115,10 @@ impl InputState {
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
         self.close_properties_panel();
+        if self.clickthrough_active() && matches!(button, MouseButton::Left) {
+            self.set_tool_override(Some(Tool::Pen));
+            return;
+        }
         match button {
             MouseButton::Right => {
                 self.handle_right_click(x, y);

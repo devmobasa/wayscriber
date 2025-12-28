@@ -409,6 +409,7 @@ impl WaylandState {
                         height,
                     );
                 }
+                crate::ui::render_clickthrough_hotspot(&ctx, &self.input_state);
 
                 // Render help overlay if toggled
                 if self.input_state.show_help {

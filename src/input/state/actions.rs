@@ -709,15 +709,23 @@ impl InputState {
                 info!("{}", message);
             }
             Action::ToggleClickthrough => {
-                self.toggle_clickthrough_mode();
-                let message = if self.clickthrough_overridden() {
-                    "Click-through disabled (interactive mode)"
-                } else if self.clickthrough_active() {
-                    "Click-through enabled"
+                if self.tool_override() != Some(Tool::Select) {
+                    if matches!(self.state, DrawingState::TextInput { .. }) {
+                        self.cancel_text_input();
+                    }
+                    self.set_tool_override(Some(Tool::Select));
+                    self.clear_hold_to_draw();
+                    self.clear_clickthrough_override();
+                    info!("Click-through enabled (Select tool)");
                 } else {
-                    "Click-through unavailable"
-                };
-                info!("{}", message);
+                    let interactive = self.toggle_clickthrough_override();
+                    let message = if interactive {
+                        "Click-through disabled (interactive mode)"
+                    } else {
+                        "Click-through enabled"
+                    };
+                    info!("{}", message);
+                }
             }
             Action::HoldToDraw => {
                 // Hold-to-draw is handled on key press/release.

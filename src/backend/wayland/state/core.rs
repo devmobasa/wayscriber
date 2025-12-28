@@ -153,7 +153,13 @@ impl WaylandState {
         }
         self.data.overlay_clickthrough = clickthrough;
         if let Some(wl_surface) = self.surface.wl_surface().cloned() {
-            set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough);
+            let hotspot =
+                if clickthrough && self.data.overlay_suppression == OverlaySuppression::None {
+                    self.input_state.clickthrough_hotspot_rect()
+                } else {
+                    None
+                };
+            set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough, hotspot);
         }
         self.toolbar
             .set_suppressed(&self.compositor_state, clickthrough);

@@ -19,10 +19,7 @@ fn selection_rect(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> Option<
 }
 
 fn rects_intersect(a: Rect, b: Rect) -> bool {
-    a.x < b.x + b.width
-        && a.x + a.width > b.x
-        && a.y < b.y + b.height
-        && a.y + a.height > b.y
+    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
 
 impl InputState {
