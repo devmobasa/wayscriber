@@ -142,6 +142,13 @@ pub fn render_status_bar(
     } else {
         ""
     };
+    let clickthrough_badge = if input_state.clickthrough_active() {
+        " [Click-through]"
+    } else if input_state.clickthrough_overridden() {
+        " [Interactive]"
+    } else {
+        ""
+    };
 
     let frozen_badge = if input_state.frozen_active() {
         "[FROZEN] "
@@ -160,7 +167,7 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
+        "{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}{}  F1=Help",
         frozen_badge,
         zoom_badge,
         mode_badge,
@@ -169,7 +176,8 @@ pub fn render_status_bar(
         tool_name,
         font_size as i32,
         highlight_badge,
-        highlight_tool_badge
+        highlight_tool_badge,
+        clickthrough_badge
     );
 
     // Set font
@@ -706,6 +714,14 @@ pub fn render_help_overlay(
                 Row {
                     key: "Ctrl+Shift+H",
                     action: "Toggle click highlight",
+                },
+                Row {
+                    key: "Alt+D (Hold)",
+                    action: "Hold to draw (disable click-through)",
+                },
+                Row {
+                    key: "Ctrl+Alt+I",
+                    action: "Toggle click-through override",
                 },
                 Row {
                     key: "Right Click / Shift+F10",

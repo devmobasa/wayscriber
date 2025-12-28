@@ -71,6 +71,8 @@ pub enum Action {
     ToggleToolbar,
     ToggleHighlightTool,
     ToggleFill,
+    ToggleClickthrough,
+    HoldToDraw,
     OpenContextMenu,
 
     // Configurator
@@ -359,6 +361,12 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_toggle_click_highlight")]
     pub toggle_click_highlight: Vec<String>,
 
+    #[serde(default = "default_toggle_clickthrough")]
+    pub toggle_clickthrough: Vec<String>,
+
+    #[serde(default = "default_hold_to_draw")]
+    pub hold_to_draw: Vec<String>,
+
     #[serde(default = "default_toggle_toolbar")]
     pub toggle_toolbar: Vec<String>,
 
@@ -528,6 +536,8 @@ impl Default for KeybindingsConfig {
             toggle_help: default_toggle_help(),
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
+            toggle_clickthrough: default_toggle_clickthrough(),
+            hold_to_draw: default_hold_to_draw(),
             toggle_toolbar: default_toggle_toolbar(),
             toggle_fill: default_toggle_fill(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
@@ -805,6 +815,14 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_click_highlight {
             insert_binding(binding_str, Action::ToggleClickHighlight)?;
+        }
+
+        for binding_str in &self.toggle_clickthrough {
+            insert_binding(binding_str, Action::ToggleClickthrough)?;
+        }
+
+        for binding_str in &self.hold_to_draw {
+            insert_binding(binding_str, Action::HoldToDraw)?;
         }
 
         for binding_str in &self.toggle_toolbar {
@@ -1153,6 +1171,14 @@ fn default_toggle_click_highlight() -> Vec<String> {
     vec!["Ctrl+Shift+H".to_string()]
 }
 
+fn default_toggle_clickthrough() -> Vec<String> {
+    vec!["Ctrl+Alt+I".to_string()]
+}
+
+fn default_hold_to_draw() -> Vec<String> {
+    vec!["Alt+D".to_string()]
+}
+
 fn default_toggle_toolbar() -> Vec<String> {
     vec!["F2".to_string(), "F9".to_string()]
 }
@@ -1460,6 +1486,15 @@ mod tests {
             map.get(&toggle_highlight),
             Some(&Action::ToggleClickHighlight)
         );
+
+        let toggle_clickthrough = KeyBinding::parse("Ctrl+Alt+I").unwrap();
+        assert_eq!(
+            map.get(&toggle_clickthrough),
+            Some(&Action::ToggleClickthrough)
+        );
+
+        let hold_to_draw = KeyBinding::parse("Alt+D").unwrap();
+        assert_eq!(map.get(&hold_to_draw), Some(&Action::HoldToDraw));
 
         let toggle_highlight_tool = KeyBinding::parse("Ctrl+Alt+H").unwrap();
         assert_eq!(

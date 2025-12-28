@@ -1518,6 +1518,36 @@ fn toggle_click_highlight_action_changes_state() {
 }
 
 #[test]
+fn toggle_clickthrough_action_changes_state() {
+    let mut state = create_test_input_state();
+    state.set_tool_override(Some(Tool::Select));
+    assert!(!state.clickthrough_overridden());
+
+    state.handle_action(Action::ToggleClickthrough);
+    assert!(state.clickthrough_overridden());
+    assert!(state.needs_redraw);
+
+    state.needs_redraw = false;
+    state.handle_action(Action::ToggleClickthrough);
+    assert!(!state.clickthrough_overridden());
+    assert!(state.needs_redraw);
+}
+
+#[test]
+fn hold_to_draw_tracks_press_and_release() {
+    let mut state = create_test_input_state();
+    assert!(!state.hold_to_draw_active());
+
+    state.on_key_press(Key::Alt);
+    state.on_key_press(Key::Char('D'));
+    assert!(state.hold_to_draw_active());
+
+    state.on_key_release(Key::Char('D'));
+    state.on_key_release(Key::Alt);
+    assert!(!state.hold_to_draw_active());
+}
+
+#[test]
 fn highlight_tool_prevents_drawing() {
     let mut state = create_test_input_state();
     assert_eq!(state.active_tool(), Tool::Pen);

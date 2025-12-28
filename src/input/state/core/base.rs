@@ -21,7 +21,7 @@ use crate::input::{
     tool::{EraserMode, Tool},
 };
 use crate::util::Rect;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
 /// Current drawing mode state machine.
@@ -253,6 +253,10 @@ pub struct InputState {
     pub(crate) click_highlight: ClickHighlightState,
     /// Optional tool override independent of modifier keys
     pub(super) tool_override: Option<Tool>,
+    /// Whether click-through is forced off (interactive mode)
+    pub(super) clickthrough_override: bool,
+    /// Active hold-to-draw keys (temporarily disables click-through)
+    pub(super) hold_to_draw_keys: HashSet<String>,
     /// Current selection information
     pub selection_state: SelectionState,
     /// Last axis used for selection nudges (used to resolve Home/End axis)
@@ -458,6 +462,8 @@ impl InputState {
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
+            clickthrough_override: false,
+            hold_to_draw_keys: HashSet::new(),
             selection_state: SelectionState::None,
             last_selection_axis: None,
             context_menu_state: ContextMenuState::Hidden,
@@ -526,6 +532,7 @@ impl InputState {
         self.modifiers.ctrl = false;
         self.modifiers.alt = false;
         self.modifiers.tab = false;
+        self.clear_hold_to_draw();
     }
 
     /// Synchronize modifier state from backend-provided values (e.g. compositor).

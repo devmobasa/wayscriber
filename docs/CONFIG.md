@@ -559,6 +559,12 @@ toggle_status_bar = ["F12"]
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]
 
+# Toggle click-through override (force interactive mode)
+toggle_clickthrough = ["Ctrl+Alt+I"]
+
+# Hold to temporarily disable click-through (draw while in Select)
+hold_to_draw = ["Alt+D"]
+
 # Toggle highlight-only drawing tool
 toggle_highlight_tool = ["Ctrl+Alt+H"]
 

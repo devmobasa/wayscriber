@@ -113,36 +113,13 @@ impl InputState {
 
             if should_check_actions {
                 // Convert key to string for action lookup
-                let key_str = match key {
-                    Key::Char(c) => c.to_string(),
-                    Key::Escape => "Escape".to_string(),
-                    Key::Return => "Return".to_string(),
-                    Key::Backspace => "Backspace".to_string(),
-                    Key::Space => "Space".to_string(),
-                    Key::F1 => "F1".to_string(),
-                    Key::F2 => "F2".to_string(),
-                    Key::F4 => "F4".to_string(),
-                    Key::F9 => "F9".to_string(),
-                    Key::F10 => "F10".to_string(),
-                    Key::F11 => "F11".to_string(),
-                    Key::F12 => "F12".to_string(),
-                    Key::Menu => "Menu".to_string(),
-                    Key::Up => "ArrowUp".to_string(),
-                    Key::Down => "ArrowDown".to_string(),
-                    Key::Left => "ArrowLeft".to_string(),
-                    Key::Right => "ArrowRight".to_string(),
-                    Key::Delete => "Delete".to_string(),
-                    Key::Home => "Home".to_string(),
-                    Key::End => "End".to_string(),
-                    Key::PageUp => "PageUp".to_string(),
-                    Key::PageDown => "PageDown".to_string(),
-                    _ => String::new(),
-                };
-
-                // Check if this key combination triggers an action
-                if !key_str.is_empty()
+                if let Some(key_str) = key_to_string(key)
                     && let Some(action) = self.find_action(&key_str)
                 {
+                    if action == Action::HoldToDraw {
+                        self.add_hold_to_draw_key(&key_str);
+                        return;
+                    }
                     // Actions work in text mode
                     // Note: Exit action has special logic in handle_action - it cancels
                     // text mode if in TextInput state, or exits app if in Idle state
@@ -287,36 +264,17 @@ impl InputState {
             return;
         }
 
-        // Convert key to string for action lookup
-        let key_str = match key {
-            Key::Char(c) => c.to_string(),
-            Key::Escape => "Escape".to_string(),
-            Key::Return => "Return".to_string(),
-            Key::Backspace => "Backspace".to_string(),
-            Key::Space => "Space".to_string(),
-            Key::F1 => "F1".to_string(),
-            Key::F2 => "F2".to_string(),
-            Key::F4 => "F4".to_string(),
-            Key::F9 => "F9".to_string(),
-            Key::F10 => "F10".to_string(),
-            Key::F11 => "F11".to_string(),
-            Key::F12 => "F12".to_string(),
-            Key::Menu => "Menu".to_string(),
-            Key::Up => "ArrowUp".to_string(),
-            Key::Down => "ArrowDown".to_string(),
-            Key::Left => "ArrowLeft".to_string(),
-            Key::Right => "ArrowRight".to_string(),
-            Key::Delete => "Delete".to_string(),
-            Key::Home => "Home".to_string(),
-            Key::End => "End".to_string(),
-            Key::PageUp => "PageUp".to_string(),
-            Key::PageDown => "PageDown".to_string(),
-            _ => return,
-        };
-
-        // Look up action based on keybinding
-        if let Some(action) = self.find_action(&key_str) {
-            self.handle_action(action);
+        if let Some(key_str) = key_to_string(key) {
+            // Look up action based on keybinding
+            if let Some(action) = self.find_action(&key_str) {
+                if action == Action::HoldToDraw {
+                    self.add_hold_to_draw_key(&key_str);
+                    return;
+                }
+                self.handle_action(action);
+                return;
+            }
+        } else {
             return;
         }
 
@@ -750,6 +708,20 @@ impl InputState {
                 };
                 info!("{}", message);
             }
+            Action::ToggleClickthrough => {
+                self.toggle_clickthrough_mode();
+                let message = if self.clickthrough_overridden() {
+                    "Click-through disabled (interactive mode)"
+                } else if self.clickthrough_active() {
+                    "Click-through enabled"
+                } else {
+                    "Click-through unavailable"
+                };
+                info!("{}", message);
+            }
+            Action::HoldToDraw => {
+                // Hold-to-draw is handled on key press/release.
+            }
             Action::OpenContextMenu => {
                 if !self.zoom_active() {
                     self.toggle_context_menu_via_keyboard();
@@ -888,6 +860,10 @@ impl InputState {
             Key::Tab => self.modifiers.tab = false,
             _ => {}
         }
+
+        if let Some(key_str) = key_to_string(key) {
+            self.remove_hold_to_draw_key(&key_str);
+        }
     }
 
     pub(crate) fn undo_all_immediate(&mut self) {
@@ -901,4 +877,32 @@ impl InputState {
             self.apply_action_side_effects(&action);
         }
     }
+}
+
+fn key_to_string(key: Key) -> Option<String> {
+    Some(match key {
+        Key::Char(c) => c.to_string(),
+        Key::Escape => "Escape".to_string(),
+        Key::Return => "Return".to_string(),
+        Key::Backspace => "Backspace".to_string(),
+        Key::Space => "Space".to_string(),
+        Key::F1 => "F1".to_string(),
+        Key::F2 => "F2".to_string(),
+        Key::F4 => "F4".to_string(),
+        Key::F9 => "F9".to_string(),
+        Key::F10 => "F10".to_string(),
+        Key::F11 => "F11".to_string(),
+        Key::F12 => "F12".to_string(),
+        Key::Menu => "Menu".to_string(),
+        Key::Up => "ArrowUp".to_string(),
+        Key::Down => "ArrowDown".to_string(),
+        Key::Left => "ArrowLeft".to_string(),
+        Key::Right => "ArrowRight".to_string(),
+        Key::Delete => "Delete".to_string(),
+        Key::Home => "Home".to_string(),
+        Key::End => "End".to_string(),
+        Key::PageUp => "PageUp".to_string(),
+        Key::PageDown => "PageDown".to_string(),
+        _ => return None,
+    })
 }

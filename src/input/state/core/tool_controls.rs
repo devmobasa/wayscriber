@@ -16,6 +16,10 @@ impl InputState {
 
         self.tool_override = tool;
         self.active_preset_slot = None;
+        if matches!(tool, Some(Tool::Select)) {
+            self.clear_hold_to_draw();
+            self.clear_clickthrough_override();
+        }
 
         // Ensure we are not mid-drawing with a stale tool
         if !matches!(

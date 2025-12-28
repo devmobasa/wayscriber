@@ -76,19 +76,26 @@ fn process_tray_action(state: &mut WaylandState) {
     let action_str = match fs::read_to_string(&action_path) {
         Ok(content) => content.lines().next().unwrap_or("").trim().to_string(),
         Err(err) => {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                warn!(
-                    "Tray action signal received but failed to read {}: {}",
-                    action_path.display(),
-                    err
-                );
+            if err.kind() == std::io::ErrorKind::NotFound {
+                state.input_state.toggle_clickthrough_mode();
+                state.input_state.needs_redraw = true;
+                log::info!("Click-through toggled via SIGUSR2");
+                return;
             }
+            warn!(
+                "Tray action signal received but failed to read {}: {}",
+                action_path.display(),
+                err
+            );
             return;
         }
     };
 
     if action_str.is_empty() {
         let _ = fs::remove_file(&action_path);
+        state.input_state.toggle_clickthrough_mode();
+        state.input_state.needs_redraw = true;
+        log::info!("Click-through toggled via SIGUSR2");
         return;
     }
 
@@ -110,6 +117,10 @@ fn process_tray_action(state: &mut WaylandState) {
         "toggle_help" => {
             state.input_state.show_help = !state.input_state.show_help;
             state.input_state.dirty_tracker.mark_full();
+            state.input_state.needs_redraw = true;
+        }
+        "toggle_clickthrough" => {
+            state.input_state.toggle_clickthrough_mode();
             state.input_state.needs_redraw = true;
         }
         other => warn!("Unknown tray action '{}'", other),
@@ -821,6 +832,7 @@ impl WaylandBackend {
                     }
                     // Adjust keyboard interactivity if toolbar visibility changed.
                     state.sync_toolbar_visibility(&qh);
+                    state.refresh_overlay_clickthrough();
 
                     // Advance any delayed history playback (undo/redo with delay).
                     if state

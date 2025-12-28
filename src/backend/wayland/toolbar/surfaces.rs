@@ -321,19 +321,24 @@ impl ToolbarSurface {
         ctx.set_operator(cairo::Operator::Over);
 
         self.hit_regions.clear();
-        if !self.suppressed {
-            if self.scale > 1 {
-                ctx.scale(self.scale as f64, self.scale as f64);
-            }
-            render_fn(
-                &ctx,
-                self.width as f64,
-                self.height as f64,
-                snapshot,
-                &mut self.hit_regions,
-                hover,
-            )?;
+        let mut scratch_hits = Vec::new();
+        let hits = if self.suppressed {
+            &mut scratch_hits
+        } else {
+            &mut self.hit_regions
+        };
+        let hover = if self.suppressed { None } else { hover };
+        if self.scale > 1 {
+            ctx.scale(self.scale as f64, self.scale as f64);
         }
+        render_fn(
+            &ctx,
+            self.width as f64,
+            self.height as f64,
+            snapshot,
+            hits,
+            hover,
+        )?;
 
         surface.flush();
 
