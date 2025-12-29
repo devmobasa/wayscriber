@@ -293,9 +293,9 @@ impl ConfigDraft {
         }
     }
 
-    pub fn to_config(&self) -> Result<Config, Vec<FormError>> {
+    pub fn to_config(&self, base: &Config) -> Result<Config, Vec<FormError>> {
         let mut errors = Vec::new();
-        let mut config = Config::default();
+        let mut config = base.clone();
 
         match self.drawing_color.to_color_spec() {
             Ok(color) => config.drawing.default_color = color,
@@ -764,7 +764,9 @@ mod tests {
             selected_named: NamedColorOption::Custom,
         };
 
-        let errors = draft.to_config().expect_err("expected validation errors");
+        let errors = draft
+            .to_config(&Config::default())
+            .expect_err("expected validation errors");
         let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
 
         assert!(fields.contains(&"drawing.default_thickness"));
@@ -778,7 +780,9 @@ mod tests {
         draft.session_storage_mode = SessionStorageModeOption::Custom;
         draft.session_custom_directory = "   ".to_string();
 
-        let config = draft.to_config().expect("to_config should succeed");
+        let config = draft
+            .to_config(&Config::default())
+            .expect("to_config should succeed");
         assert!(config.session.custom_directory.is_none());
     }
 

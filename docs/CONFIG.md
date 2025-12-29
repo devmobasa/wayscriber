@@ -437,13 +437,13 @@ exit_after_capture = false
 
 ### `[session]` - Session Persistence
 
-Optional on-disk persistence for your drawings. Disabled by default so each session starts fresh.
+Optional on-disk persistence for your drawings. Enabled by default so sessions resume automatically.
 
 ```toml
 [session]
-persist_transparent = false
-persist_whiteboard = false
-persist_blackboard = false
+persist_transparent = true
+persist_whiteboard = true
+persist_blackboard = true
 persist_history = true
 restore_tool_state = true
 storage = "auto"
