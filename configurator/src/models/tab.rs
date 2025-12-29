@@ -70,3 +70,41 @@ impl UiTabId {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeybindingsTabId {
+    General,
+    Drawing,
+    Tools,
+    Selection,
+    History,
+    UiModes,
+    CaptureView,
+    Presets,
+}
+
+impl KeybindingsTabId {
+    pub const ALL: [KeybindingsTabId; 8] = [
+        KeybindingsTabId::General,
+        KeybindingsTabId::Drawing,
+        KeybindingsTabId::Tools,
+        KeybindingsTabId::Selection,
+        KeybindingsTabId::History,
+        KeybindingsTabId::UiModes,
+        KeybindingsTabId::CaptureView,
+        KeybindingsTabId::Presets,
+    ];
+
+    pub fn title(&self) -> &'static str {
+        match self {
+            KeybindingsTabId::General => "General",
+            KeybindingsTabId::Drawing => "Drawing",
+            KeybindingsTabId::Tools => "Tools",
+            KeybindingsTabId::Selection => "Selection",
+            KeybindingsTabId::History => "History",
+            KeybindingsTabId::UiModes => "UI & Modes",
+            KeybindingsTabId::CaptureView => "Capture & View",
+            KeybindingsTabId::Presets => "Presets",
+        }
+    }
+}
