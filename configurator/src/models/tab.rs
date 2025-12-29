@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TabId {
     Drawing,
+    Presets,
     Arrow,
     History,
     Performance,
@@ -13,8 +14,9 @@ pub enum TabId {
 }
 
 impl TabId {
-    pub const ALL: [TabId; 10] = [
+    pub const ALL: [TabId; 11] = [
         TabId::Drawing,
+        TabId::Presets,
         TabId::Ui,
         TabId::Board,
         TabId::Performance,
@@ -29,6 +31,7 @@ impl TabId {
     pub fn title(&self) -> &'static str {
         match self {
             TabId::Drawing => "Drawing",
+            TabId::Presets => "Presets",
             TabId::Arrow => "Arrow",
             TabId::History => "History",
             TabId::Performance => "Performance",
