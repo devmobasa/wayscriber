@@ -71,6 +71,7 @@ pub enum Action {
     ToggleToolbar,
     ToggleHighlightTool,
     ToggleFill,
+    ToggleSelectionProperties,
     OpenContextMenu,
 
     // Configurator
@@ -367,6 +368,8 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_toggle_highlight_tool")]
     pub toggle_highlight_tool: Vec<String>,
+    #[serde(default = "default_toggle_selection_properties")]
+    pub toggle_selection_properties: Vec<String>,
     #[serde(default = "default_open_context_menu")]
     pub open_context_menu: Vec<String>,
 
@@ -531,6 +534,7 @@ impl Default for KeybindingsConfig {
             toggle_toolbar: default_toggle_toolbar(),
             toggle_fill: default_toggle_fill(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
+            toggle_selection_properties: default_toggle_selection_properties(),
             open_context_menu: default_open_context_menu(),
             open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
@@ -817,6 +821,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_highlight_tool {
             insert_binding(binding_str, Action::ToggleHighlightTool)?;
+        }
+
+        for binding_str in &self.toggle_selection_properties {
+            insert_binding(binding_str, Action::ToggleSelectionProperties)?;
         }
 
         for binding_str in &self.open_context_menu {
@@ -1163,6 +1171,10 @@ fn default_toggle_fill() -> Vec<String> {
 
 fn default_toggle_highlight_tool() -> Vec<String> {
     vec!["Ctrl+Alt+H".to_string()]
+}
+
+fn default_toggle_selection_properties() -> Vec<String> {
+    vec!["Ctrl+Alt+P".to_string()]
 }
 
 fn default_open_context_menu() -> Vec<String> {

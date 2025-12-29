@@ -114,6 +114,27 @@ impl InputState {
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
+        if self.is_properties_panel_open() {
+            self.update_pointer_position(x, y);
+            if self.properties_panel_layout().is_none() {
+                return;
+            }
+            match button {
+                MouseButton::Left => {
+                    if let Some(index) = self.properties_panel_index_at(x, y) {
+                        self.set_properties_panel_focus(Some(index));
+                    } else {
+                        self.close_properties_panel();
+                    }
+                }
+                MouseButton::Right => {
+                    self.close_properties_panel();
+                }
+                MouseButton::Middle => {}
+            }
+            return;
+        }
+
         self.close_properties_panel();
         match button {
             MouseButton::Right => {
@@ -262,6 +283,14 @@ impl InputState {
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
 
+        if self.is_properties_panel_open() {
+            if self.properties_panel_layout().is_none() {
+                return;
+            }
+            self.update_properties_panel_hover_from_pointer(x, y);
+            return;
+        }
+
         if let DrawingState::ResizingText {
             shape_id,
             base_x,
@@ -368,6 +397,20 @@ impl InputState {
     /// - Returns to Idle state
     pub fn on_mouse_release(&mut self, button: MouseButton, x: i32, y: i32) {
         self.update_pointer_position(x, y);
+        if button == MouseButton::Left && self.is_properties_panel_open() {
+            if self.properties_panel_layout().is_none() {
+                return;
+            }
+            if let Some(index) = self.properties_panel_index_at(x, y) {
+                self.set_properties_panel_focus(Some(index));
+                self.activate_properties_panel_entry();
+            } else {
+                self.close_properties_panel();
+            }
+            self.needs_redraw = true;
+            return;
+        }
+
         if button == MouseButton::Left && self.is_context_menu_open() {
             if let Some(index) = self.context_menu_index_at(x, y) {
                 let entries = self.context_menu_entries();

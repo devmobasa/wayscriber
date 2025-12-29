@@ -562,6 +562,9 @@ toggle_click_highlight = ["Ctrl+Shift+H"]
 # Toggle highlight-only drawing tool
 toggle_highlight_tool = ["Ctrl+Alt+H"]
 
+# Toggle selection properties panel
+toggle_selection_properties = ["Ctrl+Alt+P"]
+
 # Toggle eraser behavior (brush vs stroke)
 toggle_eraser_mode = ["Ctrl+Shift+E"]
 

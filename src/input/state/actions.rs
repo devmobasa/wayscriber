@@ -45,8 +45,26 @@ impl InputState {
             _ => {}
         }
 
-        if matches!(key, Key::Escape) && self.properties_panel().is_some() {
-            self.close_properties_panel();
+        if self.is_properties_panel_open() {
+            let handled = match key {
+                Key::Escape => {
+                    self.close_properties_panel();
+                    true
+                }
+                Key::Up => self.focus_previous_properties_entry(),
+                Key::Down => self.focus_next_properties_entry(),
+                Key::Home => self.focus_first_properties_entry(),
+                Key::End => self.focus_last_properties_entry(),
+                Key::Return | Key::Space => self.activate_properties_panel_entry(),
+                Key::Left => self.adjust_properties_panel_entry(-1),
+                Key::Right => self.adjust_properties_panel_entry(1),
+                Key::Char('+') | Key::Char('=') => self.adjust_properties_panel_entry(1),
+                Key::Char('-') | Key::Char('_') => self.adjust_properties_panel_entry(-1),
+                _ => false,
+            };
+            if handled {
+                return;
+            }
             return;
         }
 
@@ -341,7 +359,10 @@ impl InputState {
 
     /// Handle an action triggered by a keybinding.
     pub(super) fn handle_action(&mut self, action: Action) {
-        if !matches!(action, Action::OpenContextMenu) {
+        if !matches!(
+            action,
+            Action::OpenContextMenu | Action::ToggleSelectionProperties
+        ) {
             self.close_properties_panel();
         }
 
@@ -753,6 +774,17 @@ impl InputState {
             Action::OpenContextMenu => {
                 if !self.zoom_active() {
                     self.toggle_context_menu_via_keyboard();
+                }
+            }
+            Action::ToggleSelectionProperties => {
+                if matches!(self.state, DrawingState::Idle) {
+                    if self.properties_panel().is_some() {
+                        self.close_properties_panel();
+                    } else if self.show_properties_panel() {
+                        self.close_context_menu();
+                    } else {
+                        self.set_ui_toast(UiToastKind::Warning, "No selection to edit.");
+                    }
                 }
             }
             Action::OpenConfigurator => {

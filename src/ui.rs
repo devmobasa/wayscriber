@@ -1319,74 +1319,41 @@ pub fn render_context_menu(
 pub fn render_properties_panel(
     ctx: &cairo::Context,
     input_state: &InputState,
-    screen_width: u32,
-    screen_height: u32,
+    _screen_width: u32,
+    _screen_height: u32,
 ) {
     let panel = match input_state.properties_panel() {
         Some(panel) => panel,
+        None => return,
+    };
+    let layout = match input_state.properties_panel_layout() {
+        Some(layout) => layout,
         None => return,
     };
 
     let title_font_size = 15.0;
     let body_font_size = 13.0;
     let line_height = 18.0;
-    let padding_x = 16.0;
-    let padding_y = 12.0;
-    let margin = 12.0;
 
     let _ = ctx.save();
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(title_font_size);
-    let mut max_width = ctx
-        .text_extents(&panel.title)
-        .map(|ext| ext.width())
-        .unwrap_or(0.0);
-
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(body_font_size);
-    for line in &panel.lines {
-        if let Ok(extents) = ctx.text_extents(line) {
-            max_width = max_width.max(extents.width());
-        }
-    }
-
-    let content_height = if panel.lines.is_empty() {
-        0.0
-    } else {
-        line_height * panel.lines.len() as f64
-    };
-    let title_height = title_font_size + 4.0;
-    let panel_width = max_width + padding_x * 2.0;
-    let panel_height = padding_y * 2.0 + title_height + content_height;
-
-    let screen_w = screen_width as f64;
-    let screen_h = screen_height as f64;
-    let mut origin_x = panel.anchor.0;
-    let mut origin_y = panel.anchor.1;
-
-    if origin_x + panel_width > screen_w - margin {
-        origin_x = (screen_w - panel_width - margin).max(margin);
-    }
-    if origin_y + panel_height > screen_h - margin {
-        origin_y = (screen_h - panel_height - margin).max(margin);
-    }
-    if origin_x < margin {
-        origin_x = margin;
-    }
-    if origin_y < margin {
-        origin_y = margin;
-    }
-
     ctx.set_source_rgba(0.08, 0.11, 0.17, 0.92);
-    ctx.rectangle(origin_x, origin_y, panel_width, panel_height);
+    ctx.rectangle(
+        layout.origin_x,
+        layout.origin_y,
+        layout.width,
+        layout.height,
+    );
     let _ = ctx.fill();
 
     ctx.set_source_rgba(0.18, 0.22, 0.3, 0.95);
     ctx.set_line_width(1.0);
-    ctx.rectangle(origin_x, origin_y, panel_width, panel_height);
+    ctx.rectangle(
+        layout.origin_x,
+        layout.origin_y,
+        layout.width,
+        layout.height,
+    );
     let _ = ctx.stroke();
-
-    let mut text_y = origin_y + padding_y + title_font_size;
 
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(title_font_size);
@@ -1395,22 +1362,57 @@ pub fn render_properties_panel(
     } else {
         ctx.set_source_rgba(0.93, 0.95, 0.99, 1.0);
     }
-    ctx.move_to(origin_x + padding_x, text_y);
+    ctx.move_to(layout.label_x, layout.title_baseline_y);
     let _ = ctx.show_text(&panel.title);
 
     ctx.set_source_rgba(0.35, 0.4, 0.5, 0.9);
-    ctx.move_to(origin_x + padding_x, text_y + 4.0);
-    ctx.line_to(origin_x + panel_width - padding_x, text_y + 4.0);
+    ctx.move_to(layout.label_x, layout.title_baseline_y + 4.0);
+    ctx.line_to(
+        layout.origin_x + layout.width - layout.padding_x,
+        layout.title_baseline_y + 4.0,
+    );
     let _ = ctx.stroke();
 
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     ctx.set_font_size(body_font_size);
     ctx.set_source_rgba(0.86, 0.89, 0.95, 1.0);
-    text_y += 12.0;
+    let mut text_y = layout.info_start_y;
     for line in &panel.lines {
-        ctx.move_to(origin_x + padding_x, text_y);
+        ctx.move_to(layout.label_x, text_y);
         let _ = ctx.show_text(line);
         text_y += line_height;
+    }
+
+    if !panel.entries.is_empty() {
+        let active_index = panel.hover_index.or(panel.keyboard_focus);
+        for (index, entry) in panel.entries.iter().enumerate() {
+            let row_top = layout.entry_start_y + layout.entry_row_height * index as f64;
+            let row_center = row_top + layout.entry_row_height * 0.5;
+
+            if active_index == Some(index) && !entry.disabled {
+                ctx.set_source_rgba(0.25, 0.32, 0.45, 0.9);
+                ctx.rectangle(
+                    layout.origin_x,
+                    row_top,
+                    layout.width,
+                    layout.entry_row_height,
+                );
+                let _ = ctx.fill();
+            }
+
+            let (text_r, text_g, text_b, text_a) = if entry.disabled {
+                (0.6, 0.64, 0.68, 0.5)
+            } else {
+                (0.9, 0.92, 0.97, 1.0)
+            };
+            ctx.set_source_rgba(text_r, text_g, text_b, text_a);
+            ctx.move_to(layout.label_x, row_center + body_font_size * 0.35);
+            let _ = ctx.show_text(&entry.label);
+
+            ctx.set_source_rgba(0.7, 0.73, 0.78, text_a);
+            ctx.move_to(layout.value_x, row_center + body_font_size * 0.35);
+            let _ = ctx.show_text(&entry.value);
+        }
     }
 
     let _ = ctx.restore();
