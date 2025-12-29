@@ -10,8 +10,9 @@ pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
 pub use config::ConfigDraft;
 pub use fields::{
     BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
-    QuadField, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 pub use keybindings::KeybindingField;
 pub use tab::{TabId, UiTabId};

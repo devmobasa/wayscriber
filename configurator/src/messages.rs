@@ -5,9 +5,10 @@ use wayscriber::config::Config;
 
 use crate::models::{
     BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    KeybindingField, NamedColorOption, OverrideOption, PresetEraserKindOption,
+    PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 
 #[derive(Debug, Clone)]
@@ -37,4 +38,14 @@ pub enum Message {
     KeybindingChanged(KeybindingField, String),
     FontStyleOptionSelected(FontStyleOption),
     FontWeightOptionSelected(FontWeightOption),
+    PresetSlotCountChanged(usize),
+    PresetSlotEnabledChanged(usize, bool),
+    PresetToolChanged(usize, ToolOption),
+    PresetColorModeChanged(usize, ColorMode),
+    PresetNamedColorSelected(usize, NamedColorOption),
+    PresetColorComponentChanged(usize, usize, String),
+    PresetTextChanged(usize, PresetTextField, String),
+    PresetToggleOptionChanged(usize, PresetToggleField, OverrideOption),
+    PresetEraserKindChanged(usize, PresetEraserKindOption),
+    PresetEraserModeChanged(usize, PresetEraserModeOption),
 }

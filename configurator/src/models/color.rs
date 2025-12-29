@@ -115,6 +115,10 @@ impl ColorInput {
     }
 
     pub fn to_color_spec(&self) -> Result<ColorSpec, FormError> {
+        self.to_color_spec_with_field("drawing.default_color")
+    }
+
+    pub fn to_color_spec_with_field(&self, field: &str) -> Result<ColorSpec, FormError> {
         match self.mode {
             ColorMode::Named => {
                 let value = if self.selected_named_is_custom() {
@@ -125,7 +129,7 @@ impl ColorInput {
 
                 if value.trim().is_empty() {
                     Err(FormError::new(
-                        "drawing.default_color",
+                        field.to_string(),
                         "Please enter a color name.",
                     ))
                 } else {
@@ -135,7 +139,7 @@ impl ColorInput {
             ColorMode::Rgb => {
                 let mut rgb = [0u8; 3];
                 for (index, component) in self.rgb.iter().enumerate() {
-                    let field = format!("drawing.default_color[{}]", index);
+                    let field = format!("{field}[{index}]");
                     let parsed = component.trim().parse::<i64>().map_err(|_| {
                         FormError::new(&field, "Expected integer between 0 and 255")
                     })?;
