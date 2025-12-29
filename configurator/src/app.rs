@@ -623,7 +623,7 @@ impl ConfiguratorApp {
     }
 
     fn defaults_legend(&self) -> Element<'_, Message> {
-        row![
+        let legend = row![
             text("Default labels:").size(12),
             text("blue = matches")
                 .size(12)
@@ -633,8 +633,14 @@ impl ConfiguratorApp {
                 .style(theme::Text::Color(default_label_color(true))),
         ]
         .spacing(12)
-        .align_items(iced::Alignment::Center)
-        .into()
+        .align_items(iced::Alignment::Center);
+
+        let hint = feedback_text(
+            "Tip: use Tab/Shift+Tab to move between fields; Enter activates buttons.",
+            false,
+        );
+
+        column![legend, hint].spacing(4).into()
     }
 
     fn drawing_tab(&self) -> Element<'_, Message> {
@@ -670,7 +676,7 @@ impl ConfiguratorApp {
 
                 let picker_row = row![
                     picker,
-                    color_preview_badge(self.draft.drawing_color.preview_color()),
+                    color_preview_labeled(self.draft.drawing_color.preview_color()),
                 ]
                 .spacing(8)
                 .align_items(iced::Alignment::Center);
@@ -710,7 +716,7 @@ impl ConfiguratorApp {
                     text_input("B (0-255)", &self.draft.drawing_color.rgb[2]).on_input(|value| {
                         Message::TripletChanged(TripletField::DrawingColorRgb, 2, value)
                     }),
-                    color_preview_badge(self.draft.drawing_color.preview_color()),
+                    color_preview_labeled(self.draft.drawing_color.preview_color()),
                 ]
                 .spacing(8)
                 .align_items(iced::Alignment::Center);
@@ -996,7 +1002,7 @@ impl ConfiguratorApp {
         let slot_header = Row::new()
             .spacing(8)
             .align_items(iced::Alignment::Center)
-            .push(text(format!("Slot {slot_index}")).size(18))
+            .push(text(format!("Slot {slot_index} settings")).size(18))
             .push(Space::new(Length::Fill, Length::Shrink))
             .push(collapse_button)
             .push(reset_button)
@@ -1079,7 +1085,7 @@ impl ConfiguratorApp {
                 )
                 .width(Length::Fixed(COLOR_PICKER_WIDTH));
 
-                let picker_row = row![picker, color_preview_badge(slot.color.preview_color()),]
+                let picker_row = row![picker, color_preview_labeled(slot.color.preview_color()),]
                     .spacing(8)
                     .align_items(iced::Alignment::Center);
 
@@ -1120,7 +1126,7 @@ impl ConfiguratorApp {
                     text_input("B (0-255)", &slot.color.rgb[2]).on_input(move |value| {
                         Message::PresetColorComponentChanged(slot_index, 2, value)
                     }),
-                    color_preview_badge(slot.color.preview_color()),
+                    color_preview_labeled(slot.color.preview_color()),
                 ]
                 .spacing(8)
                 .align_items(iced::Alignment::Center);
@@ -2398,11 +2404,11 @@ fn color_triplet_editor<'a>(
         .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center),
         row![
-            text_input("R", &colors.components[0])
+            text_input("Red", &colors.components[0])
                 .on_input(move |val| Message::TripletChanged(field, 0, val)),
-            text_input("G", &colors.components[1])
+            text_input("Green", &colors.components[1])
                 .on_input(move |val| Message::TripletChanged(field, 1, val)),
-            text_input("B", &colors.components[2])
+            text_input("Blue", &colors.components[2])
                 .on_input(move |val| Message::TripletChanged(field, 2, val)),
         ]
         .spacing(8)
@@ -2426,13 +2432,13 @@ fn color_quad_editor<'a>(
         .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center),
         row![
-            text_input("R", &colors.components[0])
+            text_input("Red", &colors.components[0])
                 .on_input(move |val| Message::QuadChanged(field, 0, val)),
-            text_input("G", &colors.components[1])
+            text_input("Green", &colors.components[1])
                 .on_input(move |val| Message::QuadChanged(field, 1, val)),
-            text_input("B", &colors.components[2])
+            text_input("Blue", &colors.components[2])
                 .on_input(move |val| Message::QuadChanged(field, 2, val)),
-            text_input("A", &colors.components[3])
+            text_input("Alpha", &colors.components[3])
                 .on_input(move |val| Message::QuadChanged(field, 3, val)),
         ]
         .spacing(8)
@@ -2465,6 +2471,13 @@ fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
             color: preview_color,
             is_invalid: !is_valid,
         })))
+        .into()
+}
+
+fn color_preview_labeled<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
+    column![text("Preview").size(12), color_preview_badge(color)]
+        .spacing(2)
+        .align_items(iced::Alignment::Center)
         .into()
 }
 
