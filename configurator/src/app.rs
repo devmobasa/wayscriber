@@ -55,6 +55,7 @@ pub struct ConfiguratorApp {
     draft: ConfigDraft,
     baseline: ConfigDraft,
     defaults: ConfigDraft,
+    // Base config loaded from disk to preserve unknown fields when saving.
     base_config: Arc<Config>,
     status: StatusMessage,
     active_tab: TabId,
@@ -877,7 +878,12 @@ impl ConfiguratorApp {
             .push(text("Preset Slots").size(20))
             .push(slot_count_control);
 
-        for slot_index in 1..=PRESET_SLOTS_MAX {
+        let slot_limit = self
+            .draft
+            .presets
+            .slot_count
+            .clamp(PRESET_SLOTS_MIN, PRESET_SLOTS_MAX);
+        for slot_index in 1..=slot_limit {
             column = column.push(self.preset_slot_section(slot_index));
         }
 
@@ -891,6 +897,9 @@ impl ConfiguratorApp {
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
             return Space::new(Length::Shrink, Length::Shrink).into();
         };
+        if slot_index > self.draft.presets.slot_count {
+            return Space::new(Length::Shrink, Length::Shrink).into();
+        }
 
         let enabled_row = row![
             checkbox("Enabled", slot.enabled)
@@ -907,17 +916,6 @@ impl ConfiguratorApp {
             .spacing(8)
             .push(text(format!("Slot {slot_index}")).size(18))
             .push(enabled_row);
-
-        if slot_index > self.draft.presets.slot_count {
-            section = section.push(
-                text(format!(
-                    "Hidden (slot count is {})",
-                    self.draft.presets.slot_count
-                ))
-                .size(12)
-                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
-            );
-        }
 
         if !slot.enabled {
             section = section.push(
@@ -1225,6 +1223,50 @@ impl ConfiguratorApp {
     }
 
     fn history_tab(&self) -> Element<'_, Message> {
+        let custom_enabled = self.draft.history_custom_section_enabled;
+        let custom_section = container(
+            column![
+                text("Custom section").size(16),
+                row![
+                    labeled_input_state(
+                        "Custom undo delay (ms)",
+                        &self.draft.history_custom_undo_delay_ms,
+                        &self.defaults.history_custom_undo_delay_ms,
+                        TextField::HistoryCustomUndoDelayMs,
+                        custom_enabled,
+                    ),
+                    labeled_input_state(
+                        "Custom redo delay (ms)",
+                        &self.draft.history_custom_redo_delay_ms,
+                        &self.defaults.history_custom_redo_delay_ms,
+                        TextField::HistoryCustomRedoDelayMs,
+                        custom_enabled,
+                    )
+                ]
+                .spacing(12),
+                row![
+                    labeled_input_state(
+                        "Custom undo steps",
+                        &self.draft.history_custom_undo_steps,
+                        &self.defaults.history_custom_undo_steps,
+                        TextField::HistoryCustomUndoSteps,
+                        custom_enabled,
+                    ),
+                    labeled_input_state(
+                        "Custom redo steps",
+                        &self.draft.history_custom_redo_steps,
+                        &self.defaults.history_custom_redo_steps,
+                        TextField::HistoryCustomRedoSteps,
+                        custom_enabled,
+                    )
+                ]
+                .spacing(12),
+            ]
+            .spacing(12),
+        )
+        .padding(12)
+        .style(theme::Container::Box);
+
         scrollable(
             column![
                 text("History").size(20),
@@ -1249,36 +1291,7 @@ impl ConfiguratorApp {
                     self.defaults.history_custom_section_enabled,
                     ToggleField::HistoryCustomSectionEnabled,
                 ),
-                row![
-                    labeled_input(
-                        "Custom undo delay (ms)",
-                        &self.draft.history_custom_undo_delay_ms,
-                        &self.defaults.history_custom_undo_delay_ms,
-                        TextField::HistoryCustomUndoDelayMs,
-                    ),
-                    labeled_input(
-                        "Custom redo delay (ms)",
-                        &self.draft.history_custom_redo_delay_ms,
-                        &self.defaults.history_custom_redo_delay_ms,
-                        TextField::HistoryCustomRedoDelayMs,
-                    )
-                ]
-                .spacing(12),
-                row![
-                    labeled_input(
-                        "Custom undo steps",
-                        &self.draft.history_custom_undo_steps,
-                        &self.defaults.history_custom_undo_steps,
-                        TextField::HistoryCustomUndoSteps,
-                    ),
-                    labeled_input(
-                        "Custom redo steps",
-                        &self.draft.history_custom_redo_steps,
-                        &self.defaults.history_custom_redo_steps,
-                        TextField::HistoryCustomRedoSteps,
-                    )
-                ]
-                .spacing(12),
+                custom_section,
             ]
             .spacing(12),
         )
@@ -1303,7 +1316,7 @@ impl ConfiguratorApp {
             column![
                 text("Performance").size(20),
                 labeled_control(
-                    "Buffer count",
+                    "Buffer count (2-4)",
                     buffer_control,
                     self.defaults.performance_buffer_count.to_string(),
                     self.draft.performance_buffer_count != self.defaults.performance_buffer_count,
@@ -1353,11 +1366,14 @@ impl ConfiguratorApp {
         let general = column![
             text("General UI").size(18),
             labeled_input(
-                "Preferred output (xdg fallback)",
+                "Preferred output (GNOME fallback)",
                 &self.draft.ui_preferred_output,
                 &self.defaults.ui_preferred_output,
                 TextField::UiPreferredOutput,
             ),
+            text("Used for the GNOME xdg-shell fallback overlay.")
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             toggle_row(
                 "Use fullscreen xdg fallback",
                 self.draft.ui_xdg_fullscreen,
@@ -1521,13 +1537,13 @@ impl ConfiguratorApp {
             text("Placement offsets").size(16),
             row![
                 labeled_input(
-                    "Top offset X",
+                    "Top offset X (px)",
                     &self.draft.ui_toolbar_top_offset,
                     &self.defaults.ui_toolbar_top_offset,
                     TextField::ToolbarTopOffset,
                 ),
                 labeled_input(
-                    "Top offset Y",
+                    "Top offset Y (px)",
                     &self.draft.ui_toolbar_top_offset_y,
                     &self.defaults.ui_toolbar_top_offset_y,
                     TextField::ToolbarTopOffsetY,
@@ -1536,13 +1552,13 @@ impl ConfiguratorApp {
             .spacing(12),
             row![
                 labeled_input(
-                    "Side offset Y",
+                    "Side offset Y (px)",
                     &self.draft.ui_toolbar_side_offset,
                     &self.defaults.ui_toolbar_side_offset,
                     TextField::ToolbarSideOffset,
                 ),
                 labeled_input(
-                    "Side offset X",
+                    "Side offset X (px)",
                     &self.draft.ui_toolbar_side_offset_x,
                     &self.defaults.ui_toolbar_side_offset_x,
                     TextField::ToolbarSideOffsetX,
@@ -2068,6 +2084,31 @@ fn labeled_input<'a>(
             .spacing(DEFAULT_LABEL_GAP)
             .align_items(iced::Alignment::Center),
         text_input(label, value).on_input(move |val| Message::TextChanged(field, val))
+    ]
+    .spacing(4)
+    .width(Length::Fill)
+    .into()
+}
+
+fn labeled_input_state<'a>(
+    label: &'static str,
+    value: &'a str,
+    default: &'a str,
+    field: TextField,
+    enabled: bool,
+) -> Element<'a, Message> {
+    let changed = value.trim() != default.trim();
+    let input = if enabled {
+        text_input(label, value).on_input(move |val| Message::TextChanged(field, val))
+    } else {
+        text_input(label, value)
+    };
+
+    column![
+        row![text(label).size(14), default_value_text(default, changed)]
+            .spacing(DEFAULT_LABEL_GAP)
+            .align_items(iced::Alignment::Center),
+        input
     ]
     .spacing(4)
     .width(Length::Fill)
