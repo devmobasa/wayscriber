@@ -296,6 +296,7 @@ journalctl --user -u wayscriber.service -f
 | <kbd>Ctrl+Shift+C</kbd> | Select region → clipboard |
 | <kbd>Ctrl+Shift+S</kbd> | Select region → save PNG |
 | <kbd>Ctrl+Shift+O</kbd> | Capture active window |
+| <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
 Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if missing.
 
@@ -354,6 +355,9 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 |--------|-----|
 | Undo | <kbd>Ctrl+Z</kbd> |
 | Redo | <kbd>Ctrl+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> |
+| Copy selection | <kbd>Ctrl+Alt+C</kbd> |
+| Paste selection | <kbd>Ctrl+Alt+V</kbd> |
+| Select all | <kbd>Ctrl+A</kbd> |
 | Eraser | <kbd>D</kbd> |
 | Toggle eraser mode | <kbd>Ctrl+Shift+E</kbd> |
 | Clear all | <kbd>E</kbd> |
