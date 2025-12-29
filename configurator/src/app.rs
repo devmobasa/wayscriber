@@ -54,6 +54,7 @@ pub struct ConfiguratorApp {
     draft: ConfigDraft,
     baseline: ConfigDraft,
     defaults: ConfigDraft,
+    base_config: Arc<Config>,
     status: StatusMessage,
     active_tab: TabId,
     active_ui_tab: UiTabId,
@@ -103,11 +104,13 @@ impl Application for ConfiguratorApp {
         let baseline = defaults.clone();
         let override_mode = defaults.ui_toolbar_layout_mode;
         let config_path = Config::get_config_path().ok();
+        let base_config = Arc::new(default_config.clone());
 
         let app = Self {
             draft: baseline.clone(),
             baseline,
             defaults,
+            base_config,
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Drawing,
             active_ui_tab: UiTabId::Toolbar,
@@ -144,6 +147,7 @@ impl Application for ConfiguratorApp {
                         let draft = ConfigDraft::from_config(config.as_ref());
                         self.draft = draft.clone();
                         self.baseline = draft;
+                        self.base_config = config.clone();
                         self.override_mode = self.draft.ui_toolbar_layout_mode;
                         self.is_dirty = false;
                         self.status = StatusMessage::success("Configuration loaded from disk.");
@@ -174,7 +178,7 @@ impl Application for ConfiguratorApp {
                     return Command::none();
                 }
 
-                match self.draft.to_config() {
+                match self.draft.to_config(self.base_config.as_ref()) {
                     Ok(mut config) => {
                         config.validate_and_clamp();
                         self.is_saving = true;
@@ -201,6 +205,7 @@ impl Application for ConfiguratorApp {
                         self.last_backup_path = backup.clone();
                         self.draft = draft.clone();
                         self.baseline = draft;
+                        self.base_config = saved_config.clone();
                         self.is_dirty = false;
                         let mut msg = "Configuration saved successfully.".to_string();
                         if let Some(path) = backup {
