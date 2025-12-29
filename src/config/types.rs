@@ -1015,9 +1015,9 @@ pub struct SessionConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
-            persist_transparent: false,
-            persist_whiteboard: false,
-            persist_blackboard: false,
+            persist_transparent: true,
+            persist_whiteboard: true,
+            persist_blackboard: true,
             persist_history: default_persist_history(),
             restore_tool_state: default_restore_tool_state(),
             storage: default_session_storage_mode(),
