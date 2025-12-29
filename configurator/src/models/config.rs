@@ -228,10 +228,9 @@ impl PresetSlotDraft {
             Some(name.to_string())
         };
 
-        let color = match self
-            .color
-            .to_color_spec_with_field(&format!("presets.slot_{slot_index}.color"))
-        {
+        let field_prefix = format!("presets.slot_{slot_index}.");
+        let color_field = format!("{field_prefix}color");
+        let color = match self.color.to_color_spec_with_field(&color_field) {
             Ok(color) => Some(color),
             Err(err) => {
                 errors.push(err);
@@ -239,30 +238,26 @@ impl PresetSlotDraft {
             }
         };
 
-        let size = parse_required_f64(
-            &self.size,
-            format!("presets.slot_{slot_index}.size"),
-            errors,
-        );
+        let size = parse_required_f64(&self.size, || format!("{field_prefix}size"), errors);
 
         let marker_opacity = parse_optional_f64(
             &self.marker_opacity,
-            format!("presets.slot_{slot_index}.marker_opacity"),
+            || format!("{field_prefix}marker_opacity"),
             errors,
         );
         let font_size = parse_optional_f64(
             &self.font_size,
-            format!("presets.slot_{slot_index}.font_size"),
+            || format!("{field_prefix}font_size"),
             errors,
         );
         let arrow_length = parse_optional_f64(
             &self.arrow_length,
-            format!("presets.slot_{slot_index}.arrow_length"),
+            || format!("{field_prefix}arrow_length"),
             errors,
         );
         let arrow_angle = parse_optional_f64(
             &self.arrow_angle,
-            format!("presets.slot_{slot_index}.arrow_angle"),
+            || format!("{field_prefix}arrow_angle"),
             errors,
         );
 
@@ -1223,22 +1218,28 @@ fn parse_optional_usize_field<F>(
     }
 }
 
-fn parse_required_f64(value: &str, field: String, errors: &mut Vec<FormError>) -> Option<f64> {
+fn parse_required_f64<F>(value: &str, field: F, errors: &mut Vec<FormError>) -> Option<f64>
+where
+    F: FnOnce() -> String,
+{
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        errors.push(FormError::new(field, "Value is required"));
+        errors.push(FormError::new(field(), "Value is required"));
         return None;
     }
     match parse_f64(trimmed) {
         Ok(parsed) => Some(parsed),
         Err(err) => {
-            errors.push(FormError::new(field, err));
+            errors.push(FormError::new(field(), err));
             None
         }
     }
 }
 
-fn parse_optional_f64(value: &str, field: String, errors: &mut Vec<FormError>) -> Option<f64> {
+fn parse_optional_f64<F>(value: &str, field: F, errors: &mut Vec<FormError>) -> Option<f64>
+where
+    F: FnOnce() -> String,
+{
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return None;
@@ -1246,7 +1247,7 @@ fn parse_optional_f64(value: &str, field: String, errors: &mut Vec<FormError>) -
     match parse_f64(trimmed) {
         Ok(parsed) => Some(parsed),
         Err(err) => {
-            errors.push(FormError::new(field, err));
+            errors.push(FormError::new(field(), err));
             None
         }
     }
@@ -1276,7 +1277,8 @@ where
 mod tests {
     use super::*;
     use crate::models::{ColorMode, NamedColorOption};
-    use wayscriber::config::Config;
+    use wayscriber::config::{ColorSpec, Config, ToolPresetConfig};
+    use wayscriber::input::Tool;
 
     #[test]
     fn config_draft_to_config_reports_errors() {
@@ -1334,5 +1336,72 @@ mod tests {
         draft.set_toggle(ToggleField::ArrowHeadAtEnd, true);
         assert!(draft.board_enabled);
         assert!(draft.arrow_head_at_end);
+    }
+
+    #[test]
+    fn config_draft_round_trips_presets_and_history() {
+        let mut config = Config::default();
+        config.history.undo_all_delay_ms = 500;
+        config.history.redo_all_delay_ms = 700;
+        config.history.custom_section_enabled = true;
+        config.history.custom_undo_delay_ms = 200;
+        config.history.custom_redo_delay_ms = 300;
+        config.history.custom_undo_steps = 12;
+        config.history.custom_redo_steps = 9;
+
+        config.presets.slot_count = 3;
+        let preset = ToolPresetConfig {
+            name: Some("Primary".to_string()),
+            tool: Tool::Pen,
+            color: ColorSpec::Name("blue".to_string()),
+            size: 5.0,
+            eraser_kind: None,
+            eraser_mode: None,
+            marker_opacity: Some(0.5),
+            fill_enabled: Some(true),
+            font_size: Some(14.0),
+            text_background_enabled: Some(false),
+            arrow_length: Some(20.0),
+            arrow_angle: Some(30.0),
+            arrow_head_at_end: Some(true),
+            show_status_bar: Some(false),
+        };
+        config.presets.set_slot(1, Some(preset));
+
+        let draft = ConfigDraft::from_config(&config);
+        let round_trip = draft
+            .to_config(&config)
+            .expect("expected config to round trip");
+
+        assert_eq!(
+            round_trip.history.undo_all_delay_ms,
+            config.history.undo_all_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.redo_all_delay_ms,
+            config.history.redo_all_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.custom_section_enabled,
+            config.history.custom_section_enabled
+        );
+        assert_eq!(
+            round_trip.history.custom_undo_delay_ms,
+            config.history.custom_undo_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.custom_redo_delay_ms,
+            config.history.custom_redo_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.custom_undo_steps,
+            config.history.custom_undo_steps
+        );
+        assert_eq!(
+            round_trip.history.custom_redo_steps,
+            config.history.custom_redo_steps
+        );
+        assert_eq!(round_trip.presets.slot_count, config.presets.slot_count);
+        assert_eq!(round_trip.presets.get_slot(1), config.presets.get_slot(1));
     }
 }

@@ -583,6 +583,7 @@ pub enum ToggleField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Copy for cheap capture in iced callback closures.
 pub enum PresetToggleField {
     FillEnabled,
     TextBackgroundEnabled,
@@ -643,6 +644,7 @@ pub enum TextField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Copy for cheap capture in iced callback closures.
 pub enum PresetTextField {
     Name,
     ColorName,

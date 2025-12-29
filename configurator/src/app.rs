@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
 use iced::alignment::Horizontal;
 use iced::border::Radius;
@@ -68,6 +68,7 @@ pub struct ConfiguratorApp {
     is_saving: bool,
     is_dirty: bool,
     config_path: Option<PathBuf>,
+    config_mtime: Option<SystemTime>,
     last_backup_path: Option<PathBuf>,
 }
 
@@ -126,6 +127,7 @@ impl Application for ConfiguratorApp {
             is_saving: false,
             is_dirty: false,
             config_path,
+            config_mtime: None,
             last_backup_path: None,
         };
 
@@ -156,6 +158,7 @@ impl Application for ConfiguratorApp {
                         self.baseline = draft;
                         self.base_config = config.clone();
                         self.override_mode = self.draft.ui_toolbar_layout_mode;
+                        self.config_mtime = load_config_mtime(&self.config_path);
                         self.is_dirty = false;
                         self.status = StatusMessage::success("Configuration loaded from disk.");
                     }
@@ -182,6 +185,12 @@ impl Application for ConfiguratorApp {
             }
             Message::SaveRequested => {
                 if self.is_saving {
+                    return Command::none();
+                }
+                if self.config_changed_on_disk() {
+                    self.status = StatusMessage::error(
+                        "Configuration changed on disk. Reload before saving.",
+                    );
                     return Command::none();
                 }
 
@@ -213,6 +222,7 @@ impl Application for ConfiguratorApp {
                         self.draft = draft.clone();
                         self.baseline = draft;
                         self.base_config = saved_config.clone();
+                        self.config_mtime = load_config_mtime(&self.config_path);
                         self.is_dirty = false;
                         let mut msg = "Configuration saved successfully.".to_string();
                         if let Some(path) = backup {
@@ -2191,6 +2201,20 @@ impl ConfiguratorApp {
         scrollable(column).into()
     }
 
+    fn config_changed_on_disk(&self) -> bool {
+        let Some(last_modified) = self.config_mtime else {
+            return false;
+        };
+        let Some(path) = self.config_path.as_ref() else {
+            return false;
+        };
+
+        match std::fs::metadata(path).and_then(|meta| meta.modified()) {
+            Ok(modified) => modified > last_modified,
+            Err(_) => false,
+        }
+    }
+
     fn refresh_dirty_flag(&mut self) {
         self.is_dirty = self.draft != self.baseline;
     }
@@ -2205,6 +2229,12 @@ async fn load_config_from_disk() -> Result<Arc<Config>, String> {
 async fn save_config_to_disk(config: Config) -> Result<(Option<PathBuf>, Arc<Config>), String> {
     let backup = config.save_with_backup().map_err(|err| err.to_string())?;
     Ok((backup, Arc::new(config)))
+}
+
+fn load_config_mtime(path: &Option<PathBuf>) -> Option<SystemTime> {
+    let path = path.as_ref()?;
+    let metadata = std::fs::metadata(path).ok()?;
+    metadata.modified().ok()
 }
 
 fn labeled_input<'a>(
