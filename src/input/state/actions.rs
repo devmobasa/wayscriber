@@ -68,6 +68,17 @@ impl InputState {
             }
         }
 
+        if matches!(key, Key::Escape)
+            && matches!(self.state, DrawingState::Idle)
+            && self.has_selection()
+        {
+            let bounds = self.selection_bounding_box(self.selected_shape_ids());
+            self.clear_selection();
+            self.mark_selection_dirty_region(bounds);
+            self.needs_redraw = true;
+            return;
+        }
+
         // In text input mode, only check actions if modifiers are pressed or it's a special key
         // This allows plain letters to be typed without triggering color/tool actions
         if matches!(&self.state, DrawingState::TextInput { .. }) {
@@ -354,6 +365,12 @@ impl InputState {
                         self.restore_selection_from_snapshots(snapshots.clone());
                         self.state = DrawingState::Idle;
                     }
+                    DrawingState::Selecting { .. } => {
+                        self.clear_provisional_dirty();
+                        self.last_provisional_bounds = None;
+                        self.state = DrawingState::Idle;
+                        self.needs_redraw = true;
+                    }
                     DrawingState::ResizingText {
                         shape_id, snapshot, ..
                     } => {
@@ -450,6 +467,49 @@ impl InputState {
             Action::RedoAllDelayed => {
                 self.start_redo_all_delayed(self.redo_all_delay_ms);
             }
+            Action::CopySelection => {
+                let copied = self.copy_selection();
+                if copied > 0 {
+                    info!("Copied selection ({} shape(s))", copied);
+                } else if self.has_selection() {
+                    self.set_ui_toast(
+                        UiToastKind::Warning,
+                        "No unlocked shapes to copy; clipboard unchanged.",
+                    );
+                } else {
+                    self.set_ui_toast(
+                        UiToastKind::Warning,
+                        "No selection to copy; clipboard unchanged.",
+                    );
+                }
+            }
+            Action::PasteSelection => {
+                let pasted = self.paste_selection();
+                if pasted > 0 {
+                    info!("Pasted selection ({} shape(s))", pasted);
+                } else if self.selection_clipboard_is_empty() {
+                    self.set_ui_toast(UiToastKind::Warning, "Clipboard is empty.");
+                }
+            }
+            Action::SelectAll => {
+                let previous_bounds = self.selection_bounding_box(self.selected_shape_ids());
+                let ids: Vec<_> = self
+                    .canvas_set
+                    .active_frame()
+                    .shapes
+                    .iter()
+                    .map(|shape| shape.id)
+                    .collect();
+                if ids.is_empty() {
+                    self.set_ui_toast(UiToastKind::Warning, "No shapes to select.");
+                } else {
+                    self.set_selection(ids);
+                    self.mark_selection_dirty_region(previous_bounds);
+                    let new_bounds = self.selection_bounding_box(self.selected_shape_ids());
+                    self.mark_selection_dirty_region(new_bounds);
+                    self.needs_redraw = true;
+                }
+            }
             Action::DuplicateSelection => {
                 if self.duplicate_selection() {
                     info!("Duplicated selection");
@@ -534,26 +594,12 @@ impl InputState {
                 }
             }
             Action::MoveSelectionToStart => {
-                let axis = self
-                    .last_selection_axis
-                    .unwrap_or(SelectionAxis::Horizontal);
-                let moved = match axis {
-                    SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(true),
-                    SelectionAxis::Vertical => self.move_selection_to_vertical_edge(true),
-                };
-                if moved {
+                if self.move_selection_to_horizontal_edge(true) {
                     info!("Moved selection to start");
                 }
             }
             Action::MoveSelectionToEnd => {
-                let axis = self
-                    .last_selection_axis
-                    .unwrap_or(SelectionAxis::Horizontal);
-                let moved = match axis {
-                    SelectionAxis::Horizontal => self.move_selection_to_horizontal_edge(false),
-                    SelectionAxis::Vertical => self.move_selection_to_vertical_edge(false),
-                };
-                if moved {
+                if self.move_selection_to_horizontal_edge(false) {
                     info!("Moved selection to end");
                 }
             }
@@ -711,6 +757,9 @@ impl InputState {
             }
             Action::OpenConfigurator => {
                 self.launch_configurator();
+            }
+            Action::OpenCaptureFolder => {
+                self.open_capture_folder();
             }
             Action::SetColorRed => {
                 let _ = self.set_color(util::key_to_color('r').unwrap());

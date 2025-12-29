@@ -41,6 +41,7 @@ impl SeatHandler for WaylandState {
                 Ok(pointer) => {
                     debug!("Pointer initialized with theme");
                     self.themed_pointer = Some(pointer);
+                    self.current_pointer_shape = None;
                 }
                 Err(err) => {
                     warn!("Pointer initialized without theme: {}", err);
@@ -74,6 +75,7 @@ impl SeatHandler for WaylandState {
         if capability == Capability::Pointer {
             info!("Pointer capability removed");
             self.themed_pointer = None;
+            self.current_pointer_shape = None;
         }
     }
 

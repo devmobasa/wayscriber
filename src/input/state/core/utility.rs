@@ -6,6 +6,7 @@ use crate::config::Action;
 use crate::config::Config;
 use crate::util::Rect;
 use std::io::ErrorKind;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -201,6 +202,37 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn set_capture_feedback(
+        &mut self,
+        saved_path: Option<&Path>,
+        copied_to_clipboard: bool,
+        open_folder_binding: Option<&str>,
+    ) {
+        let mut parts = Vec::new();
+        self.last_capture_path = saved_path.map(|path| path.to_path_buf());
+        if let Some(path) = saved_path {
+            let mut saved = format!("Saved to {}", path.display());
+            if let Some(binding) = open_folder_binding {
+                saved.push_str(&format!(" ({binding} opens folder)"));
+            }
+            parts.push(saved);
+        }
+
+        if copied_to_clipboard {
+            if saved_path.is_none() {
+                parts.push("Clipboard only (no file saved)".to_string());
+            }
+            parts.push("Copied to clipboard".to_string());
+        }
+
+        if parts.is_empty() {
+            parts.push("Screenshot captured".to_string());
+        }
+
+        self.set_ui_toast(UiToastKind::Info, parts.join(" | "));
+    }
+
     pub fn advance_ui_toast(&mut self, now: Instant) -> bool {
         let duration = Duration::from_millis(UI_TOAST_DURATION_MS);
         let Some(toast) = &self.ui_toast else {
@@ -211,6 +243,57 @@ impl InputState {
             return false;
         }
         true
+    }
+
+    /// Opens the most recent capture directory using the desktop default application.
+    pub(crate) fn open_capture_folder(&mut self) {
+        let Some(path) = self.last_capture_path.clone() else {
+            self.set_ui_toast(UiToastKind::Warning, "No saved capture to open.");
+            return;
+        };
+
+        let folder = if path.is_dir() {
+            path
+        } else if let Some(parent) = path.parent() {
+            parent.to_path_buf()
+        } else {
+            self.set_ui_toast(UiToastKind::Warning, "Capture folder is unavailable.");
+            return;
+        };
+
+        let opener = if cfg!(target_os = "macos") {
+            "open"
+        } else if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "xdg-open"
+        };
+
+        let mut cmd = Command::new(opener);
+        if cfg!(target_os = "windows") {
+            cmd.args(["/C", "start", ""]).arg(&folder);
+        } else {
+            cmd.arg(&folder);
+        }
+
+        match cmd.spawn() {
+            Ok(child) => {
+                log::info!(
+                    "Opened capture folder at {} (pid {})",
+                    folder.display(),
+                    child.id()
+                );
+                self.should_exit = true;
+            }
+            Err(err) => {
+                log::error!(
+                    "Failed to open capture folder at {}: {}",
+                    folder.display(),
+                    err
+                );
+                self.set_ui_toast(UiToastKind::Error, "Failed to open capture folder.");
+            }
+        }
     }
 
     /// Opens the primary config file using the desktop default application.

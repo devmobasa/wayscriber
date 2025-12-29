@@ -509,6 +509,13 @@ redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
 # Duplicate current selection
 duplicate_selection = ["Ctrl+D"]
 
+# Copy/paste selection
+copy_selection = ["Ctrl+Alt+C"]
+paste_selection = ["Ctrl+Alt+V"]
+
+# Select all annotations
+select_all = ["Ctrl+A"]
+
 # Nudge selection (hold Shift for a larger step)
 nudge_selection_up = ["ArrowUp"]
 nudge_selection_down = ["ArrowDown"]
@@ -519,7 +526,7 @@ nudge_selection_right = ["ArrowRight", "Shift+PageDown"]
 nudge_selection_up_large = ["PageUp"]
 nudge_selection_down_large = ["PageDown"]
 
-# Move selection to edges (left/right by default; top/bottom after a vertical nudge)
+# Move selection to horizontal edges (left/right)
 move_selection_to_start = ["Home"]
 move_selection_to_end = ["End"]
 
@@ -583,6 +590,9 @@ capture_clipboard_selection = ["Ctrl+Shift+C"]
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Shift+6"]
+
+# Open the most recent capture folder
+open_capture_folder = ["Ctrl+Alt+O"]
 
 # Toggle frozen mode
 toggle_frozen_mode = ["Ctrl+Shift+F"]
@@ -673,7 +683,9 @@ clear_canvas = ["X"]
 - Duplicate keybindings across actions will be detected and reported at startup
 
 **Defaults:**
-All defaults match the original hardcoded keybindings to maintain compatibility.
+Defaults match the original hardcoded keybindings where possible. Copy/paste selection uses
+<kbd>Ctrl+Alt+C</kbd>/<kbd>Ctrl+Alt+V</kbd>, so the clipboard-selection capture shortcut
+defaults to <kbd>Ctrl+Shift+C</kbd> to avoid conflicts.
 
 ## Creating Your Configuration
 

@@ -125,14 +125,13 @@ impl InputState {
         current_x: i32,
         current_y: i32,
     ) -> bool {
-        if let DrawingState::Drawing {
-            tool,
-            start_x: _,
-            start_y: _,
-            points,
-        } = &self.state
-        {
-            match tool {
+        match &self.state {
+            DrawingState::Drawing {
+                tool,
+                start_x: _,
+                start_y: _,
+                points,
+            } => match tool {
                 Tool::Pen => {
                     // Render freehand without cloning - just borrow the points
                     render_freehand_borrowed(
@@ -173,9 +172,38 @@ impl InputState {
                         false
                     }
                 }
+            },
+            DrawingState::Selecting {
+                start_x,
+                start_y,
+                additive,
+            } => {
+                let Some(rect) =
+                    Self::selection_rect_from_points(*start_x, *start_y, current_x, current_y)
+                else {
+                    return false;
+                };
+                let _ = ctx.save();
+                ctx.rectangle(
+                    rect.x as f64,
+                    rect.y as f64,
+                    rect.width as f64,
+                    rect.height as f64,
+                );
+                ctx.set_source_rgba(0.2, 0.45, 1.0, 0.12);
+                let _ = ctx.fill_preserve();
+                if *additive {
+                    ctx.set_source_rgba(0.2, 0.75, 0.45, 0.9);
+                } else {
+                    ctx.set_source_rgba(0.2, 0.45, 1.0, 0.9);
+                }
+                ctx.set_line_width(1.5);
+                ctx.set_dash(&[6.0, 4.0], 0.0);
+                let _ = ctx.stroke();
+                let _ = ctx.restore();
+                true
             }
-        } else {
-            false
+            _ => false,
         }
     }
 
