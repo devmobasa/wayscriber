@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
 use iced::alignment::Horizontal;
 use iced::border::Radius;
@@ -13,6 +13,7 @@ use iced::{Application, Background, Border, Command, Element, Length, Settings, 
 use wayscriber::config::{Config, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN};
 
 use crate::messages::Message;
+use crate::models::util::format_float;
 use crate::models::{
     BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, EraserModeOption,
     FontStyleOption, FontWeightOption, KeybindingsTabId, NamedColorOption, OverrideOption,
@@ -55,16 +56,19 @@ pub struct ConfiguratorApp {
     draft: ConfigDraft,
     baseline: ConfigDraft,
     defaults: ConfigDraft,
+    // Base config loaded from disk to preserve unknown fields when saving.
     base_config: Arc<Config>,
     status: StatusMessage,
     active_tab: TabId,
     active_ui_tab: UiTabId,
     active_keybindings_tab: KeybindingsTabId,
+    preset_collapsed: Vec<bool>,
     override_mode: ToolbarLayoutModeOption,
     is_loading: bool,
     is_saving: bool,
     is_dirty: bool,
     config_path: Option<PathBuf>,
+    config_mtime: Option<SystemTime>,
     last_backup_path: Option<PathBuf>,
 }
 
@@ -117,11 +121,13 @@ impl Application for ConfiguratorApp {
             active_tab: TabId::Drawing,
             active_ui_tab: UiTabId::Toolbar,
             active_keybindings_tab: KeybindingsTabId::General,
+            preset_collapsed: vec![false; PRESET_SLOTS_MAX],
             override_mode,
             is_loading: true,
             is_saving: false,
             is_dirty: false,
             config_path,
+            config_mtime: None,
             last_backup_path: None,
         };
 
@@ -152,6 +158,7 @@ impl Application for ConfiguratorApp {
                         self.baseline = draft;
                         self.base_config = config.clone();
                         self.override_mode = self.draft.ui_toolbar_layout_mode;
+                        self.config_mtime = load_config_mtime(&self.config_path);
                         self.is_dirty = false;
                         self.status = StatusMessage::success("Configuration loaded from disk.");
                     }
@@ -178,6 +185,12 @@ impl Application for ConfiguratorApp {
             }
             Message::SaveRequested => {
                 if self.is_saving {
+                    return Command::none();
+                }
+                if self.config_changed_on_disk() {
+                    self.status = StatusMessage::error(
+                        "Configuration changed on disk. Reload before saving.",
+                    );
                     return Command::none();
                 }
 
@@ -209,6 +222,7 @@ impl Application for ConfiguratorApp {
                         self.draft = draft.clone();
                         self.baseline = draft;
                         self.base_config = saved_config.clone();
+                        self.config_mtime = load_config_mtime(&self.config_path);
                         self.is_dirty = false;
                         let mut msg = "Configuration saved successfully.".to_string();
                         if let Some(path) = backup {
@@ -351,6 +365,42 @@ impl Application for ConfiguratorApp {
                 self.status = StatusMessage::idle();
                 if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
                     slot.enabled = enabled;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetCollapseToggled(slot_index) => {
+                if let Some(collapsed) = self.preset_collapsed.get_mut(slot_index.saturating_sub(1))
+                {
+                    *collapsed = !*collapsed;
+                }
+            }
+            Message::PresetResetSlot(slot_index) => {
+                self.status = StatusMessage::idle();
+                if let (Some(slot), Some(default_slot)) = (
+                    self.draft.presets.slot_mut(slot_index),
+                    self.defaults.presets.slot(slot_index),
+                ) {
+                    let enabled = slot.enabled;
+                    *slot = default_slot.clone();
+                    slot.enabled = enabled;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetDuplicateSlot(slot_index) => {
+                self.status = StatusMessage::idle();
+                let target_index = slot_index + 1;
+                if target_index <= PRESET_SLOTS_MAX
+                    && let Some(source) = self.draft.presets.slot(slot_index).cloned()
+                    && let Some(target) = self.draft.presets.slot_mut(target_index)
+                {
+                    *target = source;
+                    target.enabled = true;
+                    if let Some(collapsed) = self.preset_collapsed.get_mut(target_index - 1) {
+                        *collapsed = false;
+                    }
+                    if self.draft.presets.slot_count < target_index {
+                        self.draft.presets.slot_count = target_index;
+                    }
                 }
                 self.refresh_dirty_flag();
             }
@@ -548,6 +598,7 @@ impl ConfiguratorApp {
             TabId::Capture => self.capture_tab(),
             TabId::Session => self.session_tab(),
             TabId::Keybindings => self.keybindings_tab(),
+            #[cfg(feature = "tablet-input")]
             TabId::Tablet => self.tablet_tab(),
         };
 
@@ -572,7 +623,7 @@ impl ConfiguratorApp {
     }
 
     fn defaults_legend(&self) -> Element<'_, Message> {
-        row![
+        let legend = row![
             text("Default labels:").size(12),
             text("blue = matches")
                 .size(12)
@@ -582,8 +633,14 @@ impl ConfiguratorApp {
                 .style(theme::Text::Color(default_label_color(true))),
         ]
         .spacing(12)
-        .align_items(iced::Alignment::Center)
-        .into()
+        .align_items(iced::Alignment::Center);
+
+        let hint = feedback_text(
+            "Tip: use Tab/Shift+Tab to move between fields; Enter activates buttons.",
+            false,
+        );
+
+        column![legend, hint].spacing(4).into()
     }
 
     fn drawing_tab(&self) -> Element<'_, Message> {
@@ -615,11 +672,11 @@ impl ConfiguratorApp {
                     Some(self.draft.drawing_color.selected_named),
                     Message::NamedColorSelected,
                 )
-                .width(Length::Fixed(160.0));
+                .width(Length::Fixed(COLOR_PICKER_WIDTH));
 
                 let picker_row = row![
                     picker,
-                    color_preview_badge(self.draft.drawing_color.preview_color()),
+                    color_preview_labeled(self.draft.drawing_color.preview_color()),
                 ]
                 .spacing(8)
                 .align_items(iced::Alignment::Center);
@@ -659,7 +716,7 @@ impl ConfiguratorApp {
                     text_input("B (0-255)", &self.draft.drawing_color.rgb[2]).on_input(|value| {
                         Message::TripletChanged(TripletField::DrawingColorRgb, 2, value)
                     }),
-                    color_preview_badge(self.draft.drawing_color.preview_color()),
+                    color_preview_labeled(self.draft.drawing_color.preview_color()),
                 ]
                 .spacing(8)
                 .align_items(iced::Alignment::Center);
@@ -710,26 +767,32 @@ impl ConfiguratorApp {
             text("Drawing Defaults").size(20),
             color_block,
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Thickness (px)",
                     &self.draft.drawing_default_thickness,
                     &self.defaults.drawing_default_thickness,
                     TextField::DrawingThickness,
+                    Some("Range: 1-50 px"),
+                    validate_f64_range(&self.draft.drawing_default_thickness, 1.0, 50.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Font size (pt)",
                     &self.draft.drawing_default_font_size,
                     &self.defaults.drawing_default_font_size,
                     TextField::DrawingFontSize,
+                    Some("Range: 8-72 pt"),
+                    validate_f64_range(&self.draft.drawing_default_font_size, 8.0, 72.0),
                 )
             ]
             .spacing(12),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Eraser size (px)",
                     &self.draft.drawing_default_eraser_size,
                     &self.defaults.drawing_default_eraser_size,
                     TextField::DrawingEraserSize,
+                    Some("Range: 1-50 px"),
+                    validate_f64_range(&self.draft.drawing_default_eraser_size, 1.0, 50.0),
                 ),
                 labeled_control(
                     "Eraser mode",
@@ -744,32 +807,40 @@ impl ConfiguratorApp {
             ]
             .spacing(12),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Marker opacity (0.05-0.9)",
                     &self.draft.drawing_marker_opacity,
                     &self.defaults.drawing_marker_opacity,
                     TextField::DrawingMarkerOpacity,
+                    None,
+                    validate_f64_range(&self.draft.drawing_marker_opacity, 0.05, 0.9),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Undo stack limit",
                     &self.draft.drawing_undo_stack_limit,
                     &self.defaults.drawing_undo_stack_limit,
                     TextField::DrawingUndoStackLimit,
+                    Some("Range: 10-1000"),
+                    validate_usize_range(&self.draft.drawing_undo_stack_limit, 10, 1000),
                 )
             ]
             .spacing(12),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Hit-test tolerance (px)",
                     &self.draft.drawing_hit_test_tolerance,
                     &self.defaults.drawing_hit_test_tolerance,
                     TextField::DrawingHitTestTolerance,
+                    Some("Range: 1-20 px"),
+                    validate_f64_range(&self.draft.drawing_hit_test_tolerance, 1.0, 20.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Hit-test threshold",
                     &self.draft.drawing_hit_test_linear_threshold,
                     &self.defaults.drawing_hit_test_linear_threshold,
                     TextField::DrawingHitTestThreshold,
+                    Some("Minimum: 1"),
+                    validate_usize_min(&self.draft.drawing_hit_test_linear_threshold, 1),
                 )
             ]
             .spacing(12),
@@ -863,7 +934,7 @@ impl ConfiguratorApp {
             Some(self.draft.presets.slot_count),
             Message::PresetSlotCountChanged,
         )
-        .width(Length::Fixed(140.0));
+        .width(Length::Fixed(SMALL_PICKER_WIDTH));
 
         let slot_count_control = labeled_control(
             "Visible slots",
@@ -877,7 +948,12 @@ impl ConfiguratorApp {
             .push(text("Preset Slots").size(20))
             .push(slot_count_control);
 
-        for slot_index in 1..=PRESET_SLOTS_MAX {
+        let slot_limit = self
+            .draft
+            .presets
+            .slot_count
+            .clamp(PRESET_SLOTS_MIN, PRESET_SLOTS_MAX);
+        for slot_index in 1..=slot_limit {
             column = column.push(self.preset_slot_section(slot_index));
         }
 
@@ -891,6 +967,9 @@ impl ConfiguratorApp {
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
             return Space::new(Length::Shrink, Length::Shrink).into();
         };
+        if slot_index > self.draft.presets.slot_count {
+            return Space::new(Length::Shrink, Length::Shrink).into();
+        }
 
         let enabled_row = row![
             checkbox("Enabled", slot.enabled)
@@ -903,20 +982,39 @@ impl ConfiguratorApp {
         .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center);
 
-        let mut section = Column::new()
-            .spacing(8)
-            .push(text(format!("Slot {slot_index}")).size(18))
-            .push(enabled_row);
+        let is_collapsed = self
+            .preset_collapsed
+            .get(slot_index.saturating_sub(1))
+            .copied()
+            .unwrap_or(false);
+        let collapse_label = if is_collapsed { "Expand" } else { "Collapse" };
+        let collapse_button = button(collapse_label)
+            .style(theme::Button::Secondary)
+            .on_press(Message::PresetCollapseToggled(slot_index));
+        let reset_button = button("Reset")
+            .style(theme::Button::Secondary)
+            .on_press(Message::PresetResetSlot(slot_index));
+        let mut duplicate_button = button("Duplicate").style(theme::Button::Secondary);
+        if slot_index < PRESET_SLOTS_MAX {
+            duplicate_button = duplicate_button.on_press(Message::PresetDuplicateSlot(slot_index));
+        }
 
-        if slot_index > self.draft.presets.slot_count {
-            section = section.push(
-                text(format!(
-                    "Hidden (slot count is {})",
-                    self.draft.presets.slot_count
-                ))
-                .size(12)
-                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
-            );
+        let slot_header = Row::new()
+            .spacing(8)
+            .align_items(iced::Alignment::Center)
+            .push(text(format!("Slot {slot_index} settings")).size(18))
+            .push(Space::new(Length::Fill, Length::Shrink))
+            .push(collapse_button)
+            .push(reset_button)
+            .push(duplicate_button);
+
+        let mut section = Column::new().spacing(8).push(slot_header).push(enabled_row);
+
+        if is_collapsed {
+            return container(section)
+                .padding(12)
+                .style(theme::Container::Box)
+                .into();
         }
 
         if !slot.enabled {
@@ -936,7 +1034,7 @@ impl ConfiguratorApp {
         })
         .width(Length::Fill);
 
-        let header_row = row![
+        let tool_row = row![
             preset_input(
                 "Label",
                 &slot.name,
@@ -985,9 +1083,9 @@ impl ConfiguratorApp {
                     Some(slot.color.selected_named),
                     move |opt| Message::PresetNamedColorSelected(slot_index, opt),
                 )
-                .width(Length::Fixed(160.0));
+                .width(Length::Fixed(COLOR_PICKER_WIDTH));
 
-                let picker_row = row![picker, color_preview_badge(slot.color.preview_color()),]
+                let picker_row = row![picker, color_preview_labeled(slot.color.preview_color()),]
                     .spacing(8)
                     .align_items(iced::Alignment::Center);
 
@@ -1028,7 +1126,7 @@ impl ConfiguratorApp {
                     text_input("B (0-255)", &slot.color.rgb[2]).on_input(move |value| {
                         Message::PresetColorComponentChanged(slot_index, 2, value)
                     }),
-                    color_preview_badge(slot.color.preview_color()),
+                    color_preview_labeled(slot.color.preview_color()),
                 ]
                 .spacing(8)
                 .align_items(iced::Alignment::Center);
@@ -1178,7 +1276,7 @@ impl ConfiguratorApp {
         )];
 
         section = section
-            .push(header_row)
+            .push(tool_row)
             .push(color_block)
             .push(size_row)
             .push(eraser_row)
@@ -1198,17 +1296,21 @@ impl ConfiguratorApp {
             column![
                 text("Arrow Settings").size(20),
                 row![
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Arrow length (px)",
                         &self.draft.arrow_length,
                         &self.defaults.arrow_length,
                         TextField::ArrowLength,
+                        Some("Range: 5-50 px"),
+                        validate_f64_range(&self.draft.arrow_length, 5.0, 50.0),
                     ),
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Arrow angle (deg)",
                         &self.draft.arrow_angle,
                         &self.defaults.arrow_angle,
                         TextField::ArrowAngle,
+                        Some("Range: 15-60 deg"),
+                        validate_f64_range(&self.draft.arrow_angle, 15.0, 60.0),
                     )
                 ]
                 .spacing(12),
@@ -1225,21 +1327,93 @@ impl ConfiguratorApp {
     }
 
     fn history_tab(&self) -> Element<'_, Message> {
+        let custom_enabled = self.draft.history_custom_section_enabled;
+        let custom_section = container(
+            column![
+                text("Custom section").size(16),
+                row![
+                    labeled_input_state(
+                        "Custom undo delay (ms)",
+                        &self.draft.history_custom_undo_delay_ms,
+                        &self.defaults.history_custom_undo_delay_ms,
+                        TextField::HistoryCustomUndoDelayMs,
+                        custom_enabled,
+                        Some("Range: 50-5000 ms"),
+                        if custom_enabled {
+                            validate_u64_range(&self.draft.history_custom_undo_delay_ms, 50, 5000)
+                        } else {
+                            None
+                        },
+                    ),
+                    labeled_input_state(
+                        "Custom redo delay (ms)",
+                        &self.draft.history_custom_redo_delay_ms,
+                        &self.defaults.history_custom_redo_delay_ms,
+                        TextField::HistoryCustomRedoDelayMs,
+                        custom_enabled,
+                        Some("Range: 50-5000 ms"),
+                        if custom_enabled {
+                            validate_u64_range(&self.draft.history_custom_redo_delay_ms, 50, 5000)
+                        } else {
+                            None
+                        },
+                    )
+                ]
+                .spacing(12),
+                row![
+                    labeled_input_state(
+                        "Custom undo steps",
+                        &self.draft.history_custom_undo_steps,
+                        &self.defaults.history_custom_undo_steps,
+                        TextField::HistoryCustomUndoSteps,
+                        custom_enabled,
+                        Some("Range: 1-500"),
+                        if custom_enabled {
+                            validate_usize_range(&self.draft.history_custom_undo_steps, 1, 500)
+                        } else {
+                            None
+                        },
+                    ),
+                    labeled_input_state(
+                        "Custom redo steps",
+                        &self.draft.history_custom_redo_steps,
+                        &self.defaults.history_custom_redo_steps,
+                        TextField::HistoryCustomRedoSteps,
+                        custom_enabled,
+                        Some("Range: 1-500"),
+                        if custom_enabled {
+                            validate_usize_range(&self.draft.history_custom_redo_steps, 1, 500)
+                        } else {
+                            None
+                        },
+                    )
+                ]
+                .spacing(12),
+            ]
+            .spacing(12),
+        )
+        .padding(12)
+        .style(theme::Container::Box);
+
         scrollable(
             column![
                 text("History").size(20),
                 row![
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Undo all delay (ms)",
                         &self.draft.history_undo_all_delay_ms,
                         &self.defaults.history_undo_all_delay_ms,
                         TextField::HistoryUndoAllDelayMs,
+                        Some("Range: 50-5000 ms"),
+                        validate_u64_range(&self.draft.history_undo_all_delay_ms, 50, 5000),
                     ),
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Redo all delay (ms)",
                         &self.draft.history_redo_all_delay_ms,
                         &self.defaults.history_redo_all_delay_ms,
                         TextField::HistoryRedoAllDelayMs,
+                        Some("Range: 50-5000 ms"),
+                        validate_u64_range(&self.draft.history_redo_all_delay_ms, 50, 5000),
                     )
                 ]
                 .spacing(12),
@@ -1249,36 +1423,7 @@ impl ConfiguratorApp {
                     self.defaults.history_custom_section_enabled,
                     ToggleField::HistoryCustomSectionEnabled,
                 ),
-                row![
-                    labeled_input(
-                        "Custom undo delay (ms)",
-                        &self.draft.history_custom_undo_delay_ms,
-                        &self.defaults.history_custom_undo_delay_ms,
-                        TextField::HistoryCustomUndoDelayMs,
-                    ),
-                    labeled_input(
-                        "Custom redo delay (ms)",
-                        &self.draft.history_custom_redo_delay_ms,
-                        &self.defaults.history_custom_redo_delay_ms,
-                        TextField::HistoryCustomRedoDelayMs,
-                    )
-                ]
-                .spacing(12),
-                row![
-                    labeled_input(
-                        "Custom undo steps",
-                        &self.draft.history_custom_undo_steps,
-                        &self.defaults.history_custom_undo_steps,
-                        TextField::HistoryCustomUndoSteps,
-                    ),
-                    labeled_input(
-                        "Custom redo steps",
-                        &self.draft.history_custom_redo_steps,
-                        &self.defaults.history_custom_redo_steps,
-                        TextField::HistoryCustomRedoSteps,
-                    )
-                ]
-                .spacing(12),
+                custom_section,
             ]
             .spacing(12),
         )
@@ -1292,7 +1437,7 @@ impl ConfiguratorApp {
             Message::BufferCountChanged,
         );
         let buffer_control = row![
-            buffer_pick.width(Length::Fixed(120.0)),
+            buffer_pick.width(Length::Fixed(BUFFER_PICKER_WIDTH)),
             text(self.draft.performance_buffer_count.to_string())
         ]
         .spacing(12)
@@ -1303,16 +1448,18 @@ impl ConfiguratorApp {
             column![
                 text("Performance").size(20),
                 labeled_control(
-                    "Buffer count",
+                    "Buffer count (2-4)",
                     buffer_control,
                     self.defaults.performance_buffer_count.to_string(),
                     self.draft.performance_buffer_count != self.defaults.performance_buffer_count,
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "UI animation FPS (0 = unlimited)",
                     &self.draft.performance_ui_animation_fps,
                     &self.defaults.performance_ui_animation_fps,
                     TextField::PerformanceUiAnimationFps,
+                    Some("Range: 0-240"),
+                    validate_u32_range(&self.draft.performance_ui_animation_fps, 0, 240),
                 ),
                 toggle_row(
                     "Enable VSync",
@@ -1353,11 +1500,14 @@ impl ConfiguratorApp {
         let general = column![
             text("General UI").size(18),
             labeled_input(
-                "Preferred output (xdg fallback)",
+                "Preferred output (GNOME fallback)",
                 &self.draft.ui_preferred_output,
                 &self.defaults.ui_preferred_output,
                 TextField::UiPreferredOutput,
             ),
+            text("Used for the GNOME xdg-shell fallback overlay.")
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             toggle_row(
                 "Use fullscreen xdg fallback",
                 self.draft.ui_xdg_fullscreen,
@@ -1521,13 +1671,13 @@ impl ConfiguratorApp {
             text("Placement offsets").size(16),
             row![
                 labeled_input(
-                    "Top offset X",
+                    "Top offset X (px)",
                     &self.draft.ui_toolbar_top_offset,
                     &self.defaults.ui_toolbar_top_offset,
                     TextField::ToolbarTopOffset,
                 ),
                 labeled_input(
-                    "Top offset Y",
+                    "Top offset Y (px)",
                     &self.draft.ui_toolbar_top_offset_y,
                     &self.defaults.ui_toolbar_top_offset_y,
                     TextField::ToolbarTopOffsetY,
@@ -1536,13 +1686,13 @@ impl ConfiguratorApp {
             .spacing(12),
             row![
                 labeled_input(
-                    "Side offset Y",
+                    "Side offset Y (px)",
                     &self.draft.ui_toolbar_side_offset,
                     &self.defaults.ui_toolbar_side_offset,
                     TextField::ToolbarSideOffset,
                 ),
                 labeled_input(
-                    "Side offset X",
+                    "Side offset X (px)",
                     &self.draft.ui_toolbar_side_offset_x,
                     &self.defaults.ui_toolbar_side_offset_x,
                     TextField::ToolbarSideOffsetX,
@@ -1692,23 +1842,29 @@ impl ConfiguratorApp {
                 ToggleField::UiClickHighlightUsePenColor,
             ),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Radius",
                     &self.draft.click_highlight_radius,
                     &self.defaults.click_highlight_radius,
                     TextField::HighlightRadius,
+                    Some("Range: 16-160"),
+                    validate_f64_range(&self.draft.click_highlight_radius, 16.0, 160.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Outline thickness",
                     &self.draft.click_highlight_outline_thickness,
                     &self.defaults.click_highlight_outline_thickness,
                     TextField::HighlightOutlineThickness,
+                    Some("Range: 1-12"),
+                    validate_f64_range(&self.draft.click_highlight_outline_thickness, 1.0, 12.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Duration (ms)",
                     &self.draft.click_highlight_duration_ms,
                     &self.defaults.click_highlight_duration_ms,
                     TextField::HighlightDurationMs,
+                    Some("Range: 150-1500 ms"),
+                    validate_u64_range(&self.draft.click_highlight_duration_ms, 150, 1500),
                 )
             ]
             .spacing(12),
@@ -1908,11 +2064,13 @@ impl ConfiguratorApp {
                 self.defaults.session_compression.label().to_string(),
                 self.draft.session_compression != self.defaults.session_compression,
             ))
-            .push(labeled_input(
+            .push(labeled_input_with_feedback(
                 "Max shapes per frame",
                 &self.draft.session_max_shapes_per_frame,
                 &self.defaults.session_max_shapes_per_frame,
                 TextField::SessionMaxShapesPerFrame,
+                Some("Minimum: 1"),
+                validate_usize_min(&self.draft.session_max_shapes_per_frame, 1),
             ))
             .push(labeled_input(
                 "Max persisted undo depth (blank = runtime limit)",
@@ -1920,17 +2078,21 @@ impl ConfiguratorApp {
                 &self.defaults.session_max_persisted_undo_depth,
                 TextField::SessionMaxPersistedUndoDepth,
             ))
-            .push(labeled_input(
+            .push(labeled_input_with_feedback(
                 "Max file size (MB)",
                 &self.draft.session_max_file_size_mb,
                 &self.defaults.session_max_file_size_mb,
                 TextField::SessionMaxFileSizeMb,
+                Some("Range: 1-1024 MB"),
+                validate_u64_range(&self.draft.session_max_file_size_mb, 1, 1024),
             ))
-            .push(labeled_input(
+            .push(labeled_input_with_feedback(
                 "Auto-compress threshold (KB)",
                 &self.draft.session_auto_compress_threshold_kb,
                 &self.defaults.session_auto_compress_threshold_kb,
                 TextField::SessionAutoCompressThresholdKb,
+                Some("Minimum: 1 KB"),
+                validate_u64_min(&self.draft.session_auto_compress_threshold_kb, 1),
             ))
             .push(labeled_input(
                 "Backup retention count",
@@ -1942,6 +2104,7 @@ impl ConfiguratorApp {
         scrollable(column).into()
     }
 
+    #[cfg(feature = "tablet-input")]
     fn tablet_tab(&self) -> Element<'_, Message> {
         scrollable(
             column![
@@ -1959,17 +2122,21 @@ impl ConfiguratorApp {
                     ToggleField::TabletPressureEnabled,
                 ),
                 row![
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Min thickness",
                         &self.draft.tablet_min_thickness,
                         &self.defaults.tablet_min_thickness,
                         TextField::TabletMinThickness,
+                        Some("Range: 1-50"),
+                        validate_f64_range(&self.draft.tablet_min_thickness, 1.0, 50.0),
                     ),
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Max thickness",
                         &self.draft.tablet_max_thickness,
                         &self.defaults.tablet_max_thickness,
                         TextField::TabletMaxThickness,
+                        Some("Range: 1-50"),
+                        validate_f64_range(&self.draft.tablet_max_thickness, 1.0, 50.0),
                     )
                 ]
                 .spacing(12),
@@ -2017,7 +2184,7 @@ impl ConfiguratorApp {
             column = column.push(
                 row![
                     container(text(entry.field.label()).size(16))
-                        .width(Length::Fixed(220.0))
+                        .width(Length::Fixed(LABEL_COLUMN_WIDTH))
                         .align_x(Horizontal::Right),
                     column![
                         text_input("Shortcut list", &entry.value)
@@ -2040,6 +2207,20 @@ impl ConfiguratorApp {
         scrollable(column).into()
     }
 
+    fn config_changed_on_disk(&self) -> bool {
+        let Some(last_modified) = self.config_mtime else {
+            return false;
+        };
+        let Some(path) = self.config_path.as_ref() else {
+            return false;
+        };
+
+        match std::fs::metadata(path).and_then(|meta| meta.modified()) {
+            Ok(modified) => modified > last_modified,
+            Err(_) => false,
+        }
+    }
+
     fn refresh_dirty_flag(&mut self) {
         self.is_dirty = self.draft != self.baseline;
     }
@@ -2056,22 +2237,81 @@ async fn save_config_to_disk(config: Config) -> Result<(Option<PathBuf>, Arc<Con
     Ok((backup, Arc::new(config)))
 }
 
+fn load_config_mtime(path: &Option<PathBuf>) -> Option<SystemTime> {
+    let path = path.as_ref()?;
+    let metadata = std::fs::metadata(path).ok()?;
+    metadata.modified().ok()
+}
+
 fn labeled_input<'a>(
     label: &'static str,
     value: &'a str,
     default: &'a str,
     field: TextField,
 ) -> Element<'a, Message> {
+    labeled_input_with_feedback(label, value, default, field, None, None)
+}
+
+fn labeled_input_with_feedback<'a>(
+    label: &'static str,
+    value: &'a str,
+    default: &'a str,
+    field: TextField,
+    hint: Option<&'static str>,
+    error: Option<String>,
+) -> Element<'a, Message> {
     let changed = value.trim() != default.trim();
-    column![
+    let input = text_input(label, value).on_input(move |val| Message::TextChanged(field, val));
+    let mut column = column![
         row![text(label).size(14), default_value_text(default, changed)]
             .spacing(DEFAULT_LABEL_GAP)
             .align_items(iced::Alignment::Center),
-        text_input(label, value).on_input(move |val| Message::TextChanged(field, val))
+        input
     ]
     .spacing(4)
-    .width(Length::Fill)
-    .into()
+    .width(Length::Fill);
+
+    if let Some(message) = error {
+        column = column.push(feedback_text(message, true));
+    } else if let Some(message) = hint {
+        column = column.push(feedback_text(message, false));
+    }
+
+    column.into()
+}
+
+fn labeled_input_state<'a>(
+    label: &'static str,
+    value: &'a str,
+    default: &'a str,
+    field: TextField,
+    enabled: bool,
+    hint: Option<&'static str>,
+    error: Option<String>,
+) -> Element<'a, Message> {
+    let changed = value.trim() != default.trim();
+    let input = if enabled {
+        text_input(label, value).on_input(move |val| Message::TextChanged(field, val))
+    } else {
+        text_input(label, value)
+    };
+
+    let mut column = column![
+        row![text(label).size(14), default_value_text(default, changed)]
+            .spacing(DEFAULT_LABEL_GAP)
+            .align_items(iced::Alignment::Center),
+        input
+    ]
+    .spacing(4)
+    .width(Length::Fill);
+
+    if let Some(message) = error {
+        column = column.push(feedback_text(message, true));
+    } else if let Some(message) = hint {
+        column = column.push(feedback_text(message, false));
+    }
+
+    column.into()
 }
 
 fn labeled_control<'a>(
@@ -2142,7 +2382,7 @@ fn override_row<'a>(field: ToolbarOverrideField, value: OverrideOption) -> Eleme
         pick_list(OverrideOption::list(), Some(value), move |opt| {
             Message::ToolbarOverrideChanged(field, opt)
         },)
-        .width(Length::Fixed(140.0)),
+        .width(Length::Fixed(SMALL_PICKER_WIDTH)),
     ]
     .spacing(12)
     .align_items(iced::Alignment::Center)
@@ -2164,11 +2404,11 @@ fn color_triplet_editor<'a>(
         .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center),
         row![
-            text_input("R", &colors.components[0])
+            text_input("Red", &colors.components[0])
                 .on_input(move |val| Message::TripletChanged(field, 0, val)),
-            text_input("G", &colors.components[1])
+            text_input("Green", &colors.components[1])
                 .on_input(move |val| Message::TripletChanged(field, 1, val)),
-            text_input("B", &colors.components[2])
+            text_input("Blue", &colors.components[2])
                 .on_input(move |val| Message::TripletChanged(field, 2, val)),
         ]
         .spacing(8)
@@ -2192,13 +2432,13 @@ fn color_quad_editor<'a>(
         .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center),
         row![
-            text_input("R", &colors.components[0])
+            text_input("Red", &colors.components[0])
                 .on_input(move |val| Message::QuadChanged(field, 0, val)),
-            text_input("G", &colors.components[1])
+            text_input("Green", &colors.components[1])
                 .on_input(move |val| Message::QuadChanged(field, 1, val)),
-            text_input("B", &colors.components[2])
+            text_input("Blue", &colors.components[2])
                 .on_input(move |val| Message::QuadChanged(field, 2, val)),
-            text_input("A", &colors.components[3])
+            text_input("Alpha", &colors.components[3])
                 .on_input(move |val| Message::QuadChanged(field, 3, val)),
         ]
         .spacing(8)
@@ -2213,9 +2453,20 @@ fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
         None => (iced::Color::from_rgb(0.2, 0.2, 0.2), false),
     };
 
-    container(Space::with_width(Length::Fixed(20.0)).height(Length::Fixed(20.0)))
+    let content: Element<'_, Message> = if is_valid {
+        Space::new(Length::Shrink, Length::Shrink).into()
+    } else {
+        text("?")
+            .size(14)
+            .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.95, 0.95)))
+            .into()
+    };
+
+    container(content)
         .width(Length::Fixed(24.0))
         .height(Length::Fixed(24.0))
+        .center_x()
+        .center_y()
         .style(theme::Container::Custom(Box::new(ColorPreviewStyle {
             color: preview_color,
             is_invalid: !is_valid,
@@ -2223,7 +2474,18 @@ fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
         .into()
 }
 
+fn color_preview_labeled<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
+    column![text("Preview").size(12), color_preview_badge(color)]
+        .spacing(2)
+        .align_items(iced::Alignment::Center)
+        .into()
+}
+
 const DEFAULT_LABEL_GAP: f32 = 12.0;
+const LABEL_COLUMN_WIDTH: f32 = 220.0;
+const SMALL_PICKER_WIDTH: f32 = 140.0;
+const COLOR_PICKER_WIDTH: f32 = 160.0;
+const BUFFER_PICKER_WIDTH: f32 = 120.0;
 
 fn default_label_color(changed: bool) -> iced::Color {
     if changed {
@@ -2238,6 +2500,16 @@ fn default_value_text<'a>(value: impl Into<String>, changed: bool) -> iced::widg
     text(label)
         .size(12)
         .style(theme::Text::Color(default_label_color(changed)))
+}
+
+fn feedback_text<'a>(message: impl Into<String>, is_error: bool) -> iced::widget::Text<'a> {
+    let color = if is_error {
+        iced::Color::from_rgb(0.95, 0.6, 0.6)
+    } else {
+        iced::Color::from_rgb(0.6, 0.6, 0.6)
+    };
+    let message = message.into();
+    text(message).size(12).style(theme::Text::Color(color))
 }
 
 fn bool_label(value: bool) -> &'static str {
@@ -2258,6 +2530,118 @@ fn toggle_row<'a>(
     .spacing(DEFAULT_LABEL_GAP)
     .align_items(iced::Alignment::Center)
     .into()
+}
+
+fn validate_f64_range(value: &str, min: f64, max: f64) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a numeric value".to_string());
+    }
+
+    match trimmed.parse::<f64>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!(
+                    "Range: {}-{}",
+                    format_float(min),
+                    format_float(max)
+                ))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a numeric value".to_string()),
+    }
+}
+
+fn validate_u32_range(value: &str, min: u32, max: u32) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<u32>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!("Range: {min}-{max}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_u64_range(value: &str, min: u64, max: u64) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<u64>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!("Range: {min}-{max}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_u64_min(value: &str, min: u64) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<u64>() {
+        Ok(value) => {
+            if value < min {
+                Some(format!("Minimum: {min}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_usize_range(value: &str, min: usize, max: usize) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<usize>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!("Range: {min}-{max}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_usize_min(value: &str, min: usize) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<usize>() {
+        Ok(value) => {
+            if value < min {
+                Some(format!("Minimum: {min}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
 }
 
 #[derive(Clone, Copy)]

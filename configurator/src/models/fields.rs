@@ -576,11 +576,14 @@ pub enum ToggleField {
     SessionPerOutput,
     HistoryCustomSectionEnabled,
     ArrowHeadAtEnd,
+    #[cfg(feature = "tablet-input")]
     TabletEnabled,
+    #[cfg(feature = "tablet-input")]
     TabletPressureEnabled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Copy for cheap capture in iced callback closures.
 pub enum PresetToggleField {
     FillEnabled,
     TextBackgroundEnabled,
@@ -634,11 +637,14 @@ pub enum TextField {
     SessionAutoCompressThresholdKb,
     SessionMaxPersistedUndoDepth,
     SessionBackupRetention,
+    #[cfg(feature = "tablet-input")]
     TabletMinThickness,
+    #[cfg(feature = "tablet-input")]
     TabletMaxThickness,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Copy for cheap capture in iced callback closures.
 pub enum PresetTextField {
     Name,
     ColorName,
