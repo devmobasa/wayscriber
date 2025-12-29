@@ -2,36 +2,42 @@
 pub enum TabId {
     Drawing,
     Arrow,
+    History,
     Performance,
     Ui,
     Board,
     Capture,
     Session,
     Keybindings,
+    Tablet,
 }
 
 impl TabId {
-    pub const ALL: [TabId; 8] = [
+    pub const ALL: [TabId; 10] = [
         TabId::Drawing,
         TabId::Ui,
         TabId::Board,
         TabId::Performance,
+        TabId::History,
         TabId::Capture,
         TabId::Session,
         TabId::Keybindings,
         TabId::Arrow,
+        TabId::Tablet,
     ];
 
     pub fn title(&self) -> &'static str {
         match self {
             TabId::Drawing => "Drawing",
             TabId::Arrow => "Arrow",
+            TabId::History => "History",
             TabId::Performance => "Performance",
             TabId::Ui => "UI",
             TabId::Board => "Board",
             TabId::Capture => "Capture",
             TabId::Session => "Session",
             TabId::Keybindings => "Keybindings",
+            TabId::Tablet => "Tablet",
         }
     }
 }

@@ -3,8 +3,8 @@ use wayscriber::config::{Config, PresetSlotsConfig, ToolbarModeOverride, Toolbar
 use super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::error::FormError;
 use super::fields::{
-    BoardModeOption, FontStyleOption, FontWeightOption, OverrideOption, QuadField,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
+    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
+    QuadField, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
     ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 use super::keybindings::KeybindingsDraft;
@@ -14,11 +14,18 @@ use super::util::{format_float, parse_f64};
 pub struct ConfigDraft {
     pub drawing_color: ColorInput,
     pub drawing_default_thickness: String,
+    pub drawing_default_eraser_size: String,
+    pub drawing_default_eraser_mode: EraserModeOption,
     pub drawing_default_font_size: String,
+    pub drawing_marker_opacity: String,
+    pub drawing_hit_test_tolerance: String,
+    pub drawing_hit_test_linear_threshold: String,
+    pub drawing_undo_stack_limit: String,
     pub drawing_font_family: String,
     pub drawing_font_weight: String,
     pub drawing_font_style: String,
     pub drawing_text_background_enabled: bool,
+    pub drawing_default_fill_enabled: bool,
     pub drawing_font_style_option: FontStyleOption,
     pub drawing_font_weight_option: FontWeightOption,
 
@@ -26,12 +33,27 @@ pub struct ConfigDraft {
     pub arrow_angle: String,
     pub arrow_head_at_end: bool,
 
+    pub history_undo_all_delay_ms: String,
+    pub history_redo_all_delay_ms: String,
+    pub history_custom_section_enabled: bool,
+    pub history_custom_undo_delay_ms: String,
+    pub history_custom_redo_delay_ms: String,
+    pub history_custom_undo_steps: String,
+    pub history_custom_redo_steps: String,
+
     pub performance_buffer_count: u32,
     pub performance_enable_vsync: bool,
     pub performance_ui_animation_fps: String,
 
     pub ui_show_status_bar: bool,
     pub ui_show_frozen_badge: bool,
+    pub ui_context_menu_enabled: bool,
+    pub ui_preferred_output: String,
+    pub ui_xdg_fullscreen: bool,
+    pub ui_toolbar_top_pinned: bool,
+    pub ui_toolbar_side_pinned: bool,
+    pub ui_toolbar_use_icons: bool,
+    pub ui_toolbar_show_more_colors: bool,
     pub ui_toolbar_show_preset_toasts: bool,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
     pub ui_toolbar_show_presets: bool,
@@ -40,6 +62,14 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_step_section: bool,
     pub ui_toolbar_show_text_controls: bool,
     pub ui_toolbar_show_settings_section: bool,
+    pub ui_toolbar_show_delay_sliders: bool,
+    pub ui_toolbar_show_marker_opacity_section: bool,
+    pub ui_toolbar_show_tool_preview: bool,
+    pub ui_toolbar_force_inline: bool,
+    pub ui_toolbar_top_offset: String,
+    pub ui_toolbar_top_offset_y: String,
+    pub ui_toolbar_side_offset: String,
+    pub ui_toolbar_side_offset_x: String,
     pub ui_toolbar_mode_overrides: ToolbarModeOverridesDraft,
     pub ui_status_position: StatusPositionOption,
     pub status_font_size: String,
@@ -82,6 +112,7 @@ pub struct ConfigDraft {
     pub session_persist_transparent: bool,
     pub session_persist_whiteboard: bool,
     pub session_persist_blackboard: bool,
+    pub session_persist_history: bool,
     pub session_restore_tool_state: bool,
     pub session_per_output: bool,
     pub session_storage_mode: SessionStorageModeOption,
@@ -90,7 +121,13 @@ pub struct ConfigDraft {
     pub session_max_file_size_mb: String,
     pub session_compression: SessionCompressionOption,
     pub session_auto_compress_threshold_kb: String,
+    pub session_max_persisted_undo_depth: String,
     pub session_backup_retention: String,
+
+    pub tablet_enabled: bool,
+    pub tablet_pressure_enabled: bool,
+    pub tablet_min_thickness: String,
+    pub tablet_max_thickness: String,
 
     pub presets: PresetSlotsConfig,
 
@@ -191,11 +228,20 @@ impl ConfigDraft {
         Self {
             drawing_color: ColorInput::from_color(&config.drawing.default_color),
             drawing_default_thickness: format_float(config.drawing.default_thickness),
+            drawing_default_eraser_size: format_float(config.drawing.default_eraser_size),
+            drawing_default_eraser_mode: EraserModeOption::from_mode(
+                config.drawing.default_eraser_mode,
+            ),
             drawing_default_font_size: format_float(config.drawing.default_font_size),
+            drawing_marker_opacity: format_float(config.drawing.marker_opacity),
+            drawing_hit_test_tolerance: format_float(config.drawing.hit_test_tolerance),
+            drawing_hit_test_linear_threshold: config.drawing.hit_test_linear_threshold.to_string(),
+            drawing_undo_stack_limit: config.drawing.undo_stack_limit.to_string(),
             drawing_font_family: config.drawing.font_family.clone(),
             drawing_font_weight: weight_value,
             drawing_font_style: style_value,
             drawing_text_background_enabled: config.drawing.text_background_enabled,
+            drawing_default_fill_enabled: config.drawing.default_fill_enabled,
             drawing_font_style_option: style_option,
             drawing_font_weight_option: weight_option,
 
@@ -203,12 +249,27 @@ impl ConfigDraft {
             arrow_angle: format_float(config.arrow.angle_degrees),
             arrow_head_at_end: config.arrow.head_at_end,
 
+            history_undo_all_delay_ms: config.history.undo_all_delay_ms.to_string(),
+            history_redo_all_delay_ms: config.history.redo_all_delay_ms.to_string(),
+            history_custom_section_enabled: config.history.custom_section_enabled,
+            history_custom_undo_delay_ms: config.history.custom_undo_delay_ms.to_string(),
+            history_custom_redo_delay_ms: config.history.custom_redo_delay_ms.to_string(),
+            history_custom_undo_steps: config.history.custom_undo_steps.to_string(),
+            history_custom_redo_steps: config.history.custom_redo_steps.to_string(),
+
             performance_buffer_count: config.performance.buffer_count,
             performance_enable_vsync: config.performance.enable_vsync,
             performance_ui_animation_fps: config.performance.ui_animation_fps.to_string(),
 
             ui_show_status_bar: config.ui.show_status_bar,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
+            ui_context_menu_enabled: config.ui.context_menu.enabled,
+            ui_preferred_output: config.ui.preferred_output.clone().unwrap_or_default(),
+            ui_xdg_fullscreen: config.ui.xdg_fullscreen,
+            ui_toolbar_top_pinned: config.ui.toolbar.top_pinned,
+            ui_toolbar_side_pinned: config.ui.toolbar.side_pinned,
+            ui_toolbar_use_icons: config.ui.toolbar.use_icons,
+            ui_toolbar_show_more_colors: config.ui.toolbar.show_more_colors,
             ui_toolbar_show_preset_toasts: config.ui.toolbar.show_preset_toasts,
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
@@ -219,6 +280,14 @@ impl ConfigDraft {
             ui_toolbar_show_step_section: config.ui.toolbar.show_step_section,
             ui_toolbar_show_text_controls: config.ui.toolbar.show_text_controls,
             ui_toolbar_show_settings_section: config.ui.toolbar.show_settings_section,
+            ui_toolbar_show_delay_sliders: config.ui.toolbar.show_delay_sliders,
+            ui_toolbar_show_marker_opacity_section: config.ui.toolbar.show_marker_opacity_section,
+            ui_toolbar_show_tool_preview: config.ui.toolbar.show_tool_preview,
+            ui_toolbar_force_inline: config.ui.toolbar.force_inline,
+            ui_toolbar_top_offset: format_float(config.ui.toolbar.top_offset),
+            ui_toolbar_top_offset_y: format_float(config.ui.toolbar.top_offset_y),
+            ui_toolbar_side_offset: format_float(config.ui.toolbar.side_offset),
+            ui_toolbar_side_offset_x: format_float(config.ui.toolbar.side_offset_x),
             ui_toolbar_mode_overrides: ToolbarModeOverridesDraft::from_config(
                 &config.ui.toolbar.mode_overrides,
             ),
@@ -270,6 +339,7 @@ impl ConfigDraft {
             session_persist_transparent: config.session.persist_transparent,
             session_persist_whiteboard: config.session.persist_whiteboard,
             session_persist_blackboard: config.session.persist_blackboard,
+            session_persist_history: config.session.persist_history,
             session_restore_tool_state: config.session.restore_tool_state,
             session_per_output: config.session.per_output,
             session_storage_mode: SessionStorageModeOption::from_mode(
@@ -285,7 +355,17 @@ impl ConfigDraft {
                 .session
                 .auto_compress_threshold_kb
                 .to_string(),
+            session_max_persisted_undo_depth: config
+                .session
+                .max_persisted_undo_depth
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
             session_backup_retention: config.session.backup_retention.to_string(),
+
+            tablet_enabled: config.tablet.enabled,
+            tablet_pressure_enabled: config.tablet.pressure_enabled,
+            tablet_min_thickness: format_float(config.tablet.min_thickness),
+            tablet_max_thickness: format_float(config.tablet.max_thickness),
 
             presets: config.presets.clone(),
 
@@ -308,15 +388,47 @@ impl ConfigDraft {
             |value| config.drawing.default_thickness = value,
         );
         parse_field(
+            &self.drawing_default_eraser_size,
+            "drawing.default_eraser_size",
+            &mut errors,
+            |value| config.drawing.default_eraser_size = value,
+        );
+        config.drawing.default_eraser_mode = self.drawing_default_eraser_mode.to_mode();
+        parse_field(
             &self.drawing_default_font_size,
             "drawing.default_font_size",
             &mut errors,
             |value| config.drawing.default_font_size = value,
         );
+        parse_field(
+            &self.drawing_marker_opacity,
+            "drawing.marker_opacity",
+            &mut errors,
+            |value| config.drawing.marker_opacity = value,
+        );
         config.drawing.font_family = self.drawing_font_family.clone();
         config.drawing.font_weight = self.drawing_font_weight.clone();
         config.drawing.font_style = self.drawing_font_style.clone();
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
+        config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
+        parse_field(
+            &self.drawing_hit_test_tolerance,
+            "drawing.hit_test_tolerance",
+            &mut errors,
+            |value| config.drawing.hit_test_tolerance = value,
+        );
+        parse_usize_field(
+            &self.drawing_hit_test_linear_threshold,
+            "drawing.hit_test_linear_threshold",
+            &mut errors,
+            |value| config.drawing.hit_test_linear_threshold = value,
+        );
+        parse_usize_field(
+            &self.drawing_undo_stack_limit,
+            "drawing.undo_stack_limit",
+            &mut errors,
+            |value| config.drawing.undo_stack_limit = value,
+        );
 
         parse_field(&self.arrow_length, "arrow.length", &mut errors, |value| {
             config.arrow.length = value
@@ -329,6 +441,44 @@ impl ConfigDraft {
         );
         config.arrow.head_at_end = self.arrow_head_at_end;
 
+        parse_u64_field(
+            &self.history_undo_all_delay_ms,
+            "history.undo_all_delay_ms",
+            &mut errors,
+            |value| config.history.undo_all_delay_ms = value,
+        );
+        parse_u64_field(
+            &self.history_redo_all_delay_ms,
+            "history.redo_all_delay_ms",
+            &mut errors,
+            |value| config.history.redo_all_delay_ms = value,
+        );
+        config.history.custom_section_enabled = self.history_custom_section_enabled;
+        parse_u64_field(
+            &self.history_custom_undo_delay_ms,
+            "history.custom_undo_delay_ms",
+            &mut errors,
+            |value| config.history.custom_undo_delay_ms = value,
+        );
+        parse_u64_field(
+            &self.history_custom_redo_delay_ms,
+            "history.custom_redo_delay_ms",
+            &mut errors,
+            |value| config.history.custom_redo_delay_ms = value,
+        );
+        parse_usize_field(
+            &self.history_custom_undo_steps,
+            "history.custom_undo_steps",
+            &mut errors,
+            |value| config.history.custom_undo_steps = value,
+        );
+        parse_usize_field(
+            &self.history_custom_redo_steps,
+            "history.custom_redo_steps",
+            &mut errors,
+            |value| config.history.custom_redo_steps = value,
+        );
+
         config.performance.buffer_count = self.performance_buffer_count;
         config.performance.enable_vsync = self.performance_enable_vsync;
         parse_u32_field(
@@ -340,6 +490,18 @@ impl ConfigDraft {
 
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
+        config.ui.context_menu.enabled = self.ui_context_menu_enabled;
+        let preferred_output = self.ui_preferred_output.trim();
+        config.ui.preferred_output = if preferred_output.is_empty() {
+            None
+        } else {
+            Some(preferred_output.to_string())
+        };
+        config.ui.xdg_fullscreen = self.ui_xdg_fullscreen;
+        config.ui.toolbar.top_pinned = self.ui_toolbar_top_pinned;
+        config.ui.toolbar.side_pinned = self.ui_toolbar_side_pinned;
+        config.ui.toolbar.use_icons = self.ui_toolbar_use_icons;
+        config.ui.toolbar.show_more_colors = self.ui_toolbar_show_more_colors;
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
         config.ui.toolbar.mode_overrides = self.ui_toolbar_mode_overrides.to_config();
@@ -349,6 +511,34 @@ impl ConfigDraft {
         config.ui.toolbar.show_step_section = self.ui_toolbar_show_step_section;
         config.ui.toolbar.show_text_controls = self.ui_toolbar_show_text_controls;
         config.ui.toolbar.show_settings_section = self.ui_toolbar_show_settings_section;
+        config.ui.toolbar.show_delay_sliders = self.ui_toolbar_show_delay_sliders;
+        config.ui.toolbar.show_marker_opacity_section = self.ui_toolbar_show_marker_opacity_section;
+        config.ui.toolbar.show_tool_preview = self.ui_toolbar_show_tool_preview;
+        config.ui.toolbar.force_inline = self.ui_toolbar_force_inline;
+        parse_field(
+            &self.ui_toolbar_top_offset,
+            "ui.toolbar.top_offset",
+            &mut errors,
+            |value| config.ui.toolbar.top_offset = value,
+        );
+        parse_field(
+            &self.ui_toolbar_top_offset_y,
+            "ui.toolbar.top_offset_y",
+            &mut errors,
+            |value| config.ui.toolbar.top_offset_y = value,
+        );
+        parse_field(
+            &self.ui_toolbar_side_offset,
+            "ui.toolbar.side_offset",
+            &mut errors,
+            |value| config.ui.toolbar.side_offset = value,
+        );
+        parse_field(
+            &self.ui_toolbar_side_offset_x,
+            "ui.toolbar.side_offset_x",
+            &mut errors,
+            |value| config.ui.toolbar.side_offset_x = value,
+        );
         config.ui.status_bar_position = self.ui_status_position.to_status_position();
         parse_field(
             &self.status_font_size,
@@ -506,6 +696,7 @@ impl ConfigDraft {
         config.session.persist_transparent = self.session_persist_transparent;
         config.session.persist_whiteboard = self.session_persist_whiteboard;
         config.session.persist_blackboard = self.session_persist_blackboard;
+        config.session.persist_history = self.session_persist_history;
         config.session.restore_tool_state = self.session_restore_tool_state;
         config.session.per_output = self.session_per_output;
         config.session.storage = self.session_storage_mode.to_mode();
@@ -534,12 +725,35 @@ impl ConfigDraft {
             &mut errors,
             |value| config.session.auto_compress_threshold_kb = value,
         );
+        parse_optional_usize_field(
+            &self.session_max_persisted_undo_depth,
+            "session.max_persisted_undo_depth",
+            &mut errors,
+            |value| config.session.max_persisted_undo_depth = value,
+        );
         parse_usize_field(
             &self.session_backup_retention,
             "session.backup_retention",
             &mut errors,
             |value| config.session.backup_retention = value,
         );
+
+        {
+            config.tablet.enabled = self.tablet_enabled;
+            config.tablet.pressure_enabled = self.tablet_pressure_enabled;
+            parse_field(
+                &self.tablet_min_thickness,
+                "tablet.min_thickness",
+                &mut errors,
+                |value| config.tablet.min_thickness = value,
+            );
+            parse_field(
+                &self.tablet_max_thickness,
+                "tablet.max_thickness",
+                &mut errors,
+                |value| config.tablet.max_thickness = value,
+            );
+        }
 
         config.presets = self.presets.clone();
 
@@ -582,9 +796,18 @@ impl ConfigDraft {
             ToggleField::DrawingTextBackground => {
                 self.drawing_text_background_enabled = value;
             }
+            ToggleField::DrawingFillEnabled => {
+                self.drawing_default_fill_enabled = value;
+            }
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
+            ToggleField::UiContextMenuEnabled => self.ui_context_menu_enabled = value,
+            ToggleField::UiXdgFullscreen => self.ui_xdg_fullscreen = value,
+            ToggleField::UiToolbarTopPinned => self.ui_toolbar_top_pinned = value,
+            ToggleField::UiToolbarSidePinned => self.ui_toolbar_side_pinned = value,
+            ToggleField::UiToolbarUseIcons => self.ui_toolbar_use_icons = value,
+            ToggleField::UiToolbarShowMoreColors => self.ui_toolbar_show_more_colors = value,
             ToggleField::UiToolbarPresetToasts => self.ui_toolbar_show_preset_toasts = value,
             ToggleField::UiToolbarShowPresets => self.ui_toolbar_show_presets = value,
             ToggleField::UiToolbarShowActionsSection => {
@@ -597,6 +820,18 @@ impl ConfigDraft {
             ToggleField::UiToolbarShowTextControls => self.ui_toolbar_show_text_controls = value,
             ToggleField::UiToolbarShowSettingsSection => {
                 self.ui_toolbar_show_settings_section = value;
+            }
+            ToggleField::UiToolbarShowDelaySliders => {
+                self.ui_toolbar_show_delay_sliders = value;
+            }
+            ToggleField::UiToolbarShowMarkerOpacitySection => {
+                self.ui_toolbar_show_marker_opacity_section = value;
+            }
+            ToggleField::UiToolbarShowToolPreview => {
+                self.ui_toolbar_show_tool_preview = value;
+            }
+            ToggleField::UiToolbarForceInline => {
+                self.ui_toolbar_force_inline = value;
             }
             ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
             ToggleField::UiClickHighlightUsePenColor => self.click_highlight_use_pen_color = value,
@@ -614,15 +849,23 @@ impl ConfigDraft {
             ToggleField::SessionPersistBlackboard => {
                 self.session_persist_blackboard = value;
             }
+            ToggleField::SessionPersistHistory => {
+                self.session_persist_history = value;
+            }
             ToggleField::SessionRestoreToolState => {
                 self.session_restore_tool_state = value;
             }
             ToggleField::SessionPerOutput => {
                 self.session_per_output = value;
             }
+            ToggleField::HistoryCustomSectionEnabled => {
+                self.history_custom_section_enabled = value;
+            }
             ToggleField::ArrowHeadAtEnd => {
                 self.arrow_head_at_end = value;
             }
+            ToggleField::TabletEnabled => self.tablet_enabled = value,
+            ToggleField::TabletPressureEnabled => self.tablet_pressure_enabled = value,
         }
     }
 
@@ -633,7 +876,9 @@ impl ConfigDraft {
                 self.drawing_color.update_named_from_current();
             }
             TextField::DrawingThickness => self.drawing_default_thickness = value,
+            TextField::DrawingEraserSize => self.drawing_default_eraser_size = value,
             TextField::DrawingFontSize => self.drawing_default_font_size = value,
+            TextField::DrawingMarkerOpacity => self.drawing_marker_opacity = value,
             TextField::DrawingFontFamily => self.drawing_font_family = value,
             TextField::DrawingFontWeight => {
                 self.drawing_font_weight = value;
@@ -643,9 +888,19 @@ impl ConfigDraft {
                 self.drawing_font_style = value;
                 self.drawing_font_style_option = FontStyleOption::Custom;
             }
+            TextField::DrawingHitTestTolerance => self.drawing_hit_test_tolerance = value,
+            TextField::DrawingHitTestThreshold => self.drawing_hit_test_linear_threshold = value,
+            TextField::DrawingUndoStackLimit => self.drawing_undo_stack_limit = value,
             TextField::ArrowLength => self.arrow_length = value,
             TextField::ArrowAngle => self.arrow_angle = value,
             TextField::PerformanceUiAnimationFps => self.performance_ui_animation_fps = value,
+            TextField::HistoryUndoAllDelayMs => self.history_undo_all_delay_ms = value,
+            TextField::HistoryRedoAllDelayMs => self.history_redo_all_delay_ms = value,
+            TextField::HistoryCustomUndoDelayMs => self.history_custom_undo_delay_ms = value,
+            TextField::HistoryCustomRedoDelayMs => self.history_custom_redo_delay_ms = value,
+            TextField::HistoryCustomUndoSteps => self.history_custom_undo_steps = value,
+            TextField::HistoryCustomRedoSteps => self.history_custom_redo_steps = value,
+            TextField::UiPreferredOutput => self.ui_preferred_output = value,
             TextField::StatusFontSize => self.status_font_size = value,
             TextField::StatusPadding => self.status_padding = value,
             TextField::StatusDotRadius => self.status_dot_radius = value,
@@ -659,13 +914,22 @@ impl ConfigDraft {
             TextField::CaptureSaveDirectory => self.capture_save_directory = value,
             TextField::CaptureFilename => self.capture_filename_template = value,
             TextField::CaptureFormat => self.capture_format = value,
+            TextField::ToolbarTopOffset => self.ui_toolbar_top_offset = value,
+            TextField::ToolbarTopOffsetY => self.ui_toolbar_top_offset_y = value,
+            TextField::ToolbarSideOffset => self.ui_toolbar_side_offset = value,
+            TextField::ToolbarSideOffsetX => self.ui_toolbar_side_offset_x = value,
             TextField::SessionCustomDirectory => self.session_custom_directory = value,
             TextField::SessionMaxShapesPerFrame => self.session_max_shapes_per_frame = value,
             TextField::SessionMaxFileSizeMb => self.session_max_file_size_mb = value,
             TextField::SessionAutoCompressThresholdKb => {
                 self.session_auto_compress_threshold_kb = value
             }
+            TextField::SessionMaxPersistedUndoDepth => {
+                self.session_max_persisted_undo_depth = value
+            }
             TextField::SessionBackupRetention => self.session_backup_retention = value,
+            TextField::TabletMinThickness => self.tablet_min_thickness = value,
+            TextField::TabletMaxThickness => self.tablet_max_thickness = value,
         }
     }
 
@@ -722,6 +986,25 @@ where
 {
     match value.trim().parse::<usize>() {
         Ok(parsed) => apply(parsed),
+        Err(err) => errors.push(FormError::new(field, err.to_string())),
+    }
+}
+
+fn parse_optional_usize_field<F>(
+    value: &str,
+    field: &'static str,
+    errors: &mut Vec<FormError>,
+    apply: F,
+) where
+    F: FnOnce(Option<usize>),
+{
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        apply(None);
+        return;
+    }
+    match trimmed.parse::<usize>() {
+        Ok(parsed) => apply(Some(parsed)),
         Err(err) => errors.push(FormError::new(field, err.to_string())),
     }
 }

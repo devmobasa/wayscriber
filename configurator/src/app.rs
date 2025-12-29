@@ -14,10 +14,10 @@ use wayscriber::config::Config;
 
 use crate::messages::Message;
 use crate::models::{
-    BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, FontStyleOption,
-    FontWeightOption, NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, EraserModeOption,
+    FontStyleOption, FontWeightOption, NamedColorOption, OverrideOption, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 
 pub fn run() -> iced::Result {
@@ -271,6 +271,11 @@ impl Application for ConfiguratorApp {
                 }
                 self.refresh_dirty_flag();
             }
+            Message::EraserModeChanged(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.drawing_default_eraser_mode = option;
+                self.refresh_dirty_flag();
+            }
             Message::StatusPositionChanged(option) => {
                 self.status = StatusMessage::idle();
                 self.draft.ui_status_position = option;
@@ -428,12 +433,14 @@ impl ConfiguratorApp {
         let content: Element<'_, Message> = match self.active_tab {
             TabId::Drawing => self.drawing_tab(),
             TabId::Arrow => self.arrow_tab(),
+            TabId::History => self.history_tab(),
             TabId::Performance => self.performance_tab(),
             TabId::Ui => self.ui_tab(),
             TabId::Board => self.board_tab(),
             TabId::Capture => self.capture_tab(),
             TabId::Session => self.session_tab(),
             TabId::Keybindings => self.keybindings_tab(),
+            TabId::Tablet => self.tablet_tab(),
         };
 
         let legend = self.defaults_legend();
@@ -585,6 +592,12 @@ impl ConfiguratorApp {
         ]
         .spacing(8);
 
+        let eraser_mode_pick = pick_list(
+            EraserModeOption::list(),
+            Some(self.draft.drawing_default_eraser_mode),
+            Message::EraserModeChanged,
+        );
+
         let column = column![
             text("Drawing Defaults").size(20),
             color_block,
@@ -600,6 +613,55 @@ impl ConfiguratorApp {
                     &self.draft.drawing_default_font_size,
                     &self.defaults.drawing_default_font_size,
                     TextField::DrawingFontSize,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Eraser size (px)",
+                    &self.draft.drawing_default_eraser_size,
+                    &self.defaults.drawing_default_eraser_size,
+                    TextField::DrawingEraserSize,
+                ),
+                labeled_control(
+                    "Eraser mode",
+                    eraser_mode_pick.width(Length::Fill).into(),
+                    self.defaults
+                        .drawing_default_eraser_mode
+                        .label()
+                        .to_string(),
+                    self.draft.drawing_default_eraser_mode
+                        != self.defaults.drawing_default_eraser_mode,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Marker opacity (0.05-0.9)",
+                    &self.draft.drawing_marker_opacity,
+                    &self.defaults.drawing_marker_opacity,
+                    TextField::DrawingMarkerOpacity,
+                ),
+                labeled_input(
+                    "Undo stack limit",
+                    &self.draft.drawing_undo_stack_limit,
+                    &self.defaults.drawing_undo_stack_limit,
+                    TextField::DrawingUndoStackLimit,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Hit-test tolerance (px)",
+                    &self.draft.drawing_hit_test_tolerance,
+                    &self.defaults.drawing_hit_test_tolerance,
+                    TextField::DrawingHitTestTolerance,
+                ),
+                labeled_input(
+                    "Hit-test threshold",
+                    &self.draft.drawing_hit_test_linear_threshold,
+                    &self.defaults.drawing_hit_test_linear_threshold,
+                    TextField::DrawingHitTestThreshold,
                 )
             ]
             .spacing(12),
@@ -672,6 +734,12 @@ impl ConfiguratorApp {
                 self.draft.drawing_text_background_enabled,
                 self.defaults.drawing_text_background_enabled,
                 ToggleField::DrawingTextBackground,
+            ),
+            toggle_row(
+                "Start shapes filled",
+                self.draft.drawing_default_fill_enabled,
+                self.defaults.drawing_default_fill_enabled,
+                ToggleField::DrawingFillEnabled,
             )
         ]
         .spacing(12)
@@ -705,6 +773,67 @@ impl ConfiguratorApp {
                     self.defaults.arrow_head_at_end,
                     ToggleField::ArrowHeadAtEnd,
                 )
+            ]
+            .spacing(12),
+        )
+        .into()
+    }
+
+    fn history_tab(&self) -> Element<'_, Message> {
+        scrollable(
+            column![
+                text("History").size(20),
+                row![
+                    labeled_input(
+                        "Undo all delay (ms)",
+                        &self.draft.history_undo_all_delay_ms,
+                        &self.defaults.history_undo_all_delay_ms,
+                        TextField::HistoryUndoAllDelayMs,
+                    ),
+                    labeled_input(
+                        "Redo all delay (ms)",
+                        &self.draft.history_redo_all_delay_ms,
+                        &self.defaults.history_redo_all_delay_ms,
+                        TextField::HistoryRedoAllDelayMs,
+                    )
+                ]
+                .spacing(12),
+                toggle_row(
+                    "Enable custom undo/redo section",
+                    self.draft.history_custom_section_enabled,
+                    self.defaults.history_custom_section_enabled,
+                    ToggleField::HistoryCustomSectionEnabled,
+                ),
+                row![
+                    labeled_input(
+                        "Custom undo delay (ms)",
+                        &self.draft.history_custom_undo_delay_ms,
+                        &self.defaults.history_custom_undo_delay_ms,
+                        TextField::HistoryCustomUndoDelayMs,
+                    ),
+                    labeled_input(
+                        "Custom redo delay (ms)",
+                        &self.draft.history_custom_redo_delay_ms,
+                        &self.defaults.history_custom_redo_delay_ms,
+                        TextField::HistoryCustomRedoDelayMs,
+                    )
+                ]
+                .spacing(12),
+                row![
+                    labeled_input(
+                        "Custom undo steps",
+                        &self.draft.history_custom_undo_steps,
+                        &self.defaults.history_custom_undo_steps,
+                        TextField::HistoryCustomUndoSteps,
+                    ),
+                    labeled_input(
+                        "Custom redo steps",
+                        &self.draft.history_custom_redo_steps,
+                        &self.defaults.history_custom_redo_steps,
+                        TextField::HistoryCustomRedoSteps,
+                    )
+                ]
+                .spacing(12),
             ]
             .spacing(12),
         )
@@ -776,7 +905,30 @@ impl ConfiguratorApp {
             UiTabId::ClickHighlight => self.ui_click_highlight_tab(),
         };
 
-        column![text("UI Settings").size(20), tab_bar, content]
+        let general = column![
+            text("General UI").size(18),
+            labeled_input(
+                "Preferred output (xdg fallback)",
+                &self.draft.ui_preferred_output,
+                &self.defaults.ui_preferred_output,
+                TextField::UiPreferredOutput,
+            ),
+            toggle_row(
+                "Use fullscreen xdg fallback",
+                self.draft.ui_xdg_fullscreen,
+                self.defaults.ui_xdg_fullscreen,
+                ToggleField::UiXdgFullscreen,
+            ),
+            toggle_row(
+                "Enable context menu",
+                self.draft.ui_context_menu_enabled,
+                self.defaults.ui_context_menu_enabled,
+                ToggleField::UiContextMenuEnabled,
+            )
+        ]
+        .spacing(12);
+
+        column![text("UI Settings").size(20), general, tab_bar, content]
             .spacing(12)
             .into()
     }
@@ -804,6 +956,30 @@ impl ConfiguratorApp {
                 toolbar_layout.width(Length::Fill).into(),
                 self.defaults.ui_toolbar_layout_mode.label().to_string(),
                 self.draft.ui_toolbar_layout_mode != self.defaults.ui_toolbar_layout_mode,
+            ),
+            toggle_row(
+                "Pin top toolbar",
+                self.draft.ui_toolbar_top_pinned,
+                self.defaults.ui_toolbar_top_pinned,
+                ToggleField::UiToolbarTopPinned,
+            ),
+            toggle_row(
+                "Pin side toolbar",
+                self.draft.ui_toolbar_side_pinned,
+                self.defaults.ui_toolbar_side_pinned,
+                ToggleField::UiToolbarSidePinned,
+            ),
+            toggle_row(
+                "Use icon-only buttons",
+                self.draft.ui_toolbar_use_icons,
+                self.defaults.ui_toolbar_use_icons,
+                ToggleField::UiToolbarUseIcons,
+            ),
+            toggle_row(
+                "Show extended colors",
+                self.draft.ui_toolbar_show_more_colors,
+                self.defaults.ui_toolbar_show_more_colors,
+                ToggleField::UiToolbarShowMoreColors,
             ),
             toggle_row(
                 "Show presets",
@@ -842,10 +1018,34 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowSettingsSection,
             ),
             toggle_row(
+                "Show delay sliders",
+                self.draft.ui_toolbar_show_delay_sliders,
+                self.defaults.ui_toolbar_show_delay_sliders,
+                ToggleField::UiToolbarShowDelaySliders,
+            ),
+            toggle_row(
+                "Show marker opacity controls",
+                self.draft.ui_toolbar_show_marker_opacity_section,
+                self.defaults.ui_toolbar_show_marker_opacity_section,
+                ToggleField::UiToolbarShowMarkerOpacitySection,
+            ),
+            toggle_row(
+                "Show tool preview bubble",
+                self.draft.ui_toolbar_show_tool_preview,
+                self.defaults.ui_toolbar_show_tool_preview,
+                ToggleField::UiToolbarShowToolPreview,
+            ),
+            toggle_row(
                 "Show preset action toasts",
                 self.draft.ui_toolbar_show_preset_toasts,
                 self.defaults.ui_toolbar_show_preset_toasts,
                 ToggleField::UiToolbarPresetToasts,
+            ),
+            toggle_row(
+                "Force inline toolbars",
+                self.draft.ui_toolbar_force_inline,
+                self.defaults.ui_toolbar_force_inline,
+                ToggleField::UiToolbarForceInline,
             ),
             text("Mode overrides").size(16),
             row![text("Edit mode:"), override_mode_pick]
@@ -873,6 +1073,37 @@ impl ConfiguratorApp {
                 ToolbarOverrideField::ShowSettingsSection,
                 overrides.show_settings_section,
             ),
+            text("Placement offsets").size(16),
+            row![
+                labeled_input(
+                    "Top offset X",
+                    &self.draft.ui_toolbar_top_offset,
+                    &self.defaults.ui_toolbar_top_offset,
+                    TextField::ToolbarTopOffset,
+                ),
+                labeled_input(
+                    "Top offset Y",
+                    &self.draft.ui_toolbar_top_offset_y,
+                    &self.defaults.ui_toolbar_top_offset_y,
+                    TextField::ToolbarTopOffsetY,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Side offset Y",
+                    &self.draft.ui_toolbar_side_offset,
+                    &self.defaults.ui_toolbar_side_offset,
+                    TextField::ToolbarSideOffset,
+                ),
+                labeled_input(
+                    "Side offset X",
+                    &self.draft.ui_toolbar_side_offset_x,
+                    &self.defaults.ui_toolbar_side_offset_x,
+                    TextField::ToolbarSideOffsetX,
+                )
+            ]
+            .spacing(12),
         ]
         .spacing(12);
 
@@ -1190,6 +1421,12 @@ impl ConfiguratorApp {
                 ToggleField::SessionPersistBlackboard,
             ),
             toggle_row(
+                "Persist undo/redo history",
+                self.draft.session_persist_history,
+                self.defaults.session_persist_history,
+                ToggleField::SessionPersistHistory,
+            ),
+            toggle_row(
                 "Restore tool state on startup",
                 self.draft.session_restore_tool_state,
                 self.defaults.session_restore_tool_state,
@@ -1233,6 +1470,12 @@ impl ConfiguratorApp {
                 TextField::SessionMaxShapesPerFrame,
             ))
             .push(labeled_input(
+                "Max persisted undo depth (blank = runtime limit)",
+                &self.draft.session_max_persisted_undo_depth,
+                &self.defaults.session_max_persisted_undo_depth,
+                TextField::SessionMaxPersistedUndoDepth,
+            ))
+            .push(labeled_input(
                 "Max file size (MB)",
                 &self.draft.session_max_file_size_mb,
                 &self.defaults.session_max_file_size_mb,
@@ -1252,6 +1495,43 @@ impl ConfiguratorApp {
             ));
 
         scrollable(column).into()
+    }
+
+    fn tablet_tab(&self) -> Element<'_, Message> {
+        scrollable(
+            column![
+                text("Tablet / Stylus").size(20),
+                toggle_row(
+                    "Enable tablet input",
+                    self.draft.tablet_enabled,
+                    self.defaults.tablet_enabled,
+                    ToggleField::TabletEnabled,
+                ),
+                toggle_row(
+                    "Enable pressure-to-thickness",
+                    self.draft.tablet_pressure_enabled,
+                    self.defaults.tablet_pressure_enabled,
+                    ToggleField::TabletPressureEnabled,
+                ),
+                row![
+                    labeled_input(
+                        "Min thickness",
+                        &self.draft.tablet_min_thickness,
+                        &self.defaults.tablet_min_thickness,
+                        TextField::TabletMinThickness,
+                    ),
+                    labeled_input(
+                        "Max thickness",
+                        &self.draft.tablet_max_thickness,
+                        &self.defaults.tablet_max_thickness,
+                        TextField::TabletMaxThickness,
+                    )
+                ]
+                .spacing(12),
+            ]
+            .spacing(12),
+        )
+        .into()
     }
 
     fn keybindings_tab(&self) -> Element<'_, Message> {

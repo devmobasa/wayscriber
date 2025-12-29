@@ -1,6 +1,7 @@
 use wayscriber::config::{
     SessionCompression, SessionStorageMode, StatusPosition, ToolbarLayoutMode,
 };
+use wayscriber::input::EraserMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontStyleOption {
@@ -113,6 +114,45 @@ impl FontWeightOption {
 }
 
 impl std::fmt::Display for FontWeightOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EraserModeOption {
+    Brush,
+    Stroke,
+}
+
+impl EraserModeOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::Brush, Self::Stroke]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Brush => "Brush",
+            Self::Stroke => "Stroke",
+        }
+    }
+
+    pub fn to_mode(self) -> EraserMode {
+        match self {
+            Self::Brush => EraserMode::Brush,
+            Self::Stroke => EraserMode::Stroke,
+        }
+    }
+
+    pub fn from_mode(mode: EraserMode) -> Self {
+        match mode {
+            EraserMode::Brush => EraserModeOption::Brush,
+            EraserMode::Stroke => EraserModeOption::Stroke,
+        }
+    }
+}
+
+impl std::fmt::Display for EraserModeOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }
@@ -336,9 +376,16 @@ impl std::fmt::Display for BoardModeOption {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToggleField {
     DrawingTextBackground,
+    DrawingFillEnabled,
     PerformanceVsync,
     UiShowStatusBar,
     UiShowFrozenBadge,
+    UiContextMenuEnabled,
+    UiXdgFullscreen,
+    UiToolbarTopPinned,
+    UiToolbarSidePinned,
+    UiToolbarUseIcons,
+    UiToolbarShowMoreColors,
     UiToolbarPresetToasts,
     UiToolbarShowPresets,
     UiToolbarShowActionsSection,
@@ -346,6 +393,10 @@ pub enum ToggleField {
     UiToolbarShowStepSection,
     UiToolbarShowTextControls,
     UiToolbarShowSettingsSection,
+    UiToolbarShowDelaySliders,
+    UiToolbarShowMarkerOpacitySection,
+    UiToolbarShowToolPreview,
+    UiToolbarForceInline,
     UiClickHighlightEnabled,
     UiClickHighlightUsePenColor,
     BoardEnabled,
@@ -356,22 +407,38 @@ pub enum ToggleField {
     SessionPersistTransparent,
     SessionPersistWhiteboard,
     SessionPersistBlackboard,
+    SessionPersistHistory,
     SessionRestoreToolState,
     SessionPerOutput,
+    HistoryCustomSectionEnabled,
     ArrowHeadAtEnd,
+    TabletEnabled,
+    TabletPressureEnabled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextField {
     DrawingColorName,
     DrawingThickness,
+    DrawingEraserSize,
     DrawingFontSize,
+    DrawingMarkerOpacity,
     DrawingFontFamily,
     DrawingFontWeight,
     DrawingFontStyle,
+    DrawingHitTestTolerance,
+    DrawingHitTestThreshold,
+    DrawingUndoStackLimit,
     ArrowLength,
     ArrowAngle,
     PerformanceUiAnimationFps,
+    HistoryUndoAllDelayMs,
+    HistoryRedoAllDelayMs,
+    HistoryCustomUndoDelayMs,
+    HistoryCustomRedoDelayMs,
+    HistoryCustomUndoSteps,
+    HistoryCustomRedoSteps,
+    UiPreferredOutput,
     StatusFontSize,
     StatusPadding,
     StatusDotRadius,
@@ -385,11 +452,18 @@ pub enum TextField {
     CaptureSaveDirectory,
     CaptureFilename,
     CaptureFormat,
+    ToolbarTopOffset,
+    ToolbarTopOffsetY,
+    ToolbarSideOffset,
+    ToolbarSideOffsetX,
     SessionCustomDirectory,
     SessionMaxShapesPerFrame,
     SessionMaxFileSizeMb,
     SessionAutoCompressThresholdKb,
+    SessionMaxPersistedUndoDepth,
     SessionBackupRetention,
+    TabletMinThickness,
+    TabletMaxThickness,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
