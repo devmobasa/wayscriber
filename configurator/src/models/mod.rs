@@ -15,4 +15,4 @@ pub use fields::{
     ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 pub use keybindings::KeybindingField;
-pub use tab::{TabId, UiTabId};
+pub use tab::{KeybindingsTabId, TabId, UiTabId};

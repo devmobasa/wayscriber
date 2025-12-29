@@ -15,8 +15,8 @@ use wayscriber::config::{Config, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN};
 use crate::messages::Message;
 use crate::models::{
     BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, EraserModeOption,
-    FontStyleOption, FontWeightOption, NamedColorOption, OverrideOption, PresetEraserKindOption,
-    PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    FontStyleOption, FontWeightOption, KeybindingsTabId, NamedColorOption, OverrideOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
     ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
@@ -59,6 +59,7 @@ pub struct ConfiguratorApp {
     status: StatusMessage,
     active_tab: TabId,
     active_ui_tab: UiTabId,
+    active_keybindings_tab: KeybindingsTabId,
     override_mode: ToolbarLayoutModeOption,
     is_loading: bool,
     is_saving: bool,
@@ -115,6 +116,7 @@ impl Application for ConfiguratorApp {
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Drawing,
             active_ui_tab: UiTabId::Toolbar,
+            active_keybindings_tab: KeybindingsTabId::General,
             override_mode,
             is_loading: true,
             is_saving: false,
@@ -225,6 +227,9 @@ impl Application for ConfiguratorApp {
             }
             Message::UiTabSelected(tab) => {
                 self.active_ui_tab = tab;
+            }
+            Message::KeybindingsTabSelected(tab) => {
+                self.active_keybindings_tab = tab;
             }
             Message::ToggleChanged(field, value) => {
                 self.status = StatusMessage::idle();
@@ -1975,11 +1980,34 @@ impl ConfiguratorApp {
     }
 
     fn keybindings_tab(&self) -> Element<'_, Message> {
+        let tab_bar = KeybindingsTabId::ALL.iter().fold(
+            Row::new().spacing(8).align_items(iced::Alignment::Center),
+            |row, tab| {
+                let label = tab.title();
+                let button = button(label)
+                    .padding([6, 12])
+                    .style(if *tab == self.active_keybindings_tab {
+                        theme::Button::Primary
+                    } else {
+                        theme::Button::Secondary
+                    })
+                    .on_press(Message::KeybindingsTabSelected(*tab));
+                row.push(button)
+            },
+        );
+
         let mut column = Column::new()
             .spacing(8)
-            .push(text("Keybindings (comma-separated)").size(20));
+            .push(text("Keybindings (comma-separated)").size(20))
+            .push(tab_bar);
 
-        for entry in &self.draft.keybindings.entries {
+        for entry in self
+            .draft
+            .keybindings
+            .entries
+            .iter()
+            .filter(|entry| entry.field.tab() == self.active_keybindings_tab)
+        {
             let default_value = self
                 .defaults
                 .keybindings
