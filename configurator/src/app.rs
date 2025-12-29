@@ -13,6 +13,7 @@ use iced::{Application, Background, Border, Command, Element, Length, Settings, 
 use wayscriber::config::{Config, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN};
 
 use crate::messages::Message;
+use crate::models::util::format_float;
 use crate::models::{
     BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, EraserModeOption,
     FontStyleOption, FontWeightOption, KeybindingsTabId, NamedColorOption, OverrideOption,
@@ -750,26 +751,32 @@ impl ConfiguratorApp {
             text("Drawing Defaults").size(20),
             color_block,
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Thickness (px)",
                     &self.draft.drawing_default_thickness,
                     &self.defaults.drawing_default_thickness,
                     TextField::DrawingThickness,
+                    Some("Range: 1-50 px"),
+                    validate_f64_range(&self.draft.drawing_default_thickness, 1.0, 50.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Font size (pt)",
                     &self.draft.drawing_default_font_size,
                     &self.defaults.drawing_default_font_size,
                     TextField::DrawingFontSize,
+                    Some("Range: 8-72 pt"),
+                    validate_f64_range(&self.draft.drawing_default_font_size, 8.0, 72.0),
                 )
             ]
             .spacing(12),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Eraser size (px)",
                     &self.draft.drawing_default_eraser_size,
                     &self.defaults.drawing_default_eraser_size,
                     TextField::DrawingEraserSize,
+                    Some("Range: 1-50 px"),
+                    validate_f64_range(&self.draft.drawing_default_eraser_size, 1.0, 50.0),
                 ),
                 labeled_control(
                     "Eraser mode",
@@ -784,32 +791,40 @@ impl ConfiguratorApp {
             ]
             .spacing(12),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Marker opacity (0.05-0.9)",
                     &self.draft.drawing_marker_opacity,
                     &self.defaults.drawing_marker_opacity,
                     TextField::DrawingMarkerOpacity,
+                    None,
+                    validate_f64_range(&self.draft.drawing_marker_opacity, 0.05, 0.9),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Undo stack limit",
                     &self.draft.drawing_undo_stack_limit,
                     &self.defaults.drawing_undo_stack_limit,
                     TextField::DrawingUndoStackLimit,
+                    Some("Range: 10-1000"),
+                    validate_usize_range(&self.draft.drawing_undo_stack_limit, 10, 1000),
                 )
             ]
             .spacing(12),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Hit-test tolerance (px)",
                     &self.draft.drawing_hit_test_tolerance,
                     &self.defaults.drawing_hit_test_tolerance,
                     TextField::DrawingHitTestTolerance,
+                    Some("Range: 1-20 px"),
+                    validate_f64_range(&self.draft.drawing_hit_test_tolerance, 1.0, 20.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Hit-test threshold",
                     &self.draft.drawing_hit_test_linear_threshold,
                     &self.defaults.drawing_hit_test_linear_threshold,
                     TextField::DrawingHitTestThreshold,
+                    Some("Minimum: 1"),
+                    validate_usize_min(&self.draft.drawing_hit_test_linear_threshold, 1),
                 )
             ]
             .spacing(12),
@@ -1265,17 +1280,21 @@ impl ConfiguratorApp {
             column![
                 text("Arrow Settings").size(20),
                 row![
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Arrow length (px)",
                         &self.draft.arrow_length,
                         &self.defaults.arrow_length,
                         TextField::ArrowLength,
+                        Some("Range: 5-50 px"),
+                        validate_f64_range(&self.draft.arrow_length, 5.0, 50.0),
                     ),
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Arrow angle (deg)",
                         &self.draft.arrow_angle,
                         &self.defaults.arrow_angle,
                         TextField::ArrowAngle,
+                        Some("Range: 15-60 deg"),
+                        validate_f64_range(&self.draft.arrow_angle, 15.0, 60.0),
                     )
                 ]
                 .spacing(12),
@@ -1303,6 +1322,12 @@ impl ConfiguratorApp {
                         &self.defaults.history_custom_undo_delay_ms,
                         TextField::HistoryCustomUndoDelayMs,
                         custom_enabled,
+                        Some("Range: 50-5000 ms"),
+                        if custom_enabled {
+                            validate_u64_range(&self.draft.history_custom_undo_delay_ms, 50, 5000)
+                        } else {
+                            None
+                        },
                     ),
                     labeled_input_state(
                         "Custom redo delay (ms)",
@@ -1310,6 +1335,12 @@ impl ConfiguratorApp {
                         &self.defaults.history_custom_redo_delay_ms,
                         TextField::HistoryCustomRedoDelayMs,
                         custom_enabled,
+                        Some("Range: 50-5000 ms"),
+                        if custom_enabled {
+                            validate_u64_range(&self.draft.history_custom_redo_delay_ms, 50, 5000)
+                        } else {
+                            None
+                        },
                     )
                 ]
                 .spacing(12),
@@ -1320,6 +1351,12 @@ impl ConfiguratorApp {
                         &self.defaults.history_custom_undo_steps,
                         TextField::HistoryCustomUndoSteps,
                         custom_enabled,
+                        Some("Range: 1-500"),
+                        if custom_enabled {
+                            validate_usize_range(&self.draft.history_custom_undo_steps, 1, 500)
+                        } else {
+                            None
+                        },
                     ),
                     labeled_input_state(
                         "Custom redo steps",
@@ -1327,6 +1364,12 @@ impl ConfiguratorApp {
                         &self.defaults.history_custom_redo_steps,
                         TextField::HistoryCustomRedoSteps,
                         custom_enabled,
+                        Some("Range: 1-500"),
+                        if custom_enabled {
+                            validate_usize_range(&self.draft.history_custom_redo_steps, 1, 500)
+                        } else {
+                            None
+                        },
                     )
                 ]
                 .spacing(12),
@@ -1340,17 +1383,21 @@ impl ConfiguratorApp {
             column![
                 text("History").size(20),
                 row![
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Undo all delay (ms)",
                         &self.draft.history_undo_all_delay_ms,
                         &self.defaults.history_undo_all_delay_ms,
                         TextField::HistoryUndoAllDelayMs,
+                        Some("Range: 50-5000 ms"),
+                        validate_u64_range(&self.draft.history_undo_all_delay_ms, 50, 5000),
                     ),
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Redo all delay (ms)",
                         &self.draft.history_redo_all_delay_ms,
                         &self.defaults.history_redo_all_delay_ms,
                         TextField::HistoryRedoAllDelayMs,
+                        Some("Range: 50-5000 ms"),
+                        validate_u64_range(&self.draft.history_redo_all_delay_ms, 50, 5000),
                     )
                 ]
                 .spacing(12),
@@ -1390,11 +1437,13 @@ impl ConfiguratorApp {
                     self.defaults.performance_buffer_count.to_string(),
                     self.draft.performance_buffer_count != self.defaults.performance_buffer_count,
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "UI animation FPS (0 = unlimited)",
                     &self.draft.performance_ui_animation_fps,
                     &self.defaults.performance_ui_animation_fps,
                     TextField::PerformanceUiAnimationFps,
+                    Some("Range: 0-240"),
+                    validate_u32_range(&self.draft.performance_ui_animation_fps, 0, 240),
                 ),
                 toggle_row(
                     "Enable VSync",
@@ -1777,23 +1826,29 @@ impl ConfiguratorApp {
                 ToggleField::UiClickHighlightUsePenColor,
             ),
             row![
-                labeled_input(
+                labeled_input_with_feedback(
                     "Radius",
                     &self.draft.click_highlight_radius,
                     &self.defaults.click_highlight_radius,
                     TextField::HighlightRadius,
+                    Some("Range: 16-160"),
+                    validate_f64_range(&self.draft.click_highlight_radius, 16.0, 160.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Outline thickness",
                     &self.draft.click_highlight_outline_thickness,
                     &self.defaults.click_highlight_outline_thickness,
                     TextField::HighlightOutlineThickness,
+                    Some("Range: 1-12"),
+                    validate_f64_range(&self.draft.click_highlight_outline_thickness, 1.0, 12.0),
                 ),
-                labeled_input(
+                labeled_input_with_feedback(
                     "Duration (ms)",
                     &self.draft.click_highlight_duration_ms,
                     &self.defaults.click_highlight_duration_ms,
                     TextField::HighlightDurationMs,
+                    Some("Range: 150-1500 ms"),
+                    validate_u64_range(&self.draft.click_highlight_duration_ms, 150, 1500),
                 )
             ]
             .spacing(12),
@@ -1993,11 +2048,13 @@ impl ConfiguratorApp {
                 self.defaults.session_compression.label().to_string(),
                 self.draft.session_compression != self.defaults.session_compression,
             ))
-            .push(labeled_input(
+            .push(labeled_input_with_feedback(
                 "Max shapes per frame",
                 &self.draft.session_max_shapes_per_frame,
                 &self.defaults.session_max_shapes_per_frame,
                 TextField::SessionMaxShapesPerFrame,
+                Some("Minimum: 1"),
+                validate_usize_min(&self.draft.session_max_shapes_per_frame, 1),
             ))
             .push(labeled_input(
                 "Max persisted undo depth (blank = runtime limit)",
@@ -2005,17 +2062,21 @@ impl ConfiguratorApp {
                 &self.defaults.session_max_persisted_undo_depth,
                 TextField::SessionMaxPersistedUndoDepth,
             ))
-            .push(labeled_input(
+            .push(labeled_input_with_feedback(
                 "Max file size (MB)",
                 &self.draft.session_max_file_size_mb,
                 &self.defaults.session_max_file_size_mb,
                 TextField::SessionMaxFileSizeMb,
+                Some("Range: 1-1024 MB"),
+                validate_u64_range(&self.draft.session_max_file_size_mb, 1, 1024),
             ))
-            .push(labeled_input(
+            .push(labeled_input_with_feedback(
                 "Auto-compress threshold (KB)",
                 &self.draft.session_auto_compress_threshold_kb,
                 &self.defaults.session_auto_compress_threshold_kb,
                 TextField::SessionAutoCompressThresholdKb,
+                Some("Minimum: 1 KB"),
+                validate_u64_min(&self.draft.session_auto_compress_threshold_kb, 1),
             ))
             .push(labeled_input(
                 "Backup retention count",
@@ -2045,17 +2106,21 @@ impl ConfiguratorApp {
                     ToggleField::TabletPressureEnabled,
                 ),
                 row![
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Min thickness",
                         &self.draft.tablet_min_thickness,
                         &self.defaults.tablet_min_thickness,
                         TextField::TabletMinThickness,
+                        Some("Range: 1-50"),
+                        validate_f64_range(&self.draft.tablet_min_thickness, 1.0, 50.0),
                     ),
-                    labeled_input(
+                    labeled_input_with_feedback(
                         "Max thickness",
                         &self.draft.tablet_max_thickness,
                         &self.defaults.tablet_max_thickness,
                         TextField::TabletMaxThickness,
+                        Some("Range: 1-50"),
+                        validate_f64_range(&self.draft.tablet_max_thickness, 1.0, 50.0),
                     )
                 ]
                 .spacing(12),
@@ -2148,16 +2213,35 @@ fn labeled_input<'a>(
     default: &'a str,
     field: TextField,
 ) -> Element<'a, Message> {
+    labeled_input_with_feedback(label, value, default, field, None, None)
+}
+
+fn labeled_input_with_feedback<'a>(
+    label: &'static str,
+    value: &'a str,
+    default: &'a str,
+    field: TextField,
+    hint: Option<&'static str>,
+    error: Option<String>,
+) -> Element<'a, Message> {
     let changed = value.trim() != default.trim();
-    column![
+    let input = text_input(label, value).on_input(move |val| Message::TextChanged(field, val));
+    let mut column = column![
         row![text(label).size(14), default_value_text(default, changed)]
             .spacing(DEFAULT_LABEL_GAP)
             .align_items(iced::Alignment::Center),
-        text_input(label, value).on_input(move |val| Message::TextChanged(field, val))
+        input
     ]
     .spacing(4)
-    .width(Length::Fill)
-    .into()
+    .width(Length::Fill);
+
+    if let Some(message) = error {
+        column = column.push(feedback_text(message, true));
+    } else if let Some(message) = hint {
+        column = column.push(feedback_text(message, false));
+    }
+
+    column.into()
 }
 
 fn labeled_input_state<'a>(
@@ -2166,6 +2250,8 @@ fn labeled_input_state<'a>(
     default: &'a str,
     field: TextField,
     enabled: bool,
+    hint: Option<&'static str>,
+    error: Option<String>,
 ) -> Element<'a, Message> {
     let changed = value.trim() != default.trim();
     let input = if enabled {
@@ -2174,15 +2260,22 @@ fn labeled_input_state<'a>(
         text_input(label, value)
     };
 
-    column![
+    let mut column = column![
         row![text(label).size(14), default_value_text(default, changed)]
             .spacing(DEFAULT_LABEL_GAP)
             .align_items(iced::Alignment::Center),
         input
     ]
     .spacing(4)
-    .width(Length::Fill)
-    .into()
+    .width(Length::Fill);
+
+    if let Some(message) = error {
+        column = column.push(feedback_text(message, true));
+    } else if let Some(message) = hint {
+        column = column.push(feedback_text(message, false));
+    }
+
+    column.into()
 }
 
 fn labeled_control<'a>(
@@ -2366,6 +2459,16 @@ fn default_value_text<'a>(value: impl Into<String>, changed: bool) -> iced::widg
         .style(theme::Text::Color(default_label_color(changed)))
 }
 
+fn feedback_text<'a>(message: impl Into<String>, is_error: bool) -> iced::widget::Text<'a> {
+    let color = if is_error {
+        iced::Color::from_rgb(0.95, 0.6, 0.6)
+    } else {
+        iced::Color::from_rgb(0.6, 0.6, 0.6)
+    };
+    let message = message.into();
+    text(message).size(12).style(theme::Text::Color(color))
+}
+
 fn bool_label(value: bool) -> &'static str {
     if value { "On" } else { "Off" }
 }
@@ -2384,6 +2487,118 @@ fn toggle_row<'a>(
     .spacing(DEFAULT_LABEL_GAP)
     .align_items(iced::Alignment::Center)
     .into()
+}
+
+fn validate_f64_range(value: &str, min: f64, max: f64) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a numeric value".to_string());
+    }
+
+    match trimmed.parse::<f64>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!(
+                    "Range: {}-{}",
+                    format_float(min),
+                    format_float(max)
+                ))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a numeric value".to_string()),
+    }
+}
+
+fn validate_u32_range(value: &str, min: u32, max: u32) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<u32>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!("Range: {min}-{max}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_u64_range(value: &str, min: u64, max: u64) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<u64>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!("Range: {min}-{max}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_u64_min(value: &str, min: u64) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<u64>() {
+        Ok(value) => {
+            if value < min {
+                Some(format!("Minimum: {min}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_usize_range(value: &str, min: usize, max: usize) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<usize>() {
+        Ok(value) => {
+            if value < min || value > max {
+                Some(format!("Range: {min}-{max}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
+}
+
+fn validate_usize_min(value: &str, min: usize) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some("Expected a whole number".to_string());
+    }
+
+    match trimmed.parse::<usize>() {
+        Ok(value) => {
+            if value < min {
+                Some(format!("Minimum: {min}"))
+            } else {
+                None
+            }
+        }
+        Err(_) => Some("Expected a whole number".to_string()),
+    }
 }
 
 #[derive(Clone, Copy)]
