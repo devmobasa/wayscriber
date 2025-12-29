@@ -19,10 +19,7 @@ fn selection_rect(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> Option<
 }
 
 fn rects_intersect(a: Rect, b: Rect) -> bool {
-    a.x < b.x + b.width
-        && a.x + a.width > b.x
-        && a.y < b.y + b.height
-        && a.y + a.height > b.y
+    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
 
 impl InputState {
@@ -235,7 +232,7 @@ impl InputState {
     pub(crate) fn selection_clipboard_is_empty(&self) -> bool {
         self.selection_clipboard
             .as_ref()
-            .map_or(true, |clipboard| clipboard.is_empty())
+            .is_none_or(|clipboard| clipboard.is_empty())
     }
 
     pub(crate) fn paste_selection(&mut self) -> usize {
