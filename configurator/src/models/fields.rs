@@ -576,7 +576,9 @@ pub enum ToggleField {
     SessionPerOutput,
     HistoryCustomSectionEnabled,
     ArrowHeadAtEnd,
+    #[cfg(feature = "tablet-input")]
     TabletEnabled,
+    #[cfg(feature = "tablet-input")]
     TabletPressureEnabled,
 }
 
@@ -634,7 +636,9 @@ pub enum TextField {
     SessionAutoCompressThresholdKb,
     SessionMaxPersistedUndoDepth,
     SessionBackupRetention,
+    #[cfg(feature = "tablet-input")]
     TabletMinThickness,
+    #[cfg(feature = "tablet-input")]
     TabletMaxThickness,
 }
 

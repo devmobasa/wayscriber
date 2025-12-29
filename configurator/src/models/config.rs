@@ -129,9 +129,13 @@ pub struct ConfigDraft {
     pub session_max_persisted_undo_depth: String,
     pub session_backup_retention: String,
 
+    #[cfg(feature = "tablet-input")]
     pub tablet_enabled: bool,
+    #[cfg(feature = "tablet-input")]
     pub tablet_pressure_enabled: bool,
+    #[cfg(feature = "tablet-input")]
     pub tablet_min_thickness: String,
+    #[cfg(feature = "tablet-input")]
     pub tablet_max_thickness: String,
 
     pub presets: PresetsDraft,
@@ -563,9 +567,13 @@ impl ConfigDraft {
                 .unwrap_or_default(),
             session_backup_retention: config.session.backup_retention.to_string(),
 
+            #[cfg(feature = "tablet-input")]
             tablet_enabled: config.tablet.enabled,
+            #[cfg(feature = "tablet-input")]
             tablet_pressure_enabled: config.tablet.pressure_enabled,
+            #[cfg(feature = "tablet-input")]
             tablet_min_thickness: format_float(config.tablet.min_thickness),
+            #[cfg(feature = "tablet-input")]
             tablet_max_thickness: format_float(config.tablet.max_thickness),
 
             presets: PresetsDraft::from_config(config),
@@ -939,6 +947,7 @@ impl ConfigDraft {
             |value| config.session.backup_retention = value,
         );
 
+        #[cfg(feature = "tablet-input")]
         {
             config.tablet.enabled = self.tablet_enabled;
             config.tablet.pressure_enabled = self.tablet_pressure_enabled;
@@ -1065,7 +1074,9 @@ impl ConfigDraft {
             ToggleField::ArrowHeadAtEnd => {
                 self.arrow_head_at_end = value;
             }
+            #[cfg(feature = "tablet-input")]
             ToggleField::TabletEnabled => self.tablet_enabled = value,
+            #[cfg(feature = "tablet-input")]
             ToggleField::TabletPressureEnabled => self.tablet_pressure_enabled = value,
         }
     }
@@ -1129,7 +1140,9 @@ impl ConfigDraft {
                 self.session_max_persisted_undo_depth = value
             }
             TextField::SessionBackupRetention => self.session_backup_retention = value,
+            #[cfg(feature = "tablet-input")]
             TextField::TabletMinThickness => self.tablet_min_thickness = value,
+            #[cfg(feature = "tablet-input")]
             TextField::TabletMaxThickness => self.tablet_max_thickness = value,
         }
     }

@@ -10,10 +10,12 @@ pub enum TabId {
     Capture,
     Session,
     Keybindings,
+    #[cfg(feature = "tablet-input")]
     Tablet,
 }
 
 impl TabId {
+    #[cfg(feature = "tablet-input")]
     pub const ALL: [TabId; 11] = [
         TabId::Drawing,
         TabId::Presets,
@@ -28,6 +30,20 @@ impl TabId {
         TabId::Tablet,
     ];
 
+    #[cfg(not(feature = "tablet-input"))]
+    pub const ALL: [TabId; 10] = [
+        TabId::Drawing,
+        TabId::Presets,
+        TabId::Ui,
+        TabId::Board,
+        TabId::Performance,
+        TabId::History,
+        TabId::Capture,
+        TabId::Session,
+        TabId::Keybindings,
+        TabId::Arrow,
+    ];
+
     pub fn title(&self) -> &'static str {
         match self {
             TabId::Drawing => "Drawing",
@@ -40,6 +56,7 @@ impl TabId {
             TabId::Capture => "Capture",
             TabId::Session => "Session",
             TabId::Keybindings => "Keybindings",
+            #[cfg(feature = "tablet-input")]
             TabId::Tablet => "Tablet",
         }
     }

@@ -549,6 +549,7 @@ impl ConfiguratorApp {
             TabId::Capture => self.capture_tab(),
             TabId::Session => self.session_tab(),
             TabId::Keybindings => self.keybindings_tab(),
+            #[cfg(feature = "tablet-input")]
             TabId::Tablet => self.tablet_tab(),
         };
 
@@ -616,7 +617,7 @@ impl ConfiguratorApp {
                     Some(self.draft.drawing_color.selected_named),
                     Message::NamedColorSelected,
                 )
-                .width(Length::Fixed(160.0));
+                .width(Length::Fixed(COLOR_PICKER_WIDTH));
 
                 let picker_row = row![
                     picker,
@@ -864,7 +865,7 @@ impl ConfiguratorApp {
             Some(self.draft.presets.slot_count),
             Message::PresetSlotCountChanged,
         )
-        .width(Length::Fixed(140.0));
+        .width(Length::Fixed(SMALL_PICKER_WIDTH));
 
         let slot_count_control = labeled_control(
             "Visible slots",
@@ -983,7 +984,7 @@ impl ConfiguratorApp {
                     Some(slot.color.selected_named),
                     move |opt| Message::PresetNamedColorSelected(slot_index, opt),
                 )
-                .width(Length::Fixed(160.0));
+                .width(Length::Fixed(COLOR_PICKER_WIDTH));
 
                 let picker_row = row![picker, color_preview_badge(slot.color.preview_color()),]
                     .spacing(8)
@@ -1305,7 +1306,7 @@ impl ConfiguratorApp {
             Message::BufferCountChanged,
         );
         let buffer_control = row![
-            buffer_pick.width(Length::Fixed(120.0)),
+            buffer_pick.width(Length::Fixed(BUFFER_PICKER_WIDTH)),
             text(self.draft.performance_buffer_count.to_string())
         ]
         .spacing(12)
@@ -1958,6 +1959,7 @@ impl ConfiguratorApp {
         scrollable(column).into()
     }
 
+    #[cfg(feature = "tablet-input")]
     fn tablet_tab(&self) -> Element<'_, Message> {
         scrollable(
             column![
@@ -2033,7 +2035,7 @@ impl ConfiguratorApp {
             column = column.push(
                 row![
                     container(text(entry.field.label()).size(16))
-                        .width(Length::Fixed(220.0))
+                        .width(Length::Fixed(LABEL_COLUMN_WIDTH))
                         .align_x(Horizontal::Right),
                     column![
                         text_input("Shortcut list", &entry.value)
@@ -2183,7 +2185,7 @@ fn override_row<'a>(field: ToolbarOverrideField, value: OverrideOption) -> Eleme
         pick_list(OverrideOption::list(), Some(value), move |opt| {
             Message::ToolbarOverrideChanged(field, opt)
         },)
-        .width(Length::Fixed(140.0)),
+        .width(Length::Fixed(SMALL_PICKER_WIDTH)),
     ]
     .spacing(12)
     .align_items(iced::Alignment::Center)
@@ -2265,6 +2267,10 @@ fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
 }
 
 const DEFAULT_LABEL_GAP: f32 = 12.0;
+const LABEL_COLUMN_WIDTH: f32 = 220.0;
+const SMALL_PICKER_WIDTH: f32 = 140.0;
+const COLOR_PICKER_WIDTH: f32 = 160.0;
+const BUFFER_PICKER_WIDTH: f32 = 120.0;
 
 fn default_label_color(changed: bool) -> iced::Color {
     if changed {
