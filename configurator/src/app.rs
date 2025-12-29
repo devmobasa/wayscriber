@@ -61,6 +61,7 @@ pub struct ConfiguratorApp {
     active_tab: TabId,
     active_ui_tab: UiTabId,
     active_keybindings_tab: KeybindingsTabId,
+    preset_collapsed: Vec<bool>,
     override_mode: ToolbarLayoutModeOption,
     is_loading: bool,
     is_saving: bool,
@@ -118,6 +119,7 @@ impl Application for ConfiguratorApp {
             active_tab: TabId::Drawing,
             active_ui_tab: UiTabId::Toolbar,
             active_keybindings_tab: KeybindingsTabId::General,
+            preset_collapsed: vec![false; PRESET_SLOTS_MAX],
             override_mode,
             is_loading: true,
             is_saving: false,
@@ -352,6 +354,42 @@ impl Application for ConfiguratorApp {
                 self.status = StatusMessage::idle();
                 if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
                     slot.enabled = enabled;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetCollapseToggled(slot_index) => {
+                if let Some(collapsed) = self.preset_collapsed.get_mut(slot_index.saturating_sub(1))
+                {
+                    *collapsed = !*collapsed;
+                }
+            }
+            Message::PresetResetSlot(slot_index) => {
+                self.status = StatusMessage::idle();
+                if let (Some(slot), Some(default_slot)) = (
+                    self.draft.presets.slot_mut(slot_index),
+                    self.defaults.presets.slot(slot_index),
+                ) {
+                    let enabled = slot.enabled;
+                    *slot = default_slot.clone();
+                    slot.enabled = enabled;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetDuplicateSlot(slot_index) => {
+                self.status = StatusMessage::idle();
+                let target_index = slot_index + 1;
+                if target_index <= PRESET_SLOTS_MAX
+                    && let Some(source) = self.draft.presets.slot(slot_index).cloned()
+                    && let Some(target) = self.draft.presets.slot_mut(target_index)
+                {
+                    *target = source;
+                    target.enabled = true;
+                    if let Some(collapsed) = self.preset_collapsed.get_mut(target_index - 1) {
+                        *collapsed = false;
+                    }
+                    if self.draft.presets.slot_count < target_index {
+                        self.draft.presets.slot_count = target_index;
+                    }
                 }
                 self.refresh_dirty_flag();
             }
@@ -913,10 +951,40 @@ impl ConfiguratorApp {
         .spacing(DEFAULT_LABEL_GAP)
         .align_items(iced::Alignment::Center);
 
-        let mut section = Column::new()
+        let is_collapsed = self
+            .preset_collapsed
+            .get(slot_index.saturating_sub(1))
+            .copied()
+            .unwrap_or(false);
+        let collapse_label = if is_collapsed { "Expand" } else { "Collapse" };
+        let collapse_button = button(collapse_label)
+            .style(theme::Button::Secondary)
+            .on_press(Message::PresetCollapseToggled(slot_index));
+        let reset_button = button("Reset")
+            .style(theme::Button::Secondary)
+            .on_press(Message::PresetResetSlot(slot_index));
+        let mut duplicate_button = button("Duplicate").style(theme::Button::Secondary);
+        if slot_index < PRESET_SLOTS_MAX {
+            duplicate_button = duplicate_button.on_press(Message::PresetDuplicateSlot(slot_index));
+        }
+
+        let slot_header = Row::new()
             .spacing(8)
+            .align_items(iced::Alignment::Center)
             .push(text(format!("Slot {slot_index}")).size(18))
-            .push(enabled_row);
+            .push(Space::new(Length::Fill, Length::Shrink))
+            .push(collapse_button)
+            .push(reset_button)
+            .push(duplicate_button);
+
+        let mut section = Column::new().spacing(8).push(slot_header).push(enabled_row);
+
+        if is_collapsed {
+            return container(section)
+                .padding(12)
+                .style(theme::Container::Box)
+                .into();
+        }
 
         if !slot.enabled {
             section = section.push(
@@ -935,7 +1003,7 @@ impl ConfiguratorApp {
         })
         .width(Length::Fill);
 
-        let header_row = row![
+        let tool_row = row![
             preset_input(
                 "Label",
                 &slot.name,
@@ -1177,7 +1245,7 @@ impl ConfiguratorApp {
         )];
 
         section = section
-            .push(header_row)
+            .push(tool_row)
             .push(color_block)
             .push(size_row)
             .push(eraser_row)
@@ -2256,9 +2324,20 @@ fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
         None => (iced::Color::from_rgb(0.2, 0.2, 0.2), false),
     };
 
-    container(Space::with_width(Length::Fixed(20.0)).height(Length::Fixed(20.0)))
+    let content: Element<'_, Message> = if is_valid {
+        Space::new(Length::Shrink, Length::Shrink).into()
+    } else {
+        text("?")
+            .size(14)
+            .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.95, 0.95)))
+            .into()
+    };
+
+    container(content)
         .width(Length::Fixed(24.0))
         .height(Length::Fixed(24.0))
+        .center_x()
+        .center_y()
         .style(theme::Container::Custom(Box::new(ColorPreviewStyle {
             color: preview_color,
             is_invalid: !is_valid,
