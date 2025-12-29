@@ -26,6 +26,7 @@ pub fn run() -> iced::Result {
     settings.window.resizable = true;
     settings.window.decorations = true;
     if std::env::var_os("ICED_BACKEND").is_none() && should_force_tiny_skia() {
+        // GNOME Wayland + wgpu can crash on dma-buf/present mode selection; tiny-skia avoids this.
         // SAFETY: setting a process-local env var before initializing iced is safe here.
         unsafe {
             std::env::set_var("ICED_BACKEND", "tiny-skia");
