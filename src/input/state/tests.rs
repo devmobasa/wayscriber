@@ -403,6 +403,7 @@ fn select_tool_drag_selects_shapes_in_rect() {
     });
 
     state.set_tool_override(Some(Tool::Select));
+    state.toggle_clickthrough_override();
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_motion(40, 40);
     state.on_mouse_release(MouseButton::Left, 40, 40);

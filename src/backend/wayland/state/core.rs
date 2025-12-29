@@ -91,6 +91,7 @@ impl WaylandState {
             zoom: ZoomState::new(zoom_manager),
             exit_after_capture_mode,
             themed_pointer: None,
+            current_pointer_shape: None,
             locked_pointer: None,
             relative_pointer: None,
             #[cfg(tablet)]

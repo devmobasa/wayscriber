@@ -9,9 +9,10 @@ pub mod util;
 pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
 pub use config::ConfigDraft;
 pub use fields::{
-    BoardModeOption, FontStyleOption, FontWeightOption, OverrideOption, QuadField,
+    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 pub use keybindings::KeybindingField;
-pub use tab::{TabId, UiTabId};
+pub use tab::{KeybindingsTabId, TabId, UiTabId};

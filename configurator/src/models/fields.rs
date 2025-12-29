@@ -1,6 +1,8 @@
 use wayscriber::config::{
     SessionCompression, SessionStorageMode, StatusPosition, ToolbarLayoutMode,
 };
+use wayscriber::draw::EraserKind;
+use wayscriber::input::{EraserMode, Tool};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontStyleOption {
@@ -113,6 +115,208 @@ impl FontWeightOption {
 }
 
 impl std::fmt::Display for FontWeightOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EraserModeOption {
+    Brush,
+    Stroke,
+}
+
+impl EraserModeOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::Brush, Self::Stroke]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Brush => "Brush",
+            Self::Stroke => "Stroke",
+        }
+    }
+
+    pub fn to_mode(self) -> EraserMode {
+        match self {
+            Self::Brush => EraserMode::Brush,
+            Self::Stroke => EraserMode::Stroke,
+        }
+    }
+
+    pub fn from_mode(mode: EraserMode) -> Self {
+        match mode {
+            EraserMode::Brush => EraserModeOption::Brush,
+            EraserMode::Stroke => EraserModeOption::Stroke,
+        }
+    }
+}
+
+impl std::fmt::Display for EraserModeOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolOption {
+    Select,
+    Pen,
+    Line,
+    Rect,
+    Ellipse,
+    Arrow,
+    Marker,
+    Highlight,
+    Eraser,
+}
+
+impl ToolOption {
+    pub fn list() -> Vec<Self> {
+        vec![
+            Self::Select,
+            Self::Pen,
+            Self::Line,
+            Self::Rect,
+            Self::Ellipse,
+            Self::Arrow,
+            Self::Marker,
+            Self::Highlight,
+            Self::Eraser,
+        ]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Select => "Select",
+            Self::Pen => "Pen",
+            Self::Line => "Line",
+            Self::Rect => "Rectangle",
+            Self::Ellipse => "Ellipse",
+            Self::Arrow => "Arrow",
+            Self::Marker => "Marker",
+            Self::Highlight => "Highlight",
+            Self::Eraser => "Eraser",
+        }
+    }
+
+    pub fn to_tool(self) -> Tool {
+        match self {
+            Self::Select => Tool::Select,
+            Self::Pen => Tool::Pen,
+            Self::Line => Tool::Line,
+            Self::Rect => Tool::Rect,
+            Self::Ellipse => Tool::Ellipse,
+            Self::Arrow => Tool::Arrow,
+            Self::Marker => Tool::Marker,
+            Self::Highlight => Tool::Highlight,
+            Self::Eraser => Tool::Eraser,
+        }
+    }
+
+    pub fn from_tool(tool: Tool) -> Self {
+        match tool {
+            Tool::Select => Self::Select,
+            Tool::Pen => Self::Pen,
+            Tool::Line => Self::Line,
+            Tool::Rect => Self::Rect,
+            Tool::Ellipse => Self::Ellipse,
+            Tool::Arrow => Self::Arrow,
+            Tool::Marker => Self::Marker,
+            Tool::Highlight => Self::Highlight,
+            Tool::Eraser => Self::Eraser,
+        }
+    }
+}
+
+impl std::fmt::Display for ToolOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetEraserKindOption {
+    Default,
+    Circle,
+    Rect,
+}
+
+impl PresetEraserKindOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::Default, Self::Circle, Self::Rect]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::Circle => "Circle",
+            Self::Rect => "Rectangle",
+        }
+    }
+
+    pub fn to_option(self) -> Option<EraserKind> {
+        match self {
+            Self::Default => None,
+            Self::Circle => Some(EraserKind::Circle),
+            Self::Rect => Some(EraserKind::Rect),
+        }
+    }
+
+    pub fn from_option(value: Option<EraserKind>) -> Self {
+        match value {
+            None => Self::Default,
+            Some(EraserKind::Circle) => Self::Circle,
+            Some(EraserKind::Rect) => Self::Rect,
+        }
+    }
+}
+
+impl std::fmt::Display for PresetEraserKindOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetEraserModeOption {
+    Default,
+    Brush,
+    Stroke,
+}
+
+impl PresetEraserModeOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::Default, Self::Brush, Self::Stroke]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::Brush => "Brush",
+            Self::Stroke => "Stroke",
+        }
+    }
+
+    pub fn to_option(self) -> Option<EraserMode> {
+        match self {
+            Self::Default => None,
+            Self::Brush => Some(EraserMode::Brush),
+            Self::Stroke => Some(EraserMode::Stroke),
+        }
+    }
+
+    pub fn from_option(value: Option<EraserMode>) -> Self {
+        match value {
+            None => Self::Default,
+            Some(EraserMode::Brush) => Self::Brush,
+            Some(EraserMode::Stroke) => Self::Stroke,
+        }
+    }
+}
+
+impl std::fmt::Display for PresetEraserModeOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }
@@ -336,9 +540,16 @@ impl std::fmt::Display for BoardModeOption {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToggleField {
     DrawingTextBackground,
+    DrawingFillEnabled,
     PerformanceVsync,
     UiShowStatusBar,
     UiShowFrozenBadge,
+    UiContextMenuEnabled,
+    UiXdgFullscreen,
+    UiToolbarTopPinned,
+    UiToolbarSidePinned,
+    UiToolbarUseIcons,
+    UiToolbarShowMoreColors,
     UiToolbarPresetToasts,
     UiToolbarShowPresets,
     UiToolbarShowActionsSection,
@@ -346,6 +557,10 @@ pub enum ToggleField {
     UiToolbarShowStepSection,
     UiToolbarShowTextControls,
     UiToolbarShowSettingsSection,
+    UiToolbarShowDelaySliders,
+    UiToolbarShowMarkerOpacitySection,
+    UiToolbarShowToolPreview,
+    UiToolbarForceInline,
     UiClickHighlightEnabled,
     UiClickHighlightUsePenColor,
     BoardEnabled,
@@ -356,22 +571,46 @@ pub enum ToggleField {
     SessionPersistTransparent,
     SessionPersistWhiteboard,
     SessionPersistBlackboard,
+    SessionPersistHistory,
     SessionRestoreToolState,
     SessionPerOutput,
+    HistoryCustomSectionEnabled,
     ArrowHeadAtEnd,
+    TabletEnabled,
+    TabletPressureEnabled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetToggleField {
+    FillEnabled,
+    TextBackgroundEnabled,
+    ArrowHeadAtEnd,
+    ShowStatusBar,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextField {
     DrawingColorName,
     DrawingThickness,
+    DrawingEraserSize,
     DrawingFontSize,
+    DrawingMarkerOpacity,
     DrawingFontFamily,
     DrawingFontWeight,
     DrawingFontStyle,
+    DrawingHitTestTolerance,
+    DrawingHitTestThreshold,
+    DrawingUndoStackLimit,
     ArrowLength,
     ArrowAngle,
     PerformanceUiAnimationFps,
+    HistoryUndoAllDelayMs,
+    HistoryRedoAllDelayMs,
+    HistoryCustomUndoDelayMs,
+    HistoryCustomRedoDelayMs,
+    HistoryCustomUndoSteps,
+    HistoryCustomRedoSteps,
+    UiPreferredOutput,
     StatusFontSize,
     StatusPadding,
     StatusDotRadius,
@@ -385,11 +624,29 @@ pub enum TextField {
     CaptureSaveDirectory,
     CaptureFilename,
     CaptureFormat,
+    ToolbarTopOffset,
+    ToolbarTopOffsetY,
+    ToolbarSideOffset,
+    ToolbarSideOffsetX,
     SessionCustomDirectory,
     SessionMaxShapesPerFrame,
     SessionMaxFileSizeMb,
     SessionAutoCompressThresholdKb,
+    SessionMaxPersistedUndoDepth,
     SessionBackupRetention,
+    TabletMinThickness,
+    TabletMaxThickness,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetTextField {
+    Name,
+    ColorName,
+    Size,
+    MarkerOpacity,
+    FontSize,
+    ArrowLength,
+    ArrowAngle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

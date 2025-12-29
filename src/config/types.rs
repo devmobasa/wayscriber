@@ -13,7 +13,7 @@ pub const PRESET_SLOTS_MAX: usize = 5;
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
 /// Users can change these values at runtime using keybindings.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DrawingConfig {
     /// Default pen color - either a named color (red, green, blue, yellow, orange, pink, white, black)
     /// or an RGB array like `[255, 0, 0]` for red
@@ -222,7 +222,7 @@ impl Default for PresetSlotsConfig {
 /// Arrow drawing settings.
 ///
 /// Controls the appearance of arrowheads when using the arrow tool (Ctrl+Shift+Drag).
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ArrowConfig {
     /// Arrowhead length in pixels (valid range: 5.0 - 50.0)
     #[serde(default = "default_arrow_length")]
@@ -249,7 +249,7 @@ impl Default for ArrowConfig {
 }
 
 /// Undo/redo playback configuration.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HistoryConfig {
     /// Delay in milliseconds between steps when running "undo all by delay"
     #[serde(default = "default_undo_all_delay_ms")]
@@ -298,7 +298,7 @@ impl Default for HistoryConfig {
 ///
 /// These settings control rendering performance and smoothness. Most users
 /// won't need to change these from their defaults.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PerformanceConfig {
     /// Number of buffers for buffering (valid range: 2 - 4)
     /// - 2 = double buffering (lower memory, potential tearing)
@@ -331,7 +331,7 @@ impl Default for PerformanceConfig {
 /// UI display preferences.
 ///
 /// Controls the visibility and positioning of on-screen UI elements.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct UiConfig {
     /// Show the status bar displaying current color, thickness, and tool
     #[serde(default = "default_show_status")]
@@ -394,7 +394,7 @@ impl Default for UiConfig {
 }
 
 /// Status bar styling configuration.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct StatusBarStyle {
     /// Font size for status bar text
     #[serde(default = "default_status_font_size")]
@@ -430,7 +430,7 @@ impl Default for StatusBarStyle {
 }
 
 /// Click highlight configuration for mouse press indicator.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClickHighlightConfig {
     /// Whether the highlight effect starts enabled
     #[serde(default = "default_click_highlight_enabled")]
@@ -462,7 +462,7 @@ pub struct ClickHighlightConfig {
 }
 
 /// Context menu visibility configuration.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ContextMenuUiConfig {
     #[serde(default = "default_context_menu_enabled")]
     pub enabled: bool,
@@ -491,7 +491,7 @@ impl Default for ClickHighlightConfig {
 }
 
 /// Help overlay styling configuration.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HelpOverlayStyle {
     /// Font size for help overlay text
     #[serde(default = "default_help_font_size")]
@@ -541,7 +541,7 @@ impl Default for HelpOverlayStyle {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(tablet)]
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct TabletInputConfig {
     /// Enable tablet/stylus events at runtime (feature must be compiled in).
     #[serde(default = "default_tablet_enabled")]
@@ -1015,9 +1015,9 @@ pub struct SessionConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
-            persist_transparent: false,
-            persist_whiteboard: false,
-            persist_blackboard: false,
+            persist_transparent: true,
+            persist_whiteboard: true,
+            persist_blackboard: true,
             persist_history: default_persist_history(),
             restore_tool_state: default_restore_tool_state(),
             storage: default_session_storage_mode(),

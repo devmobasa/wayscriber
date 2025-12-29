@@ -14,6 +14,10 @@ cd configurator
 cargo run
 ```
 
+On GNOME Wayland, the configurator forces the `tiny-skia` renderer by default to
+avoid wgpu dma-buf/present mode crashes. Override with
+`ICED_BACKEND=wgpu wayscriber-configurator` if desired.
+
 The window loads the current config, lets you tweak values across the tabbed sections, and writes changes back via `Config::save_with_backup()`.
 
 ### Handy actions

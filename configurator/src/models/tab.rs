@@ -1,37 +1,46 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TabId {
     Drawing,
+    Presets,
     Arrow,
+    History,
     Performance,
     Ui,
     Board,
     Capture,
     Session,
     Keybindings,
+    Tablet,
 }
 
 impl TabId {
-    pub const ALL: [TabId; 8] = [
+    pub const ALL: [TabId; 11] = [
         TabId::Drawing,
+        TabId::Presets,
         TabId::Ui,
         TabId::Board,
         TabId::Performance,
+        TabId::History,
         TabId::Capture,
         TabId::Session,
         TabId::Keybindings,
         TabId::Arrow,
+        TabId::Tablet,
     ];
 
     pub fn title(&self) -> &'static str {
         match self {
             TabId::Drawing => "Drawing",
+            TabId::Presets => "Presets",
             TabId::Arrow => "Arrow",
+            TabId::History => "History",
             TabId::Performance => "Performance",
             TabId::Ui => "UI",
             TabId::Board => "Board",
             TabId::Capture => "Capture",
             TabId::Session => "Session",
             TabId::Keybindings => "Keybindings",
+            TabId::Tablet => "Tablet",
         }
     }
 }
@@ -58,6 +67,44 @@ impl UiTabId {
             UiTabId::StatusBar => "Status Bar",
             UiTabId::HelpOverlay => "Help Overlay",
             UiTabId::ClickHighlight => "Click Highlight",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeybindingsTabId {
+    General,
+    Drawing,
+    Tools,
+    Selection,
+    History,
+    UiModes,
+    CaptureView,
+    Presets,
+}
+
+impl KeybindingsTabId {
+    pub const ALL: [KeybindingsTabId; 8] = [
+        KeybindingsTabId::General,
+        KeybindingsTabId::Drawing,
+        KeybindingsTabId::Tools,
+        KeybindingsTabId::Selection,
+        KeybindingsTabId::History,
+        KeybindingsTabId::UiModes,
+        KeybindingsTabId::CaptureView,
+        KeybindingsTabId::Presets,
+    ];
+
+    pub fn title(&self) -> &'static str {
+        match self {
+            KeybindingsTabId::General => "General",
+            KeybindingsTabId::Drawing => "Drawing",
+            KeybindingsTabId::Tools => "Tools",
+            KeybindingsTabId::Selection => "Selection",
+            KeybindingsTabId::History => "History",
+            KeybindingsTabId::UiModes => "UI & Modes",
+            KeybindingsTabId::CaptureView => "Capture & View",
+            KeybindingsTabId::Presets => "Presets",
         }
     }
 }

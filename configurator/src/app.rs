@@ -10,14 +10,15 @@ use iced::widget::{
     scrollable, text, text_input,
 };
 use iced::{Application, Background, Border, Command, Element, Length, Settings, Size};
-use wayscriber::config::Config;
+use wayscriber::config::{Config, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN};
 
 use crate::messages::Message;
 use crate::models::{
-    BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, FontStyleOption,
-    FontWeightOption, NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    BoardModeOption, ColorMode, ColorQuadInput, ColorTripletInput, ConfigDraft, EraserModeOption,
+    FontStyleOption, FontWeightOption, KeybindingsTabId, NamedColorOption, OverrideOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 
 pub fn run() -> iced::Result {
@@ -25,7 +26,28 @@ pub fn run() -> iced::Result {
     settings.window.size = Size::new(960.0, 640.0);
     settings.window.resizable = true;
     settings.window.decorations = true;
+    if std::env::var_os("ICED_BACKEND").is_none() && should_force_tiny_skia() {
+        // GNOME Wayland + wgpu can crash on dma-buf/present mode selection; tiny-skia avoids this.
+        // SAFETY: setting a process-local env var before initializing iced is safe here.
+        unsafe {
+            std::env::set_var("ICED_BACKEND", "tiny-skia");
+        }
+        eprintln!(
+            "wayscriber-configurator: GNOME Wayland detected; using tiny-skia renderer (set ICED_BACKEND=wgpu to override)."
+        );
+    }
     ConfiguratorApp::run(settings)
+}
+
+fn should_force_tiny_skia() -> bool {
+    if std::env::var_os("WAYLAND_DISPLAY").is_none() {
+        return false;
+    }
+    let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+    let session = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
+    let combined = format!("{current};{session}");
+    let combined = combined.to_ascii_lowercase();
+    combined.contains("gnome") || combined.contains("ubuntu")
 }
 
 #[derive(Debug)]
@@ -33,9 +55,11 @@ pub struct ConfiguratorApp {
     draft: ConfigDraft,
     baseline: ConfigDraft,
     defaults: ConfigDraft,
+    base_config: Arc<Config>,
     status: StatusMessage,
     active_tab: TabId,
     active_ui_tab: UiTabId,
+    active_keybindings_tab: KeybindingsTabId,
     override_mode: ToolbarLayoutModeOption,
     is_loading: bool,
     is_saving: bool,
@@ -82,14 +106,17 @@ impl Application for ConfiguratorApp {
         let baseline = defaults.clone();
         let override_mode = defaults.ui_toolbar_layout_mode;
         let config_path = Config::get_config_path().ok();
+        let base_config = Arc::new(default_config.clone());
 
         let app = Self {
             draft: baseline.clone(),
             baseline,
             defaults,
+            base_config,
             status: StatusMessage::info("Loading configuration..."),
             active_tab: TabId::Drawing,
             active_ui_tab: UiTabId::Toolbar,
+            active_keybindings_tab: KeybindingsTabId::General,
             override_mode,
             is_loading: true,
             is_saving: false,
@@ -123,6 +150,7 @@ impl Application for ConfiguratorApp {
                         let draft = ConfigDraft::from_config(config.as_ref());
                         self.draft = draft.clone();
                         self.baseline = draft;
+                        self.base_config = config.clone();
                         self.override_mode = self.draft.ui_toolbar_layout_mode;
                         self.is_dirty = false;
                         self.status = StatusMessage::success("Configuration loaded from disk.");
@@ -153,7 +181,7 @@ impl Application for ConfiguratorApp {
                     return Command::none();
                 }
 
-                match self.draft.to_config() {
+                match self.draft.to_config(self.base_config.as_ref()) {
                     Ok(mut config) => {
                         config.validate_and_clamp();
                         self.is_saving = true;
@@ -180,6 +208,7 @@ impl Application for ConfiguratorApp {
                         self.last_backup_path = backup.clone();
                         self.draft = draft.clone();
                         self.baseline = draft;
+                        self.base_config = saved_config.clone();
                         self.is_dirty = false;
                         let mut msg = "Configuration saved successfully.".to_string();
                         if let Some(path) = backup {
@@ -198,6 +227,9 @@ impl Application for ConfiguratorApp {
             }
             Message::UiTabSelected(tab) => {
                 self.active_ui_tab = tab;
+            }
+            Message::KeybindingsTabSelected(tab) => {
+                self.active_keybindings_tab = tab;
             }
             Message::ToggleChanged(field, value) => {
                 self.status = StatusMessage::idle();
@@ -243,6 +275,11 @@ impl Application for ConfiguratorApp {
                 if option != NamedColorOption::Custom {
                     self.draft.drawing_color.name = option.as_value().to_string();
                 }
+                self.refresh_dirty_flag();
+            }
+            Message::EraserModeChanged(option) => {
+                self.status = StatusMessage::idle();
+                self.draft.drawing_default_eraser_mode = option;
                 self.refresh_dirty_flag();
             }
             Message::StatusPositionChanged(option) => {
@@ -302,6 +339,107 @@ impl Application for ConfiguratorApp {
                 self.draft.drawing_font_weight_option = option;
                 if option != FontWeightOption::Custom {
                     self.draft.drawing_font_weight = option.canonical_value().to_string();
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetSlotCountChanged(count) => {
+                self.status = StatusMessage::idle();
+                self.draft.presets.slot_count = count;
+                self.refresh_dirty_flag();
+            }
+            Message::PresetSlotEnabledChanged(slot_index, enabled) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    slot.enabled = enabled;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetToolChanged(slot_index, tool) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    slot.tool = tool;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetColorModeChanged(slot_index, mode) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    slot.color.mode = mode;
+                    if matches!(mode, ColorMode::Named) {
+                        if slot.color.name.trim().is_empty() {
+                            slot.color.selected_named = NamedColorOption::Red;
+                            slot.color.name = slot.color.selected_named.as_value().to_string();
+                        } else {
+                            slot.color.update_named_from_current();
+                        }
+                    }
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetNamedColorSelected(slot_index, option) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    slot.color.selected_named = option;
+                    if option != NamedColorOption::Custom {
+                        slot.color.name = option.as_value().to_string();
+                    }
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetColorComponentChanged(slot_index, component, value) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index)
+                    && let Some(entry) = slot.color.rgb.get_mut(component)
+                {
+                    *entry = value;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetTextChanged(slot_index, field, value) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    match field {
+                        PresetTextField::Name => {
+                            slot.name = value;
+                        }
+                        PresetTextField::ColorName => {
+                            slot.color.name = value;
+                            slot.color.update_named_from_current();
+                        }
+                        PresetTextField::Size => slot.size = value,
+                        PresetTextField::MarkerOpacity => slot.marker_opacity = value,
+                        PresetTextField::FontSize => slot.font_size = value,
+                        PresetTextField::ArrowLength => slot.arrow_length = value,
+                        PresetTextField::ArrowAngle => slot.arrow_angle = value,
+                    }
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetToggleOptionChanged(slot_index, field, value) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    match field {
+                        PresetToggleField::FillEnabled => slot.fill_enabled = value,
+                        PresetToggleField::TextBackgroundEnabled => {
+                            slot.text_background_enabled = value;
+                        }
+                        PresetToggleField::ArrowHeadAtEnd => slot.arrow_head_at_end = value,
+                        PresetToggleField::ShowStatusBar => slot.show_status_bar = value,
+                    }
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetEraserKindChanged(slot_index, value) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    slot.eraser_kind = value;
+                }
+                self.refresh_dirty_flag();
+            }
+            Message::PresetEraserModeChanged(slot_index, value) => {
+                self.status = StatusMessage::idle();
+                if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
+                    slot.eraser_mode = value;
                 }
                 self.refresh_dirty_flag();
             }
@@ -401,13 +539,16 @@ impl ConfiguratorApp {
 
         let content: Element<'_, Message> = match self.active_tab {
             TabId::Drawing => self.drawing_tab(),
+            TabId::Presets => self.presets_tab(),
             TabId::Arrow => self.arrow_tab(),
+            TabId::History => self.history_tab(),
             TabId::Performance => self.performance_tab(),
             TabId::Ui => self.ui_tab(),
             TabId::Board => self.board_tab(),
             TabId::Capture => self.capture_tab(),
             TabId::Session => self.session_tab(),
             TabId::Keybindings => self.keybindings_tab(),
+            TabId::Tablet => self.tablet_tab(),
         };
 
         let legend = self.defaults_legend();
@@ -559,6 +700,12 @@ impl ConfiguratorApp {
         ]
         .spacing(8);
 
+        let eraser_mode_pick = pick_list(
+            EraserModeOption::list(),
+            Some(self.draft.drawing_default_eraser_mode),
+            Message::EraserModeChanged,
+        );
+
         let column = column![
             text("Drawing Defaults").size(20),
             color_block,
@@ -574,6 +721,55 @@ impl ConfiguratorApp {
                     &self.draft.drawing_default_font_size,
                     &self.defaults.drawing_default_font_size,
                     TextField::DrawingFontSize,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Eraser size (px)",
+                    &self.draft.drawing_default_eraser_size,
+                    &self.defaults.drawing_default_eraser_size,
+                    TextField::DrawingEraserSize,
+                ),
+                labeled_control(
+                    "Eraser mode",
+                    eraser_mode_pick.width(Length::Fill).into(),
+                    self.defaults
+                        .drawing_default_eraser_mode
+                        .label()
+                        .to_string(),
+                    self.draft.drawing_default_eraser_mode
+                        != self.defaults.drawing_default_eraser_mode,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Marker opacity (0.05-0.9)",
+                    &self.draft.drawing_marker_opacity,
+                    &self.defaults.drawing_marker_opacity,
+                    TextField::DrawingMarkerOpacity,
+                ),
+                labeled_input(
+                    "Undo stack limit",
+                    &self.draft.drawing_undo_stack_limit,
+                    &self.defaults.drawing_undo_stack_limit,
+                    TextField::DrawingUndoStackLimit,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Hit-test tolerance (px)",
+                    &self.draft.drawing_hit_test_tolerance,
+                    &self.defaults.drawing_hit_test_tolerance,
+                    TextField::DrawingHitTestTolerance,
+                ),
+                labeled_input(
+                    "Hit-test threshold",
+                    &self.draft.drawing_hit_test_linear_threshold,
+                    &self.defaults.drawing_hit_test_linear_threshold,
+                    TextField::DrawingHitTestThreshold,
                 )
             ]
             .spacing(12),
@@ -646,12 +842,355 @@ impl ConfiguratorApp {
                 self.draft.drawing_text_background_enabled,
                 self.defaults.drawing_text_background_enabled,
                 ToggleField::DrawingTextBackground,
+            ),
+            toggle_row(
+                "Start shapes filled",
+                self.draft.drawing_default_fill_enabled,
+                self.defaults.drawing_default_fill_enabled,
+                ToggleField::DrawingFillEnabled,
             )
         ]
         .spacing(12)
         .width(Length::Fill);
 
         scrollable(column).into()
+    }
+
+    fn presets_tab(&self) -> Element<'_, Message> {
+        let slot_counts: Vec<usize> = (PRESET_SLOTS_MIN..=PRESET_SLOTS_MAX).collect();
+        let slot_picker = pick_list(
+            slot_counts,
+            Some(self.draft.presets.slot_count),
+            Message::PresetSlotCountChanged,
+        )
+        .width(Length::Fixed(140.0));
+
+        let slot_count_control = labeled_control(
+            "Visible slots",
+            slot_picker.into(),
+            self.defaults.presets.slot_count.to_string(),
+            self.draft.presets.slot_count != self.defaults.presets.slot_count,
+        );
+
+        let mut column = Column::new()
+            .spacing(12)
+            .push(text("Preset Slots").size(20))
+            .push(slot_count_control);
+
+        for slot_index in 1..=PRESET_SLOTS_MAX {
+            column = column.push(self.preset_slot_section(slot_index));
+        }
+
+        scrollable(column).into()
+    }
+
+    fn preset_slot_section(&self, slot_index: usize) -> Element<'_, Message> {
+        let Some(slot) = self.draft.presets.slot(slot_index) else {
+            return Space::new(Length::Shrink, Length::Shrink).into();
+        };
+        let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
+            return Space::new(Length::Shrink, Length::Shrink).into();
+        };
+
+        let enabled_row = row![
+            checkbox("Enabled", slot.enabled)
+                .on_toggle(move |val| Message::PresetSlotEnabledChanged(slot_index, val)),
+            default_value_text(
+                bool_label(default_slot.enabled),
+                slot.enabled != default_slot.enabled
+            ),
+        ]
+        .spacing(DEFAULT_LABEL_GAP)
+        .align_items(iced::Alignment::Center);
+
+        let mut section = Column::new()
+            .spacing(8)
+            .push(text(format!("Slot {slot_index}")).size(18))
+            .push(enabled_row);
+
+        if slot_index > self.draft.presets.slot_count {
+            section = section.push(
+                text(format!(
+                    "Hidden (slot count is {})",
+                    self.draft.presets.slot_count
+                ))
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            );
+        }
+
+        if !slot.enabled {
+            section = section.push(
+                text("Slot disabled. Enable to configure.")
+                    .size(12)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            );
+            return container(section)
+                .padding(12)
+                .style(theme::Container::Box)
+                .into();
+        }
+
+        let tool_picker = pick_list(ToolOption::list(), Some(slot.tool), move |opt| {
+            Message::PresetToolChanged(slot_index, opt)
+        })
+        .width(Length::Fill);
+
+        let header_row = row![
+            preset_input(
+                "Label",
+                &slot.name,
+                &default_slot.name,
+                slot_index,
+                PresetTextField::Name,
+                true,
+            ),
+            labeled_control(
+                "Tool",
+                tool_picker.into(),
+                default_slot.tool.label(),
+                slot.tool != default_slot.tool,
+            )
+        ]
+        .spacing(12);
+
+        let color_mode_picker = Row::new()
+            .spacing(12)
+            .push(
+                button("Named Color")
+                    .style(if slot.color.mode == ColorMode::Named {
+                        theme::Button::Primary
+                    } else {
+                        theme::Button::Secondary
+                    })
+                    .on_press(Message::PresetColorModeChanged(
+                        slot_index,
+                        ColorMode::Named,
+                    )),
+            )
+            .push(
+                button("RGB Color")
+                    .style(if slot.color.mode == ColorMode::Rgb {
+                        theme::Button::Primary
+                    } else {
+                        theme::Button::Secondary
+                    })
+                    .on_press(Message::PresetColorModeChanged(slot_index, ColorMode::Rgb)),
+            );
+
+        let color_section: Element<'_, Message> = match slot.color.mode {
+            ColorMode::Named => {
+                let picker = pick_list(
+                    NamedColorOption::list(),
+                    Some(slot.color.selected_named),
+                    move |opt| Message::PresetNamedColorSelected(slot_index, opt),
+                )
+                .width(Length::Fixed(160.0));
+
+                let picker_row = row![picker, color_preview_badge(slot.color.preview_color()),]
+                    .spacing(8)
+                    .align_items(iced::Alignment::Center);
+
+                let mut column = Column::new().spacing(8).push(picker_row);
+
+                if slot.color.selected_named_is_custom() {
+                    column = column.push(
+                        text_input("Custom color name", &slot.color.name)
+                            .on_input(move |value| {
+                                Message::PresetTextChanged(
+                                    slot_index,
+                                    PresetTextField::ColorName,
+                                    value,
+                                )
+                            })
+                            .width(Length::Fill),
+                    );
+
+                    if slot.color.preview_color().is_none() && !slot.color.name.trim().is_empty() {
+                        column = column.push(
+                            text("Unknown color name")
+                                .size(12)
+                                .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.6, 0.6))),
+                        );
+                    }
+                }
+
+                column.into()
+            }
+            ColorMode::Rgb => {
+                let rgb_inputs = row![
+                    text_input("R (0-255)", &slot.color.rgb[0]).on_input(move |value| {
+                        Message::PresetColorComponentChanged(slot_index, 0, value)
+                    }),
+                    text_input("G (0-255)", &slot.color.rgb[1]).on_input(move |value| {
+                        Message::PresetColorComponentChanged(slot_index, 1, value)
+                    }),
+                    text_input("B (0-255)", &slot.color.rgb[2]).on_input(move |value| {
+                        Message::PresetColorComponentChanged(slot_index, 2, value)
+                    }),
+                    color_preview_badge(slot.color.preview_color()),
+                ]
+                .spacing(8)
+                .align_items(iced::Alignment::Center);
+
+                let mut column = Column::new().spacing(8).push(rgb_inputs);
+
+                if slot.color.preview_color().is_none()
+                    && slot.color.rgb.iter().any(|value| !value.trim().is_empty())
+                {
+                    column = column.push(
+                        text("RGB values must be between 0 and 255")
+                            .size(12)
+                            .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.6, 0.6))),
+                    );
+                }
+
+                column.into()
+            }
+        };
+
+        let color_block = column![
+            row![
+                text("Color").size(14),
+                default_value_text(
+                    default_slot.color.summary(),
+                    slot.color != default_slot.color,
+                ),
+            ]
+            .spacing(DEFAULT_LABEL_GAP)
+            .align_items(iced::Alignment::Center),
+            color_mode_picker,
+            color_section
+        ]
+        .spacing(8);
+
+        let size_row = row![
+            preset_input(
+                "Size (px)",
+                &slot.size,
+                &default_slot.size,
+                slot_index,
+                PresetTextField::Size,
+                false,
+            ),
+            preset_input(
+                "Marker opacity (0.05-0.9)",
+                &slot.marker_opacity,
+                &default_slot.marker_opacity,
+                slot_index,
+                PresetTextField::MarkerOpacity,
+                true,
+            )
+        ]
+        .spacing(12);
+
+        let eraser_row = row![
+            labeled_control(
+                "Eraser kind",
+                pick_list(
+                    PresetEraserKindOption::list(),
+                    Some(slot.eraser_kind),
+                    move |opt| Message::PresetEraserKindChanged(slot_index, opt),
+                )
+                .width(Length::Fill)
+                .into(),
+                default_slot.eraser_kind.label(),
+                slot.eraser_kind != default_slot.eraser_kind,
+            ),
+            labeled_control(
+                "Eraser mode",
+                pick_list(
+                    PresetEraserModeOption::list(),
+                    Some(slot.eraser_mode),
+                    move |opt| Message::PresetEraserModeChanged(slot_index, opt),
+                )
+                .width(Length::Fill)
+                .into(),
+                default_slot.eraser_mode.label(),
+                slot.eraser_mode != default_slot.eraser_mode,
+            )
+        ]
+        .spacing(12);
+
+        let fill_row = row![
+            preset_override_control(
+                "Fill enabled",
+                slot.fill_enabled,
+                default_slot.fill_enabled,
+                slot_index,
+                PresetToggleField::FillEnabled,
+            ),
+            preset_override_control(
+                "Text background",
+                slot.text_background_enabled,
+                default_slot.text_background_enabled,
+                slot_index,
+                PresetToggleField::TextBackgroundEnabled,
+            )
+        ]
+        .spacing(12);
+
+        let font_row = row![
+            preset_input(
+                "Font size (pt)",
+                &slot.font_size,
+                &default_slot.font_size,
+                slot_index,
+                PresetTextField::FontSize,
+                true,
+            ),
+            preset_input(
+                "Arrow length (px)",
+                &slot.arrow_length,
+                &default_slot.arrow_length,
+                slot_index,
+                PresetTextField::ArrowLength,
+                true,
+            )
+        ]
+        .spacing(12);
+
+        let arrow_row = row![
+            preset_input(
+                "Arrow angle (deg)",
+                &slot.arrow_angle,
+                &default_slot.arrow_angle,
+                slot_index,
+                PresetTextField::ArrowAngle,
+                true,
+            ),
+            preset_override_control(
+                "Arrow head at end",
+                slot.arrow_head_at_end,
+                default_slot.arrow_head_at_end,
+                slot_index,
+                PresetToggleField::ArrowHeadAtEnd,
+            )
+        ]
+        .spacing(12);
+
+        let status_row = row![preset_override_control(
+            "Show status bar",
+            slot.show_status_bar,
+            default_slot.show_status_bar,
+            slot_index,
+            PresetToggleField::ShowStatusBar,
+        )];
+
+        section = section
+            .push(header_row)
+            .push(color_block)
+            .push(size_row)
+            .push(eraser_row)
+            .push(fill_row)
+            .push(font_row)
+            .push(arrow_row)
+            .push(status_row);
+
+        container(section)
+            .padding(12)
+            .style(theme::Container::Box)
+            .into()
     }
 
     fn arrow_tab(&self) -> Element<'_, Message> {
@@ -679,6 +1218,67 @@ impl ConfiguratorApp {
                     self.defaults.arrow_head_at_end,
                     ToggleField::ArrowHeadAtEnd,
                 )
+            ]
+            .spacing(12),
+        )
+        .into()
+    }
+
+    fn history_tab(&self) -> Element<'_, Message> {
+        scrollable(
+            column![
+                text("History").size(20),
+                row![
+                    labeled_input(
+                        "Undo all delay (ms)",
+                        &self.draft.history_undo_all_delay_ms,
+                        &self.defaults.history_undo_all_delay_ms,
+                        TextField::HistoryUndoAllDelayMs,
+                    ),
+                    labeled_input(
+                        "Redo all delay (ms)",
+                        &self.draft.history_redo_all_delay_ms,
+                        &self.defaults.history_redo_all_delay_ms,
+                        TextField::HistoryRedoAllDelayMs,
+                    )
+                ]
+                .spacing(12),
+                toggle_row(
+                    "Enable custom undo/redo section",
+                    self.draft.history_custom_section_enabled,
+                    self.defaults.history_custom_section_enabled,
+                    ToggleField::HistoryCustomSectionEnabled,
+                ),
+                row![
+                    labeled_input(
+                        "Custom undo delay (ms)",
+                        &self.draft.history_custom_undo_delay_ms,
+                        &self.defaults.history_custom_undo_delay_ms,
+                        TextField::HistoryCustomUndoDelayMs,
+                    ),
+                    labeled_input(
+                        "Custom redo delay (ms)",
+                        &self.draft.history_custom_redo_delay_ms,
+                        &self.defaults.history_custom_redo_delay_ms,
+                        TextField::HistoryCustomRedoDelayMs,
+                    )
+                ]
+                .spacing(12),
+                row![
+                    labeled_input(
+                        "Custom undo steps",
+                        &self.draft.history_custom_undo_steps,
+                        &self.defaults.history_custom_undo_steps,
+                        TextField::HistoryCustomUndoSteps,
+                    ),
+                    labeled_input(
+                        "Custom redo steps",
+                        &self.draft.history_custom_redo_steps,
+                        &self.defaults.history_custom_redo_steps,
+                        TextField::HistoryCustomRedoSteps,
+                    )
+                ]
+                .spacing(12),
             ]
             .spacing(12),
         )
@@ -750,7 +1350,30 @@ impl ConfiguratorApp {
             UiTabId::ClickHighlight => self.ui_click_highlight_tab(),
         };
 
-        column![text("UI Settings").size(20), tab_bar, content]
+        let general = column![
+            text("General UI").size(18),
+            labeled_input(
+                "Preferred output (xdg fallback)",
+                &self.draft.ui_preferred_output,
+                &self.defaults.ui_preferred_output,
+                TextField::UiPreferredOutput,
+            ),
+            toggle_row(
+                "Use fullscreen xdg fallback",
+                self.draft.ui_xdg_fullscreen,
+                self.defaults.ui_xdg_fullscreen,
+                ToggleField::UiXdgFullscreen,
+            ),
+            toggle_row(
+                "Enable context menu",
+                self.draft.ui_context_menu_enabled,
+                self.defaults.ui_context_menu_enabled,
+                ToggleField::UiContextMenuEnabled,
+            )
+        ]
+        .spacing(12);
+
+        column![text("UI Settings").size(20), general, tab_bar, content]
             .spacing(12)
             .into()
     }
@@ -778,6 +1401,30 @@ impl ConfiguratorApp {
                 toolbar_layout.width(Length::Fill).into(),
                 self.defaults.ui_toolbar_layout_mode.label().to_string(),
                 self.draft.ui_toolbar_layout_mode != self.defaults.ui_toolbar_layout_mode,
+            ),
+            toggle_row(
+                "Pin top toolbar",
+                self.draft.ui_toolbar_top_pinned,
+                self.defaults.ui_toolbar_top_pinned,
+                ToggleField::UiToolbarTopPinned,
+            ),
+            toggle_row(
+                "Pin side toolbar",
+                self.draft.ui_toolbar_side_pinned,
+                self.defaults.ui_toolbar_side_pinned,
+                ToggleField::UiToolbarSidePinned,
+            ),
+            toggle_row(
+                "Use icon-only buttons",
+                self.draft.ui_toolbar_use_icons,
+                self.defaults.ui_toolbar_use_icons,
+                ToggleField::UiToolbarUseIcons,
+            ),
+            toggle_row(
+                "Show extended colors",
+                self.draft.ui_toolbar_show_more_colors,
+                self.defaults.ui_toolbar_show_more_colors,
+                ToggleField::UiToolbarShowMoreColors,
             ),
             toggle_row(
                 "Show presets",
@@ -816,10 +1463,34 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowSettingsSection,
             ),
             toggle_row(
+                "Show delay sliders",
+                self.draft.ui_toolbar_show_delay_sliders,
+                self.defaults.ui_toolbar_show_delay_sliders,
+                ToggleField::UiToolbarShowDelaySliders,
+            ),
+            toggle_row(
+                "Show marker opacity controls",
+                self.draft.ui_toolbar_show_marker_opacity_section,
+                self.defaults.ui_toolbar_show_marker_opacity_section,
+                ToggleField::UiToolbarShowMarkerOpacitySection,
+            ),
+            toggle_row(
+                "Show tool preview bubble",
+                self.draft.ui_toolbar_show_tool_preview,
+                self.defaults.ui_toolbar_show_tool_preview,
+                ToggleField::UiToolbarShowToolPreview,
+            ),
+            toggle_row(
                 "Show preset action toasts",
                 self.draft.ui_toolbar_show_preset_toasts,
                 self.defaults.ui_toolbar_show_preset_toasts,
                 ToggleField::UiToolbarPresetToasts,
+            ),
+            toggle_row(
+                "Force inline toolbars",
+                self.draft.ui_toolbar_force_inline,
+                self.defaults.ui_toolbar_force_inline,
+                ToggleField::UiToolbarForceInline,
             ),
             text("Mode overrides").size(16),
             row![text("Edit mode:"), override_mode_pick]
@@ -847,6 +1518,37 @@ impl ConfiguratorApp {
                 ToolbarOverrideField::ShowSettingsSection,
                 overrides.show_settings_section,
             ),
+            text("Placement offsets").size(16),
+            row![
+                labeled_input(
+                    "Top offset X",
+                    &self.draft.ui_toolbar_top_offset,
+                    &self.defaults.ui_toolbar_top_offset,
+                    TextField::ToolbarTopOffset,
+                ),
+                labeled_input(
+                    "Top offset Y",
+                    &self.draft.ui_toolbar_top_offset_y,
+                    &self.defaults.ui_toolbar_top_offset_y,
+                    TextField::ToolbarTopOffsetY,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_input(
+                    "Side offset Y",
+                    &self.draft.ui_toolbar_side_offset,
+                    &self.defaults.ui_toolbar_side_offset,
+                    TextField::ToolbarSideOffset,
+                ),
+                labeled_input(
+                    "Side offset X",
+                    &self.draft.ui_toolbar_side_offset_x,
+                    &self.defaults.ui_toolbar_side_offset_x,
+                    TextField::ToolbarSideOffsetX,
+                )
+            ]
+            .spacing(12),
         ]
         .spacing(12);
 
@@ -1164,6 +1866,12 @@ impl ConfiguratorApp {
                 ToggleField::SessionPersistBlackboard,
             ),
             toggle_row(
+                "Persist undo/redo history",
+                self.draft.session_persist_history,
+                self.defaults.session_persist_history,
+                ToggleField::SessionPersistHistory,
+            ),
+            toggle_row(
                 "Restore tool state on startup",
                 self.draft.session_restore_tool_state,
                 self.defaults.session_restore_tool_state,
@@ -1207,6 +1915,12 @@ impl ConfiguratorApp {
                 TextField::SessionMaxShapesPerFrame,
             ))
             .push(labeled_input(
+                "Max persisted undo depth (blank = runtime limit)",
+                &self.draft.session_max_persisted_undo_depth,
+                &self.defaults.session_max_persisted_undo_depth,
+                TextField::SessionMaxPersistedUndoDepth,
+            ))
+            .push(labeled_input(
                 "Max file size (MB)",
                 &self.draft.session_max_file_size_mb,
                 &self.defaults.session_max_file_size_mb,
@@ -1228,12 +1942,72 @@ impl ConfiguratorApp {
         scrollable(column).into()
     }
 
+    fn tablet_tab(&self) -> Element<'_, Message> {
+        scrollable(
+            column![
+                text("Tablet / Stylus").size(20),
+                toggle_row(
+                    "Enable tablet input",
+                    self.draft.tablet_enabled,
+                    self.defaults.tablet_enabled,
+                    ToggleField::TabletEnabled,
+                ),
+                toggle_row(
+                    "Enable pressure-to-thickness",
+                    self.draft.tablet_pressure_enabled,
+                    self.defaults.tablet_pressure_enabled,
+                    ToggleField::TabletPressureEnabled,
+                ),
+                row![
+                    labeled_input(
+                        "Min thickness",
+                        &self.draft.tablet_min_thickness,
+                        &self.defaults.tablet_min_thickness,
+                        TextField::TabletMinThickness,
+                    ),
+                    labeled_input(
+                        "Max thickness",
+                        &self.draft.tablet_max_thickness,
+                        &self.defaults.tablet_max_thickness,
+                        TextField::TabletMaxThickness,
+                    )
+                ]
+                .spacing(12),
+            ]
+            .spacing(12),
+        )
+        .into()
+    }
+
     fn keybindings_tab(&self) -> Element<'_, Message> {
+        let tab_bar = KeybindingsTabId::ALL.iter().fold(
+            Row::new().spacing(8).align_items(iced::Alignment::Center),
+            |row, tab| {
+                let label = tab.title();
+                let button = button(label)
+                    .padding([6, 12])
+                    .style(if *tab == self.active_keybindings_tab {
+                        theme::Button::Primary
+                    } else {
+                        theme::Button::Secondary
+                    })
+                    .on_press(Message::KeybindingsTabSelected(*tab));
+                row.push(button)
+            },
+        );
+
         let mut column = Column::new()
             .spacing(8)
-            .push(text("Keybindings (comma-separated)").size(20));
+            .push(text("Keybindings (comma-separated)").size(20))
+            .push(tab_bar);
 
-        for entry in &self.draft.keybindings.entries {
+        for entry in self
+            .draft
+            .keybindings
+            .entries
+            .iter()
+            .filter(|entry| entry.field.tab() == self.active_keybindings_tab)
+        {
             let default_value = self
                 .defaults
                 .keybindings
@@ -1315,6 +2089,51 @@ fn labeled_control<'a>(
     .spacing(4)
     .width(Length::Fill)
     .into()
+}
+
+fn preset_input<'a>(
+    label: &'static str,
+    value: &'a str,
+    default: &'a str,
+    slot_index: usize,
+    field: PresetTextField,
+    show_unset: bool,
+) -> Element<'a, Message> {
+    let changed = value.trim() != default.trim();
+    let default_label = if show_unset && default.trim().is_empty() {
+        "unset".to_string()
+    } else {
+        default.trim().to_string()
+    };
+
+    column![
+        row![
+            text(label).size(14),
+            default_value_text(default_label, changed)
+        ]
+        .spacing(DEFAULT_LABEL_GAP)
+        .align_items(iced::Alignment::Center),
+        text_input(label, value)
+            .on_input(move |val| Message::PresetTextChanged(slot_index, field, val))
+    ]
+    .spacing(4)
+    .width(Length::Fill)
+    .into()
+}
+
+fn preset_override_control<'a>(
+    label: &'static str,
+    value: OverrideOption,
+    default: OverrideOption,
+    slot_index: usize,
+    field: PresetToggleField,
+) -> Element<'a, Message> {
+    let picker = pick_list(OverrideOption::list(), Some(value), move |opt| {
+        Message::PresetToggleOptionChanged(slot_index, field, opt)
+    })
+    .width(Length::Fill);
+
+    labeled_control(label, picker.into(), default.label(), value != default)
 }
 
 fn override_row<'a>(field: ToolbarOverrideField, value: OverrideOption) -> Element<'a, Message> {

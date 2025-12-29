@@ -433,10 +433,10 @@ exit_after_capture = false
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [session]
-# Enable persistence per mode (default to false for clean startup)
-persist_transparent = false
-persist_whiteboard = false
-persist_blackboard = false
+# Enable persistence per mode (default to true)
+persist_transparent = true
+persist_whiteboard = true
+persist_blackboard = true
 
 # Persist undo/redo history alongside shapes (set false to save only visible drawings)
 persist_history = true

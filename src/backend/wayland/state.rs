@@ -3,6 +3,7 @@
 use crate::draw::Color;
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
+use smithay_client_toolkit::seat::pointer::CursorIcon;
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
@@ -162,6 +163,7 @@ pub(super) struct WaylandState {
     // Pointer cursor
     pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
     pub(super) locked_pointer: Option<ZwpLockedPointerV1>,
+    pub(super) current_pointer_shape: Option<CursorIcon>,
     pub(super) relative_pointer: Option<ZwpRelativePointerV1>,
 
     // Tablet / stylus (feature-gated)

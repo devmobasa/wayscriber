@@ -417,7 +417,7 @@ pub(super) fn primary_config_dir() -> Result<PathBuf> {
 /// exit = ["Escape", "Ctrl+Q"]
 /// undo = ["Ctrl+Z"]
 /// ```
-#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct Config {
     /// Drawing tool defaults (color, thickness, font size)
     #[serde(default)]
