@@ -4,8 +4,8 @@ use std::sync::Arc;
 use wayscriber::config::Config;
 
 use crate::models::{
-    BoardModeOption, ColorMode, FontStyleOption, FontWeightOption, KeybindingField,
-    NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
+    BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
+    KeybindingField, NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
     SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField,
     ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
@@ -25,6 +25,7 @@ pub enum Message {
     QuadChanged(QuadField, usize, String),
     ColorModeChanged(ColorMode),
     NamedColorSelected(NamedColorOption),
+    EraserModeChanged(EraserModeOption),
     StatusPositionChanged(StatusPositionOption),
     ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),
