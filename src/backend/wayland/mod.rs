@@ -8,7 +8,6 @@ mod session;
 mod state;
 mod surface;
 mod toolbar;
-mod toolbar_icons;
 mod toolbar_intent;
 mod zoom;
 

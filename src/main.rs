@@ -44,6 +44,7 @@ mod notification;
 mod paths;
 mod session;
 mod time_utils;
+mod toolbar_icons;
 mod ui;
 mod util;
 

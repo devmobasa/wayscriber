@@ -1,6 +1,5 @@
 pub mod toolbar;
 
-/// UI rendering: status bar, help overlay, visual indicators
 use crate::config::StatusPosition;
 use crate::input::state::{
     PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UI_TOAST_DURATION_MS, UiToastKind,
@@ -9,6 +8,8 @@ use crate::input::{
     BoardMode, DrawingState, HelpOverlayView, InputState, TextInputMode, Tool,
     state::ContextMenuState,
 };
+/// UI rendering: status bar, help overlay, visual indicators
+use crate::toolbar_icons;
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::time::Instant;
 
@@ -715,6 +716,8 @@ pub fn render_help_overlay(
     board_enabled: bool,
     capture_enabled: bool,
 ) {
+    type IconFn = fn(&cairo::Context, f64, f64, f64);
+
     #[derive(Clone)]
     struct Row {
         key: String,
@@ -732,6 +735,7 @@ pub fn render_help_overlay(
         title: &'static str,
         rows: Vec<Row>,
         badges: Vec<Badge>,
+        icon: Option<IconFn>,
     }
 
     struct MeasuredSection {
@@ -953,6 +957,7 @@ pub fn render_help_overlay(
             row("Ctrl+Shift+T", "Return to Transparent"),
         ],
         badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_settings),
     });
 
     let pages_section = Section {
@@ -965,6 +970,7 @@ pub fn render_help_overlay(
             row("Ctrl+Alt+Delete", "Delete page"),
         ],
         badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_file),
     };
 
     let zoom_section = Section {
@@ -978,6 +984,7 @@ pub fn render_help_overlay(
             row("Arrow keys", "Nudge zoom view"),
         ],
         badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_zoom_in),
     };
 
     let selection_section = Section {
@@ -993,6 +1000,7 @@ pub fn render_help_overlay(
             row("Ctrl+A", "Select all"),
         ],
         badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_select),
     };
 
     let drawing_section = Section {
@@ -1010,6 +1018,7 @@ pub fn render_help_overlay(
             row("H", "Marker tool"),
         ],
         badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_pen),
     };
 
     let pen_text_section = Section {
@@ -1054,6 +1063,7 @@ pub fn render_help_overlay(
                 color: [0.28, 0.30, 0.38],
             },
         ],
+        icon: Some(toolbar_icons::draw_icon_text),
     };
 
     let mut action_rows = vec![
@@ -1074,6 +1084,7 @@ pub fn render_help_overlay(
         title: "Actions",
         rows: action_rows,
         badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_undo),
     };
 
     let screenshots_section = (!context_filter || capture_enabled).then(|| Section {
@@ -1088,6 +1099,7 @@ pub fn render_help_overlay(
             row("Ctrl+Alt+O", "Open capture folder"),
         ],
         badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_save),
     });
 
     let mut all_sections = Vec::new();
@@ -1138,6 +1150,7 @@ pub fn render_help_overlay(
                     row("", "Tip: search by key or action name"),
                 ],
                 badges: Vec::new(),
+                icon: None,
             });
         }
 
@@ -1164,6 +1177,8 @@ pub fn render_help_overlay(
     let subtitle_font_size = body_font_size;
     let row_line_height = style.line_height.max(body_font_size + 8.0);
     let heading_line_height = heading_font_size + 10.0;
+    let heading_icon_size = heading_font_size * 0.9;
+    let heading_icon_gap = 10.0;
     let row_gap_after_heading = 10.0;
     let key_desc_gap = 24.0;
     let row_gap = 36.0;
@@ -1207,6 +1222,7 @@ pub fn render_help_overlay(
     let accent_color = [0.91, 0.73, 0.42, 1.0];
     let accent_muted = [accent_color[0], accent_color[1], accent_color[2], 0.85];
     let highlight_color = [accent_color[0], accent_color[1], accent_color[2], 0.22];
+    let heading_icon_color = [accent_color[0], accent_color[1], accent_color[2], 0.9];
     let nav_key_color = [0.58, 0.82, 0.88, 1.0];
     let search_color = [0.92, 0.58, 0.28, 1.0];
     let subtitle_color = [0.58, 0.62, 0.72, 1.0];
@@ -1295,7 +1311,11 @@ pub fn render_help_overlay(
             heading_font_size,
             section.title,
         );
-        section_width = section_width.max(heading_extents.width());
+        let mut heading_width = heading_extents.width();
+        if section.icon.is_some() {
+            heading_width += heading_icon_size + heading_icon_gap;
+        }
+        section_width = section_width.max(heading_width);
         section_height += heading_line_height;
 
         if !section.rows.is_empty() {
@@ -1792,8 +1812,22 @@ pub fn render_help_overlay(
                 accent_color[2],
                 accent_color[3],
             );
+            let mut heading_text_x = content_x;
+            if let Some(icon) = section.icon {
+                let icon_y = section_y + (heading_line_height - heading_icon_size) * 0.5;
+                let _ = ctx.save();
+                ctx.set_source_rgba(
+                    heading_icon_color[0],
+                    heading_icon_color[1],
+                    heading_icon_color[2],
+                    heading_icon_color[3],
+                );
+                icon(ctx, content_x, icon_y, heading_icon_size);
+                let _ = ctx.restore();
+                heading_text_x += heading_icon_size + heading_icon_gap;
+            }
             let heading_baseline = section_y + heading_font_size;
-            ctx.move_to(content_x, heading_baseline);
+            ctx.move_to(heading_text_x, heading_baseline);
             let _ = ctx.show_text(section.title);
             section_y += heading_line_height;
 

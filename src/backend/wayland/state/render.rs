@@ -1,5 +1,5 @@
 use super::*;
-use crate::backend::wayland::toolbar_icons;
+use crate::toolbar_icons;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
