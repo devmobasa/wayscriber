@@ -209,6 +209,8 @@ pub struct InputState {
     pub help_overlay_view: HelpOverlayView,
     /// Active help overlay page index
     pub help_overlay_page: usize,
+    /// Current help overlay search query
+    pub help_overlay_search: String,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
@@ -468,6 +470,7 @@ impl InputState {
             show_help: false,
             help_overlay_view: HelpOverlayView::Quick,
             help_overlay_page: 0,
+            help_overlay_search: String::new(),
             show_status_bar,
             toolbar_visible: false,
             toolbar_top_visible: false,

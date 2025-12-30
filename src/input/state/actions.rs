@@ -986,6 +986,32 @@ impl InputState {
                 self.toggle_help_overlay_view();
                 true
             }
+            Key::Backspace => {
+                if !self.help_overlay_search.is_empty() {
+                    self.help_overlay_search.pop();
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            Key::Space => {
+                self.help_overlay_search.push(' ');
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                true
+            }
+            Key::Char(ch) => {
+                if !ch.is_control() {
+                    self.help_overlay_search.push(ch);
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
             Key::Left | Key::PageUp => self.help_overlay_prev_page(),
             Key::Right | Key::PageDown => self.help_overlay_next_page(),
             Key::Home => {

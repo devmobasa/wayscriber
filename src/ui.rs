@@ -521,22 +521,26 @@ pub fn render_help_overlay(
     frozen_enabled: bool,
     view: HelpOverlayView,
     page_index: usize,
-    page_prev_label: String,
-    page_next_label: String,
+    page_prev_label: &str,
+    page_next_label: &str,
+    search_query: &str,
     context_filter: bool,
     board_enabled: bool,
     capture_enabled: bool,
 ) {
+    #[derive(Clone)]
     struct Row {
         key: String,
         action: &'static str,
     }
 
+    #[derive(Clone)]
     struct Badge {
         label: &'static str,
         color: [f64; 3],
     }
 
+    #[derive(Clone)]
     struct Section {
         title: &'static str,
         rows: Vec<Row>,
@@ -556,6 +560,77 @@ pub fn render_help_overlay(
             action,
         }
     }
+
+    fn draw_highlight(
+        ctx: &cairo::Context,
+        x: f64,
+        baseline: f64,
+        font_size: f64,
+        weight: cairo::FontWeight,
+        text: &str,
+        range: (usize, usize),
+        color: [f64; 4],
+    ) {
+        let (start, end) = range;
+        if start >= end || end > text.len() {
+            return;
+        }
+        if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+            return;
+        }
+        let prefix = &text[..start];
+        let matched = &text[start..end];
+        if matched.is_empty() {
+            return;
+        }
+
+        let prefix_extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            weight,
+            font_size,
+            prefix,
+        );
+        let match_extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            weight,
+            font_size,
+            matched,
+        );
+
+        let pad_x = 2.0;
+        let pad_y = 2.0;
+        let highlight_x = x + prefix_extents.width() - pad_x;
+        let highlight_y = baseline + match_extents.y_bearing() - pad_y;
+        let highlight_width = match_extents.width() + pad_x * 2.0;
+        let highlight_height = match_extents.height() + pad_y * 2.0;
+
+        ctx.set_source_rgba(color[0], color[1], color[2], color[3]);
+        ctx.rectangle(highlight_x, highlight_y, highlight_width, highlight_height);
+        let _ = ctx.fill();
+    }
+
+    fn find_match_range(haystack: &str, needle_lower: &str) -> Option<(usize, usize)> {
+        if needle_lower.is_empty() {
+            return None;
+        }
+        let haystack_lower = haystack.to_ascii_lowercase();
+        haystack_lower
+            .find(needle_lower)
+            .map(|start| (start, start + needle_lower.len()))
+    }
+
+    fn row_matches(row: &Row, needle_lower: &str) -> bool {
+        find_match_range(&row.key, needle_lower).is_some()
+            || find_match_range(row.action, needle_lower).is_some()
+    }
+
+    let search_query = search_query.trim();
+    let search_active = !search_query.is_empty();
+    let search_lower = search_query.to_ascii_lowercase();
 
     let page_count = view.page_count().max(1);
     let page_index = page_index.min(page_count - 1);
@@ -709,6 +784,20 @@ pub fn render_help_overlay(
         badges: Vec::new(),
     });
 
+    let mut all_sections = Vec::new();
+    if let Some(section) = board_modes_section.clone() {
+        all_sections.push(section);
+    }
+    all_sections.push(pages_section.clone());
+    all_sections.push(drawing_section.clone());
+    all_sections.push(selection_section.clone());
+    all_sections.push(actions_section.clone());
+    all_sections.push(zoom_section.clone());
+    all_sections.push(pen_text_section.clone());
+    if let Some(section) = screenshots_section.clone() {
+        all_sections.push(section);
+    }
+
     let mut page1_sections = Vec::new();
     if let Some(section) = board_modes_section {
         page1_sections.push(section);
@@ -723,7 +812,31 @@ pub fn render_help_overlay(
         page2_sections.push(section);
     }
 
-    let sections = if matches!(view, HelpOverlayView::Quick) || page_index == 0 {
+    let sections = if search_active {
+        let mut filtered = Vec::new();
+        for mut section in all_sections {
+            let title_match = find_match_range(section.title, &search_lower).is_some();
+            if !title_match {
+                section.rows.retain(|row| row_matches(row, &search_lower));
+            }
+            if !section.rows.is_empty() {
+                filtered.push(section);
+            }
+        }
+
+        if filtered.is_empty() {
+            filtered.push(Section {
+                title: "No results",
+                rows: vec![
+                    row("", "Try: zoom, page, selection, capture"),
+                    row("", "Tip: search by key or action name"),
+                ],
+                badges: Vec::new(),
+            });
+        }
+
+        filtered
+    } else if matches!(view, HelpOverlayView::Quick) || page_index == 0 {
         page1_sections
     } else {
         page2_sections
@@ -736,7 +849,8 @@ pub fn render_help_overlay(
         env!("CARGO_PKG_VERSION"),
         commit_hash
     );
-    let nav_text_primary = if page_count > 1 {
+    let show_page_info = !search_active && page_count > 1;
+    let nav_text_primary = if show_page_info {
         format!(
             "{} view • Page {}/{}",
             view_label,
@@ -746,11 +860,14 @@ pub fn render_help_overlay(
     } else {
         format!("{} view", view_label)
     };
-    let nav_text_secondary = if page_count > 1 {
-        "Switch pages: Left/Right, PageUp/PageDown, Home/End • Tab: Toggle view"
+    let nav_text_secondary = if search_active {
+        "Esc: Close • Backspace: Remove • Tab: Toggle view"
+    } else if page_count > 1 {
+        "Switch pages: Left/Right, PageUp/PageDown, Home/End • Tab: Toggle view • Type to search"
     } else {
-        "Tab: Toggle view"
+        "Tab: Toggle view • Type to search"
     };
+    let search_text = search_active.then(|| format!("Search: {}", search_query));
     let note_text = "Note: Each board mode has independent pages";
 
     let body_font_size = style.font_size;
@@ -776,6 +893,8 @@ pub fn render_help_overlay(
     let subtitle_bottom_spacing = 28.0;
     let nav_line_gap = 6.0;
     let nav_bottom_spacing = 18.0;
+    let search_line_gap = 6.0;
+    let search_bottom_spacing = 18.0;
     let columns_bottom_spacing = 28.0;
 
     let lerp = |a: f64, b: f64, t: f64| a * (1.0 - t) + b * t;
@@ -795,6 +914,7 @@ pub fn render_help_overlay(
     ];
 
     let accent_color = [0.96, 0.78, 0.38, 1.0];
+    let highlight_color = [accent_color[0], accent_color[1], accent_color[2], 0.25];
     let subtitle_color = [0.62, 0.66, 0.76, 1.0];
     let body_text_color = style.text_color;
     let description_color = [
@@ -964,6 +1084,16 @@ pub fn render_help_overlay(
         nav_font_size,
         nav_text_secondary,
     );
+    let search_extents = search_text.as_ref().map(|text| {
+        text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            nav_font_size,
+            text,
+        )
+    });
     let note_font_size = (body_font_size - 2.0).max(12.0);
     let note_extents = text_extents_for(
         ctx,
@@ -980,12 +1110,20 @@ pub fn render_help_overlay(
         .max(nav_primary_extents.width())
         .max(nav_secondary_extents.width())
         .max(note_extents.width());
+    if let Some(extents) = &search_extents {
+        content_width = content_width.max(extents.width());
+    }
     if rows.is_empty() {
         content_width = content_width
             .max(title_extents.width())
             .max(subtitle_extents.width());
     }
 
+    let nav_block_height = if search_active {
+        nav_font_size * 2.0 + nav_line_gap + search_line_gap + nav_font_size + search_bottom_spacing
+    } else {
+        nav_font_size * 2.0 + nav_line_gap + nav_bottom_spacing
+    };
     let box_width = content_width + style.padding * 2.0;
     let content_height = accent_line_height
         + accent_line_bottom_spacing
@@ -993,9 +1131,7 @@ pub fn render_help_overlay(
         + title_bottom_spacing
         + subtitle_font_size
         + subtitle_bottom_spacing
-        + nav_font_size * 2.0
-        + nav_line_gap
-        + nav_bottom_spacing
+        + nav_block_height
         + grid_height
         + columns_bottom_spacing
         + note_font_size;
@@ -1094,7 +1230,17 @@ pub fn render_help_overlay(
     let nav_secondary_baseline = cursor_y + nav_font_size;
     ctx.move_to(inner_x, nav_secondary_baseline);
     let _ = ctx.show_text(nav_text_secondary);
-    cursor_y += nav_font_size + nav_bottom_spacing;
+    cursor_y += nav_font_size;
+
+    if let Some(search_text) = &search_text {
+        cursor_y += search_line_gap;
+        let search_baseline = cursor_y + nav_font_size;
+        ctx.move_to(inner_x, search_baseline);
+        let _ = ctx.show_text(search_text);
+        cursor_y += nav_font_size + search_bottom_spacing;
+    } else {
+        cursor_y += nav_bottom_spacing;
+    }
 
     let grid_start_y = cursor_y;
 
@@ -1137,6 +1283,33 @@ pub fn render_help_overlay(
                 section_y += row_gap_after_heading;
                 for row_data in &section.rows {
                     let baseline = section_y + body_font_size;
+
+                    if search_active {
+                        if let Some(range) = find_match_range(&row_data.key, &search_lower) {
+                            draw_highlight(
+                                ctx,
+                                section_x,
+                                baseline,
+                                body_font_size,
+                                cairo::FontWeight::Bold,
+                                &row_data.key,
+                                range,
+                                highlight_color,
+                            );
+                        }
+                        if let Some(range) = find_match_range(row_data.action, &search_lower) {
+                            draw_highlight(
+                                ctx,
+                                desc_x,
+                                baseline,
+                                body_font_size,
+                                cairo::FontWeight::Normal,
+                                row_data.action,
+                                range,
+                                highlight_color,
+                            );
+                        }
+                    }
 
                     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
                     ctx.set_font_size(body_font_size);

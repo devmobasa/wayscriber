@@ -15,6 +15,7 @@ impl InputState {
     pub(crate) fn toggle_help_overlay(&mut self) {
         let now_visible = !self.show_help;
         self.show_help = now_visible;
+        self.help_overlay_search.clear();
         if now_visible {
             self.help_overlay_view = HelpOverlayView::Quick;
             self.help_overlay_page = 0;
