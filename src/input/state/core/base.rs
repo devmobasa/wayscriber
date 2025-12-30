@@ -319,6 +319,8 @@ pub struct InputState {
     pub properties_panel_layout: Option<PropertiesPanelLayout>,
     /// Recompute properties hover next time layout is available
     pub(super) pending_properties_hover_recalc: bool,
+    /// Refresh properties panel entries on the next layout pass
+    pub(super) properties_panel_needs_refresh: bool,
     /// Whether frozen mode is currently active
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
@@ -495,6 +497,7 @@ impl InputState {
             shape_properties_panel: None,
             properties_panel_layout: None,
             pending_properties_hover_recalc: false,
+            properties_panel_needs_refresh: false,
             frozen_active: false,
             pending_frozen_toggle: false,
             zoom_active: false,

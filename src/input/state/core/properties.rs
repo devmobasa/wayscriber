@@ -16,6 +16,8 @@ const PANEL_COLUMN_GAP: f64 = 16.0;
 const PANEL_SECTION_GAP: f64 = 8.0;
 const PANEL_MARGIN: f64 = 12.0;
 const PANEL_INFO_OFFSET: f64 = 12.0;
+const PANEL_ANCHOR_GAP: f64 = 12.0;
+const PANEL_POINTER_OFFSET: f64 = 16.0;
 
 const SELECTION_THICKNESS_STEP: f64 = 1.0;
 const SELECTION_FONT_SIZE_STEP: f64 = 2.0;
@@ -78,6 +80,7 @@ pub struct PropertiesPanelLayout {
 pub struct ShapePropertiesPanel {
     pub title: String,
     pub anchor: (f64, f64),
+    pub anchor_rect: Option<Rect>,
     pub lines: Vec<String>,
     pub entries: Vec<SelectionPropertyEntry>,
     pub hover_index: Option<usize>,
@@ -116,6 +119,7 @@ impl InputState {
     pub fn close_properties_panel(&mut self) {
         if self.shape_properties_panel.take().is_some() {
             self.clear_properties_panel_layout();
+            self.properties_panel_needs_refresh = false;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
@@ -125,6 +129,7 @@ impl InputState {
         self.shape_properties_panel = Some(panel);
         self.properties_panel_layout = None;
         self.pending_properties_hover_recalc = true;
+        self.properties_panel_needs_refresh = false;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -137,17 +142,7 @@ impl InputState {
 
         let frame = self.canvas_set.active_frame();
         let anchor_rect = self.selection_bounding_box(&ids);
-        let anchor = anchor_rect
-            .map(|rect| {
-                (
-                    (rect.x + rect.width + 12) as f64,
-                    (rect.y - 12).max(12) as f64,
-                )
-            })
-            .unwrap_or_else(|| {
-                let (px, py) = self.last_pointer_position;
-                ((px + 16) as f64, (py - 16) as f64)
-            });
+        let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
 
         let entries = self.build_selection_property_entries(&ids);
 
@@ -172,6 +167,7 @@ impl InputState {
             self.set_properties_panel(ShapePropertiesPanel {
                 title: "Selection Properties".to_string(),
                 anchor,
+                anchor_rect,
                 lines,
                 entries,
                 hover_index: None,
@@ -209,6 +205,7 @@ impl InputState {
         self.set_properties_panel(ShapePropertiesPanel {
             title: "Shape Properties".to_string(),
             anchor,
+            anchor_rect,
             lines,
             entries,
             hover_index: None,
@@ -219,16 +216,72 @@ impl InputState {
     }
 
     pub(crate) fn refresh_properties_panel(&mut self) {
+        self.properties_panel_needs_refresh = false;
         let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
         if ids.is_empty() {
             return;
         }
+        let anchor_rect = self.selection_bounding_box(&ids);
+        let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
         let entries = self.build_selection_property_entries(&ids);
+
+        let details = (|| {
+            let frame = self.canvas_set.active_frame();
+            if ids.len() > 1 {
+                let total = ids.len();
+                let locked = ids
+                    .iter()
+                    .filter(|id| frame.shape(**id).map(|shape| shape.locked).unwrap_or(false))
+                    .count();
+                let mut lines = Vec::new();
+                lines.push(format!("Shapes selected: {total}"));
+                if locked > 0 {
+                    lines.push(format!("Locked: {locked}/{total}"));
+                }
+                if let Some(bounds) = anchor_rect {
+                    lines.push(format!(
+                        "Bounds: {}×{} px",
+                        bounds.width.max(0),
+                        bounds.height.max(0)
+                    ));
+                }
+                return Some(("Selection Properties".to_string(), lines, true));
+            }
+
+            let shape_id = *ids.first()?;
+            let index = frame.find_index(shape_id)?;
+            let drawn = frame.shape(shape_id)?;
+            let mut lines = Vec::new();
+            lines.push(format!("Shape ID: {shape_id}"));
+            lines.push(format!("Type: {}", drawn.shape.kind_name()));
+            lines.push(format!("Layer: {} of {}", index + 1, frame.shapes.len()));
+            lines.push(format!(
+                "Locked: {}",
+                if drawn.locked { "Yes" } else { "No" }
+            ));
+            if let Some(timestamp) = format_timestamp(drawn.created_at) {
+                lines.push(format!("Created: {timestamp}"));
+            }
+            if let Some(bounds) = drawn.shape.bounding_box() {
+                lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
+            }
+            Some(("Shape Properties".to_string(), lines, false))
+        })();
+
+        let Some((title, lines, multiple_selection)) = details else {
+            self.close_properties_panel();
+            return;
+        };
 
         let Some(panel) = self.shape_properties_panel.as_mut() else {
             return;
         };
+        panel.title = title;
+        panel.lines = lines;
         panel.entries = entries;
+        panel.anchor_rect = anchor_rect;
+        panel.anchor = anchor;
+        panel.multiple_selection = multiple_selection;
 
         let valid_focus = panel
             .keyboard_focus
@@ -259,6 +312,9 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
+        if self.properties_panel_needs_refresh {
+            self.refresh_properties_panel();
+        }
         let Some(panel) = self.shape_properties_panel.as_ref() else {
             self.properties_panel_layout = None;
             return;
@@ -313,11 +369,72 @@ impl InputState {
         let panel_height =
             (PANEL_PADDING_Y * 2.0 + title_height + info_height + entries_height).ceil();
 
-        let mut origin_x = panel.anchor.0;
-        let mut origin_y = panel.anchor.1;
-
         let screen_w = screen_width as f64;
         let screen_h = screen_height as f64;
+
+        let (mut origin_x, mut origin_y) = if screen_w > 0.0 && screen_h > 0.0 {
+            if let Some(bounds) = panel.anchor_rect {
+                let rect_x = bounds.x as f64;
+                let rect_y = bounds.y as f64;
+                let rect_w = bounds.width.max(1) as f64;
+                let rect_h = bounds.height.max(1) as f64;
+                let center_x = rect_x + rect_w / 2.0;
+                let center_y = rect_y + rect_h / 2.0;
+
+                let candidates = [
+                    (
+                        rect_x + rect_w + PANEL_ANCHOR_GAP,
+                        center_y - panel_height / 2.0,
+                    ),
+                    (
+                        rect_x - panel_width - PANEL_ANCHOR_GAP,
+                        center_y - panel_height / 2.0,
+                    ),
+                    (
+                        center_x - panel_width / 2.0,
+                        rect_y + rect_h + PANEL_ANCHOR_GAP,
+                    ),
+                    (
+                        center_x - panel_width / 2.0,
+                        rect_y - panel_height - PANEL_ANCHOR_GAP,
+                    ),
+                ];
+
+                let max_x = screen_w - PANEL_MARGIN;
+                let max_y = screen_h - PANEL_MARGIN;
+                let overflow = |x: f64, y: f64| -> f64 {
+                    let mut overflow = 0.0;
+                    if x < PANEL_MARGIN {
+                        overflow += PANEL_MARGIN - x;
+                    }
+                    if y < PANEL_MARGIN {
+                        overflow += PANEL_MARGIN - y;
+                    }
+                    if x + panel_width > max_x {
+                        overflow += x + panel_width - max_x;
+                    }
+                    if y + panel_height > max_y {
+                        overflow += y + panel_height - max_y;
+                    }
+                    overflow
+                };
+
+                let mut best = candidates[0];
+                let mut best_overflow = overflow(best.0, best.1);
+                for (x, y) in candidates.into_iter().skip(1) {
+                    let candidate_overflow = overflow(x, y);
+                    if candidate_overflow < best_overflow {
+                        best = (x, y);
+                        best_overflow = candidate_overflow;
+                    }
+                }
+                best
+            } else {
+                panel.anchor
+            }
+        } else {
+            panel.anchor
+        };
         if origin_x + panel_width > screen_w - PANEL_MARGIN {
             origin_x = (screen_w - panel_width - PANEL_MARGIN).max(PANEL_MARGIN);
         }
@@ -1176,7 +1293,25 @@ impl InputState {
 }
 
 fn direction_or_default(direction: i32) -> i32 {
+    // Treat activation (0) as a forward step; preserve negative direction.
     if direction < 0 { -1 } else { 1 }
+}
+
+fn selection_panel_anchor(bounds: Option<Rect>, pointer: (i32, i32)) -> (f64, f64) {
+    bounds
+        .map(|rect| {
+            (
+                rect.x as f64 + rect.width as f64 + PANEL_ANCHOR_GAP,
+                (rect.y as f64 - PANEL_ANCHOR_GAP).max(PANEL_MARGIN),
+            )
+        })
+        .unwrap_or_else(|| {
+            let (px, py) = pointer;
+            (
+                px as f64 + PANEL_POINTER_OFFSET,
+                py as f64 - PANEL_POINTER_OFFSET,
+            )
+        })
 }
 
 fn cycle_index(index: usize, len: usize, offset: i32) -> usize {

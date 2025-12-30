@@ -5,6 +5,7 @@ use crate::util;
 use log::{info, warn};
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
+const PROPERTIES_PANEL_COARSE_STEP: i32 = 5;
 
 use super::{
     DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, SelectionAxis,
@@ -46,6 +47,11 @@ impl InputState {
         }
 
         if self.is_properties_panel_open() {
+            let adjust_step = if self.modifiers.shift {
+                PROPERTIES_PANEL_COARSE_STEP
+            } else {
+                1
+            };
             let handled = match key {
                 Key::Escape => {
                     self.close_properties_panel();
@@ -56,10 +62,10 @@ impl InputState {
                 Key::Home => self.focus_first_properties_entry(),
                 Key::End => self.focus_last_properties_entry(),
                 Key::Return | Key::Space => self.activate_properties_panel_entry(),
-                Key::Left => self.adjust_properties_panel_entry(-1),
-                Key::Right => self.adjust_properties_panel_entry(1),
-                Key::Char('+') | Key::Char('=') => self.adjust_properties_panel_entry(1),
-                Key::Char('-') | Key::Char('_') => self.adjust_properties_panel_entry(-1),
+                Key::Left => self.adjust_properties_panel_entry(-adjust_step),
+                Key::Right => self.adjust_properties_panel_entry(adjust_step),
+                Key::Char('+') | Key::Char('=') => self.adjust_properties_panel_entry(adjust_step),
+                Key::Char('-') | Key::Char('_') => self.adjust_properties_panel_entry(-adjust_step),
                 _ => false,
             };
             if handled {
