@@ -977,6 +977,8 @@ impl InputState {
             return false;
         }
 
+        let search_active = !self.help_overlay_search.trim().is_empty();
+
         match key {
             Key::Escape | Key::F1 | Key::F10 => {
                 self.toggle_help_overlay();
@@ -997,9 +999,11 @@ impl InputState {
                 }
             }
             Key::Space => {
-                self.help_overlay_search.push(' ');
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                if search_active {
+                    self.help_overlay_search.push(' ');
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                }
                 true
             }
             Key::Char(ch) => {
@@ -1012,9 +1016,15 @@ impl InputState {
                     false
                 }
             }
-            Key::Left | Key::PageUp => self.help_overlay_prev_page(),
-            Key::Right | Key::PageDown => self.help_overlay_next_page(),
-            Key::Home => {
+            // Disable page navigation while search is active
+            Key::Left | Key::Right | Key::PageUp | Key::PageDown | Key::Home | Key::End
+                if search_active =>
+            {
+                true
+            }
+            Key::Left | Key::PageUp if !search_active => self.help_overlay_prev_page(),
+            Key::Right | Key::PageDown if !search_active => self.help_overlay_next_page(),
+            Key::Home if !search_active => {
                 if self.help_overlay_page != 0 {
                     self.help_overlay_page = 0;
                     self.dirty_tracker.mark_full();
@@ -1024,7 +1034,7 @@ impl InputState {
                     false
                 }
             }
-            Key::End => {
+            Key::End if !search_active => {
                 let last_page = self.help_overlay_page_count().saturating_sub(1);
                 if self.help_overlay_page != last_page {
                     self.help_overlay_page = last_page;

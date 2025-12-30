@@ -71,6 +71,171 @@ fn draw_rounded_rect(ctx: &cairo::Context, x: f64, y: f64, width: f64, height: f
     ctx.close_path();
 }
 
+/// Draw a keyboard key with keycap styling
+fn draw_keycap(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    text: &str,
+    font_size: f64,
+    text_color: [f64; 4],
+) -> f64 {
+    let padding_x = 6.0;
+    let padding_y = 3.0;
+    let radius = 4.0;
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(font_size);
+    let extents = ctx
+        .text_extents(text)
+        .unwrap_or_else(|_| fallback_text_extents(font_size, text));
+
+    let cap_width = extents.width() + padding_x * 2.0;
+    let cap_height = font_size + padding_y * 2.0;
+    let cap_y = y - font_size - padding_y;
+
+    // Keycap background with subtle gradient effect
+    draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+    let _ = ctx.fill_preserve();
+
+    // Keycap border
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.15);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    // Bottom edge highlight for 3D effect
+    ctx.move_to(x + radius, cap_y + cap_height - 1.0);
+    ctx.line_to(x + cap_width - radius, cap_y + cap_height - 1.0);
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.2);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    // Text
+    ctx.set_source_rgba(text_color[0], text_color[1], text_color[2], text_color[3]);
+    ctx.move_to(x + padding_x, y);
+    let _ = ctx.show_text(text);
+
+    cap_width
+}
+
+/// Measure the width of a key combination string with keycap styling
+fn measure_key_combo(ctx: &cairo::Context, key_str: &str, font_size: f64) -> f64 {
+    let keycap_padding_x = 6.0;
+    let key_gap = 4.0;
+    let separator_gap = 6.0;
+
+    let mut total_width = 0.0;
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(font_size);
+
+    // Split by " / " for alternate bindings
+    let alternatives: Vec<&str> = key_str.split(" / ").collect();
+
+    for (alt_idx, alt) in alternatives.iter().enumerate() {
+        if alt_idx > 0 {
+            // Add separator "/" width
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            ctx.set_font_size(font_size);
+            let slash_ext = ctx
+                .text_extents("/")
+                .unwrap_or_else(|_| fallback_text_extents(font_size, "/"));
+            total_width += separator_gap * 2.0 + slash_ext.width();
+        }
+
+        // Split by "+" for key combinations
+        let keys: Vec<&str> = alt.split('+').collect();
+        for (key_idx, key) in keys.iter().enumerate() {
+            if key_idx > 0 {
+                // Add "+" separator width (matches draw_key_combo)
+                ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+                ctx.set_font_size(font_size * 0.9);
+                let plus_ext = ctx
+                    .text_extents("+")
+                    .unwrap_or_else(|_| fallback_text_extents(font_size, "+"));
+                total_width += 6.0 + plus_ext.width();
+            }
+
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            ctx.set_font_size(font_size);
+            let ext = ctx
+                .text_extents(key.trim())
+                .unwrap_or_else(|_| fallback_text_extents(font_size, key.trim()));
+            total_width += ext.width() + keycap_padding_x * 2.0 + key_gap;
+        }
+    }
+
+    total_width - key_gap // Remove trailing gap
+}
+
+/// Draw a key combination string with keycap styling, returns total width
+fn draw_key_combo(
+    ctx: &cairo::Context,
+    x: f64,
+    baseline: f64,
+    key_str: &str,
+    font_size: f64,
+    text_color: [f64; 4],
+    separator_color: [f64; 4],
+) -> f64 {
+    let mut cursor_x = x;
+    let key_gap = 4.0;
+    let separator_gap = 6.0;
+
+    // Split by " / " for alternate bindings
+    let alternatives: Vec<&str> = key_str.split(" / ").collect();
+
+    for (alt_idx, alt) in alternatives.iter().enumerate() {
+        if alt_idx > 0 {
+            // Draw separator "/"
+            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            ctx.set_font_size(font_size);
+            ctx.set_source_rgba(
+                separator_color[0],
+                separator_color[1],
+                separator_color[2],
+                separator_color[3],
+            );
+            cursor_x += separator_gap;
+            ctx.move_to(cursor_x, baseline);
+            let _ = ctx.show_text("/");
+            let slash_ext = ctx
+                .text_extents("/")
+                .unwrap_or_else(|_| fallback_text_extents(font_size, "/"));
+            cursor_x += slash_ext.width() + separator_gap;
+        }
+
+        // Split by "+" for key combinations
+        let keys: Vec<&str> = alt.split('+').collect();
+        for (key_idx, key) in keys.iter().enumerate() {
+            if key_idx > 0 {
+                // Draw "+" separator (bold and visible)
+                ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+                ctx.set_font_size(font_size * 0.9);
+                ctx.set_source_rgba(
+                    separator_color[0],
+                    separator_color[1],
+                    separator_color[2],
+                    0.85,
+                );
+                cursor_x += 3.0;
+                ctx.move_to(cursor_x, baseline);
+                let _ = ctx.show_text("+");
+                let plus_ext = ctx
+                    .text_extents("+")
+                    .unwrap_or_else(|_| fallback_text_extents(font_size, "+"));
+                cursor_x += plus_ext.width() + 3.0;
+            }
+
+            let cap_width = draw_keycap(ctx, cursor_x, baseline, key.trim(), font_size, text_color);
+            cursor_x += cap_width + key_gap;
+        }
+    }
+
+    cursor_x - x - key_gap // Return total width minus trailing gap
+}
+
 /// Render status bar showing current color, thickness, and tool
 pub fn render_status_bar(
     ctx: &cairo::Context,
@@ -613,6 +778,38 @@ pub fn render_help_overlay(
         let _ = ctx.fill();
     }
 
+    fn draw_key_combo_highlight(
+        ctx: &cairo::Context,
+        x: f64,
+        baseline: f64,
+        font_size: f64,
+        key_width: f64,
+        color: [f64; 4],
+    ) {
+        if key_width <= 0.0 {
+            return;
+        }
+
+        let padding_y = 3.0;
+        let pad_x = 2.0;
+        let pad_y = 2.0;
+        let highlight_x = x - pad_x;
+        let highlight_y = baseline - font_size - padding_y - pad_y;
+        let highlight_width = key_width + pad_x * 2.0;
+        let highlight_height = font_size + padding_y * 2.0 + pad_y * 2.0;
+
+        ctx.set_source_rgba(color[0], color[1], color[2], color[3]);
+        draw_rounded_rect(
+            ctx,
+            highlight_x,
+            highlight_y,
+            highlight_width,
+            highlight_height,
+            6.0,
+        );
+        let _ = ctx.fill();
+    }
+
     fn draw_segmented_text(
         ctx: &cairo::Context,
         x: f64,
@@ -637,6 +834,67 @@ pub fn render_help_overlay(
             );
             cursor_x += extents.width();
         }
+    }
+
+    fn ellipsize_to_fit(
+        ctx: &cairo::Context,
+        text: &str,
+        font_size: f64,
+        weight: cairo::FontWeight,
+        max_width: f64,
+    ) -> String {
+        if text.is_empty() || max_width <= 0.0 {
+            return String::new();
+        }
+
+        let extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            weight,
+            font_size,
+            text,
+        );
+        if extents.width() <= max_width {
+            return text.to_string();
+        }
+
+        let ellipsis = "...";
+        let base_text = text.strip_suffix(ellipsis).unwrap_or(text);
+        let ellipsis_extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            weight,
+            font_size,
+            ellipsis,
+        );
+        if ellipsis_extents.width() > max_width {
+            return ellipsis.to_string();
+        }
+
+        let mut end = base_text.len();
+        while end > 0 {
+            if !base_text.is_char_boundary(end) {
+                end -= 1;
+                continue;
+            }
+            let candidate = format!("{}{}", &base_text[..end], ellipsis);
+            let candidate_extents = text_extents_for(
+                ctx,
+                "Sans",
+                cairo::FontSlant::Normal,
+                weight,
+                font_size,
+                &candidate,
+            );
+            if candidate_extents.width() <= max_width {
+                return candidate;
+            }
+            end -= 1;
+        }
+
+        ellipsis.to_string()
     }
 
     fn find_match_range(haystack: &str, needle_lower: &str) -> Option<(usize, usize)> {
@@ -830,10 +1088,10 @@ pub fn render_help_overlay(
     }
     page1_sections.push(pages_section);
     page1_sections.push(drawing_section);
-    page1_sections.push(selection_section);
+    page1_sections.push(pen_text_section);
     page1_sections.push(actions_section);
 
-    let mut page2_sections = vec![zoom_section, pen_text_section];
+    let mut page2_sections = vec![zoom_section, selection_section];
     if let Some(section) = screenshots_section {
         page2_sections.push(section);
     }
@@ -876,17 +1134,20 @@ pub fn render_help_overlay(
         commit_hash
     );
     let note_text = "Note: Each board mode has independent pages";
+    let close_hint_text = "F1 / Esc to close";
 
     let body_font_size = style.font_size;
     let heading_font_size = body_font_size + 6.0;
     let title_font_size = heading_font_size + 6.0;
     let subtitle_font_size = body_font_size;
-    let row_line_height = style.line_height.max(body_font_size + 4.0);
-    let heading_line_height = heading_font_size + 6.0;
-    let row_gap_after_heading = 6.0;
-    let key_desc_gap = 20.0;
-    let row_gap = 28.0;
-    let column_gap = 48.0;
+    let row_line_height = style.line_height.max(body_font_size + 8.0);
+    let heading_line_height = heading_font_size + 10.0;
+    let row_gap_after_heading = 10.0;
+    let key_desc_gap = 24.0;
+    let row_gap = 36.0;
+    let column_gap = 56.0;
+    let section_card_padding = 14.0;
+    let section_card_radius = 10.0;
     let badge_font_size = (body_font_size - 2.0).max(12.0);
     let badge_padding_x = 12.0;
     let badge_padding_y = 6.0;
@@ -920,11 +1181,15 @@ pub fn render_help_overlay(
         bg_a,
     ];
 
-    let accent_color = [0.96, 0.78, 0.38, 1.0];
-    let highlight_color = [accent_color[0], accent_color[1], accent_color[2], 0.25];
-    let nav_key_color = [0.56, 0.86, 0.92, 1.0];
-    let search_color = [0.96, 0.56, 0.2, 1.0];
-    let subtitle_color = [0.62, 0.66, 0.76, 1.0];
+    // Warmer, softer accent gold
+    let accent_color = [0.91, 0.73, 0.42, 1.0];
+    let accent_muted = [accent_color[0], accent_color[1], accent_color[2], 0.85];
+    let highlight_color = [accent_color[0], accent_color[1], accent_color[2], 0.22];
+    let nav_key_color = [0.58, 0.82, 0.88, 1.0];
+    let search_color = [0.92, 0.58, 0.28, 1.0];
+    let subtitle_color = [0.58, 0.62, 0.72, 1.0];
+    let section_card_bg = [1.0, 1.0, 1.0, 0.04];
+    let section_card_border = [1.0, 1.0, 1.0, 0.08];
     let body_text_color = style.text_color;
     let description_color = [
         lerp(body_text_color[0], subtitle_color[0], 0.35),
@@ -959,14 +1224,11 @@ pub fn render_help_overlay(
         ]
     } else if page_count > 1 {
         vec![
-            ("Switch pages: ".to_string(), subtitle_color),
+            ("Switch pages:  ".to_string(), subtitle_color),
             (
                 "Left/Right, PageUp/PageDown, Home/End".to_string(),
                 nav_key_color,
             ),
-            (nav_separator.to_string(), subtitle_color),
-            ("Tab".to_string(), nav_key_color),
-            (": Toggle view".to_string(), subtitle_color),
         ]
     } else {
         vec![
@@ -974,13 +1236,20 @@ pub fn render_help_overlay(
             (": Toggle view".to_string(), subtitle_color),
         ]
     };
+    // Third nav line for multi-page view (separate from switch pages)
+    let nav_tertiary_segments: Option<Vec<(String, [f64; 4])>> = if !search_active && page_count > 1
+    {
+        Some(vec![
+            ("Tab".to_string(), nav_key_color),
+            (": Toggle view".to_string(), subtitle_color),
+        ])
+    } else {
+        None
+    };
     let nav_text_secondary: String = nav_secondary_segments
         .iter()
         .map(|(text, _)| text.as_str())
         .collect();
-    let search_text = search_active.then(|| format!("Search: {}", search_query));
-    let search_hint_text = (!search_active).then(|| "Type to search".to_string());
-
     let mut measured_sections = Vec::with_capacity(sections.len());
     for section in sections {
         let mut key_max_width: f64 = 0.0;
@@ -988,15 +1257,9 @@ pub fn render_help_overlay(
             if row.key.is_empty() {
                 continue;
             }
-            let key_extents = text_extents_for(
-                ctx,
-                "Sans",
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Bold,
-                body_font_size,
-                row.key.as_str(),
-            );
-            key_max_width = key_max_width.max(key_extents.width());
+            // Measure with keycap styling padding
+            let key_width = measure_key_combo(ctx, row.key.as_str(), body_font_size);
+            key_max_width = key_max_width.max(key_width);
         }
 
         let mut section_width: f64 = 0.0;
@@ -1056,8 +1319,8 @@ pub fn render_help_overlay(
 
         measured_sections.push(MeasuredSection {
             section,
-            width: section_width,
-            height: section_height,
+            width: section_width + section_card_padding * 2.0,
+            height: section_height + section_card_padding * 2.0,
             key_column_width: key_max_width,
         });
     }
@@ -1140,6 +1403,46 @@ pub fn render_help_overlay(
         nav_font_size,
         &nav_text_secondary,
     );
+    let nav_tertiary_text: String = nav_tertiary_segments
+        .as_ref()
+        .map(|segs| segs.iter().map(|(t, _)| t.as_str()).collect())
+        .unwrap_or_default();
+    let nav_tertiary_extents = if nav_tertiary_segments.is_some() {
+        Some(text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            nav_font_size,
+            &nav_tertiary_text,
+        ))
+    } else {
+        None
+    };
+    let max_search_width = (screen_width as f64 * 0.9 - style.padding * 2.0).max(0.0);
+    let search_text = if search_active {
+        let prefix = "Search: ";
+        let prefix_extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            nav_font_size,
+            prefix,
+        );
+        let max_query_width = (max_search_width - prefix_extents.width()).max(0.0);
+        let query_display = ellipsize_to_fit(
+            ctx,
+            search_query,
+            nav_font_size,
+            cairo::FontWeight::Normal,
+            max_query_width,
+        );
+        Some(format!("{}{}", prefix, query_display))
+    } else {
+        None
+    };
+    let search_hint_text = (!search_active).then(|| "Type to search".to_string());
     let extra_line_text = search_text.as_deref().or(search_hint_text.as_deref());
     let extra_line_extents = extra_line_text.map(|text| {
         text_extents_for(
@@ -1160,30 +1463,52 @@ pub fn render_help_overlay(
         note_font_size,
         note_text,
     );
+    let close_hint_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        note_font_size,
+        close_hint_text,
+    );
+    let note_to_close_gap = 12.0;
 
     let mut content_width = grid_width
         .max(title_extents.width())
         .max(subtitle_extents.width())
         .max(nav_primary_extents.width())
         .max(nav_secondary_extents.width())
-        .max(note_extents.width());
-    if let Some(extents) = &extra_line_extents {
-        content_width = content_width.max(extents.width());
-    }
+        .max(
+            nav_tertiary_extents
+                .as_ref()
+                .map(|e| e.width())
+                .unwrap_or(0.0),
+        )
+        .max(note_extents.width())
+        .max(close_hint_extents.width());
+    // Don't let search text expand the overlay - it will be clamped/elided
     if rows.is_empty() {
         content_width = content_width
             .max(title_extents.width())
             .max(subtitle_extents.width());
     }
+    // Ensure minimum width for search box
+    content_width = content_width.max(300.0);
 
+    let nav_tertiary_height = if nav_tertiary_segments.is_some() {
+        nav_line_gap + nav_font_size
+    } else {
+        0.0
+    };
     let nav_block_height = if extra_line_text.is_some() {
         nav_font_size * 2.0
             + nav_line_gap
+            + nav_tertiary_height
             + extra_line_gap
             + nav_font_size
             + extra_line_bottom_spacing
     } else {
-        nav_font_size * 2.0 + nav_line_gap + nav_bottom_spacing
+        nav_font_size * 2.0 + nav_line_gap + nav_tertiary_height + nav_bottom_spacing
     };
     let box_width = content_width + style.padding * 2.0;
     let content_height = accent_line_height
@@ -1195,6 +1520,8 @@ pub fn render_help_overlay(
         + nav_block_height
         + grid_height
         + columns_bottom_spacing
+        + note_font_size
+        + note_to_close_gap
         + note_font_size;
     let box_height = content_height + style.padding * 2.0;
 
@@ -1206,14 +1533,28 @@ pub fn render_help_overlay(
     ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
     let _ = ctx.fill();
 
-    // Drop shadow
-    let shadow_offset = 10.0;
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.45);
-    ctx.rectangle(
+    let corner_radius = 16.0;
+
+    // Drop shadow (layered for softer effect)
+    let shadow_offset = 12.0;
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.25);
+    draw_rounded_rect(
+        ctx,
+        box_x + shadow_offset + 4.0,
+        box_y + shadow_offset + 4.0,
+        box_width,
+        box_height,
+        corner_radius,
+    );
+    let _ = ctx.fill();
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    draw_rounded_rect(
+        ctx,
         box_x + shadow_offset,
         box_y + shadow_offset,
         box_width,
         box_height,
+        corner_radius,
     );
     let _ = ctx.fill();
 
@@ -1222,14 +1563,14 @@ pub fn render_help_overlay(
     gradient.add_color_stop_rgba(0.0, bg_top[0], bg_top[1], bg_top[2], bg_top[3]);
     gradient.add_color_stop_rgba(1.0, bg_bottom[0], bg_bottom[1], bg_bottom[2], bg_bottom[3]);
     let _ = ctx.set_source(&gradient);
-    ctx.rectangle(box_x, box_y, box_width, box_height);
+    draw_rounded_rect(ctx, box_x, box_y, box_width, box_height, corner_radius);
     let _ = ctx.fill();
 
     // Border
     let [br, bg, bb, ba] = style.border_color;
     ctx.set_source_rgba(br, bg, bb, ba);
     ctx.set_line_width(style.border_width);
-    ctx.rectangle(box_x, box_y, box_width, box_height);
+    draw_rounded_rect(ctx, box_x, box_y, box_width, box_height, corner_radius);
     let _ = ctx.stroke();
 
     let inner_x = box_x + style.padding;
@@ -1299,18 +1640,72 @@ pub fn render_help_overlay(
     );
     cursor_y += nav_font_size;
 
+    // Draw tertiary nav line (for multi-page Complete view)
+    if let Some(ref tertiary_segments) = nav_tertiary_segments {
+        cursor_y += nav_line_gap;
+        let nav_tertiary_baseline = cursor_y + nav_font_size;
+        draw_segmented_text(
+            ctx,
+            inner_x,
+            nav_tertiary_baseline,
+            nav_font_size,
+            cairo::FontWeight::Normal,
+            tertiary_segments,
+        );
+        cursor_y += nav_font_size;
+    }
+
     if let Some(extra_line_text) = extra_line_text {
         cursor_y += extra_line_gap;
-        let extra_line_baseline = cursor_y + nav_font_size;
+
+        // Draw search input field style
+        let search_padding_x = 12.0;
+        let search_padding_y = 6.0;
+        let search_box_height = nav_font_size + search_padding_y * 2.0;
+        // Clamp search box to available width
+        let search_box_width = inner_width.min(if let Some(ext) = &extra_line_extents {
+            (ext.width() + search_padding_x * 2.0 + 20.0).min(inner_width)
+        } else {
+            200.0
+        });
+        let search_box_radius = 6.0;
+
+        // Search box background
+        draw_rounded_rect(
+            ctx,
+            inner_x,
+            cursor_y,
+            search_box_width,
+            search_box_height,
+            search_box_radius,
+        );
+        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+        let _ = ctx.fill_preserve();
+        ctx.set_source_rgba(search_color[0], search_color[1], search_color[2], 0.5);
+        ctx.set_line_width(1.0);
+        let _ = ctx.stroke();
+
+        // Search text with clipping
+        let extra_line_baseline = cursor_y + search_padding_y + nav_font_size;
+        let max_text_width = search_box_width - search_padding_x * 2.0;
+
+        let display_text = ellipsize_to_fit(
+            ctx,
+            extra_line_text,
+            nav_font_size,
+            cairo::FontWeight::Normal,
+            max_text_width,
+        );
+
         ctx.set_source_rgba(
             search_color[0],
             search_color[1],
             search_color[2],
             search_color[3],
         );
-        ctx.move_to(inner_x, extra_line_baseline);
-        let _ = ctx.show_text(extra_line_text);
-        cursor_y += nav_font_size + extra_line_bottom_spacing;
+        ctx.move_to(inner_x + search_padding_x, extra_line_baseline);
+        let _ = ctx.show_text(&display_text);
+        cursor_y += search_box_height + extra_line_bottom_spacing;
     } else {
         cursor_y += nav_bottom_spacing;
     }
@@ -1335,9 +1730,37 @@ pub fn render_help_overlay(
                 section_x += column_gap;
             }
 
-            let mut section_y = row_y;
-            let desc_x = section_x + measured.key_column_width + key_desc_gap;
             let section = &measured.section;
+
+            // Draw section card background
+            draw_rounded_rect(
+                ctx,
+                section_x,
+                row_y,
+                measured.width,
+                measured.height,
+                section_card_radius,
+            );
+            ctx.set_source_rgba(
+                section_card_bg[0],
+                section_card_bg[1],
+                section_card_bg[2],
+                section_card_bg[3],
+            );
+            let _ = ctx.fill_preserve();
+            ctx.set_source_rgba(
+                section_card_border[0],
+                section_card_border[1],
+                section_card_border[2],
+                section_card_border[3],
+            );
+            ctx.set_line_width(1.0);
+            let _ = ctx.stroke();
+
+            // Content starts inside card padding
+            let content_x = section_x + section_card_padding;
+            let mut section_y = row_y + section_card_padding;
+            let desc_x = content_x + measured.key_column_width + key_desc_gap;
 
             ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
             ctx.set_font_size(heading_font_size);
@@ -1348,7 +1771,7 @@ pub fn render_help_overlay(
                 accent_color[3],
             );
             let heading_baseline = section_y + heading_font_size;
-            ctx.move_to(section_x, heading_baseline);
+            ctx.move_to(content_x, heading_baseline);
             let _ = ctx.show_text(section.title);
             section_y += heading_line_height;
 
@@ -1357,39 +1780,47 @@ pub fn render_help_overlay(
                 for row_data in &section.rows {
                     let baseline = section_y + body_font_size;
 
-                    if search_active {
-                        if let Some(range) = find_match_range(&row_data.key, &search_lower) {
-                            draw_highlight(
-                                ctx,
-                                section_x,
-                                baseline,
-                                body_font_size,
-                                cairo::FontWeight::Bold,
-                                &row_data.key,
-                                range,
-                                highlight_color,
-                            );
-                        }
-                        if let Some(range) = find_match_range(row_data.action, &search_lower) {
-                            draw_highlight(
-                                ctx,
-                                desc_x,
-                                baseline,
-                                body_font_size,
-                                cairo::FontWeight::Normal,
-                                row_data.action,
-                                range,
-                                highlight_color,
-                            );
-                        }
+                    let key_match =
+                        search_active && find_match_range(&row_data.key, &search_lower).is_some();
+                    if key_match && !row_data.key.is_empty() {
+                        let key_width =
+                            measure_key_combo(ctx, row_data.key.as_str(), body_font_size);
+                        draw_key_combo_highlight(
+                            ctx,
+                            content_x,
+                            baseline,
+                            body_font_size,
+                            key_width,
+                            highlight_color,
+                        );
+                    }
+                    if search_active
+                        && let Some(range) = find_match_range(row_data.action, &search_lower)
+                    {
+                        draw_highlight(
+                            ctx,
+                            desc_x,
+                            baseline,
+                            body_font_size,
+                            cairo::FontWeight::Normal,
+                            row_data.action,
+                            range,
+                            highlight_color,
+                        );
                     }
 
-                    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-                    ctx.set_font_size(body_font_size);
-                    ctx.set_source_rgba(accent_color[0], accent_color[1], accent_color[2], 0.95);
-                    ctx.move_to(section_x, baseline);
-                    let _ = ctx.show_text(row_data.key.as_str());
+                    // Draw key with keycap styling
+                    let _ = draw_key_combo(
+                        ctx,
+                        content_x,
+                        baseline,
+                        row_data.key.as_str(),
+                        body_font_size,
+                        accent_muted,
+                        subtitle_color,
+                    );
 
+                    // Draw action description
                     ctx.select_font_face(
                         "Sans",
                         cairo::FontSlant::Normal,
@@ -1411,7 +1842,7 @@ pub fn render_help_overlay(
 
             if !section.badges.is_empty() {
                 section_y += badge_top_gap;
-                let mut badge_x = section_x;
+                let mut badge_x = content_x;
 
                 for (badge_index, badge) in section.badges.iter().enumerate() {
                     if badge_index > 0 {
@@ -1476,6 +1907,14 @@ pub fn render_help_overlay(
     let note_baseline = cursor_y + note_font_size;
     ctx.move_to(note_x, note_baseline);
     let _ = ctx.show_text(note_text);
+    cursor_y += note_font_size + note_to_close_gap;
+
+    // Close hint
+    ctx.set_source_rgba(subtitle_color[0], subtitle_color[1], subtitle_color[2], 0.7);
+    let close_x = inner_x + (inner_width - close_hint_extents.width()) / 2.0;
+    let close_baseline = cursor_y + note_font_size;
+    ctx.move_to(close_x, close_baseline);
+    let _ = ctx.show_text(close_hint_text);
 }
 
 /// Renders a floating context menu for shape or canvas actions.
