@@ -613,6 +613,32 @@ pub fn render_help_overlay(
         let _ = ctx.fill();
     }
 
+    fn draw_segmented_text(
+        ctx: &cairo::Context,
+        x: f64,
+        baseline: f64,
+        font_size: f64,
+        weight: cairo::FontWeight,
+        segments: &[(String, [f64; 4])],
+    ) {
+        let mut cursor_x = x;
+        for (text, color) in segments {
+            ctx.set_source_rgba(color[0], color[1], color[2], color[3]);
+            ctx.move_to(cursor_x, baseline);
+            let _ = ctx.show_text(text);
+
+            let extents = text_extents_for(
+                ctx,
+                "Sans",
+                cairo::FontSlant::Normal,
+                weight,
+                font_size,
+                text,
+            );
+            cursor_x += extents.width();
+        }
+    }
+
     fn find_match_range(haystack: &str, needle_lower: &str) -> Option<(usize, usize)> {
         if needle_lower.is_empty() {
             return None;
@@ -849,25 +875,6 @@ pub fn render_help_overlay(
         env!("CARGO_PKG_VERSION"),
         commit_hash
     );
-    let show_page_info = !search_active && page_count > 1;
-    let nav_text_primary = if show_page_info {
-        format!(
-            "{} view • Page {}/{}",
-            view_label,
-            page_index + 1,
-            page_count
-        )
-    } else {
-        format!("{} view", view_label)
-    };
-    let nav_text_secondary = if search_active {
-        "Esc: Close • Backspace: Remove • Tab: Toggle view"
-    } else if page_count > 1 {
-        "Switch pages: Left/Right, PageUp/PageDown, Home/End • Tab: Toggle view • Type to search"
-    } else {
-        "Tab: Toggle view • Type to search"
-    };
-    let search_text = search_active.then(|| format!("Search: {}", search_query));
     let note_text = "Note: Each board mode has independent pages";
 
     let body_font_size = style.font_size;
@@ -893,8 +900,8 @@ pub fn render_help_overlay(
     let subtitle_bottom_spacing = 28.0;
     let nav_line_gap = 6.0;
     let nav_bottom_spacing = 18.0;
-    let search_line_gap = 6.0;
-    let search_bottom_spacing = 18.0;
+    let extra_line_gap = 6.0;
+    let extra_line_bottom_spacing = 18.0;
     let columns_bottom_spacing = 28.0;
 
     let lerp = |a: f64, b: f64, t: f64| a * (1.0 - t) + b * t;
@@ -915,6 +922,8 @@ pub fn render_help_overlay(
 
     let accent_color = [0.96, 0.78, 0.38, 1.0];
     let highlight_color = [accent_color[0], accent_color[1], accent_color[2], 0.25];
+    let nav_key_color = [0.56, 0.86, 0.92, 1.0];
+    let search_color = [0.96, 0.56, 0.2, 1.0];
     let subtitle_color = [0.62, 0.66, 0.76, 1.0];
     let body_text_color = style.text_color;
     let description_color = [
@@ -924,6 +933,53 @@ pub fn render_help_overlay(
         body_text_color[3],
     ];
     let note_color = [subtitle_color[0], subtitle_color[1], subtitle_color[2], 0.9];
+
+    let show_page_info = !search_active && page_count > 1;
+    let nav_text_primary = if show_page_info {
+        format!(
+            "{} view • Page {}/{}",
+            view_label,
+            page_index + 1,
+            page_count
+        )
+    } else {
+        format!("{} view", view_label)
+    };
+    let nav_separator = "   •   ";
+    let nav_secondary_segments: Vec<(String, [f64; 4])> = if search_active {
+        vec![
+            ("Esc".to_string(), nav_key_color),
+            (": Close".to_string(), subtitle_color),
+            (nav_separator.to_string(), subtitle_color),
+            ("Backspace".to_string(), nav_key_color),
+            (": Remove".to_string(), subtitle_color),
+            (nav_separator.to_string(), subtitle_color),
+            ("Tab".to_string(), nav_key_color),
+            (": Toggle view".to_string(), subtitle_color),
+        ]
+    } else if page_count > 1 {
+        vec![
+            ("Switch pages: ".to_string(), subtitle_color),
+            (
+                "Left/Right, PageUp/PageDown, Home/End".to_string(),
+                nav_key_color,
+            ),
+            (nav_separator.to_string(), subtitle_color),
+            ("Tab".to_string(), nav_key_color),
+            (": Toggle view".to_string(), subtitle_color),
+        ]
+    } else {
+        vec![
+            ("Tab".to_string(), nav_key_color),
+            (": Toggle view".to_string(), subtitle_color),
+        ]
+    };
+    let nav_text_secondary: String = nav_secondary_segments
+        .iter()
+        .map(|(text, _)| text.as_str())
+        .collect();
+    let search_text = search_active.then(|| format!("Search: {}", search_query));
+    let search_hint_text = (!search_active).then(|| "Type to search".to_string());
 
     let mut measured_sections = Vec::with_capacity(sections.len());
     for section in sections {
@@ -1082,9 +1138,10 @@ pub fn render_help_overlay(
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         nav_font_size,
-        nav_text_secondary,
+        &nav_text_secondary,
     );
-    let search_extents = search_text.as_ref().map(|text| {
+    let extra_line_text = search_text.as_deref().or(search_hint_text.as_deref());
+    let extra_line_extents = extra_line_text.map(|text| {
         text_extents_for(
             ctx,
             "Sans",
@@ -1110,7 +1167,7 @@ pub fn render_help_overlay(
         .max(nav_primary_extents.width())
         .max(nav_secondary_extents.width())
         .max(note_extents.width());
-    if let Some(extents) = &search_extents {
+    if let Some(extents) = &extra_line_extents {
         content_width = content_width.max(extents.width());
     }
     if rows.is_empty() {
@@ -1119,8 +1176,12 @@ pub fn render_help_overlay(
             .max(subtitle_extents.width());
     }
 
-    let nav_block_height = if search_active {
-        nav_font_size * 2.0 + nav_line_gap + search_line_gap + nav_font_size + search_bottom_spacing
+    let nav_block_height = if extra_line_text.is_some() {
+        nav_font_size * 2.0
+            + nav_line_gap
+            + extra_line_gap
+            + nav_font_size
+            + extra_line_bottom_spacing
     } else {
         nav_font_size * 2.0 + nav_line_gap + nav_bottom_spacing
     };
@@ -1228,16 +1289,28 @@ pub fn render_help_overlay(
     let _ = ctx.show_text(&nav_text_primary);
     cursor_y += nav_font_size + nav_line_gap;
     let nav_secondary_baseline = cursor_y + nav_font_size;
-    ctx.move_to(inner_x, nav_secondary_baseline);
-    let _ = ctx.show_text(nav_text_secondary);
+    draw_segmented_text(
+        ctx,
+        inner_x,
+        nav_secondary_baseline,
+        nav_font_size,
+        cairo::FontWeight::Normal,
+        &nav_secondary_segments,
+    );
     cursor_y += nav_font_size;
 
-    if let Some(search_text) = &search_text {
-        cursor_y += search_line_gap;
-        let search_baseline = cursor_y + nav_font_size;
-        ctx.move_to(inner_x, search_baseline);
-        let _ = ctx.show_text(search_text);
-        cursor_y += nav_font_size + search_bottom_spacing;
+    if let Some(extra_line_text) = extra_line_text {
+        cursor_y += extra_line_gap;
+        let extra_line_baseline = cursor_y + nav_font_size;
+        ctx.set_source_rgba(
+            search_color[0],
+            search_color[1],
+            search_color[2],
+            search_color[3],
+        );
+        ctx.move_to(inner_x, extra_line_baseline);
+        let _ = ctx.show_text(extra_line_text);
+        cursor_y += nav_font_size + extra_line_bottom_spacing;
     } else {
         cursor_y += nav_bottom_spacing;
     }
