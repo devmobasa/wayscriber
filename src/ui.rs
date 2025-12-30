@@ -80,9 +80,10 @@ fn draw_keycap(
     font_size: f64,
     text_color: [f64; 4],
 ) -> f64 {
-    let padding_x = 6.0;
-    let padding_y = 3.0;
-    let radius = 4.0;
+    let padding_x = 8.0;
+    let padding_y = 4.0;
+    let radius = 5.0;
+    let shadow_offset = 2.0;
 
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(font_size);
@@ -94,24 +95,45 @@ fn draw_keycap(
     let cap_height = font_size + padding_y * 2.0;
     let cap_y = y - font_size - padding_y;
 
-    // Keycap background with subtle gradient effect
-    draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
-    let _ = ctx.fill_preserve();
+    // Drop shadow for 3D depth effect
+    draw_rounded_rect(
+        ctx,
+        x + 1.0,
+        cap_y + shadow_offset,
+        cap_width,
+        cap_height,
+        radius,
+    );
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    let _ = ctx.fill();
 
-    // Keycap border
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.15);
+    // Keycap main background
+    draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
+    ctx.set_source_rgba(0.18, 0.20, 0.25, 0.95);
+    let _ = ctx.fill();
+
+    // Inner highlight (top edge glow for 3D effect)
+    draw_rounded_rect(
+        ctx,
+        x + 1.0,
+        cap_y + 1.0,
+        cap_width - 2.0,
+        cap_height - 2.0,
+        radius - 1.0,
+    );
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.12);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
-    // Bottom edge highlight for 3D effect
-    ctx.move_to(x + radius, cap_y + cap_height - 1.0);
-    ctx.line_to(x + cap_width - radius, cap_y + cap_height - 1.0);
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.2);
+    // Outer border
+    draw_rounded_rect(ctx, x, cap_y, cap_width, cap_height, radius);
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.2);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
     // Text
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(font_size);
     ctx.set_source_rgba(text_color[0], text_color[1], text_color[2], text_color[3]);
     ctx.move_to(x + padding_x, y);
     let _ = ctx.show_text(text);
@@ -121,8 +143,8 @@ fn draw_keycap(
 
 /// Measure the width of a key combination string with keycap styling
 fn measure_key_combo(ctx: &cairo::Context, key_str: &str, font_size: f64) -> f64 {
-    let keycap_padding_x = 6.0;
-    let key_gap = 4.0;
+    let keycap_padding_x = 8.0;
+    let key_gap = 5.0;
     let separator_gap = 6.0;
 
     let mut total_width = 0.0;
@@ -180,7 +202,7 @@ fn draw_key_combo(
     separator_color: [f64; 4],
 ) -> f64 {
     let mut cursor_x = x;
-    let key_gap = 4.0;
+    let key_gap = 5.0;
     let separator_gap = 6.0;
 
     // Split by " / " for alternate bindings
@@ -790,9 +812,9 @@ pub fn render_help_overlay(
             return;
         }
 
-        let padding_y = 3.0;
-        let pad_x = 2.0;
-        let pad_y = 2.0;
+        let padding_y = 4.0;
+        let pad_x = 3.0;
+        let pad_y = 3.0;
         let highlight_x = x - pad_x;
         let highlight_y = baseline - font_size - padding_y - pad_y;
         let highlight_width = key_width + pad_x * 2.0;
