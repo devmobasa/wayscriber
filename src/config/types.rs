@@ -502,6 +502,10 @@ pub struct HelpOverlayStyle {
     #[serde(default = "default_help_font_size")]
     pub font_size: f64,
 
+    /// Font family for help overlay text (comma-separated fallback list)
+    #[serde(default = "default_help_font_family")]
+    pub font_family: String,
+
     /// Line height for help text
     #[serde(default = "default_help_line_height")]
     pub line_height: f64,
@@ -531,6 +535,7 @@ impl Default for HelpOverlayStyle {
     fn default() -> Self {
         Self {
             font_size: default_help_font_size(),
+            font_family: default_help_font_family(),
             line_height: default_help_line_height(),
             padding: default_help_padding(),
             bg_color: default_help_bg_color(),
@@ -754,6 +759,10 @@ fn default_status_dot_radius() -> f64 {
 // Help overlay style defaults
 fn default_help_font_size() -> f64 {
     18.0
+}
+
+fn default_help_font_family() -> String {
+    "Noto Sans, DejaVu Sans, Liberation Sans, Sans".to_string()
 }
 
 fn default_help_line_height() -> f64 {

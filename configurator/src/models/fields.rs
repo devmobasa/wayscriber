@@ -621,6 +621,7 @@ pub enum TextField {
     HighlightRadius,
     HighlightOutlineThickness,
     HighlightDurationMs,
+    HelpFontFamily,
     HelpFontSize,
     HelpLineHeight,
     HelpPadding,

@@ -91,6 +91,7 @@ pub struct ConfigDraft {
     pub click_highlight_fill_color: ColorQuadInput,
     pub click_highlight_outline_color: ColorQuadInput,
 
+    pub help_font_family: String,
     pub help_font_size: String,
     pub help_line_height: String,
     pub help_padding: String,
@@ -513,6 +514,7 @@ impl ConfigDraft {
                 config.ui.click_highlight.outline_color,
             ),
 
+            help_font_family: config.ui.help_overlay_style.font_family.clone(),
             help_font_size: format_float(config.ui.help_overlay_style.font_size),
             help_line_height: format_float(config.ui.help_overlay_style.line_height),
             help_padding: format_float(config.ui.help_overlay_style.padding),
@@ -814,6 +816,7 @@ impl ConfigDraft {
             Err(err) => errors.push(err),
         }
 
+        config.ui.help_overlay_style.font_family = self.help_font_family.trim().to_string();
         parse_field(
             &self.help_font_size,
             "ui.help_overlay_style.font_size",
@@ -1118,6 +1121,7 @@ impl ConfigDraft {
             TextField::HighlightRadius => self.click_highlight_radius = value,
             TextField::HighlightOutlineThickness => self.click_highlight_outline_thickness = value,
             TextField::HighlightDurationMs => self.click_highlight_duration_ms = value,
+            TextField::HelpFontFamily => self.help_font_family = value,
             TextField::HelpFontSize => self.help_font_size = value,
             TextField::HelpLineHeight => self.help_line_height = value,
             TextField::HelpPadding => self.help_padding = value,

@@ -320,6 +320,9 @@ side_offset_x = 0.0
 # Font size for help overlay text
 font_size = 16.0
 
+# Font family for help overlay text (comma-separated fallback list)
+font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
+
 # Line height for help text
 line_height = 22.0
 

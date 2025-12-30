@@ -10,7 +10,10 @@ use crate::input::{
 };
 /// UI rendering: status bar, help overlay, visual indicators
 use crate::toolbar_icons;
+use pango::prelude::*;
+use std::collections::HashSet;
 use std::f64::consts::{FRAC_PI_2, PI};
+use std::sync::OnceLock;
 use std::time::Instant;
 
 // ============================================================================
@@ -62,6 +65,36 @@ fn text_extents_for(
     }
 }
 
+fn resolve_help_font_family(family_list: &str) -> String {
+    let mut fallback = None;
+    for raw in family_list.split(',') {
+        let candidate = raw.trim();
+        if candidate.is_empty() {
+            continue;
+        }
+        if fallback.is_none() {
+            fallback = Some(candidate);
+        }
+        let key = candidate.to_ascii_lowercase();
+        if help_font_families().contains(&key) {
+            return candidate.to_string();
+        }
+    }
+    fallback.unwrap_or("Sans").to_string()
+}
+
+fn help_font_families() -> &'static HashSet<String> {
+    static CACHE: OnceLock<HashSet<String>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let font_map = pangocairo::FontMap::default();
+        font_map
+            .list_families()
+            .into_iter()
+            .map(|family| family.name().to_ascii_lowercase())
+            .collect()
+    })
+}
+
 fn draw_rounded_rect(ctx: &cairo::Context, x: f64, y: f64, width: f64, height: f64, radius: f64) {
     let r = radius.min(width / 2.0).min(height / 2.0);
     ctx.new_sub_path();
@@ -78,6 +111,7 @@ fn draw_keycap(
     x: f64,
     y: f64,
     text: &str,
+    font_family: &str,
     font_size: f64,
     text_color: [f64; 4],
 ) -> f64 {
@@ -86,7 +120,11 @@ fn draw_keycap(
     let radius = 5.0;
     let shadow_offset = 2.0;
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.select_font_face(
+        font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+    );
     ctx.set_font_size(font_size);
     let extents = ctx
         .text_extents(text)
@@ -133,7 +171,11 @@ fn draw_keycap(
     let _ = ctx.stroke();
 
     // Text
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.select_font_face(
+        font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+    );
     ctx.set_font_size(font_size);
     ctx.set_source_rgba(text_color[0], text_color[1], text_color[2], text_color[3]);
     ctx.move_to(x + padding_x, y);
@@ -142,15 +184,31 @@ fn draw_keycap(
     cap_width
 }
 
+struct KeyComboStyle<'a> {
+    font_family: &'a str,
+    font_size: f64,
+    text_color: [f64; 4],
+    separator_color: [f64; 4],
+}
+
 /// Measure the width of a key combination string with keycap styling
-fn measure_key_combo(ctx: &cairo::Context, key_str: &str, font_size: f64) -> f64 {
+fn measure_key_combo(
+    ctx: &cairo::Context,
+    key_str: &str,
+    font_family: &str,
+    font_size: f64,
+) -> f64 {
     let keycap_padding_x = 8.0;
     let key_gap = 5.0;
     let separator_gap = 6.0;
 
     let mut total_width = 0.0;
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.select_font_face(
+        font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+    );
     ctx.set_font_size(font_size);
 
     // Split by " / " for alternate bindings
@@ -159,7 +217,11 @@ fn measure_key_combo(ctx: &cairo::Context, key_str: &str, font_size: f64) -> f64
     for (alt_idx, alt) in alternatives.iter().enumerate() {
         if alt_idx > 0 {
             // Add separator "/" width
-            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            ctx.select_font_face(
+                font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+            );
             ctx.set_font_size(font_size);
             let slash_ext = ctx
                 .text_extents("/")
@@ -172,7 +234,11 @@ fn measure_key_combo(ctx: &cairo::Context, key_str: &str, font_size: f64) -> f64
         for (key_idx, key) in keys.iter().enumerate() {
             if key_idx > 0 {
                 // Add "+" separator width (matches draw_key_combo)
-                ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+                ctx.select_font_face(
+                    font_family,
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                );
                 ctx.set_font_size(font_size * 0.9);
                 let plus_ext = ctx
                     .text_extents("+")
@@ -180,7 +246,11 @@ fn measure_key_combo(ctx: &cairo::Context, key_str: &str, font_size: f64) -> f64
                 total_width += 6.0 + plus_ext.width();
             }
 
-            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            ctx.select_font_face(
+                font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+            );
             ctx.set_font_size(font_size);
             let ext = ctx
                 .text_extents(key.trim())
@@ -198,9 +268,7 @@ fn draw_key_combo(
     x: f64,
     baseline: f64,
     key_str: &str,
-    font_size: f64,
-    text_color: [f64; 4],
-    separator_color: [f64; 4],
+    style: &KeyComboStyle<'_>,
 ) -> f64 {
     let mut cursor_x = x;
     let key_gap = 5.0;
@@ -212,20 +280,24 @@ fn draw_key_combo(
     for (alt_idx, alt) in alternatives.iter().enumerate() {
         if alt_idx > 0 {
             // Draw separator "/"
-            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-            ctx.set_font_size(font_size);
+            ctx.select_font_face(
+                style.font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+            );
+            ctx.set_font_size(style.font_size);
             ctx.set_source_rgba(
-                separator_color[0],
-                separator_color[1],
-                separator_color[2],
-                separator_color[3],
+                style.separator_color[0],
+                style.separator_color[1],
+                style.separator_color[2],
+                style.separator_color[3],
             );
             cursor_x += separator_gap;
             ctx.move_to(cursor_x, baseline);
             let _ = ctx.show_text("/");
             let slash_ext = ctx
                 .text_extents("/")
-                .unwrap_or_else(|_| fallback_text_extents(font_size, "/"));
+                .unwrap_or_else(|_| fallback_text_extents(style.font_size, "/"));
             cursor_x += slash_ext.width() + separator_gap;
         }
 
@@ -234,12 +306,16 @@ fn draw_key_combo(
         for (key_idx, key) in keys.iter().enumerate() {
             if key_idx > 0 {
                 // Draw "+" separator (bold and visible)
-                ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-                ctx.set_font_size(font_size * 0.9);
+                ctx.select_font_face(
+                    style.font_family,
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                );
+                ctx.set_font_size(style.font_size * 0.9);
                 ctx.set_source_rgba(
-                    separator_color[0],
-                    separator_color[1],
-                    separator_color[2],
+                    style.separator_color[0],
+                    style.separator_color[1],
+                    style.separator_color[2],
                     0.85,
                 );
                 cursor_x += 3.0;
@@ -247,11 +323,19 @@ fn draw_key_combo(
                 let _ = ctx.show_text("+");
                 let plus_ext = ctx
                     .text_extents("+")
-                    .unwrap_or_else(|_| fallback_text_extents(font_size, "+"));
+                    .unwrap_or_else(|_| fallback_text_extents(style.font_size, "+"));
                 cursor_x += plus_ext.width() + 3.0;
             }
 
-            let cap_width = draw_keycap(ctx, cursor_x, baseline, key.trim(), font_size, text_color);
+            let cap_width = draw_keycap(
+                ctx,
+                cursor_x,
+                baseline,
+                key.trim(),
+                style.font_family,
+                style.font_size,
+                style.text_color,
+            );
             cursor_x += cap_width + key_gap;
         }
     }
@@ -759,6 +843,7 @@ pub fn render_help_overlay(
         font_size: f64,
         weight: cairo::FontWeight,
         text: &str,
+        font_family: &str,
         range: (usize, usize),
         color: [f64; 4],
     ) {
@@ -777,7 +862,7 @@ pub fn render_help_overlay(
 
         let prefix_extents = text_extents_for(
             ctx,
-            "Sans",
+            font_family,
             cairo::FontSlant::Normal,
             weight,
             font_size,
@@ -785,7 +870,7 @@ pub fn render_help_overlay(
         );
         let match_extents = text_extents_for(
             ctx,
-            "Sans",
+            font_family,
             cairo::FontSlant::Normal,
             weight,
             font_size,
@@ -842,6 +927,7 @@ pub fn render_help_overlay(
         baseline: f64,
         font_size: f64,
         weight: cairo::FontWeight,
+        font_family: &str,
         segments: &[(String, [f64; 4])],
     ) {
         let mut cursor_x = x;
@@ -852,7 +938,7 @@ pub fn render_help_overlay(
 
             let extents = text_extents_for(
                 ctx,
-                "Sans",
+                font_family,
                 cairo::FontSlant::Normal,
                 weight,
                 font_size,
@@ -865,6 +951,7 @@ pub fn render_help_overlay(
     fn ellipsize_to_fit(
         ctx: &cairo::Context,
         text: &str,
+        font_family: &str,
         font_size: f64,
         weight: cairo::FontWeight,
         max_width: f64,
@@ -875,7 +962,7 @@ pub fn render_help_overlay(
 
         let extents = text_extents_for(
             ctx,
-            "Sans",
+            font_family,
             cairo::FontSlant::Normal,
             weight,
             font_size,
@@ -889,7 +976,7 @@ pub fn render_help_overlay(
         let base_text = text.strip_suffix(ellipsis).unwrap_or(text);
         let ellipsis_extents = text_extents_for(
             ctx,
-            "Sans",
+            font_family,
             cairo::FontSlant::Normal,
             weight,
             font_size,
@@ -908,7 +995,7 @@ pub fn render_help_overlay(
             let candidate = format!("{}{}", &base_text[..end], ellipsis);
             let candidate_extents = text_extents_for(
                 ctx,
-                "Sans",
+                font_family,
                 cairo::FontSlant::Normal,
                 weight,
                 font_size,
@@ -941,6 +1028,7 @@ pub fn render_help_overlay(
     let search_query = search_query.trim();
     let search_active = !search_query.is_empty();
     let search_lower = search_query.to_ascii_lowercase();
+    let help_font_family = resolve_help_font_family(&style.font_family);
 
     let page_count = view.page_count().max(1);
     let page_index = page_index.min(page_count - 1);
@@ -1235,6 +1323,12 @@ pub fn render_help_overlay(
         lerp(body_text_color[2], subtitle_color[2], 0.35),
         body_text_color[3],
     ];
+    let key_combo_style = KeyComboStyle {
+        font_family: help_font_family.as_str(),
+        font_size: body_font_size,
+        text_color: accent_muted,
+        separator_color: subtitle_color,
+    };
     let note_color = [subtitle_color[0], subtitle_color[1], subtitle_color[2], 0.9];
 
     let show_page_info = !search_active && page_count > 1;
@@ -1296,7 +1390,12 @@ pub fn render_help_overlay(
                 continue;
             }
             // Measure with keycap styling padding
-            let key_width = measure_key_combo(ctx, row.key.as_str(), body_font_size);
+            let key_width = measure_key_combo(
+                ctx,
+                row.key.as_str(),
+                help_font_family.as_str(),
+                body_font_size,
+            );
             key_max_width = key_max_width.max(key_width);
         }
 
@@ -1305,7 +1404,7 @@ pub fn render_help_overlay(
 
         let heading_extents = text_extents_for(
             ctx,
-            "Sans",
+            help_font_family.as_str(),
             cairo::FontSlant::Normal,
             cairo::FontWeight::Bold,
             heading_font_size,
@@ -1323,7 +1422,7 @@ pub fn render_help_overlay(
             for row in &section.rows {
                 let desc_extents = text_extents_for(
                     ctx,
-                    "Sans",
+                    help_font_family.as_str(),
                     cairo::FontSlant::Normal,
                     cairo::FontWeight::Normal,
                     body_font_size,
@@ -1342,7 +1441,7 @@ pub fn render_help_overlay(
             for (index, badge) in section.badges.iter().enumerate() {
                 let badge_extents = text_extents_for(
                     ctx,
-                    "Sans",
+                    help_font_family.as_str(),
                     cairo::FontSlant::Normal,
                     cairo::FontWeight::Bold,
                     badge_font_size,
@@ -1414,7 +1513,7 @@ pub fn render_help_overlay(
 
     let title_extents = text_extents_for(
         ctx,
-        "Sans",
+        help_font_family.as_str(),
         cairo::FontSlant::Normal,
         cairo::FontWeight::Bold,
         title_font_size,
@@ -1422,7 +1521,7 @@ pub fn render_help_overlay(
     );
     let subtitle_extents = text_extents_for(
         ctx,
-        "Sans",
+        help_font_family.as_str(),
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         subtitle_font_size,
@@ -1431,7 +1530,7 @@ pub fn render_help_overlay(
     let nav_font_size = (body_font_size - 1.0).max(12.0);
     let nav_primary_extents = text_extents_for(
         ctx,
-        "Sans",
+        help_font_family.as_str(),
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         nav_font_size,
@@ -1439,7 +1538,7 @@ pub fn render_help_overlay(
     );
     let nav_secondary_extents = text_extents_for(
         ctx,
-        "Sans",
+        help_font_family.as_str(),
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         nav_font_size,
@@ -1452,7 +1551,7 @@ pub fn render_help_overlay(
     let nav_tertiary_extents = if nav_tertiary_segments.is_some() {
         Some(text_extents_for(
             ctx,
-            "Sans",
+            help_font_family.as_str(),
             cairo::FontSlant::Normal,
             cairo::FontWeight::Normal,
             nav_font_size,
@@ -1466,7 +1565,7 @@ pub fn render_help_overlay(
         let prefix = "Search: ";
         let prefix_extents = text_extents_for(
             ctx,
-            "Sans",
+            help_font_family.as_str(),
             cairo::FontSlant::Normal,
             cairo::FontWeight::Normal,
             nav_font_size,
@@ -1476,6 +1575,7 @@ pub fn render_help_overlay(
         let query_display = ellipsize_to_fit(
             ctx,
             search_query,
+            help_font_family.as_str(),
             nav_font_size,
             cairo::FontWeight::Normal,
             max_query_width,
@@ -1489,7 +1589,7 @@ pub fn render_help_overlay(
     let extra_line_extents = extra_line_text.map(|text| {
         text_extents_for(
             ctx,
-            "Sans",
+            help_font_family.as_str(),
             cairo::FontSlant::Normal,
             cairo::FontWeight::Normal,
             nav_font_size,
@@ -1499,7 +1599,7 @@ pub fn render_help_overlay(
     let note_font_size = (body_font_size - 2.0).max(12.0);
     let note_extents = text_extents_for(
         ctx,
-        "Sans",
+        help_font_family.as_str(),
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         note_font_size,
@@ -1507,7 +1607,7 @@ pub fn render_help_overlay(
     );
     let close_hint_extents = text_extents_for(
         ctx,
-        "Sans",
+        help_font_family.as_str(),
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         note_font_size,
@@ -1631,7 +1731,11 @@ pub fn render_help_overlay(
     cursor_y += accent_line_height + accent_line_bottom_spacing;
 
     // Title
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.select_font_face(
+        help_font_family.as_str(),
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+    );
     ctx.set_font_size(title_font_size);
     ctx.set_source_rgba(
         body_text_color[0],
@@ -1645,7 +1749,11 @@ pub fn render_help_overlay(
     cursor_y += title_font_size + title_bottom_spacing;
 
     // Subtitle / version line
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.select_font_face(
+        help_font_family.as_str(),
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+    );
     ctx.set_font_size(subtitle_font_size);
     ctx.set_source_rgba(
         subtitle_color[0],
@@ -1659,7 +1767,11 @@ pub fn render_help_overlay(
     cursor_y += subtitle_font_size + subtitle_bottom_spacing;
 
     // Navigation lines
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.select_font_face(
+        help_font_family.as_str(),
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+    );
     ctx.set_font_size(nav_font_size);
     ctx.set_source_rgba(
         subtitle_color[0],
@@ -1678,6 +1790,7 @@ pub fn render_help_overlay(
         nav_secondary_baseline,
         nav_font_size,
         cairo::FontWeight::Normal,
+        help_font_family.as_str(),
         &nav_secondary_segments,
     );
     cursor_y += nav_font_size;
@@ -1692,6 +1805,7 @@ pub fn render_help_overlay(
             nav_tertiary_baseline,
             nav_font_size,
             cairo::FontWeight::Normal,
+            help_font_family.as_str(),
             tertiary_segments,
         );
         cursor_y += nav_font_size;
@@ -1734,6 +1848,7 @@ pub fn render_help_overlay(
         let display_text = ellipsize_to_fit(
             ctx,
             extra_line_text,
+            help_font_family.as_str(),
             nav_font_size,
             cairo::FontWeight::Normal,
             max_text_width,
@@ -1804,7 +1919,11 @@ pub fn render_help_overlay(
             let mut section_y = row_y + section_card_padding;
             let desc_x = content_x + measured.key_column_width + key_desc_gap;
 
-            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            ctx.select_font_face(
+                help_font_family.as_str(),
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+            );
             ctx.set_font_size(heading_font_size);
             ctx.set_source_rgba(
                 accent_color[0],
@@ -1839,8 +1958,12 @@ pub fn render_help_overlay(
                     let key_match =
                         search_active && find_match_range(&row_data.key, &search_lower).is_some();
                     if key_match && !row_data.key.is_empty() {
-                        let key_width =
-                            measure_key_combo(ctx, row_data.key.as_str(), body_font_size);
+                        let key_width = measure_key_combo(
+                            ctx,
+                            row_data.key.as_str(),
+                            help_font_family.as_str(),
+                            body_font_size,
+                        );
                         draw_key_combo_highlight(
                             ctx,
                             content_x,
@@ -1860,6 +1983,7 @@ pub fn render_help_overlay(
                             body_font_size,
                             cairo::FontWeight::Normal,
                             row_data.action,
+                            help_font_family.as_str(),
                             range,
                             highlight_color,
                         );
@@ -1871,14 +1995,12 @@ pub fn render_help_overlay(
                         content_x,
                         baseline,
                         row_data.key.as_str(),
-                        body_font_size,
-                        accent_muted,
-                        subtitle_color,
+                        &key_combo_style,
                     );
 
                     // Draw action description
                     ctx.select_font_face(
-                        "Sans",
+                        help_font_family.as_str(),
                         cairo::FontSlant::Normal,
                         cairo::FontWeight::Normal,
                     );
@@ -1908,7 +2030,7 @@ pub fn render_help_overlay(
                     ctx.new_path();
                     let badge_text_extents = text_extents_for(
                         ctx,
-                        "Sans",
+                        help_font_family.as_str(),
                         cairo::FontSlant::Normal,
                         cairo::FontWeight::Bold,
                         badge_font_size,
@@ -1931,7 +2053,11 @@ pub fn render_help_overlay(
                     ctx.set_line_width(1.0);
                     let _ = ctx.stroke();
 
-                    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+                    ctx.select_font_face(
+                        help_font_family.as_str(),
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Bold,
+                    );
                     ctx.set_font_size(badge_font_size);
                     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
                     let text_x = badge_x + badge_padding_x;
@@ -1956,7 +2082,11 @@ pub fn render_help_overlay(
     cursor_y = grid_start_y + grid_height + columns_bottom_spacing;
 
     // Note
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.select_font_face(
+        help_font_family.as_str(),
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+    );
     ctx.set_font_size(note_font_size);
     ctx.set_source_rgba(note_color[0], note_color[1], note_color[2], note_color[3]);
     let note_x = inner_x + (inner_width - note_extents.width()) / 2.0;

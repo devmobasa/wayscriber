@@ -1799,6 +1799,12 @@ impl ConfiguratorApp {
                 &self.defaults.help_text_color,
                 QuadField::HelpText,
             ),
+            labeled_input(
+                "Font family",
+                &self.draft.help_font_family,
+                &self.defaults.help_font_family,
+                TextField::HelpFontFamily,
+            ),
             row![
                 labeled_input(
                     "Font size",
