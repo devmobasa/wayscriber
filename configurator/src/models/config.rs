@@ -98,6 +98,7 @@ pub struct ConfigDraft {
     pub help_border_color: ColorQuadInput,
     pub help_border_width: String,
     pub help_text_color: ColorQuadInput,
+    pub help_context_filter: bool,
 
     pub board_enabled: bool,
     pub board_default_mode: BoardModeOption,
@@ -519,6 +520,7 @@ impl ConfigDraft {
             help_border_color: ColorQuadInput::from(config.ui.help_overlay_style.border_color),
             help_border_width: format_float(config.ui.help_overlay_style.border_width),
             help_text_color: ColorQuadInput::from(config.ui.help_overlay_style.text_color),
+            help_context_filter: config.ui.help_overlay_context_filter,
 
             board_enabled: config.board.enabled,
             board_default_mode: BoardModeOption::from_str(&config.board.default_mode)
@@ -857,6 +859,7 @@ impl ConfigDraft {
             Ok(values) => config.ui.help_overlay_style.text_color = values,
             Err(err) => errors.push(err),
         }
+        config.ui.help_overlay_context_filter = self.help_context_filter;
 
         config.board.enabled = self.board_enabled;
         config.board.default_mode = self.board_default_mode.as_str().to_string();
@@ -1007,6 +1010,7 @@ impl ConfigDraft {
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
+            ToggleField::UiHelpOverlayContextFilter => self.help_context_filter = value,
             ToggleField::UiContextMenuEnabled => self.ui_context_menu_enabled = value,
             ToggleField::UiXdgFullscreen => self.ui_xdg_fullscreen = value,
             ToggleField::UiToolbarTopPinned => self.ui_toolbar_top_pinned = value,

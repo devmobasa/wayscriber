@@ -353,6 +353,10 @@ pub struct UiConfig {
     #[serde(default)]
     pub help_overlay_style: HelpOverlayStyle,
 
+    /// Filter help overlay sections based on enabled features
+    #[serde(default = "default_help_overlay_context_filter")]
+    pub help_overlay_context_filter: bool,
+
     /// Preferred output name for the xdg-shell fallback overlay (GNOME).
     /// Falls back to last entered output or first available.
     #[serde(default)]
@@ -384,6 +388,7 @@ impl Default for UiConfig {
             status_bar_position: default_status_position(),
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
+            help_overlay_context_filter: default_help_overlay_context_filter(),
             preferred_output: None,
             xdg_fullscreen: default_xdg_fullscreen(),
             click_highlight: ClickHighlightConfig::default(),
@@ -715,6 +720,10 @@ fn default_show_frozen_badge() -> bool {
 
 fn default_xdg_fullscreen() -> bool {
     false
+}
+
+fn default_help_overlay_context_filter() -> bool {
+    true
 }
 
 fn default_status_position() -> StatusPosition {

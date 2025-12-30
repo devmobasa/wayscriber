@@ -946,9 +946,7 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::ToggleHelp => {
-                self.show_help = !self.show_help;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                self.toggle_help_overlay();
                 self.close_context_menu();
             }
             MenuCommand::OpenConfigFile => {

@@ -25,6 +25,10 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
+        if self.show_help && self.handle_help_overlay_key(key) {
+            return;
+        }
+
         // Handle modifier keys first
         match key {
             Key::Shift => {
@@ -764,9 +768,7 @@ impl InputState {
                 }
             },
             Action::ToggleHelp => {
-                self.show_help = !self.show_help;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                self.toggle_help_overlay();
             }
             Action::ToggleStatusBar => {
                 self.show_status_bar = !self.show_status_bar;
@@ -967,6 +969,47 @@ impl InputState {
     pub(crate) fn redo_all_immediate(&mut self) {
         while let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
             self.apply_action_side_effects(&action);
+        }
+    }
+
+    fn handle_help_overlay_key(&mut self, key: Key) -> bool {
+        if !self.show_help {
+            return false;
+        }
+
+        match key {
+            Key::Escape | Key::F1 | Key::F10 => {
+                self.toggle_help_overlay();
+                true
+            }
+            Key::Tab => {
+                self.toggle_help_overlay_view();
+                true
+            }
+            Key::Left | Key::PageUp => self.help_overlay_prev_page(),
+            Key::Right | Key::PageDown => self.help_overlay_next_page(),
+            Key::Home => {
+                if self.help_overlay_page != 0 {
+                    self.help_overlay_page = 0;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            Key::End => {
+                let last_page = self.help_overlay_page_count().saturating_sub(1);
+                if self.help_overlay_page != last_page {
+                    self.help_overlay_page = last_page;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
         }
     }
 }

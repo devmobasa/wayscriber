@@ -6,7 +6,8 @@ use crate::input::state::{
     PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UI_TOAST_DURATION_MS, UiToastKind,
 };
 use crate::input::{
-    BoardMode, DrawingState, InputState, TextInputMode, Tool, state::ContextMenuState,
+    BoardMode, DrawingState, HelpOverlayView, InputState, TextInputMode, Tool,
+    state::ContextMenuState,
 };
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::time::Instant;
@@ -511,12 +512,18 @@ pub fn render_ui_toast(
 }
 
 /// Render help overlay showing all keybindings
+#[allow(clippy::too_many_arguments)]
 pub fn render_help_overlay(
     ctx: &cairo::Context,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
     frozen_enabled: bool,
+    view: HelpOverlayView,
+    page_index: usize,
+    context_filter: bool,
+    board_enabled: bool,
+    capture_enabled: bool,
 ) {
     struct Row {
         key: &'static str,
@@ -541,20 +548,53 @@ pub fn render_help_overlay(
         key_column_width: f64,
     }
 
-    let mut board_rows = vec![
+    let page_count = view.page_count().max(1);
+    let page_index = page_index.min(page_count - 1);
+    let view_label = match view {
+        HelpOverlayView::Quick => "Quick",
+        HelpOverlayView::Full => "Full",
+    };
+
+    let mut board_rows = Vec::new();
+    if !context_filter || board_enabled {
+        board_rows.extend([
+            Row {
+                key: "Ctrl+W",
+                action: "Toggle Whiteboard",
+            },
+            Row {
+                key: "Ctrl+B",
+                action: "Toggle Blackboard",
+            },
+            Row {
+                key: "Ctrl+Shift+T",
+                action: "Return to Transparent",
+            },
+        ]);
+    }
+
+    board_rows.extend([
         Row {
-            key: "Ctrl+W",
-            action: "Toggle Whiteboard",
+            key: "Configurable",
+            action: "Previous page",
         },
         Row {
-            key: "Ctrl+B",
-            action: "Toggle Blackboard",
+            key: "Configurable",
+            action: "Next page",
         },
         Row {
-            key: "Ctrl+Shift+T",
-            action: "Return to Transparent",
+            key: "Ctrl+Alt+N",
+            action: "New page",
         },
-    ];
+        Row {
+            key: "Ctrl+Alt+D",
+            action: "Duplicate page",
+        },
+        Row {
+            key: "Ctrl+Alt+Delete",
+            action: "Delete page",
+        },
+    ]);
 
     if frozen_enabled {
         board_rows.push(Row {
@@ -563,258 +603,287 @@ pub fn render_help_overlay(
         });
     }
 
-    let sections = vec![
-        Section {
-            title: "Board Modes",
-            rows: board_rows,
-            badges: Vec::new(),
-        },
-        Section {
-            title: "Zoom",
-            rows: vec![
-                Row {
-                    key: "Ctrl+Alt+Scroll",
-                    action: "Zoom in/out",
-                },
-                Row {
-                    key: "Ctrl+Alt++ / Ctrl+Alt+-",
-                    action: "Zoom in/out",
-                },
-                Row {
-                    key: "Ctrl+Alt+0",
-                    action: "Reset zoom",
-                },
-                Row {
-                    key: "Ctrl+Alt+L",
-                    action: "Lock zoom view",
-                },
-                Row {
-                    key: "Middle drag",
-                    action: "Pan zoom view",
-                },
-                Row {
-                    key: "Arrow keys",
-                    action: "Nudge zoom view",
-                },
-            ],
-            badges: Vec::new(),
-        },
-        Section {
-            title: "Selection",
-            rows: vec![
-                Row {
-                    key: "Alt+Click",
-                    action: "Select & move shape",
-                },
-                Row {
-                    key: "Shift+Alt+Click",
-                    action: "Add to selection",
-                },
-                Row {
-                    key: "Alt+Drag",
-                    action: "Box select",
-                },
-                Row {
-                    key: "Delete",
-                    action: "Delete selection",
-                },
-                Row {
-                    key: "Ctrl+D",
-                    action: "Duplicate selection",
-                },
-                Row {
-                    key: "Ctrl+Alt+C",
-                    action: "Copy selection",
-                },
-                Row {
-                    key: "Ctrl+Alt+V",
-                    action: "Paste selection",
-                },
-                Row {
-                    key: "Ctrl+A",
-                    action: "Select all",
-                },
-            ],
-            badges: Vec::new(),
-        },
-        Section {
-            title: "Drawing Tools",
-            rows: vec![
-                Row {
-                    key: "F / Drag",
-                    action: "Freehand pen",
-                },
-                Row {
-                    key: "Shift+Drag",
-                    action: "Straight line",
-                },
-                Row {
-                    key: "Ctrl+Drag",
-                    action: "Rectangle",
-                },
-                Row {
-                    key: "Tab+Drag",
-                    action: "Circle",
-                },
-                Row {
-                    key: "Ctrl+Shift+Drag",
-                    action: "Arrow",
-                },
-                Row {
-                    key: "Ctrl+Alt+H",
-                    action: "Toggle highlight-only tool",
-                },
-                Row {
-                    key: "T",
-                    action: "Text mode",
-                },
-                Row {
-                    key: "N",
-                    action: "Sticky note",
-                },
-                Row {
-                    key: "D",
-                    action: "Eraser tool",
-                },
-                Row {
-                    key: "H",
-                    action: "Marker tool",
-                },
-            ],
-            badges: Vec::new(),
-        },
-        Section {
-            title: "Pen & Text",
-            rows: vec![
-                Row {
-                    key: "+/- or Scroll",
-                    action: "Adjust size (pen/eraser)",
-                },
-                Row {
-                    key: "Ctrl+Shift+E",
-                    action: "Toggle eraser mode",
-                },
-                Row {
-                    key: "Ctrl+Shift+/-",
-                    action: "Font size",
-                },
-                Row {
-                    key: "Shift+Scroll",
-                    action: "Font size",
-                },
-            ],
-            badges: vec![
-                Badge {
-                    label: "R",
-                    color: [0.94, 0.36, 0.36],
-                },
-                Badge {
-                    label: "G",
-                    color: [0.30, 0.78, 0.51],
-                },
-                Badge {
-                    label: "B",
-                    color: [0.36, 0.60, 0.95],
-                },
-                Badge {
-                    label: "Y",
-                    color: [0.98, 0.80, 0.10],
-                },
-                Badge {
-                    label: "O",
-                    color: [0.98, 0.55, 0.26],
-                },
-                Badge {
-                    label: "P",
-                    color: [0.78, 0.47, 0.96],
-                },
-                Badge {
-                    label: "W",
-                    color: [0.90, 0.92, 0.96],
-                },
-                Badge {
-                    label: "K",
-                    color: [0.28, 0.30, 0.38],
-                },
-            ],
-        },
-        Section {
-            title: "Actions",
-            rows: vec![
-                Row {
-                    key: "E",
-                    action: "Clear frame",
-                },
-                Row {
-                    key: "Ctrl+Z",
-                    action: "Undo",
-                },
-                Row {
-                    key: "Ctrl+Shift+H",
-                    action: "Toggle click highlight",
-                },
-                Row {
-                    key: "Right Click / Shift+F10",
-                    action: "Context menu",
-                },
-                Row {
-                    key: "Escape / Ctrl+Q",
-                    action: "Exit",
-                },
-                Row {
-                    key: "F1 / F10",
-                    action: "Toggle help",
-                },
-                Row {
-                    key: "F2 / F9",
-                    action: "Toggle toolbar",
-                },
-                Row {
-                    key: "F11",
-                    action: "Open configurator",
-                },
-                Row {
-                    key: "F4 / F12",
-                    action: "Toggle status bar",
-                },
-            ],
-            badges: Vec::new(),
-        },
-        Section {
-            title: "Screenshots",
-            rows: vec![
-                Row {
-                    key: "Ctrl+C",
-                    action: "Full screen → clipboard",
-                },
-                Row {
-                    key: "Ctrl+S",
-                    action: "Full screen → file",
-                },
-                Row {
-                    key: "Ctrl+Shift+C",
-                    action: "Region → clipboard",
-                },
-                Row {
-                    key: "Ctrl+Shift+S",
-                    action: "Region → file",
-                },
-                Row {
-                    key: "Ctrl+Shift+O",
-                    action: "Active window (Hyprland)",
-                },
-                Row {
-                    key: "Ctrl+Shift+I",
-                    action: "Selection (capture defaults)",
-                },
-                Row {
-                    key: "Ctrl+Alt+O",
-                    action: "Open capture folder",
-                },
-            ],
-            badges: Vec::new(),
-        },
-    ];
+    let boards_section = Section {
+        title: "Boards & Pages",
+        rows: board_rows,
+        badges: Vec::new(),
+    };
+
+    let zoom_section = Section {
+        title: "Zoom",
+        rows: vec![
+            Row {
+                key: "Ctrl+Alt+Scroll",
+                action: "Zoom in/out",
+            },
+            Row {
+                key: "Ctrl+Alt++ / Ctrl+Alt+-",
+                action: "Zoom in/out",
+            },
+            Row {
+                key: "Ctrl+Alt+0",
+                action: "Reset zoom",
+            },
+            Row {
+                key: "Ctrl+Alt+L",
+                action: "Lock zoom view",
+            },
+            Row {
+                key: "Middle drag",
+                action: "Pan zoom view",
+            },
+            Row {
+                key: "Arrow keys",
+                action: "Nudge zoom view",
+            },
+        ],
+        badges: Vec::new(),
+    };
+
+    let selection_section = Section {
+        title: "Selection",
+        rows: vec![
+            Row {
+                key: "Alt+Click",
+                action: "Select & move shape",
+            },
+            Row {
+                key: "Shift+Alt+Click",
+                action: "Add to selection",
+            },
+            Row {
+                key: "Alt+Drag",
+                action: "Box select",
+            },
+            Row {
+                key: "Delete",
+                action: "Delete selection",
+            },
+            Row {
+                key: "Ctrl+D",
+                action: "Duplicate selection",
+            },
+            Row {
+                key: "Ctrl+Alt+C",
+                action: "Copy selection",
+            },
+            Row {
+                key: "Ctrl+Alt+V",
+                action: "Paste selection",
+            },
+            Row {
+                key: "Ctrl+A",
+                action: "Select all",
+            },
+        ],
+        badges: Vec::new(),
+    };
+
+    let drawing_section = Section {
+        title: "Drawing Tools",
+        rows: vec![
+            Row {
+                key: "F / Drag",
+                action: "Freehand pen",
+            },
+            Row {
+                key: "Shift+Drag",
+                action: "Straight line",
+            },
+            Row {
+                key: "Ctrl+Drag",
+                action: "Rectangle",
+            },
+            Row {
+                key: "Tab+Drag",
+                action: "Circle",
+            },
+            Row {
+                key: "Ctrl+Shift+Drag",
+                action: "Arrow",
+            },
+            Row {
+                key: "Ctrl+Alt+H",
+                action: "Toggle highlight-only tool",
+            },
+            Row {
+                key: "T",
+                action: "Text mode",
+            },
+            Row {
+                key: "N",
+                action: "Sticky note",
+            },
+            Row {
+                key: "D",
+                action: "Eraser tool",
+            },
+            Row {
+                key: "H",
+                action: "Marker tool",
+            },
+        ],
+        badges: Vec::new(),
+    };
+
+    let pen_text_section = Section {
+        title: "Pen & Text",
+        rows: vec![
+            Row {
+                key: "+/- or Scroll",
+                action: "Adjust size (pen/eraser)",
+            },
+            Row {
+                key: "Ctrl+Shift+E",
+                action: "Toggle eraser mode",
+            },
+            Row {
+                key: "Ctrl+Shift+/-",
+                action: "Font size",
+            },
+            Row {
+                key: "Shift+Scroll",
+                action: "Font size",
+            },
+        ],
+        badges: vec![
+            Badge {
+                label: "R",
+                color: [0.94, 0.36, 0.36],
+            },
+            Badge {
+                label: "G",
+                color: [0.30, 0.78, 0.51],
+            },
+            Badge {
+                label: "B",
+                color: [0.36, 0.60, 0.95],
+            },
+            Badge {
+                label: "Y",
+                color: [0.98, 0.80, 0.10],
+            },
+            Badge {
+                label: "O",
+                color: [0.98, 0.55, 0.26],
+            },
+            Badge {
+                label: "P",
+                color: [0.78, 0.47, 0.96],
+            },
+            Badge {
+                label: "W",
+                color: [0.90, 0.92, 0.96],
+            },
+            Badge {
+                label: "K",
+                color: [0.28, 0.30, 0.38],
+            },
+        ],
+    };
+
+    let actions_section = Section {
+        title: "Actions",
+        rows: vec![
+            Row {
+                key: "E",
+                action: "Clear frame",
+            },
+            Row {
+                key: "Ctrl+Z",
+                action: "Undo",
+            },
+            Row {
+                key: "Ctrl+Shift+H",
+                action: "Toggle click highlight",
+            },
+            Row {
+                key: "Right Click / Shift+F10",
+                action: "Context menu",
+            },
+            Row {
+                key: "Escape / Ctrl+Q",
+                action: "Exit",
+            },
+            Row {
+                key: "F1 / F10",
+                action: "Toggle help",
+            },
+            Row {
+                key: "F2 / F9",
+                action: "Toggle toolbar",
+            },
+            Row {
+                key: "F11",
+                action: "Open configurator",
+            },
+            Row {
+                key: "F4 / F12",
+                action: "Toggle status bar",
+            },
+        ],
+        badges: Vec::new(),
+    };
+
+    let screenshots_section = (!context_filter || capture_enabled).then(|| Section {
+        title: "Screenshots",
+        rows: vec![
+            Row {
+                key: "Ctrl+C",
+                action: "Full screen → clipboard",
+            },
+            Row {
+                key: "Ctrl+S",
+                action: "Full screen → file",
+            },
+            Row {
+                key: "Ctrl+Shift+C",
+                action: "Region → clipboard",
+            },
+            Row {
+                key: "Ctrl+Shift+S",
+                action: "Region → file",
+            },
+            Row {
+                key: "Ctrl+Shift+O",
+                action: "Active window (Hyprland)",
+            },
+            Row {
+                key: "Ctrl+Shift+I",
+                action: "Selection (capture defaults)",
+            },
+            Row {
+                key: "Ctrl+Alt+O",
+                action: "Open capture folder",
+            },
+        ],
+        badges: Vec::new(),
+    });
+
+    let sections = match view {
+        HelpOverlayView::Quick => vec![
+            boards_section,
+            drawing_section,
+            selection_section,
+            actions_section,
+        ],
+        HelpOverlayView::Full => {
+            if page_index == 0 {
+                vec![
+                    boards_section,
+                    drawing_section,
+                    selection_section,
+                    pen_text_section,
+                ]
+            } else {
+                let mut sections = vec![actions_section, zoom_section];
+                if let Some(section) = screenshots_section {
+                    sections.push(section);
+                }
+                sections
+            }
+        }
+    };
 
     let title_text = "Wayscriber Controls";
     let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
@@ -823,7 +892,14 @@ pub fn render_help_overlay(
         env!("CARGO_PKG_VERSION"),
         commit_hash
     );
-    let note_text = "Note: Each board mode has independent drawings";
+    let nav_text_primary = format!(
+        "{} view • Page {}/{}",
+        view_label,
+        page_index + 1,
+        page_count
+    );
+    let nav_text_secondary = "Switch pages: Left/Right or PageUp/PageDown • Tab: Toggle view";
+    let note_text = "Note: Each board mode has independent pages";
 
     let body_font_size = style.font_size;
     let heading_font_size = body_font_size + 6.0;
@@ -846,6 +922,8 @@ pub fn render_help_overlay(
     let accent_line_bottom_spacing = 16.0;
     let title_bottom_spacing = 8.0;
     let subtitle_bottom_spacing = 28.0;
+    let nav_line_gap = 6.0;
+    let nav_bottom_spacing = 18.0;
     let columns_bottom_spacing = 28.0;
 
     let lerp = |a: f64, b: f64, t: f64| a * (1.0 - t) + b * t;
@@ -1017,6 +1095,23 @@ pub fn render_help_overlay(
         subtitle_font_size,
         &version_line,
     );
+    let nav_font_size = (body_font_size - 1.0).max(12.0);
+    let nav_primary_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        nav_font_size,
+        &nav_text_primary,
+    );
+    let nav_secondary_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        nav_font_size,
+        nav_text_secondary,
+    );
     let note_font_size = (body_font_size - 2.0).max(12.0);
     let note_extents = text_extents_for(
         ctx,
@@ -1030,6 +1125,8 @@ pub fn render_help_overlay(
     let mut content_width = grid_width
         .max(title_extents.width())
         .max(subtitle_extents.width())
+        .max(nav_primary_extents.width())
+        .max(nav_secondary_extents.width())
         .max(note_extents.width());
     if rows.is_empty() {
         content_width = content_width
@@ -1044,6 +1141,9 @@ pub fn render_help_overlay(
         + title_bottom_spacing
         + subtitle_font_size
         + subtitle_bottom_spacing
+        + nav_font_size * 2.0
+        + nav_line_gap
+        + nav_bottom_spacing
         + grid_height
         + columns_bottom_spacing
         + note_font_size;
@@ -1125,6 +1225,24 @@ pub fn render_help_overlay(
     ctx.move_to(inner_x, subtitle_baseline);
     let _ = ctx.show_text(&version_line);
     cursor_y += subtitle_font_size + subtitle_bottom_spacing;
+
+    // Navigation lines
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(nav_font_size);
+    ctx.set_source_rgba(
+        subtitle_color[0],
+        subtitle_color[1],
+        subtitle_color[2],
+        subtitle_color[3],
+    );
+    let nav_baseline = cursor_y + nav_font_size;
+    ctx.move_to(inner_x, nav_baseline);
+    let _ = ctx.show_text(&nav_text_primary);
+    cursor_y += nav_font_size + nav_line_gap;
+    let nav_secondary_baseline = cursor_y + nav_font_size;
+    ctx.move_to(inner_x, nav_secondary_baseline);
+    let _ = ctx.show_text(nav_text_secondary);
+    cursor_y += nav_font_size + nav_bottom_spacing;
 
     let grid_start_y = cursor_y;
 

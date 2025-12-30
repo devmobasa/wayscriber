@@ -426,6 +426,11 @@ impl WaylandState {
                         width,
                         height,
                         self.frozen_enabled(),
+                        self.input_state.help_overlay_view,
+                        self.input_state.help_overlay_page,
+                        self.config.ui.help_overlay_context_filter,
+                        self.input_state.board_config.enabled,
+                        self.config.capture.enabled,
                     );
                 }
 

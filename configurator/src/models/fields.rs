@@ -544,6 +544,7 @@ pub enum ToggleField {
     PerformanceVsync,
     UiShowStatusBar,
     UiShowFrozenBadge,
+    UiHelpOverlayContextFilter,
     UiContextMenuEnabled,
     UiXdgFullscreen,
     UiToolbarTopPinned,

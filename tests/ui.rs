@@ -80,7 +80,18 @@ fn render_status_bar_draws_for_all_positions() {
 fn render_help_overlay_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
-    wayscriber::ui::render_help_overlay(&ctx, &style, 800, 600, true);
+    wayscriber::ui::render_help_overlay(
+        &ctx,
+        &style,
+        800,
+        600,
+        true,
+        wayscriber::input::HelpOverlayView::Full,
+        0,
+        false,
+        true,
+        true,
+    );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }
@@ -120,7 +131,18 @@ fn render_status_bar_draws_in_board_modes() {
 fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
-    wayscriber::ui::render_help_overlay(&ctx, &style, 800, 600, false);
+    wayscriber::ui::render_help_overlay(
+        &ctx,
+        &style,
+        800,
+        600,
+        false,
+        wayscriber::input::HelpOverlayView::Full,
+        0,
+        false,
+        true,
+        true,
+    );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }

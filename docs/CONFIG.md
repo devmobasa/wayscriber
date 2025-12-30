@@ -166,6 +166,9 @@ show_status_bar = true
 # Show a small "FROZEN" badge when frozen mode is active
 show_frozen_badge = true
 
+# Filter help overlay sections based on enabled features
+help_overlay_context_filter = true
+
 # Status bar position
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"

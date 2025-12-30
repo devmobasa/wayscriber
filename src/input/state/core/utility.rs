@@ -1,3 +1,4 @@
+use super::base::HelpOverlayView;
 use super::base::{
     DrawingState, InputState, PresetAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
     ZoomAction,
@@ -11,6 +12,50 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 impl InputState {
+    pub(crate) fn toggle_help_overlay(&mut self) {
+        let now_visible = !self.show_help;
+        self.show_help = now_visible;
+        if now_visible {
+            self.help_overlay_view = HelpOverlayView::Full;
+            self.help_overlay_page = 0;
+        }
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    pub(crate) fn toggle_help_overlay_view(&mut self) {
+        self.help_overlay_view = self.help_overlay_view.toggle();
+        self.help_overlay_page = 0;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    pub(crate) fn help_overlay_page_count(&self) -> usize {
+        self.help_overlay_view.page_count()
+    }
+
+    pub(crate) fn help_overlay_next_page(&mut self) -> bool {
+        let page_count = self.help_overlay_page_count();
+        if self.help_overlay_page + 1 < page_count {
+            self.help_overlay_page += 1;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn help_overlay_prev_page(&mut self) -> bool {
+        if self.help_overlay_page > 0 {
+            self.help_overlay_page -= 1;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
     /// Updates the cached pointer location.
     pub fn update_pointer_position(&mut self, x: i32, y: i32) {
         self.last_pointer_position = (x, y);
