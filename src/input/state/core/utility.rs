@@ -1,3 +1,4 @@
+use super::base::HelpOverlayView;
 use super::base::{
     DrawingState, InputState, PresetAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
     ZoomAction,
@@ -11,6 +12,57 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 impl InputState {
+    pub(crate) fn toggle_help_overlay(&mut self) {
+        let now_visible = !self.show_help;
+        self.show_help = now_visible;
+        self.help_overlay_search.clear();
+        self.help_overlay_scroll = 0.0;
+        self.help_overlay_scroll_max = 0.0;
+        if now_visible {
+            self.help_overlay_view = HelpOverlayView::Quick;
+            self.help_overlay_page = 0;
+        }
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    pub(crate) fn toggle_help_overlay_view(&mut self) {
+        self.help_overlay_view = self.help_overlay_view.toggle();
+        self.help_overlay_page = 0;
+        self.help_overlay_scroll = 0.0;
+        self.help_overlay_scroll_max = 0.0;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    pub(crate) fn help_overlay_page_count(&self) -> usize {
+        self.help_overlay_view.page_count()
+    }
+
+    pub(crate) fn help_overlay_next_page(&mut self) -> bool {
+        let page_count = self.help_overlay_page_count();
+        if self.help_overlay_page + 1 < page_count {
+            self.help_overlay_page += 1;
+            self.help_overlay_scroll = 0.0;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn help_overlay_prev_page(&mut self) -> bool {
+        if self.help_overlay_page > 0 {
+            self.help_overlay_page -= 1;
+            self.help_overlay_scroll = 0.0;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
     /// Updates the cached pointer location.
     pub fn update_pointer_position(&mut self, x: i32, y: i32) {
         self.last_pointer_position = (x, y);
@@ -96,6 +148,22 @@ impl InputState {
             }
         }
         None
+    }
+
+    pub fn action_binding_label(&self, action: Action) -> String {
+        let mut labels: Vec<String> = self
+            .action_map
+            .iter()
+            .filter(|(_, mapped)| **mapped == action)
+            .map(|(binding, _)| binding.to_string())
+            .collect();
+        labels.sort();
+        labels.dedup();
+        if labels.is_empty() {
+            "Not bound".to_string()
+        } else {
+            labels.join(" / ")
+        }
     }
 
     /// Adjusts the current font size by a delta, clamping to valid range.

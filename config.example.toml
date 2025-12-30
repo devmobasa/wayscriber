@@ -299,6 +299,9 @@ show_preset_toasts = true
 # Show cursor tool preview bubble near the pointer
 show_tool_preview = false
 
+# Filter help overlay sections based on enabled features
+help_overlay_context_filter = true
+
 # Initial toolbar offsets (layer-shell/inline)
 # Horizontal offset for the top toolbar
 top_offset = 0.0
@@ -315,7 +318,10 @@ side_offset_x = 0.0
 
 [ui.help_overlay_style]
 # Font size for help overlay text
-font_size = 16.0
+font_size = 14.0
+
+# Font family for help overlay text (comma-separated fallback list)
+font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 
 # Line height for help text
 line_height = 22.0

@@ -1,5 +1,5 @@
 use super::*;
-use crate::backend::wayland::toolbar_icons;
+use crate::toolbar_icons;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
@@ -420,13 +420,31 @@ impl WaylandState {
 
                 // Render help overlay if toggled
                 if self.input_state.show_help {
-                    crate::ui::render_help_overlay(
+                    let page_prev_label = self
+                        .input_state
+                        .action_binding_label(crate::config::Action::PagePrev);
+                    let page_next_label = self
+                        .input_state
+                        .action_binding_label(crate::config::Action::PageNext);
+                    let scroll_max = crate::ui::render_help_overlay(
                         &ctx,
                         &self.config.ui.help_overlay_style,
                         width,
                         height,
                         self.frozen_enabled(),
+                        self.input_state.help_overlay_view,
+                        self.input_state.help_overlay_page,
+                        page_prev_label.as_str(),
+                        page_next_label.as_str(),
+                        self.input_state.help_overlay_search.as_str(),
+                        self.config.ui.help_overlay_context_filter,
+                        self.input_state.board_config.enabled,
+                        self.config.capture.enabled,
+                        self.input_state.help_overlay_scroll,
                     );
+                    self.input_state.help_overlay_scroll_max = scroll_max;
+                    self.input_state.help_overlay_scroll =
+                        self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
                 }
 
                 crate::ui::render_ui_toast(&ctx, &self.input_state, width, height);

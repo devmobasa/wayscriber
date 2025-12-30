@@ -108,9 +108,7 @@ fn process_tray_action(state: &mut WaylandState) {
             }
         }
         "toggle_help" => {
-            state.input_state.show_help = !state.input_state.show_help;
-            state.input_state.dirty_tracker.mark_full();
-            state.input_state.needs_redraw = true;
+            state.input_state.toggle_help_overlay();
         }
         other => warn!("Unknown tray action '{}'", other),
     }

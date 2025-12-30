@@ -205,6 +205,16 @@ pub struct InputState {
     pub needs_redraw: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
+    /// Help overlay view mode (quick vs full)
+    pub help_overlay_view: HelpOverlayView,
+    /// Active help overlay page index
+    pub help_overlay_page: usize,
+    /// Current help overlay search query
+    pub help_overlay_search: String,
+    /// Current help overlay scroll offset (pixels)
+    pub help_overlay_scroll: f64,
+    /// Max scrollable height for help overlay (pixels)
+    pub help_overlay_scroll_max: f64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
@@ -371,6 +381,28 @@ pub(super) enum HistoryMode {
     Redo,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HelpOverlayView {
+    Quick,
+    Full,
+}
+
+impl HelpOverlayView {
+    pub fn toggle(self) -> Self {
+        match self {
+            HelpOverlayView::Quick => HelpOverlayView::Full,
+            HelpOverlayView::Full => HelpOverlayView::Quick,
+        }
+    }
+
+    pub fn page_count(self) -> usize {
+        match self {
+            HelpOverlayView::Quick => 1,
+            HelpOverlayView::Full => 2,
+        }
+    }
+}
+
 impl InputState {
     /// Creates a new InputState with specified defaults.
     ///
@@ -440,6 +472,11 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             show_help: false,
+            help_overlay_view: HelpOverlayView::Quick,
+            help_overlay_page: 0,
+            help_overlay_search: String::new(),
+            help_overlay_scroll: 0.0,
+            help_overlay_scroll_max: 0.0,
             show_status_bar,
             toolbar_visible: false,
             toolbar_top_visible: false,

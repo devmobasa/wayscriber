@@ -3,12 +3,12 @@
 use anyhow::Result;
 
 use crate::backend::wayland::toolbar::format_binding_label;
-use crate::backend::wayland::toolbar_icons;
 use crate::draw::{
     BLACK, BLUE, Color, EraserKind, FontDescriptor, GREEN, ORANGE, PINK, RED, WHITE, YELLOW,
 };
 use crate::input::state::PresetFeedbackKind;
 use crate::input::{EraserMode, Tool};
+use crate::toolbar_icons;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::util::color_to_name;
 

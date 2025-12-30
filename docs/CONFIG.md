@@ -166,6 +166,9 @@ show_status_bar = true
 # Show a small "FROZEN" badge when frozen mode is active
 show_frozen_badge = true
 
+# Filter help overlay sections based on enabled features
+help_overlay_context_filter = true
+
 # Status bar position
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"
@@ -180,7 +183,8 @@ dot_radius = 4.0
 
 # Help overlay styling
 [ui.help_overlay_style]
-font_size = 16.0
+font_size = 14.0
+font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 line_height = 22.0
 padding = 20.0
 bg_color = [0.0, 0.0, 0.0, 0.85]     # Darker background
