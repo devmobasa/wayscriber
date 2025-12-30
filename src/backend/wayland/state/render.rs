@@ -425,6 +425,12 @@ impl WaylandState {
                 crate::ui::render_preset_toast(&ctx, &self.input_state, width, height);
 
                 if !self.zoom.active {
+                    if self.input_state.is_properties_panel_open() {
+                        self.input_state
+                            .update_properties_panel_layout(&ctx, width, height);
+                    } else {
+                        self.input_state.clear_properties_panel_layout();
+                    }
                     crate::ui::render_properties_panel(&ctx, &self.input_state, width, height);
 
                     if self.input_state.is_context_menu_open() {
@@ -438,6 +444,7 @@ impl WaylandState {
                     crate::ui::render_context_menu(&ctx, &self.input_state, width, height);
                 } else {
                     self.input_state.clear_context_menu_layout();
+                    self.input_state.clear_properties_panel_layout();
                 }
 
                 // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.

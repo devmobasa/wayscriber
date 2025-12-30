@@ -9,7 +9,7 @@ pub const UI_TOAST_DURATION_MS: u64 = 5000;
 use super::{
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
-    properties::ShapePropertiesPanel,
+    properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     selection::SelectionState,
 };
 use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX, ToolPresetConfig};
@@ -315,6 +315,12 @@ pub struct InputState {
     pub(super) pending_menu_hover_recalc: bool,
     /// Optional properties panel describing the current selection
     pub(super) shape_properties_panel: Option<ShapePropertiesPanel>,
+    /// Cached layout details for the current properties panel
+    pub properties_panel_layout: Option<PropertiesPanelLayout>,
+    /// Recompute properties hover next time layout is available
+    pub(super) pending_properties_hover_recalc: bool,
+    /// Refresh properties panel entries on the next layout pass
+    pub(super) properties_panel_needs_refresh: bool,
     /// Whether frozen mode is currently active
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
@@ -489,6 +495,9 @@ impl InputState {
             last_pointer_position: (0, 0),
             pending_menu_hover_recalc: false,
             shape_properties_panel: None,
+            properties_panel_layout: None,
+            pending_properties_hover_recalc: false,
+            properties_panel_needs_refresh: false,
             frozen_active: false,
             pending_frozen_toggle: false,
             zoom_active: false,

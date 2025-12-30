@@ -574,6 +574,9 @@ toggle_status_bar = ["F12", "F4"]
 # Toggle fill for rectangle/ellipse
 toggle_fill = []
 
+# Toggle selection properties panel
+toggle_selection_properties = ["Ctrl+Alt+P"]
+
 # Toggle context menu (keyboard alternative to right-click)
 open_context_menu = ["Shift+F10", "Menu"]
 
