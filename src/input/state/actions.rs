@@ -1,5 +1,5 @@
 use crate::config::Action;
-use crate::draw::Shape;
+use crate::draw::{PageDeleteOutcome, Shape};
 use crate::input::{ZoomAction, board_mode::BoardMode, events::Key, tool::Tool};
 use crate::util;
 use log::{info, warn};
@@ -733,6 +733,36 @@ impl InputState {
                     self.switch_board_mode(BoardMode::Transparent);
                 }
             }
+            Action::PagePrev => {
+                if self.page_prev() {
+                    info!("Switched to previous page");
+                } else {
+                    self.set_ui_toast(UiToastKind::Info, "Already on the first page.");
+                }
+            }
+            Action::PageNext => {
+                if self.page_next() {
+                    info!("Switched to next page");
+                } else {
+                    self.set_ui_toast(UiToastKind::Info, "Already on the last page.");
+                }
+            }
+            Action::PageNew => {
+                self.page_new();
+                info!("Created new page");
+            }
+            Action::PageDuplicate => {
+                self.page_duplicate();
+                info!("Duplicated page");
+            }
+            Action::PageDelete => match self.page_delete() {
+                PageDeleteOutcome::Removed => {
+                    info!("Deleted page");
+                }
+                PageDeleteOutcome::Cleared => {
+                    self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
+                }
+            },
             Action::ToggleHelp => {
                 self.show_help = !self.show_help;
                 self.dirty_tracker.mark_full();

@@ -64,6 +64,13 @@ pub enum Action {
     ToggleBlackboard,
     ReturnToTransparent,
 
+    // Page navigation
+    PagePrev,
+    PageNext,
+    PageNew,
+    PageDuplicate,
+    PageDelete,
+
     // UI toggles
     ToggleHelp,
     ToggleStatusBar,
@@ -353,6 +360,21 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_return_to_transparent")]
     pub return_to_transparent: Vec<String>,
 
+    #[serde(default = "default_page_prev")]
+    pub page_prev: Vec<String>,
+
+    #[serde(default = "default_page_next")]
+    pub page_next: Vec<String>,
+
+    #[serde(default = "default_page_new")]
+    pub page_new: Vec<String>,
+
+    #[serde(default = "default_page_duplicate")]
+    pub page_duplicate: Vec<String>,
+
+    #[serde(default = "default_page_delete")]
+    pub page_delete: Vec<String>,
+
     #[serde(default = "default_toggle_help")]
     pub toggle_help: Vec<String>,
     #[serde(default = "default_toggle_status_bar")]
@@ -528,6 +550,11 @@ impl Default for KeybindingsConfig {
             toggle_whiteboard: default_toggle_whiteboard(),
             toggle_blackboard: default_toggle_blackboard(),
             return_to_transparent: default_return_to_transparent(),
+            page_prev: default_page_prev(),
+            page_next: default_page_next(),
+            page_new: default_page_new(),
+            page_duplicate: default_page_duplicate(),
+            page_delete: default_page_delete(),
             toggle_help: default_toggle_help(),
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
@@ -775,6 +802,26 @@ impl KeybindingsConfig {
 
         for binding_str in &self.return_to_transparent {
             insert_binding(binding_str, Action::ReturnToTransparent)?;
+        }
+
+        for binding_str in &self.page_prev {
+            insert_binding(binding_str, Action::PagePrev)?;
+        }
+
+        for binding_str in &self.page_next {
+            insert_binding(binding_str, Action::PageNext)?;
+        }
+
+        for binding_str in &self.page_new {
+            insert_binding(binding_str, Action::PageNew)?;
+        }
+
+        for binding_str in &self.page_duplicate {
+            insert_binding(binding_str, Action::PageDuplicate)?;
+        }
+
+        for binding_str in &self.page_delete {
+            insert_binding(binding_str, Action::PageDelete)?;
         }
 
         // Ensure help is reachable via F1 even if older configs only include F10.
@@ -1147,6 +1194,26 @@ fn default_toggle_blackboard() -> Vec<String> {
 
 fn default_return_to_transparent() -> Vec<String> {
     vec!["Ctrl+Shift+T".to_string()]
+}
+
+fn default_page_prev() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_page_next() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_page_new() -> Vec<String> {
+    vec!["Ctrl+Alt+N".to_string()]
+}
+
+fn default_page_duplicate() -> Vec<String> {
+    vec!["Ctrl+Alt+D".to_string()]
+}
+
+fn default_page_delete() -> Vec<String> {
+    vec!["Ctrl+Alt+Delete".to_string()]
 }
 
 fn default_toggle_help() -> Vec<String> {

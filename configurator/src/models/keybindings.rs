@@ -61,6 +61,11 @@ pub enum KeybindingField {
     ToggleWhiteboard,
     ToggleBlackboard,
     ReturnToTransparent,
+    PagePrev,
+    PageNext,
+    PageNew,
+    PageDuplicate,
+    PageDelete,
     ToggleHelp,
     ToggleStatusBar,
     ToggleClickHighlight,
@@ -205,6 +210,11 @@ impl KeybindingField {
             Self::ToggleWhiteboard,
             Self::ToggleBlackboard,
             Self::ReturnToTransparent,
+            Self::PagePrev,
+            Self::PageNext,
+            Self::PageNew,
+            Self::PageDuplicate,
+            Self::PageDelete,
             Self::ToggleHelp,
             Self::ToggleStatusBar,
             Self::ToggleClickHighlight,
@@ -302,6 +312,11 @@ impl KeybindingField {
             Self::ToggleWhiteboard => "Toggle whiteboard",
             Self::ToggleBlackboard => "Toggle blackboard",
             Self::ReturnToTransparent => "Return to transparent",
+            Self::PagePrev => "Page: previous",
+            Self::PageNext => "Page: next",
+            Self::PageNew => "Page: new",
+            Self::PageDuplicate => "Page: duplicate",
+            Self::PageDelete => "Page: delete",
             Self::ToggleHelp => "Toggle help",
             Self::ToggleStatusBar => "Toggle status bar",
             Self::ToggleClickHighlight => "Toggle click highlight",
@@ -399,6 +414,11 @@ impl KeybindingField {
             Self::ToggleWhiteboard => "toggle_whiteboard",
             Self::ToggleBlackboard => "toggle_blackboard",
             Self::ReturnToTransparent => "return_to_transparent",
+            Self::PagePrev => "page_prev",
+            Self::PageNext => "page_next",
+            Self::PageNew => "page_new",
+            Self::PageDuplicate => "page_duplicate",
+            Self::PageDelete => "page_delete",
             Self::ToggleHelp => "toggle_help",
             Self::ToggleStatusBar => "toggle_status_bar",
             Self::ToggleClickHighlight => "toggle_click_highlight",
@@ -506,6 +526,11 @@ impl KeybindingField {
             Self::ToggleWhiteboard
             | Self::ToggleBlackboard
             | Self::ReturnToTransparent
+            | Self::PagePrev
+            | Self::PageNext
+            | Self::PageNew
+            | Self::PageDuplicate
+            | Self::PageDelete
             | Self::ToggleHelp
             | Self::ToggleStatusBar
             | Self::ToggleClickHighlight
@@ -592,6 +617,11 @@ impl KeybindingField {
             Self::ToggleWhiteboard => &config.toggle_whiteboard,
             Self::ToggleBlackboard => &config.toggle_blackboard,
             Self::ReturnToTransparent => &config.return_to_transparent,
+            Self::PagePrev => &config.page_prev,
+            Self::PageNext => &config.page_next,
+            Self::PageNew => &config.page_new,
+            Self::PageDuplicate => &config.page_duplicate,
+            Self::PageDelete => &config.page_delete,
             Self::ToggleHelp => &config.toggle_help,
             Self::ToggleStatusBar => &config.toggle_status_bar,
             Self::ToggleClickHighlight => &config.toggle_click_highlight,
@@ -689,6 +719,11 @@ impl KeybindingField {
             Self::ToggleWhiteboard => config.toggle_whiteboard = value,
             Self::ToggleBlackboard => config.toggle_blackboard = value,
             Self::ReturnToTransparent => config.return_to_transparent = value,
+            Self::PagePrev => config.page_prev = value,
+            Self::PageNext => config.page_next = value,
+            Self::PageNew => config.page_new = value,
+            Self::PageDuplicate => config.page_duplicate = value,
+            Self::PageDelete => config.page_delete = value,
             Self::ToggleHelp => config.toggle_help = value,
             Self::ToggleStatusBar => config.toggle_status_bar = value,
             Self::ToggleClickHighlight => config.toggle_click_highlight = value,

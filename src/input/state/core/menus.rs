@@ -1,4 +1,4 @@
-use super::base::InputState;
+use super::base::{InputState, UiToastKind};
 use crate::draw::ShapeId;
 use crate::input::board_mode::BoardMode;
 use crate::util::Rect;
@@ -9,6 +9,7 @@ use cairo::Context as CairoContext;
 pub enum ContextMenuKind {
     Shape,
     Canvas,
+    Pages,
 }
 
 /// Tracks the context menu lifecycle.
@@ -39,6 +40,12 @@ pub enum MenuCommand {
     EditText,
     ClearAll,
     ToggleHighlightTool,
+    OpenPagesMenu,
+    PagePrev,
+    PageNext,
+    PageNew,
+    PageDuplicate,
+    PageDelete,
     SwitchToWhiteboard,
     SwitchToBlackboard,
     ReturnToTransparent,
@@ -102,6 +109,7 @@ impl InputState {
             } => match kind {
                 ContextMenuKind::Canvas => self.canvas_menu_entries(),
                 ContextMenuKind::Shape => self.shape_menu_entries(shape_ids, *hovered_shape_id),
+                ContextMenuKind::Pages => self.pages_menu_entries(),
             },
         }
     }
@@ -271,6 +279,13 @@ impl InputState {
             false,
             Some(MenuCommand::ToggleHighlightTool),
         ));
+        entries.push(ContextMenuEntry::new(
+            "Pages",
+            None::<String>,
+            true,
+            false,
+            Some(MenuCommand::OpenPagesMenu),
+        ));
 
         match self.canvas_set.active_mode() {
             BoardMode::Transparent => {
@@ -338,6 +353,59 @@ impl InputState {
             Some(MenuCommand::OpenConfigFile),
         ));
         entries
+    }
+
+    fn pages_menu_entries(&self) -> Vec<ContextMenuEntry> {
+        let mode = self.canvas_set.active_mode();
+        let page_count = self.canvas_set.page_count(mode);
+        let page_index = self.canvas_set.active_page_index(mode);
+        let can_prev = page_index > 0;
+        let can_next = page_index + 1 < page_count;
+
+        vec![
+            ContextMenuEntry::new(
+                format!("Page {}/{}", page_index + 1, page_count.max(1)),
+                None::<String>,
+                false,
+                true,
+                None,
+            ),
+            ContextMenuEntry::new(
+                "Previous Page",
+                None::<String>,
+                false,
+                !can_prev,
+                Some(MenuCommand::PagePrev),
+            ),
+            ContextMenuEntry::new(
+                "Next Page",
+                None::<String>,
+                false,
+                !can_next,
+                Some(MenuCommand::PageNext),
+            ),
+            ContextMenuEntry::new(
+                "New Page",
+                Some("Ctrl+Alt+N"),
+                false,
+                false,
+                Some(MenuCommand::PageNew),
+            ),
+            ContextMenuEntry::new(
+                "Duplicate Page",
+                Some("Ctrl+Alt+D"),
+                false,
+                false,
+                Some(MenuCommand::PageDuplicate),
+            ),
+            ContextMenuEntry::new(
+                "Delete Page",
+                Some("Ctrl+Alt+Delete"),
+                false,
+                false,
+                Some(MenuCommand::PageDelete),
+            ),
+        ]
     }
 
     fn shape_menu_entries(
@@ -824,6 +892,45 @@ impl InputState {
             }
             MenuCommand::ToggleHighlightTool => {
                 self.toggle_all_highlights();
+                self.close_context_menu();
+            }
+            MenuCommand::OpenPagesMenu => {
+                let anchor = if let Some(layout) = self.context_menu_layout {
+                    (
+                        (layout.origin_x + layout.width + 8.0).round() as i32,
+                        layout.origin_y.round() as i32,
+                    )
+                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
+                    *anchor
+                } else {
+                    self.last_pointer_position
+                };
+                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Pages, None);
+                self.pending_menu_hover_recalc = false;
+                self.set_context_menu_focus(None);
+                self.focus_first_context_menu_entry();
+                self.needs_redraw = true;
+            }
+            MenuCommand::PagePrev => {
+                self.page_prev();
+                self.close_context_menu();
+            }
+            MenuCommand::PageNext => {
+                self.page_next();
+                self.close_context_menu();
+            }
+            MenuCommand::PageNew => {
+                self.page_new();
+                self.close_context_menu();
+            }
+            MenuCommand::PageDuplicate => {
+                self.page_duplicate();
+                self.close_context_menu();
+            }
+            MenuCommand::PageDelete => {
+                if matches!(self.page_delete(), crate::draw::PageDeleteOutcome::Cleared) {
+                    self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
+                }
                 self.close_context_menu();
             }
             MenuCommand::SwitchToWhiteboard => {

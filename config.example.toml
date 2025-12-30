@@ -565,6 +565,13 @@ toggle_whiteboard = ["Ctrl+W"]
 toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
 
+# Page navigation
+page_prev = []
+page_next = []
+page_new = ["Ctrl+Alt+N"]
+page_duplicate = ["Ctrl+Alt+D"]
+page_delete = ["Ctrl+Alt+Delete"]
+
 # Toggle help overlay
 toggle_help = ["F10", "F1"]
 

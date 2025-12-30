@@ -174,6 +174,7 @@ impl ToolbarLayoutSpec {
         let show_text_controls =
             snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
         let show_actions = snapshot.show_actions_section || snapshot.show_actions_advanced;
+        let show_pages = snapshot.show_actions_advanced;
         let show_presets =
             snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
         let show_step_section = snapshot.show_step_section;
@@ -205,6 +206,11 @@ impl ToolbarLayoutSpec {
         if show_actions {
             let actions_card_h = self.side_actions_height(snapshot);
             add_section(actions_card_h, &mut height);
+        }
+
+        if show_pages {
+            let pages_h = self.side_pages_height(snapshot);
+            add_section(pages_h, &mut height);
         }
 
         if show_step_section {
@@ -349,6 +355,18 @@ impl ToolbarLayoutSpec {
         } else {
             Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content + Self::SIDE_ACTION_BUTTON_GAP
         }
+    }
+
+    pub(super) fn side_pages_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
+        if !snapshot.show_actions_advanced {
+            return 0.0;
+        }
+        let btn_h = if self.use_icons {
+            Self::SIDE_ACTION_BUTTON_HEIGHT_ICON
+        } else {
+            Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT
+        };
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y + btn_h + Self::SIDE_ACTION_BUTTON_GAP
     }
 
     pub(super) fn side_step_height(&self, snapshot: &ToolbarSnapshot) -> f64 {
@@ -1065,6 +1083,38 @@ pub fn build_side_hits(
         }
 
         y += actions_card_h + section_gap;
+    }
+
+    if snapshot.show_actions_advanced {
+        let pages_card_h = spec.side_pages_height(snapshot);
+        let pages_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+        let btn_h = if use_icons {
+            ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON
+        } else {
+            ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
+        };
+        let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+        let btn_w = (content_width - btn_gap * 4.0) / 5.0;
+        let buttons = [
+            (ToolbarEvent::PagePrev, "Prev"),
+            (ToolbarEvent::PageNext, "Next"),
+            (ToolbarEvent::PageNew, "New"),
+            (ToolbarEvent::PageDuplicate, "Dup"),
+            (ToolbarEvent::PageDelete, "Del"),
+        ];
+        for (idx, (evt, label)) in buttons.iter().enumerate() {
+            let bx = x + (btn_w + btn_gap) * idx as f64;
+            hits.push(HitRegion {
+                rect: (bx, pages_y, btn_w, btn_h),
+                event: evt.clone(),
+                kind: HitKind::Click,
+                tooltip: Some(super::format_binding_label(
+                    label,
+                    snapshot.binding_hints.binding_for_event(evt),
+                )),
+            });
+        }
+        y += pages_card_h + section_gap;
     }
 
     // Delay sliders

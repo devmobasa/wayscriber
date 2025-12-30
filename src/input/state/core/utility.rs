@@ -40,6 +40,41 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    /// Cancels any in-progress interaction without exiting the application.
+    pub(crate) fn cancel_active_interaction(&mut self) {
+        match &self.state {
+            DrawingState::TextInput { .. } => {
+                self.cancel_text_input();
+            }
+            DrawingState::PendingTextClick { .. } => {
+                self.state = DrawingState::Idle;
+            }
+            DrawingState::Drawing { .. } => {
+                self.clear_provisional_dirty();
+                self.last_provisional_bounds = None;
+                self.state = DrawingState::Idle;
+                self.needs_redraw = true;
+            }
+            DrawingState::MovingSelection { snapshots, .. } => {
+                self.restore_selection_from_snapshots(snapshots.clone());
+                self.state = DrawingState::Idle;
+            }
+            DrawingState::Selecting { .. } => {
+                self.clear_provisional_dirty();
+                self.last_provisional_bounds = None;
+                self.state = DrawingState::Idle;
+                self.needs_redraw = true;
+            }
+            DrawingState::ResizingText {
+                shape_id, snapshot, ..
+            } => {
+                self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                self.state = DrawingState::Idle;
+            }
+            DrawingState::Idle => {}
+        }
+    }
+
     /// Drains pending dirty rectangles for the current surface size.
     #[allow(dead_code)]
     pub fn take_dirty_regions(&mut self) -> Vec<Rect> {
