@@ -318,7 +318,7 @@ side_offset_x = 0.0
 
 [ui.help_overlay_style]
 # Font size for help overlay text
-font_size = 16.0
+font_size = 14.0
 
 # Font family for help overlay text (comma-separated fallback list)
 font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"

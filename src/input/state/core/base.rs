@@ -211,6 +211,10 @@ pub struct InputState {
     pub help_overlay_page: usize,
     /// Current help overlay search query
     pub help_overlay_search: String,
+    /// Current help overlay scroll offset (pixels)
+    pub help_overlay_scroll: f64,
+    /// Max scrollable height for help overlay (pixels)
+    pub help_overlay_scroll_max: f64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
@@ -471,6 +475,8 @@ impl InputState {
             help_overlay_view: HelpOverlayView::Quick,
             help_overlay_page: 0,
             help_overlay_search: String::new(),
+            help_overlay_scroll: 0.0,
+            help_overlay_scroll_max: 0.0,
             show_status_bar,
             toolbar_visible: false,
             toolbar_top_visible: false,

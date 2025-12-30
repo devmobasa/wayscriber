@@ -991,6 +991,7 @@ impl InputState {
             Key::Backspace => {
                 if !self.help_overlay_search.is_empty() {
                     self.help_overlay_search.pop();
+                    self.help_overlay_scroll = 0.0;
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                     true
@@ -1001,6 +1002,7 @@ impl InputState {
             Key::Space => {
                 if search_active {
                     self.help_overlay_search.push(' ');
+                    self.help_overlay_scroll = 0.0;
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                 }
@@ -1009,6 +1011,7 @@ impl InputState {
             Key::Char(ch) => {
                 if !ch.is_control() {
                     self.help_overlay_search.push(ch);
+                    self.help_overlay_scroll = 0.0;
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                     true
@@ -1027,6 +1030,7 @@ impl InputState {
             Key::Home if !search_active => {
                 if self.help_overlay_page != 0 {
                     self.help_overlay_page = 0;
+                    self.help_overlay_scroll = 0.0;
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                     true
@@ -1038,6 +1042,7 @@ impl InputState {
                 let last_page = self.help_overlay_page_count().saturating_sub(1);
                 if self.help_overlay_page != last_page {
                     self.help_overlay_page = last_page;
+                    self.help_overlay_scroll = 0.0;
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                     true

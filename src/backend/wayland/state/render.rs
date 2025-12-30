@@ -426,7 +426,7 @@ impl WaylandState {
                     let page_next_label = self
                         .input_state
                         .action_binding_label(crate::config::Action::PageNext);
-                    crate::ui::render_help_overlay(
+                    let scroll_max = crate::ui::render_help_overlay(
                         &ctx,
                         &self.config.ui.help_overlay_style,
                         width,
@@ -440,7 +440,11 @@ impl WaylandState {
                         self.config.ui.help_overlay_context_filter,
                         self.input_state.board_config.enabled,
                         self.config.capture.enabled,
+                        self.input_state.help_overlay_scroll,
                     );
+                    self.input_state.help_overlay_scroll_max = scroll_max;
+                    self.input_state.help_overlay_scroll =
+                        self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
                 }
 
                 crate::ui::render_ui_toast(&ctx, &self.input_state, width, height);

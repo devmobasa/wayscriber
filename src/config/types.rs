@@ -758,7 +758,7 @@ fn default_status_dot_radius() -> f64 {
 
 // Help overlay style defaults
 fn default_help_font_size() -> f64 {
-    18.0
+    14.0
 }
 
 fn default_help_font_family() -> String {
@@ -766,7 +766,7 @@ fn default_help_font_family() -> String {
 }
 
 fn default_help_line_height() -> f64 {
-    28.0
+    22.0
 }
 
 fn default_help_padding() -> f64 {

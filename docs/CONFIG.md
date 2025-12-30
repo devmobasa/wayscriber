@@ -183,7 +183,7 @@ dot_radius = 4.0
 
 # Help overlay styling
 [ui.help_overlay_style]
-font_size = 16.0
+font_size = 14.0
 font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 line_height = 22.0
 padding = 20.0

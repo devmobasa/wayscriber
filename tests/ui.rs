@@ -94,6 +94,7 @@ fn render_help_overlay_draws_content() {
         false,
         true,
         true,
+        0.0,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -148,6 +149,7 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
         false,
         true,
         true,
+        0.0,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));

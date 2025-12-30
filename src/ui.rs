@@ -799,7 +799,8 @@ pub fn render_help_overlay(
     context_filter: bool,
     board_enabled: bool,
     capture_enabled: bool,
-) {
+    scroll_offset: f64,
+) -> f64 {
     type IconFn = fn(&cairo::Context, f64, f64, f64);
 
     #[derive(Clone)]
@@ -834,6 +835,30 @@ pub fn render_help_overlay(
             key: key.into(),
             action,
         }
+    }
+
+    fn grid_width_for_columns(
+        sections: &[MeasuredSection],
+        columns: usize,
+        column_gap: f64,
+    ) -> f64 {
+        if columns == 0 || sections.is_empty() {
+            return 0.0;
+        }
+
+        let mut max_width: f64 = 0.0;
+        for chunk in sections.chunks(columns) {
+            let mut width = 0.0;
+            for (index, section) in chunk.iter().enumerate() {
+                if index > 0 {
+                    width += column_gap;
+                }
+                width += section.width;
+            }
+            max_width = max_width.max(width);
+        }
+
+        max_width
     }
 
     fn draw_highlight(
@@ -1194,12 +1219,12 @@ pub fn render_help_overlay(
     if let Some(section) = board_modes_section.clone() {
         all_sections.push(section);
     }
-    all_sections.push(pages_section.clone());
-    all_sections.push(drawing_section.clone());
-    all_sections.push(selection_section.clone());
     all_sections.push(actions_section.clone());
-    all_sections.push(zoom_section.clone());
+    all_sections.push(drawing_section.clone());
     all_sections.push(pen_text_section.clone());
+    all_sections.push(zoom_section.clone());
+    all_sections.push(selection_section.clone());
+    all_sections.push(pages_section.clone());
     if let Some(section) = screenshots_section.clone() {
         all_sections.push(section);
     }
@@ -1208,12 +1233,10 @@ pub fn render_help_overlay(
     if let Some(section) = board_modes_section {
         page1_sections.push(section);
     }
-    page1_sections.push(pages_section);
+    page1_sections.push(actions_section);
     page1_sections.push(drawing_section);
     page1_sections.push(pen_text_section);
-    page1_sections.push(actions_section);
-
-    let mut page2_sections = vec![zoom_section, selection_section];
+    let mut page2_sections = vec![pages_section, zoom_section, selection_section];
     if let Some(section) = screenshots_section {
         page2_sections.push(section);
     }
@@ -1256,14 +1279,15 @@ pub fn render_help_overlay(
         env!("CARGO_PKG_VERSION"),
         commit_hash
     );
-    let note_text = "Note: Each board mode has independent pages";
+    let note_text_base = "Note: Each board mode has independent pages";
     let close_hint_text = "F1 / Esc to close";
 
     let body_font_size = style.font_size;
     let heading_font_size = body_font_size + 6.0;
     let title_font_size = heading_font_size + 6.0;
     let subtitle_font_size = body_font_size;
-    let row_line_height = style.line_height.max(body_font_size + 8.0);
+    let row_extra_gap = 4.0;
+    let row_line_height = style.line_height.max(body_font_size + 8.0) + row_extra_gap;
     let heading_line_height = heading_font_size + 10.0;
     let heading_icon_size = heading_font_size * 0.9;
     let heading_icon_gap = 10.0;
@@ -1289,6 +1313,8 @@ pub fn render_help_overlay(
     let extra_line_gap = 6.0;
     let extra_line_bottom_spacing = 18.0;
     let columns_bottom_spacing = 28.0;
+    let max_box_width = screen_width as f64 * 0.92;
+    let max_box_height = screen_height as f64 * 0.92;
 
     let lerp = |a: f64, b: f64, t: f64| a * (1.0 - t) + b * t;
 
@@ -1466,17 +1492,39 @@ pub fn render_help_overlay(
         });
     }
 
+    let max_content_width = (max_box_width - style.padding * 2.0).max(0.0);
+    let max_columns = measured_sections.len().clamp(1, 3);
+    let base_columns = if screen_width < 1200 {
+        1
+    } else if screen_width > 1920 {
+        3
+    } else {
+        2
+    };
+    let mut columns = base_columns.min(max_columns).max(1);
+    while columns > 1 {
+        let grid_width = grid_width_for_columns(&measured_sections, columns, column_gap);
+        if grid_width <= max_content_width {
+            break;
+        }
+        columns -= 1;
+    }
+
     let mut rows: Vec<Vec<MeasuredSection>> = Vec::new();
     if measured_sections.is_empty() {
         rows.push(Vec::new());
-    } else if measured_sections.len() <= 2 {
-        rows.push(measured_sections);
     } else {
-        let mut split = measured_sections;
-        let first_row_len = split.len().div_ceil(2);
-        let second_row = split.split_off(first_row_len);
-        rows.push(split);
-        rows.push(second_row);
+        let mut current_row = Vec::new();
+        for section in measured_sections {
+            current_row.push(section);
+            if current_row.len() == columns {
+                rows.push(current_row);
+                current_row = Vec::new();
+            }
+        }
+        if !current_row.is_empty() {
+            rows.push(current_row);
+        }
     }
 
     let mut row_widths: Vec<f64> = Vec::with_capacity(rows.len());
@@ -1597,14 +1645,6 @@ pub fn render_help_overlay(
         )
     });
     let note_font_size = (body_font_size - 2.0).max(12.0);
-    let note_extents = text_extents_for(
-        ctx,
-        help_font_family.as_str(),
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        note_font_size,
-        note_text,
-    );
     let close_hint_extents = text_extents_for(
         ctx,
         help_font_family.as_str(),
@@ -1614,6 +1654,50 @@ pub fn render_help_overlay(
         close_hint_text,
     );
     let note_to_close_gap = 12.0;
+
+    let nav_tertiary_height = if nav_tertiary_segments.is_some() {
+        nav_line_gap + nav_font_size
+    } else {
+        0.0
+    };
+    let nav_block_height = if extra_line_text.is_some() {
+        nav_font_size * 2.0
+            + nav_line_gap
+            + nav_tertiary_height
+            + extra_line_gap
+            + nav_font_size
+            + extra_line_bottom_spacing
+    } else {
+        nav_font_size * 2.0 + nav_line_gap + nav_tertiary_height + nav_bottom_spacing
+    };
+    let header_height = accent_line_height
+        + accent_line_bottom_spacing
+        + title_font_size
+        + title_bottom_spacing
+        + subtitle_font_size
+        + subtitle_bottom_spacing
+        + nav_block_height;
+    let footer_height =
+        columns_bottom_spacing + note_font_size + note_to_close_gap + note_font_size;
+    let content_height = header_height + grid_height + footer_height;
+    let max_inner_height = (max_box_height - style.padding * 2.0).max(0.0);
+    let inner_height = content_height.min(max_inner_height);
+    let grid_view_height = (inner_height - header_height - footer_height).max(0.0);
+    let scroll_max = (grid_height - grid_view_height).max(0.0);
+    let scroll_offset = scroll_offset.clamp(0.0, scroll_max);
+    let note_text = if scroll_max > 0.0 {
+        format!("{}  •  Scroll: Mouse wheel", note_text_base)
+    } else {
+        note_text_base.to_string()
+    };
+    let note_extents = text_extents_for(
+        ctx,
+        help_font_family.as_str(),
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        note_font_size,
+        note_text.as_str(),
+    );
 
     let mut content_width = grid_width
         .max(title_extents.width())
@@ -1636,36 +1720,8 @@ pub fn render_help_overlay(
     }
     // Ensure minimum width for search box
     content_width = content_width.max(300.0);
-
-    let nav_tertiary_height = if nav_tertiary_segments.is_some() {
-        nav_line_gap + nav_font_size
-    } else {
-        0.0
-    };
-    let nav_block_height = if extra_line_text.is_some() {
-        nav_font_size * 2.0
-            + nav_line_gap
-            + nav_tertiary_height
-            + extra_line_gap
-            + nav_font_size
-            + extra_line_bottom_spacing
-    } else {
-        nav_font_size * 2.0 + nav_line_gap + nav_tertiary_height + nav_bottom_spacing
-    };
     let box_width = content_width + style.padding * 2.0;
-    let content_height = accent_line_height
-        + accent_line_bottom_spacing
-        + title_font_size
-        + title_bottom_spacing
-        + subtitle_font_size
-        + subtitle_bottom_spacing
-        + nav_block_height
-        + grid_height
-        + columns_bottom_spacing
-        + note_font_size
-        + note_to_close_gap
-        + note_font_size;
-    let box_height = content_height + style.padding * 2.0;
+    let box_height = inner_height + style.padding * 2.0;
 
     let box_x = (screen_width as f64 - box_width) / 2.0;
     let box_y = (screen_height as f64 - box_height) / 2.0;
@@ -1869,217 +1925,225 @@ pub fn render_help_overlay(
 
     let grid_start_y = cursor_y;
 
-    let mut row_y = grid_start_y;
-    for (row_index, row) in rows.iter().enumerate() {
-        let row_height = *row_heights.get(row_index).unwrap_or(&0.0);
-        let row_width = *row_widths.get(row_index).unwrap_or(&inner_width);
-        if row.is_empty() {
+    if grid_view_height > 0.0 {
+        let _ = ctx.save();
+        ctx.rectangle(inner_x, grid_start_y, inner_width, grid_view_height);
+        ctx.clip();
+
+        let mut row_y = grid_start_y - scroll_offset;
+        for (row_index, row) in rows.iter().enumerate() {
+            let row_height = *row_heights.get(row_index).unwrap_or(&0.0);
+            let row_width = *row_widths.get(row_index).unwrap_or(&inner_width);
+            if row.is_empty() {
+                row_y += row_height;
+                if row_index + 1 < rows.len() {
+                    row_y += row_gap;
+                }
+                continue;
+            }
+
+            let mut section_x = inner_x + (inner_width - row_width) / 2.0;
+            for (section_index, measured) in row.iter().enumerate() {
+                if section_index > 0 {
+                    section_x += column_gap;
+                }
+
+                let section = &measured.section;
+
+                // Draw section card background
+                draw_rounded_rect(
+                    ctx,
+                    section_x,
+                    row_y,
+                    measured.width,
+                    measured.height,
+                    section_card_radius,
+                );
+                ctx.set_source_rgba(
+                    section_card_bg[0],
+                    section_card_bg[1],
+                    section_card_bg[2],
+                    section_card_bg[3],
+                );
+                let _ = ctx.fill_preserve();
+                ctx.set_source_rgba(
+                    section_card_border[0],
+                    section_card_border[1],
+                    section_card_border[2],
+                    section_card_border[3],
+                );
+                ctx.set_line_width(1.0);
+                let _ = ctx.stroke();
+
+                // Content starts inside card padding
+                let content_x = section_x + section_card_padding;
+                let mut section_y = row_y + section_card_padding;
+                let desc_x = content_x + measured.key_column_width + key_desc_gap;
+
+                ctx.select_font_face(
+                    help_font_family.as_str(),
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                );
+                ctx.set_font_size(heading_font_size);
+                ctx.set_source_rgba(
+                    accent_color[0],
+                    accent_color[1],
+                    accent_color[2],
+                    accent_color[3],
+                );
+                let mut heading_text_x = content_x;
+                if let Some(icon) = section.icon {
+                    let icon_y = section_y + (heading_line_height - heading_icon_size) * 0.5;
+                    let _ = ctx.save();
+                    ctx.set_source_rgba(
+                        heading_icon_color[0],
+                        heading_icon_color[1],
+                        heading_icon_color[2],
+                        heading_icon_color[3],
+                    );
+                    icon(ctx, content_x, icon_y, heading_icon_size);
+                    let _ = ctx.restore();
+                    heading_text_x += heading_icon_size + heading_icon_gap;
+                }
+                let heading_baseline = section_y + heading_font_size;
+                ctx.move_to(heading_text_x, heading_baseline);
+                let _ = ctx.show_text(section.title);
+                section_y += heading_line_height;
+
+                if !section.rows.is_empty() {
+                    section_y += row_gap_after_heading;
+                    for row_data in &section.rows {
+                        let baseline = section_y + body_font_size;
+
+                        let key_match = search_active
+                            && find_match_range(&row_data.key, &search_lower).is_some();
+                        if key_match && !row_data.key.is_empty() {
+                            let key_width = measure_key_combo(
+                                ctx,
+                                row_data.key.as_str(),
+                                help_font_family.as_str(),
+                                body_font_size,
+                            );
+                            draw_key_combo_highlight(
+                                ctx,
+                                content_x,
+                                baseline,
+                                body_font_size,
+                                key_width,
+                                highlight_color,
+                            );
+                        }
+                        if search_active
+                            && let Some(range) = find_match_range(row_data.action, &search_lower)
+                        {
+                            draw_highlight(
+                                ctx,
+                                desc_x,
+                                baseline,
+                                body_font_size,
+                                cairo::FontWeight::Normal,
+                                row_data.action,
+                                help_font_family.as_str(),
+                                range,
+                                highlight_color,
+                            );
+                        }
+
+                        // Draw key with keycap styling
+                        let _ = draw_key_combo(
+                            ctx,
+                            content_x,
+                            baseline,
+                            row_data.key.as_str(),
+                            &key_combo_style,
+                        );
+
+                        // Draw action description
+                        ctx.select_font_face(
+                            help_font_family.as_str(),
+                            cairo::FontSlant::Normal,
+                            cairo::FontWeight::Normal,
+                        );
+                        ctx.set_font_size(body_font_size);
+                        ctx.set_source_rgba(
+                            description_color[0],
+                            description_color[1],
+                            description_color[2],
+                            description_color[3],
+                        );
+                        ctx.move_to(desc_x, baseline);
+                        let _ = ctx.show_text(row_data.action);
+
+                        section_y += row_line_height;
+                    }
+                }
+
+                if !section.badges.is_empty() {
+                    section_y += badge_top_gap;
+                    let mut badge_x = content_x;
+
+                    for (badge_index, badge) in section.badges.iter().enumerate() {
+                        if badge_index > 0 {
+                            badge_x += badge_gap;
+                        }
+
+                        ctx.new_path();
+                        let badge_text_extents = text_extents_for(
+                            ctx,
+                            help_font_family.as_str(),
+                            cairo::FontSlant::Normal,
+                            cairo::FontWeight::Bold,
+                            badge_font_size,
+                            badge.label,
+                        );
+                        let badge_width = badge_text_extents.width() + badge_padding_x * 2.0;
+
+                        draw_rounded_rect(
+                            ctx,
+                            badge_x,
+                            section_y,
+                            badge_width,
+                            badge_height,
+                            badge_corner_radius,
+                        );
+                        ctx.set_source_rgba(badge.color[0], badge.color[1], badge.color[2], 0.25);
+                        let _ = ctx.fill_preserve();
+
+                        ctx.set_source_rgba(badge.color[0], badge.color[1], badge.color[2], 0.85);
+                        ctx.set_line_width(1.0);
+                        let _ = ctx.stroke();
+
+                        ctx.select_font_face(
+                            help_font_family.as_str(),
+                            cairo::FontSlant::Normal,
+                            cairo::FontWeight::Bold,
+                        );
+                        ctx.set_font_size(badge_font_size);
+                        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
+                        let text_x = badge_x + badge_padding_x;
+                        let text_y = section_y + (badge_height - badge_text_extents.height()) / 2.0
+                            - badge_text_extents.y_bearing();
+                        ctx.move_to(text_x, text_y);
+                        let _ = ctx.show_text(badge.label);
+
+                        badge_x += badge_width;
+                    }
+                }
+
+                section_x += measured.width;
+            }
+
             row_y += row_height;
             if row_index + 1 < rows.len() {
                 row_y += row_gap;
             }
-            continue;
         }
 
-        let mut section_x = inner_x + (inner_width - row_width) / 2.0;
-        for (section_index, measured) in row.iter().enumerate() {
-            if section_index > 0 {
-                section_x += column_gap;
-            }
-
-            let section = &measured.section;
-
-            // Draw section card background
-            draw_rounded_rect(
-                ctx,
-                section_x,
-                row_y,
-                measured.width,
-                measured.height,
-                section_card_radius,
-            );
-            ctx.set_source_rgba(
-                section_card_bg[0],
-                section_card_bg[1],
-                section_card_bg[2],
-                section_card_bg[3],
-            );
-            let _ = ctx.fill_preserve();
-            ctx.set_source_rgba(
-                section_card_border[0],
-                section_card_border[1],
-                section_card_border[2],
-                section_card_border[3],
-            );
-            ctx.set_line_width(1.0);
-            let _ = ctx.stroke();
-
-            // Content starts inside card padding
-            let content_x = section_x + section_card_padding;
-            let mut section_y = row_y + section_card_padding;
-            let desc_x = content_x + measured.key_column_width + key_desc_gap;
-
-            ctx.select_font_face(
-                help_font_family.as_str(),
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Bold,
-            );
-            ctx.set_font_size(heading_font_size);
-            ctx.set_source_rgba(
-                accent_color[0],
-                accent_color[1],
-                accent_color[2],
-                accent_color[3],
-            );
-            let mut heading_text_x = content_x;
-            if let Some(icon) = section.icon {
-                let icon_y = section_y + (heading_line_height - heading_icon_size) * 0.5;
-                let _ = ctx.save();
-                ctx.set_source_rgba(
-                    heading_icon_color[0],
-                    heading_icon_color[1],
-                    heading_icon_color[2],
-                    heading_icon_color[3],
-                );
-                icon(ctx, content_x, icon_y, heading_icon_size);
-                let _ = ctx.restore();
-                heading_text_x += heading_icon_size + heading_icon_gap;
-            }
-            let heading_baseline = section_y + heading_font_size;
-            ctx.move_to(heading_text_x, heading_baseline);
-            let _ = ctx.show_text(section.title);
-            section_y += heading_line_height;
-
-            if !section.rows.is_empty() {
-                section_y += row_gap_after_heading;
-                for row_data in &section.rows {
-                    let baseline = section_y + body_font_size;
-
-                    let key_match =
-                        search_active && find_match_range(&row_data.key, &search_lower).is_some();
-                    if key_match && !row_data.key.is_empty() {
-                        let key_width = measure_key_combo(
-                            ctx,
-                            row_data.key.as_str(),
-                            help_font_family.as_str(),
-                            body_font_size,
-                        );
-                        draw_key_combo_highlight(
-                            ctx,
-                            content_x,
-                            baseline,
-                            body_font_size,
-                            key_width,
-                            highlight_color,
-                        );
-                    }
-                    if search_active
-                        && let Some(range) = find_match_range(row_data.action, &search_lower)
-                    {
-                        draw_highlight(
-                            ctx,
-                            desc_x,
-                            baseline,
-                            body_font_size,
-                            cairo::FontWeight::Normal,
-                            row_data.action,
-                            help_font_family.as_str(),
-                            range,
-                            highlight_color,
-                        );
-                    }
-
-                    // Draw key with keycap styling
-                    let _ = draw_key_combo(
-                        ctx,
-                        content_x,
-                        baseline,
-                        row_data.key.as_str(),
-                        &key_combo_style,
-                    );
-
-                    // Draw action description
-                    ctx.select_font_face(
-                        help_font_family.as_str(),
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Normal,
-                    );
-                    ctx.set_font_size(body_font_size);
-                    ctx.set_source_rgba(
-                        description_color[0],
-                        description_color[1],
-                        description_color[2],
-                        description_color[3],
-                    );
-                    ctx.move_to(desc_x, baseline);
-                    let _ = ctx.show_text(row_data.action);
-
-                    section_y += row_line_height;
-                }
-            }
-
-            if !section.badges.is_empty() {
-                section_y += badge_top_gap;
-                let mut badge_x = content_x;
-
-                for (badge_index, badge) in section.badges.iter().enumerate() {
-                    if badge_index > 0 {
-                        badge_x += badge_gap;
-                    }
-
-                    ctx.new_path();
-                    let badge_text_extents = text_extents_for(
-                        ctx,
-                        help_font_family.as_str(),
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Bold,
-                        badge_font_size,
-                        badge.label,
-                    );
-                    let badge_width = badge_text_extents.width() + badge_padding_x * 2.0;
-
-                    draw_rounded_rect(
-                        ctx,
-                        badge_x,
-                        section_y,
-                        badge_width,
-                        badge_height,
-                        badge_corner_radius,
-                    );
-                    ctx.set_source_rgba(badge.color[0], badge.color[1], badge.color[2], 0.25);
-                    let _ = ctx.fill_preserve();
-
-                    ctx.set_source_rgba(badge.color[0], badge.color[1], badge.color[2], 0.85);
-                    ctx.set_line_width(1.0);
-                    let _ = ctx.stroke();
-
-                    ctx.select_font_face(
-                        help_font_family.as_str(),
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Bold,
-                    );
-                    ctx.set_font_size(badge_font_size);
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
-                    let text_x = badge_x + badge_padding_x;
-                    let text_y = section_y + (badge_height - badge_text_extents.height()) / 2.0
-                        - badge_text_extents.y_bearing();
-                    ctx.move_to(text_x, text_y);
-                    let _ = ctx.show_text(badge.label);
-
-                    badge_x += badge_width;
-                }
-            }
-
-            section_x += measured.width;
-        }
-
-        row_y += row_height;
-        if row_index + 1 < rows.len() {
-            row_y += row_gap;
-        }
+        let _ = ctx.restore();
     }
 
-    cursor_y = grid_start_y + grid_height + columns_bottom_spacing;
+    cursor_y = grid_start_y + grid_view_height + columns_bottom_spacing;
 
     // Note
     ctx.select_font_face(
@@ -2092,7 +2156,7 @@ pub fn render_help_overlay(
     let note_x = inner_x + (inner_width - note_extents.width()) / 2.0;
     let note_baseline = cursor_y + note_font_size;
     ctx.move_to(note_x, note_baseline);
-    let _ = ctx.show_text(note_text);
+    let _ = ctx.show_text(note_text.as_str());
     cursor_y += note_font_size + note_to_close_gap;
 
     // Close hint
@@ -2101,6 +2165,8 @@ pub fn render_help_overlay(
     let close_baseline = cursor_y + note_font_size;
     ctx.move_to(close_x, close_baseline);
     let _ = ctx.show_text(close_hint_text);
+
+    scroll_max
 }
 
 /// Renders a floating context menu for shape or canvas actions.
