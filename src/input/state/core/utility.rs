@@ -143,8 +143,7 @@ impl InputState {
         None
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn action_binding_label(&self, action: Action) -> String {
+    pub fn action_binding_label(&self, action: Action) -> String {
         let mut labels: Vec<String> = self
             .action_map
             .iter()
