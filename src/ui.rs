@@ -521,12 +521,14 @@ pub fn render_help_overlay(
     frozen_enabled: bool,
     view: HelpOverlayView,
     page_index: usize,
+    page_prev_label: String,
+    page_next_label: String,
     context_filter: bool,
     board_enabled: bool,
     capture_enabled: bool,
 ) {
     struct Row {
-        key: &'static str,
+        key: String,
         action: &'static str,
     }
 
@@ -548,94 +550,51 @@ pub fn render_help_overlay(
         key_column_width: f64,
     }
 
+    fn row<T: Into<String>>(key: T, action: &'static str) -> Row {
+        Row {
+            key: key.into(),
+            action,
+        }
+    }
+
     let page_count = view.page_count().max(1);
     let page_index = page_index.min(page_count - 1);
     let view_label = match view {
-        HelpOverlayView::Quick => "Quick",
-        HelpOverlayView::Full => "Full",
+        HelpOverlayView::Quick => "Essentials",
+        HelpOverlayView::Full => "Complete",
     };
 
-    let mut board_rows = Vec::new();
-    if !context_filter || board_enabled {
-        board_rows.extend([
-            Row {
-                key: "Ctrl+W",
-                action: "Toggle Whiteboard",
-            },
-            Row {
-                key: "Ctrl+B",
-                action: "Toggle Blackboard",
-            },
-            Row {
-                key: "Ctrl+Shift+T",
-                action: "Return to Transparent",
-            },
-        ]);
-    }
+    let board_modes_section = (!context_filter || board_enabled).then(|| Section {
+        title: "Board Modes",
+        rows: vec![
+            row("Ctrl+W", "Toggle Whiteboard"),
+            row("Ctrl+B", "Toggle Blackboard"),
+            row("Ctrl+Shift+T", "Return to Transparent"),
+        ],
+        badges: Vec::new(),
+    });
 
-    board_rows.extend([
-        Row {
-            key: "Configurable",
-            action: "Previous page",
-        },
-        Row {
-            key: "Configurable",
-            action: "Next page",
-        },
-        Row {
-            key: "Ctrl+Alt+N",
-            action: "New page",
-        },
-        Row {
-            key: "Ctrl+Alt+D",
-            action: "Duplicate page",
-        },
-        Row {
-            key: "Ctrl+Alt+Delete",
-            action: "Delete page",
-        },
-    ]);
-
-    if frozen_enabled {
-        board_rows.push(Row {
-            key: "Ctrl+Shift+F",
-            action: "Freeze/unfreeze active monitor",
-        });
-    }
-
-    let boards_section = Section {
-        title: "Boards & Pages",
-        rows: board_rows,
+    let pages_section = Section {
+        title: "Pages",
+        rows: vec![
+            row(page_prev_label, "Previous page"),
+            row(page_next_label, "Next page"),
+            row("Ctrl+Alt+N", "New page"),
+            row("Ctrl+Alt+D", "Duplicate page"),
+            row("Ctrl+Alt+Delete", "Delete page"),
+        ],
         badges: Vec::new(),
     };
 
     let zoom_section = Section {
         title: "Zoom",
         rows: vec![
-            Row {
-                key: "Ctrl+Alt+Scroll",
-                action: "Zoom in/out",
-            },
-            Row {
-                key: "Ctrl+Alt++ / Ctrl+Alt+-",
-                action: "Zoom in/out",
-            },
-            Row {
-                key: "Ctrl+Alt+0",
-                action: "Reset zoom",
-            },
-            Row {
-                key: "Ctrl+Alt+L",
-                action: "Lock zoom view",
-            },
-            Row {
-                key: "Middle drag",
-                action: "Pan zoom view",
-            },
-            Row {
-                key: "Arrow keys",
-                action: "Nudge zoom view",
-            },
+            row("Ctrl+Alt+Scroll", "Zoom in/out"),
+            row("Ctrl+Alt++ / Ctrl+Alt+-", "Zoom in/out"),
+            row("Ctrl+Alt+0", "Reset zoom"),
+            row("Ctrl+Alt+L", "Lock zoom view"),
+            row("Middle drag", "Pan zoom view"),
+            row("Arrow keys", "Nudge zoom view"),
         ],
         badges: Vec::new(),
     };
@@ -643,38 +602,14 @@ pub fn render_help_overlay(
     let selection_section = Section {
         title: "Selection",
         rows: vec![
-            Row {
-                key: "Alt+Click",
-                action: "Select & move shape",
-            },
-            Row {
-                key: "Shift+Alt+Click",
-                action: "Add to selection",
-            },
-            Row {
-                key: "Alt+Drag",
-                action: "Box select",
-            },
-            Row {
-                key: "Delete",
-                action: "Delete selection",
-            },
-            Row {
-                key: "Ctrl+D",
-                action: "Duplicate selection",
-            },
-            Row {
-                key: "Ctrl+Alt+C",
-                action: "Copy selection",
-            },
-            Row {
-                key: "Ctrl+Alt+V",
-                action: "Paste selection",
-            },
-            Row {
-                key: "Ctrl+A",
-                action: "Select all",
-            },
+            row("Alt+Click", "Select & move shape"),
+            row("Shift+Alt+Click", "Add to selection"),
+            row("Alt+Drag", "Box select"),
+            row("Delete", "Delete selection"),
+            row("Ctrl+D", "Duplicate selection"),
+            row("Ctrl+Alt+C", "Copy selection"),
+            row("Ctrl+Alt+V", "Paste selection"),
+            row("Ctrl+A", "Select all"),
         ],
         badges: Vec::new(),
     };
@@ -682,46 +617,16 @@ pub fn render_help_overlay(
     let drawing_section = Section {
         title: "Drawing Tools",
         rows: vec![
-            Row {
-                key: "F / Drag",
-                action: "Freehand pen",
-            },
-            Row {
-                key: "Shift+Drag",
-                action: "Straight line",
-            },
-            Row {
-                key: "Ctrl+Drag",
-                action: "Rectangle",
-            },
-            Row {
-                key: "Tab+Drag",
-                action: "Circle",
-            },
-            Row {
-                key: "Ctrl+Shift+Drag",
-                action: "Arrow",
-            },
-            Row {
-                key: "Ctrl+Alt+H",
-                action: "Toggle highlight-only tool",
-            },
-            Row {
-                key: "T",
-                action: "Text mode",
-            },
-            Row {
-                key: "N",
-                action: "Sticky note",
-            },
-            Row {
-                key: "D",
-                action: "Eraser tool",
-            },
-            Row {
-                key: "H",
-                action: "Marker tool",
-            },
+            row("F / Drag", "Freehand pen"),
+            row("Shift+Drag", "Straight line"),
+            row("Ctrl+Drag", "Rectangle"),
+            row("Tab+Drag", "Circle"),
+            row("Ctrl+Shift+Drag", "Arrow"),
+            row("Ctrl+Alt+H", "Toggle highlight-only tool"),
+            row("T", "Text mode"),
+            row("N", "Sticky note"),
+            row("D", "Eraser tool"),
+            row("H", "Marker tool"),
         ],
         badges: Vec::new(),
     };
@@ -729,22 +634,10 @@ pub fn render_help_overlay(
     let pen_text_section = Section {
         title: "Pen & Text",
         rows: vec![
-            Row {
-                key: "+/- or Scroll",
-                action: "Adjust size (pen/eraser)",
-            },
-            Row {
-                key: "Ctrl+Shift+E",
-                action: "Toggle eraser mode",
-            },
-            Row {
-                key: "Ctrl+Shift+/-",
-                action: "Font size",
-            },
-            Row {
-                key: "Shift+Scroll",
-                action: "Font size",
-            },
+            row("+/- or Scroll", "Adjust size (pen/eraser)"),
+            row("Ctrl+Shift+E", "Toggle eraser mode"),
+            row("Ctrl+Shift+/-", "Font size"),
+            row("Shift+Scroll", "Font size"),
         ],
         badges: vec![
             Badge {
@@ -782,107 +675,58 @@ pub fn render_help_overlay(
         ],
     };
 
+    let mut action_rows = vec![
+        row("E", "Clear frame"),
+        row("Ctrl+Z", "Undo"),
+        row("Ctrl+Shift+H", "Toggle click highlight"),
+        row("Right Click / Shift+F10", "Context menu"),
+        row("Escape / Ctrl+Q", "Exit"),
+        row("F1 / F10", "Toggle help"),
+        row("F2 / F9", "Toggle toolbar"),
+        row("F11", "Open configurator"),
+        row("F4 / F12", "Toggle status bar"),
+    ];
+    if frozen_enabled {
+        action_rows.push(row("Ctrl+Shift+F", "Freeze/unfreeze active monitor"));
+    }
     let actions_section = Section {
         title: "Actions",
-        rows: vec![
-            Row {
-                key: "E",
-                action: "Clear frame",
-            },
-            Row {
-                key: "Ctrl+Z",
-                action: "Undo",
-            },
-            Row {
-                key: "Ctrl+Shift+H",
-                action: "Toggle click highlight",
-            },
-            Row {
-                key: "Right Click / Shift+F10",
-                action: "Context menu",
-            },
-            Row {
-                key: "Escape / Ctrl+Q",
-                action: "Exit",
-            },
-            Row {
-                key: "F1 / F10",
-                action: "Toggle help",
-            },
-            Row {
-                key: "F2 / F9",
-                action: "Toggle toolbar",
-            },
-            Row {
-                key: "F11",
-                action: "Open configurator",
-            },
-            Row {
-                key: "F4 / F12",
-                action: "Toggle status bar",
-            },
-        ],
+        rows: action_rows,
         badges: Vec::new(),
     };
 
     let screenshots_section = (!context_filter || capture_enabled).then(|| Section {
         title: "Screenshots",
         rows: vec![
-            Row {
-                key: "Ctrl+C",
-                action: "Full screen → clipboard",
-            },
-            Row {
-                key: "Ctrl+S",
-                action: "Full screen → file",
-            },
-            Row {
-                key: "Ctrl+Shift+C",
-                action: "Region → clipboard",
-            },
-            Row {
-                key: "Ctrl+Shift+S",
-                action: "Region → file",
-            },
-            Row {
-                key: "Ctrl+Shift+O",
-                action: "Active window (Hyprland)",
-            },
-            Row {
-                key: "Ctrl+Shift+I",
-                action: "Selection (capture defaults)",
-            },
-            Row {
-                key: "Ctrl+Alt+O",
-                action: "Open capture folder",
-            },
+            row("Ctrl+C", "Full screen → clipboard"),
+            row("Ctrl+S", "Full screen → file"),
+            row("Ctrl+Shift+C", "Region → clipboard"),
+            row("Ctrl+Shift+S", "Region → file"),
+            row("Ctrl+Shift+O", "Active window (Hyprland)"),
+            row("Ctrl+Shift+I", "Selection (capture defaults)"),
+            row("Ctrl+Alt+O", "Open capture folder"),
         ],
         badges: Vec::new(),
     });
 
-    let sections = match view {
-        HelpOverlayView::Quick => vec![
-            boards_section,
-            drawing_section,
-            selection_section,
-            actions_section,
-        ],
-        HelpOverlayView::Full => {
-            if page_index == 0 {
-                vec![
-                    boards_section,
-                    drawing_section,
-                    selection_section,
-                    pen_text_section,
-                ]
-            } else {
-                let mut sections = vec![actions_section, zoom_section];
-                if let Some(section) = screenshots_section {
-                    sections.push(section);
-                }
-                sections
-            }
-        }
+    let mut page1_sections = Vec::new();
+    if let Some(section) = board_modes_section {
+        page1_sections.push(section);
+    }
+    page1_sections.push(pages_section);
+    page1_sections.push(drawing_section);
+    page1_sections.push(selection_section);
+    page1_sections.push(actions_section);
+
+    let mut page2_sections = vec![zoom_section, pen_text_section];
+    if let Some(section) = screenshots_section {
+        page2_sections.push(section);
+    }
+
+    let sections = if matches!(view, HelpOverlayView::Quick) || page_index == 0 {
+        page1_sections
+    } else {
+        page2_sections
     };
 
     let title_text = "Wayscriber Controls";
@@ -892,13 +736,21 @@ pub fn render_help_overlay(
         env!("CARGO_PKG_VERSION"),
         commit_hash
     );
-    let nav_text_primary = format!(
-        "{} view • Page {}/{}",
-        view_label,
-        page_index + 1,
-        page_count
-    );
-    let nav_text_secondary = "Switch pages: Left/Right or PageUp/PageDown • Tab: Toggle view";
+    let nav_text_primary = if page_count > 1 {
+        format!(
+            "{} view • Page {}/{}",
+            view_label,
+            page_index + 1,
+            page_count
+        )
+    } else {
+        format!("{} view", view_label)
+    };
+    let nav_text_secondary = if page_count > 1 {
+        "Switch pages: Left/Right, PageUp/PageDown, Home/End • Tab: Toggle view"
+    } else {
+        "Tab: Toggle view"
+    };
     let note_text = "Note: Each board mode has independent pages";
 
     let body_font_size = style.font_size;
@@ -966,7 +818,7 @@ pub fn render_help_overlay(
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Bold,
                 body_font_size,
-                row.key,
+                row.key.as_str(),
             );
             key_max_width = key_max_width.max(key_extents.width());
         }
@@ -1290,7 +1142,7 @@ pub fn render_help_overlay(
                     ctx.set_font_size(body_font_size);
                     ctx.set_source_rgba(accent_color[0], accent_color[1], accent_color[2], 0.95);
                     ctx.move_to(section_x, baseline);
-                    let _ = ctx.show_text(row_data.key);
+                    let _ = ctx.show_text(row_data.key.as_str());
 
                     ctx.select_font_face(
                         "Sans",

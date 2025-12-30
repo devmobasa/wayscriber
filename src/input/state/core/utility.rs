@@ -16,7 +16,7 @@ impl InputState {
         let now_visible = !self.show_help;
         self.show_help = now_visible;
         if now_visible {
-            self.help_overlay_view = HelpOverlayView::Full;
+            self.help_overlay_view = HelpOverlayView::Quick;
             self.help_overlay_page = 0;
         }
         self.dirty_tracker.mark_full();
@@ -141,6 +141,23 @@ impl InputState {
             }
         }
         None
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn action_binding_label(&self, action: Action) -> String {
+        let mut labels: Vec<String> = self
+            .action_map
+            .iter()
+            .filter(|(_, mapped)| **mapped == action)
+            .map(|(binding, _)| binding.to_string())
+            .collect();
+        labels.sort();
+        labels.dedup();
+        if labels.is_empty() {
+            "Not bound".to_string()
+        } else {
+            labels.join(" / ")
+        }
     }
 
     /// Adjusts the current font size by a delta, clamping to valid range.

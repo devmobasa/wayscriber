@@ -466,7 +466,7 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             show_help: false,
-            help_overlay_view: HelpOverlayView::Full,
+            help_overlay_view: HelpOverlayView::Quick,
             help_overlay_page: 0,
             show_status_bar,
             toolbar_visible: false,

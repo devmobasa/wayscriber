@@ -420,6 +420,12 @@ impl WaylandState {
 
                 // Render help overlay if toggled
                 if self.input_state.show_help {
+                    let page_prev_label = self
+                        .input_state
+                        .action_binding_label(crate::config::Action::PagePrev);
+                    let page_next_label = self
+                        .input_state
+                        .action_binding_label(crate::config::Action::PageNext);
                     crate::ui::render_help_overlay(
                         &ctx,
                         &self.config.ui.help_overlay_style,
@@ -428,6 +434,8 @@ impl WaylandState {
                         self.frozen_enabled(),
                         self.input_state.help_overlay_view,
                         self.input_state.help_overlay_page,
+                        page_prev_label,
+                        page_next_label,
                         self.config.ui.help_overlay_context_filter,
                         self.input_state.board_config.enabled,
                         self.config.capture.enabled,
