@@ -397,6 +397,14 @@ impl WaylandState {
                         self.input_state.zoom_locked(),
                     );
                 }
+                if !self.input_state.show_status_bar {
+                    let mode = self.input_state.board_mode();
+                    let page_count = self.input_state.canvas_set.page_count(mode);
+                    if page_count > 1 {
+                        let page_index = self.input_state.canvas_set.active_page_index(mode);
+                        crate::ui::render_page_badge(&ctx, width, height, page_index, page_count);
+                    }
+                }
 
                 // Render status bar if enabled
                 if self.input_state.show_status_bar {

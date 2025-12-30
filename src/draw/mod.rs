@@ -16,7 +16,7 @@ pub mod shape;
 
 // Re-export commonly used types at module level
 #[allow(unused_imports)]
-pub use canvas_set::CanvasSet;
+pub use canvas_set::{BoardPages, CanvasSet, PageDeleteOutcome};
 pub use color::Color;
 pub use dirty::DirtyTracker;
 pub use font::FontDescriptor;

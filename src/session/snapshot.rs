@@ -1,6 +1,6 @@
 use super::options::{CompressionMode, SessionOptions};
 use crate::draw::frame::{MAX_COMPOUND_DEPTH, ShapeId};
-use crate::draw::{Color, EraserKind, Frame};
+use crate::draw::{BoardPages, Color, EraserKind, Frame};
 use crate::input::{
     EraserMode, InputState, Tool,
     board_mode::BoardMode,
@@ -19,28 +19,43 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-const CURRENT_VERSION: u32 = 3;
+const CURRENT_VERSION: u32 = 4;
 
 /// Captured state suitable for serialisation or restoration.
 #[derive(Debug, Clone)]
 pub struct SessionSnapshot {
     pub active_mode: BoardMode,
-    pub transparent: Option<Frame>,
-    pub whiteboard: Option<Frame>,
-    pub blackboard: Option<Frame>,
+    pub transparent: Option<BoardPagesSnapshot>,
+    pub whiteboard: Option<BoardPagesSnapshot>,
+    pub blackboard: Option<BoardPagesSnapshot>,
     pub tool_state: Option<ToolStateSnapshot>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoardPagesSnapshot {
+    pub pages: Vec<Frame>,
+    pub active: usize,
+}
+
+impl BoardPagesSnapshot {
+    fn has_persistable_data(&self) -> bool {
+        if self.pages.len() > 1 || self.active > 0 {
+            return true;
+        }
+        self.pages.iter().any(|page| page.has_persistable_data())
+    }
 }
 
 impl SessionSnapshot {
     fn is_empty(&self) -> bool {
-        let empty_frame = |frame: &Option<Frame>| {
-            frame
+        let empty_pages = |pages: &Option<BoardPagesSnapshot>| {
+            pages
                 .as_ref()
                 .is_none_or(|data| !data.has_persistable_data())
         };
-        empty_frame(&self.transparent)
-            && empty_frame(&self.whiteboard)
-            && empty_frame(&self.blackboard)
+        empty_pages(&self.transparent)
+            && empty_pages(&self.whiteboard)
+            && empty_pages(&self.blackboard)
     }
 }
 
@@ -111,12 +126,24 @@ struct SessionFile {
     version: u32,
     last_modified: String,
     active_mode: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     transparent: Option<Frame>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     whiteboard: Option<Frame>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     blackboard: Option<Frame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    transparent_pages: Option<Vec<Frame>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    whiteboard_pages: Option<Vec<Frame>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    blackboard_pages: Option<Vec<Frame>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    transparent_active_page: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    whiteboard_active_page: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    blackboard_active_page: Option<usize>,
     #[serde(default)]
     tool_state: Option<ToolStateSnapshot>,
 }
@@ -146,31 +173,33 @@ pub fn snapshot_from_input(
 
     let history_limit = options.effective_history_limit(input.undo_stack_limit);
 
-    let capture_frame = |mode: BoardMode| -> Option<Frame> {
-        let frame = input.canvas_set.frame(mode)?;
-        let mut cloned = frame.clone();
-        if history_limit == 0 {
-            cloned.clamp_history_depth(0);
-        } else if history_limit < usize::MAX {
-            cloned.clamp_history_depth(history_limit);
+    let capture_pages = |mode: BoardMode| -> Option<BoardPagesSnapshot> {
+        let pages = input.canvas_set.pages(mode)?;
+        let mut cloned_pages: Vec<Frame> = pages.pages().to_vec();
+        for page in &mut cloned_pages {
+            if history_limit == 0 {
+                page.clamp_history_depth(0);
+            } else if history_limit < usize::MAX {
+                page.clamp_history_depth(history_limit);
+            }
         }
-        if cloned.has_persistable_data() {
-            Some(cloned)
-        } else {
-            None
-        }
+        let snapshot = BoardPagesSnapshot {
+            pages: cloned_pages,
+            active: pages.active_index(),
+        };
+        snapshot.has_persistable_data().then_some(snapshot)
     };
 
     if options.persist_transparent {
-        snapshot.transparent = capture_frame(BoardMode::Transparent);
+        snapshot.transparent = capture_pages(BoardMode::Transparent);
     }
 
     if options.persist_whiteboard {
-        snapshot.whiteboard = capture_frame(BoardMode::Whiteboard);
+        snapshot.whiteboard = capture_pages(BoardMode::Whiteboard);
     }
 
     if options.persist_blackboard {
-        snapshot.blackboard = capture_frame(BoardMode::Blackboard);
+        snapshot.blackboard = capture_pages(BoardMode::Blackboard);
     }
 
     if options.restore_tool_state {
@@ -242,13 +271,23 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
         return Ok(());
     }
 
+    let transparent = snapshot.transparent.clone();
+    let whiteboard = snapshot.whiteboard.clone();
+    let blackboard = snapshot.blackboard.clone();
+
     let file_payload = SessionFile {
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
         active_mode: board_mode_to_str(snapshot.active_mode).to_string(),
-        transparent: snapshot.transparent.clone(),
-        whiteboard: snapshot.whiteboard.clone(),
-        blackboard: snapshot.blackboard.clone(),
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: transparent.as_ref().map(|pages| pages.pages.clone()),
+        whiteboard_pages: whiteboard.as_ref().map(|pages| pages.pages.clone()),
+        blackboard_pages: blackboard.as_ref().map(|pages| pages.pages.clone()),
+        transparent_active_page: transparent.as_ref().map(|pages| pages.active),
+        whiteboard_active_page: whiteboard.as_ref().map(|pages| pages.active),
+        blackboard_active_page: blackboard.as_ref().map(|pages| pages.active),
         tool_state: snapshot.tool_state.clone(),
     };
 
@@ -496,12 +535,43 @@ pub(crate) fn load_snapshot_inner(
     let active_mode =
         BoardMode::from_str(&session_file.active_mode).unwrap_or(BoardMode::Transparent);
 
+    let SessionFile {
+        transparent,
+        whiteboard,
+        blackboard,
+        transparent_pages,
+        whiteboard_pages,
+        blackboard_pages,
+        transparent_active_page,
+        whiteboard_active_page,
+        blackboard_active_page,
+        tool_state,
+        ..
+    } = session_file;
+
+    let pages_from_file = |pages: Option<Vec<Frame>>,
+                           active: Option<usize>,
+                           legacy: Option<Frame>|
+     -> Option<BoardPagesSnapshot> {
+        if let Some(mut pages) = pages {
+            if pages.is_empty() {
+                pages.push(Frame::new());
+            }
+            let active = active.unwrap_or(0).min(pages.len() - 1);
+            return Some(BoardPagesSnapshot { pages, active });
+        }
+        legacy.map(|frame| BoardPagesSnapshot {
+            pages: vec![frame],
+            active: 0,
+        })
+    };
+
     let mut snapshot = SessionSnapshot {
         active_mode,
-        transparent: session_file.transparent,
-        whiteboard: session_file.whiteboard,
-        blackboard: session_file.blackboard,
-        tool_state: session_file.tool_state,
+        transparent: pages_from_file(transparent_pages, transparent_active_page, transparent),
+        whiteboard: pages_from_file(whiteboard_pages, whiteboard_active_page, whiteboard),
+        blackboard: pages_from_file(blackboard_pages, blackboard_active_page, blackboard),
+        tool_state,
     };
 
     enforce_shape_limits(&mut snapshot, options.max_shapes_per_frame);
@@ -549,9 +619,10 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
     let runtime_history_limit = options.effective_history_limit(input.undo_stack_limit);
 
     if options.persist_transparent {
-        input
-            .canvas_set
-            .set_frame(BoardMode::Transparent, snapshot.transparent);
+        input.canvas_set.set_pages(
+            BoardMode::Transparent,
+            snapshot.transparent.map(snapshot_to_board_pages),
+        );
         clamp_runtime_history(
             &mut input.canvas_set,
             BoardMode::Transparent,
@@ -559,9 +630,10 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
         );
     }
     if options.persist_whiteboard {
-        input
-            .canvas_set
-            .set_frame(BoardMode::Whiteboard, snapshot.whiteboard);
+        input.canvas_set.set_pages(
+            BoardMode::Whiteboard,
+            snapshot.whiteboard.map(snapshot_to_board_pages),
+        );
         clamp_runtime_history(
             &mut input.canvas_set,
             BoardMode::Whiteboard,
@@ -569,9 +641,10 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
         );
     }
     if options.persist_blackboard {
-        input
-            .canvas_set
-            .set_frame(BoardMode::Blackboard, snapshot.blackboard);
+        input.canvas_set.set_pages(
+            BoardMode::Blackboard,
+            snapshot.blackboard.map(snapshot_to_board_pages),
+        );
         clamp_runtime_history(
             &mut input.canvas_set,
             BoardMode::Blackboard,
@@ -639,9 +712,15 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
     input.needs_redraw = true;
 }
 
+fn snapshot_to_board_pages(pages: BoardPagesSnapshot) -> BoardPages {
+    BoardPages::from_pages(pages.pages, pages.active)
+}
+
 fn clamp_runtime_history(canvas: &mut crate::draw::CanvasSet, mode: BoardMode, limit: usize) {
-    if let Some(frame) = canvas.frame_mut(mode) {
-        frame.clamp_history_depth(limit);
+    if let Some(pages) = canvas.pages_mut(mode) {
+        for page in pages.pages_mut() {
+            page.clamp_history_depth(limit);
+        }
     }
 }
 
@@ -650,25 +729,33 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
         return;
     }
 
-    let truncate = |frame: &mut Option<Frame>, mode: &str| {
-        if let Some(frame_data) = frame
-            && frame_data.shapes.len() > max_shapes
-        {
-            let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
-            warn!(
-                "Session frame '{}' contains {} shapes which exceeds the limit of {}; truncating",
-                mode,
-                frame_data.shapes.len() + removed.len(),
-                max_shapes
-            );
-            let removed_ids: HashSet<ShapeId> = removed.into_iter().map(|shape| shape.id).collect();
-            if !removed_ids.is_empty() {
-                let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
-                if !stats.is_empty() {
-                    warn!(
-                        "Dropped {} undo and {} redo actions referencing trimmed shapes in '{}' history",
-                        stats.undo_removed, stats.redo_removed, mode
-                    );
+    let truncate = |pages: &mut Option<BoardPagesSnapshot>, mode: &str| {
+        if let Some(pages) = pages {
+            for (idx, frame_data) in pages.pages.iter_mut().enumerate() {
+                if frame_data.shapes.len() <= max_shapes {
+                    continue;
+                }
+                let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
+                warn!(
+                    "Session page '{}' (#{}) contains {} shapes which exceeds the limit of {}; truncating",
+                    mode,
+                    idx + 1,
+                    frame_data.shapes.len() + removed.len(),
+                    max_shapes
+                );
+                let removed_ids: HashSet<ShapeId> =
+                    removed.into_iter().map(|shape| shape.id).collect();
+                if !removed_ids.is_empty() {
+                    let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
+                    if !stats.is_empty() {
+                        warn!(
+                            "Dropped {} undo and {} redo actions referencing trimmed shapes in '{}' page #{} history",
+                            stats.undo_removed,
+                            stats.redo_removed,
+                            mode,
+                            idx + 1
+                        );
+                    }
                 }
             }
         }
@@ -679,29 +766,45 @@ fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: usize) {
     truncate(&mut snapshot.blackboard, "blackboard");
 }
 
-fn apply_history_policies(frame: &mut Option<Frame>, mode: &str, depth_limit: Option<usize>) {
-    if let Some(frame_data) = frame {
-        let depth_trim = frame_data.validate_history(MAX_COMPOUND_DEPTH);
-        if !depth_trim.is_empty() {
-            warn!(
-                "Removed {} undo and {} redo actions with invalid structure in '{}' history",
-                depth_trim.undo_removed, depth_trim.redo_removed, mode
-            );
-        }
-        let shape_trim = frame_data.prune_history_against_shapes();
-        if !shape_trim.is_empty() {
-            warn!(
-                "Removed {} undo and {} redo actions referencing missing shapes in '{}' history",
-                shape_trim.undo_removed, shape_trim.redo_removed, mode
-            );
-        }
-        if let Some(limit) = depth_limit {
-            let trimmed = frame_data.clamp_history_depth(limit);
-            if !trimmed.is_empty() {
-                debug!(
-                    "Clamped '{}' history to {} entries (dropped {} undo / {} redo)",
-                    mode, limit, trimmed.undo_removed, trimmed.redo_removed
+fn apply_history_policies(
+    pages: &mut Option<BoardPagesSnapshot>,
+    mode: &str,
+    depth_limit: Option<usize>,
+) {
+    if let Some(pages) = pages {
+        for (idx, frame_data) in pages.pages.iter_mut().enumerate() {
+            let depth_trim = frame_data.validate_history(MAX_COMPOUND_DEPTH);
+            if !depth_trim.is_empty() {
+                warn!(
+                    "Removed {} undo and {} redo actions with invalid structure in '{}' page #{} history",
+                    depth_trim.undo_removed,
+                    depth_trim.redo_removed,
+                    mode,
+                    idx + 1
                 );
+            }
+            let shape_trim = frame_data.prune_history_against_shapes();
+            if !shape_trim.is_empty() {
+                warn!(
+                    "Removed {} undo and {} redo actions referencing missing shapes in '{}' page #{} history",
+                    shape_trim.undo_removed,
+                    shape_trim.redo_removed,
+                    mode,
+                    idx + 1
+                );
+            }
+            if let Some(limit) = depth_limit {
+                let trimmed = frame_data.clamp_history_depth(limit);
+                if !trimmed.is_empty() {
+                    debug!(
+                        "Clamped '{}' page #{} history to {} entries (dropped {} undo / {} redo)",
+                        mode,
+                        idx + 1,
+                        limit,
+                        trimmed.undo_removed,
+                        trimmed.redo_removed
+                    );
+                }
             }
         }
     }
@@ -709,13 +812,28 @@ fn apply_history_policies(frame: &mut Option<Frame>, mode: &str, depth_limit: Op
 
 fn max_history_depth(doc: &Value) -> usize {
     let mut max_depth = 0;
-    for key in ["transparent", "whiteboard", "blackboard"] {
-        if let Some(frame) = doc.get(key)
-            && let Some(obj) = frame.as_object()
-        {
+    for key in [
+        "transparent",
+        "whiteboard",
+        "blackboard",
+        "transparent_pages",
+        "whiteboard_pages",
+        "blackboard_pages",
+    ] {
+        if let Some(Value::Object(obj)) = doc.get(key) {
             for stack_key in ["undo_stack", "redo_stack"] {
                 if let Some(Value::Array(arr)) = obj.get(stack_key) {
                     max_depth = max_depth.max(depth_array(arr));
+                }
+            }
+        } else if let Some(Value::Array(pages)) = doc.get(key) {
+            for page in pages {
+                if let Some(obj) = page.as_object() {
+                    for stack_key in ["undo_stack", "redo_stack"] {
+                        if let Some(Value::Array(arr)) = obj.get(stack_key) {
+                            max_depth = max_depth.max(depth_array(arr));
+                        }
+                    }
                 }
             }
         }
@@ -745,10 +863,24 @@ fn depth_action(action: &Value) -> usize {
 
 fn strip_history_fields(doc: &mut Value) {
     if let Some(obj) = doc.as_object_mut() {
-        for key in ["transparent", "whiteboard", "blackboard"] {
+        for key in [
+            "transparent",
+            "whiteboard",
+            "blackboard",
+            "transparent_pages",
+            "whiteboard_pages",
+            "blackboard_pages",
+        ] {
             if let Some(Value::Object(frame)) = obj.get_mut(key) {
                 frame.remove("undo_stack");
                 frame.remove("redo_stack");
+            } else if let Some(Value::Array(pages)) = obj.get_mut(key) {
+                for page in pages {
+                    if let Some(frame) = page.as_object_mut() {
+                        frame.remove("undo_stack");
+                        frame.remove("redo_stack");
+                    }
+                }
             }
         }
     }
@@ -814,7 +946,10 @@ mod tests {
 
         SessionSnapshot {
             active_mode: BoardMode::Transparent,
-            transparent: Some(frame),
+            transparent: Some(BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            }),
             whiteboard: None,
             blackboard: None,
             tool_state: None,
@@ -876,6 +1011,12 @@ mod tests {
             transparent: None,
             whiteboard: None,
             blackboard: None,
+            transparent_pages: None,
+            whiteboard_pages: None,
+            blackboard_pages: None,
+            transparent_active_page: None,
+            whiteboard_active_page: None,
+            blackboard_active_page: None,
             tool_state: None,
         };
         let bytes = serde_json::to_vec_pretty(&file).unwrap();
@@ -885,5 +1026,147 @@ mod tests {
         let loaded =
             load_snapshot_inner(&session_path, &options).expect("load_snapshot_inner should work");
         assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn save_snapshot_preserves_multiple_pages() {
+        let temp = tempdir().unwrap();
+        let mut options = SessionOptions::new(temp.path().to_path_buf(), "multi");
+        options.persist_transparent = true;
+
+        let mut first = Frame::new();
+        first.add_shape(Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 10,
+            y2: 10,
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 2.0,
+        });
+
+        let mut second = Frame::new();
+        second.add_shape(Shape::Rect {
+            x: 5,
+            y: 5,
+            w: 8,
+            h: 8,
+            fill: false,
+            color: Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            thick: 1.0,
+        });
+
+        let snapshot = SessionSnapshot {
+            active_mode: BoardMode::Transparent,
+            transparent: Some(BoardPagesSnapshot {
+                pages: vec![first, second],
+                active: 1,
+            }),
+            whiteboard: None,
+            blackboard: None,
+            tool_state: None,
+        };
+
+        save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+
+        let loaded = load_snapshot(&options)
+            .expect("load_snapshot should succeed")
+            .expect("snapshot should be present");
+        let pages = loaded
+            .transparent
+            .expect("transparent pages should be present");
+        assert_eq!(pages.pages.len(), 2);
+        assert_eq!(pages.active, 1);
+        assert_eq!(pages.pages[0].shapes.len(), 1);
+        assert_eq!(pages.pages[1].shapes.len(), 1);
+    }
+
+    #[test]
+    fn save_snapshot_keeps_empty_pages() {
+        let temp = tempdir().unwrap();
+        let mut options = SessionOptions::new(temp.path().to_path_buf(), "empty-pages");
+        options.persist_transparent = true;
+
+        let snapshot = SessionSnapshot {
+            active_mode: BoardMode::Transparent,
+            transparent: Some(BoardPagesSnapshot {
+                pages: vec![Frame::new(), Frame::new(), Frame::new()],
+                active: 2,
+            }),
+            whiteboard: None,
+            blackboard: None,
+            tool_state: None,
+        };
+
+        save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+
+        let loaded = load_snapshot(&options)
+            .expect("load_snapshot should succeed")
+            .expect("snapshot should be present");
+        let pages = loaded
+            .transparent
+            .expect("transparent pages should be present");
+        assert_eq!(pages.pages.len(), 3);
+        assert_eq!(pages.active, 2);
+    }
+
+    #[test]
+    fn load_snapshot_inner_migrates_legacy_frame_to_pages() {
+        let temp = tempdir().unwrap();
+        let session_path = temp.path().join("session.json");
+
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Line {
+            x1: 1,
+            y1: 2,
+            x2: 3,
+            y2: 4,
+            color: Color {
+                r: 0.2,
+                g: 0.3,
+                b: 0.4,
+                a: 1.0,
+            },
+            thick: 1.0,
+        });
+
+        let file = SessionFile {
+            version: CURRENT_VERSION - 1,
+            last_modified: now_rfc3339(),
+            active_mode: "transparent".to_string(),
+            transparent: Some(frame),
+            whiteboard: None,
+            blackboard: None,
+            transparent_pages: None,
+            whiteboard_pages: None,
+            blackboard_pages: None,
+            transparent_active_page: None,
+            whiteboard_active_page: None,
+            blackboard_active_page: None,
+            tool_state: None,
+        };
+        let bytes = serde_json::to_vec_pretty(&file).unwrap();
+        std::fs::write(&session_path, bytes).unwrap();
+
+        let options = SessionOptions::new(temp.path().to_path_buf(), "legacy");
+        let loaded = load_snapshot_inner(&session_path, &options)
+            .expect("load_snapshot_inner should succeed")
+            .expect("snapshot should be present");
+        let pages = loaded
+            .snapshot
+            .transparent
+            .expect("transparent pages should be present");
+        assert_eq!(pages.pages.len(), 1);
+        assert_eq!(pages.active, 0);
+        assert_eq!(pages.pages[0].shapes.len(), 1);
     }
 }

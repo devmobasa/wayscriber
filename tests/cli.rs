@@ -121,7 +121,10 @@ fn session_info_reports_saved_snapshot() {
 
     let snapshot = wayscriber::session::SessionSnapshot {
         active_mode: wayscriber::input::BoardMode::Transparent,
-        transparent: Some(frame),
+        transparent: Some(wayscriber::session::BoardPagesSnapshot {
+            pages: vec![frame],
+            active: 0,
+        }),
         whiteboard: None,
         blackboard: None,
         tool_state: None,

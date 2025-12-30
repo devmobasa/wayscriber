@@ -129,6 +129,14 @@ pub fn render_status_bar(
         BoardMode::Whiteboard => "[WHITEBOARD] ",
         BoardMode::Blackboard => "[BLACKBOARD] ",
     };
+    let page_count = input_state
+        .canvas_set
+        .page_count(input_state.board_mode())
+        .max(1);
+    let page_index = input_state
+        .canvas_set
+        .active_page_index(input_state.board_mode());
+    let page_badge = format!("[Page {}/{}] ", page_index + 1, page_count);
 
     // Build status text with mode badge and font size
     let font_size = input_state.current_font_size;
@@ -160,10 +168,11 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
+        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
         frozen_badge,
         zoom_badge,
         mode_badge,
+        page_badge,
         color_name,
         thickness as i32,
         tool_name,
@@ -311,6 +320,43 @@ pub fn render_zoom_badge(
 
     // Background with a contrasting cool tone.
     ctx.set_source_rgba(0.22, 0.56, 0.86, 0.92);
+    draw_rounded_rect(ctx, x, y - height, width, height, radius);
+    let _ = ctx.fill();
+
+    // Text
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
+    let _ = ctx.show_text(&label);
+}
+
+/// Render a small badge indicating the current page (visible even when status bar is hidden).
+pub fn render_page_badge(
+    ctx: &cairo::Context,
+    _screen_width: u32,
+    _screen_height: u32,
+    page_index: usize,
+    page_count: usize,
+) {
+    let label = format!("Page {}/{}", page_index + 1, page_count.max(1));
+    let padding = 12.0;
+    let radius = 8.0;
+    let font_size = 15.0;
+
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(font_size);
+
+    let extents = ctx
+        .text_extents(&label)
+        .unwrap_or_else(|_| fallback_text_extents(font_size, &label));
+
+    let width = extents.width() + padding * 1.4;
+    let height = extents.height() + padding;
+
+    let x = padding;
+    let y = padding + height;
+
+    // Background with a neutral cool tone.
+    ctx.set_source_rgba(0.2, 0.32, 0.45, 0.92);
     draw_rounded_rect(ctx, x, y - height, width, height, radius);
     let _ = ctx.fill();
 
