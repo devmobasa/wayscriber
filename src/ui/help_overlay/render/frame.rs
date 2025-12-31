@@ -1,8 +1,9 @@
 use crate::config::HelpOverlayStyle;
 
-use crate::ui::primitives::draw_rounded_rect;
 use super::palette::RenderPalette;
+use crate::ui::primitives::draw_rounded_rect;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_overlay_frame(
     ctx: &cairo::Context,
     style: &HelpOverlayStyle,
@@ -18,12 +19,7 @@ pub(super) fn draw_overlay_frame(
 
     // Dim background behind overlay
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55);
-    ctx.rectangle(
-        0.0,
-        0.0,
-        screen_width as f64,
-        screen_height as f64,
-    );
+    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
     let _ = ctx.fill();
 
     // Drop shadow (layered for softer effect)

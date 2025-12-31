@@ -7,8 +7,8 @@ use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::draw::{Color, ORANGE};
-use crate::input::state::PresetFeedbackKind;
 use crate::input::Tool;
+use crate::input::state::PresetFeedbackKind;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -143,11 +143,8 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 .as_deref()
                 .map(str::trim)
                 .filter(|name| !name.is_empty());
-            let tooltip = preset_tooltip_text(
-                preset,
-                slot,
-                snapshot.binding_hints.apply_preset(slot),
-            );
+            let tooltip =
+                preset_tooltip_text(preset, slot, snapshot.binding_hints.apply_preset(slot));
             hits.push(HitRegion {
                 rect: (slot_x, slot_row_y, slot_size, slot_size),
                 event: ToolbarEvent::ApplyPreset(slot),

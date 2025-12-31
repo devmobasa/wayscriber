@@ -7,7 +7,7 @@ mod presets;
 mod settings;
 mod sliders;
 
-pub(super) use super::super::events::{delay_secs_from_t, delay_t_from_ms, HitKind};
+pub(super) use super::super::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
 pub(super) use super::super::format_binding_label;
 pub(super) use super::super::hit::HitRegion;
 pub(super) use super::spec::ToolbarLayoutSpec;

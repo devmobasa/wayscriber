@@ -1,5 +1,5 @@
 use super::{
-    format_binding_label, HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec,
+    HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec, format_binding_label,
 };
 
 pub(super) fn push_actions_hits(

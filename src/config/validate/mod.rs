@@ -9,9 +9,9 @@ mod keybindings;
 mod performance;
 mod presets;
 mod session;
-mod ui;
 #[cfg(tablet)]
 mod tablet;
+mod ui;
 
 impl Config {
     /// Validates and clamps all configuration values to acceptable ranges.

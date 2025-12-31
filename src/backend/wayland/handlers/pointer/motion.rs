@@ -44,7 +44,8 @@ impl WaylandState {
             if self.toolbar_dragging() {
                 // Use move_drag_intent if pointer_motion didn't return an intent
                 // This allows dragging to continue when mouse moves outside hit region
-                let intent = evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
+                let intent =
+                    evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
                 if let Some(intent) = intent {
                     let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                     self.handle_toolbar_event(evt);
@@ -64,7 +65,8 @@ impl WaylandState {
             if self.toolbar_dragging() {
                 // Use move_drag_intent if pointer_motion didn't return an intent
                 // This allows dragging to continue when mouse moves outside hit region
-                let intent = evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
+                let intent =
+                    evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
                 if let Some(intent) = intent {
                     let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                     self.handle_toolbar_event(evt);

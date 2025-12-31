@@ -1,5 +1,5 @@
-use super::Config;
 use super::super::types::SessionStorageMode;
+use super::Config;
 
 impl Config {
     pub(super) fn validate_session(&mut self) {

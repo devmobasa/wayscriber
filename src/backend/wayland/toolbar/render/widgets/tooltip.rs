@@ -96,7 +96,11 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
     }
 }
 
-pub(in crate::backend::wayland::toolbar::render) fn wrap_tooltip_lines(ctx: &cairo::Context, text: &str, max_width: f64) -> Vec<String> {
+pub(in crate::backend::wayland::toolbar::render) fn wrap_tooltip_lines(
+    ctx: &cairo::Context,
+    text: &str,
+    max_width: f64,
+) -> Vec<String> {
     if max_width <= 0.0 {
         return vec![text.to_string()];
     }

@@ -169,8 +169,10 @@ pub fn render_help_overlay(
         + metrics.subtitle_font_size
         + metrics.subtitle_bottom_spacing
         + nav_state.nav_block_height;
-    let footer_height =
-        metrics.columns_bottom_spacing + metrics.note_font_size + note_to_close_gap + metrics.note_font_size;
+    let footer_height = metrics.columns_bottom_spacing
+        + metrics.note_font_size
+        + note_to_close_gap
+        + metrics.note_font_size;
     let content_height = header_height + grid.grid_height + footer_height;
     let max_inner_height = (metrics.max_box_height - style.padding * 2.0).max(0.0);
     let inner_height = content_height.min(max_inner_height);
@@ -351,7 +353,12 @@ pub fn render_help_overlay(
         cairo::FontWeight::Normal,
     );
     ctx.set_font_size(metrics.note_font_size);
-    ctx.set_source_rgba(palette.note[0], palette.note[1], palette.note[2], palette.note[3]);
+    ctx.set_source_rgba(
+        palette.note[0],
+        palette.note[1],
+        palette.note[2],
+        palette.note[3],
+    );
     let note_x = inner_x + (inner_width - note_extents.width()) / 2.0;
     let note_baseline = cursor_y + metrics.note_font_size;
     ctx.move_to(note_x, note_baseline);
@@ -359,7 +366,12 @@ pub fn render_help_overlay(
     cursor_y += metrics.note_font_size + note_to_close_gap;
 
     // Close hint
-    ctx.set_source_rgba(palette.subtitle[0], palette.subtitle[1], palette.subtitle[2], 0.7);
+    ctx.set_source_rgba(
+        palette.subtitle[0],
+        palette.subtitle[1],
+        palette.subtitle[2],
+        0.7,
+    );
     let close_x = inner_x + (inner_width - close_hint_extents.width()) / 2.0;
     let close_baseline = cursor_y + metrics.note_font_size;
     ctx.move_to(close_x, close_baseline);

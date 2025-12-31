@@ -10,7 +10,10 @@ pub(super) fn push_thickness_hits(
     hits.push(HitRegion {
         rect: (ctx.x, slider_row_y, ctx.content_width, slider_hit_h),
         event: ToolbarEvent::SetThickness(ctx.snapshot.thickness),
-        kind: HitKind::DragSetThickness { min: 1.0, max: 50.0 },
+        kind: HitKind::DragSetThickness {
+            min: 1.0,
+            max: 50.0,
+        },
         tooltip: None,
     });
     hits.push(HitRegion {
@@ -50,7 +53,12 @@ pub(super) fn push_text_hits(
 
     let text_slider_row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
     hits.push(HitRegion {
-        rect: (ctx.x, text_slider_row_y, ctx.content_width, ToolbarLayoutSpec::SIDE_NUDGE_SIZE),
+        rect: (
+            ctx.x,
+            text_slider_row_y,
+            ctx.content_width,
+            ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
+        ),
         event: ToolbarEvent::SetFontSize(ctx.snapshot.font_size),
         kind: HitKind::DragSetFontSize,
         tooltip: None,

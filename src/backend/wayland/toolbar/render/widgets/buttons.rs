@@ -1,7 +1,14 @@
 use super::draw_round_rect;
 use std::f64::consts::PI;
 
-pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, hover: bool) {
+pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    hover: bool,
+) {
     draw_round_rect(ctx, x, y, w, h, 4.0);
     let alpha = if hover { 0.9 } else { 0.6 };
     ctx.set_source_rgba(1.0, 1.0, 1.0, alpha * 0.5);
@@ -20,7 +27,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(ctx: &cairo
     }
 }
 
-pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(ctx: &cairo::Context, x: f64, y: f64, size: f64, hover: bool) {
+pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    size: f64,
+    hover: bool,
+) {
     let r = size / 2.0;
     let cx = x + r;
     let cy = y + r;

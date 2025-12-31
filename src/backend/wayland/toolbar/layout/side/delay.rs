@@ -1,6 +1,6 @@
 use super::{
-    delay_secs_from_t, delay_t_from_ms, HitKind, HitRegion, SideLayoutContext, ToolbarEvent,
-    ToolbarLayoutSpec,
+    HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec, delay_secs_from_t,
+    delay_t_from_ms,
 };
 
 pub(super) fn push_delay_hits(

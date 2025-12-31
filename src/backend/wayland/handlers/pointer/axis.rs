@@ -80,7 +80,10 @@ impl WaylandState {
 
                 if self.input_state.nudge_thickness_for_active_tool(delta) {
                     if eraser_active {
-                        debug!("Eraser size adjusted: {:.0}px", self.input_state.eraser_size);
+                        debug!(
+                            "Eraser size adjusted: {:.0}px",
+                            self.input_state.eraser_size
+                        );
                     } else {
                         debug!(
                             "Thickness adjusted: {:.0}px",

@@ -201,9 +201,7 @@ mod tests {
 
     #[test]
     fn extract_identity_rejects_missing_suffix_or_identity() {
-        assert!(
-            extract_identity("session-display_1.json", "session-display_1", ".json").is_none()
-        );
+        assert!(extract_identity("session-display_1.json", "session-display_1", ".json").is_none());
         assert!(extract_identity("other-display.json", "session-display_1", ".json").is_none());
     }
 }

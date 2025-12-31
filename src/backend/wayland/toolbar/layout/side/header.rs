@@ -1,4 +1,6 @@
-use super::{HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutMode, ToolbarLayoutSpec};
+use super::{
+    HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutMode, ToolbarLayoutSpec,
+};
 
 pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRegion>) {
     let (pin_x, close_x, header_y) = ctx.spec.side_header_button_positions(ctx.width);

@@ -29,7 +29,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     }
 }
 
-pub(in crate::backend::wayland::toolbar::render) fn draw_color_picker(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
+pub(in crate::backend::wayland::toolbar::render) fn draw_color_picker(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
     hue_grad.add_color_stop_rgba(0.0, 1.0, 0.0, 0.0, 1.0);
     hue_grad.add_color_stop_rgba(0.17, 1.0, 1.0, 0.0, 1.0);

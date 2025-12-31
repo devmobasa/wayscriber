@@ -4,8 +4,7 @@ use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 impl Config {
     pub(super) fn validate_drawing(&mut self) {
         // Thickness: 1.0 - 50.0
-        if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS)
-            .contains(&self.drawing.default_thickness)
+        if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(&self.drawing.default_thickness)
         {
             log::warn!(
                 "Invalid default_thickness {:.1}, clamping to {:.1}-{:.1} range",

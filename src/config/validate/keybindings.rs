@@ -1,5 +1,5 @@
-use super::Config;
 use super::super::keybindings::KeybindingsConfig;
+use super::Config;
 
 impl Config {
     pub(super) fn validate_keybindings(&mut self) {

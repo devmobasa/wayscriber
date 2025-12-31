@@ -1,10 +1,10 @@
 use super::{clear_session, inspect_session};
 use crate::draw::{Color, Frame, Shape};
 use crate::input::board_mode::BoardMode;
+use crate::session::snapshot::BoardPagesSnapshot;
 use crate::session::{
     CompressionMode, SessionOptions, SessionSnapshot, ToolStateSnapshot, save_snapshot,
 };
-use crate::session::snapshot::BoardPagesSnapshot;
 
 #[test]
 fn clear_session_removes_all_variants_for_prefix() {

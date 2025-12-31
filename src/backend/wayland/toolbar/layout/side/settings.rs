@@ -1,13 +1,9 @@
 use super::{
-    format_binding_label, HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutMode,
-    ToolbarLayoutSpec,
+    HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutMode, ToolbarLayoutSpec,
+    format_binding_label,
 };
 
-pub(super) fn push_settings_hits(
-    ctx: &SideLayoutContext<'_>,
-    y: f64,
-    hits: &mut Vec<HitRegion>,
-) {
+pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut Vec<HitRegion>) {
     if !ctx.snapshot.show_settings_section {
         return;
     }

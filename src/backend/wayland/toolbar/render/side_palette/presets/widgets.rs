@@ -34,6 +34,7 @@ pub(super) fn draw_keycap(
     ctx.set_font_size(13.0);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_preset_name_tag(
     ctx: &cairo::Context,
     name: &str,
