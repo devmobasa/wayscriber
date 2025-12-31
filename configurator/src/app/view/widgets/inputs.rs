@@ -10,7 +10,7 @@ use crate::models::{
 use super::constants::{DEFAULT_LABEL_GAP, SMALL_PICKER_WIDTH};
 use super::labels::{default_value_text, feedback_text};
 
-pub(super) fn labeled_input<'a>(
+pub(in crate::app::view) fn labeled_input<'a>(
     label: &'static str,
     value: &'a str,
     default: &'a str,
@@ -19,7 +19,7 @@ pub(super) fn labeled_input<'a>(
     labeled_input_with_feedback(label, value, default, field, None, None)
 }
 
-pub(super) fn labeled_input_with_feedback<'a>(
+pub(in crate::app::view) fn labeled_input_with_feedback<'a>(
     label: &'static str,
     value: &'a str,
     default: &'a str,
@@ -47,7 +47,7 @@ pub(super) fn labeled_input_with_feedback<'a>(
     column.into()
 }
 
-pub(super) fn labeled_input_state<'a>(
+pub(in crate::app::view) fn labeled_input_state<'a>(
     label: &'static str,
     value: &'a str,
     default: &'a str,
@@ -81,7 +81,7 @@ pub(super) fn labeled_input_state<'a>(
     column.into()
 }
 
-pub(super) fn labeled_control<'a>(
+pub(in crate::app::view) fn labeled_control<'a>(
     label: &'static str,
     control: Element<'a, Message>,
     default: impl Into<String>,
@@ -98,7 +98,7 @@ pub(super) fn labeled_control<'a>(
     .into()
 }
 
-pub(super) fn preset_input<'a>(
+pub(in crate::app::view) fn preset_input<'a>(
     label: &'static str,
     value: &'a str,
     default: &'a str,
@@ -128,7 +128,7 @@ pub(super) fn preset_input<'a>(
     .into()
 }
 
-pub(super) fn preset_override_control<'a>(
+pub(in crate::app::view) fn preset_override_control<'a>(
     label: &'static str,
     value: OverrideOption,
     default: OverrideOption,
@@ -143,7 +143,7 @@ pub(super) fn preset_override_control<'a>(
     labeled_control(label, picker.into(), default.label(), value != default)
 }
 
-pub(super) fn override_row<'a>(
+pub(in crate::app::view) fn override_row<'a>(
     field: ToolbarOverrideField,
     value: OverrideOption,
 ) -> Element<'a, Message> {
@@ -159,11 +159,11 @@ pub(super) fn override_row<'a>(
     .into()
 }
 
-pub(super) fn bool_label(value: bool) -> &'static str {
+pub(in crate::app::view) fn bool_label(value: bool) -> &'static str {
     if value { "On" } else { "Off" }
 }
 
-pub(super) fn toggle_row<'a>(
+pub(in crate::app::view) fn toggle_row<'a>(
     label: &'static str,
     value: bool,
     default: bool,

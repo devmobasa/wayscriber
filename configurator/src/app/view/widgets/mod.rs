@@ -4,9 +4,7 @@ mod inputs;
 mod labels;
 mod validation;
 
-pub(super) use colors::{
-    color_preview_badge, color_preview_labeled, color_quad_editor, color_triplet_editor,
-};
+pub(super) use colors::{color_preview_labeled, color_quad_editor, color_triplet_editor};
 pub(super) use constants::{
     BUFFER_PICKER_WIDTH, COLOR_PICKER_WIDTH, DEFAULT_LABEL_GAP, LABEL_COLUMN_WIDTH,
     SMALL_PICKER_WIDTH,

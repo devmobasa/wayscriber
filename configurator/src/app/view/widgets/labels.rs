@@ -1,7 +1,7 @@
 use iced::theme;
 use iced::widget::text;
 
-pub(super) fn default_label_color(changed: bool) -> iced::Color {
+pub(in crate::app::view) fn default_label_color(changed: bool) -> iced::Color {
     if changed {
         iced::Color::from_rgb(0.95, 0.6, 0.2)
     } else {
@@ -9,7 +9,7 @@ pub(super) fn default_label_color(changed: bool) -> iced::Color {
     }
 }
 
-pub(super) fn default_value_text<'a>(
+pub(in crate::app::view) fn default_value_text<'a>(
     value: impl Into<String>,
     changed: bool,
 ) -> iced::widget::Text<'a> {
@@ -19,7 +19,7 @@ pub(super) fn default_value_text<'a>(
         .style(theme::Text::Color(default_label_color(changed)))
 }
 
-pub(super) fn feedback_text<'a>(
+pub(in crate::app::view) fn feedback_text<'a>(
     message: impl Into<String>,
     is_error: bool,
 ) -> iced::widget::Text<'a> {

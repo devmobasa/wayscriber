@@ -10,7 +10,7 @@ use crate::models::{ColorQuadInput, ColorTripletInput, QuadField, TripletField};
 use super::constants::DEFAULT_LABEL_GAP;
 use super::labels::default_value_text;
 
-pub(super) fn color_triplet_editor<'a>(
+pub(in crate::app::view) fn color_triplet_editor<'a>(
     label: &'static str,
     colors: &'a ColorTripletInput,
     default: &'a ColorTripletInput,
@@ -38,7 +38,7 @@ pub(super) fn color_triplet_editor<'a>(
     .into()
 }
 
-pub(super) fn color_quad_editor<'a>(
+pub(in crate::app::view) fn color_quad_editor<'a>(
     label: &'static str,
     colors: &'a ColorQuadInput,
     default: &'a ColorQuadInput,
@@ -68,7 +68,9 @@ pub(super) fn color_quad_editor<'a>(
     .into()
 }
 
-pub(super) fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
+pub(in crate::app::view) fn color_preview_badge<'a>(
+    color: Option<iced::Color>,
+) -> Element<'a, Message> {
     let (preview_color, is_valid) = match color {
         Some(color) => (color, true),
         None => (iced::Color::from_rgb(0.2, 0.2, 0.2), false),
@@ -95,7 +97,9 @@ pub(super) fn color_preview_badge<'a>(color: Option<iced::Color>) -> Element<'a,
         .into()
 }
 
-pub(super) fn color_preview_labeled<'a>(color: Option<iced::Color>) -> Element<'a, Message> {
+pub(in crate::app::view) fn color_preview_labeled<'a>(
+    color: Option<iced::Color>,
+) -> Element<'a, Message> {
     column![text("Preview").size(12), color_preview_badge(color)]
         .spacing(2)
         .align_items(iced::Alignment::Center)
