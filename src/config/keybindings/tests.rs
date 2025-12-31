@@ -166,5 +166,5 @@ fn test_duplicate_with_different_modifier_order() {
     assert!(result.is_err());
     let err_msg = result.unwrap_err();
     assert!(err_msg.contains("Duplicate keybinding"));
-    assert!(err_msg.contains("Ctrl+Shift+W"));
+    assert!(err_msg.contains("Shift+Ctrl+W"));
 }
