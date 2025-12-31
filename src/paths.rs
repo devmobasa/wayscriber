@@ -74,6 +74,7 @@ pub fn tray_action_file() -> PathBuf {
 }
 
 /// Location to open when showing logs or runtime artifacts.
+#[allow(dead_code)]
 pub fn log_dir() -> PathBuf {
     runtime_root().join("logs")
 }

@@ -1,21 +1,21 @@
 use anyhow::Result;
-use log::info;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32};
-use std::thread;
-use std::thread::JoinHandle;
-use std::time::Duration;
-
 #[cfg(feature = "tray")]
 use anyhow::anyhow;
 #[cfg(feature = "tray")]
 use ksni::TrayMethods;
+use log::info;
 #[cfg(feature = "tray")]
 use log::{debug, warn};
+use std::sync::Arc;
 #[cfg(feature = "tray")]
 use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 #[cfg(feature = "tray")]
 use std::sync::mpsc;
+use std::thread;
+use std::thread::JoinHandle;
+#[cfg(feature = "tray")]
+use std::time::Duration;
 #[cfg(feature = "tray")]
 use zbus::{Connection, Proxy};
 

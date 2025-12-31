@@ -1,10 +1,10 @@
 use std::ffi::OsString;
-use std::time::Instant;
-
 #[cfg(feature = "tray")]
 use std::sync::Mutex;
 #[cfg(feature = "tray")]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(feature = "tray")]
+use std::time::Instant;
 
 /// Overlay state for daemon mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +13,7 @@ pub enum OverlayState {
     Visible, // Overlay active, capturing input
 }
 
+#[cfg(feature = "tray")]
 #[derive(Debug, Clone)]
 pub(crate) struct OverlaySpawnErrorInfo {
     pub(crate) message: String,

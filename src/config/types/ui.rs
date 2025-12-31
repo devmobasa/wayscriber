@@ -1,0 +1,97 @@
+use crate::config::enums::StatusPosition;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+use super::{
+    ClickHighlightConfig, ContextMenuUiConfig, HelpOverlayStyle, StatusBarStyle, ToolbarConfig,
+};
+
+/// UI display preferences.
+///
+/// Controls the visibility and positioning of on-screen UI elements.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UiConfig {
+    /// Show the status bar displaying current color, thickness, and tool
+    #[serde(default = "default_show_status")]
+    pub show_status_bar: bool,
+
+    /// Show the frozen-mode badge when frozen is active
+    #[serde(default = "default_show_frozen_badge")]
+    pub show_frozen_badge: bool,
+
+    /// Status bar screen position (top-left, top-right, bottom-left, bottom-right)
+    #[serde(default = "default_status_position")]
+    pub status_bar_position: StatusPosition,
+
+    /// Status bar styling options
+    #[serde(default)]
+    pub status_bar_style: StatusBarStyle,
+
+    /// Help overlay styling options
+    #[serde(default)]
+    pub help_overlay_style: HelpOverlayStyle,
+
+    /// Filter help overlay sections based on enabled features
+    #[serde(default = "default_help_overlay_context_filter")]
+    pub help_overlay_context_filter: bool,
+
+    /// Preferred output name for the xdg-shell fallback overlay (GNOME).
+    /// Falls back to last entered output or first available.
+    #[serde(default)]
+    pub preferred_output: Option<String>,
+
+    /// Use fullscreen for the xdg-shell fallback (GNOME). Disable if fullscreen
+    /// produces an opaque background; maximized is used when false.
+    #[serde(default = "default_xdg_fullscreen")]
+    pub xdg_fullscreen: bool,
+
+    /// Click highlight visual indicator settings
+    #[serde(default)]
+    pub click_highlight: ClickHighlightConfig,
+
+    /// Context menu preferences
+    #[serde(default)]
+    pub context_menu: ContextMenuUiConfig,
+
+    /// Toolbar visibility and pinning options
+    #[serde(default)]
+    pub toolbar: ToolbarConfig,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            show_status_bar: default_show_status(),
+            show_frozen_badge: default_show_frozen_badge(),
+            status_bar_position: default_status_position(),
+            status_bar_style: StatusBarStyle::default(),
+            help_overlay_style: HelpOverlayStyle::default(),
+            help_overlay_context_filter: default_help_overlay_context_filter(),
+            preferred_output: None,
+            xdg_fullscreen: default_xdg_fullscreen(),
+            click_highlight: ClickHighlightConfig::default(),
+            context_menu: ContextMenuUiConfig::default(),
+            toolbar: ToolbarConfig::default(),
+        }
+    }
+}
+
+fn default_show_status() -> bool {
+    true
+}
+
+fn default_show_frozen_badge() -> bool {
+    false
+}
+
+fn default_xdg_fullscreen() -> bool {
+    false
+}
+
+fn default_help_overlay_context_filter() -> bool {
+    true
+}
+
+fn default_status_position() -> StatusPosition {
+    StatusPosition::BottomLeft
+}
