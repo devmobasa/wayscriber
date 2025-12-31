@@ -1,0 +1,43 @@
+use super::Config;
+use super::super::types::SessionStorageMode;
+
+impl Config {
+    pub(super) fn validate_session(&mut self) {
+        if self.session.max_shapes_per_frame == 0 {
+            log::warn!("session.max_shapes_per_frame must be positive; using 1 instead");
+            self.session.max_shapes_per_frame = 1;
+        }
+
+        if self.session.max_file_size_mb == 0 {
+            log::warn!("session.max_file_size_mb must be positive; using 1 MB instead");
+            self.session.max_file_size_mb = 1;
+        } else if self.session.max_file_size_mb > 1024 {
+            log::warn!(
+                "session.max_file_size_mb {} too large, clamping to 1024",
+                self.session.max_file_size_mb
+            );
+            self.session.max_file_size_mb = 1024;
+        }
+
+        if self.session.auto_compress_threshold_kb == 0 {
+            log::warn!("session.auto_compress_threshold_kb must be positive; using 1 KiB");
+            self.session.auto_compress_threshold_kb = 1;
+        }
+
+        if matches!(self.session.storage, SessionStorageMode::Custom) {
+            let custom = self
+                .session
+                .custom_directory
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            if custom.is_none() {
+                log::warn!(
+                    "session.storage set to 'custom' but session.custom_directory missing or empty; falling back to 'auto'"
+                );
+                self.session.storage = SessionStorageMode::Auto;
+                self.session.custom_directory = None;
+            }
+        }
+    }
+}

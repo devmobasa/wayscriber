@@ -1,16 +1,20 @@
+mod format;
+mod widgets;
+
 use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::draw::{Color, EraserKind, ORANGE};
+use crate::draw::{Color, ORANGE};
 use crate::input::state::PresetFeedbackKind;
-use crate::input::{EraserMode, Tool};
+use crate::input::Tool;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
-use crate::util::color_to_name;
 
 use super::super::widgets::*;
+use format::{preset_tooltip_text, truncate_label};
+use widgets::{draw_keycap, draw_preset_name_tag};
 
 pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) -> Option<Color> {
     let ctx = layout.ctx;
@@ -79,77 +83,6 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     let number_box = (slot_size * 0.4).round();
     let keycap_pad = (slot_size * 0.1).round().max(3.0);
     let keycap_radius = (number_box * 0.25).max(3.0);
-    let draw_keycap = |ctx: &cairo::Context, key_x: f64, key_y: f64, label: &str, active| {
-        let (bg_alpha, border_alpha, text_alpha) = if active {
-            (0.75, 0.55, 0.95)
-        } else {
-            (0.4, 0.35, 0.6)
-        };
-        ctx.set_source_rgba(0.12, 0.12, 0.18, bg_alpha);
-        draw_round_rect(ctx, key_x, key_y, number_box, number_box, keycap_radius);
-        let _ = ctx.fill();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, border_alpha);
-        ctx.set_line_width(1.0);
-        draw_round_rect(ctx, key_x, key_y, number_box, number_box, keycap_radius);
-        let _ = ctx.stroke();
-        ctx.set_font_size(11.0);
-        draw_label_center_color(
-            ctx,
-            key_x,
-            key_y,
-            number_box,
-            number_box,
-            label,
-            (1.0, 1.0, 1.0, text_alpha),
-        );
-        ctx.set_font_size(13.0);
-    };
-    let tool_label = |tool: Tool| match tool {
-        Tool::Select => "Select",
-        Tool::Pen => "Pen",
-        Tool::Line => "Line",
-        Tool::Rect => "Rect",
-        Tool::Ellipse => "Circle",
-        Tool::Arrow => "Arrow",
-        Tool::Marker => "Marker",
-        Tool::Highlight => "Highlight",
-        Tool::Eraser => "Eraser",
-    };
-    let px_label = |value: f64| {
-        if (value - value.round()).abs() < 0.05 {
-            format!("{:.0}px", value)
-        } else {
-            format!("{:.1}px", value)
-        }
-    };
-    let angle_label = |value: f64| {
-        if (value - value.round()).abs() < 0.05 {
-            format!("{:.0}deg", value)
-        } else {
-            format!("{:.1}deg", value)
-        }
-    };
-    let on_off = |value: bool| if value { "on" } else { "off" };
-    let eraser_kind_label = |kind: EraserKind| match kind {
-        EraserKind::Circle => "circle",
-        EraserKind::Rect => "rect",
-    };
-    let eraser_mode_label = |mode: EraserMode| match mode {
-        EraserMode::Brush => "brush",
-        EraserMode::Stroke => "stroke",
-    };
-    let truncate_label = |value: &str, max_chars: usize| {
-        if value.chars().count() <= max_chars {
-            value.to_string()
-        } else {
-            let mut truncated = value
-                .chars()
-                .take(max_chars.saturating_sub(3))
-                .collect::<String>();
-            truncated.push_str("...");
-            truncated
-        }
-    };
 
     for slot_index in 0..slot_count {
         let slot = slot_index + 1;
@@ -210,64 +143,11 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 .as_deref()
                 .map(str::trim)
                 .filter(|name| !name.is_empty());
-            let mut extra_details = Vec::new();
-            if let Some(fill) = preset.fill_enabled {
-                extra_details.push(format!("fill:{}", on_off(fill)));
-            }
-            if let Some(opacity) = preset.marker_opacity {
-                let percent = (opacity * 100.0).round() as i32;
-                extra_details.push(format!("opacity:{}%", percent));
-            }
-            if let Some(kind) = preset.eraser_kind {
-                extra_details.push(format!("eraser:{}", eraser_kind_label(kind)));
-            }
-            if let Some(mode) = preset.eraser_mode {
-                extra_details.push(format!("mode:{}", eraser_mode_label(mode)));
-            }
-            if let Some(font_size) = preset.font_size {
-                extra_details.push(format!("font:{}", px_label(font_size)));
-            }
-            if let Some(text_bg) = preset.text_background_enabled {
-                extra_details.push(format!("text bg:{}", on_off(text_bg)));
-            }
-            let mut arrow_bits = Vec::new();
-            if let Some(length) = preset.arrow_length {
-                arrow_bits.push(format!("len {}", px_label(length)));
-            }
-            if let Some(angle) = preset.arrow_angle {
-                arrow_bits.push(format!("ang {}", angle_label(angle)));
-            }
-            if let Some(head_at_end) = preset.arrow_head_at_end {
-                let head = if head_at_end { "end" } else { "start" };
-                arrow_bits.push(format!("head {}", head));
-            }
-            if !arrow_bits.is_empty() {
-                extra_details.push(format!("arrow:{}", arrow_bits.join(", ")));
-            }
-            if let Some(show_status_bar) = preset.show_status_bar {
-                extra_details.push(format!("status:{}", on_off(show_status_bar)));
-            }
-
-            let base_summary = format!(
-                "{}, {}, {}",
-                tool_label(preset.tool),
-                color_to_name(&preset.color),
-                px_label(preset.size)
+            let tooltip = preset_tooltip_text(
+                preset,
+                slot,
+                snapshot.binding_hints.apply_preset(slot),
             );
-            let summary = if extra_details.is_empty() {
-                base_summary
-            } else {
-                format!("{}; {}", base_summary, extra_details.join("; "))
-            };
-            let label = if let Some(name) = preset_name {
-                format!("Apply preset {}: {} ({})", slot, name, summary)
-            } else {
-                format!("Apply preset {} ({})", slot, summary)
-            };
-            let tooltip = match snapshot.binding_hints.apply_preset(slot) {
-                Some(binding) => format!("{label} (key: {binding})"),
-                None => label,
-            };
             hits.push(HitRegion {
                 rect: (slot_x, slot_row_y, slot_size, slot_size),
                 event: ToolbarEvent::ApplyPreset(slot),
@@ -310,33 +190,16 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 
             if slot_hover && let Some(name) = preset_name {
                 let display_name = truncate_label(name, 12);
-                ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-                ctx.set_font_size(10.0);
-                if let Ok(extents) = ctx.text_extents(&display_name) {
-                    let pad_x = 5.0;
-                    let pad_y = 2.0;
-                    let label_w = extents.width() + pad_x * 2.0;
-                    let label_h = extents.height() + pad_y * 2.0;
-                    let mut label_x = slot_x + (slot_size - label_w) / 2.0;
-                    let label_y = (slot_row_y - label_h - 2.0).max(*y + 2.0);
-                    let min_x = card_x + 2.0;
-                    let max_x = card_x + card_w - label_w - 2.0;
-                    if label_x < min_x {
-                        label_x = min_x;
-                    }
-                    if label_x > max_x {
-                        label_x = max_x;
-                    }
-                    ctx.set_source_rgba(0.12, 0.12, 0.18, 0.92);
-                    draw_round_rect(ctx, label_x, label_y, label_w, label_h, 4.0);
-                    let _ = ctx.fill();
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-                    ctx.move_to(
-                        label_x + pad_x - extents.x_bearing(),
-                        label_y + pad_y - extents.y_bearing(),
-                    );
-                    let _ = ctx.show_text(&display_name);
-                }
+                draw_preset_name_tag(
+                    ctx,
+                    &display_name,
+                    slot_x,
+                    slot_row_y,
+                    slot_size,
+                    card_x,
+                    card_w,
+                    *y,
+                );
             }
         } else {
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
@@ -356,7 +219,15 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 
         let key_x = slot_x + keycap_pad;
         let key_y = slot_row_y + keycap_pad;
-        draw_keycap(ctx, key_x, key_y, &slot.to_string(), preset_exists);
+        draw_keycap(
+            ctx,
+            key_x,
+            key_y,
+            number_box,
+            keycap_radius,
+            &slot.to_string(),
+            preset_exists,
+        );
 
         if let Some(feedback) = snapshot
             .preset_feedback
