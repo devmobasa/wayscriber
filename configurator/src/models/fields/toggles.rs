@@ -1,0 +1,139 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToggleField {
+    DrawingTextBackground,
+    DrawingFillEnabled,
+    PerformanceVsync,
+    UiShowStatusBar,
+    UiShowFrozenBadge,
+    UiHelpOverlayContextFilter,
+    UiContextMenuEnabled,
+    UiXdgFullscreen,
+    UiToolbarTopPinned,
+    UiToolbarSidePinned,
+    UiToolbarUseIcons,
+    UiToolbarShowMoreColors,
+    UiToolbarPresetToasts,
+    UiToolbarShowPresets,
+    UiToolbarShowActionsSection,
+    UiToolbarShowActionsAdvanced,
+    UiToolbarShowStepSection,
+    UiToolbarShowTextControls,
+    UiToolbarShowSettingsSection,
+    UiToolbarShowDelaySliders,
+    UiToolbarShowMarkerOpacitySection,
+    UiToolbarShowToolPreview,
+    UiToolbarForceInline,
+    UiClickHighlightEnabled,
+    UiClickHighlightUsePenColor,
+    BoardEnabled,
+    BoardAutoAdjust,
+    CaptureEnabled,
+    CaptureCopyToClipboard,
+    CaptureExitAfter,
+    SessionPersistTransparent,
+    SessionPersistWhiteboard,
+    SessionPersistBlackboard,
+    SessionPersistHistory,
+    SessionRestoreToolState,
+    SessionPerOutput,
+    HistoryCustomSectionEnabled,
+    ArrowHeadAtEnd,
+    #[cfg(feature = "tablet-input")]
+    TabletEnabled,
+    #[cfg(feature = "tablet-input")]
+    TabletPressureEnabled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Copy for cheap capture in iced callback closures.
+pub enum PresetToggleField {
+    FillEnabled,
+    TextBackgroundEnabled,
+    ArrowHeadAtEnd,
+    ShowStatusBar,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextField {
+    DrawingColorName,
+    DrawingThickness,
+    DrawingEraserSize,
+    DrawingFontSize,
+    DrawingMarkerOpacity,
+    DrawingFontFamily,
+    DrawingFontWeight,
+    DrawingFontStyle,
+    DrawingHitTestTolerance,
+    DrawingHitTestThreshold,
+    DrawingUndoStackLimit,
+    ArrowLength,
+    ArrowAngle,
+    PerformanceUiAnimationFps,
+    HistoryUndoAllDelayMs,
+    HistoryRedoAllDelayMs,
+    HistoryCustomUndoDelayMs,
+    HistoryCustomRedoDelayMs,
+    HistoryCustomUndoSteps,
+    HistoryCustomRedoSteps,
+    UiPreferredOutput,
+    StatusFontSize,
+    StatusPadding,
+    StatusDotRadius,
+    HighlightRadius,
+    HighlightOutlineThickness,
+    HighlightDurationMs,
+    HelpFontFamily,
+    HelpFontSize,
+    HelpLineHeight,
+    HelpPadding,
+    HelpBorderWidth,
+    CaptureSaveDirectory,
+    CaptureFilename,
+    CaptureFormat,
+    ToolbarTopOffset,
+    ToolbarTopOffsetY,
+    ToolbarSideOffset,
+    ToolbarSideOffsetX,
+    SessionCustomDirectory,
+    SessionMaxShapesPerFrame,
+    SessionMaxFileSizeMb,
+    SessionAutoCompressThresholdKb,
+    SessionMaxPersistedUndoDepth,
+    SessionBackupRetention,
+    #[cfg(feature = "tablet-input")]
+    TabletMinThickness,
+    #[cfg(feature = "tablet-input")]
+    TabletMaxThickness,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Copy for cheap capture in iced callback closures.
+pub enum PresetTextField {
+    Name,
+    ColorName,
+    Size,
+    MarkerOpacity,
+    FontSize,
+    ArrowLength,
+    ArrowAngle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TripletField {
+    DrawingColorRgb,
+    BoardWhiteboard,
+    BoardBlackboard,
+    BoardWhiteboardPen,
+    BoardBlackboardPen,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuadField {
+    StatusBarBg,
+    StatusBarText,
+    HelpBg,
+    HelpBorder,
+    HelpText,
+    HighlightFill,
+    HighlightOutline,
+}
