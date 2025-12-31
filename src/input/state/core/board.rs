@@ -77,4 +77,52 @@ impl InputState {
 
         log::info!("Switched from {:?} to {:?} mode", current_mode, target_mode);
     }
+
+    fn prepare_page_switch(&mut self) {
+        self.cancel_active_interaction();
+        self.clear_selection();
+        self.close_context_menu();
+        self.invalidate_hit_cache();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    pub fn page_prev(&mut self) -> bool {
+        let mode = self.canvas_set.active_mode();
+        if self.canvas_set.prev_page(mode) {
+            self.prepare_page_switch();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn page_next(&mut self) -> bool {
+        let mode = self.canvas_set.active_mode();
+        if self.canvas_set.next_page(mode) {
+            self.prepare_page_switch();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn page_new(&mut self) {
+        let mode = self.canvas_set.active_mode();
+        self.canvas_set.new_page(mode);
+        self.prepare_page_switch();
+    }
+
+    pub fn page_duplicate(&mut self) {
+        let mode = self.canvas_set.active_mode();
+        self.canvas_set.duplicate_page(mode);
+        self.prepare_page_switch();
+    }
+
+    pub fn page_delete(&mut self) -> crate::draw::PageDeleteOutcome {
+        let mode = self.canvas_set.active_mode();
+        let outcome = self.canvas_set.delete_page(mode);
+        self.prepare_page_switch();
+        outcome
+    }
 }

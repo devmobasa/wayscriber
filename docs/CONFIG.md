@@ -166,6 +166,9 @@ show_status_bar = true
 # Show a small "FROZEN" badge when frozen mode is active
 show_frozen_badge = true
 
+# Filter help overlay sections based on enabled features
+help_overlay_context_filter = true
+
 # Status bar position
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"
@@ -180,7 +183,8 @@ dot_radius = 4.0
 
 # Help overlay styling
 [ui.help_overlay_style]
-font_size = 16.0
+font_size = 14.0
+font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 line_height = 22.0
 padding = 20.0
 bg_color = [0.0, 0.0, 0.0, 0.85]     # Darker background
@@ -550,6 +554,13 @@ toggle_whiteboard = ["Ctrl+W"]
 toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
 
+# Page navigation
+page_prev = []
+page_next = []
+page_new = ["Ctrl+Alt+N"]
+page_duplicate = ["Ctrl+Alt+D"]
+page_delete = ["Ctrl+Alt+Delete"]
+
 # Toggle help overlay
 toggle_help = ["F10"]
 
@@ -567,6 +578,9 @@ hold_to_draw = ["Alt+D"]
 
 # Toggle highlight-only drawing tool
 toggle_highlight_tool = ["Ctrl+Alt+H"]
+
+# Toggle selection properties panel
+toggle_selection_properties = ["Ctrl+Alt+P"]
 
 # Toggle eraser behavior (brush vs stroke)
 toggle_eraser_mode = ["Ctrl+Shift+E"]

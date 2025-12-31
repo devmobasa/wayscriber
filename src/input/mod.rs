@@ -16,7 +16,9 @@ pub mod tool;
 // Re-export commonly used types at module level
 pub use board_mode::BoardMode;
 pub use events::{Key, MouseButton};
-pub use state::{ClickHighlightSettings, DrawingState, InputState, TextInputMode, ZoomAction};
+pub use state::{
+    ClickHighlightSettings, DrawingState, HelpOverlayView, InputState, TextInputMode, ZoomAction,
+};
 #[cfg(tablet)]
 #[allow(unused_imports)]
 pub use tablet::TabletSettings;

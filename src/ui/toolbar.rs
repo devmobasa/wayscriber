@@ -1,7 +1,7 @@
 use crate::config::ToolbarLayoutMode;
 use crate::config::{KeybindingsConfig, PRESET_SLOTS_MAX};
 use crate::draw::{Color, EraserKind, FontDescriptor};
-use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, PresetFeedbackKind};
+use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, PresetFeedbackKind, UiToastKind};
 use crate::input::{EraserMode, InputState, Tool};
 use std::time::Instant;
 
@@ -27,6 +27,11 @@ pub enum ToolbarEvent {
     Undo,
     Redo,
     ClearCanvas,
+    PagePrev,
+    PageNext,
+    PageNew,
+    PageDuplicate,
+    PageDelete,
     EnterTextMode,
     EnterStickyNoteMode,
     /// Toggle both highlight tool and click highlight together
@@ -142,6 +147,8 @@ pub struct ToolbarSnapshot {
     pub fill_enabled: bool,
     pub undo_available: bool,
     pub redo_available: bool,
+    pub page_index: usize,
+    pub page_count: usize,
     pub click_highlight_enabled: bool,
     pub highlight_tool_active: bool,
     /// Whether any highlight feature is active (tool or click)
@@ -207,6 +214,9 @@ impl ToolbarSnapshot {
     ) -> Self {
         let frame = state.canvas_set.active_frame();
         let active_tool = state.active_tool();
+        let active_mode = state.board_mode();
+        let page_count = state.canvas_set.page_count(active_mode);
+        let page_index = state.canvas_set.active_page_index(active_mode);
         let text_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
             && state.text_input_mode == crate::input::TextInputMode::Plain;
         let note_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
@@ -285,6 +295,8 @@ impl ToolbarSnapshot {
             fill_enabled: state.fill_enabled,
             undo_available: frame.undo_stack_len() > 0,
             redo_available: frame.redo_stack_len() > 0,
+            page_index,
+            page_count,
             click_highlight_enabled: state.click_highlight_enabled(),
             highlight_tool_active: state.highlight_tool_active(),
             any_highlight_active: state.click_highlight_enabled() || state.highlight_tool_active(),
@@ -347,6 +359,11 @@ pub struct ToolbarBindingHints {
     pub zoom_out: Option<String>,
     pub reset_zoom: Option<String>,
     pub toggle_zoom_lock: Option<String>,
+    pub page_prev: Option<String>,
+    pub page_next: Option<String>,
+    pub page_new: Option<String>,
+    pub page_duplicate: Option<String>,
+    pub page_delete: Option<String>,
     pub open_configurator: Option<String>,
     pub apply_presets: Vec<Option<String>>,
     pub save_presets: Vec<Option<String>>,
@@ -424,6 +441,11 @@ impl ToolbarBindingHints {
             zoom_out: first(&kb.zoom_out),
             reset_zoom: first(&kb.reset_zoom),
             toggle_zoom_lock: first(&kb.toggle_zoom_lock),
+            page_prev: first(&kb.page_prev),
+            page_next: first(&kb.page_next),
+            page_new: first(&kb.page_new),
+            page_duplicate: first(&kb.page_duplicate),
+            page_delete: first(&kb.page_delete),
             open_configurator: first(&kb.open_configurator),
             apply_presets,
             save_presets,
@@ -463,6 +485,11 @@ impl ToolbarBindingHints {
             ToolbarEvent::ZoomOut => self.zoom_out.as_deref(),
             ToolbarEvent::ResetZoom => self.reset_zoom.as_deref(),
             ToolbarEvent::ToggleZoomLock => self.toggle_zoom_lock.as_deref(),
+            ToolbarEvent::PagePrev => self.page_prev.as_deref(),
+            ToolbarEvent::PageNext => self.page_next.as_deref(),
+            ToolbarEvent::PageNew => self.page_new.as_deref(),
+            ToolbarEvent::PageDuplicate => self.page_duplicate.as_deref(),
+            ToolbarEvent::PageDelete => self.page_delete.as_deref(),
             ToolbarEvent::OpenConfigurator => self.open_configurator.as_deref(),
             ToolbarEvent::ClearCanvas => self.clear.as_deref(),
             ToolbarEvent::ToggleAllHighlight(_) => self.toggle_highlight.as_deref(),
@@ -577,6 +604,36 @@ impl InputState {
             }
             ToolbarEvent::ClearCanvas => {
                 self.toolbar_clear();
+                true
+            }
+            ToolbarEvent::PagePrev => {
+                if self.page_prev() {
+                    true
+                } else {
+                    self.set_ui_toast(UiToastKind::Info, "Already on the first page.");
+                    false
+                }
+            }
+            ToolbarEvent::PageNext => {
+                if self.page_next() {
+                    true
+                } else {
+                    self.set_ui_toast(UiToastKind::Info, "Already on the last page.");
+                    false
+                }
+            }
+            ToolbarEvent::PageNew => {
+                self.page_new();
+                true
+            }
+            ToolbarEvent::PageDuplicate => {
+                self.page_duplicate();
+                true
+            }
+            ToolbarEvent::PageDelete => {
+                if matches!(self.page_delete(), crate::draw::PageDeleteOutcome::Cleared) {
+                    self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
+                }
                 true
             }
             ToolbarEvent::EnterTextMode => {

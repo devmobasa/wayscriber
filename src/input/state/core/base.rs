@@ -9,7 +9,7 @@ pub const UI_TOAST_DURATION_MS: u64 = 5000;
 use super::{
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
-    properties::ShapePropertiesPanel,
+    properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     selection::SelectionState,
 };
 use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX, ToolPresetConfig};
@@ -205,6 +205,16 @@ pub struct InputState {
     pub needs_redraw: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
+    /// Help overlay view mode (quick vs full)
+    pub help_overlay_view: HelpOverlayView,
+    /// Active help overlay page index
+    pub help_overlay_page: usize,
+    /// Current help overlay search query
+    pub help_overlay_search: String,
+    /// Current help overlay scroll offset (pixels)
+    pub help_overlay_scroll: f64,
+    /// Max scrollable height for help overlay (pixels)
+    pub help_overlay_scroll_max: f64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
@@ -319,6 +329,12 @@ pub struct InputState {
     pub(super) pending_menu_hover_recalc: bool,
     /// Optional properties panel describing the current selection
     pub(super) shape_properties_panel: Option<ShapePropertiesPanel>,
+    /// Cached layout details for the current properties panel
+    pub properties_panel_layout: Option<PropertiesPanelLayout>,
+    /// Recompute properties hover next time layout is available
+    pub(super) pending_properties_hover_recalc: bool,
+    /// Refresh properties panel entries on the next layout pass
+    pub(super) properties_panel_needs_refresh: bool,
     /// Whether frozen mode is currently active
     pub(super) frozen_active: bool,
     /// Pending toggle request for the backend (handled in the Wayland loop)
@@ -367,6 +383,28 @@ pub(super) struct DelayedHistory {
 pub(super) enum HistoryMode {
     Undo,
     Redo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HelpOverlayView {
+    Quick,
+    Full,
+}
+
+impl HelpOverlayView {
+    pub fn toggle(self) -> Self {
+        match self {
+            HelpOverlayView::Quick => HelpOverlayView::Full,
+            HelpOverlayView::Full => HelpOverlayView::Quick,
+        }
+    }
+
+    pub fn page_count(self) -> usize {
+        match self {
+            HelpOverlayView::Quick => 1,
+            HelpOverlayView::Full => 2,
+        }
+    }
 }
 
 impl InputState {
@@ -438,6 +476,11 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             show_help: false,
+            help_overlay_view: HelpOverlayView::Quick,
+            help_overlay_page: 0,
+            help_overlay_search: String::new(),
+            help_overlay_scroll: 0.0,
+            help_overlay_scroll_max: 0.0,
             show_status_bar,
             toolbar_visible: false,
             toolbar_top_visible: false,
@@ -495,6 +538,9 @@ impl InputState {
             last_pointer_position: (0, 0),
             pending_menu_hover_recalc: false,
             shape_properties_panel: None,
+            properties_panel_layout: None,
+            pending_properties_hover_recalc: false,
+            properties_panel_needs_refresh: false,
             frozen_active: false,
             pending_frozen_toggle: false,
             zoom_active: false,

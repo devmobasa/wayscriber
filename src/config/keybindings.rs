@@ -6,6 +6,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 /// All possible actions that can be bound to keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -65,6 +66,13 @@ pub enum Action {
     ToggleBlackboard,
     ReturnToTransparent,
 
+    // Page navigation
+    PagePrev,
+    PageNext,
+    PageNew,
+    PageDuplicate,
+    PageDelete,
+
     // UI toggles
     ToggleHelp,
     ToggleStatusBar,
@@ -74,6 +82,7 @@ pub enum Action {
     ToggleFill,
     ToggleClickthrough,
     HoldToDraw,
+    ToggleSelectionProperties,
     OpenContextMenu,
 
     // Configurator
@@ -206,6 +215,23 @@ impl KeyBinding {
             && self.ctrl == ctrl
             && self.shift == shift
             && self.alt == alt
+    }
+}
+
+impl fmt::Display for KeyBinding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut parts: Vec<&str> = Vec::new();
+        if self.ctrl {
+            parts.push("Ctrl");
+        }
+        if self.shift {
+            parts.push("Shift");
+        }
+        if self.alt {
+            parts.push("Alt");
+        }
+        parts.push(self.key.as_str());
+        write!(f, "{}", parts.join("+"))
     }
 }
 
@@ -358,6 +384,21 @@ pub struct KeybindingsConfig {
     #[serde(default = "default_return_to_transparent")]
     pub return_to_transparent: Vec<String>,
 
+    #[serde(default = "default_page_prev")]
+    pub page_prev: Vec<String>,
+
+    #[serde(default = "default_page_next")]
+    pub page_next: Vec<String>,
+
+    #[serde(default = "default_page_new")]
+    pub page_new: Vec<String>,
+
+    #[serde(default = "default_page_duplicate")]
+    pub page_duplicate: Vec<String>,
+
+    #[serde(default = "default_page_delete")]
+    pub page_delete: Vec<String>,
+
     #[serde(default = "default_toggle_help")]
     pub toggle_help: Vec<String>,
     #[serde(default = "default_toggle_status_bar")]
@@ -379,6 +420,8 @@ pub struct KeybindingsConfig {
 
     #[serde(default = "default_toggle_highlight_tool")]
     pub toggle_highlight_tool: Vec<String>,
+    #[serde(default = "default_toggle_selection_properties")]
+    pub toggle_selection_properties: Vec<String>,
     #[serde(default = "default_open_context_menu")]
     pub open_context_menu: Vec<String>,
 
@@ -538,6 +581,11 @@ impl Default for KeybindingsConfig {
             toggle_whiteboard: default_toggle_whiteboard(),
             toggle_blackboard: default_toggle_blackboard(),
             return_to_transparent: default_return_to_transparent(),
+            page_prev: default_page_prev(),
+            page_next: default_page_next(),
+            page_new: default_page_new(),
+            page_duplicate: default_page_duplicate(),
+            page_delete: default_page_delete(),
             toggle_help: default_toggle_help(),
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
@@ -546,6 +594,7 @@ impl Default for KeybindingsConfig {
             toggle_toolbar: default_toggle_toolbar(),
             toggle_fill: default_toggle_fill(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
+            toggle_selection_properties: default_toggle_selection_properties(),
             open_context_menu: default_open_context_menu(),
             open_configurator: default_open_configurator(),
             set_color_red: default_set_color_red(),
@@ -792,6 +841,26 @@ impl KeybindingsConfig {
             insert_binding(binding_str, Action::ReturnToTransparent)?;
         }
 
+        for binding_str in &self.page_prev {
+            insert_binding(binding_str, Action::PagePrev)?;
+        }
+
+        for binding_str in &self.page_next {
+            insert_binding(binding_str, Action::PageNext)?;
+        }
+
+        for binding_str in &self.page_new {
+            insert_binding(binding_str, Action::PageNew)?;
+        }
+
+        for binding_str in &self.page_duplicate {
+            insert_binding(binding_str, Action::PageDuplicate)?;
+        }
+
+        for binding_str in &self.page_delete {
+            insert_binding(binding_str, Action::PageDelete)?;
+        }
+
         // Ensure help is reachable via F1 even if older configs only include F10.
         let mut help_bindings = if self.toggle_help.is_empty() {
             default_toggle_help()
@@ -844,6 +913,10 @@ impl KeybindingsConfig {
 
         for binding_str in &self.toggle_highlight_tool {
             insert_binding(binding_str, Action::ToggleHighlightTool)?;
+        }
+
+        for binding_str in &self.toggle_selection_properties {
+            insert_binding(binding_str, Action::ToggleSelectionProperties)?;
         }
 
         for binding_str in &self.open_context_menu {
@@ -1172,6 +1245,26 @@ fn default_return_to_transparent() -> Vec<String> {
     vec!["Ctrl+Shift+T".to_string()]
 }
 
+fn default_page_prev() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_page_next() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_page_new() -> Vec<String> {
+    vec!["Ctrl+Alt+N".to_string()]
+}
+
+fn default_page_duplicate() -> Vec<String> {
+    vec!["Ctrl+Alt+D".to_string()]
+}
+
+fn default_page_delete() -> Vec<String> {
+    vec!["Ctrl+Alt+Delete".to_string()]
+}
+
 fn default_toggle_help() -> Vec<String> {
     vec!["F10".to_string(), "F1".to_string()]
 }
@@ -1202,6 +1295,10 @@ fn default_toggle_fill() -> Vec<String> {
 
 fn default_toggle_highlight_tool() -> Vec<String> {
     vec!["Ctrl+Alt+H".to_string()]
+}
+
+fn default_toggle_selection_properties() -> Vec<String> {
+    vec!["Ctrl+Alt+P".to_string()]
 }
 
 fn default_open_context_menu() -> Vec<String> {

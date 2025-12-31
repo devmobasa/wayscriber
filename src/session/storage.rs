@@ -1,6 +1,6 @@
 use super::options::SessionOptions;
 use super::snapshot;
-use crate::draw::Frame;
+use super::snapshot::BoardPagesSnapshot;
 use crate::session::lock::{lock_shared, unlock};
 use anyhow::{Context, Result};
 use log::warn;
@@ -180,14 +180,14 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         if let Some(loaded) = loaded? {
             let snapshot = loaded.snapshot;
             frame_counts = Some(FrameCounts {
-                transparent: snapshot.transparent.as_ref().map_or(0, |f| f.shapes.len()),
-                whiteboard: snapshot.whiteboard.as_ref().map_or(0, |f| f.shapes.len()),
-                blackboard: snapshot.blackboard.as_ref().map_or(0, |f| f.shapes.len()),
+                transparent: page_shape_count(snapshot.transparent.as_ref()),
+                whiteboard: page_shape_count(snapshot.whiteboard.as_ref()),
+                blackboard: page_shape_count(snapshot.blackboard.as_ref()),
             });
             let counts = HistoryCounts {
-                transparent: history_depth_from_frame(snapshot.transparent.as_ref()),
-                whiteboard: history_depth_from_frame(snapshot.whiteboard.as_ref()),
-                blackboard: history_depth_from_frame(snapshot.blackboard.as_ref()),
+                transparent: history_depth_from_pages(snapshot.transparent.as_ref()),
+                whiteboard: history_depth_from_pages(snapshot.whiteboard.as_ref()),
+                blackboard: history_depth_from_pages(snapshot.blackboard.as_ref()),
             };
             history_present = counts.has_history();
             history_counts = Some(counts);
@@ -256,15 +256,21 @@ fn remove_matching_files(dir: &Path, prefix: &str, suffix: &str) -> Result<bool>
     Ok(removed)
 }
 
-fn history_depth_from_frame(frame: Option<&Frame>) -> HistoryDepth {
-    if let Some(frame) = frame {
+fn history_depth_from_pages(pages: Option<&BoardPagesSnapshot>) -> HistoryDepth {
+    if let Some(pages) = pages {
         HistoryDepth {
-            undo: frame.undo_stack_len(),
-            redo: frame.redo_stack_len(),
+            undo: pages.pages.iter().map(|page| page.undo_stack_len()).sum(),
+            redo: pages.pages.iter().map(|page| page.redo_stack_len()).sum(),
         }
     } else {
         HistoryDepth::default()
     }
+}
+
+fn page_shape_count(pages: Option<&BoardPagesSnapshot>) -> usize {
+    pages
+        .map(|pages| pages.pages.iter().map(|page| page.shapes.len()).sum())
+        .unwrap_or(0)
 }
 
 fn find_existing_variant(
@@ -405,7 +411,10 @@ mod tests {
 
         let snapshot = SessionSnapshot {
             active_mode: BoardMode::Transparent,
-            transparent: Some(frame),
+            transparent: Some(BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            }),
             whiteboard: None,
             blackboard: None,
             tool_state: Some(ToolStateSnapshot {

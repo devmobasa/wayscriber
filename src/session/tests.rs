@@ -1,3 +1,4 @@
+use super::snapshot::BoardPagesSnapshot;
 use super::*;
 use crate::config::{Action, BoardConfig, SessionConfig, SessionStorageMode};
 use crate::draw::FontDescriptor;
@@ -649,7 +650,10 @@ fn save_snapshot_rotates_backup_when_enabled() {
 
     let snapshot = SessionSnapshot {
         active_mode: BoardMode::Transparent,
-        transparent: Some(frame),
+        transparent: Some(BoardPagesSnapshot {
+            pages: vec![frame],
+            active: 0,
+        }),
         whiteboard: None,
         blackboard: None,
         tool_state: None,
@@ -692,7 +696,10 @@ fn save_snapshot_skips_backup_when_disabled() {
 
     let snapshot = SessionSnapshot {
         active_mode: BoardMode::Transparent,
-        transparent: Some(frame),
+        transparent: Some(BoardPagesSnapshot {
+            pages: vec![frame],
+            active: 0,
+        }),
         whiteboard: None,
         blackboard: None,
         tool_state: None,
@@ -768,7 +775,7 @@ fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
         .transparent
         .expect("transparent frame should be present");
     assert_eq!(
-        transparent.shapes.len(),
+        transparent.pages[0].shapes.len(),
         2,
         "frame should be truncated to max_shapes_per_frame"
     );

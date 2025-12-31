@@ -91,6 +91,7 @@ pub struct ConfigDraft {
     pub click_highlight_fill_color: ColorQuadInput,
     pub click_highlight_outline_color: ColorQuadInput,
 
+    pub help_font_family: String,
     pub help_font_size: String,
     pub help_line_height: String,
     pub help_padding: String,
@@ -98,6 +99,7 @@ pub struct ConfigDraft {
     pub help_border_color: ColorQuadInput,
     pub help_border_width: String,
     pub help_text_color: ColorQuadInput,
+    pub help_context_filter: bool,
 
     pub board_enabled: bool,
     pub board_default_mode: BoardModeOption,
@@ -129,9 +131,13 @@ pub struct ConfigDraft {
     pub session_max_persisted_undo_depth: String,
     pub session_backup_retention: String,
 
+    #[cfg(feature = "tablet-input")]
     pub tablet_enabled: bool,
+    #[cfg(feature = "tablet-input")]
     pub tablet_pressure_enabled: bool,
+    #[cfg(feature = "tablet-input")]
     pub tablet_min_thickness: String,
+    #[cfg(feature = "tablet-input")]
     pub tablet_max_thickness: String,
 
     pub presets: PresetsDraft,
@@ -224,10 +230,9 @@ impl PresetSlotDraft {
             Some(name.to_string())
         };
 
-        let color = match self
-            .color
-            .to_color_spec_with_field(&format!("presets.slot_{slot_index}.color"))
-        {
+        let field_prefix = format!("presets.slot_{slot_index}.");
+        let color_field = format!("{field_prefix}color");
+        let color = match self.color.to_color_spec_with_field(&color_field) {
             Ok(color) => Some(color),
             Err(err) => {
                 errors.push(err);
@@ -235,30 +240,26 @@ impl PresetSlotDraft {
             }
         };
 
-        let size = parse_required_f64(
-            &self.size,
-            format!("presets.slot_{slot_index}.size"),
-            errors,
-        );
+        let size = parse_required_f64(&self.size, || format!("{field_prefix}size"), errors);
 
         let marker_opacity = parse_optional_f64(
             &self.marker_opacity,
-            format!("presets.slot_{slot_index}.marker_opacity"),
+            || format!("{field_prefix}marker_opacity"),
             errors,
         );
         let font_size = parse_optional_f64(
             &self.font_size,
-            format!("presets.slot_{slot_index}.font_size"),
+            || format!("{field_prefix}font_size"),
             errors,
         );
         let arrow_length = parse_optional_f64(
             &self.arrow_length,
-            format!("presets.slot_{slot_index}.arrow_length"),
+            || format!("{field_prefix}arrow_length"),
             errors,
         );
         let arrow_angle = parse_optional_f64(
             &self.arrow_angle,
-            format!("presets.slot_{slot_index}.arrow_angle"),
+            || format!("{field_prefix}arrow_angle"),
             errors,
         );
 
@@ -513,6 +514,7 @@ impl ConfigDraft {
                 config.ui.click_highlight.outline_color,
             ),
 
+            help_font_family: config.ui.help_overlay_style.font_family.clone(),
             help_font_size: format_float(config.ui.help_overlay_style.font_size),
             help_line_height: format_float(config.ui.help_overlay_style.line_height),
             help_padding: format_float(config.ui.help_overlay_style.padding),
@@ -520,6 +522,7 @@ impl ConfigDraft {
             help_border_color: ColorQuadInput::from(config.ui.help_overlay_style.border_color),
             help_border_width: format_float(config.ui.help_overlay_style.border_width),
             help_text_color: ColorQuadInput::from(config.ui.help_overlay_style.text_color),
+            help_context_filter: config.ui.help_overlay_context_filter,
 
             board_enabled: config.board.enabled,
             board_default_mode: BoardModeOption::from_str(&config.board.default_mode)
@@ -563,9 +566,13 @@ impl ConfigDraft {
                 .unwrap_or_default(),
             session_backup_retention: config.session.backup_retention.to_string(),
 
+            #[cfg(feature = "tablet-input")]
             tablet_enabled: config.tablet.enabled,
+            #[cfg(feature = "tablet-input")]
             tablet_pressure_enabled: config.tablet.pressure_enabled,
+            #[cfg(feature = "tablet-input")]
             tablet_min_thickness: format_float(config.tablet.min_thickness),
+            #[cfg(feature = "tablet-input")]
             tablet_max_thickness: format_float(config.tablet.max_thickness),
 
             presets: PresetsDraft::from_config(config),
@@ -809,6 +816,7 @@ impl ConfigDraft {
             Err(err) => errors.push(err),
         }
 
+        config.ui.help_overlay_style.font_family = self.help_font_family.trim().to_string();
         parse_field(
             &self.help_font_size,
             "ui.help_overlay_style.font_size",
@@ -854,6 +862,7 @@ impl ConfigDraft {
             Ok(values) => config.ui.help_overlay_style.text_color = values,
             Err(err) => errors.push(err),
         }
+        config.ui.help_overlay_context_filter = self.help_context_filter;
 
         config.board.enabled = self.board_enabled;
         config.board.default_mode = self.board_default_mode.as_str().to_string();
@@ -939,6 +948,7 @@ impl ConfigDraft {
             |value| config.session.backup_retention = value,
         );
 
+        #[cfg(feature = "tablet-input")]
         {
             config.tablet.enabled = self.tablet_enabled;
             config.tablet.pressure_enabled = self.tablet_pressure_enabled;
@@ -1003,6 +1013,7 @@ impl ConfigDraft {
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
+            ToggleField::UiHelpOverlayContextFilter => self.help_context_filter = value,
             ToggleField::UiContextMenuEnabled => self.ui_context_menu_enabled = value,
             ToggleField::UiXdgFullscreen => self.ui_xdg_fullscreen = value,
             ToggleField::UiToolbarTopPinned => self.ui_toolbar_top_pinned = value,
@@ -1065,7 +1076,9 @@ impl ConfigDraft {
             ToggleField::ArrowHeadAtEnd => {
                 self.arrow_head_at_end = value;
             }
+            #[cfg(feature = "tablet-input")]
             ToggleField::TabletEnabled => self.tablet_enabled = value,
+            #[cfg(feature = "tablet-input")]
             ToggleField::TabletPressureEnabled => self.tablet_pressure_enabled = value,
         }
     }
@@ -1108,6 +1121,7 @@ impl ConfigDraft {
             TextField::HighlightRadius => self.click_highlight_radius = value,
             TextField::HighlightOutlineThickness => self.click_highlight_outline_thickness = value,
             TextField::HighlightDurationMs => self.click_highlight_duration_ms = value,
+            TextField::HelpFontFamily => self.help_font_family = value,
             TextField::HelpFontSize => self.help_font_size = value,
             TextField::HelpLineHeight => self.help_line_height = value,
             TextField::HelpPadding => self.help_padding = value,
@@ -1129,7 +1143,9 @@ impl ConfigDraft {
                 self.session_max_persisted_undo_depth = value
             }
             TextField::SessionBackupRetention => self.session_backup_retention = value,
+            #[cfg(feature = "tablet-input")]
             TextField::TabletMinThickness => self.tablet_min_thickness = value,
+            #[cfg(feature = "tablet-input")]
             TextField::TabletMaxThickness => self.tablet_max_thickness = value,
         }
     }
@@ -1210,22 +1226,28 @@ fn parse_optional_usize_field<F>(
     }
 }
 
-fn parse_required_f64(value: &str, field: String, errors: &mut Vec<FormError>) -> Option<f64> {
+fn parse_required_f64<F>(value: &str, field: F, errors: &mut Vec<FormError>) -> Option<f64>
+where
+    F: FnOnce() -> String,
+{
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        errors.push(FormError::new(field, "Value is required"));
+        errors.push(FormError::new(field(), "Value is required"));
         return None;
     }
     match parse_f64(trimmed) {
         Ok(parsed) => Some(parsed),
         Err(err) => {
-            errors.push(FormError::new(field, err));
+            errors.push(FormError::new(field(), err));
             None
         }
     }
 }
 
-fn parse_optional_f64(value: &str, field: String, errors: &mut Vec<FormError>) -> Option<f64> {
+fn parse_optional_f64<F>(value: &str, field: F, errors: &mut Vec<FormError>) -> Option<f64>
+where
+    F: FnOnce() -> String,
+{
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return None;
@@ -1233,7 +1255,7 @@ fn parse_optional_f64(value: &str, field: String, errors: &mut Vec<FormError>) -
     match parse_f64(trimmed) {
         Ok(parsed) => Some(parsed),
         Err(err) => {
-            errors.push(FormError::new(field, err));
+            errors.push(FormError::new(field(), err));
             None
         }
     }
@@ -1263,7 +1285,8 @@ where
 mod tests {
     use super::*;
     use crate::models::{ColorMode, NamedColorOption};
-    use wayscriber::config::Config;
+    use wayscriber::config::{ColorSpec, Config, ToolPresetConfig};
+    use wayscriber::input::Tool;
 
     #[test]
     fn config_draft_to_config_reports_errors() {
@@ -1321,5 +1344,72 @@ mod tests {
         draft.set_toggle(ToggleField::ArrowHeadAtEnd, true);
         assert!(draft.board_enabled);
         assert!(draft.arrow_head_at_end);
+    }
+
+    #[test]
+    fn config_draft_round_trips_presets_and_history() {
+        let mut config = Config::default();
+        config.history.undo_all_delay_ms = 500;
+        config.history.redo_all_delay_ms = 700;
+        config.history.custom_section_enabled = true;
+        config.history.custom_undo_delay_ms = 200;
+        config.history.custom_redo_delay_ms = 300;
+        config.history.custom_undo_steps = 12;
+        config.history.custom_redo_steps = 9;
+
+        config.presets.slot_count = 3;
+        let preset = ToolPresetConfig {
+            name: Some("Primary".to_string()),
+            tool: Tool::Pen,
+            color: ColorSpec::Name("blue".to_string()),
+            size: 5.0,
+            eraser_kind: None,
+            eraser_mode: None,
+            marker_opacity: Some(0.5),
+            fill_enabled: Some(true),
+            font_size: Some(14.0),
+            text_background_enabled: Some(false),
+            arrow_length: Some(20.0),
+            arrow_angle: Some(30.0),
+            arrow_head_at_end: Some(true),
+            show_status_bar: Some(false),
+        };
+        config.presets.set_slot(1, Some(preset));
+
+        let draft = ConfigDraft::from_config(&config);
+        let round_trip = draft
+            .to_config(&config)
+            .expect("expected config to round trip");
+
+        assert_eq!(
+            round_trip.history.undo_all_delay_ms,
+            config.history.undo_all_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.redo_all_delay_ms,
+            config.history.redo_all_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.custom_section_enabled,
+            config.history.custom_section_enabled
+        );
+        assert_eq!(
+            round_trip.history.custom_undo_delay_ms,
+            config.history.custom_undo_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.custom_redo_delay_ms,
+            config.history.custom_redo_delay_ms
+        );
+        assert_eq!(
+            round_trip.history.custom_undo_steps,
+            config.history.custom_undo_steps
+        );
+        assert_eq!(
+            round_trip.history.custom_redo_steps,
+            config.history.custom_redo_steps
+        );
+        assert_eq!(round_trip.presets.slot_count, config.presets.slot_count);
+        assert_eq!(round_trip.presets.get_slot(1), config.presets.get_slot(1));
     }
 }

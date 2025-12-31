@@ -10,6 +10,7 @@ pub mod input;
 pub mod paths;
 pub mod session;
 pub mod time_utils;
+pub mod toolbar_icons;
 pub mod ui;
 pub mod util;
 

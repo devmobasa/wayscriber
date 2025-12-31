@@ -1,10 +1,11 @@
 use crate::config::Action;
-use crate::draw::Shape;
+use crate::draw::{PageDeleteOutcome, Shape};
 use crate::input::{ZoomAction, board_mode::BoardMode, events::Key, tool::Tool};
 use crate::util;
 use log::{info, warn};
 const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
+const PROPERTIES_PANEL_COARSE_STEP: i32 = 5;
 
 use super::{
     DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, SelectionAxis,
@@ -24,6 +25,10 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
+        if self.show_help && self.handle_help_overlay_key(key) {
+            return;
+        }
+
         // Handle modifier keys first
         match key {
             Key::Shift => {
@@ -45,8 +50,31 @@ impl InputState {
             _ => {}
         }
 
-        if matches!(key, Key::Escape) && self.properties_panel().is_some() {
-            self.close_properties_panel();
+        if self.is_properties_panel_open() {
+            let adjust_step = if self.modifiers.shift {
+                PROPERTIES_PANEL_COARSE_STEP
+            } else {
+                1
+            };
+            let handled = match key {
+                Key::Escape => {
+                    self.close_properties_panel();
+                    true
+                }
+                Key::Up => self.focus_previous_properties_entry(),
+                Key::Down => self.focus_next_properties_entry(),
+                Key::Home => self.focus_first_properties_entry(),
+                Key::End => self.focus_last_properties_entry(),
+                Key::Return | Key::Space => self.activate_properties_panel_entry(),
+                Key::Left => self.adjust_properties_panel_entry(-adjust_step),
+                Key::Right => self.adjust_properties_panel_entry(adjust_step),
+                Key::Char('+') | Key::Char('=') => self.adjust_properties_panel_entry(adjust_step),
+                Key::Char('-') | Key::Char('_') => self.adjust_properties_panel_entry(-adjust_step),
+                _ => false,
+            };
+            if handled {
+                return;
+            }
             return;
         }
 
@@ -299,7 +327,10 @@ impl InputState {
 
     /// Handle an action triggered by a keybinding.
     pub(super) fn handle_action(&mut self, action: Action) {
-        if !matches!(action, Action::OpenContextMenu) {
+        if !matches!(
+            action,
+            Action::OpenContextMenu | Action::ToggleSelectionProperties
+        ) {
             self.close_properties_panel();
         }
 
@@ -667,10 +698,38 @@ impl InputState {
                     self.switch_board_mode(BoardMode::Transparent);
                 }
             }
+            Action::PagePrev => {
+                if self.page_prev() {
+                    info!("Switched to previous page");
+                } else {
+                    self.set_ui_toast(UiToastKind::Info, "Already on the first page.");
+                }
+            }
+            Action::PageNext => {
+                if self.page_next() {
+                    info!("Switched to next page");
+                } else {
+                    self.set_ui_toast(UiToastKind::Info, "Already on the last page.");
+                }
+            }
+            Action::PageNew => {
+                self.page_new();
+                info!("Created new page");
+            }
+            Action::PageDuplicate => {
+                self.page_duplicate();
+                info!("Duplicated page");
+            }
+            Action::PageDelete => match self.page_delete() {
+                PageDeleteOutcome::Removed => {
+                    info!("Deleted page");
+                }
+                PageDeleteOutcome::Cleared => {
+                    self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
+                }
+            },
             Action::ToggleHelp => {
-                self.show_help = !self.show_help;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                self.toggle_help_overlay();
             }
             Action::ToggleStatusBar => {
                 self.show_status_bar = !self.show_status_bar;
@@ -736,6 +795,17 @@ impl InputState {
             Action::OpenContextMenu => {
                 if !self.zoom_active() {
                     self.toggle_context_menu_via_keyboard();
+                }
+            }
+            Action::ToggleSelectionProperties => {
+                if matches!(self.state, DrawingState::Idle) {
+                    if self.properties_panel().is_some() {
+                        self.close_properties_panel();
+                    } else if self.show_properties_panel() {
+                        self.close_context_menu();
+                    } else {
+                        self.set_ui_toast(UiToastKind::Warning, "No selection to edit.");
+                    }
                 }
             }
             Action::OpenConfigurator => {
@@ -886,6 +956,88 @@ impl InputState {
     pub(crate) fn redo_all_immediate(&mut self) {
         while let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
             self.apply_action_side_effects(&action);
+        }
+    }
+
+    fn handle_help_overlay_key(&mut self, key: Key) -> bool {
+        if !self.show_help {
+            return false;
+        }
+
+        let search_active = !self.help_overlay_search.trim().is_empty();
+
+        match key {
+            Key::Escape | Key::F1 | Key::F10 => {
+                self.toggle_help_overlay();
+                true
+            }
+            Key::Tab => {
+                self.toggle_help_overlay_view();
+                true
+            }
+            Key::Backspace => {
+                if !self.help_overlay_search.is_empty() {
+                    self.help_overlay_search.pop();
+                    self.help_overlay_scroll = 0.0;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            Key::Space => {
+                if search_active {
+                    self.help_overlay_search.push(' ');
+                    self.help_overlay_scroll = 0.0;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                }
+                true
+            }
+            Key::Char(ch) => {
+                if !ch.is_control() {
+                    self.help_overlay_search.push(ch);
+                    self.help_overlay_scroll = 0.0;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            // Disable page navigation while search is active
+            Key::Left | Key::Right | Key::PageUp | Key::PageDown | Key::Home | Key::End
+                if search_active =>
+            {
+                true
+            }
+            Key::Left | Key::PageUp if !search_active => self.help_overlay_prev_page(),
+            Key::Right | Key::PageDown if !search_active => self.help_overlay_next_page(),
+            Key::Home if !search_active => {
+                if self.help_overlay_page != 0 {
+                    self.help_overlay_page = 0;
+                    self.help_overlay_scroll = 0.0;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            Key::End if !search_active => {
+                let last_page = self.help_overlay_page_count().saturating_sub(1);
+                if self.help_overlay_page != last_page {
+                    self.help_overlay_page = last_page;
+                    self.help_overlay_scroll = 0.0;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
         }
     }
 }

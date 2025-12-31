@@ -353,6 +353,10 @@ pub struct UiConfig {
     #[serde(default)]
     pub help_overlay_style: HelpOverlayStyle,
 
+    /// Filter help overlay sections based on enabled features
+    #[serde(default = "default_help_overlay_context_filter")]
+    pub help_overlay_context_filter: bool,
+
     /// Preferred output name for the xdg-shell fallback overlay (GNOME).
     /// Falls back to last entered output or first available.
     #[serde(default)]
@@ -384,6 +388,7 @@ impl Default for UiConfig {
             status_bar_position: default_status_position(),
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
+            help_overlay_context_filter: default_help_overlay_context_filter(),
             preferred_output: None,
             xdg_fullscreen: default_xdg_fullscreen(),
             click_highlight: ClickHighlightConfig::default(),
@@ -497,6 +502,10 @@ pub struct HelpOverlayStyle {
     #[serde(default = "default_help_font_size")]
     pub font_size: f64,
 
+    /// Font family for help overlay text (comma-separated fallback list)
+    #[serde(default = "default_help_font_family")]
+    pub font_family: String,
+
     /// Line height for help text
     #[serde(default = "default_help_line_height")]
     pub line_height: f64,
@@ -526,6 +535,7 @@ impl Default for HelpOverlayStyle {
     fn default() -> Self {
         Self {
             font_size: default_help_font_size(),
+            font_family: default_help_font_family(),
             line_height: default_help_line_height(),
             padding: default_help_padding(),
             bg_color: default_help_bg_color(),
@@ -717,6 +727,10 @@ fn default_xdg_fullscreen() -> bool {
     false
 }
 
+fn default_help_overlay_context_filter() -> bool {
+    true
+}
+
 fn default_status_position() -> StatusPosition {
     StatusPosition::BottomLeft
 }
@@ -744,11 +758,15 @@ fn default_status_dot_radius() -> f64 {
 
 // Help overlay style defaults
 fn default_help_font_size() -> f64 {
-    18.0
+    14.0
+}
+
+fn default_help_font_family() -> String {
+    "Noto Sans, DejaVu Sans, Liberation Sans, Sans".to_string()
 }
 
 fn default_help_line_height() -> f64 {
-    28.0
+    22.0
 }
 
 fn default_help_padding() -> f64 {

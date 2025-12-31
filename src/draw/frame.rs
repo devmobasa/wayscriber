@@ -174,6 +174,14 @@ impl Frame {
         self.next_shape_id = 1;
     }
 
+    /// Clone the frame's shapes while dropping history.
+    pub fn clone_without_history(&self) -> Self {
+        let mut frame = Frame::new();
+        frame.shapes = self.shapes.clone();
+        frame.rebuild_next_id();
+        frame
+    }
+
     #[allow(dead_code)]
     /// Returns the number of shapes in the frame.
     pub fn len(&self) -> usize {
