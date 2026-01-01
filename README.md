@@ -506,48 +506,7 @@ ui_animation_fps = 30
 
 ## Contributing
 
-Pull requests and bug reports welcome. Priority areas:
-- Compositor compatibility testing
-- Click-through option ( while overlay is active, an option to click around )
-- Multi-monitor support
-- New drawing tools
-
-### Development
-
-```bash
-cargo run -- --active
-```
-
-Before submitting a PR, run the local CI script to ensure all checks pass:
-```bash
-./tools/lint-and-test.sh  # runs fmt, clippy, and tests (stops on first failure)
-```
-
-Use `./tools/fetch-all-deps.sh` to prefetch crates before offline builds.
-
-### Architecture
-
-<details>
-<summary>Project structure</summary>
-
-```
-wayscriber/
-├── src/
-│   ├── main.rs           # Entry point, CLI parsing
-│   ├── daemon.rs         # Daemon mode with signal handling
-│   ├── ui.rs             # Status bar and help overlay
-│   ├── backend/
-│   │   └── wayland.rs    # Wayland wlr-layer-shell implementation
-│   ├── config/           # Configuration loader and types
-│   ├── draw/             # Drawing, shapes, rendering (Cairo/Pango)
-│   └── input/            # Input handling, state machine
-├── tools/                # Helper scripts
-├── packaging/            # Distribution files
-├── docs/                 # Documentation
-└── config.example.toml
-```
-
-</details>
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure, and workflow notes.
 
 ---
 
