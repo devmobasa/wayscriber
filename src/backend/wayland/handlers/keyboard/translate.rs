@@ -1,0 +1,68 @@
+use smithay_client_toolkit::seat::keyboard::Keysym;
+
+use crate::input::Key;
+
+pub(super) fn keysym_to_key(keysym: Keysym) -> Key {
+    match keysym {
+        Keysym::Escape => Key::Escape,
+        Keysym::Return => Key::Return,
+        Keysym::BackSpace => Key::Backspace,
+        Keysym::Tab => Key::Tab,
+        Keysym::space => Key::Space,
+        Keysym::Up => Key::Up,
+        Keysym::Down => Key::Down,
+        Keysym::Left => Key::Left,
+        Keysym::Right => Key::Right,
+        Keysym::Delete => Key::Delete,
+        Keysym::Home => Key::Home,
+        Keysym::End => Key::End,
+        Keysym::Page_Up => Key::PageUp,
+        Keysym::Page_Down => Key::PageDown,
+        Keysym::Shift_L | Keysym::Shift_R => Key::Shift,
+        Keysym::Control_L | Keysym::Control_R => Key::Ctrl,
+        Keysym::Alt_L | Keysym::Alt_R => Key::Alt,
+        Keysym::Menu => Key::Menu,
+        Keysym::plus => Key::Char('+'),
+        Keysym::equal => Key::Char('='),
+        Keysym::minus => Key::Char('-'),
+        Keysym::underscore => Key::Char('_'),
+        Keysym::_0 | Keysym::KP_0 => Key::Char('0'),
+        Keysym::t => Key::Char('t'),
+        Keysym::T => Key::Char('T'),
+        Keysym::e => Key::Char('e'),
+        Keysym::E => Key::Char('E'),
+        Keysym::r => Key::Char('r'),
+        Keysym::R => Key::Char('R'),
+        Keysym::g => Key::Char('g'),
+        Keysym::G => Key::Char('G'),
+        Keysym::b => Key::Char('b'),
+        Keysym::B => Key::Char('B'),
+        Keysym::y => Key::Char('y'),
+        Keysym::Y => Key::Char('Y'),
+        Keysym::o => Key::Char('o'),
+        Keysym::O => Key::Char('O'),
+        Keysym::p => Key::Char('p'),
+        Keysym::P => Key::Char('P'),
+        Keysym::w => Key::Char('w'),
+        Keysym::W => Key::Char('W'),
+        Keysym::k => Key::Char('k'),
+        Keysym::K => Key::Char('K'),
+        Keysym::z => Key::Char('z'),
+        Keysym::Z => Key::Char('Z'),
+        Keysym::F1 => Key::F1,
+        Keysym::F2 => Key::F2,
+        Keysym::F4 => Key::F4,
+        Keysym::F9 => Key::F9,
+        Keysym::F10 => Key::F10,
+        Keysym::F11 => Key::F11,
+        Keysym::F12 => Key::F12,
+        _ => {
+            let raw = keysym.raw();
+            if (0x20..=0x7E).contains(&raw) {
+                Key::Char(raw as u8 as char)
+            } else {
+                Key::Unknown
+            }
+        }
+    }
+}
