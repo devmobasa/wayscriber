@@ -1,139 +1,6 @@
 use super::*;
 
-fn desired_keyboard_interactivity_for(
-    layer_shell_available: bool,
-    toolbar_visible: bool,
-) -> KeyboardInteractivity {
-    if layer_shell_available && toolbar_visible {
-        KeyboardInteractivity::OnDemand
-    } else {
-        KeyboardInteractivity::Exclusive
-    }
-}
-
 impl WaylandState {
-    pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {
-        self.data.pointer_over_toolbar
-    }
-
-    pub(in crate::backend::wayland) fn set_pointer_over_toolbar(&mut self, value: bool) {
-        self.data.pointer_over_toolbar = value;
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_dragging(&self) -> bool {
-        self.data.toolbar_dragging
-    }
-
-    pub(in crate::backend::wayland) fn set_toolbar_dragging(&mut self, value: bool) {
-        self.data.toolbar_dragging = value;
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_needs_recreate(&self) -> bool {
-        self.data.toolbar_needs_recreate
-    }
-
-    pub(in crate::backend::wayland) fn set_toolbar_needs_recreate(&mut self, value: bool) {
-        self.data.toolbar_needs_recreate = value;
-    }
-
-    /// Clear cached margins so recreated/hidden toolbars reapply offsets once.
-    fn reset_toolbar_margin_cache(&mut self) {
-        self.data.last_applied_top_margin = None;
-        self.data.last_applied_top_margin_top = None;
-        self.data.last_applied_side_margin = None;
-        self.data.last_applied_side_margin_left = None;
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_top_offset(&self) -> f64 {
-        self.data.toolbar_top_offset
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_top_offset_y(&self) -> f64 {
-        self.data.toolbar_top_offset_y
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_side_offset(&self) -> f64 {
-        self.data.toolbar_side_offset
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_side_offset_x(&self) -> f64 {
-        self.data.toolbar_side_offset_x
-    }
-
-    pub(in crate::backend::wayland) fn pointer_lock_active(&self) -> bool {
-        self.locked_pointer.is_some()
-    }
-
-    #[allow(dead_code)] // Kept for potential future pointer lock support
-    pub(in crate::backend::wayland) fn lock_pointer_for_drag(
-        &mut self,
-        qh: &QueueHandle<Self>,
-        surface: &wl_surface::WlSurface,
-    ) {
-        if self.inline_toolbars_active() || self.pointer_lock_active() {
-            log::info!(
-                "skip pointer lock: inline_active={}, already_locked={}",
-                self.inline_toolbars_active(),
-                self.pointer_lock_active()
-            );
-            return;
-        }
-        if self.pointer_constraints_state.bound_global().is_err() {
-            log::info!("pointer lock unavailable: constraints global missing");
-            return;
-        }
-        let Some(pointer) = self.current_pointer() else {
-            log::info!("pointer lock unavailable: no current pointer");
-            return;
-        };
-
-        match self.pointer_constraints_state.lock_pointer(
-            surface,
-            &pointer,
-            None,
-            zwp_pointer_constraints_v1::Lifetime::Oneshot,
-            qh,
-        ) {
-            Ok(lp) => {
-                self.locked_pointer = Some(lp);
-                log::info!(
-                    "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
-                    self.current_seat_id(),
-                    surface_id(surface),
-                    pointer.id().protocol_id()
-                );
-            }
-            Err(err) => {
-                warn!("Failed to lock pointer for toolbar drag: {}", err);
-                return;
-            }
-        }
-
-        match self
-            .relative_pointer_state
-            .get_relative_pointer(&pointer, qh)
-        {
-            Ok(rp) => {
-                self.relative_pointer = Some(rp);
-                log::info!("relative pointer bound for drag");
-            }
-            Err(err) => {
-                warn!("Failed to obtain relative pointer for drag: {}", err);
-                // Abort lock if relative pointer is unavailable; fall back to absolute path.
-                self.unlock_pointer();
-            }
-        }
-    }
-
-    pub(in crate::backend::wayland) fn unlock_pointer(&mut self) {
-        if let Some(lp) = self.locked_pointer.take() {
-            lp.destroy();
-        }
-        if let Some(rp) = self.relative_pointer.take() {
-            rp.destroy();
-        }
-    }
-
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
         &self,
     ) -> KeyboardInteractivity {
@@ -359,28 +226,11 @@ impl WaylandState {
         }
     }
 
-    pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {
-        self.data.inline_toolbars
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn desired_keyboard_interactivity_requires_layer_shell_and_visibility() {
-        assert_eq!(
-            desired_keyboard_interactivity_for(true, true),
-            KeyboardInteractivity::OnDemand
-        );
-        assert_eq!(
-            desired_keyboard_interactivity_for(true, false),
-            KeyboardInteractivity::Exclusive
-        );
-        assert_eq!(
-            desired_keyboard_interactivity_for(false, true),
-            KeyboardInteractivity::Exclusive
-        );
+    /// Clear cached margins so recreated/hidden toolbars reapply offsets once.
+    fn reset_toolbar_margin_cache(&mut self) {
+        self.data.last_applied_top_margin = None;
+        self.data.last_applied_top_margin_top = None;
+        self.data.last_applied_side_margin = None;
+        self.data.last_applied_side_margin_left = None;
     }
 }
