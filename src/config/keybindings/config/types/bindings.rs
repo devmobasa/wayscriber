@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::super::defaults::*;
+use super::super::super::defaults::*;
 
 /// Configuration for all keybindings.
 ///
