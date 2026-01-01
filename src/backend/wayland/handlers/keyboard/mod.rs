@@ -254,5 +254,9 @@ impl WaylandState {
                 self.stylus_peak_thickness = None;
             }
         }
+
+        if let Some(action) = self.input_state.take_pending_zoom_action() {
+            self.handle_zoom_action(action);
+        }
     }
 }

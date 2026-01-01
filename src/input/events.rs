@@ -49,8 +49,18 @@ pub enum Key {
     F1,
     /// F2 function key (toolbar toggle)
     F2,
+    /// F3 function key
+    F3,
     /// F4 function key (toggle status bar)
     F4,
+    /// F5 function key
+    F5,
+    /// F6 function key
+    F6,
+    /// F7 function key
+    F7,
+    /// F8 function key
+    F8,
     /// F9 function key (toggle toolbar)
     F9,
     /// F10 function key (toggle help)
