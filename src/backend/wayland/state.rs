@@ -3,7 +3,6 @@
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
-use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
     compositor::CompositorState,

@@ -24,14 +24,7 @@ impl WaylandState {
             }
         }
 
-        let (top_changed, side_changed) = self.apply_toolbar_offsets(&snapshot);
-        // Commit both toolbar surfaces immediately to force the compositor to apply margins.
-        if top_changed && let Some(layer) = self.toolbar.top_layer_surface() {
-            layer.wl_surface().commit();
-        }
-        if side_changed && let Some(layer) = self.toolbar.side_layer_surface() {
-            layer.wl_surface().commit();
-        }
+        let _ = self.apply_toolbar_offsets(&snapshot);
 
         drag_log(format!(
             "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
@@ -44,7 +37,6 @@ impl WaylandState {
             self.data.toolbar_side_offset
         ));
 
-        self.toolbar.mark_dirty();
         if self.inline_toolbars_active() {
             self.input_state.needs_redraw = true;
         }

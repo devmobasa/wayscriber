@@ -88,14 +88,6 @@ impl ToolbarSurfaceManager {
         self.side.set_margins(top, right, bottom, left);
     }
 
-    pub fn top_layer_surface(&self) -> Option<&LayerSurface> {
-        self.top.layer_surface.as_ref()
-    }
-
-    pub fn side_layer_surface(&self) -> Option<&LayerSurface> {
-        self.side.layer_surface.as_ref()
-    }
-
     pub fn destroy_all(&mut self) {
         self.top.destroy();
         self.side.destroy();

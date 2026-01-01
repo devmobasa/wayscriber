@@ -151,7 +151,6 @@ impl WaylandState {
             self.toolbar
                 .set_side_margins(side_margin_top, side_margin_left);
         }
-        self.toolbar.mark_dirty();
         (top_changed, side_changed)
     }
 }

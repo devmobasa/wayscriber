@@ -136,19 +136,10 @@ impl WaylandState {
             last_coord: effective_coord,
             coord_is_screen: true,
         });
-        let (top_changed, side_changed) = self.apply_toolbar_offsets(&snapshot);
-        // Force commits so compositors apply new margins immediately.
-        if top_changed && let Some(layer) = self.toolbar.top_layer_surface() {
-            layer.wl_surface().commit();
-        }
-        if side_changed && let Some(layer) = self.toolbar.side_layer_surface() {
-            layer.wl_surface().commit();
-        }
+        let _ = self.apply_toolbar_offsets(&snapshot);
         let inline_active = self.inline_toolbars_active();
-        if top_changed || side_changed || inline_active {
-            self.toolbar.mark_dirty();
-        }
         if inline_active {
+            self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
         if self.layer_shell.is_none() || inline_active {
@@ -232,19 +223,10 @@ impl WaylandState {
             last_coord: screen_coord,
             coord_is_screen: true,
         });
-        let (top_changed, side_changed) = self.apply_toolbar_offsets(&snapshot);
-        // Force commits so compositors apply new margins immediately.
-        if top_changed && let Some(layer) = self.toolbar.top_layer_surface() {
-            layer.wl_surface().commit();
-        }
-        if side_changed && let Some(layer) = self.toolbar.side_layer_surface() {
-            layer.wl_surface().commit();
-        }
+        let _ = self.apply_toolbar_offsets(&snapshot);
         let inline_active = self.inline_toolbars_active();
-        if top_changed || side_changed || inline_active {
-            self.toolbar.mark_dirty();
-        }
         if inline_active {
+            self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
         if self.layer_shell.is_none() || inline_active {
