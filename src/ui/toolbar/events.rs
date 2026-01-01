@@ -85,12 +85,12 @@ pub enum ToolbarEvent {
     SetToolbarLayoutMode(ToolbarLayoutMode),
     /// Toggle the simple-mode shape picker
     ToggleShapePicker(bool),
-    /// Drag handle for top toolbar (carries pointer position in toolbar coords)
+    /// Drag handle for top toolbar (toolbar coords; screen coords when inline toolbars are active)
     MoveTopToolbar {
         x: f64,
         y: f64,
     },
-    /// Drag handle for side toolbar (carries pointer position in toolbar coords)
+    /// Drag handle for side toolbar (toolbar coords; screen coords when inline toolbars are active)
     MoveSideToolbar {
         x: f64,
         y: f64,

@@ -4,20 +4,31 @@ impl WaylandState {
     pub(in crate::backend::wayland::state::toolbar) fn begin_toolbar_move_drag(
         &mut self,
         kind: MoveDragKind,
-        local_coord: (f64, f64),
+        coord: (f64, f64),
+        coord_is_screen: bool,
     ) {
         if self.data.toolbar_move_drag.is_none() {
             log::debug!(
-                "Begin toolbar move drag: kind={:?}, local_coord=({:.3}, {:.3})",
+                "Begin toolbar move drag: kind={:?}, coord=({:.3}, {:.3}), coord_is_screen={}",
                 kind,
-                local_coord.0,
-                local_coord.1
+                coord.0,
+                coord.1,
+                coord_is_screen
             );
-            // Store as local coords since the initial press is on the toolbar surface
+            drag_log(format!(
+                "begin move drag: kind={:?}, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}, layer_shell={}",
+                kind,
+                coord.0,
+                coord.1,
+                coord_is_screen,
+                self.inline_toolbars_active(),
+                self.layer_shell.is_some()
+            ));
+            // Store initial coord with explicit coordinate space (screen vs toolbar-local).
             self.data.toolbar_move_drag = Some(MoveDrag {
                 kind,
-                last_coord: local_coord,
-                coord_is_screen: false,
+                last_coord: coord,
+                coord_is_screen,
             });
             // Freeze base positions so the other toolbar doesn't push while dragging.
             let snapshot = self.toolbar_snapshot();
@@ -37,6 +48,10 @@ impl WaylandState {
         local_coord: (f64, f64),
     ) {
         if self.pointer_lock_active() {
+            drag_log(format!(
+                "skip handle_toolbar_move_local: pointer locked, kind={:?}, coord=({:.3}, {:.3})",
+                kind, local_coord.0, local_coord.1
+            ));
             return;
         }
         // For layer-shell surfaces, use local coordinates directly since they're
@@ -140,6 +155,10 @@ impl WaylandState {
         screen_coord: (f64, f64),
     ) {
         if self.pointer_lock_active() {
+            drag_log(format!(
+                "skip handle_toolbar_move_screen: pointer locked, kind={:?}, coord=({:.3}, {:.3})",
+                kind, screen_coord.0, screen_coord.1
+            ));
             return;
         }
         let snapshot = self
