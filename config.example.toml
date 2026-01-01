@@ -578,8 +578,8 @@ toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
 
 # Page navigation
-page_prev = []
-page_next = []
+page_prev = ["Ctrl+Alt+ArrowLeft"]
+page_next = ["Ctrl+Alt+ArrowRight"]
 page_new = ["Ctrl+Alt+N"]
 page_duplicate = ["Ctrl+Alt+D"]
 page_delete = ["Ctrl+Alt+Delete"]

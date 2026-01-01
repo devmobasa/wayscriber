@@ -11,11 +11,11 @@ pub(crate) fn default_return_to_transparent() -> Vec<String> {
 }
 
 pub(crate) fn default_page_prev() -> Vec<String> {
-    Vec::new()
+    vec!["Ctrl+Alt+ArrowLeft".to_string()]
 }
 
 pub(crate) fn default_page_next() -> Vec<String> {
-    Vec::new()
+    vec!["Ctrl+Alt+ArrowRight".to_string()]
 }
 
 pub(crate) fn default_page_new() -> Vec<String> {
