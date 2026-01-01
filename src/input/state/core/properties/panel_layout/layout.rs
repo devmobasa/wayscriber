@@ -1,20 +1,13 @@
-use super::super::base::InputState;
-use super::types::PropertiesPanelLayout;
-use crate::util::Rect;
 use cairo::Context as CairoContext;
 
-const PANEL_TITLE_FONT: f64 = 15.0;
-const PANEL_BODY_FONT: f64 = 13.0;
-const PANEL_LINE_HEIGHT: f64 = 18.0;
-const PANEL_ROW_HEIGHT: f64 = 22.0;
-const PANEL_PADDING_X: f64 = 16.0;
-const PANEL_PADDING_Y: f64 = 12.0;
-const PANEL_COLUMN_GAP: f64 = 16.0;
-const PANEL_SECTION_GAP: f64 = 8.0;
-const PANEL_MARGIN: f64 = 12.0;
-const PANEL_INFO_OFFSET: f64 = 12.0;
-const PANEL_ANCHOR_GAP: f64 = 12.0;
-const PANEL_POINTER_OFFSET: f64 = 16.0;
+use super::super::super::base::InputState;
+use super::super::types::PropertiesPanelLayout;
+use super::{
+    PANEL_ANCHOR_GAP, PANEL_BODY_FONT, PANEL_COLUMN_GAP, PANEL_INFO_OFFSET, PANEL_LINE_HEIGHT,
+    PANEL_MARGIN, PANEL_PADDING_X, PANEL_PADDING_Y, PANEL_ROW_HEIGHT, PANEL_SECTION_GAP,
+    PANEL_TITLE_FONT,
+};
+use crate::util::Rect;
 
 impl InputState {
     pub fn clear_properties_panel_layout(&mut self) {
@@ -198,199 +191,22 @@ impl InputState {
         }
 
         if let Some(layout) = self.properties_panel_layout {
-            self.mark_properties_panel_region(layout);
-        }
-    }
-
-    pub fn properties_panel_index_at(&self, x: i32, y: i32) -> Option<usize> {
-        let layout = self.properties_panel_layout?;
-        let panel = self.shape_properties_panel.as_ref()?;
-        if panel.entries.is_empty() {
-            return None;
-        }
-
-        let local_x = x as f64 - layout.origin_x;
-        let local_y = y as f64 - layout.origin_y;
-        if local_x < 0.0 || local_y < 0.0 || local_x > layout.width || local_y > layout.height {
-            return None;
-        }
-
-        let row_y = y as f64 - layout.entry_start_y;
-        if row_y < 0.0 {
-            return None;
-        }
-        let index = (row_y / layout.entry_row_height).floor() as usize;
-        if index >= panel.entries.len() {
-            None
-        } else {
-            Some(index)
-        }
-    }
-
-    fn update_properties_panel_hover_from_pointer_internal(
-        &mut self,
-        x: i32,
-        y: i32,
-        trigger_redraw: bool,
-    ) {
-        let new_hover = self.properties_panel_index_at(x, y);
-        let Some(panel) = self.shape_properties_panel.as_mut() else {
-            return;
-        };
-
-        let new_hover = new_hover.filter(|idx| *idx < panel.entries.len());
-        let new_hover = new_hover.filter(|idx| !panel.entries[*idx].disabled);
-
-        if panel.hover_index != new_hover {
-            panel.hover_index = new_hover;
-            if trigger_redraw {
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-            }
-        }
-    }
-
-    pub fn update_properties_panel_hover_from_pointer(&mut self, x: i32, y: i32) {
-        self.update_properties_panel_hover_from_pointer_internal(x, y, true);
-    }
-
-    pub fn set_properties_panel_focus(&mut self, focus: Option<usize>) {
-        if let Some(panel) = self.shape_properties_panel.as_mut() {
-            panel.keyboard_focus = focus;
-        }
-    }
-
-    pub(super) fn current_properties_focus_or_hover(&self) -> Option<usize> {
-        self.shape_properties_panel
-            .as_ref()
-            .and_then(|panel| panel.keyboard_focus.or(panel.hover_index))
-    }
-
-    fn select_properties_edge_entry(&mut self, start_front: bool) -> bool {
-        let Some(panel) = self.shape_properties_panel.as_ref() else {
-            return false;
-        };
-        if panel.entries.is_empty() {
-            return false;
-        }
-
-        let mut index = if start_front {
-            0
-        } else {
-            panel.entries.len().saturating_sub(1)
-        };
-        loop {
-            let Some(entry) = panel.entries.get(index) else {
-                return false;
-            };
-            if !entry.disabled {
-                break;
-            }
-            if start_front {
-                index += 1;
-                if index >= panel.entries.len() {
-                    return false;
-                }
-            } else if index == 0 {
-                return false;
-            } else {
-                index -= 1;
-            }
-        }
-
-        self.set_properties_panel_focus(Some(index));
-        true
-    }
-
-    pub(crate) fn focus_next_properties_entry(&mut self) -> bool {
-        self.advance_properties_focus(true)
-    }
-
-    pub(crate) fn focus_previous_properties_entry(&mut self) -> bool {
-        self.advance_properties_focus(false)
-    }
-
-    pub(crate) fn focus_first_properties_entry(&mut self) -> bool {
-        self.select_properties_edge_entry(true)
-    }
-
-    pub(crate) fn focus_last_properties_entry(&mut self) -> bool {
-        self.select_properties_edge_entry(false)
-    }
-
-    fn advance_properties_focus(&mut self, forward: bool) -> bool {
-        let Some(panel) = self.shape_properties_panel.as_ref() else {
-            return false;
-        };
-        if panel.entries.is_empty() {
-            return false;
-        }
-
-        let index = match self.current_properties_focus_or_hover() {
-            Some(index) => index,
-            None => {
-                return if forward {
-                    self.select_properties_edge_entry(true)
-                } else {
-                    self.select_properties_edge_entry(false)
-                };
-            }
-        };
-
-        let mut next = if forward {
-            index + 1
-        } else {
-            index.saturating_sub(1)
-        };
-        loop {
-            let Some(entry) = panel.entries.get(next) else {
-                return false;
-            };
-            if !entry.disabled {
-                break;
-            }
-            if forward {
-                next += 1;
-            } else if next == 0 {
-                return false;
-            } else {
-                next -= 1;
-            }
-        }
-
-        self.set_properties_panel_focus(Some(next));
-        true
-    }
-
-    fn mark_properties_panel_region(&mut self, layout: PropertiesPanelLayout) {
-        let x = layout.origin_x.floor() as i32;
-        let y = layout.origin_y.floor() as i32;
-        let width = layout.width.ceil() as i32 + 2;
-        let height = layout.height.ceil() as i32 + 2;
-        let width = width.max(1);
-        let height = height.max(1);
-
-        if let Some(rect) = Rect::new(x, y, width, height) {
-            self.dirty_tracker.mark_rect(rect);
-        } else {
-            self.dirty_tracker.mark_full();
+            mark_properties_panel_region(self, layout);
         }
     }
 }
 
-pub(super) fn selection_panel_anchor(bounds: Option<Rect>, pointer: (i32, i32)) -> (f64, f64) {
-    bounds
-        .map(|rect| {
-            (
-                rect.x as f64 + rect.width as f64 + PANEL_ANCHOR_GAP,
-                (rect.y as f64 - PANEL_ANCHOR_GAP).max(PANEL_MARGIN),
-            )
-        })
-        .unwrap_or_else(|| {
-            let (px, py) = pointer;
-            (
-                px as f64 + PANEL_POINTER_OFFSET,
-                py as f64 - PANEL_POINTER_OFFSET,
-            )
-        })
+fn mark_properties_panel_region(state: &mut InputState, layout: PropertiesPanelLayout) {
+    let x = layout.origin_x.floor() as i32;
+    let y = layout.origin_y.floor() as i32;
+    let width = layout.width.ceil() as i32 + 2;
+    let height = layout.height.ceil() as i32 + 2;
+    let width = width.max(1);
+    let height = height.max(1);
+
+    if let Some(rect) = Rect::new(x, y, width, height) {
+        state.dirty_tracker.mark_rect(rect);
+    } else {
+        state.dirty_tracker.mark_full();
+    }
 }
