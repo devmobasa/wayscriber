@@ -5,8 +5,8 @@ use iced::{Alignment, Element, Length};
 use crate::messages::Message;
 use crate::models::{ColorMode, NamedColorOption, TextField, TripletField};
 
-use super::super::state::ConfiguratorApp;
-use super::widgets::{
+use super::super::super::state::ConfiguratorApp;
+use super::super::widgets::{
     COLOR_PICKER_WIDTH, DEFAULT_LABEL_GAP, color_preview_labeled, default_value_text,
 };
 

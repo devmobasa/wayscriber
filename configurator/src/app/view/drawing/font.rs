@@ -4,8 +4,8 @@ use iced::{Alignment, Element, Length};
 use crate::messages::Message;
 use crate::models::{FontStyleOption, FontWeightOption, TextField};
 
-use super::super::state::ConfiguratorApp;
-use super::widgets::{DEFAULT_LABEL_GAP, default_value_text, labeled_input};
+use super::super::super::state::ConfiguratorApp;
+use super::super::widgets::{DEFAULT_LABEL_GAP, default_value_text, labeled_input};
 
 pub(super) fn font_controls(app: &ConfiguratorApp) -> Element<'_, Message> {
     let weight_column = column![
