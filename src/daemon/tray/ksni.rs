@@ -1,9 +1,9 @@
 #[cfg(feature = "tray")]
+use super::super::types::TrayStatus;
+#[cfg(feature = "tray")]
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use super::runtime::update_session_resume_in_config;
-#[cfg(feature = "tray")]
-use super::super::types::TrayStatus;
 #[cfg(feature = "tray")]
 use log::{info, warn};
 #[cfg(feature = "tray")]
