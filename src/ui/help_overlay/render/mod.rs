@@ -1,20 +1,16 @@
 use crate::input::HelpOverlayView;
 
-use super::super::primitives::text_extents_for;
-use super::fonts::resolve_help_font_family;
 use super::grid::{GridColors, GridStyle, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
-use super::layout::{build_grid, measure_sections};
-use super::nav::{NavDrawStyle, build_nav_state, draw_nav};
-use super::sections::{build_section_sets, filter_sections_for_search};
+use super::nav::{NavDrawStyle, draw_nav};
 
 mod frame;
 mod metrics;
 mod palette;
+mod state;
 
 use frame::draw_overlay_frame;
-use metrics::RenderMetrics;
-use palette::RenderPalette;
+use state::build_overlay_layout;
 
 const BULLET: &str = "\u{2022}";
 const ARROW: &str = "\u{2192}";
@@ -37,35 +33,6 @@ pub fn render_help_overlay(
     capture_enabled: bool,
     scroll_offset: f64,
 ) -> f64 {
-    let search_query = search_query.trim();
-    let search_active = !search_query.is_empty();
-    let search_lower = search_query.to_ascii_lowercase();
-    let help_font_family = resolve_help_font_family(&style.font_family);
-
-    let page_count = view.page_count().max(1);
-    let page_index = page_index.min(page_count - 1);
-    let view_label = match view {
-        HelpOverlayView::Quick => "Essentials",
-        HelpOverlayView::Full => "Complete",
-    };
-
-    let section_sets = build_section_sets(
-        frozen_enabled,
-        context_filter,
-        board_enabled,
-        capture_enabled,
-        page_prev_label,
-        page_next_label,
-    );
-
-    let sections = if search_active {
-        filter_sections_for_search(section_sets.all, &search_lower)
-    } else if matches!(view, HelpOverlayView::Quick) || page_index == 0 {
-        section_sets.page1
-    } else {
-        section_sets.page2
-    };
-
     let title_text = "Wayscriber Controls";
     let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
     let version_line = format!(
@@ -78,143 +45,35 @@ pub fn render_help_overlay(
     let note_text_base = "Note: Each board mode has independent pages";
     let close_hint_text = "F1 / Esc to close";
 
-    let metrics = RenderMetrics::from_style(style, screen_width, screen_height);
-    let palette = RenderPalette::from_style(style);
-
+    let layout = build_overlay_layout(
+        ctx,
+        style,
+        screen_width,
+        screen_height,
+        frozen_enabled,
+        view,
+        page_index,
+        page_prev_label,
+        page_next_label,
+        search_query,
+        context_filter,
+        board_enabled,
+        capture_enabled,
+        scroll_offset,
+        title_text,
+        &version_line,
+        note_text_base,
+        close_hint_text,
+    );
+    let help_font_family = layout.help_font_family.as_str();
+    let metrics = layout.metrics;
+    let palette = layout.palette;
     let key_combo_style = KeyComboStyle {
-        font_family: help_font_family.as_str(),
+        font_family: help_font_family,
         font_size: metrics.body_font_size,
         text_color: palette.accent_muted,
         separator_color: palette.subtitle,
     };
-
-    let max_search_width = (screen_width as f64 * 0.9 - style.padding * 2.0).max(0.0);
-    let nav_state = build_nav_state(
-        ctx,
-        help_font_family.as_str(),
-        view_label,
-        view,
-        search_active,
-        page_index,
-        page_count,
-        search_query,
-        palette.nav_key,
-        palette.subtitle,
-        metrics.nav_font_size,
-        metrics.nav_line_gap,
-        metrics.nav_bottom_spacing,
-        metrics.extra_line_gap,
-        metrics.extra_line_bottom_spacing,
-        max_search_width,
-    );
-
-    let measured_sections = measure_sections(
-        ctx,
-        sections,
-        help_font_family.as_str(),
-        metrics.body_font_size,
-        metrics.heading_font_size,
-        metrics.heading_line_height,
-        metrics.heading_icon_size,
-        metrics.heading_icon_gap,
-        metrics.row_line_height,
-        metrics.row_gap_after_heading,
-        metrics.key_desc_gap,
-        metrics.badge_font_size,
-        metrics.badge_padding_x,
-        metrics.badge_gap,
-        metrics.badge_height,
-        metrics.badge_top_gap,
-        metrics.section_card_padding,
-    );
-
-    let max_content_width = (metrics.max_box_width - style.padding * 2.0).max(0.0);
-    let grid = build_grid(
-        measured_sections,
-        screen_width,
-        max_content_width,
-        metrics.column_gap,
-        metrics.row_gap,
-    );
-
-    let title_extents = text_extents_for(
-        ctx,
-        help_font_family.as_str(),
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        metrics.title_font_size,
-        title_text,
-    );
-    let subtitle_extents = text_extents_for(
-        ctx,
-        help_font_family.as_str(),
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        metrics.subtitle_font_size,
-        &version_line,
-    );
-    let close_hint_extents = text_extents_for(
-        ctx,
-        help_font_family.as_str(),
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        metrics.note_font_size,
-        close_hint_text,
-    );
-    let note_to_close_gap = 12.0;
-    let header_height = metrics.accent_line_height
-        + metrics.accent_line_bottom_spacing
-        + metrics.title_font_size
-        + metrics.title_bottom_spacing
-        + metrics.subtitle_font_size
-        + metrics.subtitle_bottom_spacing
-        + nav_state.nav_block_height;
-    let footer_height = metrics.columns_bottom_spacing
-        + metrics.note_font_size
-        + note_to_close_gap
-        + metrics.note_font_size;
-    let content_height = header_height + grid.grid_height + footer_height;
-    let max_inner_height = (metrics.max_box_height - style.padding * 2.0).max(0.0);
-    let inner_height = content_height.min(max_inner_height);
-    let grid_view_height = (inner_height - header_height - footer_height).max(0.0);
-    let scroll_max = (grid.grid_height - grid_view_height).max(0.0);
-    let scroll_offset = scroll_offset.clamp(0.0, scroll_max);
-    let note_text = if scroll_max > 0.0 {
-        format!("{}  {}  Scroll: Mouse wheel", note_text_base, BULLET)
-    } else {
-        note_text_base.to_string()
-    };
-    let note_extents = text_extents_for(
-        ctx,
-        help_font_family.as_str(),
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        metrics.note_font_size,
-        note_text.as_str(),
-    );
-
-    let mut content_width = grid
-        .grid_width
-        .max(title_extents.width())
-        .max(subtitle_extents.width())
-        .max(nav_state.nav_primary_width)
-        .max(nav_state.nav_secondary_width)
-        .max(nav_state.nav_tertiary_width.unwrap_or(0.0))
-        .max(note_extents.width())
-        .max(close_hint_extents.width());
-    // Don't let search text expand the overlay - it will be clamped/elided
-    if grid.rows.is_empty() {
-        content_width = content_width
-            .max(title_extents.width())
-            .max(subtitle_extents.width());
-    }
-    // Ensure minimum width for search box
-    content_width = content_width.max(300.0);
-    let box_width = content_width + style.padding * 2.0;
-    let box_height = inner_height + style.padding * 2.0;
-
-    let box_x = (screen_width as f64 - box_width) / 2.0;
-    let box_y = (screen_height as f64 - box_height) / 2.0;
 
     draw_overlay_frame(
         ctx,
@@ -222,15 +81,15 @@ pub fn render_help_overlay(
         &palette,
         screen_width,
         screen_height,
-        box_x,
-        box_y,
-        box_width,
-        box_height,
+        layout.box_x,
+        layout.box_y,
+        layout.box_width,
+        layout.box_height,
     );
 
-    let inner_x = box_x + style.padding;
-    let mut cursor_y = box_y + style.padding;
-    let inner_width = box_width - style.padding * 2.0;
+    let inner_x = layout.box_x + style.padding;
+    let mut cursor_y = layout.box_y + style.padding;
+    let inner_width = layout.box_width - style.padding * 2.0;
 
     // Accent line
     ctx.set_source_rgba(
@@ -245,7 +104,7 @@ pub fn render_help_overlay(
 
     // Title
     ctx.select_font_face(
-        help_font_family.as_str(),
+        help_font_family,
         cairo::FontSlant::Normal,
         cairo::FontWeight::Bold,
     );
@@ -263,7 +122,7 @@ pub fn render_help_overlay(
 
     // Subtitle / version line
     ctx.select_font_face(
-        help_font_family.as_str(),
+        help_font_family,
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
     );
@@ -280,7 +139,7 @@ pub fn render_help_overlay(
     cursor_y += metrics.subtitle_font_size + metrics.subtitle_bottom_spacing;
 
     let nav_draw_style = NavDrawStyle {
-        font_family: help_font_family.as_str(),
+        font_family: help_font_family,
         subtitle_color: palette.subtitle,
         search_color: palette.search,
         nav_line_gap: metrics.nav_line_gap,
@@ -293,14 +152,14 @@ pub fn render_help_overlay(
         inner_x,
         cursor_y,
         inner_width,
-        &nav_state,
+        &layout.nav_state,
         &nav_draw_style,
     );
 
     let grid_start_y = cursor_y;
 
     let grid_style = GridStyle {
-        help_font_family: help_font_family.as_str(),
+        help_font_family,
         body_font_size: metrics.body_font_size,
         heading_font_size: metrics.heading_font_size,
         heading_line_height: metrics.heading_line_height,
@@ -331,24 +190,24 @@ pub fn render_help_overlay(
 
     draw_sections_grid(
         ctx,
-        &grid,
+        &layout.grid,
         grid_start_y,
         inner_x,
         inner_width,
-        grid_view_height,
-        scroll_offset,
-        search_active,
-        &search_lower,
+        layout.grid_view_height,
+        layout.scroll_offset,
+        layout.search_active,
+        &layout.search_lower,
         &grid_style,
         &grid_colors,
         &key_combo_style,
     );
 
-    cursor_y = grid_start_y + grid_view_height + metrics.columns_bottom_spacing;
+    cursor_y = grid_start_y + layout.grid_view_height + metrics.columns_bottom_spacing;
 
     // Note
     ctx.select_font_face(
-        help_font_family.as_str(),
+        help_font_family,
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
     );
@@ -359,11 +218,11 @@ pub fn render_help_overlay(
         palette.note[2],
         palette.note[3],
     );
-    let note_x = inner_x + (inner_width - note_extents.width()) / 2.0;
+    let note_x = inner_x + (inner_width - layout.note_width) / 2.0;
     let note_baseline = cursor_y + metrics.note_font_size;
     ctx.move_to(note_x, note_baseline);
-    let _ = ctx.show_text(note_text.as_str());
-    cursor_y += metrics.note_font_size + note_to_close_gap;
+    let _ = ctx.show_text(layout.note_text.as_str());
+    cursor_y += metrics.note_font_size + 12.0;
 
     // Close hint
     ctx.set_source_rgba(
@@ -372,10 +231,10 @@ pub fn render_help_overlay(
         palette.subtitle[2],
         0.7,
     );
-    let close_x = inner_x + (inner_width - close_hint_extents.width()) / 2.0;
+    let close_x = inner_x + (inner_width - layout.close_hint_width) / 2.0;
     let close_baseline = cursor_y + metrics.note_font_size;
     ctx.move_to(close_x, close_baseline);
     let _ = ctx.show_text(close_hint_text);
 
-    scroll_max
+    layout.scroll_max
 }
