@@ -1,6 +1,5 @@
 // Holds the live Wayland protocol state shared by the backend loop and the handler
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
-use crate::draw::Color;
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
@@ -23,7 +22,6 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
-use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use wayland_client::{
     Proxy, QueueHandle,
