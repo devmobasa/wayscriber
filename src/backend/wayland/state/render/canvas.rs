@@ -1,6 +1,7 @@
 use super::super::*;
 
 impl WaylandState {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn render_canvas_layer(
         &mut self,
         ctx: &cairo::Context,
