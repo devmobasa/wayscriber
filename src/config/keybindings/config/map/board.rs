@@ -7,14 +7,17 @@ impl KeybindingsConfig {
         &self,
         inserter: &mut BindingInserter,
     ) -> Result<(), String> {
-        inserter.insert_all(&self.toggle_whiteboard, Action::ToggleWhiteboard)?;
-        inserter.insert_all(&self.toggle_blackboard, Action::ToggleBlackboard)?;
-        inserter.insert_all(&self.return_to_transparent, Action::ReturnToTransparent)?;
-        inserter.insert_all(&self.page_prev, Action::PagePrev)?;
-        inserter.insert_all(&self.page_next, Action::PageNext)?;
-        inserter.insert_all(&self.page_new, Action::PageNew)?;
-        inserter.insert_all(&self.page_duplicate, Action::PageDuplicate)?;
-        inserter.insert_all(&self.page_delete, Action::PageDelete)?;
+        inserter.insert_all(&self.board.toggle_whiteboard, Action::ToggleWhiteboard)?;
+        inserter.insert_all(&self.board.toggle_blackboard, Action::ToggleBlackboard)?;
+        inserter.insert_all(
+            &self.board.return_to_transparent,
+            Action::ReturnToTransparent,
+        )?;
+        inserter.insert_all(&self.board.page_prev, Action::PagePrev)?;
+        inserter.insert_all(&self.board.page_next, Action::PageNext)?;
+        inserter.insert_all(&self.board.page_new, Action::PageNew)?;
+        inserter.insert_all(&self.board.page_duplicate, Action::PageDuplicate)?;
+        inserter.insert_all(&self.board.page_delete, Action::PageDelete)?;
         Ok(())
     }
 }

@@ -230,7 +230,7 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     config.session.auto_compress_threshold_kb = 0;
     config.session.storage = SessionStorageMode::Custom;
     config.session.custom_directory = Some("  ".to_string());
-    config.keybindings.exit = vec!["Ctrl+Shift".to_string()];
+    config.keybindings.core.exit = vec!["Ctrl+Shift".to_string()];
 
     config.validate_and_clamp();
 
@@ -262,7 +262,10 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     assert_eq!(config.session.auto_compress_threshold_kb, 1);
     assert!(matches!(config.session.storage, SessionStorageMode::Auto));
     assert!(config.session.custom_directory.is_none());
-    assert_eq!(config.keybindings.exit, KeybindingsConfig::default().exit);
+    assert_eq!(
+        config.keybindings.core.exit,
+        KeybindingsConfig::default().core.exit
+    );
 }
 
 #[test]

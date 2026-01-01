@@ -17,7 +17,7 @@ fn keybindings_draft_to_config_updates_fields() {
 
     let config = draft.to_config().expect("to_config should succeed");
     assert_eq!(
-        config.exit,
+        config.core.exit,
         vec!["Ctrl+Q".to_string(), "Escape".to_string()]
     );
 }

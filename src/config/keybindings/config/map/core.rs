@@ -7,16 +7,19 @@ impl KeybindingsConfig {
         &self,
         inserter: &mut BindingInserter,
     ) -> Result<(), String> {
-        inserter.insert_all(&self.exit, Action::Exit)?;
-        inserter.insert_all(&self.enter_text_mode, Action::EnterTextMode)?;
-        inserter.insert_all(&self.enter_sticky_note_mode, Action::EnterStickyNoteMode)?;
-        inserter.insert_all(&self.clear_canvas, Action::ClearCanvas)?;
-        inserter.insert_all(&self.undo, Action::Undo)?;
-        inserter.insert_all(&self.redo, Action::Redo)?;
-        inserter.insert_all(&self.undo_all, Action::UndoAll)?;
-        inserter.insert_all(&self.redo_all, Action::RedoAll)?;
-        inserter.insert_all(&self.undo_all_delayed, Action::UndoAllDelayed)?;
-        inserter.insert_all(&self.redo_all_delayed, Action::RedoAllDelayed)?;
+        inserter.insert_all(&self.core.exit, Action::Exit)?;
+        inserter.insert_all(&self.core.enter_text_mode, Action::EnterTextMode)?;
+        inserter.insert_all(
+            &self.core.enter_sticky_note_mode,
+            Action::EnterStickyNoteMode,
+        )?;
+        inserter.insert_all(&self.core.clear_canvas, Action::ClearCanvas)?;
+        inserter.insert_all(&self.core.undo, Action::Undo)?;
+        inserter.insert_all(&self.core.redo, Action::Redo)?;
+        inserter.insert_all(&self.core.undo_all, Action::UndoAll)?;
+        inserter.insert_all(&self.core.redo_all, Action::RedoAll)?;
+        inserter.insert_all(&self.core.undo_all_delayed, Action::UndoAllDelayed)?;
+        inserter.insert_all(&self.core.redo_all_delayed, Action::RedoAllDelayed)?;
         Ok(())
     }
 }

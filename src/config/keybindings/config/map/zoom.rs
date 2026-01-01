@@ -7,12 +7,12 @@ impl KeybindingsConfig {
         &self,
         inserter: &mut BindingInserter,
     ) -> Result<(), String> {
-        inserter.insert_all(&self.toggle_frozen_mode, Action::ToggleFrozenMode)?;
-        inserter.insert_all(&self.zoom_in, Action::ZoomIn)?;
-        inserter.insert_all(&self.zoom_out, Action::ZoomOut)?;
-        inserter.insert_all(&self.reset_zoom, Action::ResetZoom)?;
-        inserter.insert_all(&self.toggle_zoom_lock, Action::ToggleZoomLock)?;
-        inserter.insert_all(&self.refresh_zoom_capture, Action::RefreshZoomCapture)?;
+        inserter.insert_all(&self.zoom.toggle_frozen_mode, Action::ToggleFrozenMode)?;
+        inserter.insert_all(&self.zoom.zoom_in, Action::ZoomIn)?;
+        inserter.insert_all(&self.zoom.zoom_out, Action::ZoomOut)?;
+        inserter.insert_all(&self.zoom.reset_zoom, Action::ResetZoom)?;
+        inserter.insert_all(&self.zoom.toggle_zoom_lock, Action::ToggleZoomLock)?;
+        inserter.insert_all(&self.zoom.refresh_zoom_capture, Action::RefreshZoomCapture)?;
         Ok(())
     }
 }

@@ -138,11 +138,9 @@ fn test_build_action_map() {
 #[test]
 fn test_duplicate_keybinding_detection() {
     // Create a config with duplicate keybindings
-    let config = KeybindingsConfig {
-        exit: vec!["Ctrl+Z".to_string()],
-        undo: vec!["Ctrl+Z".to_string()],
-        ..Default::default()
-    };
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Z".to_string()];
+    config.core.undo = vec!["Ctrl+Z".to_string()];
 
     // This should fail with a duplicate error
     let result = config.build_action_map();
@@ -155,11 +153,9 @@ fn test_duplicate_keybinding_detection() {
 #[test]
 fn test_duplicate_with_different_modifier_order() {
     // Even with different modifier orders, these are the same keybinding
-    let config = KeybindingsConfig {
-        exit: vec!["Ctrl+Shift+W".to_string()],
-        toggle_whiteboard: vec!["Shift+Ctrl+W".to_string()],
-        ..Default::default()
-    };
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Shift+W".to_string()];
+    config.board.toggle_whiteboard = vec!["Shift+Ctrl+W".to_string()];
 
     // This should fail because they normalize to the same binding
     let result = config.build_action_map();

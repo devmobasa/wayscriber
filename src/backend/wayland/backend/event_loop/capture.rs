@@ -105,6 +105,7 @@ fn handle_capture_results(state: &mut WaylandState) {
             let open_folder_binding = state
                 .config
                 .keybindings
+                .capture
                 .open_capture_folder
                 .first()
                 .map(|binding| binding.as_str());
