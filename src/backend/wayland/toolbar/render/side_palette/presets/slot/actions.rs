@@ -7,6 +7,7 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use super::super::super::super::widgets::{draw_button, point_in_rect, set_icon_color};
 use super::PresetSlotLayout;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_preset_actions(
     ctx: &cairo::Context,
     snapshot: &ToolbarSnapshot,

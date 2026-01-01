@@ -10,6 +10,7 @@ use super::super::format::{preset_tooltip_text, truncate_label};
 use super::super::widgets::draw_preset_name_tag;
 use super::PresetSlotLayout;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_preset_content(
     ctx: &cairo::Context,
     snapshot: &ToolbarSnapshot,
