@@ -1,0 +1,74 @@
+use log::debug;
+use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
+
+use crate::input::MouseButton;
+
+use super::*;
+
+impl WaylandState {
+    pub(super) fn handle_pointer_release(
+        &mut self,
+        event: &PointerEvent,
+        on_toolbar: bool,
+        inline_active: bool,
+        button: u32,
+    ) {
+        if debug_toolbar_drag_logging_enabled() {
+            debug!(
+                "pointer release: button={}, on_toolbar={}, inline_active={}, drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
+                button,
+                on_toolbar,
+                inline_active,
+                self.is_move_dragging(),
+                self.toolbar_dragging(),
+                self.pointer_over_toolbar()
+            );
+        }
+        if inline_active {
+            if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
+                self.unlock_pointer();
+                return;
+            }
+            if self.pointer_over_toolbar() || self.toolbar_dragging() {
+                self.end_toolbar_move_drag();
+                self.unlock_pointer();
+                return;
+            }
+        }
+        if on_toolbar || self.pointer_over_toolbar() {
+            if button == BTN_LEFT {
+                self.set_toolbar_dragging(false);
+            }
+            self.end_toolbar_move_drag();
+            self.unlock_pointer();
+            return;
+        }
+        // End move drag if released on the main surface
+        if button == BTN_LEFT && self.is_move_dragging() {
+            self.set_toolbar_dragging(false);
+            self.end_toolbar_move_drag();
+            self.unlock_pointer();
+            return;
+        }
+        debug!("Button {} released", button);
+        if self.zoom.active && button == BTN_MIDDLE {
+            if self.zoom.panning {
+                self.zoom.stop_pan();
+                self.input_state.dirty_tracker.mark_full();
+                self.input_state.needs_redraw = true;
+            }
+            return;
+        }
+
+        let mb = match button {
+            BTN_LEFT => MouseButton::Left,
+            BTN_MIDDLE => MouseButton::Middle,
+            BTN_RIGHT => MouseButton::Right,
+            _ => return,
+        };
+
+        let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+        self.input_state.on_mouse_release(mb, wx, wy);
+        self.input_state.needs_redraw = true;
+    }
+}

@@ -1,0 +1,13 @@
+mod action_board_pages;
+mod action_capture_zoom;
+mod action_colors;
+mod action_core;
+mod action_dispatch;
+mod action_history;
+mod action_presets;
+mod action_selection;
+mod action_tools;
+mod action_ui;
+mod help_overlay;
+mod key_press;
+mod key_release;

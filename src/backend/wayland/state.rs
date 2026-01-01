@@ -1,6 +1,5 @@
 // Holds the live Wayland protocol state shared by the backend loop and the handler
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
-use crate::draw::Color;
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
@@ -24,7 +23,6 @@ use smithay_client_toolkit::{
     shm::Shm,
 };
 use std::time::{Duration, Instant};
-use std::{collections::HashSet, sync::OnceLock};
 use wayland_client::{
     Proxy, QueueHandle,
     protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
@@ -57,7 +55,6 @@ use crate::{
     notification,
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
-    util::Rect,
 };
 
 use self::data::{MoveDrag, StateData};
@@ -82,6 +79,7 @@ mod activation;
 mod capture;
 mod core;
 mod data;
+mod helpers;
 mod render;
 mod toolbar;
 mod zoom;
@@ -90,6 +88,11 @@ mod zoom;
 mod tests;
 
 type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+
+pub(super) use helpers::{
+    damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
+    force_inline_toolbars_requested, resolve_damage_regions, scale_damage_regions, surface_id,
+};
 
 pub(in crate::backend::wayland) struct WaylandGlobals {
     pub registry_state: RegistryState,
@@ -262,101 +265,4 @@ impl WaylandState {
         }
         self.ui_animation_next_tick.is_some_and(|next| now >= next)
     }
-}
-
-#[allow(dead_code)]
-fn resolve_damage_regions(width: i32, height: i32, mut regions: Vec<Rect>) -> Vec<Rect> {
-    regions.retain(Rect::is_valid);
-
-    if regions.is_empty()
-        && width > 0
-        && height > 0
-        && let Some(full) = Rect::new(0, 0, width, height)
-    {
-        regions.push(full);
-    }
-
-    regions
-}
-
-#[allow(dead_code)]
-fn scale_damage_regions(regions: Vec<Rect>, scale: i32) -> Vec<Rect> {
-    if scale <= 1 {
-        return regions;
-    }
-
-    regions
-        .into_iter()
-        .filter_map(|r| {
-            let x = r.x.saturating_mul(scale);
-            let y = r.y.saturating_mul(scale);
-            let w = r.width.saturating_mul(scale);
-            let h = r.height.saturating_mul(scale);
-
-            Rect::new(x, y, w, h)
-        })
-        .collect()
-}
-
-fn damage_summary(regions: &[Rect]) -> String {
-    if regions.is_empty() {
-        return "[]".to_string();
-    }
-
-    let mut parts = Vec::with_capacity(regions.len());
-    for r in regions.iter().take(5) {
-        parts.push(format!("({},{}) {}x{}", r.x, r.y, r.width, r.height));
-    }
-    if regions.len() > 5 {
-        parts.push(format!("... +{} more", regions.len() - 5));
-    }
-    parts.join(", ")
-}
-
-fn parse_boolish_env(raw: &str) -> bool {
-    let v = raw.to_ascii_lowercase();
-    !(v.is_empty() || v == "0" || v == "false" || v == "off")
-}
-
-fn parse_debug_damage_env(raw: &str) -> bool {
-    parse_boolish_env(raw)
-}
-
-fn debug_damage_logging_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        parse_debug_damage_env(&std::env::var("WAYSCRIBER_DEBUG_DAMAGE").unwrap_or_default())
-    })
-}
-
-pub(super) fn surface_id(surface: &wl_surface::WlSurface) -> u32 {
-    surface.id().protocol_id()
-}
-
-pub(super) fn debug_toolbar_drag_logging_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        parse_boolish_env(&std::env::var("WAYSCRIBER_DEBUG_TOOLBAR_DRAG").unwrap_or_default())
-    })
-}
-
-fn drag_log(message: impl AsRef<str>) {
-    if debug_toolbar_drag_logging_enabled() {
-        log::info!("{}", message.as_ref());
-    }
-}
-
-fn force_inline_env_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        parse_boolish_env(&std::env::var("WAYSCRIBER_FORCE_INLINE_TOOLBARS").unwrap_or_default())
-    })
-}
-
-fn force_inline_toolbars_requested_with_env(config: &Config, env_force_inline: bool) -> bool {
-    config.ui.toolbar.force_inline || env_force_inline
-}
-
-fn force_inline_toolbars_requested(config: &Config) -> bool {
-    force_inline_toolbars_requested_with_env(config, force_inline_env_enabled())
 }

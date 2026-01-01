@@ -1,0 +1,47 @@
+use super::*;
+
+impl WaylandState {
+    pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {
+        self.data.pointer_over_toolbar
+    }
+
+    pub(in crate::backend::wayland) fn set_pointer_over_toolbar(&mut self, value: bool) {
+        self.data.pointer_over_toolbar = value;
+    }
+
+    pub(in crate::backend::wayland) fn toolbar_dragging(&self) -> bool {
+        self.data.toolbar_dragging
+    }
+
+    pub(in crate::backend::wayland) fn set_toolbar_dragging(&mut self, value: bool) {
+        self.data.toolbar_dragging = value;
+    }
+
+    pub(in crate::backend::wayland) fn toolbar_needs_recreate(&self) -> bool {
+        self.data.toolbar_needs_recreate
+    }
+
+    pub(in crate::backend::wayland) fn set_toolbar_needs_recreate(&mut self, value: bool) {
+        self.data.toolbar_needs_recreate = value;
+    }
+
+    pub(in crate::backend::wayland) fn toolbar_top_offset(&self) -> f64 {
+        self.data.toolbar_top_offset
+    }
+
+    pub(in crate::backend::wayland) fn toolbar_top_offset_y(&self) -> f64 {
+        self.data.toolbar_top_offset_y
+    }
+
+    pub(in crate::backend::wayland) fn toolbar_side_offset(&self) -> f64 {
+        self.data.toolbar_side_offset
+    }
+
+    pub(in crate::backend::wayland) fn toolbar_side_offset_x(&self) -> f64 {
+        self.data.toolbar_side_offset_x
+    }
+
+    pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {
+        self.data.inline_toolbars
+    }
+}

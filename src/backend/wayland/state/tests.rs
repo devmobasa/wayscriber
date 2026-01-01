@@ -1,4 +1,6 @@
+use super::helpers;
 use super::*;
+use crate::util::Rect;
 
 // NOTE: The functions below are used for diagnostic logging only; the renderer currently applies
 // full-surface damage for correctness. These tests document the intended behavior if we ever
@@ -74,20 +76,20 @@ fn scale_damage_regions_multiplies_by_scale() {
 
 #[test]
 fn debug_damage_logging_env_parses_falsey() {
-    assert!(!parse_debug_damage_env(""));
-    assert!(!parse_debug_damage_env("0"));
-    assert!(!parse_debug_damage_env("false"));
-    assert!(!parse_debug_damage_env("off"));
-    assert!(parse_debug_damage_env("1"));
-    assert!(parse_debug_damage_env("true"));
+    assert!(!helpers::parse_debug_damage_env(""));
+    assert!(!helpers::parse_debug_damage_env("0"));
+    assert!(!helpers::parse_debug_damage_env("false"));
+    assert!(!helpers::parse_debug_damage_env("off"));
+    assert!(helpers::parse_debug_damage_env("1"));
+    assert!(helpers::parse_debug_damage_env("true"));
 }
 
 #[test]
 fn parse_boolish_env_handles_case_and_on() {
-    assert!(parse_boolish_env("ON"));
-    assert!(parse_boolish_env("yes"));
-    assert!(!parse_boolish_env("Off"));
-    assert!(!parse_boolish_env("0"));
+    assert!(helpers::parse_boolish_env("ON"));
+    assert!(helpers::parse_boolish_env("yes"));
+    assert!(!helpers::parse_boolish_env("Off"));
+    assert!(!helpers::parse_boolish_env("0"));
 }
 
 #[test]
@@ -119,8 +121,14 @@ fn resolve_then_scale_damage_regions_keeps_full_region() {
 #[test]
 fn force_inline_toolbars_requested_uses_config_or_env() {
     let mut config = Config::default();
-    assert!(!force_inline_toolbars_requested_with_env(&config, false));
-    assert!(force_inline_toolbars_requested_with_env(&config, true));
+    assert!(!helpers::force_inline_toolbars_requested_with_env(
+        &config, false
+    ));
+    assert!(helpers::force_inline_toolbars_requested_with_env(
+        &config, true
+    ));
     config.ui.toolbar.force_inline = true;
-    assert!(force_inline_toolbars_requested_with_env(&config, false));
+    assert!(helpers::force_inline_toolbars_requested_with_env(
+        &config, false
+    ));
 }
