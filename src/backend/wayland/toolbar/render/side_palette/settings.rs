@@ -70,6 +70,12 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 Some("Advanced: undo-all/delay/zoom."),
             ),
             (
+                "Pages",
+                snapshot.show_pages_section,
+                ToolbarEvent::TogglePagesSection(!snapshot.show_pages_section),
+                Some("Pages: prev/next/new/dup/del."),
+            ),
+            (
                 "Step controls",
                 snapshot.show_step_section,
                 ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),

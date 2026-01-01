@@ -33,6 +33,7 @@ impl ToolbarLayoutMode {
             Self::Simple => ToolbarSectionDefaults {
                 show_actions_section: true,
                 show_actions_advanced: false,
+                show_pages_section: true,
                 show_presets: false,
                 show_step_section: false,
                 show_text_controls: false,
@@ -41,6 +42,7 @@ impl ToolbarLayoutMode {
             Self::Regular => ToolbarSectionDefaults {
                 show_actions_section: true,
                 show_actions_advanced: false,
+                show_pages_section: true,
                 show_presets: true,
                 show_step_section: false,
                 show_text_controls: false,
@@ -49,6 +51,7 @@ impl ToolbarLayoutMode {
             Self::Advanced => ToolbarSectionDefaults {
                 show_actions_section: true,
                 show_actions_advanced: true,
+                show_pages_section: true,
                 show_presets: true,
                 show_step_section: true,
                 show_text_controls: true,
@@ -62,6 +65,7 @@ impl ToolbarLayoutMode {
 pub struct ToolbarSectionDefaults {
     pub show_actions_section: bool,
     pub show_actions_advanced: bool,
+    pub show_pages_section: bool,
     pub show_presets: bool,
     pub show_step_section: bool,
     pub show_text_controls: bool,
@@ -78,6 +82,10 @@ pub struct ToolbarModeOverride {
     /// Show advanced action buttons (undo all, zoom, freeze, etc.)
     #[serde(default)]
     pub show_actions_advanced: Option<bool>,
+
+    /// Show the Pages section in the side toolbar
+    #[serde(default)]
+    pub show_pages_section: Option<bool>,
 
     /// Show the presets section in the side toolbar
     #[serde(default)]
@@ -155,6 +163,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_actions_advanced")]
     pub show_actions_advanced: bool,
 
+    /// Show the Pages section in the side toolbar
+    #[serde(default = "default_show_pages_section")]
+    pub show_pages_section: bool,
+
     /// Show the presets section in the side toolbar
     #[serde(default = "default_show_presets")]
     pub show_presets: bool,
@@ -219,6 +231,7 @@ impl Default for ToolbarConfig {
             show_more_colors: default_show_more_colors(),
             show_actions_section: default_show_actions_section(),
             show_actions_advanced: default_show_actions_advanced(),
+            show_pages_section: default_show_pages_section(),
             show_presets: default_show_presets(),
             show_step_section: default_show_step_section(),
             show_text_controls: default_show_text_controls(),
@@ -262,6 +275,10 @@ fn default_show_actions_section() -> bool {
 
 fn default_show_actions_advanced() -> bool {
     false
+}
+
+fn default_show_pages_section() -> bool {
+    true
 }
 
 fn default_show_presets() -> bool {

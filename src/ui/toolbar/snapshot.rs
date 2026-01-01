@@ -84,6 +84,8 @@ pub struct ToolbarSnapshot {
     pub show_actions_section: bool,
     /// Whether to show advanced action buttons
     pub show_actions_advanced: bool,
+    /// Whether to show the Pages section
+    pub show_pages_section: bool,
     /// Whether to show the marker opacity slider section
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
@@ -224,6 +226,7 @@ impl ToolbarSnapshot {
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_actions_advanced: state.show_actions_advanced,
+            show_pages_section: state.show_pages_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
             show_preset_toasts: state.show_preset_toasts,
             show_presets: state.show_presets,

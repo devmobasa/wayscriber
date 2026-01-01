@@ -16,6 +16,7 @@ pub enum ToggleField {
     UiToolbarShowPresets,
     UiToolbarShowActionsSection,
     UiToolbarShowActionsAdvanced,
+    UiToolbarShowPagesSection,
     UiToolbarShowStepSection,
     UiToolbarShowTextControls,
     UiToolbarShowSettingsSection,

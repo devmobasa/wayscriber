@@ -272,6 +272,14 @@ impl InputState {
                     false
                 }
             }
+            ToolbarEvent::TogglePagesSection(show) => {
+                if self.show_pages_section != show {
+                    self.show_pages_section = show;
+                    true
+                } else {
+                    false
+                }
+            }
             ToolbarEvent::TogglePresets(show) => {
                 if self.show_presets != show {
                     self.show_presets = show;

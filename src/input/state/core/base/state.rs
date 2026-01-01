@@ -204,6 +204,8 @@ pub struct InputState {
     pub show_actions_section: bool,
     /// Whether to show advanced action buttons
     pub show_actions_advanced: bool,
+    /// Whether to show the Pages section
+    pub show_pages_section: bool,
     /// Whether to show the presets section
     pub show_presets: bool,
     /// Whether to show the Step Undo/Redo section
@@ -364,6 +366,7 @@ impl InputState {
             show_more_colors: false,
             show_actions_section: true, // Show by default
             show_actions_advanced: false,
+            show_pages_section: true,
             show_presets: true,
             show_step_section: false,
             show_text_controls: false,

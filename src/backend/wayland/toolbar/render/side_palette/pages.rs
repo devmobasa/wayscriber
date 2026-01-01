@@ -20,7 +20,7 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let section_gap = layout.section_gap;
     let use_icons = snapshot.use_icons;
 
-    if !snapshot.show_actions_advanced {
+    if !snapshot.show_actions_advanced || !snapshot.show_pages_section {
         return;
     }
 

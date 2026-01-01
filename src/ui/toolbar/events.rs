@@ -69,6 +69,8 @@ pub enum ToolbarEvent {
     ToggleActionsSection(bool),
     /// Toggle advanced action buttons
     ToggleActionsAdvanced(bool),
+    /// Toggle Pages section visibility
+    TogglePagesSection(bool),
     /// Toggle presets section visibility
     TogglePresets(bool),
     /// Toggle Step Undo/Redo section visibility

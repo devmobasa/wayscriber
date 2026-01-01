@@ -248,6 +248,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         config.ui.toolbar.show_more_colors,
         config.ui.toolbar.show_actions_section,
         config.ui.toolbar.show_actions_advanced,
+        config.ui.toolbar.show_pages_section,
         config.ui.toolbar.show_presets,
         config.ui.toolbar.show_step_section,
         config.ui.toolbar.show_text_controls,

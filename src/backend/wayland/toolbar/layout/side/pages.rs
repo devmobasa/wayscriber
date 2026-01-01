@@ -7,7 +7,7 @@ pub(super) fn push_pages_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ctx.snapshot.show_actions_advanced {
+    if !ctx.snapshot.show_actions_advanced || !ctx.snapshot.show_pages_section {
         return y;
     }
 

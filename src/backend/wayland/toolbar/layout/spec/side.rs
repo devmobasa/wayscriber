@@ -81,7 +81,7 @@ impl ToolbarLayoutSpec {
         let show_text_controls =
             snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
         let show_actions = snapshot.show_actions_section || snapshot.show_actions_advanced;
-        let show_pages = snapshot.show_actions_advanced;
+        let show_pages = snapshot.show_actions_advanced && snapshot.show_pages_section;
         let show_presets =
             snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
         let show_step_section = snapshot.show_step_section;
@@ -247,7 +247,7 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        if !snapshot.show_actions_advanced {
+        if !snapshot.show_actions_advanced || !snapshot.show_pages_section {
             return 0.0;
         }
         let btn_h = if self.use_icons {
@@ -286,7 +286,7 @@ impl ToolbarLayoutSpec {
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
         let mut toggle_count = 2; // Tool preview + preset toasts
         if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
-            toggle_count += 5; // presets, actions, advanced actions, step section, text controls
+            toggle_count += 6; // presets, actions, advanced actions, pages, step section, text controls
         }
         let rows = (toggle_count + 1) / 2;
         let toggle_rows_h = if rows > 0 {

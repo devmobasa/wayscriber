@@ -35,6 +35,10 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
                 Some("Advanced: undo-all/delay/zoom."),
             ),
             (
+                ToolbarEvent::TogglePagesSection(!ctx.snapshot.show_pages_section),
+                Some("Pages: prev/next/new/dup/del."),
+            ),
+            (
                 ToolbarEvent::ToggleStepSection(!ctx.snapshot.show_step_section),
                 Some("Step: step undo/redo."),
             ),

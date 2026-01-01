@@ -10,6 +10,7 @@ impl ConfigDraft {
         let defaults = mode.to_mode().section_defaults();
         self.ui_toolbar_show_actions_section = defaults.show_actions_section;
         self.ui_toolbar_show_actions_advanced = defaults.show_actions_advanced;
+        self.ui_toolbar_show_pages_section = defaults.show_pages_section;
         self.ui_toolbar_show_presets = defaults.show_presets;
         self.ui_toolbar_show_step_section = defaults.show_step_section;
         self.ui_toolbar_show_text_controls = defaults.show_text_controls;
@@ -52,6 +53,9 @@ impl ConfigDraft {
             }
             ToggleField::UiToolbarShowActionsAdvanced => {
                 self.ui_toolbar_show_actions_advanced = value;
+            }
+            ToggleField::UiToolbarShowPagesSection => {
+                self.ui_toolbar_show_pages_section = value;
             }
             ToggleField::UiToolbarShowStepSection => self.ui_toolbar_show_step_section = value,
             ToggleField::UiToolbarShowTextControls => self.ui_toolbar_show_text_controls = value,
