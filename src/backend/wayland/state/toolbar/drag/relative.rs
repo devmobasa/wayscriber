@@ -24,13 +24,12 @@ impl WaylandState {
             }
         }
 
-        self.clamp_toolbar_offsets(&snapshot);
-        self.apply_toolbar_offsets(&snapshot);
+        let (top_changed, side_changed) = self.apply_toolbar_offsets(&snapshot);
         // Commit both toolbar surfaces immediately to force the compositor to apply margins.
-        if let Some(layer) = self.toolbar.top_layer_surface() {
+        if top_changed && let Some(layer) = self.toolbar.top_layer_surface() {
             layer.wl_surface().commit();
         }
-        if let Some(layer) = self.toolbar.side_layer_surface() {
+        if side_changed && let Some(layer) = self.toolbar.side_layer_surface() {
             layer.wl_surface().commit();
         }
 

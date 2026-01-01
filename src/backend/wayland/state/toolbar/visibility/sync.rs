@@ -181,7 +181,9 @@ impl WaylandState {
                 self.reset_toolbar_margin_cache();
             }
             let snapshot = self.toolbar_snapshot();
-            self.apply_toolbar_offsets(&snapshot);
+            if !self.is_move_dragging() {
+                let _ = self.apply_toolbar_offsets(&snapshot);
+            }
             if let Some(layer_shell) = self.layer_shell.as_ref() {
                 let scale = self.surface.scale();
                 self.toolbar.ensure_created(

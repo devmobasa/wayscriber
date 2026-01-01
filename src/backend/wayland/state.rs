@@ -92,6 +92,7 @@ type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_scr
 pub(super) use helpers::{
     damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
     force_inline_toolbars_requested, resolve_damage_regions, scale_damage_regions, surface_id,
+    toolbar_pointer_lock_enabled,
 };
 
 pub(in crate::backend::wayland) struct WaylandGlobals {

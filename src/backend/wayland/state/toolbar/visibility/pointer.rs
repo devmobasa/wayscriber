@@ -11,6 +11,10 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
         surface: &wl_surface::WlSurface,
     ) {
+        if !toolbar_pointer_lock_enabled() {
+            log::info!("skip pointer lock: disabled via WAYSCRIBER_TOOLBAR_POINTER_LOCK");
+            return;
+        }
         if self.inline_toolbars_active() || self.pointer_lock_active() {
             log::info!(
                 "skip pointer lock: inline_active={}, already_locked={}",

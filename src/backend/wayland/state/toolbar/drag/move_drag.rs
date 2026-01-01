@@ -104,6 +104,14 @@ impl WaylandState {
             self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset
         );
+        if delta.0 == 0.0 && delta.1 == 0.0 {
+            self.data.toolbar_move_drag = Some(MoveDrag {
+                kind,
+                last_coord: effective_coord,
+                coord_is_screen: true,
+            });
+            return;
+        }
 
         match kind {
             MoveDragKind::Top => {
@@ -128,21 +136,22 @@ impl WaylandState {
             last_coord: effective_coord,
             coord_is_screen: true,
         });
-        self.apply_toolbar_offsets(&snapshot);
+        let (top_changed, side_changed) = self.apply_toolbar_offsets(&snapshot);
         // Force commits so compositors apply new margins immediately.
-        if let Some(layer) = self.toolbar.top_layer_surface() {
+        if top_changed && let Some(layer) = self.toolbar.top_layer_surface() {
             layer.wl_surface().commit();
         }
-        if let Some(layer) = self.toolbar.side_layer_surface() {
+        if side_changed && let Some(layer) = self.toolbar.side_layer_surface() {
             layer.wl_surface().commit();
         }
-        self.toolbar.mark_dirty();
-        if self.inline_toolbars_active() {
+        let inline_active = self.inline_toolbars_active();
+        if top_changed || side_changed || inline_active {
+            self.toolbar.mark_dirty();
+        }
+        if inline_active {
             self.input_state.needs_redraw = true;
         }
-        self.clamp_toolbar_offsets(&snapshot);
-
-        if self.layer_shell.is_none() || self.inline_toolbars_active() {
+        if self.layer_shell.is_none() || inline_active {
             self.clear_inline_toolbar_hits();
         }
     }
@@ -199,6 +208,14 @@ impl WaylandState {
             self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset
         );
+        if delta.0 == 0.0 && delta.1 == 0.0 {
+            self.data.toolbar_move_drag = Some(MoveDrag {
+                kind,
+                last_coord: screen_coord,
+                coord_is_screen: true,
+            });
+            return;
+        }
         match kind {
             MoveDragKind::Top => {
                 self.data.toolbar_top_offset += delta.0;
@@ -215,16 +232,22 @@ impl WaylandState {
             last_coord: screen_coord,
             coord_is_screen: true,
         });
-        self.apply_toolbar_offsets(&snapshot);
-        self.toolbar.mark_dirty();
-        if self.inline_toolbars_active() {
+        let (top_changed, side_changed) = self.apply_toolbar_offsets(&snapshot);
+        // Force commits so compositors apply new margins immediately.
+        if top_changed && let Some(layer) = self.toolbar.top_layer_surface() {
+            layer.wl_surface().commit();
+        }
+        if side_changed && let Some(layer) = self.toolbar.side_layer_surface() {
+            layer.wl_surface().commit();
+        }
+        let inline_active = self.inline_toolbars_active();
+        if top_changed || side_changed || inline_active {
+            self.toolbar.mark_dirty();
+        }
+        if inline_active {
             self.input_state.needs_redraw = true;
         }
-
-        // Ensure we don't drift off-screen.
-        self.clamp_toolbar_offsets(&snapshot);
-
-        if self.layer_shell.is_none() || self.inline_toolbars_active() {
+        if self.layer_shell.is_none() || inline_active {
             // Inline mode uses cached rects, so force a relayout.
             self.clear_inline_toolbar_hits();
         }

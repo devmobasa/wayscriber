@@ -74,78 +74,84 @@ impl WaylandState {
     pub(in crate::backend::wayland::state::toolbar) fn apply_toolbar_offsets(
         &mut self,
         snapshot: &ToolbarSnapshot,
-    ) {
+    ) -> (bool, bool) {
         if self.surface.width() == 0 || self.surface.height() == 0 {
             drag_log(format!(
                 "skip apply_toolbar_offsets: surface not configured (width={}, height={})",
                 self.surface.width(),
                 self.surface.height()
             ));
-            return;
+            return (false, false);
         }
         let _ = self.clamp_toolbar_offsets(snapshot);
-        if self.layer_shell.is_some() {
-            let top_base_x = self.inline_top_base_x(snapshot);
-            let (top_margin_left, top_margin_top, side_margin_top, side_margin_left) =
-                geometry::compute_layer_margins(
-                    top_base_x,
-                    Self::TOP_BASE_MARGIN_TOP,
-                    Self::SIDE_BASE_MARGIN_LEFT,
-                    Self::SIDE_BASE_MARGIN_TOP,
-                    geometry::ToolbarOffsets {
-                        top_x: self.data.toolbar_top_offset,
-                        top_y: self.data.toolbar_top_offset_y,
-                        side_x: self.data.toolbar_side_offset_x,
-                        side_y: self.data.toolbar_side_offset,
-                    },
-                );
-            drag_log(format!(
-                "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, side_margin_top={}, side_margin_left={}, offsets=({}, {})/({}, {}), scale={}, top_base_x={}",
+        if self.layer_shell.is_none() {
+            return (false, false);
+        }
+        let top_base_x = self.inline_top_base_x(snapshot);
+        let (top_margin_left, top_margin_top, side_margin_top, side_margin_left) =
+            geometry::compute_layer_margins(
+                top_base_x,
+                Self::TOP_BASE_MARGIN_TOP,
+                Self::SIDE_BASE_MARGIN_LEFT,
+                Self::SIDE_BASE_MARGIN_TOP,
+                geometry::ToolbarOffsets {
+                    top_x: self.data.toolbar_top_offset,
+                    top_y: self.data.toolbar_top_offset_y,
+                    side_x: self.data.toolbar_side_offset_x,
+                    side_y: self.data.toolbar_side_offset,
+                },
+            );
+        drag_log(format!(
+            "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, side_margin_top={}, side_margin_left={}, offsets=({}, {})/({}, {}), scale={}, top_base_x={}",
+            top_margin_left,
+            top_margin_top,
+            side_margin_top,
+            side_margin_left,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset,
+            self.surface.scale(),
+            top_base_x
+        ));
+        if debug_toolbar_drag_logging_enabled() {
+            debug!(
+                "apply_toolbar_offsets: top_margin_left={} (last={:?}), top_margin_top={} (last={:?}), side_margin_top={} (last={:?}), side_margin_left={} (last={:?}), offsets=({}, {})/({}, {}), top_base_x={}",
                 top_margin_left,
+                self.data.last_applied_top_margin,
                 top_margin_top,
+                self.data.last_applied_top_margin_top,
                 side_margin_top,
+                self.data.last_applied_side_margin,
                 side_margin_left,
+                self.data.last_applied_side_margin_left,
                 self.data.toolbar_top_offset,
                 self.data.toolbar_top_offset_y,
                 self.data.toolbar_side_offset_x,
                 self.data.toolbar_side_offset,
-                self.surface.scale(),
                 top_base_x
-            ));
-            if debug_toolbar_drag_logging_enabled() {
-                debug!(
-                    "apply_toolbar_offsets: top_margin_left={} (last={:?}), top_margin_top={} (last={:?}), side_margin_top={} (last={:?}), side_margin_left={} (last={:?}), offsets=({}, {})/({}, {}), top_base_x={}",
-                    top_margin_left,
-                    self.data.last_applied_top_margin,
-                    top_margin_top,
-                    self.data.last_applied_top_margin_top,
-                    side_margin_top,
-                    self.data.last_applied_side_margin,
-                    side_margin_left,
-                    self.data.last_applied_side_margin_left,
-                    self.data.toolbar_top_offset,
-                    self.data.toolbar_top_offset_y,
-                    self.data.toolbar_side_offset_x,
-                    self.data.toolbar_side_offset,
-                    top_base_x
-                );
-            }
-            let margins_changed = self.data.last_applied_top_margin != Some(top_margin_left)
-                || self.data.last_applied_top_margin_top != Some(top_margin_top)
-                || self.data.last_applied_side_margin != Some(side_margin_top)
-                || self.data.last_applied_side_margin_left != Some(side_margin_left);
-            if !margins_changed {
-                return;
-            }
-            self.data.last_applied_top_margin = Some(top_margin_left);
-            self.data.last_applied_side_margin = Some(side_margin_top);
-            self.data.last_applied_top_margin_top = Some(top_margin_top);
-            self.data.last_applied_side_margin_left = Some(side_margin_left);
+            );
+        }
+        let top_changed = self.data.last_applied_top_margin != Some(top_margin_left)
+            || self.data.last_applied_top_margin_top != Some(top_margin_top);
+        let side_changed = self.data.last_applied_side_margin != Some(side_margin_top)
+            || self.data.last_applied_side_margin_left != Some(side_margin_left);
+        if !top_changed && !side_changed {
+            return (false, false);
+        }
+        self.data.last_applied_top_margin = Some(top_margin_left);
+        self.data.last_applied_side_margin = Some(side_margin_top);
+        self.data.last_applied_top_margin_top = Some(top_margin_top);
+        self.data.last_applied_side_margin_left = Some(side_margin_left);
+        if top_changed {
             self.toolbar
                 .set_top_margins(top_margin_top, top_margin_left);
+        }
+        if side_changed {
             self.toolbar
                 .set_side_margins(side_margin_top, side_margin_left);
-            self.toolbar.mark_dirty();
         }
+        self.toolbar.mark_dirty();
+        (top_changed, side_changed)
     }
 }
