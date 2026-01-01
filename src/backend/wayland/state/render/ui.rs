@@ -124,8 +124,8 @@ impl WaylandState {
                 self.input_state.clear_properties_panel_layout();
             }
 
-            // Inline toolbars (xdg fallback) render directly into main surface when layer-shell is unavailable.
-            if self.toolbar.is_visible() && self.inline_toolbars_active() {
+            // Inline toolbars (xdg fallback or drag preview) render directly into main surface.
+            if self.toolbar.is_visible() && self.inline_toolbars_render_active() {
                 let snapshot = self.toolbar_snapshot();
                 if self.toolbar.update_snapshot(&snapshot) {
                     self.toolbar.mark_dirty();

@@ -35,6 +35,7 @@ pub struct StateData {
     pub(super) last_activation_serial: Option<u32>,
     pub(super) pointer_over_toolbar: bool,
     pub(super) toolbar_dragging: bool,
+    pub(super) toolbar_drag_preview: bool,
     pub(super) current_keyboard_interactivity:
         Option<smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity>,
     pub(super) toolbar_needs_recreate: bool,
@@ -82,6 +83,7 @@ impl StateData {
             last_activation_serial: None,
             pointer_over_toolbar: false,
             toolbar_dragging: false,
+            toolbar_drag_preview: false,
             current_keyboard_interactivity: None,
             toolbar_needs_recreate: true,
             toolbar_layer_shell_missing_logged: false,

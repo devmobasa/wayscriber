@@ -37,7 +37,7 @@ impl WaylandState {
             self.data.toolbar_side_offset
         ));
 
-        if self.inline_toolbars_active() {
+        if self.inline_toolbars_render_active() {
             self.input_state.needs_redraw = true;
         }
     }
@@ -50,6 +50,14 @@ impl WaylandState {
             self.data.active_drag_kind = None;
             self.data.drag_top_base_x = None;
             self.data.drag_top_base_y = None;
+            if self.toolbar_drag_preview_active() {
+                drag_log("disable inline drag preview (restore layer-shell toolbars)");
+                self.set_toolbar_drag_preview_active(false);
+                self.set_toolbar_needs_recreate(true);
+                self.clear_inline_toolbar_hits();
+                self.clear_inline_toolbar_hover();
+                self.input_state.needs_redraw = true;
+            }
             self.save_toolbar_pin_config();
             self.unlock_pointer();
         }

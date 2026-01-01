@@ -71,6 +71,7 @@ impl WaylandState {
         let top_visible = self.input_state.toolbar_top_visible();
         let side_visible = self.input_state.toolbar_side_visible();
         let inline_active = self.inline_toolbars_active();
+        let drag_preview = self.toolbar_drag_preview_active();
 
         if top_visible != self.toolbar.is_top_visible() {
             self.toolbar.set_top_visible(top_visible);
@@ -135,7 +136,7 @@ impl WaylandState {
             self.data.toolbar_configure_miss_count = 0;
         }
 
-        if any_visible && self.layer_shell.is_some() && !inline_active {
+        if any_visible && self.layer_shell.is_some() && !inline_active && !drag_preview {
             // Detect compositors ignoring or failing to configure toolbar layer surfaces; if they
             // never configure after repeated attempts, fall back to inline toolbars automatically.
             let (top_configured, side_configured) = self.toolbar.configured_states();
@@ -214,7 +215,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn render_layer_toolbars_if_needed(&mut self) {
-        if !self.toolbar.is_visible() || self.inline_toolbars_active() {
+        if !self.toolbar.is_visible() || self.inline_toolbars_render_active() {
             return;
         }
 
