@@ -526,6 +526,7 @@ backup_retention = 1
 duplicate_policy = "error"
 
 # Exit overlay (or cancel current action)
+# If exit is empty, Escape/Ctrl+Q are injected for safety (overriding existing actions if needed).
 exit = ["Escape", "Ctrl+Q"]
 
 # Enter text mode

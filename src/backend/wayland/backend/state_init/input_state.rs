@@ -74,7 +74,7 @@ fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
     match config.keybindings.build_action_map() {
         Ok(map) => {
             log::info!("Keybinding map built with {} bindings", map.len());
-            map
+            ensure_exit_fallback(map)
         }
         Err(err) => {
             warn!(
@@ -91,7 +91,45 @@ fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
                     HashMap::new()
                 });
             log::info!("Fallback keybinding map size: {}", map.len());
-            map
+            ensure_exit_fallback(map)
         }
     }
+}
+
+fn ensure_exit_fallback(mut map: HashMap<KeyBinding, Action>) -> HashMap<KeyBinding, Action> {
+    if map.values().any(|action| *action == Action::Exit) {
+        return map;
+    }
+
+    let mut inserted = 0;
+    let mut overridden = 0;
+    for (binding_str, label) in [("Escape", "Escape"), ("Ctrl+Q", "Ctrl+Q")] {
+        match KeyBinding::parse(binding_str) {
+            Ok(binding) => match map.insert(binding, Action::Exit) {
+                Some(previous) => {
+                    overridden += 1;
+                    warn!(
+                        "No Exit binding configured; overriding {} from {:?} to Exit.",
+                        label, previous
+                    );
+                }
+                None => {
+                    inserted += 1;
+                }
+            },
+            Err(err) => {
+                warn!(
+                    "Failed to parse exit fallback binding '{}': {}",
+                    binding_str, err
+                );
+            }
+        }
+    }
+    if inserted > 0 || overridden > 0 {
+        warn!(
+            "No Exit binding configured; injected {} fallback(s), overridden {} binding(s).",
+            inserted, overridden
+        );
+    }
+    map
 }

@@ -714,6 +714,7 @@ clear_canvas = ["X"]
 - In text input mode, configured keybindings (like <kbd>Ctrl+Q</kbd> for exit) work before keys are consumed as text
 - Color keys only work when not holding <kbd>Ctrl</kbd> (to avoid conflicts with other actions)
 - Invalid keybinding strings will be logged and fall back to defaults
+- If no Exit binding is configured, <kbd>Escape</kbd> and <kbd>Ctrl+Q</kbd> are injected for safety (overriding existing actions if needed)
 - Duplicate keybindings across actions are resolved according to `duplicate_policy`
 
 **Defaults:**
