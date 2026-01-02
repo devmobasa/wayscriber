@@ -591,7 +591,7 @@ toggle_help = ["F10", "F1"]
 toggle_status_bar = ["F12", "F4"]
 
 # Toggle presenter mode
-toggle_presenter_mode = ["F8"]
+toggle_presenter_mode = ["Ctrl+Shift+K"]
 
 # Toggle fill for rectangle/ellipse
 toggle_fill = []
