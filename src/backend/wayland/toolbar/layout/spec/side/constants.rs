@@ -35,7 +35,7 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SWATCH_GAP: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_NAME_ROW_HEIGHT: f64 = 22.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_NAME_BUTTON_WIDTH: f64 = 70.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_SWATCH_TOP_GAP: f64 = 8.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_COLOR_DOT_SIZE: f64 = 14.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_LABEL_OFFSET_Y: f64 = 12.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_LABEL_OFFSET_TALL: f64 = 14.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_FONT_BUTTON_HEIGHT: f64 = 24.0;

@@ -135,11 +135,6 @@ impl InputState {
         true
     }
 
-    pub(crate) fn set_active_board_background_color(&mut self, color: Color) -> bool {
-        let index = self.boards.active_index();
-        self.set_board_background_color(index, color)
-    }
-
     fn switch_board_with(
         &mut self,
         switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,

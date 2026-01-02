@@ -181,18 +181,11 @@ impl ToolbarLayoutSpec {
 
     pub(in crate::backend::wayland::toolbar) fn side_board_height(
         &self,
-        snapshot: &ToolbarSnapshot,
+        _snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        let swatch_rows = if snapshot.show_more_colors { 2.0 } else { 1.0 };
-        let swatch_h = Self::SIDE_COLOR_SWATCH * swatch_rows
-            + Self::SIDE_COLOR_SWATCH_GAP * (swatch_rows - 1.0);
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y
             + Self::SIDE_BOARD_NAME_ROW_HEIGHT
             + Self::SIDE_ACTION_BUTTON_GAP
-            + Self::SIDE_COLOR_PICKER_INPUT_HEIGHT
-            + Self::SIDE_BOARD_SWATCH_TOP_GAP
-            + swatch_h
-            + Self::SIDE_COLOR_SECTION_BOTTOM_PADDING
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_pages_height(

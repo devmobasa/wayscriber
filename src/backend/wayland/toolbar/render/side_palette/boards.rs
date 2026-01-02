@@ -2,7 +2,6 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::ui::toolbar::ToolbarEvent;
 
 use super::super::widgets::*;
@@ -31,6 +30,10 @@ pub(super) fn draw_board_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let name_row_h = ToolbarLayoutSpec::SIDE_BOARD_NAME_ROW_HEIGHT;
     let rename_w = ToolbarLayoutSpec::SIDE_BOARD_NAME_BUTTON_WIDTH;
     let rename_x = x + content_width - rename_w;
+    let dot_size = ToolbarLayoutSpec::SIDE_BOARD_COLOR_DOT_SIZE;
+    let dot_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
+    let dot_x = rename_x - dot_gap - dot_size;
+    let dot_y = name_row_y + (name_row_h - dot_size) * 0.5;
     let rename_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, rename_x, name_row_y, rename_w, name_row_h))
         .unwrap_or(false);
@@ -52,135 +55,28 @@ pub(super) fn draw_board_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     });
 
     let name_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-    let max_label_w = content_width - rename_w - name_gap;
+    let max_label_w = content_width - rename_w - dot_size - name_gap * 2.0;
     let name_label = board_label(snapshot);
     let display_label = truncate_label(&name_label, 24);
     draw_label_left(ctx, x, name_row_y, max_label_w, name_row_h, &display_label);
 
-    let picker_y = name_row_y + name_row_h + name_gap;
-    let picker_w = content_width;
-    let picker_h = ToolbarLayoutSpec::SIDE_COLOR_PICKER_INPUT_HEIGHT;
-    draw_color_picker(ctx, x, picker_y, picker_w, picker_h);
-
-    let board_color_enabled = snapshot.board_color.is_some();
-    if board_color_enabled {
+    if let Some(color) = snapshot.board_color {
+        draw_swatch(ctx, dot_x, dot_y, dot_size, color, false);
         hits.push(HitRegion {
-            rect: (x, picker_y, picker_w, picker_h),
-            event: ToolbarEvent::SetBoardColor(snapshot.board_color.unwrap_or(Color {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 1.0,
-            })),
-            kind: HitKind::PickBoardColor {
-                x,
-                y: picker_y,
-                w: picker_w,
-                h: picker_h,
-            },
-            tooltip: Some("Pick board color".to_string()),
+            rect: (dot_x, dot_y, dot_size, dot_size),
+            event: ToolbarEvent::EditBoardColor,
+            kind: HitKind::Click,
+            tooltip: Some("Edit board color".to_string()),
         });
     } else {
-        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.45);
-        ctx.rectangle(x, picker_y, picker_w, picker_h);
-        let _ = ctx.fill();
-        draw_label_center(ctx, x, picker_y, picker_w, picker_h, "No background");
-    }
-
-    let basic_colors: &[(Color, &str)] = &[
-        (RED, "Red"),
-        (GREEN, "Green"),
-        (BLUE, "Blue"),
-        (YELLOW, "Yellow"),
-        (WHITE, "White"),
-        (BLACK, "Black"),
-    ];
-    let extended_colors: &[(Color, &str)] = &[
-        (ORANGE, "Orange"),
-        (PINK, "Pink"),
-        (
-            Color {
-                r: 0.0,
-                g: 1.0,
-                b: 1.0,
-                a: 1.0,
-            },
-            "Cyan",
-        ),
-        (
-            Color {
-                r: 0.6,
-                g: 0.4,
-                b: 0.8,
-                a: 1.0,
-            },
-            "Purple",
-        ),
-        (
-            Color {
-                r: 0.4,
-                g: 0.4,
-                b: 0.4,
-                a: 1.0,
-            },
-            "Gray",
-        ),
-    ];
-
-    let swatch = ToolbarLayoutSpec::SIDE_COLOR_SWATCH;
-    let swatch_gap = ToolbarLayoutSpec::SIDE_COLOR_SWATCH_GAP;
-    let mut row_y = picker_y + picker_h + ToolbarLayoutSpec::SIDE_BOARD_SWATCH_TOP_GAP;
-    let mut cx = x;
-    for (color, _name) in basic_colors {
-        draw_swatch(
-            ctx,
-            cx,
-            row_y,
-            swatch,
-            *color,
-            snapshot.board_color == Some(*color),
-        );
-        if board_color_enabled {
-            hits.push(HitRegion {
-                rect: (cx, row_y, swatch, swatch),
-                event: ToolbarEvent::SetBoardColor(*color),
-                kind: HitKind::Click,
-                tooltip: Some("Set board color".to_string()),
-            });
-        } else {
-            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
-            ctx.rectangle(cx, row_y, swatch, swatch);
-            let _ = ctx.fill();
-        }
-        cx += swatch + swatch_gap;
-    }
-
-    if snapshot.show_more_colors {
-        row_y += swatch + swatch_gap;
-        cx = x;
-        for (color, _name) in extended_colors {
-            draw_swatch(
-                ctx,
-                cx,
-                row_y,
-                swatch,
-                *color,
-                snapshot.board_color == Some(*color),
-            );
-            if board_color_enabled {
-                hits.push(HitRegion {
-                    rect: (cx, row_y, swatch, swatch),
-                    event: ToolbarEvent::SetBoardColor(*color),
-                    kind: HitKind::Click,
-                    tooltip: Some("Set board color".to_string()),
-                });
-            } else {
-                ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
-                ctx.rectangle(cx, row_y, swatch, swatch);
-                let _ = ctx.fill();
-            }
-            cx += swatch + swatch_gap;
-        }
+        ctx.set_source_rgba(0.62, 0.68, 0.76, 0.7);
+        draw_round_rect(ctx, dot_x, dot_y, dot_size, dot_size, 3.0);
+        let _ = ctx.stroke();
+        ctx.move_to(dot_x, dot_y);
+        ctx.line_to(dot_x + dot_size, dot_y + dot_size);
+        ctx.move_to(dot_x + dot_size, dot_y);
+        ctx.line_to(dot_x, dot_y + dot_size);
+        let _ = ctx.stroke();
     }
 
     *y += board_card_h + section_gap;

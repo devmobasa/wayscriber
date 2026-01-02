@@ -109,8 +109,10 @@ impl InputState {
             self.update_pointer_position(x, y);
             match button {
                 MouseButton::Left => {
-                    if self.board_picker_index_at(x, y).is_some() {
-                        self.update_board_picker_hover_from_pointer(x, y);
+                    if self.board_picker_contains_point(x, y) {
+                        if self.board_picker_index_at(x, y).is_some() {
+                            self.update_board_picker_hover_from_pointer(x, y);
+                        }
                     } else {
                         self.close_board_picker();
                     }

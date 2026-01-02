@@ -291,6 +291,15 @@ impl InputState {
         }
     }
 
+    pub(crate) fn board_picker_contains_point(&self, x: i32, y: i32) -> bool {
+        let Some(layout) = self.board_picker_layout else {
+            return false;
+        };
+        let local_x = x as f64 - layout.origin_x;
+        let local_y = y as f64 - layout.origin_y;
+        local_x >= 0.0 && local_y >= 0.0 && local_x <= layout.width && local_y <= layout.height
+    }
+
     pub(crate) fn board_picker_swatch_index_at(&self, x: i32, y: i32) -> Option<usize> {
         let layout = self.board_picker_layout?;
         let board_count = self.boards.board_count();

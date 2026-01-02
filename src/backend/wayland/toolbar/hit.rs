@@ -30,7 +30,6 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
             | HitKind::DragSetMarkerOpacity { .. }
             | HitKind::DragSetFontSize
             | HitKind::PickColor { .. }
-            | HitKind::PickBoardColor { .. }
             | HitKind::DragUndoDelay
             | HitKind::DragRedoDelay
             | HitKind::DragCustomUndoDelay
@@ -61,13 +60,6 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
             let hue = ((x - px) / w).clamp(0.0, 1.0);
             let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
             ToolbarEvent::SetColor(crate::backend::wayland::toolbar::events::hsv_to_rgb(
-                hue, 1.0, value,
-            ))
-        }
-        PickBoardColor { x: px, y: py, w, h } => {
-            let hue = ((x - px) / w).clamp(0.0, 1.0);
-            let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-            ToolbarEvent::SetBoardColor(crate::backend::wayland::toolbar::events::hsv_to_rgb(
                 hue, 1.0, value,
             ))
         }
@@ -130,13 +122,6 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
             let hue = ((x - px) / w).clamp(0.0, 1.0);
             let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
             Some(ToolbarIntent(ToolbarEvent::SetColor(
-                crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value),
-            )))
-        }
-        PickBoardColor { x: px, y: py, w, h } => {
-            let hue = ((x - px) / w).clamp(0.0, 1.0);
-            let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-            Some(ToolbarIntent(ToolbarEvent::SetBoardColor(
                 crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value),
             )))
         }
