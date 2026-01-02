@@ -567,6 +567,9 @@ toggle_help = ["F10"]
 # Toggle status bar visibility
 toggle_status_bar = ["F12"]
 
+# Toggle presenter mode
+toggle_presenter_mode = ["F8"]
+
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]
 

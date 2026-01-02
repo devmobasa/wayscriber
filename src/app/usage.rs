@@ -21,7 +21,7 @@ pub(crate) fn log_overlay_controls(freeze: bool) {
     );
     log::info!("  - Context menu: Right Click or Shift+F10");
     log::info!(
-        "  - Help: F1/F10   •   Toolbar: F2/F9   •   Configurator: F11   •   Status bar: F4/F12"
+        "  - Help: F1/F10   •   Toolbar: F2/F9   •   Presenter: F8   •   Configurator: F11   •   Status bar: F4/F12"
     );
     log::info!("  - Exit: Escape");
     if freeze {

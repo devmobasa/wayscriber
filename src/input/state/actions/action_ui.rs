@@ -11,6 +11,9 @@ impl InputState {
                 true
             }
             Action::ToggleStatusBar => {
+                if self.presenter_mode {
+                    return true;
+                }
                 self.show_status_bar = !self.show_status_bar;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
@@ -27,6 +30,9 @@ impl InputState {
                 true
             }
             Action::ToggleToolbar => {
+                if self.presenter_mode {
+                    return true;
+                }
                 let now_visible = !self.toolbar_visible();
                 let changed = self.set_toolbar_visible(now_visible);
                 if changed {
@@ -35,6 +41,14 @@ impl InputState {
                         if now_visible { "enabled" } else { "disabled" }
                     );
                 }
+                true
+            }
+            Action::TogglePresenterMode => {
+                let enabled = self.toggle_presenter_mode();
+                info!(
+                    "Presenter mode {}",
+                    if enabled { "enabled" } else { "disabled" }
+                );
                 true
             }
             Action::OpenContextMenu => {

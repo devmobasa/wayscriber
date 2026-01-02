@@ -84,6 +84,8 @@ impl InputState {
             help_overlay_scroll: 0.0,
             help_overlay_scroll_max: 0.0,
             show_status_bar,
+            presenter_mode: false,
+            presenter_restore: None,
             toolbar_visible: false,
             toolbar_top_visible: false,
             toolbar_side_visible: false,

@@ -20,6 +20,16 @@ use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PresenterRestore {
+    pub(crate) show_status_bar: bool,
+    pub(crate) show_tool_preview: bool,
+    pub(crate) toolbar_visible: bool,
+    pub(crate) toolbar_top_visible: bool,
+    pub(crate) toolbar_side_visible: bool,
+    pub(crate) click_highlight_enabled: bool,
+}
+
 pub struct InputState {
     /// Multi-frame canvas management (transparent, whiteboard, blackboard)
     pub canvas_set: CanvasSet,
@@ -73,6 +83,10 @@ pub struct InputState {
     pub help_overlay_scroll_max: f64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether presenter mode is currently enabled
+    pub presenter_mode: bool,
+    /// Previous UI state to restore after presenter mode exits
+    pub(crate) presenter_restore: Option<PresenterRestore>,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
     pub toolbar_visible: bool,
     /// Whether the top toolbar panel is visible

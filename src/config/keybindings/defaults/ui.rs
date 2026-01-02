@@ -14,6 +14,10 @@ pub(crate) fn default_toggle_toolbar() -> Vec<String> {
     vec!["F2".to_string(), "F9".to_string()]
 }
 
+pub(crate) fn default_toggle_presenter_mode() -> Vec<String> {
+    vec!["F8".to_string()]
+}
+
 pub(crate) fn default_toggle_fill() -> Vec<String> {
     Vec::new()
 }
