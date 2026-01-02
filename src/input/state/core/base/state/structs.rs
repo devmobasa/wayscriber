@@ -28,6 +28,7 @@ pub(crate) struct PresenterRestore {
     pub(crate) toolbar_top_visible: bool,
     pub(crate) toolbar_side_visible: bool,
     pub(crate) click_highlight_enabled: bool,
+    pub(crate) tool_override: Option<Tool>,
 }
 
 pub struct InputState {
