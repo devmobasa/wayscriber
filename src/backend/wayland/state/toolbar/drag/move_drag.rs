@@ -15,8 +15,8 @@ impl WaylandState {
             {
                 drag_log("enable inline drag preview (layer-shell toolbars hidden)");
                 self.set_toolbar_drag_preview_active(true);
-                self.toolbar.destroy_all();
-                self.set_toolbar_needs_recreate(true);
+                self.toolbar
+                    .set_suppressed(&self.compositor_state, true);
                 self.input_state.needs_redraw = true;
             }
             log::debug!(

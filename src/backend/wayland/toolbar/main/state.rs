@@ -78,6 +78,10 @@ impl ToolbarSurfaceManager {
         self.side.set_suppressed(compositor, suppressed);
     }
 
+    pub fn is_suppressed(&self) -> bool {
+        self.suppressed
+    }
+
     pub fn set_top_margins(&mut self, top: i32, left: i32) {
         let (_, right, bottom, _) = self.top.margin;
         self.top.set_margins(top, right, bottom, left);

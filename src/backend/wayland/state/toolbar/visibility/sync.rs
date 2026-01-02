@@ -215,7 +215,10 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn render_layer_toolbars_if_needed(&mut self) {
-        if !self.toolbar.is_visible() || self.inline_toolbars_render_active() {
+        if !self.toolbar.is_visible() {
+            return;
+        }
+        if self.inline_toolbars_render_active() && !self.toolbar.is_suppressed() {
             return;
         }
 
