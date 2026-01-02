@@ -7,6 +7,9 @@ impl WaylandState {
         if self.overlay_suppressed() {
             return KeyboardInteractivity::None;
         }
+        if self.has_pointer_focus() {
+            return KeyboardInteractivity::Exclusive;
+        }
         desired_keyboard_interactivity_for(self.layer_shell.is_some(), self.toolbar.is_visible())
     }
 

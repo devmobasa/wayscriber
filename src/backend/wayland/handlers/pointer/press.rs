@@ -1,5 +1,7 @@
 use log::debug;
-use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
+use smithay_client_toolkit::seat::pointer::{
+    BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent, PointerEventKind,
+};
 use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 use wayland_client::QueueHandle;
 
@@ -19,6 +21,13 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        if let PointerEventKind::Press { serial, .. } = event.kind {
+            self.set_last_activation_serial(Some(serial));
+            if !self.has_keyboard_focus() {
+                self.request_xdg_activation(qh);
+            }
+        }
+
         if !self.has_keyboard_focus() && !self.overlay_suppressed() {
             let current = self.current_keyboard_interactivity();
             if current != Some(KeyboardInteractivity::Exclusive)
