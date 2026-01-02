@@ -29,15 +29,43 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn refresh_keyboard_interactivity(&mut self) {
         let desired = self.desired_keyboard_interactivity();
         let current = self.current_keyboard_interactivity();
+        let overlay_suppressed = self.overlay_suppressed();
+        let toolbar_visible = self.toolbar.is_visible();
+        let inline_active = self.inline_toolbars_active();
+        let layer_shell_available = self.layer_shell.is_some();
+        let pointer_focus = self.has_pointer_focus();
+        let keyboard_focus = self.has_keyboard_focus();
 
         let updated = if let Some(layer) = self.surface.layer_surface_mut() {
             if current != Some(desired) {
+                log::info!(
+                    "keyboard interactivity change: current={:?} desired={:?} overlay_suppressed={} toolbar_visible={} inline_active={} layer_shell={} pointer_focus={} keyboard_focus={}",
+                    current,
+                    desired,
+                    overlay_suppressed,
+                    toolbar_visible,
+                    inline_active,
+                    layer_shell_available,
+                    pointer_focus,
+                    keyboard_focus
+                );
                 layer.set_keyboard_interactivity(desired);
                 true
             } else {
                 false
             }
         } else {
+            log::info!(
+                "keyboard interactivity unset: no layer surface (current={:?} desired={:?} overlay_suppressed={} toolbar_visible={} inline_active={} layer_shell={} pointer_focus={} keyboard_focus={})",
+                current,
+                desired,
+                overlay_suppressed,
+                toolbar_visible,
+                inline_active,
+                layer_shell_available,
+                pointer_focus,
+                keyboard_focus
+            );
             self.set_current_keyboard_interactivity(None);
             return;
         };

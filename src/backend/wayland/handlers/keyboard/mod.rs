@@ -1,13 +1,14 @@
 // Bridges Wayland key events into our `InputState`, including capture-action plumbing.
 mod translate;
 
-use log::{debug, warn};
+use log::{debug, info, warn};
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, KeyboardHandler, Modifiers, RawModifiers};
 use wayland_client::{
     Connection, QueueHandle,
     protocol::{wl_keyboard, wl_surface},
 };
 
+use crate::backend::wayland::state::surface_id;
 use crate::{input::Key, notification};
 
 use super::super::state::WaylandState;
@@ -24,7 +25,17 @@ impl KeyboardHandler for WaylandState {
         _raw: &[u32],
         _keysyms: &[smithay_client_toolkit::seat::keyboard::Keysym],
     ) {
-        debug!("Keyboard focus entered");
+        info!(
+            "kbd enter: surface={}, serial={}, focus={}, interactivity={:?}, pointer_focus={}, overlay_suppressed={}, toolbar_visible={}, inline_active={}",
+            surface_id(surface),
+            serial,
+            self.has_keyboard_focus(),
+            self.current_keyboard_interactivity(),
+            self.has_pointer_focus(),
+            self.overlay_suppressed(),
+            self.toolbar.is_visible(),
+            self.inline_toolbars_active()
+        );
         self.set_keyboard_focus(true);
         self.set_last_activation_serial(Some(serial));
         self.maybe_retry_activation(qh);
@@ -43,7 +54,15 @@ impl KeyboardHandler for WaylandState {
         _surface: &wl_surface::WlSurface,
         _serial: u32,
     ) {
-        debug!("Keyboard focus left");
+        info!(
+            "kbd leave: focus={}, interactivity={:?}, pointer_focus={}, overlay_suppressed={}, toolbar_visible={}, inline_active={}",
+            self.has_keyboard_focus(),
+            self.current_keyboard_interactivity(),
+            self.has_pointer_focus(),
+            self.overlay_suppressed(),
+            self.toolbar.is_visible(),
+            self.inline_toolbars_active()
+        );
         self.set_keyboard_focus(false);
         self.clear_toolbar_focus();
 
@@ -75,6 +94,7 @@ impl KeyboardHandler for WaylandState {
         event: KeyEvent,
     ) {
         let key = keysym_to_key(event.keysym);
+        self.log_keyboard_event("press", Some(key));
         if self.zoom.is_engaged() {
             match key {
                 Key::Escape => {
@@ -140,7 +160,7 @@ impl KeyboardHandler for WaylandState {
         event: KeyEvent,
     ) {
         let key = keysym_to_key(event.keysym);
-        debug!("Key released: {:?}", key);
+        self.log_keyboard_event("release", Some(key));
         self.input_state.on_key_release(key);
     }
 
@@ -154,9 +174,17 @@ impl KeyboardHandler for WaylandState {
         _layout: RawModifiers,
         _group: u32,
     ) {
-        debug!(
-            "Modifiers: ctrl={} alt={} shift={}",
-            modifiers.ctrl, modifiers.alt, modifiers.shift
+        info!(
+            "kbd modifiers: ctrl={} alt={} shift={} (focus={}, interactivity={:?}, pointer_focus={}, overlay_suppressed={}, toolbar_visible={}, inline_active={})",
+            modifiers.ctrl,
+            modifiers.alt,
+            modifiers.shift,
+            self.has_keyboard_focus(),
+            self.current_keyboard_interactivity(),
+            self.has_pointer_focus(),
+            self.overlay_suppressed(),
+            self.toolbar.is_visible(),
+            self.inline_toolbars_active()
         );
         // Trust compositor-reported modifier state to reconcile any missed key release
         // events and avoid "stuck" modifiers.
@@ -173,6 +201,7 @@ impl KeyboardHandler for WaylandState {
         event: KeyEvent,
     ) {
         let key = keysym_to_key(event.keysym);
+        self.log_keyboard_event("repeat", Some(key));
         if self.zoom.active {
             match key {
                 Key::Up | Key::Down | Key::Left | Key::Right => {
@@ -258,5 +287,24 @@ impl WaylandState {
         if let Some(action) = self.input_state.take_pending_zoom_action() {
             self.handle_zoom_action(action);
         }
+    }
+
+    fn log_keyboard_event(&self, label: &str, key: Option<Key>) {
+        info!(
+            "kbd {}: key={:?} focus={} interactivity={:?} pointer_focus={} overlay_suppressed={} toolbar_visible={} inline_active={} state={:?} mods(ctrl={},shift={},alt={},tab={})",
+            label,
+            key,
+            self.has_keyboard_focus(),
+            self.current_keyboard_interactivity(),
+            self.has_pointer_focus(),
+            self.overlay_suppressed(),
+            self.toolbar.is_visible(),
+            self.inline_toolbars_active(),
+            self.input_state.state,
+            self.input_state.modifiers.ctrl,
+            self.input_state.modifiers.shift,
+            self.input_state.modifiers.alt,
+            self.input_state.modifiers.tab
+        );
     }
 }

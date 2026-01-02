@@ -27,6 +27,13 @@ pub(super) fn create_overlay_surface(
         // Configure the layer surface for fullscreen overlay
         layer_surface.set_anchor(Anchor::all());
         let desired_keyboard_mode = state.desired_keyboard_interactivity();
+        info!(
+            "Overlay keyboard interactivity init: {:?} (layer_shell_available={}, toolbar_visible={}, overlay_suppressed={})",
+            desired_keyboard_mode,
+            state.layer_shell.is_some(),
+            state.toolbar.is_visible(),
+            state.overlay_suppressed()
+        );
         layer_surface.set_keyboard_interactivity(desired_keyboard_mode);
         layer_surface.set_size(0, 0); // Use full screen size
         layer_surface.set_exclusive_zone(-1);

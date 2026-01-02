@@ -616,7 +616,7 @@ capture_file_full = ["Ctrl+S"]
 capture_clipboard_selection = ["Ctrl+Shift+C"]
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
-capture_file_region = ["Ctrl+Shift+6"]
+capture_file_region = ["Ctrl+Shift+R"]
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]

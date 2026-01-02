@@ -1,4 +1,5 @@
 use super::super::*;
+use log::info;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn current_mouse(&self) -> (i32, i32) {
@@ -16,7 +17,19 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn set_keyboard_focus(&mut self, value: bool) {
-        self.data.has_keyboard_focus = value;
+        if self.data.has_keyboard_focus != value {
+            info!(
+                "keyboard focus set: {} -> {} (interactivity={:?}, pointer_focus={}, overlay_suppressed={}, toolbar_visible={}, inline_active={})",
+                self.data.has_keyboard_focus,
+                value,
+                self.current_keyboard_interactivity(),
+                self.has_pointer_focus(),
+                self.overlay_suppressed(),
+                self.toolbar.is_visible(),
+                self.inline_toolbars_active()
+            );
+            self.data.has_keyboard_focus = value;
+        }
     }
 
     #[allow(dead_code)]
@@ -25,7 +38,19 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn set_pointer_focus(&mut self, value: bool) {
-        self.data.has_pointer_focus = value;
+        if self.data.has_pointer_focus != value {
+            info!(
+                "pointer focus set: {} -> {} (interactivity={:?}, keyboard_focus={}, overlay_suppressed={}, toolbar_visible={}, inline_active={})",
+                self.data.has_pointer_focus,
+                value,
+                self.current_keyboard_interactivity(),
+                self.has_keyboard_focus(),
+                self.overlay_suppressed(),
+                self.toolbar.is_visible(),
+                self.inline_toolbars_active()
+            );
+            self.data.has_pointer_focus = value;
+        }
     }
 
     pub(in crate::backend::wayland) fn current_seat(&self) -> Option<wl_seat::WlSeat> {

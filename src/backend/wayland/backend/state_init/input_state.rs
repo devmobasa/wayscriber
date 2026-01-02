@@ -72,13 +72,16 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
 
 fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
     match config.keybindings.build_action_map() {
-        Ok(map) => map,
+        Ok(map) => {
+            log::info!("Keybinding map built with {} bindings", map.len());
+            map
+        }
         Err(err) => {
             warn!(
                 "Invalid keybindings config: {}. Falling back to defaults.",
                 err
             );
-            KeybindingsConfig::default()
+            let map = KeybindingsConfig::default()
                 .build_action_map()
                 .unwrap_or_else(|err| {
                     warn!(
@@ -86,7 +89,9 @@ fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
                         err
                     );
                     HashMap::new()
-                })
+                });
+            log::info!("Fallback keybinding map size: {}", map.len());
+            map
         }
     }
 }

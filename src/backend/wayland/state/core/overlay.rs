@@ -20,6 +20,12 @@ impl WaylandState {
         if self.data.overlay_suppression != OverlaySuppression::None {
             return;
         }
+        log::info!(
+            "overlay suppression enter: reason={:?} kb_interactivity={:?} toolbar_visible={}",
+            reason,
+            self.current_keyboard_interactivity(),
+            self.toolbar.is_visible()
+        );
         self.data.overlay_suppression = reason;
         self.apply_overlay_clickthrough(true);
         if let Some(layer) = self.surface.layer_surface_mut() {
@@ -37,6 +43,12 @@ impl WaylandState {
         if self.data.overlay_suppression != reason {
             return;
         }
+        log::info!(
+            "overlay suppression exit: reason={:?} kb_interactivity={:?} toolbar_visible={}",
+            reason,
+            self.current_keyboard_interactivity(),
+            self.toolbar.is_visible()
+        );
         self.data.overlay_suppression = OverlaySuppression::None;
         self.apply_overlay_clickthrough(false);
         self.refresh_keyboard_interactivity();

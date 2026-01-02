@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, info};
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 use wayland_client::QueueHandle;
 
@@ -18,6 +18,19 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        info!(
+            "ptr press: surface={}, button={}, on_toolbar={}, inline_active={}, pos=({:.1},{:.1}), kb_focus={}, kb_interactivity={:?}, overlay_suppressed={}, toolbar_visible={}",
+            surface_id(&event.surface),
+            button,
+            on_toolbar,
+            inline_active,
+            event.position.0,
+            event.position.1,
+            self.has_keyboard_focus(),
+            self.current_keyboard_interactivity(),
+            self.overlay_suppressed(),
+            self.toolbar.is_visible()
+        );
         if debug_toolbar_drag_logging_enabled() {
             debug!(
                 "pointer press: button={}, on_toolbar={}, inline_active={}, drag_active={}",

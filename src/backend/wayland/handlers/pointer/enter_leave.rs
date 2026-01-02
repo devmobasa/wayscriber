@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, info};
 use smithay_client_toolkit::seat::pointer::PointerEvent;
 use wayland_client::Connection;
 
@@ -14,6 +14,18 @@ impl WaylandState {
         on_toolbar: bool,
         inline_active: bool,
     ) {
+        info!(
+            "ptr enter: surface={}, on_toolbar={}, inline_active={}, pos=({:.1},{:.1}), kb_focus={}, kb_interactivity={:?}, overlay_suppressed={}, toolbar_visible={}",
+            surface_id(&event.surface),
+            on_toolbar,
+            inline_active,
+            event.position.0,
+            event.position.1,
+            self.has_keyboard_focus(),
+            self.current_keyboard_interactivity(),
+            self.overlay_suppressed(),
+            self.toolbar.is_visible()
+        );
         debug!(
             "Pointer entered at ({}, {}), on_toolbar={}, is_move_dragging={}",
             event.position.0,
@@ -49,6 +61,18 @@ impl WaylandState {
         on_toolbar: bool,
         inline_active: bool,
     ) {
+        info!(
+            "ptr leave: surface={}, on_toolbar={}, inline_active={}, pos=({:.1},{:.1}), kb_focus={}, kb_interactivity={:?}, overlay_suppressed={}, toolbar_visible={}",
+            surface_id(&event.surface),
+            on_toolbar,
+            inline_active,
+            event.position.0,
+            event.position.1,
+            self.has_keyboard_focus(),
+            self.current_keyboard_interactivity(),
+            self.overlay_suppressed(),
+            self.toolbar.is_visible()
+        );
         debug!(
             "Pointer left surface: on_toolbar={}, is_move_dragging={}",
             on_toolbar,
