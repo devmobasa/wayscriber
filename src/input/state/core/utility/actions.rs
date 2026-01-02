@@ -14,6 +14,21 @@ impl InputState {
                 return Some(*action);
             }
         }
+
+        if self.modifiers.shift
+            && let Some(unshifted) = unshift_digit_key(key_str)
+        {
+            for (binding, action) in &self.action_map {
+                if binding.matches(
+                    unshifted,
+                    self.modifiers.ctrl,
+                    self.modifiers.shift,
+                    self.modifiers.alt,
+                ) {
+                    return Some(*action);
+                }
+            }
+        }
         None
     }
 
@@ -31,5 +46,21 @@ impl InputState {
         } else {
             labels.join(" / ")
         }
+    }
+}
+
+fn unshift_digit_key(key_str: &str) -> Option<&'static str> {
+    match key_str {
+        "!" => Some("1"),
+        "@" => Some("2"),
+        "#" => Some("3"),
+        "$" => Some("4"),
+        "%" => Some("5"),
+        "^" => Some("6"),
+        "&" => Some("7"),
+        "*" => Some("8"),
+        "(" => Some("9"),
+        ")" => Some("0"),
+        _ => None,
     }
 }
