@@ -10,6 +10,8 @@ mod defaults;
 
 pub use actions::Action;
 pub use binding::KeyBinding;
+#[allow(unused_imports)]
+pub use config::DuplicateKeybindingPolicy;
 pub use config::KeybindingsConfig;
 
 #[cfg(test)]

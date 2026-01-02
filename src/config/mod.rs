@@ -26,7 +26,8 @@ pub use core::Config;
 pub use enums::StatusPosition;
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
-pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
+#[allow(unused_imports)]
+pub use keybindings::{Action, DuplicateKeybindingPolicy, KeyBinding, KeybindingsConfig};
 #[cfg(tablet)]
 #[allow(unused_imports)]
 pub use types::TabletInputConfig;

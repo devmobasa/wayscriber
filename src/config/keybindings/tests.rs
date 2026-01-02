@@ -136,31 +136,90 @@ fn test_build_action_map() {
 }
 
 #[test]
-fn test_duplicate_keybinding_detection() {
+fn test_duplicate_keybinding_keeps_first() {
     // Create a config with duplicate keybindings
-    let mut config = KeybindingsConfig::default();
+    let mut config = KeybindingsConfig {
+        duplicate_policy: DuplicateKeybindingPolicy::KeepFirst,
+        ..Default::default()
+    };
     config.core.exit = vec!["Ctrl+Z".to_string()];
     config.core.undo = vec!["Ctrl+Z".to_string()];
 
-    // This should fail with a duplicate error
-    let result = config.build_action_map();
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err();
-    assert!(err_msg.contains("Duplicate keybinding"));
-    assert!(err_msg.contains("Ctrl+Z"));
+    // Duplicates are ignored; first binding wins.
+    let map = config.build_action_map().unwrap();
+    let ctrl_z = KeyBinding::parse("Ctrl+Z").unwrap();
+    assert_eq!(map.get(&ctrl_z), Some(&Action::Exit));
 }
 
 #[test]
-fn test_duplicate_with_different_modifier_order() {
+fn test_duplicate_with_different_modifier_order_keeps_first() {
     // Even with different modifier orders, these are the same keybinding
-    let mut config = KeybindingsConfig::default();
+    let mut config = KeybindingsConfig {
+        duplicate_policy: DuplicateKeybindingPolicy::KeepFirst,
+        ..Default::default()
+    };
     config.core.exit = vec!["Ctrl+Shift+W".to_string()];
     config.board.toggle_whiteboard = vec!["Shift+Ctrl+W".to_string()];
 
-    // This should fail because they normalize to the same binding
-    let result = config.build_action_map();
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err();
-    assert!(err_msg.contains("Duplicate keybinding"));
-    assert!(err_msg.contains("Shift+Ctrl+W"));
+    // Duplicates are ignored; first binding wins.
+    let map = config.build_action_map().unwrap();
+    let ctrl_shift_w = KeyBinding::parse("Ctrl+Shift+W").unwrap();
+    assert_eq!(map.get(&ctrl_shift_w), Some(&Action::Exit));
+}
+
+#[test]
+fn test_default_keybindings_have_no_duplicates() {
+    let config = KeybindingsConfig::default();
+    config
+        .build_action_map_with_policy(DuplicateKeybindingPolicy::Error)
+        .unwrap();
+}
+
+#[test]
+fn test_duplicate_keybinding_errors_in_strict_mode() {
+    let mut config = KeybindingsConfig {
+        duplicate_policy: DuplicateKeybindingPolicy::Error,
+        ..Default::default()
+    };
+    config.core.exit = vec!["Ctrl+Z".to_string()];
+    config.core.undo = vec!["Ctrl+Z".to_string()];
+
+    let err = config.build_action_map().unwrap_err();
+    assert!(err.contains("Duplicate keybinding"));
+}
+
+#[test]
+fn test_duplicate_keybinding_keeps_last() {
+    let mut config = KeybindingsConfig {
+        duplicate_policy: DuplicateKeybindingPolicy::KeepLast,
+        ..Default::default()
+    };
+    config.core.exit = vec!["Ctrl+Z".to_string()];
+    config.core.undo = vec!["Ctrl+Z".to_string()];
+
+    let map = config.build_action_map().unwrap();
+    let ctrl_z = KeyBinding::parse("Ctrl+Z").unwrap();
+    assert_eq!(map.get(&ctrl_z), Some(&Action::Undo));
+}
+
+#[test]
+fn test_duplicate_policy_deserializes() {
+    let keep_first: KeybindingsConfig =
+        toml::from_str("duplicate_policy = \"keep_first\"").unwrap();
+    assert_eq!(
+        keep_first.duplicate_policy,
+        DuplicateKeybindingPolicy::KeepFirst
+    );
+
+    let keep_last: KeybindingsConfig = toml::from_str("duplicate_policy = \"keep_last\"").unwrap();
+    assert_eq!(
+        keep_last.duplicate_policy,
+        DuplicateKeybindingPolicy::KeepLast
+    );
+
+    let error_policy: KeybindingsConfig = toml::from_str("duplicate_policy = \"error\"").unwrap();
+    assert_eq!(
+        error_policy.duplicate_policy,
+        DuplicateKeybindingPolicy::Error
+    );
 }

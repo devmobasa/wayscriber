@@ -1,3 +1,3 @@
 pub mod bindings;
 
-pub use bindings::KeybindingsConfig;
+pub use bindings::{DuplicateKeybindingPolicy, KeybindingsConfig};

@@ -489,6 +489,9 @@ Customize keyboard shortcuts for all actions. Each action can have multiple keyb
 
 ```toml
 [keybindings]
+# Duplicate binding resolution: "keep_first", "keep_last", or "error"
+duplicate_policy = "error"
+
 # Exit overlay (or cancel current action)
 exit = ["Escape", "Ctrl+Q"]
 
@@ -669,8 +672,12 @@ Modifiers can appear in any order - `"Ctrl+Shift+W"`, `"Shift+Ctrl+W"`, and `"Sh
 **Multiple Bindings:**
 Each action supports multiple keybindings (e.g., both `+` and `=` for increase thickness).
 
-**Duplicate Detection:**
-The system will detect and report duplicate keybindings at startup. If two actions share the same key combination, the application will log an error and use default keybindings.
+**Duplicate Policy:**
+Duplicate keybindings across actions are detected at startup. By default
+(`duplicate_policy = "error"`), duplicates are rejected and the app falls back to
+default keybindings. Use `"keep_first"` to accept duplicates and keep the first
+action (later bindings log a warning), or `"keep_last"` to override earlier
+bindings (based on internal insert order).
 
 **Case Insensitive:**
 Key names are case-insensitive in the config file, but will match the actual key case at runtime.
@@ -707,7 +714,7 @@ clear_canvas = ["X"]
 - In text input mode, configured keybindings (like <kbd>Ctrl+Q</kbd> for exit) work before keys are consumed as text
 - Color keys only work when not holding <kbd>Ctrl</kbd> (to avoid conflicts with other actions)
 - Invalid keybinding strings will be logged and fall back to defaults
-- Duplicate keybindings across actions will be detected and reported at startup
+- Duplicate keybindings across actions are resolved according to `duplicate_policy`
 
 **Defaults:**
 Defaults match the original hardcoded keybindings where possible. Copy/paste selection uses

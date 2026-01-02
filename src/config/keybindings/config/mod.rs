@@ -1,4 +1,4 @@
 mod map;
 mod types;
 
-pub use types::KeybindingsConfig;
+pub use types::{DuplicateKeybindingPolicy, KeybindingsConfig};

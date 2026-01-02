@@ -521,6 +521,9 @@ backup_retention = 1
 # Format: key names with modifiers separated by +
 # Examples: "Escape", "Ctrl+Z", "Ctrl+Shift+T", "F10"
 # Each action can have multiple keybindings (e.g., ["+", "="])
+# Duplicate binding resolution: "keep_first", "keep_last", or "error"
+# error rejects duplicates and falls back to defaults (default).
+duplicate_policy = "error"
 
 # Exit overlay (or cancel current action)
 exit = ["Escape", "Ctrl+Q"]
