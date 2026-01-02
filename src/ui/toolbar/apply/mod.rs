@@ -1,4 +1,5 @@
 mod actions;
+mod boards;
 mod delays;
 mod layout;
 mod pages;
@@ -54,6 +55,8 @@ impl InputState {
             ToolbarEvent::PageNew => self.apply_toolbar_page_new(),
             ToolbarEvent::PageDuplicate => self.apply_toolbar_page_duplicate(),
             ToolbarEvent::PageDelete => self.apply_toolbar_page_delete(),
+            ToolbarEvent::SetBoardColor(color) => self.apply_toolbar_set_board_color(color),
+            ToolbarEvent::RenameBoard => self.apply_toolbar_rename_board(),
             ToolbarEvent::EnterTextMode => self.apply_toolbar_enter_text_mode(),
             ToolbarEvent::EnterStickyNoteMode => self.apply_toolbar_enter_sticky_note_mode(),
             ToolbarEvent::ToggleAllHighlight(enable) => {

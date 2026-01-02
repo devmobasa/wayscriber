@@ -1,9 +1,41 @@
+use crate::draw::{Color, BLACK, BLUE, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 
 const TITLE_FONT_SIZE: f64 = 17.0;
 const BODY_FONT_SIZE: f64 = 14.0;
 const FOOTER_FONT_SIZE: f64 = 12.0;
+const PALETTE_SWATCH_SIZE: f64 = 18.0;
+const PALETTE_SWATCH_GAP: f64 = 6.0;
+
+const BOARD_PALETTE: [Color; 11] = [
+    RED,
+    GREEN,
+    BLUE,
+    YELLOW,
+    WHITE,
+    BLACK,
+    ORANGE,
+    PINK,
+    Color {
+        r: 0.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    },
+    Color {
+        r: 0.6,
+        g: 0.4,
+        b: 0.8,
+        a: 1.0,
+    },
+    Color {
+        r: 0.4,
+        g: 0.4,
+        b: 0.4,
+        a: 1.0,
+    },
+];
 
 pub fn render_board_picker(
     ctx: &cairo::Context,
@@ -54,7 +86,8 @@ pub fn render_board_picker(
     let _ = ctx.show_text(&title);
 
     // Footer
-    let footer = "Enter: switch  N: new  R: rename  C: color  Del: delete  Esc: close";
+    let footer =
+        "Enter: switch  N: new  R: rename  C: color  Swatch: palette  Del: delete  Esc: close";
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     ctx.set_font_size(FOOTER_FONT_SIZE);
     ctx.set_source_rgba(0.64, 0.69, 0.76, 0.9);
@@ -246,6 +279,64 @@ pub fn render_board_picker(
                     );
                     let _ = ctx.stroke();
                 }
+            }
+        }
+    }
+
+    if layout.palette_rows > 0 && layout.palette_cols > 0 {
+        let palette_x = layout.origin_x + layout.padding_x;
+        let palette_y = layout.palette_top;
+        let active_color = edit_state
+            .and_then(|(_, edit_index, _)| input_state.boards.board_states().get(edit_index))
+            .and_then(|board| match board.spec.background {
+                BoardBackground::Solid(color) => Some(color),
+                BoardBackground::Transparent => None,
+            });
+
+        let mut idx = 0usize;
+        for row in 0..layout.palette_rows {
+            for col in 0..layout.palette_cols {
+                if idx >= BOARD_PALETTE.len() {
+                    break;
+                }
+                let color = BOARD_PALETTE[idx];
+                let swatch_x = palette_x + col as f64 * (PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP);
+                let swatch_y = palette_y + row as f64 * (PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP);
+                ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
+                draw_rounded_rect(
+                    ctx,
+                    swatch_x,
+                    swatch_y,
+                    PALETTE_SWATCH_SIZE,
+                    PALETTE_SWATCH_SIZE,
+                    4.0,
+                );
+                let _ = ctx.fill();
+                ctx.set_source_rgba(0.0, 0.0, 0.0, 0.2);
+                draw_rounded_rect(
+                    ctx,
+                    swatch_x,
+                    swatch_y,
+                    PALETTE_SWATCH_SIZE,
+                    PALETTE_SWATCH_SIZE,
+                    4.0,
+                );
+                let _ = ctx.stroke();
+
+                if active_color.map(|active| active == color).unwrap_or(false) {
+                    ctx.set_source_rgba(0.98, 0.92, 0.55, 0.95);
+                    ctx.set_line_width(1.5);
+                    draw_rounded_rect(
+                        ctx,
+                        swatch_x - 2.0,
+                        swatch_y - 2.0,
+                        PALETTE_SWATCH_SIZE + 4.0,
+                        PALETTE_SWATCH_SIZE + 4.0,
+                        5.0,
+                    );
+                    let _ = ctx.stroke();
+                }
+                idx += 1;
             }
         }
     }

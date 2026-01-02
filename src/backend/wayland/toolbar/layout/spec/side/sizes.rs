@@ -28,6 +28,8 @@ impl ToolbarLayoutSpec {
             }
         };
 
+        let board_h = self.side_board_height(snapshot);
+        add_section(board_h, &mut height);
         add_section(colors_h, &mut height);
         if show_presets {
             add_section(Self::SIDE_PRESET_CARD_HEIGHT, &mut height);
@@ -175,6 +177,22 @@ impl ToolbarLayoutSpec {
         } else {
             Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content + Self::SIDE_ACTION_BUTTON_GAP
         }
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_board_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        let swatch_rows = if snapshot.show_more_colors { 2.0 } else { 1.0 };
+        let swatch_h = Self::SIDE_COLOR_SWATCH * swatch_rows
+            + Self::SIDE_COLOR_SWATCH_GAP * (swatch_rows - 1.0);
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
+            + Self::SIDE_BOARD_NAME_ROW_HEIGHT
+            + Self::SIDE_ACTION_BUTTON_GAP
+            + Self::SIDE_COLOR_PICKER_INPUT_HEIGHT
+            + Self::SIDE_BOARD_SWATCH_TOP_GAP
+            + swatch_h
+            + Self::SIDE_COLOR_SECTION_BOTTOM_PADDING
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_pages_height(

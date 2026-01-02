@@ -49,10 +49,22 @@ impl WaylandState {
                 );
             }
             if !self.input_state.show_status_bar {
+                let board_count = self.input_state.boards.board_count();
                 let page_count = self.input_state.boards.page_count();
-                if page_count > 1 {
+                if board_count > 1 || page_count > 1 {
+                    let board_index = self.input_state.boards.active_index();
+                    let board_name = self.input_state.board_name();
                     let page_index = self.input_state.boards.active_page_index();
-                    crate::ui::render_page_badge(ctx, width, height, page_index, page_count);
+                    crate::ui::render_page_badge(
+                        ctx,
+                        width,
+                        height,
+                        board_index,
+                        board_count,
+                        board_name,
+                        page_index,
+                        page_count,
+                    );
                 }
             }
 

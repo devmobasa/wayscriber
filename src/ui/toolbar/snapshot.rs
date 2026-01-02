@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::config::ToolbarLayoutMode;
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, PresetFeedbackKind};
-use crate::input::{EraserMode, InputState, Tool};
+use crate::input::{BoardBackground, EraserMode, InputState, Tool};
 
 use super::bindings::ToolbarBindingHints;
 
@@ -56,6 +56,10 @@ pub struct ToolbarSnapshot {
     pub fill_enabled: bool,
     pub undo_available: bool,
     pub redo_available: bool,
+    pub board_index: usize,
+    pub board_count: usize,
+    pub board_name: String,
+    pub board_color: Option<Color>,
     pub page_index: usize,
     pub page_count: usize,
     pub click_highlight_enabled: bool,
@@ -125,6 +129,13 @@ impl ToolbarSnapshot {
     ) -> Self {
         let frame = state.boards.active_frame();
         let active_tool = state.active_tool();
+        let board_count = state.boards.board_count();
+        let board_index = state.boards.active_index();
+        let board_name = state.board_name().to_string();
+        let board_color = match state.boards.active_background() {
+            BoardBackground::Solid(color) => Some(*color),
+            BoardBackground::Transparent => None,
+        };
         let page_count = state.boards.page_count();
         let page_index = state.boards.active_page_index();
         let text_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
@@ -205,6 +216,10 @@ impl ToolbarSnapshot {
             fill_enabled: state.fill_enabled,
             undo_available: frame.undo_stack_len() > 0,
             redo_available: frame.redo_stack_len() > 0,
+            board_index,
+            board_count,
+            board_name,
+            board_color,
             page_index,
             page_count,
             click_highlight_enabled: state.click_highlight_enabled(),

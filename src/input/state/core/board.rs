@@ -1,5 +1,6 @@
 use super::base::{InputState, UiToastKind};
-use crate::input::BOARD_ID_TRANSPARENT;
+use crate::draw::Color;
+use crate::input::{BoardBackground, BOARD_ID_TRANSPARENT};
 
 impl InputState {
     /// Returns the active board id.
@@ -86,6 +87,57 @@ impl InputState {
         if self.switch_board_with(|boards| boards.remove_active_board(), &current_id) {
             self.queue_board_config_save();
         }
+    }
+
+    pub(crate) fn set_board_name(&mut self, index: usize, name: String) -> bool {
+        let Some(board) = self.boards.board_state_mut(index) else {
+            return false;
+        };
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            self.set_ui_toast(UiToastKind::Warning, "Board name cannot be empty.");
+            return false;
+        }
+        if board.spec.name == trimmed {
+            return false;
+        }
+        board.spec.name = trimmed.to_string();
+        self.queue_board_config_save();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn set_board_background_color(&mut self, index: usize, color: Color) -> bool {
+        let is_active = self.boards.active_index() == index;
+        let Some(board) = self.boards.board_state_mut(index) else {
+            return false;
+        };
+        if board.spec.background.is_transparent() {
+            self.set_ui_toast(UiToastKind::Info, "Overlay board has no background color.");
+            return false;
+        }
+        if matches!(board.spec.background, BoardBackground::Solid(existing) if existing == color) {
+            return false;
+        }
+
+        board.spec.background = BoardBackground::Solid(color);
+        if board.spec.auto_adjust_pen {
+            board.spec.default_pen_color = Some(contrast_color(color));
+            if is_active {
+                self.current_color = board.spec.effective_pen_color().unwrap_or(color);
+                self.sync_highlight_color();
+            }
+        }
+        self.queue_board_config_save();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn set_active_board_background_color(&mut self, color: Color) -> bool {
+        let index = self.boards.active_index();
+        self.set_board_background_color(index, color)
     }
 
     fn switch_board_with(
@@ -197,5 +249,24 @@ impl InputState {
         let outcome = self.boards.delete_page();
         self.prepare_page_switch();
         outcome
+    }
+}
+
+fn contrast_color(background: Color) -> Color {
+    let luminance = 0.2126 * background.r + 0.7152 * background.g + 0.0722 * background.b;
+    if luminance > 0.5 {
+        Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }
+    } else {
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        }
     }
 }

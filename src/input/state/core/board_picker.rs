@@ -3,7 +3,7 @@
 use cairo::Context as CairoContext;
 
 use crate::config::Action;
-use crate::draw::Color;
+use crate::draw::{Color, BLACK, BLUE, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::BoardBackground;
 use crate::util::Rect;
 
@@ -20,6 +20,10 @@ const SWATCH_SIZE: f64 = 14.0;
 const SWATCH_PADDING: f64 = 10.0;
 const COLUMN_GAP: f64 = 12.0;
 const MAX_BOARD_NAME_LEN: usize = 40;
+const PALETTE_SWATCH_SIZE: f64 = 18.0;
+const PALETTE_SWATCH_GAP: f64 = 6.0;
+const PALETTE_TOP_GAP: f64 = 8.0;
+const PALETTE_BOTTOM_GAP: f64 = 8.0;
 
 #[derive(Debug, Clone)]
 pub enum BoardPickerState {
@@ -58,6 +62,9 @@ pub struct BoardPickerLayout {
     pub swatch_padding: f64,
     pub hint_width: f64,
     pub row_count: usize,
+    pub palette_top: f64,
+    pub palette_rows: usize,
+    pub palette_cols: usize,
 }
 
 impl InputState {
@@ -127,7 +134,8 @@ impl InputState {
         let max_count = self.boards.max_count();
 
         let title = format!("Boards ({}/{})", board_count, max_count);
-        let footer = "Enter: switch  N: new  R: rename  C: color  Del: delete  Esc: close";
+        let footer =
+            "Enter: switch  N: new  R: rename  C: color  Swatch: palette  Del: delete  Esc: close";
 
         let _ = ctx.save();
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
@@ -188,13 +196,53 @@ impl InputState {
         panel_width = panel_width.max(title_width + PADDING_X * 2.0);
         panel_width = panel_width.max(footer_width + PADDING_X * 2.0);
 
-        let panel_height =
-            PADDING_Y * 2.0 + HEADER_HEIGHT + ROW_HEIGHT * row_count as f64 + FOOTER_HEIGHT;
+        let mut palette_rows = 0usize;
+        let mut palette_cols = 0usize;
+        let mut palette_height = 0.0;
+        if let Some((BoardPickerEditMode::Color, edit_index, _)) = edit_state
+            && edit_index < board_count
+            && self
+                .boards
+                .board_states()
+                .get(edit_index)
+                .map(|board| !board.spec.background.is_transparent())
+                .unwrap_or(false)
+        {
+            let colors = board_palette_colors();
+            if !colors.is_empty() {
+                let available_width = panel_width - PADDING_X * 2.0;
+                let unit = PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP;
+                let max_cols =
+                    ((available_width + PALETTE_SWATCH_GAP) / unit).floor() as usize;
+                palette_cols = max_cols.clamp(1, colors.len());
+                palette_rows = colors.len().div_ceil(palette_cols);
+                palette_height = palette_rows as f64 * PALETTE_SWATCH_SIZE
+                    + (palette_rows.saturating_sub(1) as f64) * PALETTE_SWATCH_GAP;
+            }
+        }
+
+        let palette_extra = if palette_rows > 0 {
+            PALETTE_TOP_GAP + palette_height + PALETTE_BOTTOM_GAP
+        } else {
+            0.0
+        };
+
+        let panel_height = PADDING_Y * 2.0
+            + HEADER_HEIGHT
+            + ROW_HEIGHT * row_count as f64
+            + palette_extra
+            + FOOTER_HEIGHT;
 
         let mut origin_x = (screen_width as f64 - panel_width) * 0.5;
         let mut origin_y = (screen_height as f64 - panel_height) * 0.5;
         origin_x = origin_x.max(8.0);
         origin_y = origin_y.max(8.0);
+
+        let palette_top = if palette_rows > 0 {
+            origin_y + PADDING_Y + HEADER_HEIGHT + ROW_HEIGHT * row_count as f64 + PALETTE_TOP_GAP
+        } else {
+            0.0
+        };
 
         self.board_picker_layout = Some(BoardPickerLayout {
             origin_x,
@@ -210,6 +258,9 @@ impl InputState {
             swatch_padding: SWATCH_PADDING,
             hint_width: max_hint_width,
             row_count,
+            palette_top,
+            palette_rows,
+            palette_cols,
         });
 
         if let Some(layout) = self.board_picker_layout {
@@ -239,6 +290,57 @@ impl InputState {
         } else {
             Some(index)
         }
+    }
+
+    pub(crate) fn board_picker_swatch_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        let board_count = self.boards.board_count();
+        let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
+        for row in 0..board_count {
+            let row_top = rows_top + layout.row_height * row as f64;
+            let row_center = row_top + layout.row_height * 0.5;
+            let swatch_x = layout.origin_x + layout.padding_x;
+            let swatch_y = row_center - layout.swatch_size * 0.5;
+            let within_x = (x as f64) >= swatch_x
+                && (x as f64) <= swatch_x + layout.swatch_size;
+            let within_y = (y as f64) >= swatch_y
+                && (y as f64) <= swatch_y + layout.swatch_size;
+            if within_x && within_y {
+                return Some(row);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn board_picker_palette_color_at(&self, x: i32, y: i32) -> Option<Color> {
+        let layout = self.board_picker_layout?;
+        if layout.palette_rows == 0 || layout.palette_cols == 0 {
+            return None;
+        }
+        let palette = board_palette_colors();
+        if palette.is_empty() {
+            return None;
+        }
+        let origin_x = layout.origin_x + layout.padding_x;
+        let origin_y = layout.palette_top;
+        let local_x = x as f64 - origin_x;
+        let local_y = y as f64 - origin_y;
+        if local_x < 0.0 || local_y < 0.0 {
+            return None;
+        }
+        let cell = PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP;
+        let col = (local_x / cell).floor() as usize;
+        let row = (local_y / cell).floor() as usize;
+        if col >= layout.palette_cols || row >= layout.palette_rows {
+            return None;
+        }
+        let within_x = local_x - col as f64 * cell <= PALETTE_SWATCH_SIZE;
+        let within_y = local_y - row as f64 * cell <= PALETTE_SWATCH_SIZE;
+        if !within_x || !within_y {
+            return None;
+        }
+        let index = row * layout.palette_cols + col;
+        palette.get(index).copied()
     }
 
     pub(crate) fn update_board_picker_hover_from_pointer(&mut self, x: i32, y: i32) {
@@ -372,6 +474,7 @@ impl InputState {
             BoardBackground::Transparent => String::new(),
         };
         self.board_picker_start_edit(BoardPickerEditMode::Color, buffer);
+        self.needs_redraw = true;
     }
 
     pub(crate) fn board_picker_commit_edit(&mut self) -> bool {
@@ -387,16 +490,8 @@ impl InputState {
         let trimmed = buffer.trim();
         match mode {
             BoardPickerEditMode::Name => {
-                if trimmed.is_empty() {
-                    self.set_ui_toast(UiToastKind::Warning, "Board name cannot be empty.");
+                if !self.set_board_name(index, trimmed.to_string()) {
                     return false;
-                }
-                let name = trimmed.to_string();
-                if let Some(board) = self.boards.board_state_mut(index)
-                    && board.spec.name != name
-                {
-                    board.spec.name = name;
-                    self.queue_board_config_save();
                 }
             }
             BoardPickerEditMode::Color => {
@@ -407,24 +502,13 @@ impl InputState {
                     );
                     return false;
                 };
-                let is_active = self.boards.active_index() == index;
-                if let Some(board) = self.boards.board_state_mut(index) {
-                    board.spec.background = BoardBackground::Solid(color);
-                    if board.spec.auto_adjust_pen {
-                        board.spec.default_pen_color = Some(contrast_color(color));
-                        if is_active {
-                            self.current_color = board.spec.effective_pen_color().unwrap_or(color);
-                            self.sync_highlight_color();
-                        }
-                    }
-                    self.queue_board_config_save();
+                if !self.set_board_background_color(index, color) {
+                    return false;
                 }
             }
         }
 
         self.board_picker_clear_edit();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
         true
     }
 
@@ -470,6 +554,25 @@ impl InputState {
                 }
             }
         }
+    }
+
+    pub(crate) fn board_picker_apply_palette_color(&mut self, color: Color) -> bool {
+        let Some(index) = self.board_picker_selected_index() else {
+            return false;
+        };
+        if self.board_picker_is_new_row(index) {
+            return false;
+        }
+        if !self.set_board_background_color(index, color) {
+            return false;
+        }
+        if let Some(edit) = self.board_picker_edit_buffer_mut()
+            && edit.mode == BoardPickerEditMode::Color
+        {
+            edit.buffer = color_to_hex(color);
+        }
+        self.needs_redraw = true;
+        true
     }
 
     pub(crate) fn board_picker_delete_selected(&mut self) {
@@ -525,6 +628,39 @@ fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
     } else {
         Some(label)
     }
+}
+
+const BOARD_PALETTE: [Color; 11] = [
+    RED,
+    GREEN,
+    BLUE,
+    YELLOW,
+    WHITE,
+    BLACK,
+    ORANGE,
+    PINK,
+    Color {
+        r: 0.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    },
+    Color {
+        r: 0.6,
+        g: 0.4,
+        b: 0.8,
+        a: 1.0,
+    },
+    Color {
+        r: 0.4,
+        g: 0.4,
+        b: 0.4,
+        a: 1.0,
+    },
+];
+
+fn board_palette_colors() -> &'static [Color] {
+    &BOARD_PALETTE
 }
 
 fn parse_hex_color(value: &str) -> Option<Color> {

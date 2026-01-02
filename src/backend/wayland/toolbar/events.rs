@@ -8,6 +8,7 @@ pub enum HitKind {
     DragSetMarkerOpacity { min: f64, max: f64 },
     DragSetFontSize,
     PickColor { x: f64, y: f64, w: f64, h: f64 },
+    PickBoardColor { x: f64, y: f64, w: f64, h: f64 },
     DragUndoDelay,
     DragRedoDelay,
     DragCustomUndoDelay,
