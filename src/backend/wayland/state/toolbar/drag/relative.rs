@@ -53,8 +53,7 @@ impl WaylandState {
             if self.toolbar_drag_preview_active() {
                 drag_log("disable inline drag preview (restore layer-shell toolbars)");
                 self.set_toolbar_drag_preview_active(false);
-                self.toolbar
-                    .set_suppressed(&self.compositor_state, false);
+                self.toolbar.set_suppressed(&self.compositor_state, false);
                 self.clear_inline_toolbar_hits();
                 self.clear_inline_toolbar_hover();
                 self.input_state.needs_redraw = true;
