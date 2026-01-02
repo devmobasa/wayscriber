@@ -17,6 +17,14 @@ impl WaylandState {
         self.data.toolbar_dragging = value;
     }
 
+    pub(in crate::backend::wayland) fn toolbar_drag_preview_active(&self) -> bool {
+        self.data.toolbar_drag_preview
+    }
+
+    pub(in crate::backend::wayland) fn set_toolbar_drag_preview_active(&mut self, value: bool) {
+        self.data.toolbar_drag_preview = value;
+    }
+
     pub(in crate::backend::wayland) fn toolbar_needs_recreate(&self) -> bool {
         self.data.toolbar_needs_recreate
     }
@@ -43,5 +51,9 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {
         self.data.inline_toolbars
+    }
+
+    pub(in crate::backend::wayland) fn inline_toolbars_render_active(&self) -> bool {
+        self.inline_toolbars_active() || self.toolbar_drag_preview_active()
     }
 }

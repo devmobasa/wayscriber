@@ -6,7 +6,7 @@ impl WaylandState {
         ctx: &cairo::Context,
         snapshot: &ToolbarSnapshot,
     ) {
-        if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
+        if !self.inline_toolbars_render_active() || !self.toolbar.is_visible() {
             self.clear_inline_toolbar_hits();
             self.clear_inline_toolbar_hover();
             return;

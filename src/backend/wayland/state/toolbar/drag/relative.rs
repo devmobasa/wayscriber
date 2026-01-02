@@ -24,15 +24,7 @@ impl WaylandState {
             }
         }
 
-        self.clamp_toolbar_offsets(&snapshot);
-        self.apply_toolbar_offsets(&snapshot);
-        // Commit both toolbar surfaces immediately to force the compositor to apply margins.
-        if let Some(layer) = self.toolbar.top_layer_surface() {
-            layer.wl_surface().commit();
-        }
-        if let Some(layer) = self.toolbar.side_layer_surface() {
-            layer.wl_surface().commit();
-        }
+        let _ = self.apply_toolbar_offsets(&snapshot);
 
         drag_log(format!(
             "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
@@ -45,8 +37,7 @@ impl WaylandState {
             self.data.toolbar_side_offset
         ));
 
-        self.toolbar.mark_dirty();
-        if self.inline_toolbars_active() {
+        if self.inline_toolbars_render_active() {
             self.input_state.needs_redraw = true;
         }
     }
@@ -59,6 +50,14 @@ impl WaylandState {
             self.data.active_drag_kind = None;
             self.data.drag_top_base_x = None;
             self.data.drag_top_base_y = None;
+            if self.toolbar_drag_preview_active() {
+                drag_log("disable inline drag preview (restore layer-shell toolbars)");
+                self.set_toolbar_drag_preview_active(false);
+                self.toolbar.set_suppressed(&self.compositor_state, false);
+                self.clear_inline_toolbar_hits();
+                self.clear_inline_toolbar_hover();
+                self.input_state.needs_redraw = true;
+            }
             self.save_toolbar_pin_config();
             self.unlock_pointer();
         }

@@ -11,13 +11,33 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
         match event {
             ToolbarEvent::MoveTopToolbar { x, y } => {
-                self.begin_toolbar_move_drag(MoveDragKind::Top, (x, y));
-                self.handle_toolbar_move(MoveDragKind::Top, (x, y));
+                let inline_active = self.inline_toolbars_active();
+                let coord_is_screen = inline_active;
+                drag_log(format!(
+                    "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
+                    x, y, coord_is_screen, inline_active
+                ));
+                self.begin_toolbar_move_drag(MoveDragKind::Top, (x, y), coord_is_screen);
+                if coord_is_screen {
+                    self.handle_toolbar_move_screen(MoveDragKind::Top, (x, y));
+                } else {
+                    self.handle_toolbar_move(MoveDragKind::Top, (x, y));
+                }
                 return;
             }
             ToolbarEvent::MoveSideToolbar { x, y } => {
-                self.begin_toolbar_move_drag(MoveDragKind::Side, (x, y));
-                self.handle_toolbar_move(MoveDragKind::Side, (x, y));
+                let inline_active = self.inline_toolbars_active();
+                let coord_is_screen = inline_active;
+                drag_log(format!(
+                    "toolbar move event: kind=Side, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
+                    x, y, coord_is_screen, inline_active
+                ));
+                self.begin_toolbar_move_drag(MoveDragKind::Side, (x, y), coord_is_screen);
+                if coord_is_screen {
+                    self.handle_toolbar_move_screen(MoveDragKind::Side, (x, y));
+                } else {
+                    self.handle_toolbar_move(MoveDragKind::Side, (x, y));
+                }
                 return;
             }
             _ => {}

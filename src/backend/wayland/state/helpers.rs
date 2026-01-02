@@ -87,6 +87,22 @@ pub(in crate::backend::wayland) fn debug_toolbar_drag_logging_enabled() -> bool 
     })
 }
 
+pub(in crate::backend::wayland) fn toolbar_pointer_lock_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        parse_boolish_env(&std::env::var("WAYSCRIBER_TOOLBAR_POINTER_LOCK").unwrap_or_default())
+    })
+}
+
+pub(in crate::backend::wayland) fn toolbar_drag_preview_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        parse_boolish_env(
+            &std::env::var("WAYSCRIBER_TOOLBAR_DRAG_PREVIEW").unwrap_or_else(|_| "1".into()),
+        )
+    })
+}
+
 pub(in crate::backend::wayland) fn drag_log(message: impl AsRef<str>) {
     if debug_toolbar_drag_logging_enabled() {
         log::info!("{}", message.as_ref());

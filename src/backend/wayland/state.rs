@@ -3,7 +3,6 @@
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
-use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
     compositor::CompositorState,
@@ -52,7 +51,6 @@ use crate::{
     },
     config::{Action, ColorSpec, Config},
     input::{BoardMode, DrawingState, EraserMode, InputState, Tool, ZoomAction},
-    notification,
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
@@ -92,6 +90,7 @@ type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_scr
 pub(super) use helpers::{
     damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
     force_inline_toolbars_requested, resolve_damage_regions, scale_damage_regions, surface_id,
+    toolbar_drag_preview_enabled, toolbar_pointer_lock_enabled,
 };
 
 pub(in crate::backend::wayland) struct WaylandGlobals {

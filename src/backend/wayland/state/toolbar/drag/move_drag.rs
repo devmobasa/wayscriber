@@ -4,20 +4,41 @@ impl WaylandState {
     pub(in crate::backend::wayland::state::toolbar) fn begin_toolbar_move_drag(
         &mut self,
         kind: MoveDragKind,
-        local_coord: (f64, f64),
+        coord: (f64, f64),
+        coord_is_screen: bool,
     ) {
         if self.data.toolbar_move_drag.is_none() {
+            if toolbar_drag_preview_enabled()
+                && self.layer_shell.is_some()
+                && !self.inline_toolbars_active()
+                && !self.toolbar_drag_preview_active()
+            {
+                drag_log("enable inline drag preview (layer-shell toolbars hidden)");
+                self.set_toolbar_drag_preview_active(true);
+                self.toolbar.set_suppressed(&self.compositor_state, true);
+                self.input_state.needs_redraw = true;
+            }
             log::debug!(
-                "Begin toolbar move drag: kind={:?}, local_coord=({:.3}, {:.3})",
+                "Begin toolbar move drag: kind={:?}, coord=({:.3}, {:.3}), coord_is_screen={}",
                 kind,
-                local_coord.0,
-                local_coord.1
+                coord.0,
+                coord.1,
+                coord_is_screen
             );
-            // Store as local coords since the initial press is on the toolbar surface
+            drag_log(format!(
+                "begin move drag: kind={:?}, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}, layer_shell={}",
+                kind,
+                coord.0,
+                coord.1,
+                coord_is_screen,
+                self.inline_toolbars_active(),
+                self.layer_shell.is_some()
+            ));
+            // Store initial coord with explicit coordinate space (screen vs toolbar-local).
             self.data.toolbar_move_drag = Some(MoveDrag {
                 kind,
-                last_coord: local_coord,
-                coord_is_screen: false,
+                last_coord: coord,
+                coord_is_screen,
             });
             // Freeze base positions so the other toolbar doesn't push while dragging.
             let snapshot = self.toolbar_snapshot();
@@ -37,6 +58,10 @@ impl WaylandState {
         local_coord: (f64, f64),
     ) {
         if self.pointer_lock_active() {
+            drag_log(format!(
+                "skip handle_toolbar_move_local: pointer locked, kind={:?}, coord=({:.3}, {:.3})",
+                kind, local_coord.0, local_coord.1
+            ));
             return;
         }
         // For layer-shell surfaces, use local coordinates directly since they're
@@ -89,6 +114,14 @@ impl WaylandState {
             self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset
         );
+        if delta.0 == 0.0 && delta.1 == 0.0 {
+            self.data.toolbar_move_drag = Some(MoveDrag {
+                kind,
+                last_coord: effective_coord,
+                coord_is_screen: true,
+            });
+            return;
+        }
 
         match kind {
             MoveDragKind::Top => {
@@ -113,21 +146,13 @@ impl WaylandState {
             last_coord: effective_coord,
             coord_is_screen: true,
         });
-        self.apply_toolbar_offsets(&snapshot);
-        // Force commits so compositors apply new margins immediately.
-        if let Some(layer) = self.toolbar.top_layer_surface() {
-            layer.wl_surface().commit();
-        }
-        if let Some(layer) = self.toolbar.side_layer_surface() {
-            layer.wl_surface().commit();
-        }
-        self.toolbar.mark_dirty();
-        if self.inline_toolbars_active() {
+        let _ = self.apply_toolbar_offsets(&snapshot);
+        let inline_render_active = self.inline_toolbars_render_active();
+        if inline_render_active {
+            self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
-        self.clamp_toolbar_offsets(&snapshot);
-
-        if self.layer_shell.is_none() || self.inline_toolbars_active() {
+        if self.layer_shell.is_none() || inline_render_active {
             self.clear_inline_toolbar_hits();
         }
     }
@@ -140,6 +165,10 @@ impl WaylandState {
         screen_coord: (f64, f64),
     ) {
         if self.pointer_lock_active() {
+            drag_log(format!(
+                "skip handle_toolbar_move_screen: pointer locked, kind={:?}, coord=({:.3}, {:.3})",
+                kind, screen_coord.0, screen_coord.1
+            ));
             return;
         }
         let snapshot = self
@@ -180,6 +209,14 @@ impl WaylandState {
             self.data.toolbar_side_offset_x,
             self.data.toolbar_side_offset
         );
+        if delta.0 == 0.0 && delta.1 == 0.0 {
+            self.data.toolbar_move_drag = Some(MoveDrag {
+                kind,
+                last_coord: screen_coord,
+                coord_is_screen: true,
+            });
+            return;
+        }
         match kind {
             MoveDragKind::Top => {
                 self.data.toolbar_top_offset += delta.0;
@@ -196,16 +233,13 @@ impl WaylandState {
             last_coord: screen_coord,
             coord_is_screen: true,
         });
-        self.apply_toolbar_offsets(&snapshot);
-        self.toolbar.mark_dirty();
-        if self.inline_toolbars_active() {
+        let _ = self.apply_toolbar_offsets(&snapshot);
+        let inline_render_active = self.inline_toolbars_render_active();
+        if inline_render_active {
+            self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
-
-        // Ensure we don't drift off-screen.
-        self.clamp_toolbar_offsets(&snapshot);
-
-        if self.layer_shell.is_none() || self.inline_toolbars_active() {
+        if self.layer_shell.is_none() || inline_render_active {
             // Inline mode uses cached rects, so force a relayout.
             self.clear_inline_toolbar_hits();
         }

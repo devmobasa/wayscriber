@@ -493,6 +493,17 @@ ls -la ~/.config/wayscriber/config.toml
 RUST_LOG=info wayscriber --active   # watch for TOML errors
 ```
 
+### Environment variables
+
+Common toggles:
+- `WAYSCRIBER_TOOLBAR_DRAG_PREVIEW=0` disables inline toolbar drag preview (default: on)
+- `WAYSCRIBER_TOOLBAR_POINTER_LOCK=1` enables pointer-lock drag path (default: off)
+- `WAYSCRIBER_DEBUG_TOOLBAR_DRAG=1` enables toolbar drag logging (default: off)
+- `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)
+- `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
+
+See `docs/CONFIG.md` for the full list.
+
 ### Performance tuning
 
 ```toml
