@@ -62,9 +62,9 @@ pub(crate) fn build_nav_state(
         ]
     } else if page_count > 1 {
         vec![
-            ("Switch pages:  ".to_string(), subtitle_color),
+            ("Switch pages:".to_string(), subtitle_color),
             (
-                "Left/Right, PageUp/PageDown, Home/End".to_string(),
+                "  Left/Right, PageUp/PageDown, Home/End".to_string(),
                 nav_key_color,
             ),
         ]
