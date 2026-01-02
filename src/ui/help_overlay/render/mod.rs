@@ -87,9 +87,10 @@ pub fn render_help_overlay(
         layout.box_height,
     );
 
-    let inner_x = layout.box_x + style.padding;
-    let mut cursor_y = layout.box_y + style.padding;
-    let inner_width = layout.box_width - style.padding * 2.0;
+    let padding = metrics.padding;
+    let inner_x = layout.box_x + padding;
+    let mut cursor_y = layout.box_y + padding;
+    let inner_width = layout.box_width - padding * 2.0;
 
     // Accent line
     ctx.set_source_rgba(
@@ -222,7 +223,7 @@ pub fn render_help_overlay(
     let note_baseline = cursor_y + metrics.note_font_size;
     ctx.move_to(note_x, note_baseline);
     let _ = ctx.show_text(layout.note_text.as_str());
-    cursor_y += metrics.note_font_size + 12.0;
+    cursor_y += metrics.note_font_size + metrics.note_to_close_gap;
 
     // Close hint
     ctx.set_source_rgba(

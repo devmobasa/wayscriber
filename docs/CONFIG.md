@@ -571,8 +571,8 @@ board_delete = ["Ctrl+Shift+Delete"]
 board_picker = ["Ctrl+Shift+B"]
 
 # Page navigation
-page_prev = []
-page_next = []
+page_prev = ["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+PageUp"]
+page_next = ["Ctrl+Alt+ArrowRight", "Ctrl+Alt+PageDown"]
 page_new = ["Ctrl+Alt+N"]
 page_duplicate = ["Ctrl+Alt+D"]
 page_delete = ["Ctrl+Alt+Delete"]

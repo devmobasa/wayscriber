@@ -8,11 +8,23 @@ impl WaylandState {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return None;
         }
-        self.data
-            .inline_top_hits
-            .iter()
-            .chain(self.data.inline_side_hits.iter())
-            .find_map(|hit| intent_for_hit(hit, position.0, position.1))
+        if self.toolbar.is_top_visible()
+            && let Some(intent) = self
+                .data
+                .inline_top_hits
+                .iter()
+                .find_map(|hit| intent_for_hit(hit, position.0, position.1))
+        {
+            return Some(intent);
+        }
+        if self.toolbar.is_side_visible() {
+            return self
+                .data
+                .inline_side_hits
+                .iter()
+                .find_map(|hit| intent_for_hit(hit, position.0, position.1));
+        }
+        None
     }
 
     fn inline_toolbar_drag_at(
@@ -27,11 +39,23 @@ impl WaylandState {
         if let Some(intent) = self.move_drag_intent(position.0, position.1) {
             return Some(intent);
         }
-        self.data
-            .inline_top_hits
-            .iter()
-            .chain(self.data.inline_side_hits.iter())
-            .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+        if self.toolbar.is_top_visible()
+            && let Some(intent) = self
+                .data
+                .inline_top_hits
+                .iter()
+                .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+        {
+            return Some(intent);
+        }
+        if self.toolbar.is_side_visible() {
+            return self
+                .data
+                .inline_side_hits
+                .iter()
+                .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1));
+        }
+        None
     }
 
     pub(in crate::backend::wayland) fn inline_toolbar_motion(
@@ -52,16 +76,20 @@ impl WaylandState {
         self.data.inline_top_hover = None;
         self.data.inline_side_hover = None;
 
+        let top_visible = self.toolbar.is_top_visible();
+        let side_visible = self.toolbar.is_side_visible();
         let mut over_toolbar = false;
 
-        if let Some((x, y, w, h)) = self.data.inline_top_rect
+        if top_visible
+            && let Some((x, y, w, h)) = self.data.inline_top_rect
             && geometry::point_in_rect(position.0, position.1, x, y, w, h)
         {
             over_toolbar = true;
             self.data.inline_top_hover = Some(position);
         }
 
-        if let Some((x, y, w, h)) = self.data.inline_side_rect
+        if side_visible
+            && let Some((x, y, w, h)) = self.data.inline_side_rect
             && geometry::point_in_rect(position.0, position.1, x, y, w, h)
         {
             over_toolbar = true;
