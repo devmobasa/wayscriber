@@ -34,7 +34,15 @@ pub(super) fn draw_board_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let rename_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, rename_x, name_row_y, rename_w, name_row_h))
         .unwrap_or(false);
-    draw_button(ctx, rename_x, name_row_y, rename_w, name_row_h, true, rename_hover);
+    draw_button(
+        ctx,
+        rename_x,
+        name_row_y,
+        rename_w,
+        name_row_h,
+        true,
+        rename_hover,
+    );
     draw_label_center(ctx, rename_x, name_row_y, rename_w, name_row_h, "Rename");
     hits.push(HitRegion {
         rect: (rename_x, name_row_y, rename_w, name_row_h),
@@ -124,7 +132,14 @@ pub(super) fn draw_board_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let mut row_y = picker_y + picker_h + ToolbarLayoutSpec::SIDE_BOARD_SWATCH_TOP_GAP;
     let mut cx = x;
     for (color, _name) in basic_colors {
-        draw_swatch(ctx, cx, row_y, swatch, *color, snapshot.board_color == Some(*color));
+        draw_swatch(
+            ctx,
+            cx,
+            row_y,
+            swatch,
+            *color,
+            snapshot.board_color == Some(*color),
+        );
         if board_color_enabled {
             hits.push(HitRegion {
                 rect: (cx, row_y, swatch, swatch),
@@ -144,7 +159,14 @@ pub(super) fn draw_board_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         row_y += swatch + swatch_gap;
         cx = x;
         for (color, _name) in extended_colors {
-            draw_swatch(ctx, cx, row_y, swatch, *color, snapshot.board_color == Some(*color));
+            draw_swatch(
+                ctx,
+                cx,
+                row_y,
+                swatch,
+                *color,
+                snapshot.board_color == Some(*color),
+            );
             if board_color_enabled {
                 hits.push(HitRegion {
                     rect: (cx, row_y, swatch, swatch),
@@ -168,7 +190,11 @@ fn board_label(snapshot: &crate::ui::toolbar::ToolbarSnapshot) -> String {
     let name = snapshot.board_name.trim();
     if snapshot.board_count > 1 {
         if name.is_empty() {
-            format!("Board {}/{}", snapshot.board_index + 1, snapshot.board_count)
+            format!(
+                "Board {}/{}",
+                snapshot.board_index + 1,
+                snapshot.board_count
+            )
         } else {
             format!(
                 "Board {}/{}: {}",

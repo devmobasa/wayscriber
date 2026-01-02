@@ -74,6 +74,7 @@ pub fn render_zoom_badge(
 }
 
 /// Render a small badge indicating the current board/page (visible when status bar is hidden).
+#[allow(clippy::too_many_arguments)]
 pub fn render_page_badge(
     ctx: &cairo::Context,
     _screen_width: u32,

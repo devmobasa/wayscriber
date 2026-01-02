@@ -1,6 +1,6 @@
 use super::base::{InputState, UiToastKind};
 use crate::draw::Color;
-use crate::input::{BoardBackground, BOARD_ID_TRANSPARENT};
+use crate::input::{BOARD_ID_TRANSPARENT, BoardBackground};
 
 impl InputState {
     /// Returns the active board id.

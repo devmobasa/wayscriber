@@ -1,4 +1,4 @@
-use crate::draw::{Color, BLACK, BLUE, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
+use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 

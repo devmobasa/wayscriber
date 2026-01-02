@@ -3,7 +3,7 @@
 use cairo::Context as CairoContext;
 
 use crate::config::Action;
-use crate::draw::{Color, BLACK, BLUE, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
+use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::BoardBackground;
 use crate::util::Rect;
 
@@ -212,8 +212,7 @@ impl InputState {
             if !colors.is_empty() {
                 let available_width = panel_width - PADDING_X * 2.0;
                 let unit = PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP;
-                let max_cols =
-                    ((available_width + PALETTE_SWATCH_GAP) / unit).floor() as usize;
+                let max_cols = ((available_width + PALETTE_SWATCH_GAP) / unit).floor() as usize;
                 palette_cols = max_cols.clamp(1, colors.len());
                 palette_rows = colors.len().div_ceil(palette_cols);
                 palette_height = palette_rows as f64 * PALETTE_SWATCH_SIZE
@@ -301,10 +300,8 @@ impl InputState {
             let row_center = row_top + layout.row_height * 0.5;
             let swatch_x = layout.origin_x + layout.padding_x;
             let swatch_y = row_center - layout.swatch_size * 0.5;
-            let within_x = (x as f64) >= swatch_x
-                && (x as f64) <= swatch_x + layout.swatch_size;
-            let within_y = (y as f64) >= swatch_y
-                && (y as f64) <= swatch_y + layout.swatch_size;
+            let within_x = (x as f64) >= swatch_x && (x as f64) <= swatch_x + layout.swatch_size;
+            let within_y = (y as f64) >= swatch_y && (y as f64) <= swatch_y + layout.swatch_size;
             if within_x && within_y {
                 return Some(row);
             }
