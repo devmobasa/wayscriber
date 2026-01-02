@@ -1,11 +1,25 @@
+use crate::config::Action;
 use crate::input::events::Key;
 use crate::input::state::InputState;
+
+use super::bindings::key_to_action_label;
 
 const PROPERTIES_PANEL_COARSE_STEP: i32 = 5;
 
 impl InputState {
     pub(super) fn handle_board_picker_key(&mut self, key: Key) -> bool {
         if !self.is_board_picker_open() {
+            return false;
+        }
+
+        if matches!(key, Key::Shift | Key::Ctrl | Key::Alt | Key::Tab) {
+            return false;
+        }
+
+        if !matches!(key, Key::Escape)
+            && let Some(key_str) = key_to_action_label(key)
+            && let Some(Action::Exit) = self.find_action(&key_str)
+        {
             return false;
         }
 
