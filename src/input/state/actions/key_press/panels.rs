@@ -36,10 +36,17 @@ impl InputState {
         } else {
             match key {
                 Key::Escape => {
-                    self.close_board_picker();
+                    if !self.board_picker_clear_search() {
+                        self.close_board_picker();
+                    }
+                    true
+                }
+                Key::Backspace => {
+                    self.board_picker_backspace_search();
                     true
                 }
                 Key::Up => {
+                    self.board_picker_clear_search();
                     let next = self
                         .board_picker_selected_index()
                         .unwrap_or(0)
@@ -49,6 +56,7 @@ impl InputState {
                     true
                 }
                 Key::Down => {
+                    self.board_picker_clear_search();
                     let next = self
                         .board_picker_selected_index()
                         .unwrap_or(0)
@@ -58,11 +66,13 @@ impl InputState {
                     true
                 }
                 Key::Home => {
+                    self.board_picker_clear_search();
                     self.board_picker_set_selected(0);
                     self.needs_redraw = true;
                     true
                 }
                 Key::End => {
+                    self.board_picker_clear_search();
                     let last = self.board_picker_row_count().saturating_sub(1);
                     self.board_picker_set_selected(last);
                     self.needs_redraw = true;
@@ -78,16 +88,26 @@ impl InputState {
                     self.board_picker_delete_selected();
                     true
                 }
-                Key::Char('n') | Key::Char('N') => {
+                Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
                     self.board_picker_create_new();
                     true
                 }
-                Key::Char('r') | Key::Char('R') | Key::F2 => {
+                Key::Char('r') | Key::Char('R') if self.modifiers.ctrl => {
                     self.board_picker_rename_selected();
                     true
                 }
-                Key::Char('c') | Key::Char('C') => {
+                Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => {
                     self.board_picker_edit_color_selected();
+                    true
+                }
+                Key::Char(ch) => {
+                    if !ch.is_control() {
+                        self.board_picker_append_search(ch);
+                    }
+                    true
+                }
+                Key::F2 => {
+                    self.board_picker_rename_selected();
                     true
                 }
                 _ => true,

@@ -86,14 +86,13 @@ pub fn render_board_picker(
     let _ = ctx.show_text(&title);
 
     // Footer
-    let footer =
-        "Enter: switch  N: new  R: rename  C: color  Swatch: palette  Del: delete  Esc: close";
+    let footer = input_state.board_picker_footer_text();
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     ctx.set_font_size(FOOTER_FONT_SIZE);
     ctx.set_source_rgba(0.64, 0.69, 0.76, 0.9);
     let footer_y = layout.origin_y + layout.height - layout.padding_y;
     ctx.move_to(layout.origin_x + layout.padding_x, footer_y);
-    let _ = ctx.show_text(footer);
+    let _ = ctx.show_text(&footer);
 
     let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
     let name_x = layout.origin_x + layout.padding_x + layout.swatch_size + layout.swatch_padding;

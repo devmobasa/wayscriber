@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use cairo::Context as CairoContext;
+use std::time::{Duration, Instant};
 
 use crate::config::Action;
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
@@ -24,6 +25,8 @@ const PALETTE_SWATCH_SIZE: f64 = 18.0;
 const PALETTE_SWATCH_GAP: f64 = 6.0;
 const PALETTE_TOP_GAP: f64 = 8.0;
 const PALETTE_BOTTOM_GAP: f64 = 8.0;
+const BOARD_PICKER_SEARCH_TIMEOUT: Duration = Duration::from_millis(1200);
+const BOARD_PICKER_SEARCH_MAX_LEN: usize = 24;
 
 #[derive(Debug, Clone)]
 pub enum BoardPickerState {
@@ -79,6 +82,7 @@ impl InputState {
         self.cancel_active_interaction();
         self.close_context_menu();
         self.close_properties_panel();
+        self.board_picker_clear_search();
         self.board_picker_state = BoardPickerState::Open {
             selected: self.boards.active_index(),
             hover_index: None,
@@ -94,6 +98,7 @@ impl InputState {
         }
         self.board_picker_state = BoardPickerState::Hidden;
         self.board_picker_layout = None;
+        self.board_picker_clear_search();
         self.needs_redraw = true;
     }
 
@@ -134,8 +139,7 @@ impl InputState {
         let max_count = self.boards.max_count();
 
         let title = format!("Boards ({}/{})", board_count, max_count);
-        let footer =
-            "Enter: switch  N: new  R: rename  C: color  Swatch: palette  Del: delete  Esc: close";
+        let footer = self.board_picker_footer_text();
 
         let _ = ctx.save();
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
@@ -143,7 +147,7 @@ impl InputState {
         let title_width = text_width(ctx, &title);
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
         ctx.set_font_size(BODY_FONT_SIZE);
-        let footer_width = text_width(ctx, footer);
+        let footer_width = text_width(ctx, &footer);
 
         let mut max_name_width: f64 = 0.0;
         let mut max_hint_width: f64 = 0.0;
@@ -399,6 +403,7 @@ impl InputState {
         if let BoardPickerState::Open { edit, .. } = &mut self.board_picker_state {
             *edit = Some(BoardPickerEdit { mode, buffer });
         }
+        self.board_picker_clear_search();
     }
 
     pub(crate) fn board_picker_edit_state(&self) -> Option<(BoardPickerEditMode, usize, &str)> {
@@ -414,6 +419,63 @@ impl InputState {
             return None;
         };
         edit.as_mut()
+    }
+
+    pub(crate) fn board_picker_footer_text(&self) -> String {
+        let search = self.board_picker_search.trim();
+        let search_label = if search.is_empty() {
+            "Type: jump".to_string()
+        } else {
+            format!(
+                "Search: {}",
+                truncate_search_label(search, BOARD_PICKER_SEARCH_MAX_LEN)
+            )
+        };
+        let esc_label = if search.is_empty() {
+            "Esc: close"
+        } else {
+            "Esc: clear"
+        };
+        format!(
+            "Enter: switch  Ctrl+N: new  Ctrl+R: rename  Ctrl+C: color  {search_label}  Del: delete  {esc_label}"
+        )
+    }
+
+    pub(crate) fn board_picker_clear_search(&mut self) -> bool {
+        if self.board_picker_search.is_empty() {
+            return false;
+        }
+        self.board_picker_search.clear();
+        self.board_picker_search_last_input = None;
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn board_picker_backspace_search(&mut self) -> bool {
+        if self.board_picker_search.is_empty() {
+            return false;
+        }
+        self.board_picker_search.pop();
+        if self.board_picker_search.is_empty() {
+            self.board_picker_search_last_input = None;
+        } else {
+            self.board_picker_search_last_input = Some(Instant::now());
+        }
+        self.board_picker_select_search_match();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn board_picker_append_search(&mut self, ch: char) -> bool {
+        self.board_picker_reset_search_if_stale();
+        if self.board_picker_search.len() >= BOARD_PICKER_SEARCH_MAX_LEN {
+            return false;
+        }
+        self.board_picker_search.push(ch);
+        self.board_picker_search_last_input = Some(Instant::now());
+        self.board_picker_select_search_match();
+        self.needs_redraw = true;
+        true
     }
 
     pub(crate) fn board_picker_row_count(&self) -> usize {
@@ -581,6 +643,53 @@ impl InputState {
         true
     }
 
+    fn board_picker_reset_search_if_stale(&mut self) {
+        let Some(last_input) = self.board_picker_search_last_input else {
+            return;
+        };
+        if last_input.elapsed() > BOARD_PICKER_SEARCH_TIMEOUT {
+            self.board_picker_search.clear();
+            self.board_picker_search_last_input = None;
+            self.needs_redraw = true;
+        }
+    }
+
+    fn board_picker_select_search_match(&mut self) {
+        let Some(index) = self.board_picker_match_index(self.board_picker_search.trim()) else {
+            return;
+        };
+        self.board_picker_set_selected(index);
+    }
+
+    fn board_picker_match_index(&self, query: &str) -> Option<usize> {
+        let query = query.trim();
+        if query.is_empty() {
+            return None;
+        }
+        let board_count = self.boards.board_count();
+        let lower = query.to_ascii_lowercase();
+        match lower.parse::<usize>() {
+            Ok(value) if (1..=board_count).contains(&value) => return Some(value - 1),
+            _ => {}
+        }
+        let mut prefix_match = None;
+        let mut contains_match = None;
+        for (idx, board) in self.boards.board_states().iter().enumerate() {
+            let name = board.spec.name.to_ascii_lowercase();
+            let id = board.spec.id.to_ascii_lowercase();
+            if prefix_match.is_none() && (name.starts_with(&lower) || id.starts_with(&lower)) {
+                prefix_match = Some(idx);
+            }
+            if contains_match.is_none() && (name.contains(&lower) || id.contains(&lower)) {
+                contains_match = Some(idx);
+            }
+            if prefix_match.is_some() && contains_match.is_some() {
+                break;
+            }
+        }
+        prefix_match.or(contains_match)
+    }
+
     pub(crate) fn board_picker_delete_selected(&mut self) {
         let Some(index) = self.board_picker_selected_index() else {
             return;
@@ -634,6 +743,18 @@ fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
     } else {
         Some(label)
     }
+}
+
+fn truncate_search_label(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+    let mut truncated = value
+        .chars()
+        .take(max_chars.saturating_sub(3))
+        .collect::<String>();
+    truncated.push_str("...");
+    truncated
 }
 
 const BOARD_PALETTE: [Color; 11] = [

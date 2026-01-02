@@ -21,6 +21,7 @@ use crate::input::{
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Instant;
 
 pub struct InputState {
     /// Multi-board canvas management
@@ -73,6 +74,10 @@ pub struct InputState {
     pub help_overlay_scroll: f64,
     /// Max scrollable height for help overlay (pixels)
     pub help_overlay_scroll_max: f64,
+    /// Board picker quick search query
+    pub board_picker_search: String,
+    /// Time of last board picker search input
+    pub board_picker_search_last_input: Option<Instant>,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
