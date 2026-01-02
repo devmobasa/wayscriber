@@ -9,7 +9,7 @@ impl InputState {
         hovered_shape_id: Option<ShapeId>,
     ) -> Vec<ContextMenuEntry> {
         let mut entries = Vec::new();
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let locked = ids
             .iter()
             .any(|id| frame.shape(*id).map(|shape| shape.locked).unwrap_or(false));

@@ -11,7 +11,7 @@ pub(super) struct SelectionApplyResult {
 
 impl InputState {
     pub(super) fn selection_primary_color(&self) -> Option<Color> {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         for id in self.selected_shape_ids() {
             let Some(drawn) = frame.shape(*id) else {
                 continue;
@@ -30,7 +30,7 @@ impl InputState {
     where
         F: FnMut(&Shape) -> Option<bool>,
     {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let mut applicable = 0;
         let mut editable_values = Vec::new();
         for id in self.selected_shape_ids() {
@@ -73,7 +73,7 @@ impl InputState {
         let mut dirty_regions = Vec::new();
 
         {
-            let frame = self.canvas_set.active_frame_mut();
+            let frame = self.boards.active_frame_mut();
             for id in ids {
                 let Some(drawn) = frame.shape_mut(id) else {
                     continue;
@@ -124,7 +124,7 @@ impl InputState {
             crate::draw::frame::UndoAction::Compound(actions)
         };
 
-        self.canvas_set
+        self.boards
             .active_frame_mut()
             .push_undo_action(undo_action, self.undo_stack_limit);
 

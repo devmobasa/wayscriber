@@ -115,4 +115,11 @@ impl BoardPages {
     pub fn pages_mut(&mut self) -> &mut Vec<Frame> {
         &mut self.pages
     }
+
+    pub fn has_persistable_data(&self) -> bool {
+        if self.pages.len() > 1 || self.active > 0 {
+            return true;
+        }
+        self.pages.iter().any(|page| page.has_persistable_data())
+    }
 }

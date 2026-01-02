@@ -6,7 +6,7 @@ fn erase_stroke_samples_sparse_path() {
     state.eraser_size = 4.0;
     state.eraser_mode = EraserMode::Stroke;
 
-    let line_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -22,7 +22,7 @@ fn erase_stroke_samples_sparse_path() {
 
     let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
     assert!(erased, "stroke eraser should remove intersected line");
-    assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+    assert!(state.boards.active_frame().shape(line_id).is_none());
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn erase_stroke_includes_release_segment() {
     state.eraser_mode = EraserMode::Stroke;
     state.set_tool_override(Some(Tool::Eraser));
 
-    let line_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -49,7 +49,7 @@ fn erase_stroke_includes_release_segment() {
     state.on_mouse_press(MouseButton::Left, 0, -10);
     state.on_mouse_release(MouseButton::Left, 100, 10);
 
-    assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+    assert!(state.boards.active_frame().shape(line_id).is_none());
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn erase_stroke_skips_locked_shapes() {
     state.eraser_size = 4.0;
     state.eraser_mode = EraserMode::Stroke;
 
-    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let locked_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -71,7 +71,7 @@ fn erase_stroke_skips_locked_shapes() {
         },
         thick: 1.0,
     });
-    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let unlocked_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -85,14 +85,14 @@ fn erase_stroke_skips_locked_shapes() {
         thick: 1.0,
     });
 
-    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
-        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    if let Some(index) = state.boards.active_frame().find_index(locked_id) {
+        state.boards.active_frame_mut().shapes[index].locked = true;
     }
 
     let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
     assert!(erased, "eraser should remove unlocked shapes");
-    assert!(state.canvas_set.active_frame().shape(unlocked_id).is_none());
-    assert!(state.canvas_set.active_frame().shape(locked_id).is_some());
+    assert!(state.boards.active_frame().shape(unlocked_id).is_none());
+    assert!(state.boards.active_frame().shape(locked_id).is_some());
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn erase_stroke_samples_randomized_crossings() {
         state.eraser_size = 4.0;
         state.eraser_mode = EraserMode::Stroke;
 
-        let line_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
             x1: 0,
             y1: 0,
             x2: 100,
@@ -143,7 +143,7 @@ fn erase_stroke_samples_randomized_crossings() {
             "stroke eraser should remove line at angle {}",
             angle
         );
-        assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+        assert!(state.boards.active_frame().shape(line_id).is_none());
     }
 }
 
@@ -209,10 +209,10 @@ fn erase_stroke_hits_various_shapes() {
         let mut state = create_test_input_state();
         state.eraser_size = 4.0;
         state.eraser_mode = EraserMode::Stroke;
-        let shape_id = state.canvas_set.active_frame_mut().add_shape(shape);
+        let shape_id = state.boards.active_frame_mut().add_shape(shape);
 
         let erased = state.erase_strokes_by_points(&path);
         assert!(erased, "stroke eraser should remove intersected shape");
-        assert!(state.canvas_set.active_frame().shape(shape_id).is_none());
+        assert!(state.boards.active_frame().shape(shape_id).is_none());
     }
 }

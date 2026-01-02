@@ -13,7 +13,7 @@ impl InputState {
 
         for (shape_id, snapshot) in snapshots {
             let bounds = {
-                let frame = self.canvas_set.active_frame_mut();
+                let frame = self.boards.active_frame_mut();
                 if let Some(shape) = frame.shape_mut(shape_id) {
                     let before = shape.shape.bounding_box();
                     shape.shape = snapshot.shape.clone();

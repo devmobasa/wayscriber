@@ -1,5 +1,6 @@
 pub mod toolbar;
 
+mod board_picker;
 mod context_menu;
 mod help_overlay;
 mod primitives;
@@ -7,6 +8,7 @@ mod properties_panel;
 mod status;
 mod toasts;
 
+pub use board_picker::render_board_picker;
 pub use context_menu::render_context_menu;
 pub use help_overlay::render_help_overlay;
 pub use properties_panel::render_properties_panel;

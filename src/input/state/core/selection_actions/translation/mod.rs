@@ -8,7 +8,7 @@ mod undo;
 
 impl InputState {
     pub(crate) fn capture_movable_selection_snapshots(&self) -> Vec<(ShapeId, ShapeSnapshot)> {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         self.selected_shape_ids()
             .iter()
             .filter_map(|id| {
@@ -48,7 +48,7 @@ impl InputState {
         let mut moved_any = false;
         for id in ids {
             let bounds = {
-                let frame = self.canvas_set.active_frame_mut();
+                let frame = self.boards.active_frame_mut();
                 if let Some(shape) = frame.shape_mut(id) {
                     if shape.locked {
                         None

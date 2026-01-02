@@ -1,5 +1,6 @@
 use super::super::base::{InputState, PresetAction, ZoomAction};
 use crate::config::Action;
+use crate::config::BoardsConfig;
 
 impl InputState {
     /// Takes and clears any pending capture action.
@@ -25,5 +26,10 @@ impl InputState {
     /// Takes and clears any pending preset save/clear action.
     pub fn take_pending_preset_action(&mut self) -> Option<PresetAction> {
         self.pending_preset_action.take()
+    }
+
+    /// Takes and clears any pending board config update.
+    pub fn take_pending_board_config(&mut self) -> Option<BoardsConfig> {
+        self.pending_board_config.take()
     }
 }

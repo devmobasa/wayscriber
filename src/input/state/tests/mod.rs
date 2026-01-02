@@ -1,8 +1,8 @@
 use super::core::{ContextMenuKind, ContextMenuState, MenuCommand};
 use super::*;
-use crate::config::{Action, BoardConfig, ColorSpec, ToolPresetConfig};
+use crate::config::{Action, BoardsConfig, ColorSpec, ToolPresetConfig};
 use crate::draw::{Color, EraserKind, FontDescriptor, Shape, frame::UndoAction};
-use crate::input::{BoardMode, ClickHighlightSettings, EraserMode, Key, MouseButton, Tool};
+use crate::input::{ClickHighlightSettings, EraserMode, Key, MouseButton, Tool};
 use crate::util;
 
 mod helpers;

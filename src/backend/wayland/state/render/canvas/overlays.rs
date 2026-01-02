@@ -10,7 +10,7 @@ impl WaylandState {
                 .iter()
                 .copied()
                 .collect();
-            let frame = self.input_state.canvas_set.active_frame();
+            let frame = self.input_state.boards.active_frame();
             for drawn in &frame.shapes {
                 if selected.contains(&drawn.id) {
                     crate::draw::render_selection_halo(ctx, drawn);
@@ -76,7 +76,7 @@ impl WaylandState {
                     .hit_test_all_for_points_cached(&point, self.input_state.eraser_hit_radius())
             };
             if !ids.is_empty() {
-                let frame = self.input_state.canvas_set.active_frame();
+                let frame = self.input_state.boards.active_frame();
                 match ids.len() {
                     1 => {
                         if let Some(drawn) = frame.shape(ids[0]) {

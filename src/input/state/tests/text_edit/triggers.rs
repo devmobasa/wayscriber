@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn double_click_edit_enters_text_input() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 120,
         y: 120,
         text: "Hello".to_string(),
@@ -15,7 +15,7 @@ fn double_click_edit_enters_text_input() {
     });
 
     let bounds = state
-        .canvas_set
+        .boards
         .active_frame()
         .shape(shape_id)
         .unwrap()
@@ -39,7 +39,7 @@ fn double_click_edit_enters_text_input() {
     }
     assert!(state.text_edit_target.is_some());
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::Text { text, .. } => assert!(text.is_empty()),
@@ -50,7 +50,7 @@ fn double_click_edit_enters_text_input() {
 #[test]
 fn right_click_clears_double_click_tracking() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 80,
         y: 80,
         text: "Hello".to_string(),
@@ -62,7 +62,7 @@ fn right_click_clears_double_click_tracking() {
     });
 
     let bounds = state
-        .canvas_set
+        .boards
         .active_frame()
         .shape(shape_id)
         .unwrap()
@@ -85,7 +85,7 @@ fn right_click_clears_double_click_tracking() {
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_edit_target.is_none());
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::Text { text, .. } => assert_eq!(text, "Hello"),
@@ -97,7 +97,7 @@ fn right_click_clears_double_click_tracking() {
 fn enter_key_starts_edit_for_selected_sticky_note() {
     let mut state = create_test_input_state();
     let shape_id = state
-        .canvas_set
+        .boards
         .active_frame_mut()
         .add_shape(Shape::StickyNote {
             x: 120,
@@ -122,7 +122,7 @@ fn enter_key_starts_edit_for_selected_sticky_note() {
 #[test]
 fn enter_key_starts_edit_for_selected_text() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 60,
         y: 70,
         text: "Hello".to_string(),

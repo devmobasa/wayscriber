@@ -1,11 +1,11 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
-use crate::input::board_mode::BoardMode;
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
 impl InputState {
     pub(super) fn canvas_menu_entries(&self) -> Vec<ContextMenuEntry> {
         let mut entries = Vec::new();
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let mut has_locked = false;
         let mut has_unlocked = false;
         for shape in &frame.shapes {
@@ -46,8 +46,12 @@ impl InputState {
             Some(MenuCommand::OpenPagesMenu),
         ));
 
-        match self.canvas_set.active_mode() {
-            BoardMode::Transparent => {
+        let current_id = self.board_id();
+        let has_whiteboard = self.boards.has_board(BOARD_ID_WHITEBOARD);
+        let has_blackboard = self.boards.has_board(BOARD_ID_BLACKBOARD);
+
+        if current_id == BOARD_ID_TRANSPARENT {
+            if has_whiteboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Whiteboard",
                     Some("Ctrl+W"),
@@ -55,6 +59,8 @@ impl InputState {
                     false,
                     Some(MenuCommand::SwitchToWhiteboard),
                 ));
+            }
+            if has_blackboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Blackboard",
                     Some("Ctrl+B"),
@@ -63,14 +69,15 @@ impl InputState {
                     Some(MenuCommand::SwitchToBlackboard),
                 ));
             }
-            BoardMode::Whiteboard => {
-                entries.push(ContextMenuEntry::new(
-                    "Return to Transparent",
-                    Some("Ctrl+Shift+T"),
-                    false,
-                    false,
-                    Some(MenuCommand::ReturnToTransparent),
-                ));
+        } else {
+            entries.push(ContextMenuEntry::new(
+                "Return to Transparent",
+                Some("Ctrl+Shift+T"),
+                false,
+                false,
+                Some(MenuCommand::ReturnToTransparent),
+            ));
+            if current_id == BOARD_ID_WHITEBOARD && has_blackboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Blackboard",
                     Some("Ctrl+B"),
@@ -78,15 +85,7 @@ impl InputState {
                     false,
                     Some(MenuCommand::SwitchToBlackboard),
                 ));
-            }
-            BoardMode::Blackboard => {
-                entries.push(ContextMenuEntry::new(
-                    "Return to Transparent",
-                    Some("Ctrl+Shift+T"),
-                    false,
-                    false,
-                    Some(MenuCommand::ReturnToTransparent),
-                ));
+            } else if current_id == BOARD_ID_BLACKBOARD && has_whiteboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Whiteboard",
                     Some("Ctrl+W"),

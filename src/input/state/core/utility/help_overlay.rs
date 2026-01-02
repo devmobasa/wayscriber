@@ -2,6 +2,9 @@ use super::super::base::{HelpOverlayView, InputState};
 
 impl InputState {
     pub(crate) fn toggle_help_overlay(&mut self) {
+        if self.is_board_picker_open() {
+            self.close_board_picker();
+        }
         let now_visible = !self.show_help;
         self.show_help = now_visible;
         self.help_overlay_search.clear();

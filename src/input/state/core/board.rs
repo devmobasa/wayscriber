@@ -1,72 +1,138 @@
-use super::base::InputState;
-use crate::input::board_mode::BoardMode;
+use super::base::{InputState, UiToastKind};
+use crate::input::BOARD_ID_TRANSPARENT;
 
 impl InputState {
-    /// Returns the current board mode.
-    pub fn board_mode(&self) -> BoardMode {
-        self.canvas_set.active_mode()
+    /// Returns the active board id.
+    pub fn board_id(&self) -> &str {
+        self.boards.active_board_id()
     }
 
-    /// Switches to a different board mode with color auto-adjustment.
+    /// Returns the active board display name.
+    pub fn board_name(&self) -> &str {
+        self.boards.active_board_name()
+    }
+
+    /// Returns true if the active board is transparent.
+    pub fn board_is_transparent(&self) -> bool {
+        self.boards.active_background().is_transparent()
+    }
+
+    /// Switches to a different board with color auto-adjustment.
     ///
-    /// Handles mode transitions with automatic color adjustment for contrast:
-    /// - Entering board mode: saves current color, applies mode default
-    /// - Exiting board mode: restores previous color
-    /// - Switching between boards: applies new mode default
+    /// Handles board transitions with automatic color adjustment for contrast:
+    /// - Entering auto-adjust board: saves current color, applies board default
+    /// - Exiting auto-adjust board: restores previous color
+    /// - Switching between auto-adjust boards: applies new board default
     ///
     /// Also resets drawing state to prevent partial shapes crossing modes.
-    pub fn switch_board_mode(&mut self, new_mode: BoardMode) {
-        let current_mode = self.canvas_set.active_mode();
+    pub fn switch_board(&mut self, target_id: &str) {
+        let current_id = self.boards.active_board_id().to_string();
 
-        // Toggle behavior: if already in target mode, return to transparent
-        let target_mode = if current_mode == new_mode && new_mode != BoardMode::Transparent {
-            BoardMode::Transparent
-        } else {
-            new_mode
-        };
+        // Toggle behavior: if already in target board, return to transparent.
+        let mut target_id = target_id.to_string();
+        if current_id == target_id && !self.board_is_transparent() {
+            target_id = BOARD_ID_TRANSPARENT.to_string();
+        }
 
-        // No-op if we're already in the target mode
-        if current_mode == target_mode {
+        if current_id == target_id {
             return;
         }
 
-        // Handle color auto-adjustment based on transition type (if enabled)
-        if self.board_config.auto_adjust_pen {
-            match (current_mode, target_mode) {
-                // Entering board mode from transparent
-                (BoardMode::Transparent, BoardMode::Whiteboard | BoardMode::Blackboard) => {
-                    // Save current color and apply board default
-                    self.board_previous_color = Some(self.current_color);
-                    if let Some(default_color) = target_mode.default_pen_color(&self.board_config) {
-                        self.current_color = default_color;
-                        self.sync_highlight_color();
-                    }
-                }
-                // Exiting board mode to transparent
-                (BoardMode::Whiteboard | BoardMode::Blackboard, BoardMode::Transparent) => {
-                    // Restore previous color if we saved one
-                    if let Some(prev_color) = self.board_previous_color {
-                        self.current_color = prev_color;
-                        self.board_previous_color = None;
-                        self.sync_highlight_color();
-                    }
-                }
-                // Switching between board modes
-                (BoardMode::Whiteboard, BoardMode::Blackboard)
-                | (BoardMode::Blackboard, BoardMode::Whiteboard) => {
-                    // Apply new board's default color
-                    if let Some(default_color) = target_mode.default_pen_color(&self.board_config) {
-                        self.current_color = default_color;
-                        self.sync_highlight_color();
-                    }
-                }
-                // All other transitions (shouldn't happen, but handle gracefully)
-                _ => {}
-            }
+        self.switch_board_with(|boards| boards.switch_to_id(&target_id), &current_id);
+    }
+
+    pub fn create_board(&mut self) -> bool {
+        let current_id = self.boards.active_board_id().to_string();
+        let created = self.switch_board_with(|boards| boards.create_board(), &current_id);
+        if created {
+            self.queue_board_config_save();
+        }
+        created
+    }
+
+    pub fn switch_board_slot(&mut self, slot: usize) {
+        let current_id = self.boards.active_board_id().to_string();
+        self.switch_board_with(|boards| boards.switch_to_slot(slot), &current_id);
+    }
+
+    pub fn switch_board_next(&mut self) {
+        let current_id = self.boards.active_board_id().to_string();
+        self.switch_board_with(|boards| boards.next_board(), &current_id);
+    }
+
+    pub fn switch_board_prev(&mut self) {
+        let current_id = self.boards.active_board_id().to_string();
+        self.switch_board_with(|boards| boards.prev_board(), &current_id);
+    }
+
+    pub fn delete_active_board(&mut self) {
+        if self.board_is_transparent() {
+            self.set_ui_toast(UiToastKind::Info, "Overlay board cannot be deleted.");
+            return;
+        }
+        if self.boards.active_pages().has_persistable_data() {
+            self.set_ui_toast(
+                UiToastKind::Warning,
+                "Board has content; deletion requires clearing first.",
+            );
+            return;
+        }
+        if self.boards.board_count() <= 1 {
+            self.set_ui_toast(UiToastKind::Info, "At least one board must remain.");
+            return;
         }
 
-        // Switch the active frame
-        self.canvas_set.switch_mode(target_mode);
+        let current_id = self.boards.active_board_id().to_string();
+        if self.switch_board_with(|boards| boards.remove_active_board(), &current_id) {
+            self.queue_board_config_save();
+        }
+    }
+
+    fn switch_board_with(
+        &mut self,
+        switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,
+        current_id: &str,
+    ) -> bool {
+        let current_spec = self.boards.active_board().spec.clone();
+        let prev_count = self.boards.board_count();
+        if !switch(&mut self.boards) {
+            return false;
+        }
+
+        let target_spec = self.boards.active_board().spec.clone();
+        if target_spec.id == current_id {
+            return false;
+        }
+        if self.boards.board_count() > prev_count {
+            self.queue_board_config_save();
+        }
+
+        let current_auto =
+            current_spec.auto_adjust_pen && !current_spec.background.is_transparent();
+        let target_auto = target_spec.auto_adjust_pen && !target_spec.background.is_transparent();
+
+        match (current_auto, target_auto) {
+            (false, true) => {
+                self.board_previous_color = Some(self.current_color);
+                if let Some(default_color) = target_spec.effective_pen_color() {
+                    self.current_color = default_color;
+                    self.sync_highlight_color();
+                }
+            }
+            (true, false) => {
+                if let Some(prev_color) = self.board_previous_color.take() {
+                    self.current_color = prev_color;
+                    self.sync_highlight_color();
+                }
+            }
+            (true, true) => {
+                if let Some(default_color) = target_spec.effective_pen_color() {
+                    self.current_color = default_color;
+                    self.sync_highlight_color();
+                }
+            }
+            _ => {}
+        }
 
         // Reset drawing state to prevent partial shapes crossing modes
         self.state = super::base::DrawingState::Idle;
@@ -75,7 +141,19 @@ impl InputState {
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
 
-        log::info!("Switched from {:?} to {:?} mode", current_mode, target_mode);
+        log::info!(
+            "Switched from '{}' to '{}' board",
+            current_id,
+            target_spec.id
+        );
+        true
+    }
+
+    pub(crate) fn queue_board_config_save(&mut self) {
+        if !self.boards.persist_customizations() {
+            return;
+        }
+        self.pending_board_config = Some(self.boards.to_config());
     }
 
     fn prepare_page_switch(&mut self) {
@@ -88,8 +166,7 @@ impl InputState {
     }
 
     pub fn page_prev(&mut self) -> bool {
-        let mode = self.canvas_set.active_mode();
-        if self.canvas_set.prev_page(mode) {
+        if self.boards.prev_page() {
             self.prepare_page_switch();
             true
         } else {
@@ -98,8 +175,7 @@ impl InputState {
     }
 
     pub fn page_next(&mut self) -> bool {
-        let mode = self.canvas_set.active_mode();
-        if self.canvas_set.next_page(mode) {
+        if self.boards.next_page() {
             self.prepare_page_switch();
             true
         } else {
@@ -108,20 +184,17 @@ impl InputState {
     }
 
     pub fn page_new(&mut self) {
-        let mode = self.canvas_set.active_mode();
-        self.canvas_set.new_page(mode);
+        self.boards.new_page();
         self.prepare_page_switch();
     }
 
     pub fn page_duplicate(&mut self) {
-        let mode = self.canvas_set.active_mode();
-        self.canvas_set.duplicate_page(mode);
+        self.boards.duplicate_page();
         self.prepare_page_switch();
     }
 
     pub fn page_delete(&mut self) -> crate::draw::PageDeleteOutcome {
-        let mode = self.canvas_set.active_mode();
-        let outcome = self.canvas_set.delete_page(mode);
+        let outcome = self.boards.delete_page();
         self.prepare_page_switch();
         outcome
     }

@@ -1,5 +1,5 @@
-use super::types::{BoardPagesSnapshot, SessionSnapshot, ToolStateSnapshot};
-use crate::input::{InputState, board_mode::BoardMode};
+use super::types::{BoardPagesSnapshot, BoardSnapshot, SessionSnapshot, ToolStateSnapshot};
+use crate::input::InputState;
 use crate::session::options::SessionOptions;
 
 /// Capture a snapshot from the current input state if persistence is enabled.
@@ -12,17 +12,14 @@ pub fn snapshot_from_input(
     }
 
     let mut snapshot = SessionSnapshot {
-        active_mode: input.board_mode(),
-        transparent: None,
-        whiteboard: None,
-        blackboard: None,
+        active_board_id: input.board_id().to_string(),
+        boards: Vec::new(),
         tool_state: None,
     };
 
     let history_limit = options.effective_history_limit(input.undo_stack_limit);
 
-    let capture_pages = |mode: BoardMode| -> Option<BoardPagesSnapshot> {
-        let pages = input.canvas_set.pages(mode)?;
+    let capture_pages = |pages: &crate::draw::BoardPages| -> Option<BoardPagesSnapshot> {
         let mut cloned_pages = pages.pages().to_vec();
         for page in &mut cloned_pages {
             if history_limit == 0 {
@@ -38,16 +35,23 @@ pub fn snapshot_from_input(
         snapshot.has_persistable_data().then_some(snapshot)
     };
 
-    if options.persist_transparent {
-        snapshot.transparent = capture_pages(BoardMode::Transparent);
-    }
-
-    if options.persist_whiteboard {
-        snapshot.whiteboard = capture_pages(BoardMode::Whiteboard);
-    }
-
-    if options.persist_blackboard {
-        snapshot.blackboard = capture_pages(BoardMode::Blackboard);
+    let persist_non_transparent = options.persist_whiteboard || options.persist_blackboard;
+    for board in input.boards.board_states() {
+        let is_transparent = board.spec.background.is_transparent();
+        let should_persist = if is_transparent {
+            options.persist_transparent
+        } else {
+            persist_non_transparent && board.spec.persist
+        };
+        if !should_persist {
+            continue;
+        }
+        if let Some(pages) = capture_pages(&board.pages) {
+            snapshot.boards.push(BoardSnapshot {
+                id: board.spec.id.clone(),
+                pages,
+            });
+        }
     }
 
     if options.restore_tool_state {

@@ -9,80 +9,29 @@ pub(super) fn enforce_shape_limits(snapshot: &mut SessionSnapshot, max_shapes: u
         return;
     }
 
-    let truncate = |pages: &mut Option<BoardPagesSnapshot>, mode: &str| {
-        if let Some(pages) = pages {
-            for (idx, frame_data) in pages.pages.iter_mut().enumerate() {
-                if frame_data.shapes.len() <= max_shapes {
-                    continue;
-                }
-                let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
-                warn!(
-                    "Session page '{}' (#{}) contains {} shapes which exceeds the limit of {}; truncating",
-                    mode,
-                    idx + 1,
-                    frame_data.shapes.len() + removed.len(),
-                    max_shapes
-                );
-                let removed_ids: HashSet<ShapeId> =
-                    removed.into_iter().map(|shape| shape.id).collect();
-                if !removed_ids.is_empty() {
-                    let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
-                    if !stats.is_empty() {
-                        warn!(
-                            "Dropped {} undo and {} redo actions referencing trimmed shapes in '{}' page #{} history",
-                            stats.undo_removed,
-                            stats.redo_removed,
-                            mode,
-                            idx + 1
-                        );
-                    }
-                }
+    for board in &mut snapshot.boards {
+        for (idx, frame_data) in board.pages.pages.iter_mut().enumerate() {
+            if frame_data.shapes.len() <= max_shapes {
+                continue;
             }
-        }
-    };
-
-    truncate(&mut snapshot.transparent, "transparent");
-    truncate(&mut snapshot.whiteboard, "whiteboard");
-    truncate(&mut snapshot.blackboard, "blackboard");
-}
-
-pub(super) fn apply_history_policies(
-    pages: &mut Option<BoardPagesSnapshot>,
-    mode: &str,
-    depth_limit: Option<usize>,
-) {
-    if let Some(pages) = pages {
-        for (idx, frame_data) in pages.pages.iter_mut().enumerate() {
-            let depth_trim = frame_data.validate_history(MAX_COMPOUND_DEPTH);
-            if !depth_trim.is_empty() {
-                warn!(
-                    "Removed {} undo and {} redo actions with invalid structure in '{}' page #{} history",
-                    depth_trim.undo_removed,
-                    depth_trim.redo_removed,
-                    mode,
-                    idx + 1
-                );
-            }
-            let shape_trim = frame_data.prune_history_against_shapes();
-            if !shape_trim.is_empty() {
-                warn!(
-                    "Removed {} undo and {} redo actions referencing missing shapes in '{}' page #{} history",
-                    shape_trim.undo_removed,
-                    shape_trim.redo_removed,
-                    mode,
-                    idx + 1
-                );
-            }
-            if let Some(limit) = depth_limit {
-                let trimmed = frame_data.clamp_history_depth(limit);
-                if !trimmed.is_empty() {
-                    debug!(
-                        "Clamped '{}' page #{} history to {} entries (dropped {} undo / {} redo)",
-                        mode,
-                        idx + 1,
-                        limit,
-                        trimmed.undo_removed,
-                        trimmed.redo_removed
+            let removed: Vec<_> = frame_data.shapes.drain(max_shapes..).collect();
+            warn!(
+                "Session board '{}' page #{} contains {} shapes which exceeds the limit of {}; truncating",
+                board.id,
+                idx + 1,
+                frame_data.shapes.len() + removed.len(),
+                max_shapes
+            );
+            let removed_ids: HashSet<ShapeId> = removed.into_iter().map(|shape| shape.id).collect();
+            if !removed_ids.is_empty() {
+                let stats = frame_data.prune_history_for_removed_ids(&removed_ids);
+                if !stats.is_empty() {
+                    warn!(
+                        "Dropped {} undo and {} redo actions referencing trimmed shapes in '{}' page #{} history",
+                        stats.undo_removed,
+                        stats.redo_removed,
+                        board.id,
+                        idx + 1
                     );
                 }
             }
@@ -90,8 +39,67 @@ pub(super) fn apply_history_policies(
     }
 }
 
+pub(super) fn apply_history_policies(
+    pages: &mut BoardPagesSnapshot,
+    board_id: &str,
+    depth_limit: Option<usize>,
+) {
+    for (idx, frame_data) in pages.pages.iter_mut().enumerate() {
+        let depth_trim = frame_data.validate_history(MAX_COMPOUND_DEPTH);
+        if !depth_trim.is_empty() {
+            warn!(
+                "Removed {} undo and {} redo actions with invalid structure in '{}' page #{} history",
+                depth_trim.undo_removed,
+                depth_trim.redo_removed,
+                board_id,
+                idx + 1
+            );
+        }
+        let shape_trim = frame_data.prune_history_against_shapes();
+        if !shape_trim.is_empty() {
+            warn!(
+                "Removed {} undo and {} redo actions referencing missing shapes in '{}' page #{} history",
+                shape_trim.undo_removed,
+                shape_trim.redo_removed,
+                board_id,
+                idx + 1
+            );
+        }
+        if let Some(limit) = depth_limit {
+            let trimmed = frame_data.clamp_history_depth(limit);
+            if !trimmed.is_empty() {
+                debug!(
+                    "Clamped '{}' page #{} history to {} entries (dropped {} undo / {} redo)",
+                    board_id,
+                    idx + 1,
+                    limit,
+                    trimmed.undo_removed,
+                    trimmed.redo_removed
+                );
+            }
+        }
+    }
+}
+
 pub(super) fn max_history_depth(doc: &Value) -> usize {
     let mut max_depth = 0;
+    if let Some(Value::Array(boards)) = doc.get("boards") {
+        for board in boards {
+            if let Some(obj) = board.as_object()
+                && let Some(Value::Array(pages)) = obj.get("pages")
+            {
+                for page in pages {
+                    if let Some(obj) = page.as_object() {
+                        for stack_key in ["undo_stack", "redo_stack"] {
+                            if let Some(Value::Array(arr)) = obj.get(stack_key) {
+                                max_depth = max_depth.max(depth_array(arr));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     for key in [
         "transparent",
         "whiteboard",
@@ -123,6 +131,20 @@ pub(super) fn max_history_depth(doc: &Value) -> usize {
 
 pub(super) fn strip_history_fields(doc: &mut Value) {
     if let Some(obj) = doc.as_object_mut() {
+        if let Some(Value::Array(boards)) = obj.get_mut("boards") {
+            for board in boards {
+                if let Some(board_obj) = board.as_object_mut()
+                    && let Some(Value::Array(pages)) = board_obj.get_mut("pages")
+                {
+                    for page in pages {
+                        if let Some(frame) = page.as_object_mut() {
+                            frame.remove("undo_stack");
+                            frame.remove("redo_stack");
+                        }
+                    }
+                }
+            }
+        }
         for key in [
             "transparent",
             "whiteboard",

@@ -15,7 +15,7 @@ fn context_menu_respects_enable_flag() {
 #[test]
 fn shape_menu_includes_select_this_entry_whenever_hovered() {
     let mut state = create_test_input_state();
-    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 10,
         w: 20,
@@ -24,7 +24,7 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 40,
         y: 40,
         w: 20,
@@ -65,7 +65,7 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
 #[test]
 fn select_this_shape_command_focuses_single_shape() {
     let mut state = create_test_input_state();
-    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 10,
         w: 20,
@@ -74,7 +74,7 @@ fn select_this_shape_command_focuses_single_shape() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 40,
         y: 40,
         w: 20,
@@ -105,7 +105,7 @@ fn select_this_shape_command_focuses_single_shape() {
 fn properties_command_opens_panel() {
     let mut state = create_test_input_state();
     let shape_id = {
-        let frame = state.canvas_set.active_frame_mut();
+        let frame = state.boards.active_frame_mut();
         frame.add_shape(Shape::Rect {
             x: 10,
             y: 10,
@@ -143,7 +143,7 @@ fn keyboard_context_menu_sets_initial_focus() {
 #[test]
 fn keyboard_context_menu_focuses_edit_for_selected_text() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,
         y: 60,
         text: "Hello".to_string(),

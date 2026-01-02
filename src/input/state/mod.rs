@@ -6,6 +6,7 @@ mod render;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use core::board_picker::BoardPickerEditMode;
 #[allow(unused_imports)]
 pub use core::{
     ContextMenuEntry, ContextMenuKind, ContextMenuState, DrawingState, HelpOverlayView, InputState,

@@ -12,7 +12,7 @@ impl InputState {
         &self,
         ids: &[ShapeId],
     ) -> Vec<SelectionPropertyEntry> {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let mut entries = Vec::new();
 
         let color_summary = summarize_property(frame, ids, shape_color, color_eq);

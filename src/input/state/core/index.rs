@@ -33,7 +33,7 @@ impl InputState {
             return Vec::new();
         }
 
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let len = frame.shapes.len();
         if len == 0 {
             return Vec::new();
@@ -104,7 +104,7 @@ impl InputState {
     }
 
     pub(crate) fn ensure_spatial_index_for_active_frame(&mut self) {
-        let len = self.canvas_set.active_frame().shapes.len();
+        let len = self.boards.active_frame().shapes.len();
         if len <= self.max_linear_hit_test {
             self.spatial_index = None;
             return;
@@ -112,13 +112,13 @@ impl InputState {
 
         let rebuild = !matches!(&self.spatial_index, Some(grid) if grid.shape_count == len);
         if rebuild {
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             self.spatial_index = SpatialGrid::build(frame, SPATIAL_GRID_CELL_SIZE);
         }
     }
 
     fn hit_test_single(&mut self, index: usize, x: i32, y: i32, tolerance: f64) -> Option<ShapeId> {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         if index >= frame.shapes.len() {
             return None;
         }
@@ -158,14 +158,14 @@ impl InputState {
     /// Performs hit-testing against the active frame and returns the top-most shape id.
     pub fn hit_test_at(&mut self, x: i32, y: i32) -> Option<ShapeId> {
         let tolerance = self.hit_test_tolerance;
-        let len = self.canvas_set.active_frame().shapes.len();
+        let len = self.boards.active_frame().shapes.len();
         let threshold = self.max_linear_hit_test;
 
         if len > threshold {
             let rebuild = !matches!(&self.spatial_index, Some(grid) if grid.shape_count == len);
 
             if rebuild {
-                let frame = self.canvas_set.active_frame();
+                let frame = self.boards.active_frame();
                 self.spatial_index = SpatialGrid::build(frame, SPATIAL_GRID_CELL_SIZE);
             }
 

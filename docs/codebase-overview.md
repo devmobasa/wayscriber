@@ -11,7 +11,7 @@ This document explains how the application boots, how user input travels through
    - Verifies `WAYLAND_DISPLAY` when a Wayland session is required.
 
 2. **Mode selection**
-   - `--daemon`: instantiate `daemon::Daemon` with the optional initial board mode and call `run()`.
+   - `--daemon`: instantiate `daemon::Daemon` with the optional initial board id and call `run()`.
    - `--active`: print usage/help tips, then call `backend::run_wayland`.
    - No flags: print a usage summary and exit.
 
@@ -52,7 +52,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
 2. `WaylandBackend::run`:
    - Connects to Wayland (`smithay-client-toolkit`).
    - Binds compositor, layer shell, SHM, outputs, seats, registry.
-   - Loads configuration (color defaults, board settings, keybindings).
+   - Loads configuration (color defaults, boards settings, keybindings).
    - Initializes `InputState` (see section 4).
    - Creates the layer-shell overlay surface and enters the event loop.
 3. Main loop responsibilities:
@@ -80,8 +80,8 @@ Daemon mode therefore provides a persistent background service that reacts to us
    - Adjust pen thickness or font size via scroll wheel + modifiers.
 
 3. **`InputState` responsibilities**
-   - Holds canvas data (`draw::CanvasSet`), current colors, thickness, fonts, modifier flags, and `DrawingState` (Idle/Drawing/TextInput).
-   - `actions.rs` maps keybindings to `Action` enums and performs side effects (color changes, board mode switches, capture requests).
+   - Holds canvas data (`BoardManager` + per-board pages), current colors, thickness, fonts, modifier flags, and `DrawingState` (Idle/Drawing/TextInput).
+   - `actions.rs` maps keybindings to `Action` enums and performs side effects (color changes, board switches, capture requests).
    - `mouse.rs` converts drag gestures into shapes (`draw::Shape` variants).
    - `render.rs` exposes provisional shape previews for live feedback.
 
@@ -90,7 +90,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
    - Draw order: board background → finalized shapes → provisional shape → text cursor preview → status bar (if enabled) → help overlay (if toggled).
    - `ui` module encapsulates status/help overlays, while `draw` handles actual vector geometry routines.
 
-The result is a predictable pipeline: Wayland → handlers → `InputState` → `CanvasSet`/`DrawingState` → `WaylandState::render`.
+The result is a predictable pipeline: Wayland → handlers → `InputState` → `BoardManager`/`DrawingState` → `WaylandState::render`.
 
 ---
 
@@ -132,7 +132,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 
 ## 7. Utility Modules
 
-- **`src/draw/`**: Shape definitions, Cairo helpers, arrow geometry, fonts, and the `CanvasSet` abstraction (with undo/history per board mode).
+- **`src/draw/`**: Shape definitions, Cairo helpers, arrow geometry, fonts, and the `BoardPages` abstraction (with undo/history per board).
 - **`src/ui.rs`**: Composes the status bar and help overlay using Cairo.
 - **`src/notification.rs`**: Tiny helper to send desktop notifications asynchronously (used after captures).
 - **`src/util.rs`**: Misc helpers (color parsing, geometry math, etc.).
@@ -147,7 +147,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 | `src/main.rs` | CLI entry point, mode selection. |
 | `src/daemon.rs` | Background daemon, tray menu, signal handling, overlay toggling. |
 | `src/backend/` | Wayland backend implementation split into bootstrap (`mod.rs`), runtime (`state.rs`), and input/render handlers. |
-| `src/input/` | Event/state machine for drawing tools, board modes, and capture triggers. |
+| `src/input/` | Event/state machine for drawing tools, boards, and capture triggers. |
 | `src/draw/` | Vector drawing primitives, canvases, fonts. |
 | `src/ui.rs` | Status/help overlays. |
 | `src/capture/` | Screenshot pipeline (manager, dependencies, sources, clipboard/file helpers). |

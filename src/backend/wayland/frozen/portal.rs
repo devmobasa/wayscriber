@@ -242,7 +242,7 @@ mod tests {
             10.0,
             false,
             false,
-            crate::config::BoardConfig::default(),
+            crate::config::BoardsConfig::default(),
             std::collections::HashMap::new(),
             usize::MAX,
             crate::input::ClickHighlightSettings::disabled(),

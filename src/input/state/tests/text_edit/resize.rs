@@ -4,7 +4,7 @@ use super::*;
 fn dragging_text_resize_handle_updates_wrap_width_within_screen() {
     let mut state = create_test_input_state();
     state.update_screen_dimensions(300, 200);
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 250,
         y: 120,
         text: "Hello".to_string(),
@@ -28,7 +28,7 @@ fn dragging_text_resize_handle_updates_wrap_width_within_screen() {
     state.on_mouse_release(MouseButton::Left, drag_x, handle_y);
     assert!(matches!(state.state, DrawingState::Idle));
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::Text { wrap_width, .. } => assert_eq!(*wrap_width, Some(50)),

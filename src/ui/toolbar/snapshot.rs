@@ -123,11 +123,10 @@ impl ToolbarSnapshot {
         state: &InputState,
         binding_hints: ToolbarBindingHints,
     ) -> Self {
-        let frame = state.canvas_set.active_frame();
+        let frame = state.boards.active_frame();
         let active_tool = state.active_tool();
-        let active_mode = state.board_mode();
-        let page_count = state.canvas_set.page_count(active_mode);
-        let page_index = state.canvas_set.active_page_index(active_mode);
+        let page_count = state.boards.page_count();
+        let page_index = state.boards.active_page_index();
         let text_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
             && state.text_input_mode == crate::input::TextInputMode::Plain;
         let note_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })

@@ -1,7 +1,6 @@
 use super::{clear_session, inspect_session};
 use crate::draw::{Color, Frame, Shape};
-use crate::input::board_mode::BoardMode;
-use crate::session::snapshot::BoardPagesSnapshot;
+use crate::session::snapshot::{BoardPagesSnapshot, BoardSnapshot};
 use crate::session::{
     CompressionMode, SessionOptions, SessionSnapshot, ToolStateSnapshot, save_snapshot,
 };
@@ -81,13 +80,14 @@ fn inspect_session_reports_counts_and_flags() {
     });
 
     let snapshot = SessionSnapshot {
-        active_mode: BoardMode::Transparent,
-        transparent: Some(BoardPagesSnapshot {
-            pages: vec![frame],
-            active: 0,
-        }),
-        whiteboard: None,
-        blackboard: None,
+        active_board_id: "transparent".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            },
+        }],
         tool_state: Some(ToolStateSnapshot {
             current_color: Color {
                 r: 0.0,

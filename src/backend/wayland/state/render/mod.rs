@@ -7,14 +7,13 @@ mod ui;
 impl WaylandState {
     pub(in crate::backend::wayland) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
         debug!("=== RENDER START ===");
-        let board_mode = self.input_state.board_mode();
-        let suppression = if self.data.overlay_suppression == OverlaySuppression::Zoom
-            && board_mode != BoardMode::Transparent
-        {
-            OverlaySuppression::None
-        } else {
-            self.data.overlay_suppression
-        };
+        let board_is_transparent = self.input_state.board_is_transparent();
+        let suppression =
+            if self.data.overlay_suppression == OverlaySuppression::Zoom && !board_is_transparent {
+                OverlaySuppression::None
+            } else {
+                self.data.overlay_suppression
+            };
         let render_canvas = !matches!(
             suppression,
             OverlaySuppression::Frozen | OverlaySuppression::Zoom

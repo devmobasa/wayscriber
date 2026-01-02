@@ -1,51 +1,27 @@
 use super::types::{BoardPagesSnapshot, SessionSnapshot};
 use crate::draw::BoardPages;
-use crate::input::{
-    InputState,
-    board_mode::BoardMode,
-    state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS},
-};
+use crate::input::InputState;
+use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::session::options::SessionOptions;
 
 /// Apply a session snapshot to the live [`InputState`].
 pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options: &SessionOptions) {
     let runtime_history_limit = options.effective_history_limit(input.undo_stack_limit);
 
-    if options.persist_transparent {
-        input.canvas_set.set_pages(
-            BoardMode::Transparent,
-            snapshot.transparent.map(snapshot_to_board_pages),
-        );
-        clamp_runtime_history(
-            &mut input.canvas_set,
-            BoardMode::Transparent,
-            runtime_history_limit,
-        );
-    }
-    if options.persist_whiteboard {
-        input.canvas_set.set_pages(
-            BoardMode::Whiteboard,
-            snapshot.whiteboard.map(snapshot_to_board_pages),
-        );
-        clamp_runtime_history(
-            &mut input.canvas_set,
-            BoardMode::Whiteboard,
-            runtime_history_limit,
-        );
-    }
-    if options.persist_blackboard {
-        input.canvas_set.set_pages(
-            BoardMode::Blackboard,
-            snapshot.blackboard.map(snapshot_to_board_pages),
-        );
-        clamp_runtime_history(
-            &mut input.canvas_set,
-            BoardMode::Blackboard,
-            runtime_history_limit,
-        );
+    for board in &snapshot.boards {
+        let pages = snapshot_to_board_pages(board.pages.clone());
+        if input.boards.set_board_pages(&board.id, pages)
+            && let Some(board_state) = input
+                .boards
+                .board_states_mut()
+                .iter_mut()
+                .find(|state| state.spec.id == board.id)
+        {
+            clamp_runtime_history(&mut board_state.pages, runtime_history_limit);
+        }
     }
 
-    input.canvas_set.switch_mode(snapshot.active_mode);
+    input.switch_board(&snapshot.active_board_id);
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
@@ -109,10 +85,8 @@ fn snapshot_to_board_pages(pages: BoardPagesSnapshot) -> BoardPages {
     BoardPages::from_pages(pages.pages, pages.active)
 }
 
-fn clamp_runtime_history(canvas: &mut crate::draw::CanvasSet, mode: BoardMode, limit: usize) {
-    if let Some(pages) = canvas.pages_mut(mode) {
-        for page in pages.pages_mut() {
-            page.clamp_history_depth(limit);
-        }
+fn clamp_runtime_history(pages: &mut BoardPages, limit: usize) {
+    for page in pages.pages_mut() {
+        page.clamp_history_depth(limit);
     }
 }

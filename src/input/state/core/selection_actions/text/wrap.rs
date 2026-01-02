@@ -22,7 +22,7 @@ impl InputState {
 
     pub(crate) fn update_text_wrap_width(&mut self, shape_id: ShapeId, new_width: i32) -> bool {
         let updated = {
-            let frame = self.canvas_set.active_frame_mut();
+            let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
                 if shape.locked {
                     return false;

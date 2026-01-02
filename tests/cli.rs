@@ -120,13 +120,14 @@ fn session_info_reports_saved_snapshot() {
     });
 
     let snapshot = wayscriber::session::SessionSnapshot {
-        active_mode: wayscriber::input::BoardMode::Transparent,
-        transparent: Some(wayscriber::session::BoardPagesSnapshot {
-            pages: vec![frame],
-            active: 0,
-        }),
-        whiteboard: None,
-        blackboard: None,
+        active_board_id: "transparent".to_string(),
+        boards: vec![wayscriber::session::BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: wayscriber::session::BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            },
+        }],
         tool_state: None,
     };
 

@@ -64,7 +64,7 @@ impl InputState {
         } else {
             let focus_edit = selection.len() == 1
                 && self
-                    .canvas_set
+                    .boards
                     .active_frame()
                     .shape(selection[0])
                     .map(|shape| {

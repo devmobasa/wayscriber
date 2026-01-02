@@ -42,7 +42,7 @@ pub fn render_help_overlay(
         BULLET,
         ARROW
     );
-    let note_text_base = "Note: Each board mode has independent pages";
+    let note_text_base = "Note: Each board has independent pages";
     let close_hint_text = "F1 / Esc to close";
 
     let layout = build_overlay_layout(

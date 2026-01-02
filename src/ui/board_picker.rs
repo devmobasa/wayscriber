@@ -1,0 +1,276 @@
+use crate::input::{BoardBackground, InputState};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+
+const TITLE_FONT_SIZE: f64 = 17.0;
+const BODY_FONT_SIZE: f64 = 14.0;
+const FOOTER_FONT_SIZE: f64 = 12.0;
+
+pub fn render_board_picker(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    if !input_state.is_board_picker_open() {
+        return;
+    }
+
+    let layout = match input_state.board_picker_layout() {
+        Some(layout) => *layout,
+        None => return,
+    };
+
+    let _ = ctx.save();
+
+    // Dim background
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
+    let _ = ctx.fill();
+
+    // Panel
+    draw_rounded_rect(
+        ctx,
+        layout.origin_x,
+        layout.origin_y,
+        layout.width,
+        layout.height,
+        12.0,
+    );
+    ctx.set_source_rgba(0.09, 0.11, 0.15, 0.96);
+    let _ = ctx.fill_preserve();
+    ctx.set_source_rgba(0.2, 0.24, 0.3, 0.9);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    // Title
+    let board_count = input_state.boards.board_count();
+    let max_count = input_state.boards.max_count();
+    let title = format!("Boards ({}/{})", board_count, max_count);
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(TITLE_FONT_SIZE);
+    ctx.set_source_rgba(0.92, 0.94, 0.98, 1.0);
+    let title_y = layout.origin_y + layout.padding_y + TITLE_FONT_SIZE;
+    ctx.move_to(layout.origin_x + layout.padding_x, title_y);
+    let _ = ctx.show_text(&title);
+
+    // Footer
+    let footer = "Enter: switch  N: new  R: rename  C: color  Del: delete  Esc: close";
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(FOOTER_FONT_SIZE);
+    ctx.set_source_rgba(0.64, 0.69, 0.76, 0.9);
+    let footer_y = layout.origin_y + layout.height - layout.padding_y;
+    ctx.move_to(layout.origin_x + layout.padding_x, footer_y);
+    let _ = ctx.show_text(footer);
+
+    let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
+    let name_x = layout.origin_x + layout.padding_x + layout.swatch_size + layout.swatch_padding;
+    let hint_x = if layout.hint_width > 0.0 {
+        Some(layout.origin_x + layout.width - layout.padding_x - layout.hint_width)
+    } else {
+        None
+    };
+
+    let highlight_index = input_state.board_picker_active_index();
+    let selected_index = input_state.board_picker_selected_index();
+    let active_board_index = input_state.boards.active_index();
+    let edit_state = input_state.board_picker_edit_state();
+
+    for row in 0..layout.row_count {
+        let row_top = rows_top + layout.row_height * row as f64;
+        let row_center = row_top + layout.row_height * 0.5;
+        let is_highlighted = highlight_index == Some(row);
+        let is_selected = selected_index == Some(row);
+        let is_active_board = row < board_count && row == active_board_index;
+
+        if is_highlighted {
+            ctx.set_source_rgba(0.22, 0.28, 0.38, 0.9);
+            ctx.rectangle(
+                layout.origin_x + 6.0,
+                row_top,
+                layout.width - 12.0,
+                layout.row_height,
+            );
+            let _ = ctx.fill();
+        }
+
+        if is_selected {
+            ctx.set_source_rgba(0.33, 0.42, 0.58, 0.9);
+            ctx.rectangle(layout.origin_x + 6.0, row_top, 3.0, layout.row_height);
+            let _ = ctx.fill();
+        }
+
+        let swatch_x = layout.origin_x + layout.padding_x;
+        let swatch_y = row_center - layout.swatch_size * 0.5;
+
+        let is_new_row = row >= board_count;
+        if is_new_row {
+            ctx.set_source_rgba(0.45, 0.5, 0.58, 0.9);
+            ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+            let _ = ctx.stroke();
+            ctx.set_line_width(1.5);
+            let mid_x = swatch_x + layout.swatch_size * 0.5;
+            let mid_y = swatch_y + layout.swatch_size * 0.5;
+            ctx.move_to(mid_x - 4.0, mid_y);
+            ctx.line_to(mid_x + 4.0, mid_y);
+            ctx.move_to(mid_x, mid_y - 4.0);
+            ctx.line_to(mid_x, mid_y + 4.0);
+            let _ = ctx.stroke();
+        } else {
+            let board = &input_state.boards.board_states()[row];
+            match board.spec.background {
+                BoardBackground::Transparent => {
+                    ctx.set_source_rgba(0.62, 0.68, 0.76, 0.85);
+                    ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+                    let _ = ctx.stroke();
+                    ctx.move_to(swatch_x, swatch_y);
+                    ctx.line_to(swatch_x + layout.swatch_size, swatch_y + layout.swatch_size);
+                    ctx.move_to(swatch_x + layout.swatch_size, swatch_y);
+                    ctx.line_to(swatch_x, swatch_y + layout.swatch_size);
+                    let _ = ctx.stroke();
+                }
+                BoardBackground::Solid(color) => {
+                    ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
+                    ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+                    let _ = ctx.fill();
+                    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.2);
+                    ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+                    let _ = ctx.stroke();
+                }
+            }
+            if is_active_board {
+                ctx.set_source_rgba(0.9, 0.83, 0.32, 0.95);
+                ctx.rectangle(
+                    swatch_x - 2.0,
+                    swatch_y - 2.0,
+                    layout.swatch_size + 4.0,
+                    layout.swatch_size + 4.0,
+                );
+                let _ = ctx.stroke();
+            }
+        }
+
+        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        ctx.set_font_size(BODY_FONT_SIZE);
+
+        if is_new_row {
+            let label = if board_count >= max_count {
+                "New board (max reached)"
+            } else {
+                "New board"
+            };
+            ctx.set_source_rgba(0.7, 0.74, 0.8, 0.9);
+            ctx.move_to(name_x, row_center + BODY_FONT_SIZE * 0.35);
+            let _ = ctx.show_text(label);
+            continue;
+        }
+
+        let board = &input_state.boards.board_states()[row];
+        let (mut name, mut hint_override) = (board.spec.name.clone(), None);
+        if let Some((mode, edit_index, buffer)) = edit_state
+            && edit_index == row
+        {
+            match mode {
+                crate::input::state::BoardPickerEditMode::Name => {
+                    name = buffer.to_string();
+                }
+                crate::input::state::BoardPickerEditMode::Color => {
+                    hint_override = Some(buffer.to_string());
+                }
+            }
+        }
+
+        let name_color = if is_active_board {
+            [0.96, 0.98, 1.0, 1.0]
+        } else {
+            [0.86, 0.89, 0.94, 1.0]
+        };
+        ctx.set_source_rgba(name_color[0], name_color[1], name_color[2], name_color[3]);
+        ctx.move_to(name_x, row_center + BODY_FONT_SIZE * 0.35);
+        let _ = ctx.show_text(&name);
+
+        if let Some((mode, edit_index, _buffer)) = edit_state
+            && edit_index == row
+            && mode == crate::input::state::BoardPickerEditMode::Name
+        {
+            let extents = text_extents_for(
+                ctx,
+                "Sans",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+                BODY_FONT_SIZE,
+                &name,
+            );
+            let caret_x = name_x + extents.width() + 2.0;
+            ctx.set_source_rgba(0.98, 0.92, 0.55, 1.0);
+            ctx.set_line_width(1.0);
+            ctx.move_to(caret_x, row_center - BODY_FONT_SIZE * 0.5);
+            ctx.line_to(caret_x, row_center + BODY_FONT_SIZE * 0.5);
+            let _ = ctx.stroke();
+            ctx.move_to(name_x, row_center + BODY_FONT_SIZE * 0.55);
+            ctx.line_to(
+                name_x + extents.width() + 6.0,
+                row_center + BODY_FONT_SIZE * 0.55,
+            );
+            let _ = ctx.stroke();
+        }
+
+        if let Some(hint_x) = hint_x {
+            let hint = hint_override.or_else(|| board_slot_hint(input_state, row));
+            if let Some(hint) = hint {
+                ctx.set_source_rgba(0.6, 0.65, 0.72, 0.9);
+                ctx.move_to(hint_x, row_center + BODY_FONT_SIZE * 0.35);
+                let _ = ctx.show_text(&hint);
+
+                if let Some((mode, edit_index, _)) = edit_state
+                    && edit_index == row
+                    && mode == crate::input::state::BoardPickerEditMode::Color
+                {
+                    let extents = text_extents_for(
+                        ctx,
+                        "Sans",
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Normal,
+                        BODY_FONT_SIZE,
+                        &hint,
+                    );
+                    let caret_x = hint_x + extents.width() + 2.0;
+                    ctx.set_source_rgba(0.98, 0.92, 0.55, 1.0);
+                    ctx.set_line_width(1.0);
+                    ctx.move_to(caret_x, row_center - BODY_FONT_SIZE * 0.5);
+                    ctx.line_to(caret_x, row_center + BODY_FONT_SIZE * 0.5);
+                    let _ = ctx.stroke();
+                    ctx.move_to(hint_x, row_center + BODY_FONT_SIZE * 0.55);
+                    ctx.line_to(
+                        hint_x + extents.width() + 6.0,
+                        row_center + BODY_FONT_SIZE * 0.55,
+                    );
+                    let _ = ctx.stroke();
+                }
+            }
+        }
+    }
+
+    let _ = ctx.restore();
+}
+
+fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
+    use crate::config::Action;
+    let action = match index {
+        0 => Action::Board1,
+        1 => Action::Board2,
+        2 => Action::Board3,
+        3 => Action::Board4,
+        4 => Action::Board5,
+        5 => Action::Board6,
+        6 => Action::Board7,
+        7 => Action::Board8,
+        8 => Action::Board9,
+        _ => return None,
+    };
+    let label = state.action_binding_label(action);
+    if label == "Not bound" {
+        None
+    } else {
+        Some(label)
+    }
+}

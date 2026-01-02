@@ -5,11 +5,7 @@ use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
 use super::setup::WaylandSetup;
 use super::tray::process_tray_action;
-use crate::{
-    capture::CaptureManager,
-    config::Config,
-    input::{BoardMode, InputState},
-};
+use crate::{capture::CaptureManager, config::Config, input::InputState};
 
 mod config;
 mod input_state;
@@ -39,7 +35,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
-    apply_initial_mode(backend, &config, &mut input_state);
+    apply_initial_mode(backend, &mut input_state);
 
     let capture_manager = CaptureManager::new(backend.tokio_runtime.handle());
     info!("Capture manager initialized");
@@ -84,32 +80,14 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     })
 }
 
-fn apply_initial_mode(backend: &WaylandBackend, config: &Config, input_state: &mut InputState) {
-    // Apply initial mode from CLI (if provided) or config default (only if board modes enabled).
-    if config.board.enabled {
-        let initial_mode_str = backend
-            .initial_mode
-            .clone()
-            .unwrap_or_else(|| config.board.default_mode.clone());
-
-        if let Ok(mode) = initial_mode_str.parse::<BoardMode>() {
-            if mode != BoardMode::Transparent {
-                info!("Starting in {} mode", initial_mode_str);
-                input_state.canvas_set.switch_mode(mode);
-                // Apply auto-color adjustment if enabled.
-                if config.board.auto_adjust_pen
-                    && let Some(default_color) = mode.default_pen_color(&config.board)
-                {
-                    input_state.current_color = default_color;
-                }
-            }
-        } else if !initial_mode_str.is_empty() {
-            warn!(
-                "Invalid board mode '{}', using transparent",
-                initial_mode_str
-            );
+fn apply_initial_mode(backend: &WaylandBackend, input_state: &mut InputState) {
+    // Apply initial board from CLI (if provided).
+    if let Some(initial_id) = backend.initial_mode.clone() {
+        if input_state.boards.has_board(&initial_id) {
+            info!("Starting on board '{}'", initial_id);
+            input_state.switch_board(&initial_id);
+        } else if !initial_id.is_empty() {
+            warn!("Requested board '{}' not found; using default", initial_id);
         }
-    } else if backend.initial_mode.is_some() {
-        warn!("Board modes disabled in config, ignoring --mode flag");
     }
 }

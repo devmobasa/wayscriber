@@ -18,11 +18,16 @@ pub(crate) fn build_section_sets(
     page_next_label: &str,
 ) -> SectionSets {
     let board_modes_section = (!context_filter || board_enabled).then(|| Section {
-        title: "Board Modes",
+        title: "Boards",
         rows: vec![
             row("Ctrl+W", "Toggle Whiteboard"),
             row("Ctrl+B", "Toggle Blackboard"),
             row("Ctrl+Shift+T", "Return to Transparent"),
+            row("Ctrl+Shift+1..9", "Switch board slot"),
+            row("Ctrl+Shift+Left/Right", "Previous/next board"),
+            row("Ctrl+Shift+N", "New board"),
+            row("Ctrl+Shift+Delete", "Delete board"),
+            row("Ctrl+Shift+B", "Board picker"),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_settings),

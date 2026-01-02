@@ -5,7 +5,7 @@ fn test_redo_restores_shape_after_undo() {
     let mut state = create_test_input_state();
 
     {
-        let frame = state.canvas_set.active_frame_mut();
+        let frame = state.boards.active_frame_mut();
         let shape_id = frame.add_shape(Shape::Line {
             x1: 0,
             y1: 0,
@@ -25,13 +25,13 @@ fn test_redo_restores_shape_after_undo() {
         );
     }
 
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+    assert_eq!(state.boards.active_frame().shapes.len(), 1);
 
     state.handle_action(Action::Undo);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
+    assert_eq!(state.boards.active_frame().shapes.len(), 0);
 
     state.handle_action(Action::Redo);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+    assert_eq!(state.boards.active_frame().shapes.len(), 1);
 }
 
 #[test]

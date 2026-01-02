@@ -1,4 +1,5 @@
 use super::super::super::{
+    board_picker::{BoardPickerLayout, BoardPickerState},
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
@@ -8,9 +9,10 @@ use super::super::types::{
     DelayedHistory, DrawingState, HelpOverlayView, PresetAction, PresetFeedbackState,
     SelectionAxis, TextClickState, TextInputMode, UiToastState, ZoomAction,
 };
-use crate::config::{Action, BoardConfig, KeyBinding, ToolPresetConfig};
+use crate::config::{Action, BoardsConfig, KeyBinding, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
+use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
+use crate::input::BoardManager;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     modifiers::Modifiers,
@@ -21,8 +23,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub struct InputState {
-    /// Multi-frame canvas management (transparent, whiteboard, blackboard)
-    pub canvas_set: CanvasSet,
+    /// Multi-board canvas management
+    pub boards: BoardManager,
     /// Current drawing color (changed with color keys: R, G, B, etc.)
     pub current_color: Color,
     /// Current pen/line thickness in pixels (changed with +/- keys)
@@ -99,8 +101,6 @@ pub struct InputState {
     pub screen_height: u32,
     /// Previous color before entering board mode (for restoration)
     pub board_previous_color: Option<Color>,
-    /// Board mode configuration
-    pub board_config: BoardConfig,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)
@@ -127,6 +127,8 @@ pub struct InputState {
     pub context_menu_state: ContextMenuState,
     /// Whether context menu interactions are enabled
     pub(in crate::input::state::core) context_menu_enabled: bool,
+    /// Current board picker state
+    pub board_picker_state: BoardPickerState,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Hit test tolerance in pixels
@@ -173,6 +175,8 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
     pub context_menu_layout: Option<ContextMenuLayout>,
+    /// Cached layout details for the board picker overlay
+    pub board_picker_layout: Option<BoardPickerLayout>,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
     pub(in crate::input::state::core) spatial_index: Option<SpatialGrid>,
     /// Last known pointer position (for keyboard anchors and hover refresh)
@@ -219,6 +223,8 @@ pub struct InputState {
     pub presets: Vec<Option<ToolPresetConfig>>,
     /// Last applied preset slot (for UI highlight)
     pub active_preset_slot: Option<usize>,
+    /// Pending board config update (from board picker edits)
+    pub(in crate::input::state::core) pending_board_config: Option<BoardsConfig>,
     /// Transient preset feedback for toolbar animations
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Pending preset save/clear action for backend persistence

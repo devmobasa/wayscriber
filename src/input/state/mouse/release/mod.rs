@@ -23,6 +23,9 @@ impl InputState {
     pub fn on_mouse_release(&mut self, button: MouseButton, x: i32, y: i32) {
         self.update_pointer_position(x, y);
         if button == MouseButton::Left {
+            if panels::handle_board_picker_release(self, x, y) {
+                return;
+            }
             if panels::handle_properties_panel_release(self, x, y) {
                 return;
             }

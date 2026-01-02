@@ -2,6 +2,7 @@ use super::Config;
 
 mod arrow;
 mod board;
+mod boards;
 mod drawing;
 mod fonts;
 mod history;
@@ -35,6 +36,7 @@ impl Config {
         self.validate_arrow();
         self.validate_performance();
         self.validate_fonts();
+        self.validate_boards();
         self.validate_board();
         self.validate_ui();
         self.validate_keybindings();
