@@ -737,6 +737,19 @@ pkill wayscriber
 wayscriber --daemon &
 ```
 
+## Environment Variables
+
+These override behavior at runtime. Bool-ish values treat anything except `0`, `false`, or `off` as true.
+
+- `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
+- `WAYSCRIBER_RESUME_SESSION=1/0` forces session persistence on/off for the current run (default: unset; follows config)
+- `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)
+- `WAYSCRIBER_TOOLBAR_DRAG_PREVIEW=0` disables inline toolbar drag preview (default: on)
+- `WAYSCRIBER_TOOLBAR_POINTER_LOCK=1` enables pointer-lock drag path (experimental; default: off)
+- `WAYSCRIBER_DEBUG_TOOLBAR_DRAG=1` enables toolbar drag logging (default: off)
+- `WAYSCRIBER_DEBUG_DAMAGE=1` enables damage region logging (default: off)
+- `RUST_LOG=info` enables Rust logging (default: unset; use `wayscriber=debug` for app-level logs)
+
 ## Troubleshooting
 
 ### Config File Not Loading
