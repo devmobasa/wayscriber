@@ -1,5 +1,6 @@
 use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
+use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 use wayland_client::QueueHandle;
 
 use crate::backend::wayland::toolbar_intent::intent_to_event;
@@ -18,6 +19,16 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        if !self.has_keyboard_focus() && !self.overlay_suppressed() {
+            let current = self.current_keyboard_interactivity();
+            if current != Some(KeyboardInteractivity::Exclusive)
+                && let Some(layer) = self.surface.layer_surface_mut()
+            {
+                layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+                self.set_current_keyboard_interactivity(Some(KeyboardInteractivity::Exclusive));
+            }
+        }
+
         if debug_toolbar_drag_logging_enabled() {
             debug!(
                 "pointer press: button={}, on_toolbar={}, inline_active={}, drag_active={}",
