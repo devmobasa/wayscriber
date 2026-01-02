@@ -8,7 +8,7 @@ impl InputState {
         self.help_overlay_scroll = 0.0;
         self.help_overlay_scroll_max = 0.0;
         if now_visible {
-            self.help_overlay_view = HelpOverlayView::Quick;
+            self.help_overlay_view = HelpOverlayView::Full;
             self.help_overlay_page = 0;
         }
         self.dirty_tracker.mark_full();
@@ -29,16 +29,29 @@ impl InputState {
     }
 
     pub(crate) fn help_overlay_next_page(&mut self) -> bool {
+        let next_page = self.help_overlay_page + 1;
         let page_count = self.help_overlay_page_count();
-        if self.help_overlay_page + 1 < page_count {
-            self.help_overlay_page += 1;
+        if next_page < page_count {
+            self.help_overlay_page = next_page;
             self.help_overlay_scroll = 0.0;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
-            true
-        } else {
-            false
+            return true;
         }
+        if matches!(self.help_overlay_view, HelpOverlayView::Quick) {
+            self.help_overlay_view = HelpOverlayView::Full;
+            let page_count = self.help_overlay_page_count();
+            if page_count > 0 {
+                self.help_overlay_page = next_page.min(page_count - 1);
+            } else {
+                self.help_overlay_page = 0;
+            }
+            self.help_overlay_scroll = 0.0;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return true;
+        }
+        false
     }
 
     pub(crate) fn help_overlay_prev_page(&mut self) -> bool {
