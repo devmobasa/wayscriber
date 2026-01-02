@@ -8,15 +8,14 @@ impl WaylandState {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return None;
         }
-        if self.toolbar.is_top_visible() {
-            if let Some(intent) = self
+        if self.toolbar.is_top_visible()
+            && let Some(intent) = self
                 .data
                 .inline_top_hits
                 .iter()
                 .find_map(|hit| intent_for_hit(hit, position.0, position.1))
-            {
-                return Some(intent);
-            }
+        {
+            return Some(intent);
         }
         if self.toolbar.is_side_visible() {
             return self
@@ -40,15 +39,14 @@ impl WaylandState {
         if let Some(intent) = self.move_drag_intent(position.0, position.1) {
             return Some(intent);
         }
-        if self.toolbar.is_top_visible() {
-            if let Some(intent) = self
+        if self.toolbar.is_top_visible()
+            && let Some(intent) = self
                 .data
                 .inline_top_hits
                 .iter()
                 .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
-            {
-                return Some(intent);
-            }
+        {
+            return Some(intent);
         }
         if self.toolbar.is_side_visible() {
             return self
