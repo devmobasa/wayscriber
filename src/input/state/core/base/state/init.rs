@@ -78,7 +78,7 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             show_help: false,
-            help_overlay_view: HelpOverlayView::Quick,
+            help_overlay_view: HelpOverlayView::Full,
             help_overlay_page: 0,
             help_overlay_search: String::new(),
             help_overlay_scroll: 0.0,

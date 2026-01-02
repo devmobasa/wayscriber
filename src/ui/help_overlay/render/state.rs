@@ -82,7 +82,7 @@ pub(super) fn build_overlay_layout(
     let metrics = RenderMetrics::from_style(style, screen_width, screen_height);
     let palette = RenderPalette::from_style(style);
 
-    let max_search_width = (screen_width as f64 * 0.9 - style.padding * 2.0).max(0.0);
+    let max_search_width = (screen_width as f64 * 0.9 - metrics.padding * 2.0).max(0.0);
     let nav_state = build_nav_state(
         ctx,
         help_font_family.as_str(),
@@ -122,7 +122,7 @@ pub(super) fn build_overlay_layout(
         metrics.section_card_padding,
     );
 
-    let max_content_width = (metrics.max_box_width - style.padding * 2.0).max(0.0);
+    let max_content_width = (metrics.max_box_width - metrics.padding * 2.0).max(0.0);
     let grid = build_grid(
         measured_sections,
         screen_width,
@@ -159,7 +159,7 @@ pub(super) fn build_overlay_layout(
     )
     .width();
 
-    let note_to_close_gap = 12.0;
+    let note_to_close_gap = metrics.note_to_close_gap;
     let header_height = metrics.accent_line_height
         + metrics.accent_line_bottom_spacing
         + metrics.title_font_size
@@ -172,15 +172,19 @@ pub(super) fn build_overlay_layout(
         + note_to_close_gap
         + metrics.note_font_size;
     let content_height = header_height + grid.grid_height + footer_height;
-    let max_inner_height = (metrics.max_box_height - style.padding * 2.0).max(0.0);
+    let max_inner_height = (metrics.max_box_height - metrics.padding * 2.0).max(0.0);
     let inner_height = content_height.min(max_inner_height);
     let grid_view_height = (inner_height - header_height - footer_height).max(0.0);
     let scroll_max = (grid.grid_height - grid_view_height).max(0.0);
     let scroll_offset = scroll_offset.clamp(0.0, scroll_max);
+    let page_label = format!("Page {}/{}", page_index + 1, page_count.max(1));
     let note_text = if scroll_max > 0.0 {
-        format!("{}  {}  Scroll: Mouse wheel", note_text_base, BULLET)
+        format!(
+            "{}  {}  {}  {}  Scroll: Mouse wheel",
+            note_text_base, BULLET, page_label, BULLET
+        )
     } else {
-        note_text_base.to_string()
+        format!("{}  {}  {}", note_text_base, BULLET, page_label)
     };
     let note_width = text_extents_for(
         ctx,
@@ -207,8 +211,8 @@ pub(super) fn build_overlay_layout(
     }
     // Ensure minimum width for search box
     content_width = content_width.max(300.0);
-    let box_width = content_width + style.padding * 2.0;
-    let box_height = inner_height + style.padding * 2.0;
+    let box_width = content_width + metrics.padding * 2.0;
+    let box_height = inner_height + metrics.padding * 2.0;
 
     let box_x = (screen_width as f64 - box_width) / 2.0;
     let box_y = (screen_height as f64 - box_height) / 2.0;
