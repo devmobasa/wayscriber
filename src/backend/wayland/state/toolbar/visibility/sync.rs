@@ -17,30 +17,12 @@ impl WaylandState {
 
         let desktop_env = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "unknown".into());
         let session_env = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_else(|_| "unknown".into());
-        log::warn!(
+        log::info!(
             "Layer-shell protocol unavailable; toolbar surfaces will not appear (desktop='{}', session='{}'). Overlay may be limited to the work area on compositors like GNOME.",
             desktop_env,
             session_env
         );
         self.data.toolbar_layer_shell_missing_logged = true;
-    }
-
-    fn notify_toolbar_layer_shell_missing_once(&mut self) {
-        if self.data.toolbar_layer_shell_notice_sent {
-            return;
-        }
-
-        self.data.toolbar_layer_shell_notice_sent = true;
-        let summary = "Toolbars unavailable on this desktop";
-        let body = "This compositor does not expose the layer-shell protocol, so the toolbar surfaces cannot be created. Try a compositor with layer-shell support or an X11 session.";
-        notification::send_notification_async(
-            &self.tokio_handle,
-            summary.to_string(),
-            body.to_string(),
-            Some("dialog-warning".to_string()),
-        );
-        log::warn!("{}", summary);
-        log::warn!("{}", body);
     }
 
     /// Applies keyboard interactivity based on toolbar visibility.
@@ -122,7 +104,6 @@ impl WaylandState {
         // Warn the user when layer-shell is unavailable and we're forced to inline fallback.
         if any_visible && self.layer_shell.is_none() {
             self.log_toolbar_layer_shell_missing_once();
-            self.notify_toolbar_layer_shell_missing_once();
         }
 
         if any_visible && inline_active {

@@ -51,7 +51,6 @@ use crate::{
     },
     config::{Action, ColorSpec, Config},
     input::{BoardMode, DrawingState, EraserMode, InputState, Tool, ZoomAction},
-    notification,
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
