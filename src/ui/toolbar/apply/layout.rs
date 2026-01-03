@@ -142,6 +142,9 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_tool_preview(&mut self, show: bool) -> bool {
+        if self.presenter_mode && self.presenter_mode_config.hide_tool_preview {
+            return false;
+        }
         if self.show_tool_preview != show {
             self.show_tool_preview = show;
             self.needs_redraw = true;

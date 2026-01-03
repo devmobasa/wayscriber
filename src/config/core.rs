@@ -3,7 +3,7 @@ use super::keybindings::KeybindingsConfig;
 use super::types::TabletInputConfig;
 use super::types::{
     ArrowConfig, BoardConfig, CaptureConfig, DrawingConfig, HistoryConfig, PerformanceConfig,
-    PresetSlotsConfig, SessionConfig, UiConfig,
+    PresenterModeConfig, PresetSlotsConfig, SessionConfig, UiConfig,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -63,6 +63,10 @@ pub struct Config {
     /// UI display preferences
     #[serde(default)]
     pub ui: UiConfig,
+
+    /// Presenter mode behavior overrides
+    #[serde(default)]
+    pub presenter_mode: PresenterModeConfig,
 
     /// Board mode settings (whiteboard/blackboard)
     #[serde(default)]

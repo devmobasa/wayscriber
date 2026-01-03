@@ -1,7 +1,8 @@
 use super::super::super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::super::super::fields::{
-    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, ToolbarLayoutModeOption,
+    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption,
+    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, ToolbarLayoutModeOption,
 };
 use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;
@@ -102,6 +103,16 @@ impl ConfigDraft {
             click_highlight_outline_color: ColorQuadInput::from(
                 config.ui.click_highlight.outline_color,
             ),
+
+            presenter_hide_status_bar: config.presenter_mode.hide_status_bar,
+            presenter_hide_toolbars: config.presenter_mode.hide_toolbars,
+            presenter_hide_tool_preview: config.presenter_mode.hide_tool_preview,
+            presenter_close_help_overlay: config.presenter_mode.close_help_overlay,
+            presenter_enable_click_highlight: config.presenter_mode.enable_click_highlight,
+            presenter_tool_behavior: PresenterToolBehaviorOption::from_behavior(
+                config.presenter_mode.tool_behavior,
+            ),
+            presenter_show_toast: config.presenter_mode.show_toast,
 
             help_font_family: config.ui.help_overlay_style.font_family.clone(),
             help_font_size: format_float(config.ui.help_overlay_style.font_size),

@@ -94,7 +94,7 @@ Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), preset slots, ic
 Save tool + color + size (plus optional fill/opacity/text settings) into 3-5 slots for fast recall. Apply with <kbd>1</kbd>-<kbd>5</kbd>, save with <kbd>Shift+1</kbd>-<kbd>Shift+5</kbd>.
 
 ### Presenter Helpers
-Click highlights with configurable colors/radius/duration. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running. Screen zoom (<kbd>Ctrl+Alt</kbd> + scroll) with lock/pan for callouts.
+Click highlights with configurable colors/radius/duration. Presenter mode (<kbd>Ctrl+Shift+K</kbd>) hides UI chrome and forces click highlights for clean demos. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running. Screen zoom (<kbd>Ctrl+Alt</kbd> + scroll) with lock/pan for callouts.
 
 ### Zoom & Callouts
 Zoom is built-in for spotlighting details during demos, with controls that match ZoomIt muscle memory:

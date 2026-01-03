@@ -2,8 +2,9 @@ mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::super::fields::{
-    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, ToolbarLayoutModeOption,
+    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption,
+    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, ToolbarLayoutModeOption,
 };
 use super::super::keybindings::KeybindingsDraft;
 use super::presets::PresetsDraft;
@@ -85,6 +86,14 @@ pub struct ConfigDraft {
     pub click_highlight_duration_ms: String,
     pub click_highlight_fill_color: ColorQuadInput,
     pub click_highlight_outline_color: ColorQuadInput,
+
+    pub presenter_hide_status_bar: bool,
+    pub presenter_hide_toolbars: bool,
+    pub presenter_hide_tool_preview: bool,
+    pub presenter_close_help_overlay: bool,
+    pub presenter_enable_click_highlight: bool,
+    pub presenter_tool_behavior: PresenterToolBehaviorOption,
+    pub presenter_show_toast: bool,
 
     pub help_font_family: String,
     pub help_font_size: String,

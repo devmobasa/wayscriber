@@ -17,6 +17,9 @@ pub struct UiKeybindingsConfig {
     #[serde(default = "default_toggle_toolbar")]
     pub toggle_toolbar: Vec<String>,
 
+    #[serde(default = "default_toggle_presenter_mode")]
+    pub toggle_presenter_mode: Vec<String>,
+
     #[serde(default = "default_toggle_fill")]
     pub toggle_fill: Vec<String>,
 
@@ -37,6 +40,7 @@ impl Default for UiKeybindingsConfig {
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
             toggle_toolbar: default_toggle_toolbar(),
+            toggle_presenter_mode: default_toggle_presenter_mode(),
             toggle_fill: default_toggle_fill(),
             toggle_selection_properties: default_toggle_selection_properties(),
             open_context_menu: default_open_context_menu(),

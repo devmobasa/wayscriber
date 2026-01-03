@@ -228,6 +228,26 @@ use_pen_color = true  # Existing highlights update immediately when you change p
 - Semi-transparent dark backgrounds
 - Light blue help overlay border
 
+### `[presenter_mode]` - Presenter Mode
+
+Control which UI elements presenter mode hides and how tools behave when it is active.
+
+```toml
+[presenter_mode]
+hide_status_bar = true
+hide_toolbars = true
+hide_tool_preview = true
+close_help_overlay = true
+enable_click_highlight = true
+tool_behavior = "force-highlight"
+show_toast = true
+```
+
+**Tool behavior options:**
+- `"keep"`: Leave the active tool unchanged
+- `"force-highlight"`: Switch to highlight on entry, allow tool changes
+- `"force-highlight-locked"`: Switch to highlight and lock tools while presenting
+
 ### `[ui.toolbar]` - Floating Toolbars
 
 Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
@@ -566,6 +586,9 @@ toggle_help = ["F10"]
 
 # Toggle status bar visibility
 toggle_status_bar = ["F12"]
+
+# Toggle presenter mode
+toggle_presenter_mode = ["Ctrl+Shift+K"]
 
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]

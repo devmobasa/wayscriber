@@ -8,7 +8,7 @@ use super::super::types::{
     DelayedHistory, DrawingState, HelpOverlayView, PresetAction, PresetFeedbackState,
     SelectionAxis, TextClickState, TextInputMode, UiToastState, ZoomAction,
 };
-use crate::config::{Action, BoardConfig, KeyBinding, ToolPresetConfig};
+use crate::config::{Action, BoardConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::state::highlight::ClickHighlightState;
@@ -19,6 +19,17 @@ use crate::input::{
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PresenterRestore {
+    pub(crate) show_status_bar: Option<bool>,
+    pub(crate) show_tool_preview: Option<bool>,
+    pub(crate) toolbar_visible: Option<bool>,
+    pub(crate) toolbar_top_visible: Option<bool>,
+    pub(crate) toolbar_side_visible: Option<bool>,
+    pub(crate) click_highlight_enabled: Option<bool>,
+    pub(crate) tool_override: Option<Option<Tool>>,
+}
 
 pub struct InputState {
     /// Multi-frame canvas management (transparent, whiteboard, blackboard)
@@ -73,6 +84,12 @@ pub struct InputState {
     pub help_overlay_scroll_max: f64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether presenter mode is currently enabled
+    pub presenter_mode: bool,
+    /// Presenter mode behavior configuration
+    pub presenter_mode_config: PresenterModeConfig,
+    /// Previous UI state to restore after presenter mode exits
+    pub(crate) presenter_restore: Option<PresenterRestore>,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
     pub toolbar_visible: bool,
     /// Whether the top toolbar panel is visible

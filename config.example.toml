@@ -219,6 +219,29 @@ use_pen_color = true
 enabled = true
 
 # ───────────────────────────────────────────────────────────────────────────────
+# Presenter Mode
+# ───────────────────────────────────────────────────────────────────────────────
+
+[presenter_mode]
+# Hide UI chrome while presenting
+hide_status_bar = true
+hide_toolbars = true
+hide_tool_preview = true
+
+# Close the help overlay when entering presenter mode
+close_help_overlay = true
+
+# Force click highlights on while presenting
+enable_click_highlight = true
+
+# Tool behavior while presenting:
+# "keep" / "force-highlight" / "force-highlight-locked"
+tool_behavior = "force-highlight"
+
+# Show enter/exit toast notifications
+show_toast = true
+
+# ───────────────────────────────────────────────────────────────────────────────
 # Floating Toolbars (Press F2/F9 to toggle)
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -589,6 +612,9 @@ toggle_help = ["F10", "F1"]
 
 # Toggle status bar
 toggle_status_bar = ["F12", "F4"]
+
+# Toggle presenter mode
+toggle_presenter_mode = ["Ctrl+Shift+K"]
 
 # Toggle fill for rectangle/ellipse
 toggle_fill = []

@@ -39,6 +39,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.history.custom_redo_delay_ms,
         config.history.custom_undo_steps,
         config.history.custom_redo_steps,
+        config.presenter_mode.clone(),
     );
 
     input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);

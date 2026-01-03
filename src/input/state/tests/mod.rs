@@ -12,6 +12,7 @@ mod basics;
 mod drawing;
 mod erase;
 mod menus;
+mod presenter_mode;
 mod selection;
 mod text_edit;
 mod text_input;

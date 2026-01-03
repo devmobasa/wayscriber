@@ -96,17 +96,29 @@ impl InputState {
             }
         }
 
-        // Keep click highlight visuals aligned with highlight mode
-        if enable != self.click_highlight_enabled() {
+        let click_enabled = self.click_highlight_enabled();
+        let force_click = self.presenter_mode && self.presenter_mode_config.enable_click_highlight;
+
+        // Keep click highlight visuals aligned with highlight mode unless presenter mode forces it on.
+        if enable != click_enabled {
+            if enable || !force_click {
+                self.toggle_click_highlight();
+            }
+        } else if force_click && !click_enabled {
             self.toggle_click_highlight();
         }
     }
 
     /// Toggles the combined highlight tool and click highlight together.
     pub fn toggle_all_highlights(&mut self) -> bool {
-        let enable = !(self.highlight_tool_active() || self.click_highlight_enabled());
+        let force_click = self.presenter_mode && self.presenter_mode_config.enable_click_highlight;
+        let enable = if force_click {
+            !self.highlight_tool_active()
+        } else {
+            !(self.highlight_tool_active() || self.click_highlight_enabled())
+        };
         self.set_highlight_tool(enable);
-        enable
+        self.highlight_tool_active()
     }
 
     /// Returns true when undo/redo playback is queued.

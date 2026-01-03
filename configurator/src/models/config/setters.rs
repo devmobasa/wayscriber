@@ -76,6 +76,14 @@ impl ConfigDraft {
             }
             ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
             ToggleField::UiClickHighlightUsePenColor => self.click_highlight_use_pen_color = value,
+            ToggleField::PresenterHideStatusBar => self.presenter_hide_status_bar = value,
+            ToggleField::PresenterHideToolbars => self.presenter_hide_toolbars = value,
+            ToggleField::PresenterHideToolPreview => self.presenter_hide_tool_preview = value,
+            ToggleField::PresenterCloseHelpOverlay => self.presenter_close_help_overlay = value,
+            ToggleField::PresenterEnableClickHighlight => {
+                self.presenter_enable_click_highlight = value;
+            }
+            ToggleField::PresenterShowToast => self.presenter_show_toast = value,
             ToggleField::BoardEnabled => self.board_enabled = value,
             ToggleField::BoardAutoAdjust => self.board_auto_adjust_pen = value,
             ToggleField::CaptureEnabled => self.capture_enabled = value,

@@ -5,4 +5,5 @@ mod help_overlay;
 mod interaction;
 mod launcher;
 mod pending;
+mod presenter_mode;
 mod toasts;

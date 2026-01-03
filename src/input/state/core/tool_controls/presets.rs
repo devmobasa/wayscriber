@@ -95,6 +95,7 @@ impl InputState {
             self.needs_redraw = true;
         }
         if let Some(show_status_bar) = preset.show_status_bar
+            && !(self.presenter_mode && self.presenter_mode_config.hide_status_bar)
             && self.show_status_bar != show_status_bar
         {
             self.show_status_bar = show_status_bar;

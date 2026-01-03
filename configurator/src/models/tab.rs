@@ -68,14 +68,16 @@ pub enum UiTabId {
     StatusBar,
     HelpOverlay,
     ClickHighlight,
+    PresenterMode,
 }
 
 impl UiTabId {
-    pub const ALL: [UiTabId; 4] = [
+    pub const ALL: [UiTabId; 5] = [
         UiTabId::Toolbar,
         UiTabId::StatusBar,
         UiTabId::HelpOverlay,
         UiTabId::ClickHighlight,
+        UiTabId::PresenterMode,
     ];
 
     pub fn title(&self) -> &'static str {
@@ -84,6 +86,7 @@ impl UiTabId {
             UiTabId::StatusBar => "Status Bar",
             UiTabId::HelpOverlay => "Help Overlay",
             UiTabId::ClickHighlight => "Click Highlight",
+            UiTabId::PresenterMode => "Presenter Mode",
         }
     }
 }

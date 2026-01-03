@@ -253,6 +253,7 @@ mod tests {
             0,
             5,
             5,
+            crate::config::PresenterModeConfig::default(),
         );
 
         // Simulate an in-flight portal capture

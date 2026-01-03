@@ -29,6 +29,7 @@ impl InputState {
     /// * `show_status_bar` - Whether the status bar starts visible
     /// * `board_config` - Board mode configuration
     /// * `action_map` - Keybinding action map
+    /// * `presenter_mode_config` - Presenter mode behavior configuration
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         color: crate::draw::Color,
@@ -55,6 +56,7 @@ impl InputState {
         custom_redo_delay_ms: u64,
         custom_undo_steps: usize,
         custom_redo_steps: usize,
+        presenter_mode_config: crate::config::PresenterModeConfig,
     ) -> Self {
         let clamped_eraser = eraser_size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let mut state = Self {
@@ -84,6 +86,9 @@ impl InputState {
             help_overlay_scroll: 0.0,
             help_overlay_scroll_max: 0.0,
             show_status_bar,
+            presenter_mode: false,
+            presenter_mode_config,
+            presenter_restore: None,
             toolbar_visible: false,
             toolbar_top_visible: false,
             toolbar_side_visible: false,

@@ -163,6 +163,7 @@ pub(crate) fn build_section_sets(
         row("Escape / Ctrl+Q", "Exit"),
         row("F1 / F10", "Toggle help"),
         row("F2 / F9", "Toggle toolbar"),
+        row("Ctrl+Shift+K", "Toggle presenter mode"),
         row("F11", "Open configurator"),
         row("F4 / F12", "Toggle status bar"),
     ];
