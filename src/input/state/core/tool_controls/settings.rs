@@ -5,9 +5,6 @@ use crate::input::tool::{EraserMode, Tool};
 impl InputState {
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
     pub fn set_tool_override(&mut self, tool: Option<Tool>) -> bool {
-        if self.presenter_mode && tool != Some(Tool::Highlight) {
-            return false;
-        }
         if self.tool_override == tool {
             return false;
         }
