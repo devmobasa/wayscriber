@@ -101,6 +101,7 @@ impl InputState {
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,
+            board_recent: Vec::new(),
             dirty_tracker: DirtyTracker::new(),
             last_provisional_bounds: None,
             last_text_preview_bounds: None,

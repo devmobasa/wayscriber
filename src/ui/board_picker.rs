@@ -54,8 +54,13 @@ pub fn render_board_picker(
 
     let _ = ctx.save();
 
-    // Dim background
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    // Dim background (lighter in quick mode for a popover feel)
+    let dim_alpha = if input_state.board_picker_is_quick() {
+        0.15
+    } else {
+        0.35
+    };
+    ctx.set_source_rgba(0.0, 0.0, 0.0, dim_alpha);
     ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
     let _ = ctx.fill();
 
@@ -77,7 +82,7 @@ pub fn render_board_picker(
     // Title
     let board_count = input_state.boards.board_count();
     let max_count = input_state.boards.max_count();
-    let title = format!("Boards ({}/{})", board_count, max_count);
+    let title = input_state.board_picker_title(board_count, max_count);
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(TITLE_FONT_SIZE);
     ctx.set_source_rgba(0.92, 0.94, 0.98, 1.0);
@@ -87,12 +92,19 @@ pub fn render_board_picker(
 
     // Footer
     let footer = input_state.board_picker_footer_text();
+    let recent = input_state.board_picker_recent_label();
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     ctx.set_font_size(FOOTER_FONT_SIZE);
     ctx.set_source_rgba(0.64, 0.69, 0.76, 0.9);
     let footer_y = layout.origin_y + layout.height - layout.padding_y;
     ctx.move_to(layout.origin_x + layout.padding_x, footer_y);
     let _ = ctx.show_text(&footer);
+    if let Some(recent) = recent {
+        let recent_y = footer_y - layout.recent_height;
+        ctx.set_source_rgba(0.52, 0.58, 0.66, 0.9);
+        ctx.move_to(layout.origin_x + layout.padding_x, recent_y);
+        let _ = ctx.show_text(&recent);
+    }
 
     let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
     let name_x = layout.origin_x + layout.padding_x + layout.swatch_size + layout.swatch_padding;

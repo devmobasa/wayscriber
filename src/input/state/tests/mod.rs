@@ -9,6 +9,7 @@ mod helpers;
 use helpers::create_test_input_state;
 
 mod basics;
+mod board_picker;
 mod drawing;
 mod erase;
 mod menus;

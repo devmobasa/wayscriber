@@ -106,6 +106,8 @@ pub struct InputState {
     pub screen_height: u32,
     /// Previous color before entering board mode (for restoration)
     pub board_previous_color: Option<Color>,
+    /// Most recently used board ids (most recent first)
+    pub board_recent: Vec<String>,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)

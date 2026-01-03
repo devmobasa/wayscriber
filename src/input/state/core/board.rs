@@ -2,6 +2,8 @@ use super::base::{InputState, UiToastKind};
 use crate::draw::Color;
 use crate::input::{BOARD_ID_TRANSPARENT, BoardBackground};
 
+const BOARD_RECENT_LIMIT: usize = 5;
+
 impl InputState {
     /// Returns the active board id.
     pub fn board_id(&self) -> &str {
@@ -85,6 +87,7 @@ impl InputState {
 
         let current_id = self.boards.active_board_id().to_string();
         if self.switch_board_with(|boards| boards.remove_active_board(), &current_id) {
+            self.remove_board_recent(&current_id);
             self.queue_board_config_save();
         }
     }
@@ -153,6 +156,7 @@ impl InputState {
         if self.boards.board_count() > prev_count {
             self.queue_board_config_save();
         }
+        self.record_board_recent(&target_spec.id);
 
         let current_auto =
             current_spec.auto_adjust_pen && !current_spec.background.is_transparent();
@@ -194,6 +198,18 @@ impl InputState {
             target_spec.id
         );
         true
+    }
+
+    fn record_board_recent(&mut self, board_id: &str) {
+        self.board_recent.retain(|id| id != board_id);
+        self.board_recent.insert(0, board_id.to_string());
+        if self.board_recent.len() > BOARD_RECENT_LIMIT {
+            self.board_recent.truncate(BOARD_RECENT_LIMIT);
+        }
+    }
+
+    fn remove_board_recent(&mut self, board_id: &str) {
+        self.board_recent.retain(|id| id != board_id);
     }
 
     pub(crate) fn queue_board_config_save(&mut self) {
