@@ -116,6 +116,7 @@ impl InputState {
             context_menu_state: ContextMenuState::Hidden,
             context_menu_enabled: true,
             board_picker_state: BoardPickerState::Hidden,
+            board_picker_drag: None,
             hit_test_cache: HashMap::new(),
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,

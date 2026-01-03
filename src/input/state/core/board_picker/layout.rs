@@ -6,10 +6,14 @@ use crate::util::Rect;
 
 use super::super::base::InputState;
 use super::{
-    BOARD_PICKER_RECENT_LINE_HEIGHT, BODY_FONT_SIZE, BoardPickerEditMode, BoardPickerLayout,
-    BoardPickerState, COLUMN_GAP, FOOTER_HEIGHT, HEADER_HEIGHT, PADDING_X, PADDING_Y,
-    PALETTE_BOTTOM_GAP, PALETTE_SWATCH_GAP, PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, ROW_HEIGHT,
-    SWATCH_PADDING, SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
+    BOARD_PICKER_RECENT_LINE_HEIGHT, BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT, BODY_FONT_SIZE,
+    BoardPickerEditMode, BoardPickerLayout, BoardPickerState, COLUMN_GAP, COMPACT_BODY_FONT_SIZE,
+    COMPACT_FOOTER_FONT_SIZE, COMPACT_FOOTER_HEIGHT, COMPACT_HEADER_HEIGHT, COMPACT_PADDING_X,
+    COMPACT_PADDING_Y, COMPACT_ROW_HEIGHT, COMPACT_SWATCH_PADDING, COMPACT_SWATCH_SIZE,
+    COMPACT_TITLE_FONT_SIZE, FOOTER_FONT_SIZE, FOOTER_HEIGHT, HANDLE_GAP, HANDLE_WIDTH,
+    HEADER_HEIGHT, PADDING_X, PADDING_Y, PALETTE_BOTTOM_GAP, PALETTE_SWATCH_GAP,
+    PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, PIN_OFFSET_FACTOR, ROW_HEIGHT, SWATCH_PADDING,
+    SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
 };
 
 impl InputState {
@@ -41,20 +45,68 @@ impl InputState {
         let board_count = self.boards.board_count();
         let max_count = self.boards.max_count();
 
+        let (
+            title_font_size,
+            body_font_size,
+            footer_font_size,
+            row_height,
+            header_height,
+            base_footer_height,
+            padding_x,
+            padding_y,
+            swatch_size,
+            swatch_padding,
+            recent_line_height,
+            handle_width,
+            handle_gap,
+        ) = if self.board_picker_is_quick() {
+            (
+                COMPACT_TITLE_FONT_SIZE,
+                COMPACT_BODY_FONT_SIZE,
+                COMPACT_FOOTER_FONT_SIZE,
+                COMPACT_ROW_HEIGHT,
+                COMPACT_HEADER_HEIGHT,
+                COMPACT_FOOTER_HEIGHT,
+                COMPACT_PADDING_X,
+                COMPACT_PADDING_Y,
+                COMPACT_SWATCH_SIZE,
+                COMPACT_SWATCH_PADDING,
+                BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT,
+                0.0,
+                0.0,
+            )
+        } else {
+            (
+                TITLE_FONT_SIZE,
+                BODY_FONT_SIZE,
+                FOOTER_FONT_SIZE,
+                ROW_HEIGHT,
+                HEADER_HEIGHT,
+                FOOTER_HEIGHT,
+                PADDING_X,
+                PADDING_Y,
+                SWATCH_SIZE,
+                SWATCH_PADDING,
+                BOARD_PICKER_RECENT_LINE_HEIGHT,
+                HANDLE_WIDTH,
+                HANDLE_GAP,
+            )
+        };
+
         let title = self.board_picker_title(board_count, max_count);
         let footer = self.board_picker_footer_text();
         let recent_label = self.board_picker_recent_label();
 
         let _ = ctx.save();
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-        ctx.set_font_size(TITLE_FONT_SIZE);
-        let title_width = text_width(ctx, &title);
+        ctx.set_font_size(title_font_size);
+        let title_width = text_width(ctx, &title, title_font_size);
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(BODY_FONT_SIZE);
-        let footer_width = text_width(ctx, &footer);
+        ctx.set_font_size(footer_font_size);
+        let footer_width = text_width(ctx, &footer, footer_font_size);
         let recent_width = recent_label
             .as_deref()
-            .map(|label| text_width(ctx, label))
+            .map(|label| text_width(ctx, label, footer_font_size))
             .unwrap_or(0.0);
 
         let mut max_name_width: f64 = 0.0;
@@ -65,7 +117,10 @@ impl InputState {
 
         for index in 0..row_count {
             let (label, hint) = if index < board_count {
-                let board = &self.boards.board_states()[index];
+                let board_index = self
+                    .board_picker_board_index_for_row(index)
+                    .unwrap_or(index);
+                let board = &self.boards.board_states()[board_index];
                 let label = match edit_state {
                     Some((BoardPickerEditMode::Name, edit_index, buffer))
                         if edit_index == index =>
@@ -81,7 +136,7 @@ impl InputState {
                         {
                             Some(buffer.to_string())
                         }
-                        _ => board_slot_hint(self, index),
+                        _ => board_slot_hint(self, board_index),
                     }
                 } else {
                     None
@@ -96,23 +151,26 @@ impl InputState {
                 (label, None)
             };
 
-            max_name_width = max_name_width.max(text_width(ctx, &label));
+            max_name_width = max_name_width.max(text_width(ctx, &label, body_font_size));
             if let Some(hint) = hint {
-                max_hint_width = max_hint_width.max(text_width(ctx, &hint));
+                max_hint_width = max_hint_width.max(text_width(ctx, &hint, body_font_size));
             }
         }
 
         let _ = ctx.restore();
 
-        let mut content_width = SWATCH_SIZE + SWATCH_PADDING + max_name_width;
+        let mut content_width = swatch_size + swatch_padding + max_name_width;
         if max_hint_width > 0.0 {
             content_width += COLUMN_GAP + max_hint_width;
         }
+        if handle_width > 0.0 {
+            content_width += handle_gap + handle_width;
+        }
 
-        let mut panel_width = PADDING_X * 2.0 + content_width;
-        panel_width = panel_width.max(title_width + PADDING_X * 2.0);
-        panel_width = panel_width.max(footer_width + PADDING_X * 2.0);
-        panel_width = panel_width.max(recent_width + PADDING_X * 2.0);
+        let mut panel_width = padding_x * 2.0 + content_width;
+        panel_width = panel_width.max(title_width + padding_x * 2.0);
+        panel_width = panel_width.max(footer_width + padding_x * 2.0);
+        panel_width = panel_width.max(recent_width + padding_x * 2.0);
 
         let mut palette_rows = 0usize;
         let mut palette_cols = 0usize;
@@ -120,15 +178,14 @@ impl InputState {
         if let Some((BoardPickerEditMode::Color, edit_index, _)) = edit_state
             && edit_index < board_count
             && self
-                .boards
-                .board_states()
-                .get(edit_index)
+                .board_picker_board_index_for_row(edit_index)
+                .and_then(|board_index| self.boards.board_states().get(board_index))
                 .map(|board| !board.spec.background.is_transparent())
                 .unwrap_or(false)
         {
             let colors = board_palette_colors();
             if !colors.is_empty() {
-                let available_width = panel_width - PADDING_X * 2.0;
+                let available_width = panel_width - padding_x * 2.0;
                 let unit = PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP;
                 let max_cols = ((available_width + PALETTE_SWATCH_GAP) / unit).floor() as usize;
                 palette_cols = max_cols.clamp(1, colors.len());
@@ -145,15 +202,15 @@ impl InputState {
         };
 
         let recent_height = if recent_label.is_some() {
-            BOARD_PICKER_RECENT_LINE_HEIGHT
+            recent_line_height
         } else {
             0.0
         };
-        let footer_height = FOOTER_HEIGHT + recent_height;
+        let footer_height = base_footer_height + recent_height;
 
-        let panel_height = PADDING_Y * 2.0
-            + HEADER_HEIGHT
-            + ROW_HEIGHT * row_count as f64
+        let panel_height = padding_y * 2.0
+            + header_height
+            + row_height * row_count as f64
             + palette_extra
             + footer_height;
 
@@ -163,7 +220,7 @@ impl InputState {
         origin_y = origin_y.max(8.0);
 
         let palette_top = if palette_rows > 0 {
-            origin_y + PADDING_Y + HEADER_HEIGHT + ROW_HEIGHT * row_count as f64 + PALETTE_TOP_GAP
+            origin_y + padding_y + header_height + row_height * row_count as f64 + PALETTE_TOP_GAP
         } else {
             0.0
         };
@@ -173,19 +230,24 @@ impl InputState {
             origin_y,
             width: panel_width,
             height: panel_height,
-            row_height: ROW_HEIGHT,
-            header_height: HEADER_HEIGHT,
+            title_font_size,
+            body_font_size,
+            footer_font_size,
+            row_height,
+            header_height,
             footer_height,
-            padding_x: PADDING_X,
-            padding_y: PADDING_Y,
-            swatch_size: SWATCH_SIZE,
-            swatch_padding: SWATCH_PADDING,
+            padding_x,
+            padding_y,
+            swatch_size,
+            swatch_padding,
             hint_width: max_hint_width,
             row_count,
             palette_top,
             palette_rows,
             palette_cols,
             recent_height,
+            handle_width,
+            handle_gap,
         });
 
         if let Some(layout) = self.board_picker_layout {
@@ -275,6 +337,52 @@ impl InputState {
         palette.get(index).copied()
     }
 
+    pub(crate) fn board_picker_handle_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if layout.handle_width <= 0.0 || self.board_picker_is_quick() {
+            return None;
+        }
+        let board_count = self.boards.board_count();
+        if board_count == 0 {
+            return None;
+        }
+        let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
+        let handle_x = layout.origin_x + layout.width - layout.padding_x - layout.handle_width;
+        let within_x = (x as f64) >= handle_x && (x as f64) <= handle_x + layout.handle_width;
+        if !within_x {
+            return None;
+        }
+        for row in 0..board_count {
+            let row_top = rows_top + layout.row_height * row as f64;
+            let row_bottom = row_top + layout.row_height;
+            if (y as f64) >= row_top && (y as f64) <= row_bottom {
+                return Some(row);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn board_picker_pin_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        let board_count = self.boards.board_count();
+        if board_count == 0 {
+            return None;
+        }
+        let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
+        let swatch_x = layout.origin_x + layout.padding_x;
+        let pin_x = swatch_x - layout.swatch_padding * PIN_OFFSET_FACTOR;
+        let radius = (layout.body_font_size * 0.45).max(4.0);
+        for row in 0..board_count {
+            let row_center = rows_top + layout.row_height * row as f64 + layout.row_height * 0.5;
+            let dx = x as f64 - pin_x;
+            let dy = y as f64 - row_center;
+            if dx * dx + dy * dy <= radius * radius {
+                return Some(row);
+            }
+        }
+        None
+    }
+
     pub(crate) fn update_board_picker_hover_from_pointer(&mut self, x: i32, y: i32) {
         if !self.is_board_picker_open() {
             return;
@@ -301,10 +409,10 @@ impl InputState {
     }
 }
 
-fn text_width(ctx: &CairoContext, text: &str) -> f64 {
+fn text_width(ctx: &CairoContext, text: &str, font_size: f64) -> f64 {
     match ctx.text_extents(text) {
         Ok(extents) => extents.width(),
-        Err(_) => text.len() as f64 * BODY_FONT_SIZE * 0.5,
+        Err(_) => text.len() as f64 * font_size * 0.5,
     }
 }
 

@@ -110,6 +110,10 @@ impl InputState {
             match button {
                 MouseButton::Left => {
                     if self.board_picker_contains_point(x, y) {
+                        if let Some(row) = self.board_picker_handle_index_at(x, y) {
+                            self.board_picker_start_drag(row);
+                            return;
+                        }
                         if self.board_picker_index_at(x, y).is_some() {
                             self.update_board_picker_hover_from_pointer(x, y);
                         }

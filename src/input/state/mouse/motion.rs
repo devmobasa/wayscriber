@@ -17,7 +17,11 @@ impl InputState {
         self.update_pointer_position(x, y);
 
         if self.is_board_picker_open() {
-            self.update_board_picker_hover_from_pointer(x, y);
+            if self.board_picker_is_dragging() {
+                self.board_picker_update_drag_from_pointer(x, y);
+            } else {
+                self.update_board_picker_hover_from_pointer(x, y);
+            }
             return;
         }
 

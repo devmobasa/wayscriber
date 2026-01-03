@@ -57,6 +57,7 @@ impl BoardsConfig {
             default_pen_color: None,
             auto_adjust_pen: false,
             persist: true,
+            pinned: false,
         }];
 
         if legacy.enabled {
@@ -69,6 +70,7 @@ impl BoardsConfig {
                 default_pen_color: Some(BoardColorConfig::Rgb(legacy.whiteboard_pen_color)),
                 auto_adjust_pen: legacy.auto_adjust_pen,
                 persist: true,
+                pinned: false,
             });
             items.push(BoardItemConfig {
                 id: "blackboard".to_string(),
@@ -79,6 +81,7 @@ impl BoardsConfig {
                 default_pen_color: Some(BoardColorConfig::Rgb(legacy.blackboard_pen_color)),
                 auto_adjust_pen: legacy.auto_adjust_pen,
                 persist: true,
+                pinned: false,
             });
         }
 
@@ -117,6 +120,10 @@ pub struct BoardItemConfig {
     /// Persist this board in session saves.
     #[serde(default = "default_board_persist")]
     pub persist: bool,
+
+    /// Pin this board to the top of the quick switch list.
+    #[serde(default = "default_board_pinned")]
+    pub pinned: bool,
 }
 
 /// Background specification: "transparent" or an RGB color.
@@ -182,6 +189,10 @@ fn default_board_persist() -> bool {
     true
 }
 
+fn default_board_pinned() -> bool {
+    false
+}
+
 fn default_board_items() -> Vec<BoardItemConfig> {
     vec![
         BoardItemConfig {
@@ -191,6 +202,7 @@ fn default_board_items() -> Vec<BoardItemConfig> {
             default_pen_color: None,
             auto_adjust_pen: false,
             persist: true,
+            pinned: false,
         },
         BoardItemConfig {
             id: "whiteboard".to_string(),
@@ -199,6 +211,7 @@ fn default_board_items() -> Vec<BoardItemConfig> {
             default_pen_color: Some(BoardColorConfig::Rgb([0.0, 0.0, 0.0])),
             auto_adjust_pen: true,
             persist: true,
+            pinned: false,
         },
         BoardItemConfig {
             id: "blackboard".to_string(),
@@ -207,6 +220,7 @@ fn default_board_items() -> Vec<BoardItemConfig> {
             default_pen_color: Some(BoardColorConfig::Rgb([1.0, 1.0, 1.0])),
             auto_adjust_pen: true,
             persist: true,
+            pinned: false,
         },
         BoardItemConfig {
             id: "blueprint".to_string(),
@@ -215,6 +229,7 @@ fn default_board_items() -> Vec<BoardItemConfig> {
             default_pen_color: Some(BoardColorConfig::Rgb([0.902, 0.945, 1.0])),
             auto_adjust_pen: true,
             persist: true,
+            pinned: false,
         },
         BoardItemConfig {
             id: "corkboard".to_string(),
@@ -223,6 +238,7 @@ fn default_board_items() -> Vec<BoardItemConfig> {
             default_pen_color: Some(BoardColorConfig::Rgb([0.969, 0.890, 0.784])),
             auto_adjust_pen: true,
             persist: true,
+            pinned: false,
         },
     ]
 }

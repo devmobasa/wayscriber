@@ -10,6 +10,7 @@ use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 
 const TITLE_FONT_SIZE: f64 = 17.0;
 const BODY_FONT_SIZE: f64 = 14.0;
+const FOOTER_FONT_SIZE: f64 = 12.0;
 const ROW_HEIGHT: f64 = 32.0;
 const HEADER_HEIGHT: f64 = 28.0;
 const FOOTER_HEIGHT: f64 = 22.0;
@@ -17,6 +18,20 @@ const PADDING_X: f64 = 16.0;
 const PADDING_Y: f64 = 14.0;
 const SWATCH_SIZE: f64 = 14.0;
 const SWATCH_PADDING: f64 = 10.0;
+
+const COMPACT_TITLE_FONT_SIZE: f64 = 15.0;
+const COMPACT_BODY_FONT_SIZE: f64 = 13.0;
+const COMPACT_FOOTER_FONT_SIZE: f64 = 11.0;
+const COMPACT_ROW_HEIGHT: f64 = 26.0;
+const COMPACT_HEADER_HEIGHT: f64 = 22.0;
+const COMPACT_FOOTER_HEIGHT: f64 = 18.0;
+const COMPACT_PADDING_X: f64 = 12.0;
+const COMPACT_PADDING_Y: f64 = 10.0;
+const COMPACT_SWATCH_SIZE: f64 = 12.0;
+const COMPACT_SWATCH_PADDING: f64 = 8.0;
+const HANDLE_WIDTH: f64 = 10.0;
+const HANDLE_GAP: f64 = 8.0;
+const PIN_OFFSET_FACTOR: f64 = 0.6;
 const COLUMN_GAP: f64 = 12.0;
 const MAX_BOARD_NAME_LEN: usize = 40;
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
@@ -26,6 +41,7 @@ const PALETTE_BOTTOM_GAP: f64 = 8.0;
 const BOARD_PICKER_SEARCH_TIMEOUT: Duration = Duration::from_millis(1200);
 const BOARD_PICKER_SEARCH_MAX_LEN: usize = 24;
 const BOARD_PICKER_RECENT_LINE_HEIGHT: f64 = 16.0;
+const BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT: f64 = 14.0;
 const BOARD_PICKER_RECENT_MAX_NAMES: usize = 3;
 const BOARD_PICKER_RECENT_LABEL_MAX_CHARS: usize = BOARD_PICKER_SEARCH_MAX_LEN + 6;
 
@@ -59,11 +75,21 @@ pub struct BoardPickerEdit {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct BoardPickerDrag {
+    pub source_row: usize,
+    pub source_board: usize,
+    pub current_row: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct BoardPickerLayout {
     pub origin_x: f64,
     pub origin_y: f64,
     pub width: f64,
     pub height: f64,
+    pub title_font_size: f64,
+    pub body_font_size: f64,
+    pub footer_font_size: f64,
     pub row_height: f64,
     pub header_height: f64,
     pub footer_height: f64,
@@ -77,6 +103,8 @@ pub struct BoardPickerLayout {
     pub palette_rows: usize,
     pub palette_cols: usize,
     pub recent_height: f64,
+    pub handle_width: f64,
+    pub handle_gap: f64,
 }
 
 fn truncate_search_label(value: &str, max_chars: usize) -> String {

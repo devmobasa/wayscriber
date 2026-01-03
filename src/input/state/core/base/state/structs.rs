@@ -1,5 +1,5 @@
 use super::super::super::{
-    board_picker::{BoardPickerLayout, BoardPickerState},
+    board_picker::{BoardPickerDrag, BoardPickerLayout, BoardPickerState},
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
@@ -136,6 +136,8 @@ pub struct InputState {
     pub(in crate::input::state::core) context_menu_enabled: bool,
     /// Current board picker state
     pub board_picker_state: BoardPickerState,
+    /// Active board picker drag state (full mode reorder)
+    pub board_picker_drag: Option<BoardPickerDrag>,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Hit test tolerance in pixels

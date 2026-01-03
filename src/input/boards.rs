@@ -25,6 +25,7 @@ pub struct BoardSpec {
     pub default_pen_color: Option<Color>,
     pub auto_adjust_pen: bool,
     pub persist: bool,
+    pub pinned: bool,
 }
 
 impl BoardSpec {
@@ -36,6 +37,7 @@ impl BoardSpec {
             default_pen_color: item.default_pen_color.as_ref().map(board_color_from_config),
             auto_adjust_pen: item.auto_adjust_pen,
             persist: item.persist,
+            pinned: item.pinned,
         }
     }
 
@@ -99,6 +101,7 @@ impl BoardManager {
                 default_pen_color: None,
                 auto_adjust_pen: false,
                 persist: true,
+                pinned: false,
             }));
         }
 
@@ -319,6 +322,22 @@ impl BoardManager {
         true
     }
 
+    pub fn move_board(&mut self, from: usize, to: usize) -> bool {
+        let len = self.boards.len();
+        if from >= len || to >= len || from == to {
+            return false;
+        }
+        let active_id = self.active_board_id().to_string();
+        let board = self.boards.remove(from);
+        self.boards.insert(to, board);
+        if let Some(index) = self.boards.iter().position(|b| b.spec.id == active_id) {
+            self.active_index = index;
+        } else {
+            self.active_index = self.active_index.min(self.boards.len().saturating_sub(1));
+        }
+        true
+    }
+
     pub fn set_board_pages(&mut self, id: &str, pages: BoardPages) -> bool {
         if let Some(board) = self.ensure_board(id) {
             board.pages = pages;
@@ -344,6 +363,7 @@ impl BoardManager {
                 default_pen_color: None,
                 auto_adjust_pen: false,
                 persist: true,
+                pinned: false,
             }
         } else {
             self.template.clone()
@@ -396,6 +416,7 @@ impl BoardManager {
                         .map(|color| BoardColorConfig::Rgb([color.r, color.g, color.b])),
                     auto_adjust_pen: board.spec.auto_adjust_pen,
                     persist: board.spec.persist,
+                    pinned: board.spec.pinned,
                 })
                 .collect(),
         }
@@ -449,7 +470,7 @@ fn contrast_color(background: Color) -> Color {
 }
 
 fn pick_template(boards: &[BoardState]) -> BoardSpec {
-    boards
+    let mut template = boards
         .iter()
         .find(|board| !board.spec.background.is_transparent())
         .map(|board| board.spec.clone())
@@ -470,7 +491,10 @@ fn pick_template(boards: &[BoardState]) -> BoardSpec {
             }),
             auto_adjust_pen: true,
             persist: true,
-        })
+            pinned: false,
+        });
+    template.pinned = false;
+    template
 }
 
 fn parse_board_slot(id: &str) -> Option<usize> {

@@ -1,10 +1,8 @@
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use std::f64::consts::PI;
 
-const TITLE_FONT_SIZE: f64 = 17.0;
-const BODY_FONT_SIZE: f64 = 14.0;
-const FOOTER_FONT_SIZE: f64 = 12.0;
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
 const PALETTE_SWATCH_GAP: f64 = 6.0;
 
@@ -84,9 +82,9 @@ pub fn render_board_picker(
     let max_count = input_state.boards.max_count();
     let title = input_state.board_picker_title(board_count, max_count);
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(TITLE_FONT_SIZE);
+    ctx.set_font_size(layout.title_font_size);
     ctx.set_source_rgba(0.92, 0.94, 0.98, 1.0);
-    let title_y = layout.origin_y + layout.padding_y + TITLE_FONT_SIZE;
+    let title_y = layout.origin_y + layout.padding_y + layout.title_font_size;
     ctx.move_to(layout.origin_x + layout.padding_x, title_y);
     let _ = ctx.show_text(&title);
 
@@ -94,7 +92,7 @@ pub fn render_board_picker(
     let footer = input_state.board_picker_footer_text();
     let recent = input_state.board_picker_recent_label();
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(FOOTER_FONT_SIZE);
+    ctx.set_font_size(layout.footer_font_size);
     ctx.set_source_rgba(0.64, 0.69, 0.76, 0.9);
     let footer_y = layout.origin_y + layout.height - layout.padding_y;
     ctx.move_to(layout.origin_x + layout.padding_x, footer_y);
@@ -108,8 +106,18 @@ pub fn render_board_picker(
 
     let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
     let name_x = layout.origin_x + layout.padding_x + layout.swatch_size + layout.swatch_padding;
+    let handle_x = if layout.handle_width > 0.0 {
+        Some(layout.origin_x + layout.width - layout.padding_x - layout.handle_width)
+    } else {
+        None
+    };
+    let hint_right_edge = if let Some(handle_x) = handle_x {
+        handle_x - layout.handle_gap
+    } else {
+        layout.origin_x + layout.width - layout.padding_x
+    };
     let hint_x = if layout.hint_width > 0.0 {
-        Some(layout.origin_x + layout.width - layout.padding_x - layout.hint_width)
+        Some(hint_right_edge - layout.hint_width)
     } else {
         None
     };
@@ -124,7 +132,14 @@ pub fn render_board_picker(
         let row_center = row_top + layout.row_height * 0.5;
         let is_highlighted = highlight_index == Some(row);
         let is_selected = selected_index == Some(row);
-        let is_active_board = row < board_count && row == active_board_index;
+        let board_index = if row < board_count {
+            input_state
+                .board_picker_board_index_for_row(row)
+                .unwrap_or(row)
+        } else {
+            0
+        };
+        let is_active_board = row < board_count && board_index == active_board_index;
 
         if is_highlighted {
             ctx.set_source_rgba(0.22, 0.28, 0.38, 0.9);
@@ -160,7 +175,7 @@ pub fn render_board_picker(
             ctx.line_to(mid_x, mid_y + 4.0);
             let _ = ctx.stroke();
         } else {
-            let board = &input_state.boards.board_states()[row];
+            let board = &input_state.boards.board_states()[board_index];
             match board.spec.background {
                 BoardBackground::Transparent => {
                     ctx.set_source_rgba(0.62, 0.68, 0.76, 0.85);
@@ -194,7 +209,7 @@ pub fn render_board_picker(
         }
 
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(BODY_FONT_SIZE);
+        ctx.set_font_size(layout.body_font_size);
 
         if is_new_row {
             let label = if board_count >= max_count {
@@ -203,12 +218,32 @@ pub fn render_board_picker(
                 "New board"
             };
             ctx.set_source_rgba(0.7, 0.74, 0.8, 0.9);
-            ctx.move_to(name_x, row_center + BODY_FONT_SIZE * 0.35);
+            ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
             let _ = ctx.show_text(label);
             continue;
         }
 
-        let board = &input_state.boards.board_states()[row];
+        let board = &input_state.boards.board_states()[board_index];
+        let show_pin = board.spec.pinned || is_highlighted || is_selected;
+        if show_pin {
+            let pin_x = swatch_x - (layout.swatch_padding * 0.6);
+            let (r, g, b, a, filled) = if board.spec.pinned {
+                (0.96, 0.82, 0.28, 0.95, true)
+            } else {
+                (0.6, 0.65, 0.72, 0.5, false)
+            };
+            draw_pin_icon(
+                ctx,
+                pin_x,
+                row_center,
+                layout.body_font_size,
+                r,
+                g,
+                b,
+                a,
+                filled,
+            );
+        }
         let (mut name, mut hint_override) = (board.spec.name.clone(), None);
         if let Some((mode, edit_index, buffer)) = edit_state
             && edit_index == row
@@ -229,7 +264,7 @@ pub fn render_board_picker(
             [0.86, 0.89, 0.94, 1.0]
         };
         ctx.set_source_rgba(name_color[0], name_color[1], name_color[2], name_color[3]);
-        ctx.move_to(name_x, row_center + BODY_FONT_SIZE * 0.35);
+        ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
         let _ = ctx.show_text(&name);
 
         if let Some((mode, edit_index, _buffer)) = edit_state
@@ -241,28 +276,28 @@ pub fn render_board_picker(
                 "Sans",
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Normal,
-                BODY_FONT_SIZE,
+                layout.body_font_size,
                 &name,
             );
             let caret_x = name_x + extents.width() + 2.0;
             ctx.set_source_rgba(0.98, 0.92, 0.55, 1.0);
             ctx.set_line_width(1.0);
-            ctx.move_to(caret_x, row_center - BODY_FONT_SIZE * 0.5);
-            ctx.line_to(caret_x, row_center + BODY_FONT_SIZE * 0.5);
+            ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
+            ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);
             let _ = ctx.stroke();
-            ctx.move_to(name_x, row_center + BODY_FONT_SIZE * 0.55);
+            ctx.move_to(name_x, row_center + layout.body_font_size * 0.55);
             ctx.line_to(
                 name_x + extents.width() + 6.0,
-                row_center + BODY_FONT_SIZE * 0.55,
+                row_center + layout.body_font_size * 0.55,
             );
             let _ = ctx.stroke();
         }
 
         if let Some(hint_x) = hint_x {
-            let hint = hint_override.or_else(|| board_slot_hint(input_state, row));
+            let hint = hint_override.or_else(|| board_slot_hint(input_state, board_index));
             if let Some(hint) = hint {
                 ctx.set_source_rgba(0.6, 0.65, 0.72, 0.9);
-                ctx.move_to(hint_x, row_center + BODY_FONT_SIZE * 0.35);
+                ctx.move_to(hint_x, row_center + layout.body_font_size * 0.35);
                 let _ = ctx.show_text(&hint);
 
                 if let Some((mode, edit_index, _)) = edit_state
@@ -274,23 +309,30 @@ pub fn render_board_picker(
                         "Sans",
                         cairo::FontSlant::Normal,
                         cairo::FontWeight::Normal,
-                        BODY_FONT_SIZE,
+                        layout.body_font_size,
                         &hint,
                     );
                     let caret_x = hint_x + extents.width() + 2.0;
                     ctx.set_source_rgba(0.98, 0.92, 0.55, 1.0);
                     ctx.set_line_width(1.0);
-                    ctx.move_to(caret_x, row_center - BODY_FONT_SIZE * 0.5);
-                    ctx.line_to(caret_x, row_center + BODY_FONT_SIZE * 0.5);
+                    ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
+                    ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);
                     let _ = ctx.stroke();
-                    ctx.move_to(hint_x, row_center + BODY_FONT_SIZE * 0.55);
+                    ctx.move_to(hint_x, row_center + layout.body_font_size * 0.55);
                     ctx.line_to(
                         hint_x + extents.width() + 6.0,
-                        row_center + BODY_FONT_SIZE * 0.55,
+                        row_center + layout.body_font_size * 0.55,
                     );
                     let _ = ctx.stroke();
                 }
             }
+        }
+
+        if let Some(handle_x) = handle_x
+            && !is_new_row
+            && !input_state.board_picker_is_quick()
+        {
+            draw_drag_handle(ctx, handle_x, row_center, layout.handle_width);
         }
     }
 
@@ -298,7 +340,8 @@ pub fn render_board_picker(
         let palette_x = layout.origin_x + layout.padding_x;
         let palette_y = layout.palette_top;
         let active_color = edit_state
-            .and_then(|(_, edit_index, _)| input_state.boards.board_states().get(edit_index))
+            .and_then(|(_, edit_index, _)| input_state.board_picker_board_index_for_row(edit_index))
+            .and_then(|board_index| input_state.boards.board_states().get(board_index))
             .and_then(|board| match board.spec.background {
                 BoardBackground::Solid(color) => Some(color),
                 BoardBackground::Transparent => None,
@@ -374,5 +417,50 @@ fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
         None
     } else {
         Some(label)
+    }
+}
+
+fn draw_pin_icon(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    size: f64,
+    r: f64,
+    g: f64,
+    b: f64,
+    a: f64,
+    filled: bool,
+) {
+    let head_radius = (size * 0.22).clamp(2.0, 3.2);
+    let stem_length = size * 0.6;
+    let head_y = y - stem_length * 0.35;
+    ctx.set_source_rgba(r, g, b, a);
+    ctx.arc(x, head_y, head_radius, 0.0, PI * 2.0);
+    if filled {
+        let _ = ctx.fill();
+    } else {
+        ctx.set_line_width(1.2);
+        let _ = ctx.stroke();
+    }
+    ctx.set_line_width(1.2);
+    ctx.move_to(x, head_y + head_radius);
+    ctx.line_to(x, head_y + head_radius + stem_length);
+    let _ = ctx.stroke();
+}
+
+fn draw_drag_handle(ctx: &cairo::Context, x: f64, y: f64, width: f64) {
+    let dot_radius = (width * 0.18).clamp(1.2, 2.2);
+    let gap = dot_radius * 2.2;
+    let col_gap = dot_radius * 2.6;
+    let start_x = x + width * 0.5 - col_gap * 0.5;
+    let start_y = y - gap;
+    ctx.set_source_rgba(0.58, 0.63, 0.7, 0.85);
+    for row in 0..3 {
+        for col in 0..2 {
+            let cx = start_x + col as f64 * col_gap;
+            let cy = start_y + row as f64 * gap;
+            ctx.arc(cx, cy, dot_radius, 0.0, PI * 2.0);
+            let _ = ctx.fill();
+        }
     }
 }

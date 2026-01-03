@@ -138,6 +138,27 @@ impl InputState {
         true
     }
 
+    pub(crate) fn toggle_board_pinned(&mut self, index: usize) -> bool {
+        let Some(board) = self.boards.board_state_mut(index) else {
+            return false;
+        };
+        board.spec.pinned = !board.spec.pinned;
+        self.queue_board_config_save();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn reorder_board(&mut self, from: usize, to: usize) -> bool {
+        if !self.boards.move_board(from, to) {
+            return false;
+        }
+        self.queue_board_config_save();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
     fn switch_board_with(
         &mut self,
         switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,

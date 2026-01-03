@@ -4,8 +4,9 @@ use crate::input::BoardBackground;
 use super::super::base::{InputState, UiToastKind};
 use super::{
     BOARD_PICKER_RECENT_LABEL_MAX_CHARS, BOARD_PICKER_RECENT_MAX_NAMES,
-    BOARD_PICKER_SEARCH_MAX_LEN, BoardPickerEdit, BoardPickerEditMode, BoardPickerMode,
-    BoardPickerState, MAX_BOARD_NAME_LEN, color_to_hex, parse_hex_color, truncate_search_label,
+    BOARD_PICKER_SEARCH_MAX_LEN, BoardPickerDrag, BoardPickerEdit, BoardPickerEditMode,
+    BoardPickerMode, BoardPickerState, MAX_BOARD_NAME_LEN, color_to_hex, parse_hex_color,
+    truncate_search_label,
 };
 
 impl InputState {
@@ -32,12 +33,19 @@ impl InputState {
         self.close_context_menu();
         self.close_properties_panel();
         self.board_picker_clear_search();
+        self.board_picker_drag = None;
+        let active_index = self.boards.active_index();
         self.board_picker_state = BoardPickerState::Open {
-            selected: self.boards.active_index(),
+            selected: active_index,
             hover_index: None,
             edit: None,
             mode: BoardPickerMode::Full,
         };
+        if let Some(selected) = self.board_picker_row_for_board(active_index) {
+            if let BoardPickerState::Open { selected: row, .. } = &mut self.board_picker_state {
+                *row = selected;
+            }
+        }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -50,12 +58,19 @@ impl InputState {
         self.close_context_menu();
         self.close_properties_panel();
         self.board_picker_clear_search();
+        self.board_picker_drag = None;
+        let active_index = self.boards.active_index();
         self.board_picker_state = BoardPickerState::Open {
-            selected: self.boards.active_index(),
+            selected: active_index,
             hover_index: None,
             edit: None,
             mode: BoardPickerMode::Quick,
         };
+        if let Some(selected) = self.board_picker_row_for_board(active_index) {
+            if let BoardPickerState::Open { selected: row, .. } = &mut self.board_picker_state {
+                *row = selected;
+            }
+        }
         self.board_picker_select_recent();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -66,6 +81,7 @@ impl InputState {
             self.mark_board_picker_region(layout);
         }
         self.board_picker_state = BoardPickerState::Hidden;
+        self.board_picker_drag = None;
         self.board_picker_layout = None;
         self.board_picker_clear_search();
         self.needs_redraw = true;
@@ -112,6 +128,90 @@ impl InputState {
             *selected = next;
             self.needs_redraw = true;
         }
+    }
+
+    pub(crate) fn board_picker_is_dragging(&self) -> bool {
+        self.board_picker_drag.is_some()
+    }
+
+    pub(crate) fn board_picker_start_drag(&mut self, row: usize) -> bool {
+        if self.board_picker_is_quick() || self.board_picker_is_new_row(row) {
+            return false;
+        }
+        let Some(board_index) = self.board_picker_board_index_for_row(row) else {
+            return false;
+        };
+        self.board_picker_drag = Some(BoardPickerDrag {
+            source_row: row,
+            source_board: board_index,
+            current_row: row,
+        });
+        self.board_picker_set_selected(row);
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn board_picker_update_drag_from_pointer(&mut self, _x: i32, y: i32) {
+        let Some(layout) = self.board_picker_layout else {
+            return;
+        };
+        let Some(source_board) = self
+            .board_picker_drag
+            .as_ref()
+            .map(|drag| drag.source_board)
+        else {
+            return;
+        };
+        let board_count = self.boards.board_count();
+        if board_count == 0 {
+            return;
+        }
+        let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
+        let row = ((y as f64 - rows_top) / layout.row_height).floor() as isize;
+        let max_row = board_count.saturating_sub(1) as isize;
+        let clamped = row.clamp(0, max_row) as usize;
+        let target_row = self.board_picker_clamp_drag_row(clamped, source_board);
+        if let Some(drag) = &mut self.board_picker_drag {
+            if drag.current_row != target_row {
+                drag.current_row = target_row;
+                self.board_picker_set_selected(target_row);
+                self.needs_redraw = true;
+            }
+        }
+    }
+
+    pub(crate) fn board_picker_finish_drag(&mut self) -> bool {
+        let Some(drag) = self.board_picker_drag.take() else {
+            return false;
+        };
+        let target_row = self.board_picker_clamp_drag_row(drag.current_row, drag.source_board);
+        if target_row == drag.source_row {
+            self.needs_redraw = true;
+            return true;
+        }
+        let Some(target_board) = self.board_picker_board_index_for_row(target_row) else {
+            return true;
+        };
+        let source_id = self
+            .boards
+            .board_states()
+            .get(drag.source_board)
+            .map(|board| board.spec.id.clone());
+        if self.reorder_board(drag.source_board, target_board) {
+            if let Some(source_id) = source_id {
+                if let Some(new_index) = self
+                    .boards
+                    .board_states()
+                    .iter()
+                    .position(|board| board.spec.id == source_id)
+                {
+                    if let Some(row) = self.board_picker_row_for_board(new_index) {
+                        self.board_picker_set_selected(row);
+                    }
+                }
+            }
+        }
+        true
     }
 
     pub(crate) fn board_picker_clear_edit(&mut self) {
@@ -161,7 +261,7 @@ impl InputState {
             format!("Enter: switch  {search_label}  {esc_label}")
         } else {
             format!(
-                "Enter: switch  Ctrl+N: new  Ctrl+R: rename  Ctrl+C: color  {search_label}  Del: delete  {esc_label}"
+                "Enter: switch  Ctrl+N: new  Ctrl+R: rename  Ctrl+C: color  Ctrl+P: pin  {search_label}  Del: delete  {esc_label}"
             )
         }
     }
@@ -212,7 +312,7 @@ impl InputState {
                 .iter()
                 .position(|board| board.spec.id == *id)
             {
-                recent_index = Some(idx);
+                recent_index = self.board_picker_row_for_board(idx);
                 break;
             }
         }
@@ -222,8 +322,18 @@ impl InputState {
     }
 
     fn board_picker_promote_to_full(&mut self) {
+        let selected_board = match &self.board_picker_state {
+            BoardPickerState::Open { selected, mode, .. } => {
+                self.board_picker_board_index_for_row_in_mode(*selected, *mode)
+            }
+            BoardPickerState::Hidden => None,
+        };
+        let selected_row_full = selected_board.and_then(|board_index| {
+            self.board_picker_row_for_board_in_mode(board_index, BoardPickerMode::Full)
+        });
+
         let BoardPickerState::Open {
-            selected: _,
+            selected,
             hover_index,
             edit,
             mode,
@@ -237,6 +347,9 @@ impl InputState {
         *mode = BoardPickerMode::Full;
         *hover_index = None;
         *edit = None;
+        if let Some(row) = selected_row_full {
+            *selected = row;
+        }
         self.board_picker_layout = None;
         self.needs_redraw = true;
     }
@@ -257,8 +370,10 @@ impl InputState {
     pub(crate) fn board_picker_activate_row(&mut self, index: usize) {
         let board_count = self.boards.board_count();
         if index < board_count {
-            self.switch_board_slot(index);
-            self.close_board_picker();
+            if let Some(board_index) = self.board_picker_board_index_for_row(index) {
+                self.switch_board_slot(board_index);
+                self.close_board_picker();
+            }
         } else {
             self.board_picker_create_new();
         }
@@ -273,7 +388,9 @@ impl InputState {
             return;
         }
         let index = self.boards.active_index();
-        self.board_picker_set_selected(index);
+        if let Some(row) = self.board_picker_row_for_board(index) {
+            self.board_picker_set_selected(row);
+        }
         let name = self.boards.active_board_name().to_string();
         self.board_picker_start_edit(BoardPickerEditMode::Name, name);
         self.needs_redraw = true;
@@ -290,7 +407,10 @@ impl InputState {
             self.board_picker_create_new();
             return;
         }
-        if let Some(board) = self.boards.board_states().get(index) {
+        let Some(board_index) = self.board_picker_board_index_for_row(index) else {
+            return;
+        };
+        if let Some(board) = self.boards.board_states().get(board_index) {
             self.board_picker_start_edit(BoardPickerEditMode::Name, board.spec.name.clone());
         }
     }
@@ -306,7 +426,10 @@ impl InputState {
             self.board_picker_create_new();
             return;
         }
-        let Some(board) = self.boards.board_states().get(index) else {
+        let Some(board_index) = self.board_picker_board_index_for_row(index) else {
+            return;
+        };
+        let Some(board) = self.boards.board_states().get(board_index) else {
             return;
         };
         if board.spec.background.is_transparent() {
@@ -329,12 +452,16 @@ impl InputState {
             self.board_picker_clear_edit();
             return false;
         }
+        let Some(board_index) = self.board_picker_board_index_for_row(index) else {
+            self.board_picker_clear_edit();
+            return false;
+        };
 
         let buffer = buffer.to_string();
         let trimmed = buffer.trim();
         match mode {
             BoardPickerEditMode::Name => {
-                if !self.set_board_name(index, trimmed.to_string()) {
+                if !self.set_board_name(board_index, trimmed.to_string()) {
                     return false;
                 }
             }
@@ -346,7 +473,7 @@ impl InputState {
                     );
                     return false;
                 };
-                if !self.set_board_background_color(index, color) {
+                if !self.set_board_background_color(board_index, color) {
                     return false;
                 }
             }
@@ -407,7 +534,10 @@ impl InputState {
         if self.board_picker_is_new_row(index) {
             return false;
         }
-        if !self.set_board_background_color(index, color) {
+        let Some(board_index) = self.board_picker_board_index_for_row(index) else {
+            return false;
+        };
+        if !self.set_board_background_color(board_index, color) {
             return false;
         }
         if let Some(edit) = self.board_picker_edit_buffer_mut()
@@ -426,10 +556,115 @@ impl InputState {
         if self.board_picker_is_new_row(index) {
             return;
         }
-        if self.boards.active_index() != index {
-            self.switch_board_slot(index);
+        let Some(board_index) = self.board_picker_board_index_for_row(index) else {
+            return;
+        };
+        if self.boards.active_index() != board_index {
+            self.switch_board_slot(board_index);
         }
         self.delete_active_board();
-        self.board_picker_set_selected(self.boards.active_index());
+        if let Some(row) = self.board_picker_row_for_board(self.boards.active_index()) {
+            self.board_picker_set_selected(row);
+        }
+    }
+
+    pub(crate) fn board_picker_toggle_pin_selected(&mut self) {
+        let Some(index) = self.board_picker_selected_index() else {
+            return;
+        };
+        if self.board_picker_is_new_row(index) {
+            return;
+        }
+        let Some(board_index) = self.board_picker_board_index_for_row(index) else {
+            return;
+        };
+        if !self.toggle_board_pinned(board_index) {
+            return;
+        }
+        if let Some(row) = self.board_picker_row_for_board(board_index) {
+            if let BoardPickerState::Open { selected, .. } = &mut self.board_picker_state {
+                *selected = row;
+            }
+        }
+        self.board_picker_layout = None;
+        self.needs_redraw = true;
+    }
+
+    fn board_picker_board_order(&self) -> Vec<usize> {
+        self.board_picker_board_order_for_mode(self.board_picker_mode())
+    }
+
+    fn board_picker_board_order_for_mode(&self, _mode: BoardPickerMode) -> Vec<usize> {
+        let board_count = self.boards.board_count();
+        let mut order = Vec::with_capacity(board_count);
+        for (index, board) in self.boards.board_states().iter().enumerate() {
+            if board.spec.pinned {
+                order.push(index);
+            }
+        }
+        for (index, board) in self.boards.board_states().iter().enumerate() {
+            if !board.spec.pinned {
+                order.push(index);
+            }
+        }
+        order
+    }
+
+    fn board_picker_clamp_drag_row(&self, row: usize, source_board: usize) -> usize {
+        let board_count = self.boards.board_count();
+        if board_count == 0 {
+            return row;
+        }
+        let pinned_count = self
+            .boards
+            .board_states()
+            .iter()
+            .filter(|board| board.spec.pinned)
+            .count();
+        let is_pinned = self
+            .boards
+            .board_states()
+            .get(source_board)
+            .map(|board| board.spec.pinned)
+            .unwrap_or(false);
+        let min = if is_pinned { 0 } else { pinned_count };
+        let max = if is_pinned {
+            pinned_count.saturating_sub(1)
+        } else {
+            board_count.saturating_sub(1)
+        };
+        row.clamp(min, max)
+    }
+
+    pub(crate) fn board_picker_board_index_for_row(&self, row: usize) -> Option<usize> {
+        self.board_picker_board_index_for_row_in_mode(row, self.board_picker_mode())
+    }
+
+    pub(crate) fn board_picker_row_for_board(&self, board_index: usize) -> Option<usize> {
+        self.board_picker_row_for_board_in_mode(board_index, self.board_picker_mode())
+    }
+
+    fn board_picker_board_index_for_row_in_mode(
+        &self,
+        row: usize,
+        mode: BoardPickerMode,
+    ) -> Option<usize> {
+        if row >= self.boards.board_count() {
+            return None;
+        }
+        let order = self.board_picker_board_order_for_mode(mode);
+        order.get(row).copied()
+    }
+
+    fn board_picker_row_for_board_in_mode(
+        &self,
+        board_index: usize,
+        mode: BoardPickerMode,
+    ) -> Option<usize> {
+        if board_index >= self.boards.board_count() {
+            return None;
+        }
+        let order = self.board_picker_board_order_for_mode(mode);
+        order.iter().position(|&index| index == board_index)
     }
 }

@@ -34,6 +34,16 @@ impl InputState {
                 _ => true,
             }
         } else {
+            if self.board_picker_is_quick() {
+                match key {
+                    Key::Delete | Key::F2 => return true,
+                    Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => return true,
+                    Key::Char('r') | Key::Char('R') if self.modifiers.ctrl => return true,
+                    Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => return true,
+                    Key::Char('p') | Key::Char('P') if self.modifiers.ctrl => return true,
+                    _ => {}
+                }
+            }
             match key {
                 Key::Escape => {
                     if !self.board_picker_clear_search() {
@@ -98,6 +108,10 @@ impl InputState {
                 }
                 Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => {
                     self.board_picker_edit_color_selected();
+                    true
+                }
+                Key::Char('p') | Key::Char('P') if self.modifiers.ctrl => {
+                    self.board_picker_toggle_pin_selected();
                     true
                 }
                 Key::Char(ch) => {

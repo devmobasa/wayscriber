@@ -67,7 +67,9 @@ impl InputState {
         let board_count = self.boards.board_count();
         let lower = query.to_ascii_lowercase();
         match lower.parse::<usize>() {
-            Ok(value) if (1..=board_count).contains(&value) => return Some(value - 1),
+            Ok(value) if (1..=board_count).contains(&value) => {
+                return self.board_picker_row_for_board(value - 1);
+            }
             _ => {}
         }
         let mut best: Option<(usize, i32)> = None;
@@ -96,7 +98,7 @@ impl InputState {
                 best = Some((idx, score));
             }
         }
-        best.map(|(idx, _)| idx)
+        best.and_then(|(idx, _)| self.board_picker_row_for_board(idx))
     }
 }
 
