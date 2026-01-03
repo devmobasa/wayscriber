@@ -28,8 +28,6 @@ impl ToolbarLayoutSpec {
             }
         };
 
-        let board_h = self.side_board_height(snapshot);
-        add_section(board_h, &mut height);
         add_section(colors_h, &mut height);
         if show_presets {
             add_section(Self::SIDE_PRESET_CARD_HEIGHT, &mut height);
@@ -179,15 +177,6 @@ impl ToolbarLayoutSpec {
         }
     }
 
-    pub(in crate::backend::wayland::toolbar) fn side_board_height(
-        &self,
-        _snapshot: &ToolbarSnapshot,
-    ) -> f64 {
-        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
-            + Self::SIDE_BOARD_NAME_ROW_HEIGHT
-            + Self::SIDE_ACTION_BUTTON_GAP
-    }
-
     pub(in crate::backend::wayland::toolbar) fn side_pages_height(
         &self,
         snapshot: &ToolbarSnapshot,
@@ -248,8 +237,14 @@ impl ToolbarLayoutSpec {
         Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_HANDLE_SIZE + Self::SIDE_HEADER_HANDLE_GAP
     }
 
+    pub(in crate::backend::wayland::toolbar) fn side_header_board_y(&self) -> f64 {
+        self.side_header_y() + Self::SIDE_HEADER_ROW_HEIGHT + Self::SIDE_HEADER_BOARD_GAP
+    }
+
     pub(in crate::backend::wayland::toolbar) fn side_content_start_y(&self) -> f64 {
-        self.side_header_y() + Self::SIDE_HEADER_ROW_HEIGHT + Self::SIDE_HEADER_BOTTOM_GAP
+        self.side_header_board_y()
+            + Self::SIDE_HEADER_BOARD_ROW_HEIGHT
+            + Self::SIDE_HEADER_BOTTOM_GAP
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_card_x(&self) -> f64 {

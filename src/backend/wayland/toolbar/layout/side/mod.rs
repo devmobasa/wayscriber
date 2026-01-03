@@ -1,5 +1,4 @@
 mod actions;
-mod boards;
 mod colors;
 mod delay;
 mod header;
@@ -29,7 +28,6 @@ pub fn build_side_hits(
 
     let mut y = ctx.spec.side_content_start_y();
 
-    y = boards::push_board_hits(&ctx, y, hits);
     y = colors::push_color_picker_hits(&ctx, y, hits);
     y = presets::push_preset_hits(&ctx, y, hits);
     y = sliders::push_thickness_hits(&ctx, y, hits);

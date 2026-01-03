@@ -55,8 +55,7 @@ impl InputState {
             ToolbarEvent::PageNew => self.apply_toolbar_page_new(),
             ToolbarEvent::PageDuplicate => self.apply_toolbar_page_duplicate(),
             ToolbarEvent::PageDelete => self.apply_toolbar_page_delete(),
-            ToolbarEvent::RenameBoard => self.apply_toolbar_rename_board(),
-            ToolbarEvent::EditBoardColor => self.apply_toolbar_edit_board_color(),
+            ToolbarEvent::ToggleBoardPicker => self.apply_toolbar_toggle_board_picker(),
             ToolbarEvent::EnterTextMode => self.apply_toolbar_enter_text_mode(),
             ToolbarEvent::EnterStickyNoteMode => self.apply_toolbar_enter_sticky_note_mode(),
             ToolbarEvent::ToggleAllHighlight(enable) => {

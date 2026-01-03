@@ -1,5 +1,4 @@
 mod actions;
-mod boards;
 mod colors;
 mod header;
 mod marker;
@@ -86,7 +85,6 @@ pub fn render_side_palette(
 
     let mut y = header::draw_header(&mut layout);
 
-    boards::draw_board_section(&mut layout, &mut y);
     let colors_info = colors::draw_colors_section(&mut layout, &mut y);
     let hover_preset_color = presets::draw_presets_section(&mut layout, &mut y);
     if let Some(color) = hover_preset_color {
