@@ -5,8 +5,7 @@ use crate::models::{
     BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
     KeybindingField, NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 
 use super::super::state::{ConfiguratorApp, StatusMessage};

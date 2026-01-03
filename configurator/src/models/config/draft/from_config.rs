@@ -1,8 +1,8 @@
 use super::super::super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
 use super::super::super::fields::{
-    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption, SessionCompressionOption,
-    PresenterToolBehaviorOption, SessionStorageModeOption, StatusPositionOption,
-    ToolbarLayoutModeOption,
+    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption,
+    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, ToolbarLayoutModeOption,
 };
 use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;

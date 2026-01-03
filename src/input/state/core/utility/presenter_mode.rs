@@ -70,7 +70,10 @@ impl InputState {
             self.toolbar_top_visible = false;
             self.toolbar_side_visible = false;
         }
-        if !matches!(config.tool_behavior, crate::config::PresenterToolBehavior::Keep) {
+        if !matches!(
+            config.tool_behavior,
+            crate::config::PresenterToolBehavior::Keep
+        ) {
             restore.tool_override = Some(self.tool_override());
             self.set_tool_override(Some(Tool::Highlight));
         }

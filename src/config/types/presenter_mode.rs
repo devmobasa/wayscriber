@@ -47,21 +47,16 @@ impl Default for PresenterModeConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum PresenterToolBehavior {
     /// Leave the active tool unchanged.
     Keep,
     /// Switch to highlight on entry, but allow tool changes afterward.
+    #[default]
     ForceHighlight,
     /// Switch to highlight and prevent tool changes while presenting.
     ForceHighlightLocked,
-}
-
-impl Default for PresenterToolBehavior {
-    fn default() -> Self {
-        PresenterToolBehavior::ForceHighlight
-    }
 }
 
 fn default_hide_status_bar() -> bool {

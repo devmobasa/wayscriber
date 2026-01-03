@@ -19,7 +19,9 @@ impl ConfiguratorApp {
             text("Presenter Mode").size(18),
             text("Customize what presenter mode changes when toggled.")
                 .size(12)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+                .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                    0.6, 0.6, 0.6
+                ))),
             toggle_row(
                 "Hide status bar",
                 self.draft.presenter_hide_status_bar,

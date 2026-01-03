@@ -5,11 +5,11 @@ use wayscriber::config::Config;
 
 use crate::models::{
     BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption, PresetEraserKindOption,
-    PresetEraserModeOption, PresetTextField, PresetToggleField, PresenterToolBehaviorOption,
-    QuadField,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
-    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption,
+    PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
+    PresetToggleField, QuadField, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
+    ToolbarOverrideField, TripletField, UiTabId,
 };
 
 #[derive(Debug, Clone)]
