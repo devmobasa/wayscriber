@@ -160,7 +160,7 @@ impl InputState {
             show_pages_section: true,
             show_presets: true,
             show_step_section: false,
-            show_text_controls: false,
+            show_text_controls: true,
             show_settings_section: true,
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],

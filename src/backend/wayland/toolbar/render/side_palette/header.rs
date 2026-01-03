@@ -63,15 +63,12 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         .unwrap_or(false);
     draw_button(ctx, mode_x, header_y, mode_w, icons_h, false, mode_hover);
     let (mode_label, next_mode) = match snapshot.layout_mode {
-        crate::config::ToolbarLayoutMode::Simple => (
-            "Mode: S",
-            crate::config::ToolbarLayoutMode::Regular,
-        ),
-        crate::config::ToolbarLayoutMode::Regular
-        | crate::config::ToolbarLayoutMode::Advanced => (
-            "Mode: F",
-            crate::config::ToolbarLayoutMode::Simple,
-        ),
+        crate::config::ToolbarLayoutMode::Simple => {
+            ("Mode: S", crate::config::ToolbarLayoutMode::Regular)
+        }
+        crate::config::ToolbarLayoutMode::Regular | crate::config::ToolbarLayoutMode::Advanced => {
+            ("Mode: F", crate::config::ToolbarLayoutMode::Simple)
+        }
     };
     draw_label_center(ctx, mode_x, header_y, mode_w, icons_h, mode_label);
     let mode_tooltip = "Mode: Simple/Full".to_string();

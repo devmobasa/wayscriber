@@ -151,8 +151,8 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
         if snapshot.show_actions_section {
             let icons_per_row = basic_actions.len();
             let total_icons = icons_per_row;
-            let row_width = total_icons as f64 * icon_btn_size
-                + (total_icons as f64 - 1.0) * icon_gap;
+            let row_width =
+                total_icons as f64 * icon_btn_size + (total_icons as f64 - 1.0) * icon_gap;
             let row_x = x + (content_width - row_width) / 2.0;
             for (idx, (evt, icon_fn, label, enabled)) in basic_actions.iter().enumerate() {
                 let bx = row_x + (icon_btn_size + icon_gap) * idx as f64;
@@ -199,8 +199,8 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let row_start = row * icons_per_row;
                 let row_end = (row_start + icons_per_row).min(total_icons);
                 let icons_in_row = row_end - row_start;
-                let row_width = icons_in_row as f64 * icon_btn_size
-                    + (icons_in_row as f64 - 1.0) * icon_gap;
+                let row_width =
+                    icons_in_row as f64 * icon_btn_size + (icons_in_row as f64 - 1.0) * icon_gap;
                 let row_x = x + (content_width - row_width) / 2.0;
                 for col in 0..icons_in_row {
                     let idx = row_start + col;
@@ -208,9 +208,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     let bx = row_x + (icon_btn_size + icon_gap) * col as f64;
                     let by = action_y + (icon_btn_size + icon_gap) * row as f64;
                     let is_hover = hover
-                        .map(|(hx, hy)| {
-                            point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size)
-                        })
+                        .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
                         .unwrap_or(false);
                     if *enabled {
                         draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
@@ -254,8 +252,8 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let row_start = row * icons_per_row;
                 let row_end = (row_start + icons_per_row).min(total_icons);
                 let icons_in_row = row_end - row_start;
-                let row_width = icons_in_row as f64 * icon_btn_size
-                    + (icons_in_row as f64 - 1.0) * icon_gap;
+                let row_width =
+                    icons_in_row as f64 * icon_btn_size + (icons_in_row as f64 - 1.0) * icon_gap;
                 let row_x = x + (content_width - row_width) / 2.0;
                 for col in 0..icons_in_row {
                     let idx = row_start + col;
@@ -263,9 +261,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     let bx = row_x + (icon_btn_size + icon_gap) * col as f64;
                     let by = action_y + (icon_btn_size + icon_gap) * row as f64;
                     let is_hover = hover
-                        .map(|(hx, hy)| {
-                            point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size)
-                        })
+                        .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
                         .unwrap_or(false);
                     if *enabled {
                         draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);

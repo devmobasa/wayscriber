@@ -168,7 +168,7 @@ fn default_show_step_section() -> bool {
 }
 
 fn default_show_text_controls() -> bool {
-    false
+    true
 }
 
 fn default_show_settings_section() -> bool {

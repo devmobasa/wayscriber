@@ -266,7 +266,7 @@ layout_mode = "full"
 # show_actions_section = true
 # show_actions_advanced = false
 # show_step_section = false
-# show_text_controls = false
+# show_text_controls = true
 # show_settings_section = false
 #
 # [ui.toolbar.mode_overrides.regular] # Full mode overrides
@@ -274,7 +274,7 @@ layout_mode = "full"
 # show_actions_section = true
 # show_actions_advanced = false
 # show_step_section = false
-# show_text_controls = false
+# show_text_controls = true
 # show_settings_section = true
 #
 # [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
@@ -310,7 +310,7 @@ show_presets = true
 show_step_section = false
 
 # Keep text controls visible even when text is inactive
-show_text_controls = false
+show_text_controls = true
 
 # Show Settings section (config shortcuts + advanced toggles)
 show_settings_section = true
