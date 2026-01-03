@@ -41,10 +41,11 @@ impl InputState {
             edit: None,
             mode: BoardPickerMode::Full,
         };
-        if let Some(selected) = self.board_picker_row_for_board(active_index) {
-            if let BoardPickerState::Open { selected: row, .. } = &mut self.board_picker_state {
-                *row = selected;
-            }
+        let selected_row = self.board_picker_row_for_board(active_index);
+        if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
+            (selected_row, &mut self.board_picker_state)
+        {
+            *row = selected;
         }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -66,10 +67,11 @@ impl InputState {
             edit: None,
             mode: BoardPickerMode::Quick,
         };
-        if let Some(selected) = self.board_picker_row_for_board(active_index) {
-            if let BoardPickerState::Open { selected: row, .. } = &mut self.board_picker_state {
-                *row = selected;
-            }
+        let selected_row = self.board_picker_row_for_board(active_index);
+        if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
+            (selected_row, &mut self.board_picker_state)
+        {
+            *row = selected;
         }
         self.board_picker_select_recent();
         self.dirty_tracker.mark_full();
@@ -171,12 +173,12 @@ impl InputState {
         let max_row = board_count.saturating_sub(1) as isize;
         let clamped = row.clamp(0, max_row) as usize;
         let target_row = self.board_picker_clamp_drag_row(clamped, source_board);
-        if let Some(drag) = &mut self.board_picker_drag {
-            if drag.current_row != target_row {
-                drag.current_row = target_row;
-                self.board_picker_set_selected(target_row);
-                self.needs_redraw = true;
-            }
+        if let Some(drag) = &mut self.board_picker_drag
+            && drag.current_row != target_row
+        {
+            drag.current_row = target_row;
+            self.board_picker_set_selected(target_row);
+            self.needs_redraw = true;
         }
     }
 
@@ -197,19 +199,22 @@ impl InputState {
             .board_states()
             .get(drag.source_board)
             .map(|board| board.spec.id.clone());
-        if self.reorder_board(drag.source_board, target_board) {
-            if let Some(source_id) = source_id {
-                if let Some(new_index) = self
-                    .boards
-                    .board_states()
-                    .iter()
-                    .position(|board| board.spec.id == source_id)
-                {
-                    if let Some(row) = self.board_picker_row_for_board(new_index) {
-                        self.board_picker_set_selected(row);
-                    }
-                }
-            }
+        if !self.reorder_board(drag.source_board, target_board) {
+            return true;
+        }
+        let Some(source_id) = source_id else {
+            return true;
+        };
+        let Some(new_index) = self
+            .boards
+            .board_states()
+            .iter()
+            .position(|board| board.spec.id == source_id)
+        else {
+            return true;
+        };
+        if let Some(row) = self.board_picker_row_for_board(new_index) {
+            self.board_picker_set_selected(row);
         }
         true
     }
@@ -581,10 +586,11 @@ impl InputState {
         if !self.toggle_board_pinned(board_index) {
             return;
         }
-        if let Some(row) = self.board_picker_row_for_board(board_index) {
-            if let BoardPickerState::Open { selected, .. } = &mut self.board_picker_state {
-                *selected = row;
-            }
+        let selected_row = self.board_picker_row_for_board(board_index);
+        if let (Some(row), BoardPickerState::Open { selected, .. }) =
+            (selected_row, &mut self.board_picker_state)
+        {
+            *selected = row;
         }
         self.board_picker_layout = None;
         self.needs_redraw = true;

@@ -227,22 +227,28 @@ pub fn render_board_picker(
         let show_pin = board.spec.pinned || is_highlighted || is_selected;
         if show_pin {
             let pin_x = swatch_x - (layout.swatch_padding * 0.6);
-            let (r, g, b, a, filled) = if board.spec.pinned {
-                (0.96, 0.82, 0.28, 0.95, true)
+            let (color, filled) = if board.spec.pinned {
+                (
+                    Color {
+                        r: 0.96,
+                        g: 0.82,
+                        b: 0.28,
+                        a: 0.95,
+                    },
+                    true,
+                )
             } else {
-                (0.6, 0.65, 0.72, 0.5, false)
+                (
+                    Color {
+                        r: 0.6,
+                        g: 0.65,
+                        b: 0.72,
+                        a: 0.5,
+                    },
+                    false,
+                )
             };
-            draw_pin_icon(
-                ctx,
-                pin_x,
-                row_center,
-                layout.body_font_size,
-                r,
-                g,
-                b,
-                a,
-                filled,
-            );
+            draw_pin_icon(ctx, pin_x, row_center, layout.body_font_size, color, filled);
         }
         let (mut name, mut hint_override) = (board.spec.name.clone(), None);
         if let Some((mode, edit_index, buffer)) = edit_state
@@ -420,21 +426,11 @@ fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
     }
 }
 
-fn draw_pin_icon(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    size: f64,
-    r: f64,
-    g: f64,
-    b: f64,
-    a: f64,
-    filled: bool,
-) {
+fn draw_pin_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color, filled: bool) {
     let head_radius = (size * 0.22).clamp(2.0, 3.2);
     let stem_length = size * 0.6;
     let head_y = y - stem_length * 0.35;
-    ctx.set_source_rgba(r, g, b, a);
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
     ctx.arc(x, head_y, head_radius, 0.0, PI * 2.0);
     if filled {
         let _ = ctx.fill();
