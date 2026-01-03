@@ -95,6 +95,7 @@ pub enum Action {
     ToggleStatusBar,
     ToggleClickHighlight,
     ToggleToolbar,
+    TogglePresenterMode,
     ToggleHighlightTool,
     ToggleFill,
     ToggleSelectionProperties,

@@ -4,6 +4,7 @@ mod drawing;
 mod history;
 mod keybindings;
 mod performance;
+mod presenter_mode;
 mod presets;
 mod session;
 mod tablet;
@@ -22,6 +23,7 @@ impl ConfigDraft {
         self.apply_history(&mut config, &mut errors);
         self.apply_performance(&mut config, &mut errors);
         self.apply_ui(&mut config, &mut errors);
+        self.apply_presenter_mode(&mut config);
         self.apply_board(&mut config, &mut errors);
         self.apply_capture(&mut config, &mut errors);
         self.apply_session(&mut config, &mut errors);

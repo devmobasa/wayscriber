@@ -40,5 +40,6 @@ pub(super) fn create_test_input_state() -> InputState {
         0,     // custom_redo_delay_ms
         5,     // custom_undo_steps
         5,     // custom_redo_steps
+        crate::config::PresenterModeConfig::default(),
     )
 }

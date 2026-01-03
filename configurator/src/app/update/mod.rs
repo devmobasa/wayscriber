@@ -48,6 +48,9 @@ impl ConfiguratorApp {
             Message::SessionCompressionChanged(option) => {
                 self.handle_session_compression_changed(option)
             }
+            Message::PresenterToolBehaviorChanged(option) => {
+                self.handle_presenter_tool_behavior_changed(option)
+            }
             Message::BufferCountChanged(count) => self.handle_buffer_count_changed(count),
             Message::KeybindingChanged(field, value) => {
                 self.handle_keybinding_changed(field, value)

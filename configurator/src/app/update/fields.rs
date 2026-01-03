@@ -3,9 +3,9 @@ use iced::Command;
 use crate::messages::Message;
 use crate::models::{
     BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, NamedColorOption, OverrideOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    KeybindingField, NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
+    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 
 use super::super::state::{ConfiguratorApp, StatusMessage};
@@ -166,6 +166,16 @@ impl ConfiguratorApp {
     ) -> Command<Message> {
         self.status = StatusMessage::idle();
         self.draft.session_compression = option;
+        self.refresh_dirty_flag();
+        Command::none()
+    }
+
+    pub(super) fn handle_presenter_tool_behavior_changed(
+        &mut self,
+        option: PresenterToolBehaviorOption,
+    ) -> Command<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.presenter_tool_behavior = option;
         self.refresh_dirty_flag();
         Command::none()
     }

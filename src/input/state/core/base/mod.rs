@@ -2,6 +2,7 @@ mod state;
 mod types;
 
 pub use state::InputState;
+pub(crate) use state::PresenterRestore;
 pub(crate) use types::{
     DelayedHistory, HistoryMode, PresetFeedbackState, TextClickState, UiToastState,
 };
