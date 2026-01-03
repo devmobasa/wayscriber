@@ -63,8 +63,9 @@ impl WaylandState {
                     ..
                 } = &self.input_state.state
                 {
+                    let sampled = self.input_state.sample_eraser_path_points(points);
                     self.input_state.hit_test_all_for_points_cached(
-                        points,
+                        &sampled,
                         self.input_state.eraser_hit_radius(),
                     )
                 } else {
