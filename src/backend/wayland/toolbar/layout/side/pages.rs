@@ -1,13 +1,17 @@
 use super::{
     HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec, format_binding_label,
 };
+use crate::input::ToolbarDrawerTab;
 
 pub(super) fn push_pages_hits(
     ctx: &SideLayoutContext<'_>,
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if !ctx.snapshot.show_actions_advanced || !ctx.snapshot.show_pages_section {
+    if !ctx.snapshot.show_pages_section
+        || !ctx.snapshot.drawer_open
+        || ctx.snapshot.drawer_tab != ToolbarDrawerTab::View
+    {
         return y;
     }
 

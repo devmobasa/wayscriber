@@ -6,7 +6,7 @@ use super::super::super::{
 };
 use super::super::types::{
     DelayedHistory, DrawingState, HelpOverlayView, PresetAction, PresetFeedbackState,
-    SelectionAxis, TextClickState, TextInputMode, UiToastState, ZoomAction,
+    SelectionAxis, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -110,6 +110,10 @@ pub struct InputState {
     pub toolbar_mode_overrides: crate::config::ToolbarModeOverrides,
     /// Whether the simple-mode shape picker is expanded
     pub toolbar_shapes_expanded: bool,
+    /// Whether the toolbar drawer is open
+    pub toolbar_drawer_open: bool,
+    /// Active toolbar drawer tab
+    pub toolbar_drawer_tab: ToolbarDrawerTab,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)

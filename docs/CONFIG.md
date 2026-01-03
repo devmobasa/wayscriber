@@ -254,8 +254,9 @@ Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
 
 ```toml
 [ui.toolbar]
-# Toolbar layout preset: "simple", "regular", or "advanced"
-layout_mode = "regular"
+# Toolbar layout preset: "simple" or "full"
+# Legacy values: "regular" and "advanced" (both map to Full UI label)
+layout_mode = "full"
 
 # Optional per-mode overrides for toolbar sections
 # Use true/false to override a section; omit to use the mode default.
@@ -268,7 +269,7 @@ layout_mode = "regular"
 # show_text_controls = false
 # show_settings_section = false
 #
-# [ui.toolbar.mode_overrides.regular]
+# [ui.toolbar.mode_overrides.regular] # Full mode overrides
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = false
@@ -276,7 +277,7 @@ layout_mode = "regular"
 # show_text_controls = false
 # show_settings_section = true
 #
-# [ui.toolbar.mode_overrides.advanced]
+# [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = true
@@ -299,7 +300,7 @@ show_more_colors = false
 # Show basic actions (undo/redo/clear) in the side toolbar
 show_actions_section = true
 
-# Show advanced actions (undo all, zoom, freeze, etc.)
+# Show advanced actions (undo all, delay, freeze, etc.)
 show_actions_advanced = false
 
 # Show presets section in the side toolbar

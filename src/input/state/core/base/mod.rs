@@ -9,5 +9,5 @@ pub(crate) use types::{
 pub use types::{
     DrawingState, HelpOverlayView, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
-    SelectionAxis, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    SelectionAxis, TextInputMode, ToolbarDrawerTab, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };

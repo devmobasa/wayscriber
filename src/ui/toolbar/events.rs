@@ -1,6 +1,6 @@
 use crate::config::ToolbarLayoutMode;
 use crate::draw::{Color, FontDescriptor};
-use crate::input::{EraserMode, Tool};
+use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
 
 /// Events emitted by the floating toolbar UI.
 #[derive(Debug, Clone)]
@@ -81,6 +81,12 @@ pub enum ToolbarEvent {
     TogglePresetToasts(bool),
     /// Toggle cursor tool preview bubble
     ToggleToolPreview(bool),
+    /// Toggle status bar visibility
+    ToggleStatusBar(bool),
+    /// Toggle the side drawer (View/Settings)
+    ToggleDrawer(bool),
+    /// Switch the active drawer tab
+    SetDrawerTab(ToolbarDrawerTab),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),
     /// Toggle the simple-mode shape picker

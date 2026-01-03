@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub enum ToolbarLayoutMode {
     Simple,
     #[default]
+    #[serde(alias = "full")]
     Regular,
     Advanced,
 }

@@ -3,6 +3,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -20,7 +21,10 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let section_gap = layout.section_gap;
     let use_icons = snapshot.use_icons;
 
-    if !snapshot.show_actions_advanced || !snapshot.show_pages_section {
+    if !snapshot.show_pages_section
+        || !snapshot.drawer_open
+        || snapshot.drawer_tab != ToolbarDrawerTab::View
+    {
         return;
     }
 

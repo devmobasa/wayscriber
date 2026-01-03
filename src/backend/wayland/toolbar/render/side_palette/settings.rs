@@ -3,6 +3,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -20,7 +21,10 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     let section_gap = layout.section_gap;
     let use_icons = snapshot.use_icons;
 
-    if !snapshot.show_settings_section {
+    if !snapshot.show_settings_section
+        || !snapshot.drawer_open
+        || snapshot.drawer_tab != ToolbarDrawerTab::App
+    {
         return;
     }
 
@@ -43,13 +47,19 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             Some("Tool preview: cursor bubble."),
         ),
         (
+            "Status bar",
+            snapshot.show_status_bar,
+            ToolbarEvent::ToggleStatusBar(!snapshot.show_status_bar),
+            Some("Status bar: color/tool readout."),
+        ),
+        (
             "Preset toasts",
             snapshot.show_preset_toasts,
             ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
             Some("Preset toasts: apply/save/clear."),
         ),
     ];
-    if snapshot.layout_mode == crate::config::ToolbarLayoutMode::Advanced {
+    if snapshot.layout_mode != crate::config::ToolbarLayoutMode::Simple {
         toggles.extend_from_slice(&[
             (
                 "Show presets",
@@ -67,7 +77,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 "Adv. Actions",
                 snapshot.show_actions_advanced,
                 ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
-                Some("Advanced: undo-all/delay/zoom."),
+                Some("Advanced: undo-all/delay/freeze."),
             ),
             (
                 "Pages",

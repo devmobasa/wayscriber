@@ -10,7 +10,7 @@ pub struct ToolbarModeOverride {
     #[serde(default)]
     pub show_actions_section: Option<bool>,
 
-    /// Show advanced action buttons (undo all, zoom, freeze, etc.)
+    /// Show advanced action buttons (undo all, delay, freeze, etc.)
     #[serde(default)]
     pub show_actions_advanced: Option<bool>,
 
@@ -40,7 +40,7 @@ pub struct ToolbarModeOverride {
 pub struct ToolbarModeOverrides {
     #[serde(default)]
     pub simple: ToolbarModeOverride,
-    #[serde(default)]
+    #[serde(default, alias = "full")]
     pub regular: ToolbarModeOverride,
     #[serde(default)]
     pub advanced: ToolbarModeOverride,

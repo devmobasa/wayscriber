@@ -106,6 +106,21 @@ pub enum ZoomAction {
     RefreshCapture,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarDrawerTab {
+    View,
+    App,
+}
+
+impl ToolbarDrawerTab {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::View => "View",
+            Self::App => "Settings",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PresetAction {
     Save {

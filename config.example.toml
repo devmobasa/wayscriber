@@ -246,8 +246,9 @@ show_toast = true
 # ───────────────────────────────────────────────────────────────────────────────
 
 [ui.toolbar]
-# Toolbar layout preset (simple / regular / advanced)
-layout_mode = "regular"
+# Toolbar layout preset (simple / full)
+# Legacy values: regular / advanced
+layout_mode = "full"
 
 # Optional per-mode overrides for toolbar sections
 # Use true/false to override a section; omit to use the mode default.
@@ -261,7 +262,7 @@ layout_mode = "regular"
 # show_text_controls = false
 # show_settings_section = false
 #
-# [ui.toolbar.mode_overrides.regular]
+# [ui.toolbar.mode_overrides.regular] # Full mode overrides
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = false
@@ -270,7 +271,7 @@ layout_mode = "regular"
 # show_text_controls = false
 # show_settings_section = true
 #
-# [ui.toolbar.mode_overrides.advanced]
+# [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = true
@@ -296,7 +297,7 @@ show_more_colors = false
 # Show basic actions (undo/redo/clear) in side toolbar
 show_actions_section = true
 
-# Show advanced actions (undo all, zoom, freeze, etc.)
+# Show advanced actions (undo all, delay, freeze, etc.)
 show_actions_advanced = false
 
 # Show page controls section (prev/next/new/dup/del)
