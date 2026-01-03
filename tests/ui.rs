@@ -1,5 +1,7 @@
 use cairo::{Context, ImageSurface};
-use wayscriber::config::{HelpOverlayStyle, KeybindingsConfig, StatusBarStyle, StatusPosition};
+use wayscriber::config::{
+    HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle, StatusPosition,
+};
 use wayscriber::draw::Color;
 use wayscriber::input::{ClickHighlightSettings, EraserMode, InputState};
 
@@ -36,6 +38,7 @@ fn make_input_state() -> InputState {
         0,
         5,
         5,
+        PresenterModeConfig::default(),
     )
 }
 

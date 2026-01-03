@@ -6,7 +6,8 @@ use wayscriber::config::Config;
 use crate::models::{
     BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
     KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption, PresetEraserKindOption,
-    PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    PresetEraserModeOption, PresetTextField, PresetToggleField, PresenterToolBehaviorOption,
+    QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
     ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
@@ -35,6 +36,7 @@ pub enum Message {
     BoardModeChanged(BoardModeOption),
     SessionStorageModeChanged(SessionStorageModeOption),
     SessionCompressionChanged(SessionCompressionOption),
+    PresenterToolBehaviorChanged(PresenterToolBehaviorOption),
     BufferCountChanged(u32),
     KeybindingChanged(KeybindingField, String),
     FontStyleOptionSelected(FontStyleOption),

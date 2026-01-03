@@ -1,6 +1,6 @@
 use super::super::events::HitKind;
 use super::*;
-use crate::config::{BoardConfig, KeybindingsConfig};
+use crate::config::{BoardConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{ClickHighlightSettings, EraserMode, InputState};
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
@@ -43,6 +43,7 @@ fn create_test_input_state() -> InputState {
         0,
         5,
         5,
+        PresenterModeConfig::default(),
     )
 }
 

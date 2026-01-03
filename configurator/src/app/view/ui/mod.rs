@@ -1,5 +1,6 @@
 mod click_highlight;
 mod help_overlay;
+mod presenter_mode;
 mod status_bar;
 mod toolbar;
 
@@ -36,6 +37,7 @@ impl ConfiguratorApp {
             UiTabId::StatusBar => self.ui_status_bar_tab(),
             UiTabId::HelpOverlay => self.ui_help_overlay_tab(),
             UiTabId::ClickHighlight => self.ui_click_highlight_tab(),
+            UiTabId::PresenterMode => self.ui_presenter_mode_tab(),
         };
 
         let general = column![

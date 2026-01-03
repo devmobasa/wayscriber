@@ -11,7 +11,7 @@ impl InputState {
                 true
             }
             Action::ToggleStatusBar => {
-                if self.presenter_mode {
+                if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
                     return true;
                 }
                 self.show_status_bar = !self.show_status_bar;
@@ -20,6 +20,9 @@ impl InputState {
                 true
             }
             Action::ToggleClickHighlight => {
+                if self.presenter_mode && self.presenter_mode_config.enable_click_highlight {
+                    return true;
+                }
                 let enabled = self.toggle_click_highlight();
                 let message = if enabled {
                     "Click highlight enabled"
@@ -30,7 +33,7 @@ impl InputState {
                 true
             }
             Action::ToggleToolbar => {
-                if self.presenter_mode {
+                if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
                     return true;
                 }
                 let now_visible = !self.toolbar_visible();
