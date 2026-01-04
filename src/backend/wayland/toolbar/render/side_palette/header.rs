@@ -101,7 +101,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         rect: (more_x, header_btn_y, btn_size, btn_size),
         event: ToolbarEvent::ToggleDrawer(!snapshot.drawer_open),
         kind: HitKind::Click,
-        tooltip: Some("More (View/Settings)".to_string()),
+        tooltip: Some("More (Canvas/Settings)".to_string()),
     });
     let pin_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, header_btn_y, btn_size, btn_size))

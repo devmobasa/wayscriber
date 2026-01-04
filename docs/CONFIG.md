@@ -413,7 +413,7 @@ force_inline = false
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
 - **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
-- **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the View drawer.
+- **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the Canvas drawer.
 - **Pages**: `show_pages_section` toggles the page navigation block.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.

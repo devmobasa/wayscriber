@@ -31,7 +31,7 @@ pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRe
         rect: (more_x, header_y, header_btn, header_btn),
         event: ToolbarEvent::ToggleDrawer(!ctx.snapshot.drawer_open),
         kind: HitKind::Click,
-        tooltip: Some("More (View/Settings)".to_string()),
+        tooltip: Some("More (Canvas/Settings)".to_string()),
     });
 
     hits.push(HitRegion {

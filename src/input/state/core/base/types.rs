@@ -115,7 +115,7 @@ pub enum ToolbarDrawerTab {
 impl ToolbarDrawerTab {
     pub fn label(self) -> &'static str {
         match self {
-            Self::View => "View",
+            Self::View => "Canvas",
             Self::App => "Settings",
         }
     }

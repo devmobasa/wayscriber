@@ -85,7 +85,7 @@ pub enum ToolbarEvent {
     ToggleToolPreview(bool),
     /// Toggle status bar visibility
     ToggleStatusBar(bool),
-    /// Toggle the side drawer (View/Settings)
+    /// Toggle the side drawer (Canvas/Settings)
     ToggleDrawer(bool),
     /// Switch the active drawer tab
     SetDrawerTab(ToolbarDrawerTab),
