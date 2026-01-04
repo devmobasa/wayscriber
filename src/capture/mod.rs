@@ -21,6 +21,7 @@ mod pipeline;
 mod tests;
 
 pub use manager::CaptureManager;
+pub(crate) use pipeline::CaptureRequest;
 #[allow(unused_imports)]
 pub use types::{
     CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType,

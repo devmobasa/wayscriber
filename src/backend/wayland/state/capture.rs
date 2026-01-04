@@ -1,4 +1,5 @@
 use super::*;
+use crate::capture::CaptureRequest;
 
 impl WaylandState {
     fn should_exit_after_capture(&self, destination: CaptureDestination) -> bool {
@@ -133,14 +134,28 @@ impl WaylandState {
         self.enter_overlay_suppression(OverlaySuppression::Capture);
         self.capture.mark_in_progress();
 
-        // Request capture
-        log::info!("Requesting {:?} capture", capture_type);
-        if let Err(e) =
-            self.capture
-                .manager_mut()
-                .request_capture(capture_type, destination, save_config)
-        {
+        let request = CaptureRequest {
+            capture_type,
+            destination,
+            save_config,
+        };
+
+        log::info!(
+            "Queued {:?} capture; waiting for suppression frame",
+            request.capture_type
+        );
+        self.capture.queue_preflight(request);
+    }
+
+    pub(in crate::backend::wayland) fn begin_pending_capture(&mut self, request: CaptureRequest) {
+        log::info!("Requesting {:?} capture", request.capture_type);
+        if let Err(e) = self.capture.manager_mut().request_capture(
+            request.capture_type,
+            request.destination,
+            request.save_config,
+        ) {
             log::error!("Failed to request capture: {}", e);
+            self.capture.clear_preflight();
 
             // Restore overlay on error
             self.show_overlay();
