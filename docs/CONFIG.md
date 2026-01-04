@@ -32,10 +32,10 @@ Controls the default appearance of annotations.
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
-# Default pen thickness in pixels (1.0 - 40.0)
+# Default pen thickness in pixels (1.0 - 50.0)
 default_thickness = 3.0
 
-# Default eraser size in pixels (1.0 - 40.0)
+# Default eraser size in pixels (1.0 - 50.0)
 default_eraser_size = 12.0
 
 # Default eraser mode ("brush" or "stroke")
@@ -44,9 +44,23 @@ default_eraser_mode = "brush"
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
+# Default fill state for rectangle/ellipse tools
+default_fill_enabled = false
+
 # Default font size for text mode (8.0 - 72.0)
 # Can be adjusted at runtime with <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll
 default_font_size = 32.0
+
+# Font rendering defaults
+font_family = "Sans"
+font_weight = "bold"
+font_style = "normal"
+text_background_enabled = false
+
+# Hit-test tuning + undo retention
+hit_test_tolerance = 6.0
+hit_test_linear_threshold = 400
+undo_stack_limit = 100
 ```
 
 **Color Options:**
@@ -54,9 +68,10 @@ default_font_size = 32.0
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc.
 
 **Runtime Adjustments:**
-- **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-40px)
-- **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-40px)
+- **Pen thickness**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel (range: 1-50px)
+- **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-50px)
 - **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
+- **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
 **Defaults:**
@@ -64,7 +79,13 @@ default_font_size = 32.0
 - Thickness: 3.0px
 - Eraser size: 12.0px
 - Eraser mode: Brush
+- Marker opacity: 0.32
+- Fill enabled: false
 - Font size: 32.0px
+- Font family/weight/style: Sans / bold / normal
+- Text background: false
+- Hit-test tolerance: 6.0px (linear threshold: 400)
+- Undo stack limit: 100
 
 ### `[arrow]` - Arrow Geometry
 
@@ -113,6 +134,32 @@ show_status_bar = true
 
 **Required fields:** `tool`, `color`, `size`  
 **Optional fields:** `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `show_status_bar`
+
+### `[history]` - Undo/Redo Playback
+
+Controls delayed undo/redo playback and the optional Step section in the toolbar.
+
+```toml
+[history]
+# Delay between steps for undo-all/redo-all (50 - 5000 ms)
+undo_all_delay_ms = 1000
+redo_all_delay_ms = 1000
+
+# Show the Step section in the toolbar
+custom_section_enabled = false
+
+# Delay between steps for custom undo/redo (50 - 5000 ms)
+custom_undo_delay_ms = 1000
+custom_redo_delay_ms = 1000
+
+# Number of steps to run in custom undo/redo (1 - 500)
+custom_undo_steps = 5
+custom_redo_steps = 5
+```
+
+**Notes:**
+- `undo_all_delay_ms` / `redo_all_delay_ms` drive the "Undo all (delay)" and "Redo all (delay)" toolbar actions.
+- `custom_section_enabled` reveals the Step controls in the side toolbar; those controls use the custom delays and step counts above.
 
 ### `[performance]` - Performance Tuning
 
@@ -164,7 +211,7 @@ Controls visual indicators, overlays, and UI styling.
 show_status_bar = true
 
 # Show a small "FROZEN" badge when frozen mode is active
-show_frozen_badge = true
+show_frozen_badge = false
 
 # Filter help overlay sections based on enabled features
 help_overlay_context_filter = true
@@ -173,24 +220,30 @@ help_overlay_context_filter = true
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"
 
+# Preferred output name for GNOME fallback (xdg-shell) overlays
+#preferred_output = "eDP-1"
+
+# Request fullscreen for the GNOME fallback overlay (disable if opaque)
+#xdg_fullscreen = false
+
 # Status bar styling
 [ui.status_bar_style]
-font_size = 14.0
-padding = 10.0
-bg_color = [0.0, 0.0, 0.0, 0.7]      # Semi-transparent black [R, G, B, A]
+font_size = 21.0
+padding = 15.0
+bg_color = [0.0, 0.0, 0.0, 0.85]     # Semi-transparent black [R, G, B, A]
 text_color = [1.0, 1.0, 1.0, 1.0]    # White
-dot_radius = 4.0
+dot_radius = 6.0
 
 # Help overlay styling
 [ui.help_overlay_style]
 font_size = 14.0
 font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 line_height = 22.0
-padding = 20.0
-bg_color = [0.0, 0.0, 0.0, 0.85]     # Darker background
-border_color = [0.3, 0.6, 1.0, 0.9]  # Light blue
+padding = 32.0
+bg_color = [0.09, 0.1, 0.13, 0.92]   # Deep slate background
+border_color = [0.33, 0.39, 0.52, 0.88] # Muted steel border
 border_width = 2.0
-text_color = [1.0, 1.0, 1.0, 1.0]    # White
+text_color = [0.95, 0.96, 0.98, 1.0] # Near-white
 
 # Click highlight styling (visual feedback for mouse clicks)
 [ui.click_highlight]
@@ -201,11 +254,15 @@ duration_ms = 750
 fill_color = [1.0, 0.8, 0.0, 0.35]
 outline_color = [1.0, 0.6, 0.0, 0.9]
 use_pen_color = true  # Existing highlights update immediately when you change pen color
+
+# Context menu visibility
+[ui.context_menu]
+enabled = true
 ```
 
 **Status Bar:**
 - Shows current color, pen thickness, and active tool
-- Press <kbd>F10</kbd> to toggle help overlay
+- Press <kbd>F1</kbd>/<kbd>F10</kbd> to toggle help overlay
 - Fully customizable styling (fonts, colors, sizes)
 
 **Position Options:**
@@ -219,14 +276,16 @@ use_pen_color = true  # Existing highlights update immediately when you change p
 - **Colors**: All RGBA values (0.0-1.0 range) with transparency control
 - **Layout**: Padding, line height, dot size, border width all configurable
 - **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; by default the halo follows your current pen color (set `use_pen_color = false` to keep a fixed color)
+- **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
+- **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized
 
 **Defaults:**
 - Show status bar: true
+- Show frozen badge: false
 - Position: bottom-left
-- Status bar font: 14px
-- Help overlay font: 16px
-- Semi-transparent dark backgrounds
-- Light blue help overlay border
+- Status bar font: 21px
+- Help overlay font: 14px
+- Semi-transparent dark backgrounds with muted borders
 
 ### `[presenter_mode]` - Presenter Mode
 
@@ -264,6 +323,7 @@ layout_mode = "regular"
 # show_presets = false
 # show_actions_section = true
 # show_actions_advanced = false
+# show_pages_section = true
 # show_step_section = false
 # show_text_controls = false
 # show_settings_section = false
@@ -272,6 +332,7 @@ layout_mode = "regular"
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = false
+# show_pages_section = true
 # show_step_section = false
 # show_text_controls = false
 # show_settings_section = true
@@ -280,6 +341,7 @@ layout_mode = "regular"
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = true
+# show_pages_section = true
 # show_step_section = true
 # show_text_controls = true
 # show_settings_section = true
@@ -302,6 +364,9 @@ show_actions_section = true
 # Show advanced actions (undo all, zoom, freeze, etc.)
 show_actions_advanced = false
 
+# Show page controls section (prev/next/new/dup/del)
+show_pages_section = true
+
 # Show presets section in the side toolbar
 show_presets = true
 
@@ -322,6 +387,18 @@ show_marker_opacity_section = false
 
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
+
+# Show cursor tool preview bubble
+show_tool_preview = false
+
+# Initial toolbar offsets (layer-shell/inline)
+top_offset = 0.0
+top_offset_y = 0.0
+side_offset = 0.0
+side_offset_x = 0.0
+
+# Force inline toolbars even when layer-shell is available
+force_inline = false
 ```
 
 **Behavior:**
@@ -329,6 +406,7 @@ show_preset_toasts = true
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
 - **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
+- **Pages**: `show_pages_section` toggles the page navigation block.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
 - **Step controls**: `show_step_section` hides/shows the Step Undo/Redo section.
@@ -336,6 +414,9 @@ show_preset_toasts = true
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
+- **Tool preview**: `show_tool_preview` toggles the cursor bubble.
+- **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.
+- **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Pinned**: `top_pinned`/`side_pinned` control whether each toolbar opens on startup.
 
 **Defaults:** all set as above.
@@ -388,6 +469,9 @@ auto_adjust_pen = true
 - Each mode maintains independent drawings
 - Switching modes preserves all work
 - Undo/clear operations affect only the current mode
+
+**Pages:**
+- Each board mode supports multiple pages; use the page controls (toolbar or <kbd>Ctrl+Alt</kbd> shortcuts) for multi-step walkthroughs.
 
 **Color Themes:**
 
@@ -458,6 +542,23 @@ exit_after_capture = false
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
 - Install `wl-clipboard`, `grim`, and `slurp` for the best Wayland experience; otherwise wayscriber falls back to `xdg-desktop-portal`.
+- Use `--exit-after-capture` / `--no-exit-after-capture` to override exit behavior per run.
+
+### `[tablet]` - Tablet/Stylus Input
+
+Runtime toggles for tablet/stylus input (Wayland `zwp_tablet_v2`).
+
+```toml
+[tablet]
+enabled = false
+pressure_enabled = true
+min_thickness = 1.0
+max_thickness = 8.0
+```
+
+**Notes:**
+- Requires the `tablet-input` feature at build time (enabled in default release builds).
+- Set `enabled = true` to activate tablet input at runtime.
 
 ### `[session]` - Session Persistence
 
@@ -540,6 +641,10 @@ paste_selection = ["Ctrl+Alt+V"]
 # Select all annotations
 select_all = ["Ctrl+A"]
 
+# Reorder selected annotations within the stack
+move_selection_to_front = ["]"]
+move_selection_to_back = ["["]
+
 # Nudge selection (hold Shift for a larger step)
 nudge_selection_up = ["ArrowUp"]
 nudge_selection_down = ["ArrowDown"]
@@ -565,6 +670,22 @@ delete_selection = ["Delete"]
 increase_thickness = ["+", "="]
 decrease_thickness = ["-", "_"]
 
+# Adjust marker opacity (when using the marker tool)
+increase_marker_opacity = ["Ctrl+Alt+ArrowUp"]
+decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
+
+# Tool selection shortcuts (optional; keep empty to rely on modifiers)
+select_pen_tool = ["F"]
+select_marker_tool = ["H"]
+select_eraser_tool = ["D"]
+toggle_eraser_mode = ["Ctrl+Shift+E"]
+select_line_tool = []
+select_rect_tool = []
+select_ellipse_tool = []
+select_arrow_tool = []
+select_highlight_tool = []
+toggle_highlight_tool = ["Ctrl+Alt+H"]
+
 # Adjust font size
 increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
 decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
@@ -582,10 +703,13 @@ page_duplicate = ["Ctrl+Alt+D"]
 page_delete = ["Ctrl+Alt+Delete"]
 
 # Toggle help overlay
-toggle_help = ["F10"]
+toggle_help = ["F10", "F1"]
 
 # Toggle status bar visibility
-toggle_status_bar = ["F12"]
+toggle_status_bar = ["F12", "F4"]
+
+# Toggle toolbars
+toggle_toolbar = ["F2", "F9"]
 
 # Toggle presenter mode
 toggle_presenter_mode = ["Ctrl+Shift+K"]
@@ -593,14 +717,14 @@ toggle_presenter_mode = ["Ctrl+Shift+K"]
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]
 
-# Toggle highlight-only drawing tool
-toggle_highlight_tool = ["Ctrl+Alt+H"]
+# Toggle fill for rectangle/ellipse
+toggle_fill = []
 
 # Toggle selection properties panel
 toggle_selection_properties = ["Ctrl+Alt+P"]
 
-# Toggle eraser behavior (brush vs stroke)
-toggle_eraser_mode = ["Ctrl+Shift+E"]
+# Toggle context menu (keyboard alternative to right-click)
+open_context_menu = ["Shift+F10", "Menu"]
 
 # Launch the desktop configurator (requires wayscriber-configurator)
 open_configurator = ["F11"]
@@ -766,11 +890,15 @@ These override behavior at runtime. Bool-ish values treat anything except `0`, `
 
 - `WAYSCRIBER_NO_TRAY=1` disables the tray icon (default: tray enabled)
 - `WAYSCRIBER_RESUME_SESSION=1/0` forces session persistence on/off for the current run (default: unset; follows config)
+- `WAYSCRIBER_CONFIGURATOR=/path/to/wayscriber-configurator` overrides the configurator executable path
 - `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)
 - `WAYSCRIBER_TOOLBAR_DRAG_PREVIEW=0` disables inline toolbar drag preview (default: on)
 - `WAYSCRIBER_TOOLBAR_POINTER_LOCK=1` enables pointer-lock drag path (experimental; default: off)
 - `WAYSCRIBER_DEBUG_TOOLBAR_DRAG=1` enables toolbar drag logging (default: off)
 - `WAYSCRIBER_DEBUG_DAMAGE=1` enables damage region logging (default: off)
+- `WAYSCRIBER_XDG_OUTPUT=...` forces GNOME fallback overlays onto a specific output (overrides `ui.preferred_output`)
+- `WAYSCRIBER_XDG_FULLSCREEN=1` requests fullscreen GNOME fallback overlays (overrides `ui.xdg_fullscreen`)
+- `WAYSCRIBER_XDG_FULLSCREEN_FORCE=1` bypasses the GNOME opacity safety check
 - `RUST_LOG=info` enables Rust logging (default: unset; use `wayscriber=debug` for app-level logs)
 
 ## Troubleshooting

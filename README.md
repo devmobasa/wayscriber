@@ -76,10 +76,10 @@ Works on layer-shell compositors (wlroots, Smithay-based like Niri/Cosmic, Plasm
 ## Features
 
 ### Drawing & Editing
-Freehand pen, translucent highlighter, eraser (circle/rect), straight lines, rectangles/ellipses with fill toggle, arrows, multiline text with smoothing; undo/redo; quick size/color changes via hotkeys or scroll; color picker + palettes.
+Freehand pen, translucent highlighter, eraser (circle/rect), straight lines, rectangles/ellipses with fill toggle, arrows, multiline text + sticky notes with smoothing; selection editing + properties panel; undo/redo; quick size/color changes via hotkeys or scroll; color picker + palettes.
 
 ### Board Modes
-Whiteboard, blackboard, and transparent overlays with isolated frames and auto pen contrast. Snap back to transparent with <kbd>Ctrl+Shift+T</kbd>.
+Whiteboard, blackboard, and transparent overlays with isolated frames and auto pen contrast. Snap back to transparent with <kbd>Ctrl+Shift+T</kbd>. Use board pages (prev/next/new/duplicate/delete) for multi-step walkthroughs.
 
 ### Capture & Screenshots
 Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard`. Falls back to xdg-desktop-portal if missing.
@@ -88,7 +88,7 @@ Full-screen saves, active-window grabs, and region capture to file or clipboard 
 Opt-in per board/monitor storage that restores your canvas plus pen color & thickness. One-off overrides via `--resume-session` / `--no-resume-session`; the tray checkmark flips the config on disk.
 
 ### Toolbars & UI
-Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), preset slots, icon or text modes, color picker, extended palettes, status bar, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
+Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), preset slots, icon or text modes, color picker, extended palettes, status bar, page controls, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
 
 ### Presets
 Save tool + color + size (plus optional fill/opacity/text settings) into 3-5 slots for fast recall. Apply with <kbd>1</kbd>-<kbd>5</kbd>, save with <kbd>Shift+1</kbd>-<kbd>Shift+5</kbd>.
@@ -271,8 +271,8 @@ Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; other
 - Toggle the help overlay
 - Flip session resume on/off (writes to config)
 - Clear saved session data
-- Open the log/runtime folder
-- Open configurator / Quit
+- Open the log folder
+- Open configurator / open config file / quit
 
 **Alternative** — use compositor autostart instead of systemd:
 ```conf
@@ -291,14 +291,19 @@ journalctl --user -u wayscriber.service -f
 
 | Shortcut | Action |
 |----------|--------|
-| <kbd>Ctrl+C</kbd> | Copy entire screen to clipboard |
-| <kbd>Ctrl+S</kbd> | Save entire screen as PNG |
+| <kbd>Ctrl+Shift+P</kbd> | Capture full screen (respects `capture.copy_to_clipboard`) |
+| <kbd>Ctrl+Shift+O</kbd> | Capture active window (respects `capture.copy_to_clipboard`) |
+| <kbd>Ctrl+Shift+I</kbd> | Capture selection (respects `capture.copy_to_clipboard`) |
+| <kbd>Ctrl+C</kbd> | Copy full screen to clipboard |
+| <kbd>Ctrl+S</kbd> | Save full screen as PNG |
 | <kbd>Ctrl+Shift+C</kbd> | Select region → clipboard |
 | <kbd>Ctrl+Shift+S</kbd> | Select region → save PNG |
-| <kbd>Ctrl+Shift+O</kbd> | Capture active window |
+| <kbd>Ctrl+6</kbd> | Region → clipboard (explicit) |
+| <kbd>Ctrl+Shift+6</kbd> | Region → save PNG (explicit) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
 Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if missing.
+Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the overlay closes after a capture. `--about` opens the About window.
 
 ---
 
@@ -348,6 +353,30 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Decrease thickness | <kbd>-</kbd> / <kbd>_</kbd> / scroll up |
 | Increase font size | <kbd>Ctrl+Shift++</kbd> / <kbd>Shift</kbd> + scroll down |
 | Decrease font size | <kbd>Ctrl+Shift+-</kbd> / <kbd>Shift</kbd> + scroll up |
+| Increase marker opacity | <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd> |
+| Decrease marker opacity | <kbd>Ctrl+Alt</kbd> + <kbd>↓</kbd> |
+
+### Selection & Arrange
+
+| Action | Key |
+|--------|-----|
+| Duplicate selection | <kbd>Ctrl+D</kbd> |
+| Copy selection | <kbd>Ctrl+Alt+C</kbd> |
+| Paste selection | <kbd>Ctrl+Alt+V</kbd> |
+| Delete selection | <kbd>Delete</kbd> |
+| Bring to front/back | <kbd>]</kbd> / <kbd>[</kbd> |
+| Nudge selection | Arrow keys (large: <kbd>PageUp</kbd>/<kbd>PageDown</kbd>) |
+| Move to edges | <kbd>Home</kbd>/<kbd>End</kbd> / <kbd>Ctrl+Home</kbd>/<kbd>Ctrl+End</kbd> |
+| Selection properties | <kbd>Ctrl+Alt+P</kbd> |
+
+### Pages
+
+| Action | Key |
+|--------|-----|
+| Previous/next page | <kbd>Ctrl+Alt</kbd> + <kbd>←</kbd>/<kbd>→</kbd> or <kbd>Ctrl+Alt</kbd> + <kbd>PageUp</kbd>/<kbd>PageDown</kbd> |
+| New page | <kbd>Ctrl+Alt+N</kbd> |
+| Duplicate page | <kbd>Ctrl+Alt+D</kbd> |
+| Delete page | <kbd>Ctrl+Alt+Delete</kbd> |
 
 ### Editing & UI
 
@@ -355,8 +384,6 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 |--------|-----|
 | Undo | <kbd>Ctrl+Z</kbd> |
 | Redo | <kbd>Ctrl+Shift+Z</kbd> / <kbd>Ctrl+Y</kbd> |
-| Copy selection | <kbd>Ctrl+Alt+C</kbd> |
-| Paste selection | <kbd>Ctrl+Alt+V</kbd> |
 | Select all | <kbd>Ctrl+A</kbd> |
 | Eraser | <kbd>D</kbd> |
 | Toggle eraser mode | <kbd>Ctrl+Shift+E</kbd> |
@@ -442,7 +469,7 @@ Notes:
 
 ### Tablet/Stylus Support
 
-Tablet support (`zwp_tablet_v2`) is enabled by default:
+Tablet support (`zwp_tablet_v2`) ships in default builds but is disabled at runtime by default:
 
 ```toml
 [tablet]
@@ -452,7 +479,7 @@ min_thickness = 1.0
 max_thickness = 8.0
 ```
 
-To build without tablet support: `cargo build --release --no-default-features`
+Enable it in `config.toml` and restart wayscriber. To build without tablet support: `cargo build --release --no-default-features` (or remove the `tablet-input` feature).
 
 See https://wayscriber.com/docs/ for the full reference.
 

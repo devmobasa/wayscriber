@@ -2,6 +2,16 @@
 
 ## Installation
 
+### Package installs (recommended when available)
+
+If you installed wayscriber via a package (deb/rpm/aur), enable the user service:
+
+```bash
+systemctl --user enable --now wayscriber.service
+```
+
+The service keeps the daemon running in the background; you only need a keybind to toggle the overlay.
+
 ### Quick Install
 
 Run the install script:
@@ -33,7 +43,20 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 ## Hyprland Keybind Setup
 
-### Method 1: Daemon Mode with Toggle (Recommended)
+### Method 1: Systemd user service + toggle (preferred when available)
+
+```bash
+systemctl --user enable --now wayscriber.service
+```
+
+Add the toggle keybinding to `~/.config/hypr/hyprland.conf`:
+
+```conf
+# wayscriber - Screen annotation daemon (Super+D to toggle)
+bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
+```
+
+### Method 2: Daemon autostart via compositor (no systemd)
 
 Add to `~/.config/hypr/hyprland.conf`:
 
@@ -50,7 +73,7 @@ hyprctl reload
 
 Now press <kbd>Super+D</kbd> to toggle the overlay on/off!
 
-### Method 2: One-Shot Mode (Alternative)
+### Method 3: One-Shot Mode (Alternative)
 
 For quick one-time annotations without daemon:
 
@@ -67,7 +90,7 @@ This starts a fresh overlay each time. Exit with <kbd>Escape</kbd>.
 
 ### Daemon Mode Workflow (Recommended)
 
-1. **Daemon starts automatically** → Runs in background with system tray icon
+1. **Daemon starts automatically** → Runs in background with system tray icon (systemd user service or compositor autostart)
 2. **Press <kbd>Super+D</kbd>** → Drawing overlay appears
 3. **Draw your annotations** → All tools available
 4. **Press <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd>** → Overlay hides (daemon keeps running)
@@ -93,7 +116,7 @@ Test the setup:
 which wayscriber
 
 # Test daemon mode
-wayscriber --daemon &
+systemctl --user status wayscriber.service || wayscriber --daemon &
 
 # Test keybind
 Press <kbd>Super+D</kbd> (should show overlay)
@@ -102,7 +125,8 @@ Press <kbd>Escape</kbd> (should hide overlay)
 
 ## Autostart
 
-Daemon mode is already included in Method 1! The `exec-once` line will start wayscriber automatically on login.
+- If you enabled `wayscriber.service`, systemd handles autostart.
+- If you used compositor autostart, the `exec-once` line starts wayscriber on login.
 
 ## Troubleshooting
 

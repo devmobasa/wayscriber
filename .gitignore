@@ -13,6 +13,9 @@
 *.swp
 *.swo
 
+# Local agent instructions
+AGENTS.md
+
 
 
 # Test scripts
