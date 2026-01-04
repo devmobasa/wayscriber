@@ -69,6 +69,8 @@ pub enum ToolbarEvent {
     ToggleActionsSection(bool),
     /// Toggle advanced action buttons
     ToggleActionsAdvanced(bool),
+    /// Toggle zoom action buttons
+    ToggleZoomActions(bool),
     /// Toggle Pages section visibility
     TogglePagesSection(bool),
     /// Toggle presets section visibility

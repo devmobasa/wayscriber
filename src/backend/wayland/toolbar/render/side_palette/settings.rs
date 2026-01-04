@@ -74,6 +74,12 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 Some("Actions: undo/redo/clear."),
             ),
             (
+                "Zoom actions",
+                snapshot.show_zoom_actions,
+                ToolbarEvent::ToggleZoomActions(!snapshot.show_zoom_actions),
+                Some("Zoom: in/out/reset/lock."),
+            ),
+            (
                 "Adv. Actions",
                 snapshot.show_actions_advanced,
                 ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),

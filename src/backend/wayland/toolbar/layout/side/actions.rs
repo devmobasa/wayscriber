@@ -12,6 +12,7 @@ pub(super) fn push_actions_hits(
         ctx.snapshot.drawer_open && ctx.snapshot.drawer_tab == ToolbarDrawerTab::View;
     let show_advanced = ctx.snapshot.show_actions_advanced && show_drawer_view;
     let show_view_actions = show_drawer_view
+        && ctx.snapshot.show_zoom_actions
         && (ctx.snapshot.show_actions_section || ctx.snapshot.show_actions_advanced);
     let show_actions = ctx.snapshot.show_actions_section || show_advanced;
     if !show_actions {

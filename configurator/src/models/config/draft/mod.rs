@@ -59,6 +59,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_presets: bool,
     pub ui_toolbar_show_actions_section: bool,
     pub ui_toolbar_show_actions_advanced: bool,
+    pub ui_toolbar_show_zoom_actions: bool,
     pub ui_toolbar_show_pages_section: bool,
     pub ui_toolbar_show_step_section: bool,
     pub ui_toolbar_show_text_controls: bool,

@@ -157,6 +157,7 @@ impl InputState {
             show_more_colors: false,
             show_actions_section: true, // Show by default
             show_actions_advanced: false,
+            show_zoom_actions: true,
             show_pages_section: true,
             show_presets: true,
             show_step_section: false,

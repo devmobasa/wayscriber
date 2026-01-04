@@ -96,6 +96,15 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_zoom_actions(&mut self, show: bool) -> bool {
+        if self.show_zoom_actions != show {
+            self.show_zoom_actions = show;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn apply_toolbar_toggle_pages_section(&mut self, show: bool) -> bool {
         if self.show_pages_section != show {
             self.show_pages_section = show;

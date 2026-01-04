@@ -86,6 +86,8 @@ pub struct ToolbarSnapshot {
     pub show_actions_section: bool,
     /// Whether to show advanced action buttons
     pub show_actions_advanced: bool,
+    /// Whether to show zoom actions
+    pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
     /// Whether to show the marker opacity slider section
@@ -195,6 +197,7 @@ impl ToolbarSnapshot {
         let drawer_open = state.toolbar_drawer_open;
         let drawer_tab = state.toolbar_drawer_tab;
         let show_actions_advanced = state.show_actions_advanced;
+        let show_zoom_actions = state.show_zoom_actions;
         let show_pages_section = state.show_pages_section;
         let show_step_section = state.show_step_section;
         let show_settings_section = state.show_settings_section;
@@ -242,6 +245,7 @@ impl ToolbarSnapshot {
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
             show_actions_advanced,
+            show_zoom_actions,
             show_pages_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
             show_preset_toasts: state.show_preset_toasts,

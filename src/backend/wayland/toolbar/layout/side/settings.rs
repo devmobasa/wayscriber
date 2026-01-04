@@ -38,6 +38,10 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
                 Some("Actions: undo/redo/clear."),
             ),
             (
+                ToolbarEvent::ToggleZoomActions(!ctx.snapshot.show_zoom_actions),
+                Some("Zoom: in/out/reset/lock."),
+            ),
+            (
                 ToolbarEvent::ToggleActionsAdvanced(!ctx.snapshot.show_actions_advanced),
                 Some("Advanced: undo-all/delay/freeze."),
             ),

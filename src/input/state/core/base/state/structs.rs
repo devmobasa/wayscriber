@@ -224,6 +224,8 @@ pub struct InputState {
     pub show_actions_section: bool,
     /// Whether to show advanced action buttons
     pub show_actions_advanced: bool,
+    /// Whether to show zoom actions
+    pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
     /// Whether to show the presets section

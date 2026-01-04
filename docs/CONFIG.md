@@ -324,6 +324,7 @@ layout_mode = "full"
 # show_presets = false
 # show_actions_section = true
 # show_actions_advanced = false
+# show_zoom_actions = true
 # show_pages_section = true
 # show_step_section = false
 # show_text_controls = true
@@ -333,6 +334,7 @@ layout_mode = "full"
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = false
+# show_zoom_actions = true
 # show_pages_section = true
 # show_step_section = false
 # show_text_controls = true
@@ -342,6 +344,7 @@ layout_mode = "full"
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = true
+# show_zoom_actions = true
 # show_pages_section = true
 # show_step_section = true
 # show_text_controls = true
@@ -364,6 +367,9 @@ show_actions_section = true
 
 # Show advanced actions (undo all, delay, freeze, etc.)
 show_actions_advanced = false
+
+# Show zoom actions (zoom in/out/reset/lock)
+show_zoom_actions = true
 
 # Show page controls section (prev/next/new/dup/del)
 show_pages_section = true
@@ -407,6 +413,7 @@ force_inline = false
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
 - **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
+- **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the View drawer.
 - **Pages**: `show_pages_section` toggles the page navigation block.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.

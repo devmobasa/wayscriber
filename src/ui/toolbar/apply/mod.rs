@@ -85,6 +85,7 @@ impl InputState {
             ToolbarEvent::ToggleActionsAdvanced(show) => {
                 self.apply_toolbar_toggle_actions_advanced(show)
             }
+            ToolbarEvent::ToggleZoomActions(show) => self.apply_toolbar_toggle_zoom_actions(show),
             ToolbarEvent::TogglePagesSection(show) => self.apply_toolbar_toggle_pages_section(show),
             ToolbarEvent::TogglePresets(show) => self.apply_toolbar_toggle_presets(show),
             ToolbarEvent::ToggleStepSection(show) => self.apply_toolbar_toggle_step_section(show),

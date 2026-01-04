@@ -14,6 +14,10 @@ pub struct ToolbarModeOverride {
     #[serde(default)]
     pub show_actions_advanced: Option<bool>,
 
+    /// Show zoom actions (zoom in/out/reset/lock)
+    #[serde(default)]
+    pub show_zoom_actions: Option<bool>,
+
     /// Show the Pages section in the side toolbar
     #[serde(default)]
     pub show_pages_section: Option<bool>,

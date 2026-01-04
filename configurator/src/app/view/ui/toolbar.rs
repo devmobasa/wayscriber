@@ -69,6 +69,12 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowActionsSection,
             ),
             toggle_row(
+                "Show zoom actions",
+                self.draft.ui_toolbar_show_zoom_actions,
+                self.defaults.ui_toolbar_show_zoom_actions,
+                ToggleField::UiToolbarShowZoomActions,
+            ),
+            toggle_row(
                 "Show advanced actions",
                 self.draft.ui_toolbar_show_actions_advanced,
                 self.defaults.ui_toolbar_show_actions_advanced,
@@ -138,6 +144,7 @@ impl ConfiguratorApp {
                 ToolbarOverrideField::ShowActionsSection,
                 overrides.show_actions_section,
             ),
+            override_row(ToolbarOverrideField::ShowZoomActions, overrides.show_zoom_actions),
             override_row(
                 ToolbarOverrideField::ShowActionsAdvanced,
                 overrides.show_actions_advanced,

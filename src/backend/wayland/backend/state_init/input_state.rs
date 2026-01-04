@@ -56,6 +56,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.show_more_colors,
         config.ui.toolbar.show_actions_section,
         config.ui.toolbar.show_actions_advanced,
+        config.ui.toolbar.show_zoom_actions,
         config.ui.toolbar.show_pages_section,
         config.ui.toolbar.show_presets,
         config.ui.toolbar.show_step_section,

@@ -23,8 +23,9 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 
     let show_drawer_view = snapshot.drawer_open && snapshot.drawer_tab == ToolbarDrawerTab::View;
     let show_advanced = snapshot.show_actions_advanced && show_drawer_view;
-    let show_view_actions =
-        show_drawer_view && (snapshot.show_actions_section || snapshot.show_actions_advanced);
+    let show_view_actions = show_drawer_view
+        && snapshot.show_zoom_actions
+        && (snapshot.show_actions_section || snapshot.show_actions_advanced);
     let show_actions = snapshot.show_actions_section || show_advanced;
     if !show_actions {
         return;

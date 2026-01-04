@@ -146,6 +146,7 @@ fn toolbar_toggle_handles_partial_visibility() {
         false, // show_more_colors
         true,  // show_actions_section
         false, // show_actions_advanced
+        true,  // show_zoom_actions
         true,  // show_pages_section
         true,  // show_presets
         false, // show_step_section

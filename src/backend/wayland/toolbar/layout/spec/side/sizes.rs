@@ -130,8 +130,9 @@ impl ToolbarLayoutSpec {
             snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
         let show_actions_section = snapshot.show_actions_section;
         let show_actions_advanced = snapshot.show_actions_advanced && show_drawer_view;
-        let show_view_actions =
-            show_drawer_view && (show_actions_section || snapshot.show_actions_advanced);
+        let show_view_actions = show_drawer_view
+            && snapshot.show_zoom_actions
+            && (show_actions_section || snapshot.show_actions_advanced);
         if !show_actions_section && !show_actions_advanced {
             return 0.0;
         }
@@ -263,7 +264,7 @@ impl ToolbarLayoutSpec {
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
         let mut toggle_count = 3; // Tool preview + status bar + preset toasts
         if snapshot.layout_mode != ToolbarLayoutMode::Simple {
-            toggle_count += 6; // presets, actions, advanced actions, pages, step section, text controls
+            toggle_count += 7; // presets, actions, zoom actions, advanced actions, pages, step section, text controls
         }
         let rows = (toggle_count + 1) / 2;
         let toggle_rows_h = if rows > 0 {
