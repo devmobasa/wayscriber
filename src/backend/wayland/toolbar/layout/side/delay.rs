@@ -8,7 +8,11 @@ pub(super) fn push_delay_hits(
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    if ctx.snapshot.show_step_section && ctx.snapshot.show_delay_sliders {
+    if ctx.snapshot.show_step_section
+        && ctx.snapshot.show_delay_sliders
+        && ctx.snapshot.drawer_open
+        && ctx.snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
+    {
         let undo_t = delay_t_from_ms(ctx.snapshot.undo_all_delay_ms);
         let redo_t = delay_t_from_ms(ctx.snapshot.redo_all_delay_ms);
         let toggles_h =
@@ -51,7 +55,10 @@ pub(super) fn push_delay_hits(
         });
     }
 
-    if ctx.snapshot.show_step_section {
+    if ctx.snapshot.show_step_section
+        && ctx.snapshot.drawer_open
+        && ctx.snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App
+    {
         y + ctx.spec.side_step_height(ctx.snapshot) + ctx.section_gap
     } else {
         y

@@ -1,5 +1,3 @@
-use crate::input::HelpOverlayView;
-
 use super::grid::{GridColors, GridStyle, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
 use super::nav::{NavDrawStyle, draw_nav};
@@ -23,7 +21,6 @@ pub fn render_help_overlay(
     screen_width: u32,
     screen_height: u32,
     frozen_enabled: bool,
-    view: HelpOverlayView,
     page_index: usize,
     page_prev_label: &str,
     page_next_label: &str,
@@ -51,7 +48,6 @@ pub fn render_help_overlay(
         screen_width,
         screen_height,
         frozen_enabled,
-        view,
         page_index,
         page_prev_label,
         page_next_label,

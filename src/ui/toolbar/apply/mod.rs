@@ -85,12 +85,16 @@ impl InputState {
             ToolbarEvent::ToggleActionsAdvanced(show) => {
                 self.apply_toolbar_toggle_actions_advanced(show)
             }
+            ToolbarEvent::ToggleZoomActions(show) => self.apply_toolbar_toggle_zoom_actions(show),
             ToolbarEvent::TogglePagesSection(show) => self.apply_toolbar_toggle_pages_section(show),
             ToolbarEvent::TogglePresets(show) => self.apply_toolbar_toggle_presets(show),
             ToolbarEvent::ToggleStepSection(show) => self.apply_toolbar_toggle_step_section(show),
             ToolbarEvent::ToggleTextControls(show) => self.apply_toolbar_toggle_text_controls(show),
             ToolbarEvent::TogglePresetToasts(show) => self.apply_toolbar_toggle_preset_toasts(show),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
+            ToolbarEvent::ToggleStatusBar(show) => self.apply_toolbar_toggle_status_bar(show),
+            ToolbarEvent::ToggleDrawer(open) => self.apply_toolbar_toggle_drawer(open),
+            ToolbarEvent::SetDrawerTab(tab) => self.apply_toolbar_set_drawer_tab(tab),
             ToolbarEvent::SetToolbarLayoutMode(mode) => self.apply_toolbar_set_layout_mode(mode),
             ToolbarEvent::ToggleShapePicker(open) => self.apply_toolbar_toggle_shape_picker(open),
             ToolbarEvent::ApplyPreset(slot) => self.apply_toolbar_apply_preset(slot),

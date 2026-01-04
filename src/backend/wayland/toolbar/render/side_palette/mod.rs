@@ -1,5 +1,6 @@
 mod actions;
 mod colors;
+mod drawer;
 mod header;
 mod marker;
 mod pages;
@@ -94,6 +95,7 @@ pub fn render_side_palette(
     thickness::draw_thickness_section(&mut layout, &mut y);
     marker::draw_marker_opacity_section(&mut layout, &mut y);
     text::draw_text_controls_section(&mut layout, &mut y);
+    drawer::draw_drawer_tabs(&mut layout, &mut y);
     actions::draw_actions_section(&mut layout, &mut y);
     pages::draw_pages_section(&mut layout, &mut y);
     step::draw_step_section(&mut layout, &mut y);

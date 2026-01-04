@@ -5,8 +5,8 @@ use super::super::super::{
     selection::SelectionState,
 };
 use super::super::types::{
-    DelayedHistory, DrawingState, HelpOverlayView, PresetAction, PresetFeedbackState,
-    SelectionAxis, TextClickState, TextInputMode, UiToastState, ZoomAction,
+    DelayedHistory, DrawingState, PresetAction, PresetFeedbackState, SelectionAxis, TextClickState,
+    TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -72,8 +72,6 @@ pub struct InputState {
     pub needs_redraw: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
-    /// Help overlay view mode (quick vs full)
-    pub help_overlay_view: HelpOverlayView,
     /// Active help overlay page index
     pub help_overlay_page: usize,
     /// Current help overlay search query
@@ -110,6 +108,10 @@ pub struct InputState {
     pub toolbar_mode_overrides: crate::config::ToolbarModeOverrides,
     /// Whether the simple-mode shape picker is expanded
     pub toolbar_shapes_expanded: bool,
+    /// Whether the toolbar drawer is open
+    pub toolbar_drawer_open: bool,
+    /// Active toolbar drawer tab
+    pub toolbar_drawer_tab: ToolbarDrawerTab,
     /// Screen width in pixels (set by backend after configuration)
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
@@ -220,6 +222,8 @@ pub struct InputState {
     pub show_actions_section: bool,
     /// Whether to show advanced action buttons
     pub show_actions_advanced: bool,
+    /// Whether to show zoom actions
+    pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
     /// Whether to show the presets section

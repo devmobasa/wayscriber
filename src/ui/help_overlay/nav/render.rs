@@ -50,22 +50,6 @@ pub(crate) fn draw_nav(
     );
     cursor_y += nav.nav_font_size;
 
-    // Draw tertiary nav line (for multi-page Complete view).
-    if let Some(ref tertiary_segments) = nav.nav_tertiary_segments {
-        cursor_y += style.nav_line_gap;
-        let nav_tertiary_baseline = cursor_y + nav.nav_font_size;
-        draw_segmented_text(
-            ctx,
-            inner_x,
-            nav_tertiary_baseline,
-            nav.nav_font_size,
-            cairo::FontWeight::Normal,
-            style.font_family,
-            tertiary_segments,
-        );
-        cursor_y += nav.nav_font_size;
-    }
-
     if let Some(ref extra_line_text) = nav.extra_line_text {
         cursor_y += style.extra_line_gap;
 

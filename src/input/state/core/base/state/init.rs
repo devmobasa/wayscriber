@@ -1,6 +1,6 @@
 use super::super::super::{menus::ContextMenuState, selection::SelectionState};
 use super::super::types::{
-    DrawingState, HelpOverlayView, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, TextInputMode,
+    DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, TextInputMode, ToolbarDrawerTab,
 };
 use super::structs::InputState;
 use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX};
@@ -80,7 +80,6 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             show_help: false,
-            help_overlay_view: HelpOverlayView::Full,
             help_overlay_page: 0,
             help_overlay_search: String::new(),
             help_overlay_scroll: 0.0,
@@ -99,6 +98,8 @@ impl InputState {
             toolbar_layout_mode: crate::config::ToolbarLayoutMode::Regular,
             toolbar_mode_overrides: crate::config::ToolbarModeOverrides::default(),
             toolbar_shapes_expanded: false,
+            toolbar_drawer_open: false,
+            toolbar_drawer_tab: ToolbarDrawerTab::View,
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,
@@ -154,10 +155,11 @@ impl InputState {
             show_more_colors: false,
             show_actions_section: true, // Show by default
             show_actions_advanced: false,
+            show_zoom_actions: true,
             show_pages_section: true,
             show_presets: true,
             show_step_section: false,
-            show_text_controls: false,
+            show_text_controls: true,
             show_settings_section: true,
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],

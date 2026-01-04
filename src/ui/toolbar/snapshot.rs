@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::config::ToolbarLayoutMode;
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, PresetFeedbackKind};
-use crate::input::{EraserMode, InputState, Tool};
+use crate::input::{EraserMode, InputState, Tool, ToolbarDrawerTab};
 
 use super::bindings::ToolbarBindingHints;
 
@@ -66,6 +66,8 @@ pub struct ToolbarSnapshot {
     pub redo_all_delay_ms: u64,
     pub custom_section_enabled: bool,
     pub show_delay_sliders: bool,
+    /// Whether to show delayed undo/redo actions in the toolbar
+    pub delay_actions_enabled: bool,
     pub custom_undo_delay_ms: u64,
     pub custom_redo_delay_ms: u64,
     pub custom_undo_steps: usize,
@@ -84,6 +86,8 @@ pub struct ToolbarSnapshot {
     pub show_actions_section: bool,
     /// Whether to show advanced action buttons
     pub show_actions_advanced: bool,
+    /// Whether to show zoom actions
+    pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
     /// Whether to show the marker opacity slider section
@@ -99,8 +103,13 @@ pub struct ToolbarSnapshot {
     /// Whether to show the Settings section
     pub show_settings_section: bool,
     pub show_tool_preview: bool,
+    pub show_status_bar: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
+    /// Whether the drawer is open
+    pub drawer_open: bool,
+    /// Active drawer tab
+    pub drawer_tab: ToolbarDrawerTab,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slot previews
@@ -185,6 +194,15 @@ impl ToolbarSnapshot {
                 })
             })
             .collect();
+        let drawer_open = state.toolbar_drawer_open;
+        let drawer_tab = state.toolbar_drawer_tab;
+        let show_actions_advanced = state.show_actions_advanced;
+        let show_zoom_actions = state.show_zoom_actions;
+        let show_pages_section = state.show_pages_section;
+        let show_step_section = state.show_step_section;
+        let show_settings_section = state.show_settings_section;
+        let delay_actions_enabled = state.show_step_section && state.show_delay_sliders;
+
         Self {
             active_tool,
             tool_override: state.tool_override(),
@@ -215,6 +233,7 @@ impl ToolbarSnapshot {
             redo_all_delay_ms: state.redo_all_delay_ms,
             custom_section_enabled: state.custom_section_enabled,
             show_delay_sliders: state.show_delay_sliders,
+            delay_actions_enabled,
             custom_undo_delay_ms: state.custom_undo_delay_ms,
             custom_redo_delay_ms: state.custom_redo_delay_ms,
             custom_undo_steps: state.custom_undo_steps,
@@ -225,20 +244,24 @@ impl ToolbarSnapshot {
             layout_mode: state.toolbar_layout_mode,
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
-            show_actions_advanced: state.show_actions_advanced,
-            show_pages_section: state.show_pages_section,
+            show_actions_advanced,
+            show_zoom_actions,
+            show_pages_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
             show_preset_toasts: state.show_preset_toasts,
             show_presets: state.show_presets,
-            show_step_section: state.show_step_section,
+            show_step_section,
             show_text_controls: state.show_text_controls,
-            show_settings_section: state.show_settings_section,
+            show_settings_section,
             show_tool_preview: state.show_tool_preview,
+            show_status_bar: state.show_status_bar,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,
             preset_feedback,
             shape_picker_open: state.toolbar_shapes_expanded,
+            drawer_open,
+            drawer_tab,
             binding_hints,
         }
     }

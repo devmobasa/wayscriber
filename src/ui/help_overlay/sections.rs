@@ -193,11 +193,11 @@ pub(crate) fn build_section_sets(
     });
 
     let mut all_sections = Vec::new();
+    all_sections.push(drawing_section.clone());
+    all_sections.push(actions_section.clone());
     if let Some(section) = board_modes_section.clone() {
         all_sections.push(section);
     }
-    all_sections.push(actions_section.clone());
-    all_sections.push(drawing_section.clone());
     all_sections.push(pen_text_section.clone());
     all_sections.push(zoom_section.clone());
     all_sections.push(selection_section.clone());
@@ -207,11 +207,11 @@ pub(crate) fn build_section_sets(
     }
 
     let mut page1_sections = Vec::new();
+    page1_sections.push(drawing_section);
+    page1_sections.push(actions_section);
     if let Some(section) = board_modes_section {
         page1_sections.push(section);
     }
-    page1_sections.push(actions_section);
-    page1_sections.push(drawing_section);
     page1_sections.push(pen_text_section);
 
     let mut page2_sections = vec![pages_section, zoom_section, selection_section];

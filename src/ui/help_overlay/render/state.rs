@@ -1,5 +1,3 @@
-use crate::input::HelpOverlayView;
-
 use super::super::super::primitives::text_extents_for;
 use super::super::fonts::resolve_help_font_family;
 use super::super::layout::{GridLayout, build_grid, measure_sections};
@@ -36,7 +34,6 @@ pub(super) fn build_overlay_layout(
     screen_width: u32,
     screen_height: u32,
     frozen_enabled: bool,
-    view: HelpOverlayView,
     page_index: usize,
     page_prev_label: &str,
     page_next_label: &str,
@@ -55,13 +52,6 @@ pub(super) fn build_overlay_layout(
     let search_lower = search_query.to_ascii_lowercase();
     let help_font_family = resolve_help_font_family(&style.font_family);
 
-    let page_count = view.page_count().max(1);
-    let page_index = page_index.min(page_count - 1);
-    let view_label = match view {
-        HelpOverlayView::Quick => "Essentials",
-        HelpOverlayView::Full => "Complete",
-    };
-
     let section_sets = build_section_sets(
         frozen_enabled,
         context_filter,
@@ -70,10 +60,13 @@ pub(super) fn build_overlay_layout(
         page_prev_label,
         page_next_label,
     );
+    let page_count = if section_sets.page2.is_empty() { 1 } else { 2 };
+    let page_index = page_index.min(page_count - 1);
+    let nav_title = "Controls";
 
     let sections = if search_active {
         filter_sections_for_search(section_sets.all, &search_lower)
-    } else if matches!(view, HelpOverlayView::Quick) || page_index == 0 {
+    } else if page_index == 0 {
         section_sets.page1
     } else {
         section_sets.page2
@@ -86,8 +79,7 @@ pub(super) fn build_overlay_layout(
     let nav_state = build_nav_state(
         ctx,
         help_font_family.as_str(),
-        view_label,
-        view,
+        nav_title,
         search_active,
         page_index,
         page_count,
@@ -202,7 +194,6 @@ pub(super) fn build_overlay_layout(
         .max(subtitle_width)
         .max(nav_state.nav_primary_width)
         .max(nav_state.nav_secondary_width)
-        .max(nav_state.nav_tertiary_width.unwrap_or(0.0))
         .max(note_width)
         .max(close_hint_width);
     // Don't let search text expand the overlay - it will be clamped/elided

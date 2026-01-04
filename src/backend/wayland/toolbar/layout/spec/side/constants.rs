@@ -13,7 +13,7 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_BUTTON_MARGIN_RIGHT: f64 = 12.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_BUTTON_GAP: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_TOGGLE_WIDTH: f64 = 70.0;
-    pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_MODE_WIDTH: f64 = 78.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_MODE_WIDTH: f64 = 70.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_HEADER_MODE_GAP: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_CONTENT_PADDING_X: f64 = 32.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_CARD_INSET: f64 = 6.0;

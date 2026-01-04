@@ -313,8 +313,9 @@ Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
 
 ```toml
 [ui.toolbar]
-# Toolbar layout preset: "simple", "regular", or "advanced"
-layout_mode = "regular"
+# Toolbar layout preset: "simple" or "full"
+# Legacy values: "regular" and "advanced" (both map to Full UI label)
+layout_mode = "full"
 
 # Optional per-mode overrides for toolbar sections
 # Use true/false to override a section; omit to use the mode default.
@@ -323,24 +324,27 @@ layout_mode = "regular"
 # show_presets = false
 # show_actions_section = true
 # show_actions_advanced = false
+# show_zoom_actions = true
 # show_pages_section = true
 # show_step_section = false
-# show_text_controls = false
+# show_text_controls = true
 # show_settings_section = false
 #
-# [ui.toolbar.mode_overrides.regular]
+# [ui.toolbar.mode_overrides.regular] # Full mode overrides
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = false
+# show_zoom_actions = true
 # show_pages_section = true
 # show_step_section = false
-# show_text_controls = false
+# show_text_controls = true
 # show_settings_section = true
 #
-# [ui.toolbar.mode_overrides.advanced]
+# [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
 # show_presets = true
 # show_actions_section = true
 # show_actions_advanced = true
+# show_zoom_actions = true
 # show_pages_section = true
 # show_step_section = true
 # show_text_controls = true
@@ -361,8 +365,11 @@ show_more_colors = false
 # Show basic actions (undo/redo/clear) in the side toolbar
 show_actions_section = true
 
-# Show advanced actions (undo all, zoom, freeze, etc.)
+# Show advanced actions (undo all, delay, freeze, etc.)
 show_actions_advanced = false
+
+# Show zoom actions (zoom in/out/reset/lock)
+show_zoom_actions = true
 
 # Show page controls section (prev/next/new/dup/del)
 show_pages_section = true
@@ -374,7 +381,7 @@ show_presets = true
 show_step_section = false
 
 # Keep text controls visible even when text is inactive
-show_text_controls = false
+show_text_controls = true
 
 # Show Settings section (config shortcuts + advanced toggles)
 show_settings_section = true
@@ -406,6 +413,7 @@ force_inline = false
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
 - **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
+- **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the Canvas drawer.
 - **Pages**: `show_pages_section` toggles the page navigation block.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.

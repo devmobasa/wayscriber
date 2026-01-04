@@ -25,6 +25,7 @@ impl ConfigDraft {
         config.ui.toolbar.show_presets = self.ui_toolbar_show_presets;
         config.ui.toolbar.show_actions_section = self.ui_toolbar_show_actions_section;
         config.ui.toolbar.show_actions_advanced = self.ui_toolbar_show_actions_advanced;
+        config.ui.toolbar.show_zoom_actions = self.ui_toolbar_show_zoom_actions;
         config.ui.toolbar.show_pages_section = self.ui_toolbar_show_pages_section;
         config.ui.toolbar.show_step_section = self.ui_toolbar_show_step_section;
         config.ui.toolbar.show_text_controls = self.ui_toolbar_show_text_controls;

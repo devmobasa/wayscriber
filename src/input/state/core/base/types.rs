@@ -106,6 +106,21 @@ pub enum ZoomAction {
     RefreshCapture,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarDrawerTab {
+    View,
+    App,
+}
+
+impl ToolbarDrawerTab {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::View => "Canvas",
+            Self::App => "Settings",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PresetAction {
     Save {
@@ -164,26 +179,4 @@ pub(crate) struct DelayedHistory {
 pub(crate) enum HistoryMode {
     Undo,
     Redo,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HelpOverlayView {
-    Quick,
-    Full,
-}
-
-impl HelpOverlayView {
-    pub fn toggle(self) -> Self {
-        match self {
-            HelpOverlayView::Quick => HelpOverlayView::Full,
-            HelpOverlayView::Full => HelpOverlayView::Quick,
-        }
-    }
-
-    pub fn page_count(self) -> usize {
-        match self {
-            HelpOverlayView::Quick => 1,
-            HelpOverlayView::Full => 2,
-        }
-    }
 }

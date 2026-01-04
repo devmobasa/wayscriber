@@ -46,6 +46,7 @@ impl InputState {
         show_more_colors: bool,
         show_actions_section: bool,
         show_actions_advanced: bool,
+        show_zoom_actions: bool,
         show_pages_section: bool,
         show_presets: bool,
         show_step_section: bool,
@@ -67,6 +68,7 @@ impl InputState {
         self.show_more_colors = show_more_colors;
         self.show_actions_section = show_actions_section;
         self.show_actions_advanced = show_actions_advanced;
+        self.show_zoom_actions = show_zoom_actions;
         self.show_pages_section = show_pages_section;
         self.show_presets = show_presets;
         self.show_step_section = show_step_section;
@@ -86,6 +88,9 @@ impl InputState {
         }
         if let Some(value) = overrides.show_actions_advanced {
             self.show_actions_advanced = value;
+        }
+        if let Some(value) = overrides.show_zoom_actions {
+            self.show_zoom_actions = value;
         }
         if let Some(value) = overrides.show_pages_section {
             self.show_pages_section = value;
@@ -113,6 +118,9 @@ impl InputState {
         self.show_actions_advanced = overrides
             .show_actions_advanced
             .unwrap_or(defaults.show_actions_advanced);
+        self.show_zoom_actions = overrides
+            .show_zoom_actions
+            .unwrap_or(defaults.show_zoom_actions);
         self.show_pages_section = overrides
             .show_pages_section
             .unwrap_or(defaults.show_pages_section);

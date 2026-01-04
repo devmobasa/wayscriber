@@ -33,13 +33,17 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_more_colors")]
     pub show_more_colors: bool,
 
-    /// Show the Actions section (undo all, redo all, etc.)
+    /// Show the Actions section (undo/redo/clear)
     #[serde(default = "default_show_actions_section")]
     pub show_actions_section: bool,
 
-    /// Show advanced actions (undo all, zoom, freeze, etc.)
+    /// Show advanced actions (undo all, delay, freeze, etc.)
     #[serde(default = "default_show_actions_advanced")]
     pub show_actions_advanced: bool,
+
+    /// Show zoom actions (zoom in/out/reset/lock)
+    #[serde(default = "default_show_zoom_actions")]
+    pub show_zoom_actions: bool,
 
     /// Show the Pages section in the side toolbar
     #[serde(default = "default_show_pages_section")]
@@ -109,6 +113,7 @@ impl Default for ToolbarConfig {
             show_more_colors: default_show_more_colors(),
             show_actions_section: default_show_actions_section(),
             show_actions_advanced: default_show_actions_advanced(),
+            show_zoom_actions: default_show_zoom_actions(),
             show_pages_section: default_show_pages_section(),
             show_presets: default_show_presets(),
             show_step_section: default_show_step_section(),
@@ -155,6 +160,10 @@ fn default_show_actions_advanced() -> bool {
     false
 }
 
+fn default_show_zoom_actions() -> bool {
+    true
+}
+
 fn default_show_pages_section() -> bool {
     true
 }
@@ -168,7 +177,7 @@ fn default_show_step_section() -> bool {
 }
 
 fn default_show_text_controls() -> bool {
-    false
+    true
 }
 
 fn default_show_settings_section() -> bool {

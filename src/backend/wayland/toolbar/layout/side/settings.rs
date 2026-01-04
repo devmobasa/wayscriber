@@ -4,7 +4,10 @@ use super::{
 };
 
 pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut Vec<HitRegion>) {
-    if !ctx.snapshot.show_settings_section {
+    if !ctx.snapshot.show_settings_section
+        || !ctx.snapshot.drawer_open
+        || ctx.snapshot.drawer_tab != crate::input::ToolbarDrawerTab::App
+    {
         return;
     }
 
@@ -16,11 +19,15 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
             Some("Tool preview: cursor bubble."),
         ),
         (
+            ToolbarEvent::ToggleStatusBar(!ctx.snapshot.show_status_bar),
+            Some("Status bar: color/tool readout."),
+        ),
+        (
             ToolbarEvent::TogglePresetToasts(!ctx.snapshot.show_preset_toasts),
             Some("Preset toasts: apply/save/clear."),
         ),
     ];
-    if ctx.snapshot.layout_mode == ToolbarLayoutMode::Advanced {
+    if ctx.snapshot.layout_mode != ToolbarLayoutMode::Simple {
         toggles.extend_from_slice(&[
             (
                 ToolbarEvent::TogglePresets(!ctx.snapshot.show_presets),
@@ -31,8 +38,12 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
                 Some("Actions: undo/redo/clear."),
             ),
             (
+                ToolbarEvent::ToggleZoomActions(!ctx.snapshot.show_zoom_actions),
+                Some("Zoom: in/out/reset/lock."),
+            ),
+            (
                 ToolbarEvent::ToggleActionsAdvanced(!ctx.snapshot.show_actions_advanced),
-                Some("Advanced: undo-all/delay/zoom."),
+                Some("Advanced: undo-all/delay/freeze."),
             ),
             (
                 ToolbarEvent::TogglePagesSection(!ctx.snapshot.show_pages_section),

@@ -8,7 +8,7 @@ use super::tray::process_tray_action;
 use crate::{
     capture::CaptureManager,
     config::Config,
-    input::{BoardMode, InputState},
+    input::{BoardMode, InputState, UiToastKind},
 };
 
 mod config;
@@ -39,6 +39,12 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+    if matches!(source, crate::config::ConfigSource::Default) {
+        input_state.set_ui_toast(
+            UiToastKind::Info,
+            "Choose layout: click Mode S/F in the toolbar header.",
+        );
+    }
     apply_initial_mode(backend, &config, &mut input_state);
 
     let capture_manager = CaptureManager::new(backend.tokio_runtime.handle());

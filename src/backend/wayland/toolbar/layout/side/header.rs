@@ -3,7 +3,7 @@ use super::{
 };
 
 pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRegion>) {
-    let (pin_x, close_x, header_y) = ctx.spec.side_header_button_positions(ctx.width);
+    let (more_x, pin_x, close_x, header_y) = ctx.spec.side_header_button_positions(ctx.width);
     let header_btn = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
     let icons_w = ToolbarLayoutSpec::SIDE_HEADER_TOGGLE_WIDTH;
     hits.push(HitRegion {
@@ -15,17 +15,23 @@ pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRe
 
     let mode_w = ToolbarLayoutSpec::SIDE_HEADER_MODE_WIDTH;
     let mode_x = ctx.x + icons_w + ToolbarLayoutSpec::SIDE_HEADER_MODE_GAP;
-    let mode_tooltip = format!(
-        "Mode: S/R/A = {}/{}/{}",
-        ToolbarLayoutMode::Simple.label(),
-        ToolbarLayoutMode::Regular.label(),
-        ToolbarLayoutMode::Advanced.label(),
-    );
+    let mode_tooltip = "Mode: Simple/Full".to_string();
+    let next_mode = match ctx.snapshot.layout_mode {
+        ToolbarLayoutMode::Simple => ToolbarLayoutMode::Regular,
+        ToolbarLayoutMode::Regular | ToolbarLayoutMode::Advanced => ToolbarLayoutMode::Simple,
+    };
     hits.push(HitRegion {
         rect: (mode_x, header_y, mode_w, header_btn),
-        event: ToolbarEvent::SetToolbarLayoutMode(ctx.snapshot.layout_mode.next()),
+        event: ToolbarEvent::SetToolbarLayoutMode(next_mode),
         kind: HitKind::Click,
         tooltip: Some(mode_tooltip),
+    });
+
+    hits.push(HitRegion {
+        rect: (more_x, header_y, header_btn, header_btn),
+        event: ToolbarEvent::ToggleDrawer(!ctx.snapshot.drawer_open),
+        kind: HitKind::Click,
+        tooltip: Some("More (Canvas/Settings)".to_string()),
     });
 
     hits.push(HitRegion {
