@@ -5,8 +5,8 @@ use super::super::super::{
     selection::SelectionState,
 };
 use super::super::types::{
-    DelayedHistory, DrawingState, HelpOverlayView, PresetAction, PresetFeedbackState,
-    SelectionAxis, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
+    DelayedHistory, DrawingState, PresetAction, PresetFeedbackState, SelectionAxis, TextClickState,
+    TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -72,8 +72,6 @@ pub struct InputState {
     pub needs_redraw: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
-    /// Help overlay view mode (quick vs full)
-    pub help_overlay_view: HelpOverlayView,
     /// Active help overlay page index
     pub help_overlay_page: usize,
     /// Current help overlay search query

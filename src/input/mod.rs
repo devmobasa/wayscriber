@@ -17,8 +17,8 @@ pub mod tool;
 pub use board_mode::BoardMode;
 pub use events::{Key, MouseButton};
 pub use state::{
-    ClickHighlightSettings, DrawingState, HelpOverlayView, InputState, TextInputMode,
-    ToolbarDrawerTab, UiToastKind, ZoomAction,
+    ClickHighlightSettings, DrawingState, InputState, TextInputMode, ToolbarDrawerTab, UiToastKind,
+    ZoomAction,
 };
 #[cfg(tablet)]
 #[allow(unused_imports)]

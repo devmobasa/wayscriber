@@ -1,4 +1,6 @@
-use super::super::base::{HelpOverlayView, InputState};
+use super::super::base::InputState;
+
+const HELP_OVERLAY_PAGE_COUNT: usize = 2;
 
 impl InputState {
     pub(crate) fn toggle_help_overlay(&mut self) {
@@ -8,24 +10,14 @@ impl InputState {
         self.help_overlay_scroll = 0.0;
         self.help_overlay_scroll_max = 0.0;
         if now_visible {
-            self.help_overlay_view = HelpOverlayView::Full;
             self.help_overlay_page = 0;
         }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
-    pub(crate) fn toggle_help_overlay_view(&mut self) {
-        self.help_overlay_view = self.help_overlay_view.toggle();
-        self.help_overlay_page = 0;
-        self.help_overlay_scroll = 0.0;
-        self.help_overlay_scroll_max = 0.0;
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-    }
-
     pub(crate) fn help_overlay_page_count(&self) -> usize {
-        self.help_overlay_view.page_count()
+        HELP_OVERLAY_PAGE_COUNT
     }
 
     pub(crate) fn help_overlay_next_page(&mut self) -> bool {
@@ -33,19 +25,6 @@ impl InputState {
         let page_count = self.help_overlay_page_count();
         if next_page < page_count {
             self.help_overlay_page = next_page;
-            self.help_overlay_scroll = 0.0;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            return true;
-        }
-        if matches!(self.help_overlay_view, HelpOverlayView::Quick) {
-            self.help_overlay_view = HelpOverlayView::Full;
-            let page_count = self.help_overlay_page_count();
-            if page_count > 0 {
-                self.help_overlay_page = next_page.min(page_count - 1);
-            } else {
-                self.help_overlay_page = 0;
-            }
             self.help_overlay_scroll = 0.0;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;

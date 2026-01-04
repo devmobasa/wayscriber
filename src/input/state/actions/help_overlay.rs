@@ -15,10 +15,6 @@ impl InputState {
                 self.toggle_help_overlay();
                 true
             }
-            Key::Tab => {
-                self.toggle_help_overlay_view();
-                true
-            }
             Key::Backspace => {
                 if !self.help_overlay_search.is_empty() {
                     self.help_overlay_search.pop();

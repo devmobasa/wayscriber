@@ -1,7 +1,6 @@
 use super::super::super::{menus::ContextMenuState, selection::SelectionState};
 use super::super::types::{
-    DrawingState, HelpOverlayView, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, TextInputMode,
-    ToolbarDrawerTab,
+    DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, TextInputMode, ToolbarDrawerTab,
 };
 use super::structs::InputState;
 use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX};
@@ -81,7 +80,6 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             show_help: false,
-            help_overlay_view: HelpOverlayView::Full,
             help_overlay_page: 0,
             help_overlay_search: String::new(),
             help_overlay_scroll: 0.0,

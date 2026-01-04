@@ -13,7 +13,7 @@ mod utility;
 
 pub(crate) use base::TextClickState;
 pub use base::{
-    DrawingState, HelpOverlayView, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+    DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     SelectionAxis, TextInputMode, ToolbarDrawerTab, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };

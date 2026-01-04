@@ -83,7 +83,6 @@ impl WaylandState {
                     width,
                     height,
                     self.frozen_enabled(),
-                    self.input_state.help_overlay_view,
                     self.input_state.help_overlay_page,
                     page_prev_label.as_str(),
                     page_next_label.as_str(),

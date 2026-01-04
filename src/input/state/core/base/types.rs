@@ -180,25 +180,3 @@ pub(crate) enum HistoryMode {
     Undo,
     Redo,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HelpOverlayView {
-    Quick,
-    Full,
-}
-
-impl HelpOverlayView {
-    pub fn toggle(self) -> Self {
-        match self {
-            HelpOverlayView::Quick => HelpOverlayView::Full,
-            HelpOverlayView::Full => HelpOverlayView::Quick,
-        }
-    }
-
-    pub fn page_count(self) -> usize {
-        match self {
-            HelpOverlayView::Quick => 1,
-            HelpOverlayView::Full => 2,
-        }
-    }
-}
