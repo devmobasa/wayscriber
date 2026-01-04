@@ -69,6 +69,17 @@ impl CompositorHandler for WaylandState {
             self.zoom.cancel(&mut self.input_state, false);
         }
 
+        if let Some(request) = self.capture.take_preflight_request() {
+            if !self.capture_suppressed() {
+                warn!("Capture preflight completed without capture suppression; cancelling");
+                self.capture.clear_in_progress();
+                self.capture.clear_exit_on_success();
+                self.show_overlay();
+            } else {
+                self.begin_pending_capture(request);
+            }
+        }
+
         if self.input_state.needs_redraw {
             debug!(
                 "Frame callback: needs_redraw is still true, will render on next loop iteration"

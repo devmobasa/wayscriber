@@ -132,7 +132,9 @@ impl WaylandState {
         // single accumulator.
         wl_surface.damage_buffer(0, 0, phys_width as i32, phys_height as i32);
 
-        let force_frame_callback = self.frozen.preflight_pending() || self.zoom.preflight_pending();
+        let force_frame_callback = self.frozen.preflight_pending()
+            || self.zoom.preflight_pending()
+            || self.capture.preflight_needs_frame_callback();
         if self.config.performance.enable_vsync {
             debug!("Requesting frame callback (vsync enabled)");
             wl_surface.frame(qh, wl_surface.clone());
@@ -149,6 +151,10 @@ impl WaylandState {
 
         // Render toolbar overlays if visible, only when state/hover changed.
         self.render_layer_toolbars_if_needed();
+
+        if self.data.overlay_suppression == OverlaySuppression::Capture {
+            self.capture.mark_preflight_rendered();
+        }
 
         Ok(keep_rendering)
     }

@@ -5,6 +5,10 @@ impl WaylandState {
         self.data.overlay_suppression != OverlaySuppression::None
     }
 
+    pub(in crate::backend::wayland) fn capture_suppressed(&self) -> bool {
+        self.data.overlay_suppression == OverlaySuppression::Capture
+    }
+
     fn apply_overlay_clickthrough(&mut self, clickthrough: bool) {
         if let Some(wl_surface) = self.surface.wl_surface().cloned() {
             set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough);
