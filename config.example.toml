@@ -14,14 +14,20 @@
 # Or RGB array: [255, 0, 0]
 default_color = "red"
 
-# Default pen thickness in pixels (1.0 - 40.0)
+# Default pen thickness in pixels (1.0 - 50.0)
 default_thickness = 3.0
 
-# Default eraser size in pixels (1.0 - 40.0)
+# Default eraser size in pixels (1.0 - 50.0)
 default_eraser_size = 12.0
 
 # Default eraser mode: "brush" (pixel erase) or "stroke" (erase whole stroke)
 default_eraser_mode = "brush"
+
+# Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
+marker_opacity = 0.32
+
+# Default fill state for shapes (rect/ellipse)
+default_fill_enabled = false
 
 # Default font size for text mode (8.0 - 72.0)
 default_font_size = 32.0
@@ -147,6 +153,30 @@ enable_vsync = true
 ui_animation_fps = 30
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# HISTORY / STEP UNDO SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[history]
+# Delay in milliseconds between steps for undo-all (50 - 5000)
+undo_all_delay_ms = 1000
+
+# Delay in milliseconds between steps for redo-all (50 - 5000)
+redo_all_delay_ms = 1000
+
+# Show the custom step undo/redo section in the toolbar
+custom_section_enabled = false
+
+# Delay in milliseconds between steps for custom undo (50 - 5000)
+custom_undo_delay_ms = 1000
+
+# Delay in milliseconds between steps for custom redo (50 - 5000)
+custom_redo_delay_ms = 1000
+
+# Number of steps to run for custom undo/redo (1 - 500)
+custom_undo_steps = 5
+custom_redo_steps = 5
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # UI SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -154,9 +184,15 @@ ui_animation_fps = 30
 # Show status bar with current color/thickness/tool
 show_status_bar = true
 
+# Show a "FROZEN" badge when frozen mode is active
+show_frozen_badge = false
+
 # Status bar position
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"
+
+# Filter help overlay sections based on enabled features
+help_overlay_context_filter = true
 
 # Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
 # against monitor identity; leave empty to use the current/first monitor.
@@ -329,9 +365,6 @@ show_preset_toasts = true
 # Show cursor tool preview bubble near the pointer
 show_tool_preview = false
 
-# Filter help overlay sections based on enabled features
-help_overlay_context_filter = true
-
 # Initial toolbar offsets (layer-shell/inline)
 # Horizontal offset for the top toolbar
 top_offset = 0.0
@@ -341,6 +374,9 @@ top_offset_y = 0.0
 side_offset = 0.0
 # Horizontal offset for the side toolbar (move side bar left/right)
 side_offset_x = 0.0
+
+# Force inline toolbars even when layer-shell is available
+force_inline = false
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
@@ -357,22 +393,22 @@ font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
 line_height = 22.0
 
 # Padding around help box
-padding = 20.0
+padding = 32.0
 
 # Background color [R, G, B, A] (0.0-1.0 range)
-# Default: semi-transparent black (darker than status bar)
-bg_color = [0.0, 0.0, 0.0, 0.85]
+# Default: deep slate (higher contrast than status bar)
+bg_color = [0.09, 0.1, 0.13, 0.92]
 
 # Border color [R, G, B, A] (0.0-1.0 range)
-# Default: light blue
-border_color = [0.3, 0.6, 1.0, 0.9]
+# Default: muted steel
+border_color = [0.33, 0.39, 0.52, 0.88]
 
 # Border line width
 border_width = 2.0
 
 # Text color [R, G, B, A] (0.0-1.0 range)
-# Default: white
-text_color = [1.0, 1.0, 1.0, 1.0]
+# Default: near-white
+text_color = [0.95, 0.96, 0.98, 1.0]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BOARD MODE SETTINGS (Whiteboard/Blackboard)
@@ -591,6 +627,7 @@ select_rect_tool = []
 select_ellipse_tool = []
 select_arrow_tool = []
 select_highlight_tool = []
+toggle_highlight_tool = ["Ctrl+Alt+H"]
 
 # Adjust font size
 increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
@@ -613,6 +650,12 @@ toggle_help = ["F10", "F1"]
 
 # Toggle status bar
 toggle_status_bar = ["F12", "F4"]
+
+# Toggle toolbars
+toggle_toolbar = ["F2", "F9"]
+
+# Toggle click highlight
+toggle_click_highlight = ["Ctrl+Shift+H"]
 
 # Toggle presenter mode
 toggle_presenter_mode = ["Ctrl+Shift+K"]

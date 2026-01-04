@@ -65,7 +65,7 @@ impl InputState {
         self.delete_shapes_by_ids(&ids)
     }
 
-    fn sample_eraser_path_points(&self, points: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    pub(crate) fn sample_eraser_path_points(&self, points: &[(i32, i32)]) -> Vec<(i32, i32)> {
         if points.len() < 2 {
             return points.to_vec();
         }
