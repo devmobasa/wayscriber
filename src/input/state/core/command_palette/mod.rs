@@ -162,6 +162,7 @@ fn fuzzy_score(query: &str, text: &str) -> i32 {
     // Check if all query chars appear in order
     let mut text_chars = text_lower.chars().peekable();
     let mut matched = 0;
+    let query_len = query.chars().count();
     for qc in query.chars() {
         while let Some(&tc) = text_chars.peek() {
             text_chars.next();
@@ -171,7 +172,7 @@ fn fuzzy_score(query: &str, text: &str) -> i32 {
             }
         }
     }
-    if matched == query.len() {
+    if matched == query_len {
         return 10;
     }
 
