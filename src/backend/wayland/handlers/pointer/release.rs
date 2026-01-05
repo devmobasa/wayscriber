@@ -71,9 +71,11 @@ impl WaylandState {
         if mb == MouseButton::Left {
             let screen_x = event.position.0 as i32;
             let screen_y = event.position.1 as i32;
-            if let Some(action) = self.input_state.check_toast_click(screen_x, screen_y) {
-                self.input_state.handle_action(action);
-                self.input_state.needs_redraw = true;
+            let (hit, action) = self.input_state.check_toast_click(screen_x, screen_y);
+            if hit {
+                if let Some(action) = action {
+                    self.input_state.handle_action(action);
+                }
                 return;
             }
         }

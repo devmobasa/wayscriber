@@ -91,12 +91,16 @@ impl InputState {
         true
     }
 
-    /// Check if a click at (x, y) hits the toast. If so and the toast has an action,
-    /// returns the action and dismisses the toast.
+    /// Check if a click at (x, y) hits the toast. If so, dismisses it and returns
+    /// whether it was hit plus any associated action.
     #[allow(dead_code)] // Called from WaylandState pointer release handler
-    pub(crate) fn check_toast_click(&mut self, x: i32, y: i32) -> Option<Action> {
-        let bounds = self.ui_toast_bounds?;
-        let toast = self.ui_toast.as_ref()?;
+    pub(crate) fn check_toast_click(&mut self, x: i32, y: i32) -> (bool, Option<Action>) {
+        let Some(bounds) = self.ui_toast_bounds else {
+            return (false, None);
+        };
+        let Some(toast) = self.ui_toast.as_ref() else {
+            return (false, None);
+        };
 
         // Check if click is within toast bounds
         let (bx, by, bw, bh) = bounds;
@@ -104,15 +108,13 @@ impl InputState {
         let yf = y as f64;
         if xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh {
             // Click is within toast
-            if let Some(ref action) = toast.action {
-                let result = action.action;
-                // Dismiss the toast
-                self.ui_toast = None;
-                self.ui_toast_bounds = None;
-                self.needs_redraw = true;
-                return Some(result);
-            }
+            let action = toast.action.as_ref().map(|action| action.action);
+            // Dismiss the toast
+            self.ui_toast = None;
+            self.ui_toast_bounds = None;
+            self.needs_redraw = true;
+            return (true, action);
         }
-        None
+        (false, None)
     }
 }
