@@ -97,7 +97,8 @@ impl WaylandState {
                     self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
             }
 
-            crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
+            self.input_state.ui_toast_bounds =
+                crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
             crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
 
             if !self.zoom.active {

@@ -15,8 +15,8 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
     let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let mut toggles: Vec<(ToolbarEvent, Option<&str>)> = vec![
         (
-            ToolbarEvent::ToggleToolPreview(!ctx.snapshot.show_tool_preview),
-            Some("Tool preview: cursor bubble."),
+            ToolbarEvent::ToggleTextControls(!ctx.snapshot.show_text_controls),
+            Some("Text: font size/family."),
         ),
         (
             ToolbarEvent::ToggleStatusBar(!ctx.snapshot.show_status_bar),
@@ -52,10 +52,6 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
             (
                 ToolbarEvent::ToggleStepSection(!ctx.snapshot.show_step_section),
                 Some("Step: step undo/redo."),
-            ),
-            (
-                ToolbarEvent::ToggleTextControls(!ctx.snapshot.show_text_controls),
-                Some("Text: font size/family."),
             ),
         ]);
     }

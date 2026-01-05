@@ -1,4 +1,7 @@
-use super::super::base::{InputState, UI_TOAST_DURATION_MS, UiToastKind, UiToastState};
+use super::super::base::{
+    InputState, ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
+};
+use crate::config::keybindings::Action;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -18,6 +21,28 @@ impl InputState {
             message: message.into(),
             started: Instant::now(),
             duration_ms,
+            action: None,
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Set a toast with a clickable action. Clicking the toast triggers the action.
+    pub(crate) fn set_ui_toast_with_action(
+        &mut self,
+        kind: UiToastKind,
+        message: impl Into<String>,
+        action_label: impl Into<String>,
+        action: Action,
+    ) {
+        self.ui_toast = Some(UiToastState {
+            kind,
+            message: message.into(),
+            started: Instant::now(),
+            duration_ms: UI_TOAST_DURATION_MS,
+            action: Some(ToastAction {
+                label: action_label.into(),
+                action,
+            }),
         });
         self.needs_redraw = true;
     }
@@ -60,8 +85,34 @@ impl InputState {
         let duration = Duration::from_millis(toast.duration_ms);
         if now.saturating_duration_since(toast.started) >= duration {
             self.ui_toast = None;
+            self.ui_toast_bounds = None;
             return false;
         }
         true
+    }
+
+    /// Check if a click at (x, y) hits the toast. If so and the toast has an action,
+    /// returns the action and dismisses the toast.
+    #[allow(dead_code)] // Called from WaylandState pointer release handler
+    pub(crate) fn check_toast_click(&mut self, x: i32, y: i32) -> Option<Action> {
+        let bounds = self.ui_toast_bounds?;
+        let toast = self.ui_toast.as_ref()?;
+
+        // Check if click is within toast bounds
+        let (bx, by, bw, bh) = bounds;
+        let xf = x as f64;
+        let yf = y as f64;
+        if xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh {
+            // Click is within toast
+            if let Some(ref action) = toast.action {
+                let result = action.action;
+                // Dismiss the toast
+                self.ui_toast = None;
+                self.ui_toast_bounds = None;
+                self.needs_redraw = true;
+                return Some(result);
+            }
+        }
+        None
     }
 }

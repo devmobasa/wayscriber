@@ -8,6 +8,7 @@ pub(crate) struct NavDrawStyle<'a> {
     pub(crate) subtitle_color: [f64; 4],
     pub(crate) search_color: [f64; 4],
     pub(crate) nav_line_gap: f64,
+    #[allow(dead_code)]
     pub(crate) nav_bottom_spacing: f64,
     pub(crate) extra_line_gap: f64,
     pub(crate) extra_line_bottom_spacing: f64,
@@ -50,45 +51,51 @@ pub(crate) fn draw_nav(
     );
     cursor_y += nav.nav_font_size;
 
-    if let Some(ref extra_line_text) = nav.extra_line_text {
-        cursor_y += style.extra_line_gap;
+    // Always show search box
+    cursor_y += style.extra_line_gap;
 
-        // Draw search input field style.
-        let search_padding_x = 12.0;
-        let search_padding_y = 6.0;
-        let search_box_height = nav.nav_font_size + search_padding_y * 2.0;
-        // Clamp search box to available width.
-        let search_box_width = inner_width.min(if let Some(width) = nav.extra_line_width {
+    // Draw search input field style.
+    let search_padding_x = 12.0;
+    let search_padding_y = 6.0;
+    let search_box_height = nav.nav_font_size + search_padding_y * 2.0;
+    // Determine search box width - wider for placeholder, narrower for actual text
+    let search_box_width = if nav.extra_line_text.is_some() {
+        inner_width.min(if let Some(width) = nav.extra_line_width {
             (width + search_padding_x * 2.0 + 20.0).min(inner_width)
         } else {
             200.0
-        });
-        let search_box_radius = 6.0;
+        })
+    } else {
+        // Width for placeholder text
+        inner_width.min(250.0)
+    };
+    let search_box_radius = 6.0;
 
-        // Search box background.
-        draw_rounded_rect(
-            ctx,
-            inner_x,
-            cursor_y,
-            search_box_width,
-            search_box_height,
-            search_box_radius,
-        );
-        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
-        let _ = ctx.fill_preserve();
-        ctx.set_source_rgba(
-            style.search_color[0],
-            style.search_color[1],
-            style.search_color[2],
-            0.5,
-        );
-        ctx.set_line_width(1.0);
-        let _ = ctx.stroke();
+    // Search box background.
+    draw_rounded_rect(
+        ctx,
+        inner_x,
+        cursor_y,
+        search_box_width,
+        search_box_height,
+        search_box_radius,
+    );
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+    let _ = ctx.fill_preserve();
+    ctx.set_source_rgba(
+        style.search_color[0],
+        style.search_color[1],
+        style.search_color[2],
+        0.5,
+    );
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
 
+    let extra_line_baseline = cursor_y + search_padding_y + nav.nav_font_size;
+    let max_text_width = search_box_width - search_padding_x * 2.0;
+
+    if let Some(ref extra_line_text) = nav.extra_line_text {
         // Search text with clipping.
-        let extra_line_baseline = cursor_y + search_padding_y + nav.nav_font_size;
-        let max_text_width = search_box_width - search_padding_x * 2.0;
-
         let display_text = ellipsize_to_fit(
             ctx,
             extra_line_text,
@@ -106,10 +113,18 @@ pub(crate) fn draw_nav(
         );
         ctx.move_to(inner_x + search_padding_x, extra_line_baseline);
         let _ = ctx.show_text(&display_text);
-        cursor_y += search_box_height + style.extra_line_bottom_spacing;
     } else {
-        cursor_y += style.nav_bottom_spacing;
+        // Show placeholder text
+        ctx.set_source_rgba(
+            style.search_color[0],
+            style.search_color[1],
+            style.search_color[2],
+            0.5,
+        );
+        ctx.move_to(inner_x + search_padding_x, extra_line_baseline);
+        let _ = ctx.show_text("Type to search... (Esc clears)");
     }
+    cursor_y += search_box_height + style.extra_line_bottom_spacing;
 
     cursor_y
 }

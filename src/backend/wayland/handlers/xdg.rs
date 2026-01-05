@@ -78,6 +78,13 @@ impl WindowHandler for WaylandState {
         }
 
         self.surface.set_configured(true);
+
+        // Mark overlay ready if we already have keyboard focus (configure came after enter)
+        if self.has_keyboard_focus() && !self.is_overlay_ready() {
+            self.set_overlay_ready(true);
+            log::debug!("Overlay ready for keybinds (from xdg configure)");
+        }
+
         self.input_state
             .update_screen_dimensions(self.surface.width(), self.surface.height());
         let (phys_w, phys_h) = self.surface.physical_dimensions();

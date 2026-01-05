@@ -83,6 +83,12 @@ impl LayerShellHandler for WaylandState {
         self.surface.set_configured(true);
         self.input_state.needs_redraw = true;
 
+        // Mark overlay ready if we already have keyboard focus (configure came after enter)
+        if self.has_keyboard_focus() && !self.is_overlay_ready() {
+            self.set_overlay_ready(true);
+            debug!("Overlay ready for keybinds (from configure)");
+        }
+
         let (phys_w, phys_h) = self.surface.physical_dimensions();
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);

@@ -41,10 +41,10 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![
         (
-            "Tool preview",
-            snapshot.show_tool_preview,
-            ToolbarEvent::ToggleToolPreview(!snapshot.show_tool_preview),
-            Some("Tool preview: cursor bubble."),
+            "Text controls",
+            snapshot.show_text_controls,
+            ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
+            Some("Text: font size/family."),
         ),
         (
             "Status bar",
@@ -96,12 +96,6 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 snapshot.show_step_section,
                 ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
                 Some("Step: step undo/redo."),
-            ),
-            (
-                "Text controls",
-                snapshot.show_text_controls,
-                ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
-                Some("Text: font size/family."),
             ),
         ]);
     }

@@ -11,7 +11,19 @@ impl InputState {
         let search_active = !self.help_overlay_search.trim().is_empty();
 
         match key {
-            Key::Escape | Key::F1 | Key::F10 => {
+            Key::Escape => {
+                // Escape clears search first, then closes overlay
+                if search_active {
+                    self.help_overlay_search.clear();
+                    self.help_overlay_scroll = 0.0;
+                    self.dirty_tracker.mark_full();
+                    self.needs_redraw = true;
+                } else {
+                    self.toggle_help_overlay();
+                }
+                true
+            }
+            Key::F1 | Key::F10 => {
                 self.toggle_help_overlay();
                 true
             }

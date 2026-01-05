@@ -178,6 +178,8 @@ pub struct InputState {
     pub show_tool_preview: bool,
     /// Pending UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
+    /// Cached bounds of the rendered toast for click detection (x, y, w, h)
+    pub(crate) ui_toast_bounds: Option<(f64, f64, f64, f64)>,
     /// Copied selection shapes for paste operations
     pub(in crate::input::state::core) selection_clipboard: Option<Vec<Shape>>,
     /// Offset applied to successive paste operations

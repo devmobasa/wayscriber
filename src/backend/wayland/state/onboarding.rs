@@ -1,3 +1,4 @@
+use crate::config::keybindings::Action;
 use crate::input::state::UiToastKind;
 
 use super::*;
@@ -17,8 +18,12 @@ impl WaylandState {
             return;
         }
 
-        self.input_state
-            .set_ui_toast(UiToastKind::Info, "Toolbars hidden. Press F2/F9 to show.");
+        self.input_state.set_ui_toast_with_action(
+            UiToastKind::Info,
+            "Toolbars hidden",
+            "Show (F2)",
+            Action::ToggleToolbar,
+        );
         self.onboarding.state_mut().toolbar_hint_shown = true;
         self.onboarding.save();
     }

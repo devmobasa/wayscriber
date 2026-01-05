@@ -127,4 +127,14 @@ impl WaylandState {
     ) -> Option<&mut SessionOptions> {
         self.session.options_mut()
     }
+
+    /// Returns true if the overlay is ready to process keybinds (surface configured + focus).
+    pub(in crate::backend::wayland) fn is_overlay_ready(&self) -> bool {
+        self.data.overlay_ready
+    }
+
+    /// Sets the overlay ready state. Should be true only when surface is configured and has focus.
+    pub(in crate::backend::wayland) fn set_overlay_ready(&mut self, value: bool) {
+        self.data.overlay_ready = value;
+    }
 }

@@ -146,6 +146,14 @@ pub enum UiToastKind {
     Error,
 }
 
+/// Action that can be triggered by clicking a toast.
+#[derive(Debug, Clone)]
+pub struct ToastAction {
+    pub label: String,
+    #[allow(dead_code)] // Used in check_toast_click via WaylandState
+    pub action: crate::config::keybindings::Action,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PresetFeedbackState {
     pub kind: PresetFeedbackKind,
@@ -158,6 +166,8 @@ pub(crate) struct UiToastState {
     pub message: String,
     pub started: Instant,
     pub duration_ms: u64,
+    /// Optional action that triggers when the toast is clicked.
+    pub action: Option<ToastAction>,
 }
 
 #[derive(Debug, Clone, Copy)]

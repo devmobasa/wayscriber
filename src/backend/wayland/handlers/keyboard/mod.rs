@@ -33,6 +33,11 @@ impl KeyboardHandler for WaylandState {
         } else {
             self.clear_toolbar_focus();
         }
+        // Mark overlay as ready once we have focus and surface is configured
+        if self.surface.is_configured() {
+            self.set_overlay_ready(true);
+            debug!("Overlay ready for keybinds");
+        }
     }
 
     fn leave(
@@ -45,6 +50,7 @@ impl KeyboardHandler for WaylandState {
     ) {
         debug!("Keyboard focus left");
         self.set_keyboard_focus(false);
+        self.set_overlay_ready(false);
         self.clear_toolbar_focus();
 
         // When the compositor moves focus away from our surface (e.g. to a portal
@@ -74,6 +80,11 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
         event: KeyEvent,
     ) {
+        // Block keybinds until overlay is fully ready (prevents Ctrl+W leaking to apps)
+        if !self.is_overlay_ready() {
+            debug!("Ignoring key press before overlay ready");
+            return;
+        }
         let key = keysym_to_key(event.keysym);
         if self.zoom.is_engaged() {
             match key {
@@ -172,6 +183,10 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
         event: KeyEvent,
     ) {
+        // Block keybinds until overlay is fully ready
+        if !self.is_overlay_ready() {
+            return;
+        }
         let key = keysym_to_key(event.keysym);
         if self.zoom.active {
             match key {
