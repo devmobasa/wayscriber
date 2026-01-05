@@ -1,5 +1,6 @@
 pub mod toolbar;
 
+mod command_palette;
 mod context_menu;
 mod help_overlay;
 mod primitives;
@@ -8,6 +9,7 @@ mod status;
 mod toasts;
 mod tour;
 
+pub use command_palette::render_command_palette;
 pub use context_menu::render_context_menu;
 pub use help_overlay::render_help_overlay;
 pub use properties_panel::render_properties_panel;

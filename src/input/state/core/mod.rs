@@ -1,5 +1,6 @@
 mod base;
 mod board;
+mod command_palette;
 mod dirty;
 mod highlight_controls;
 mod history;

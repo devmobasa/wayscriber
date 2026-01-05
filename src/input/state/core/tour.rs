@@ -86,6 +86,9 @@ impl InputState {
         if self.show_help {
             self.show_help = false;
         }
+        if self.command_palette_open {
+            self.command_palette_open = false;
+        }
         self.close_context_menu();
         self.close_properties_panel();
         self.dirty_tracker.mark_full();

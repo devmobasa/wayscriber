@@ -84,6 +84,10 @@ impl InputState {
                 self.start_tour();
                 true
             }
+            Action::ToggleCommandPalette => {
+                self.toggle_command_palette();
+                true
+            }
             _ => false,
         }
     }

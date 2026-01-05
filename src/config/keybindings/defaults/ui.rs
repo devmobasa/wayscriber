@@ -33,3 +33,7 @@ pub(crate) fn default_open_context_menu() -> Vec<String> {
 pub(crate) fn default_open_configurator() -> Vec<String> {
     vec!["F11".to_string()]
 }
+
+pub(crate) fn default_toggle_command_palette() -> Vec<String> {
+    vec!["Ctrl+K".to_string()]
+}

@@ -25,6 +25,11 @@ impl InputState {
             return;
         }
 
+        // Command palette takes priority
+        if self.command_palette_open && self.handle_command_palette_key(key) {
+            return;
+        }
+
         if self.show_help && self.handle_help_overlay_key(key) {
             return;
         }

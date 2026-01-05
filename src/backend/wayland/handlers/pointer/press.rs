@@ -18,8 +18,8 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
-        // Block pointer input when tour overlay is active
-        if self.input_state.tour_active {
+        // Block pointer input when modal overlays are active
+        if self.input_state.command_palette_open || self.input_state.tour_active {
             return;
         }
 

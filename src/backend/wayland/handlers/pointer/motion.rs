@@ -104,8 +104,8 @@ impl WaylandState {
             return;
         }
         self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
-        // Block pointer motion when tour overlay is active
-        if self.input_state.tour_active {
+        // Block pointer motion when modal overlays are active
+        if self.input_state.command_palette_open || self.input_state.tour_active {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);

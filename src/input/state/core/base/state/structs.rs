@@ -80,6 +80,14 @@ pub struct InputState {
     pub help_overlay_scroll: f64,
     /// Max scrollable height for help overlay (pixels)
     pub help_overlay_scroll_max: f64,
+    /// Whether the command palette is currently visible
+    pub command_palette_open: bool,
+    /// Current command palette search query
+    pub command_palette_query: String,
+    /// Currently selected command index in the palette
+    pub command_palette_selected: usize,
+    /// Scroll offset for command palette (first visible item index)
+    pub command_palette_scroll: usize,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
     /// Whether presenter mode is currently enabled
