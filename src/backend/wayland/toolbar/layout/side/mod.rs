@@ -38,7 +38,7 @@ pub fn build_side_hits(
         y += ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT + ctx.section_gap;
     }
 
-    y = arrow::push_arrow_hits(&ctx, y, hits);
+    y = arrow::advance_arrow_section(&ctx, y);
 
     let show_marker_opacity =
         snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;

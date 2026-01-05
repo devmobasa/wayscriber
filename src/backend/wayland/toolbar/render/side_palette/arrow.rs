@@ -37,6 +37,7 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     );
     if snapshot.arrow_label_enabled {
         let hint = format!("Next: {}", snapshot.arrow_label_next);
+        let _ = ctx.save();
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
         ctx.set_font_size(10.0);
         if let Ok(ext) = ctx.text_extents(&hint) {
@@ -46,8 +47,7 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
             ctx.move_to(hint_x, hint_y);
             let _ = ctx.show_text(&hint);
         }
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-        ctx.set_font_size(13.0);
+        let _ = ctx.restore();
     }
 
     let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
