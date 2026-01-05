@@ -98,6 +98,15 @@ impl InputState {
     /// End the tour (skip or complete).
     pub fn end_tour(&mut self) {
         self.tour_active = false;
+        if !self.presenter_mode || !self.presenter_mode_config.hide_toolbars {
+            let top_visible = self.toolbar_top_pinned;
+            let side_visible = self.toolbar_side_pinned;
+            if !self.toolbar_visible() && (top_visible || side_visible) {
+                self.toolbar_top_visible = top_visible;
+                self.toolbar_side_visible = side_visible;
+                self.toolbar_visible = top_visible || side_visible;
+            }
+        }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
