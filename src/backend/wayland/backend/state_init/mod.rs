@@ -8,8 +8,7 @@ use super::tray::process_tray_action;
 use crate::{
     capture::CaptureManager,
     config::Config,
-    input::state::UI_TOAST_DURATION_MS,
-    input::{BoardMode, InputState, UiToastKind},
+    input::{BoardMode, InputState},
     onboarding::OnboardingStore,
 };
 
@@ -43,13 +42,10 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let mut input_state = input_state::build_input_state(&config);
     let mut onboarding = OnboardingStore::load();
     if !onboarding.state().welcome_shown {
-        input_state.toggle_help_overlay();
-        input_state.set_ui_toast_with_duration(
-            UiToastKind::Info,
-            "Welcome! F1 help, F2/F9 toolbars, 1-5 presets, F11 configurator, Esc exits.",
-            UI_TOAST_DURATION_MS.saturating_mul(3),
-        );
+        // Start the guided tour for new users
+        input_state.start_tour();
         onboarding.state_mut().welcome_shown = true;
+        onboarding.state_mut().tour_shown = true;
         onboarding.save();
     }
     apply_initial_mode(backend, &config, &mut input_state);

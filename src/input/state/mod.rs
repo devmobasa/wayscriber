@@ -11,6 +11,6 @@ pub use core::{
     ContextMenuEntry, ContextMenuKind, ContextMenuState, DrawingState, InputState,
     MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS,
     PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind, SelectionAxis, SelectionState,
-    TextInputMode, ToolbarDrawerTab, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    TextInputMode, ToolbarDrawerTab, TourStep, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub use highlight::ClickHighlightSettings;

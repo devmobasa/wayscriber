@@ -13,6 +13,11 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        // Block pointer input when tour overlay is active
+        if self.input_state.tour_active {
+            return;
+        }
+
         if debug_toolbar_drag_logging_enabled() {
             debug!(
                 "pointer release: button={}, on_toolbar={}, inline_active={}, drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",

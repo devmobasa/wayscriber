@@ -80,6 +80,10 @@ impl InputState {
                 self.open_capture_folder();
                 true
             }
+            Action::ReplayTour => {
+                self.start_tour();
+                true
+            }
             _ => false,
         }
     }

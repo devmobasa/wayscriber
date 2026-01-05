@@ -132,6 +132,9 @@ impl WaylandState {
                 }
                 self.render_inline_toolbars(ctx, &snapshot);
             }
+
+            // Tour overlay renders last (on top of everything including toolbars)
+            crate::ui::render_tour(ctx, &self.input_state, width, height);
         } else {
             self.input_state.clear_context_menu_layout();
         }
