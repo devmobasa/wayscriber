@@ -103,6 +103,7 @@ pub(super) fn run_event_loop(
 
         capture::flush_if_capture_active(conn, capture_active);
         capture::handle_pending_actions(state);
+        state.apply_onboarding_hints();
 
         if let Some(err) = render::maybe_render(state, qh, &mut consecutive_render_failures) {
             loop_error = Some(err);

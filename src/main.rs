@@ -8,6 +8,7 @@ mod daemon;
 mod draw;
 mod input;
 mod notification;
+mod onboarding;
 mod paths;
 mod session;
 mod session_override;

@@ -1,7 +1,5 @@
 use crate::input::InputState;
-use crate::input::state::{
-    PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UI_TOAST_DURATION_MS, UiToastKind,
-};
+use crate::input::state::{PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UiToastKind};
 use std::time::Instant;
 
 use super::primitives::{draw_rounded_rect, text_extents_for};
@@ -109,7 +107,7 @@ pub fn render_ui_toast(
     };
 
     let now = Instant::now();
-    let duration_secs = UI_TOAST_DURATION_MS as f32 / 1000.0;
+    let duration_secs = toast.duration_ms as f32 / 1000.0;
     let elapsed = now.saturating_duration_since(toast.started);
     let progress = (elapsed.as_secs_f32() / duration_secs).clamp(0.0, 1.0);
     if progress >= 1.0 {

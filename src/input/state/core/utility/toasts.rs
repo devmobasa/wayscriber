@@ -4,10 +4,20 @@ use std::time::{Duration, Instant};
 
 impl InputState {
     pub(crate) fn set_ui_toast(&mut self, kind: UiToastKind, message: impl Into<String>) {
+        self.set_ui_toast_with_duration(kind, message, UI_TOAST_DURATION_MS);
+    }
+
+    pub(crate) fn set_ui_toast_with_duration(
+        &mut self,
+        kind: UiToastKind,
+        message: impl Into<String>,
+        duration_ms: u64,
+    ) {
         self.ui_toast = Some(UiToastState {
             kind,
             message: message.into(),
             started: Instant::now(),
+            duration_ms,
         });
         self.needs_redraw = true;
     }
@@ -44,10 +54,10 @@ impl InputState {
     }
 
     pub fn advance_ui_toast(&mut self, now: Instant) -> bool {
-        let duration = Duration::from_millis(UI_TOAST_DURATION_MS);
         let Some(toast) = &self.ui_toast else {
             return false;
         };
+        let duration = Duration::from_millis(toast.duration_ms);
         if now.saturating_duration_since(toast.started) >= duration {
             self.ui_toast = None;
             return false;
