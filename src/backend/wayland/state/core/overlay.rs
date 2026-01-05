@@ -10,11 +10,32 @@ impl WaylandState {
     }
 
     fn apply_overlay_clickthrough(&mut self, clickthrough: bool) {
+        if self.data.overlay_clickthrough == clickthrough {
+            return;
+        }
+        self.data.overlay_clickthrough = clickthrough;
         if let Some(wl_surface) = self.surface.wl_surface().cloned() {
-            set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough);
+            let hotspot =
+                if clickthrough && self.data.overlay_suppression == OverlaySuppression::None {
+                    self.input_state.clickthrough_hotspot_rect()
+                } else {
+                    None
+                };
+            set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough, hotspot);
         }
         self.toolbar
             .set_suppressed(&self.compositor_state, clickthrough);
+    }
+
+    pub(in crate::backend::wayland) fn refresh_overlay_clickthrough(&mut self) {
+        if self.overlay_suppressed() {
+            self.apply_overlay_clickthrough(true);
+            self.refresh_keyboard_interactivity();
+            return;
+        }
+        let desired = self.input_state.clickthrough_active();
+        self.apply_overlay_clickthrough(desired);
+        self.refresh_keyboard_interactivity();
     }
 
     pub(in crate::backend::wayland) fn enter_overlay_suppression(
@@ -42,7 +63,7 @@ impl WaylandState {
             return;
         }
         self.data.overlay_suppression = OverlaySuppression::None;
-        self.apply_overlay_clickthrough(false);
+        self.refresh_overlay_clickthrough();
         self.refresh_keyboard_interactivity();
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();

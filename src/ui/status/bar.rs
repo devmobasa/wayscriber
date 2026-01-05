@@ -63,6 +63,13 @@ pub fn render_status_bar(
     } else {
         ""
     };
+    let clickthrough_badge = if input_state.clickthrough_active() {
+        " [Click-through]"
+    } else if input_state.clickthrough_overridden() {
+        " [Interactive]"
+    } else {
+        ""
+    };
 
     let frozen_badge = if input_state.frozen_active() {
         "[FROZEN] "
@@ -81,7 +88,7 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
+        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}{}  F1=Help",
         frozen_badge,
         zoom_badge,
         mode_badge,
@@ -91,7 +98,8 @@ pub fn render_status_bar(
         tool_name,
         font_size as i32,
         highlight_badge,
-        highlight_tool_badge
+        highlight_tool_badge,
+        clickthrough_badge
     );
 
     log::debug!("Status bar font_size from config: {}", style.font_size);

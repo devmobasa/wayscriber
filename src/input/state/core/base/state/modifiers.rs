@@ -12,6 +12,7 @@ impl InputState {
         self.modifiers.ctrl = false;
         self.modifiers.alt = false;
         self.modifiers.tab = false;
+        self.clear_hold_to_draw();
     }
 
     /// Synchronize modifier state from backend-provided values (e.g. compositor).

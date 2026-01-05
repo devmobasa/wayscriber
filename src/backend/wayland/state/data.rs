@@ -69,6 +69,7 @@ pub struct StateData {
     pub(super) preferred_output_identity: Option<String>,
     pub(super) xdg_fullscreen: bool,
     pub(super) overlay_suppression: OverlaySuppression,
+    pub(super) overlay_clickthrough: bool,
 }
 
 impl StateData {
@@ -115,6 +116,7 @@ impl StateData {
             preferred_output_identity: None,
             xdg_fullscreen: false,
             overlay_suppression: OverlaySuppression::None,
+            overlay_clickthrough: false,
         }
     }
 }

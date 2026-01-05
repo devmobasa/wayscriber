@@ -1,6 +1,6 @@
 use crate::input::events::Key;
 
-pub(super) fn key_to_action_label(key: Key) -> Option<String> {
+pub(crate) fn key_to_action_label(key: Key) -> Option<String> {
     match key {
         Key::Char(c) => Some(c.to_string()),
         Key::Escape => Some("Escape".to_string()),

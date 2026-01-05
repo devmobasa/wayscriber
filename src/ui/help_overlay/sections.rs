@@ -44,6 +44,7 @@ pub(crate) fn build_section_sets(
     let drawing_section = Section {
         title: "Drawing",
         rows: vec![
+            row("V", "Select tool"),
             row("P", "Freehand pen"),
             row("Shift+Drag", "Line"),
             row("Ctrl+Drag", "Rectangle"),
@@ -159,6 +160,9 @@ pub(crate) fn build_section_sets(
         row("E", "Clear frame"),
         row("Ctrl+Z", "Undo"),
         row("Ctrl+Shift+H", "Toggle click highlight"),
+        row("Alt+D (Hold)", "Hold to draw (disable click-through)"),
+        row("Ctrl+Alt+I", "Toggle click-through override"),
+        row("Click CT", "Exit click-through"),
         row("Right Click / Shift+F10", "Context menu"),
         row("Escape / Ctrl+Q", "Exit"),
         row("F1 / F10", "Toggle help"),

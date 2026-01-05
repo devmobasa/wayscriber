@@ -52,6 +52,9 @@ impl InputState {
                     info!("Eraser mode set to {:?}", self.eraser_mode);
                 }
             }
+            Action::SelectCursorTool => {
+                self.set_tool_override(Some(Tool::Select));
+            }
             Action::SelectPenTool => {
                 self.set_tool_override(Some(Tool::Pen));
             }

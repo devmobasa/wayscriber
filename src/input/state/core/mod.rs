@@ -1,5 +1,6 @@
 mod base;
 mod board;
+mod clickthrough_controls;
 mod dirty;
 mod highlight_controls;
 mod history;
