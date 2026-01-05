@@ -75,6 +75,8 @@ impl InputState {
             arrow_length,
             arrow_angle,
             arrow_head_at_end,
+            arrow_label_enabled: false,
+            arrow_label_counter: 1,
             modifiers: Modifiers::new(),
             state: DrawingState::Idle,
             should_exit: false,

@@ -15,6 +15,12 @@ pub(super) fn finish_drawing(
     end_x: i32,
     end_y: i32,
 ) {
+    let label = if matches!(tool, Tool::Arrow) {
+        state.next_arrow_label()
+    } else {
+        None
+    };
+    let used_arrow_label = label.is_some();
     let shape = match tool {
         Tool::Pen => Shape::Freehand {
             points,
@@ -72,6 +78,7 @@ pub(super) fn finish_drawing(
             arrow_length: state.arrow_length,
             arrow_angle: state.arrow_angle,
             head_at_end: state.arrow_head_at_end,
+            label,
         },
         Tool::Marker => Shape::MarkerStroke {
             points,
@@ -143,6 +150,9 @@ pub(super) fn finish_drawing(
         state.dirty_tracker.mark_optional_rect(bounds);
         state.clear_selection();
         state.needs_redraw = true;
+        if used_arrow_label {
+            state.bump_arrow_label();
+        }
     } else if limit_reached {
         warn!(
             "Shape limit ({}) reached; discarding new shape",

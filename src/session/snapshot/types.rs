@@ -65,6 +65,8 @@ pub struct ToolStateSnapshot {
     pub arrow_angle: f64,
     #[serde(default)]
     pub arrow_head_at_end: Option<bool>,
+    #[serde(default)]
+    pub arrow_label_enabled: Option<bool>,
     pub board_previous_color: Option<Color>,
     pub show_status_bar: bool,
 }
@@ -85,6 +87,7 @@ impl ToolStateSnapshot {
             arrow_length: input.arrow_length,
             arrow_angle: input.arrow_angle,
             arrow_head_at_end: Some(input.arrow_head_at_end),
+            arrow_label_enabled: Some(input.arrow_label_enabled),
             board_previous_color: input.board_previous_color,
             show_status_bar: input.show_status_bar,
         }

@@ -3,20 +3,24 @@ use crate::util::Rect;
 
 use super::bounds::ensure_positive_rect_f64;
 
-pub(crate) fn bounding_box_for_text(
-    x: i32,
-    y: i32,
+pub(crate) struct TextLayoutMetrics {
+    pub(crate) ink_x: f64,
+    pub(crate) ink_y: f64,
+    pub(crate) ink_width: f64,
+    pub(crate) ink_height: f64,
+    pub(crate) baseline: f64,
+}
+
+pub(super) fn text_layout_metrics(
     text: &str,
     size: f64,
     font_descriptor: &FontDescriptor,
-    background_enabled: bool,
     wrap_width: Option<i32>,
-) -> Option<Rect> {
+) -> Option<TextLayoutMetrics> {
     if text.is_empty() {
         return None;
     }
 
-    // Use a tiny image surface for measurement; the layout is all we need.
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
     let ctx = cairo::Context::new(&surface).ok()?;
 
@@ -37,51 +41,60 @@ pub(crate) fn bounding_box_for_text(
 
     let (ink_rect, _logical_rect) = layout.extents();
 
-    // Convert Pango units to floats
     let scale = pango::SCALE as f64;
-    let ink_x = ink_rect.x() as f64 / scale;
-    let ink_y = ink_rect.y() as f64 / scale;
-    let ink_width = ink_rect.width() as f64 / scale;
-    let ink_height = ink_rect.height() as f64 / scale;
     let baseline = layout.baseline() as f64 / scale;
 
-    let base_x = x as f64;
-    let base_y = y as f64 - baseline;
-    let ink_max = ink_x + ink_width;
+    Some(TextLayoutMetrics {
+        ink_x: ink_rect.x() as f64 / scale,
+        ink_y: ink_rect.y() as f64 / scale,
+        ink_width: ink_rect.width() as f64 / scale,
+        ink_height: ink_rect.height() as f64 / scale,
+        baseline,
+    })
+}
+
+pub(super) fn text_bounds_from_metrics(
+    x: f64,
+    y: f64,
+    metrics: &TextLayoutMetrics,
+    size: f64,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+) -> Option<Rect> {
+    let base_x = x;
+    let base_y = y - metrics.baseline;
+    let ink_max = metrics.ink_x + metrics.ink_width;
     let effective_max = if let Some(width) = wrap_width {
         ink_max.max(width.max(1) as f64)
     } else {
         ink_max
     };
 
-    // Text fill bounds (before outline expansion)
-    let mut min_x = base_x + ink_x;
+    let mut min_x = base_x + metrics.ink_x;
     let mut max_x = base_x + effective_max;
-    let mut min_y = base_y + ink_y;
-    let mut max_y = min_y + ink_height;
+    let mut min_y = base_y + metrics.ink_y;
+    let mut max_y = min_y + metrics.ink_height;
 
-    let effective_ink_width = effective_max - ink_x;
+    let effective_ink_width = effective_max - metrics.ink_x;
 
-    // Stroke outline expands half the stroke width around text
     let stroke_padding = (size * 0.06) / 2.0;
     min_x -= stroke_padding;
     max_x += stroke_padding;
     min_y -= stroke_padding;
     max_y += stroke_padding;
 
-    // Drop shadow extends the bounds; include union
     let shadow_offset = size * 0.04;
-    min_x = min_x.min(base_x + ink_x + shadow_offset - stroke_padding);
-    min_y = min_y.min(base_y + ink_y + shadow_offset - stroke_padding);
+    min_x = min_x.min(base_x + metrics.ink_x + shadow_offset - stroke_padding);
+    min_y = min_y.min(base_y + metrics.ink_y + shadow_offset - stroke_padding);
     max_x = max_x.max(base_x + effective_max + shadow_offset + stroke_padding);
-    max_y = max_y.max(base_y + ink_y + ink_height + shadow_offset + stroke_padding);
+    max_y = max_y.max(base_y + metrics.ink_y + metrics.ink_height + shadow_offset + stroke_padding);
 
-    if background_enabled && effective_ink_width > 0.0 && ink_height > 0.0 {
+    if background_enabled && effective_ink_width > 0.0 && metrics.ink_height > 0.0 {
         let padding = size * 0.15;
-        let bg_min_x = base_x + ink_x - padding;
-        let bg_min_y = base_y + ink_y - padding;
+        let bg_min_x = base_x + metrics.ink_x - padding;
+        let bg_min_y = base_y + metrics.ink_y - padding;
         let bg_max_x = base_x + effective_max + padding;
-        let bg_max_y = base_y + ink_y + ink_height + padding;
+        let bg_max_y = base_y + metrics.ink_y + metrics.ink_height + padding;
 
         min_x = min_x.min(bg_min_x);
         min_y = min_y.min(bg_min_y);
@@ -90,6 +103,26 @@ pub(crate) fn bounding_box_for_text(
     }
 
     ensure_positive_rect_f64(min_x, min_y, max_x, max_y)
+}
+
+pub(crate) fn bounding_box_for_text(
+    x: i32,
+    y: i32,
+    text: &str,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+) -> Option<Rect> {
+    let metrics = text_layout_metrics(text, size, font_descriptor, wrap_width)?;
+    text_bounds_from_metrics(
+        x as f64,
+        y as f64,
+        &metrics,
+        size,
+        background_enabled,
+        wrap_width,
+    )
 }
 
 const NOTE_PADDING_X_RATIO: f64 = 0.55;

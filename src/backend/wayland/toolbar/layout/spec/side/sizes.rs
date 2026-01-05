@@ -1,4 +1,5 @@
 use crate::config::ToolbarLayoutMode;
+use crate::input::Tool;
 use crate::ui::toolbar::ToolbarSnapshot;
 
 use super::super::ToolbarLayoutSpec;
@@ -14,6 +15,8 @@ impl ToolbarLayoutSpec {
             snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
         let show_text_controls =
             snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
+        let show_arrow_controls =
+            snapshot.active_tool == Tool::Arrow || snapshot.arrow_label_enabled;
         let show_drawer_view =
             snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
         let show_advanced = snapshot.show_actions_advanced && show_drawer_view;
@@ -44,6 +47,9 @@ impl ToolbarLayoutSpec {
         add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Thickness
         if snapshot.thickness_targets_eraser {
             add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
+        }
+        if show_arrow_controls {
+            add_section(Self::SIDE_TOGGLE_CARD_HEIGHT, &mut height);
         }
         if show_marker_opacity {
             add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);

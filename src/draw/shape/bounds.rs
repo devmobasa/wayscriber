@@ -1,5 +1,8 @@
 use crate::util::{self, Rect};
 
+use super::arrow_label::arrow_label_layout;
+use super::types::ArrowLabel;
+
 pub(crate) fn bounding_box_for_points(points: &[(i32, i32)], thick: f64) -> Option<Rect> {
     if points.is_empty() {
         return None;
@@ -82,6 +85,7 @@ pub(crate) fn bounding_box_for_arrow(
     arrow_length: f64,
     arrow_angle: f64,
     head_at_end: bool,
+    label: Option<&ArrowLabel>,
 ) -> Option<Rect> {
     let (tip_x, tip_y, tail_x, tail_y) = if head_at_end {
         (x2, y2, x1, y1)
@@ -105,6 +109,25 @@ pub(crate) fn bounding_box_for_arrow(
     }
 
     let padding = stroke_padding(thick) as f64;
+
+    if let Some(label) = label {
+        let label_text = label.value.to_string();
+        if let Some(layout) = arrow_label_layout(
+            tip_x,
+            tip_y,
+            tail_x,
+            tail_y,
+            thick,
+            &label_text,
+            label.size,
+            &label.font_descriptor,
+        ) {
+            min_x = min_x.min(layout.bounds.x as f64);
+            min_y = min_y.min(layout.bounds.y as f64);
+            max_x = max_x.max((layout.bounds.x + layout.bounds.width) as f64);
+            max_y = max_y.max((layout.bounds.y + layout.bounds.height) as f64);
+        }
+    }
 
     ensure_positive_rect_f64(
         min_x - padding,

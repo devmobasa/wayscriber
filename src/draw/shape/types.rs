@@ -25,6 +25,17 @@ pub enum EraserKind {
     Rect,
 }
 
+/// Label metadata for numbered arrows.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ArrowLabel {
+    /// Numeric label value.
+    pub value: u32,
+    /// Font size in points.
+    pub size: f64,
+    /// Font descriptor (family, weight, style).
+    pub font_descriptor: FontDescriptor,
+}
+
 /// Represents a drawable shape or annotation on screen.
 ///
 /// Each variant represents a different drawing tool/primitive with its specific parameters.
@@ -110,6 +121,9 @@ pub enum Shape {
         /// Whether the arrowhead sits at the end of the line
         #[serde(default = "default_arrow_head_at_end")]
         head_at_end: bool,
+        /// Optional label rendered near the arrow.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<ArrowLabel>,
     },
     /// Text annotation (activated with 'T' key)
     Text {
@@ -203,6 +217,7 @@ impl Shape {
                 arrow_length,
                 arrow_angle,
                 head_at_end,
+                label,
                 color: _,
             } => bounding_box_for_arrow(
                 *x1,
@@ -213,6 +228,7 @@ impl Shape {
                 *arrow_length,
                 *arrow_angle,
                 *head_at_end,
+                label.as_ref(),
             ),
             Shape::Text {
                 x,

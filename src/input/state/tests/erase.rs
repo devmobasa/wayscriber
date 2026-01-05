@@ -200,6 +200,7 @@ fn erase_stroke_hits_various_shapes() {
                 arrow_length: 20.0,
                 arrow_angle: 30.0,
                 head_at_end: true,
+                label: None,
             },
             vec![(0, 90), (100, 90)],
         ),

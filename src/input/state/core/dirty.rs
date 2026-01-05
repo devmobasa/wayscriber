@@ -74,16 +74,20 @@ impl InputState {
                         util::ellipse_bounds(*start_x, *start_y, current_x, current_y);
                     bounding_box_for_ellipse(cx, cy, rx, ry, self.current_thickness)
                 }
-                Tool::Arrow => bounding_box_for_arrow(
-                    *start_x,
-                    *start_y,
-                    current_x,
-                    current_y,
-                    self.current_thickness,
-                    self.arrow_length,
-                    self.arrow_angle,
-                    self.arrow_head_at_end,
-                ),
+                Tool::Arrow => {
+                    let label = self.next_arrow_label();
+                    bounding_box_for_arrow(
+                        *start_x,
+                        *start_y,
+                        current_x,
+                        current_y,
+                        self.current_thickness,
+                        self.arrow_length,
+                        self.arrow_angle,
+                        self.arrow_head_at_end,
+                        label.as_ref(),
+                    )
+                }
                 Tool::Highlight => None,
                 Tool::Select => None,
             },

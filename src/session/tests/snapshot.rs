@@ -67,6 +67,7 @@ fn apply_snapshot_restores_tool_state() {
     input.arrow_length = 40.0;
     input.arrow_angle = 45.0;
     input.arrow_head_at_end = true;
+    input.arrow_label_enabled = true;
     input.board_previous_color = Some(Color {
         r: 0.9,
         g: 0.2,
@@ -92,6 +93,7 @@ fn apply_snapshot_restores_tool_state() {
     assert_eq!(restored.arrow_length, 40.0);
     assert_eq!(restored.arrow_angle, 45.0);
     assert!(restored.arrow_head_at_end);
+    assert!(restored.arrow_label_enabled);
     assert_eq!(
         restored.board_previous_color,
         Some(Color {

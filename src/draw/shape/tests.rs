@@ -48,6 +48,7 @@ fn arrow_bounding_box_includes_head() {
         arrow_length: 20.0,
         arrow_angle: 30.0,
         head_at_end: false,
+        label: None,
     };
 
     let rect = shape.bounding_box().expect("arrow should have bounds");

@@ -1,4 +1,5 @@
 mod actions;
+mod arrow;
 mod colors;
 mod delay;
 mod drawer;
@@ -36,6 +37,8 @@ pub fn build_side_hits(
     if snapshot.thickness_targets_eraser {
         y += ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT + ctx.section_gap;
     }
+
+    y = arrow::push_arrow_hits(&ctx, y, hits);
 
     let show_marker_opacity =
         snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
