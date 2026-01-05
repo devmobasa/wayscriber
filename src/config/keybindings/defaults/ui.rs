@@ -15,7 +15,7 @@ pub(crate) fn default_toggle_toolbar() -> Vec<String> {
 }
 
 pub(crate) fn default_toggle_presenter_mode() -> Vec<String> {
-    vec!["Ctrl+Shift+K".to_string()]
+    vec!["Ctrl+Shift+M".to_string()]
 }
 
 pub(crate) fn default_toggle_fill() -> Vec<String> {

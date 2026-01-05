@@ -664,7 +664,7 @@ toggle_toolbar = ["F2", "F9"]
 toggle_click_highlight = ["Ctrl+Shift+H"]
 
 # Toggle presenter mode
-toggle_presenter_mode = ["Ctrl+Shift+K"]
+toggle_presenter_mode = ["Ctrl+Shift+M"]
 
 # Toggle fill for rectangle/ellipse
 toggle_fill = []
