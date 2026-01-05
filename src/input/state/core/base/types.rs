@@ -157,6 +157,7 @@ pub(crate) struct UiToastState {
     pub kind: UiToastKind,
     pub message: String,
     pub started: Instant,
+    pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy)]

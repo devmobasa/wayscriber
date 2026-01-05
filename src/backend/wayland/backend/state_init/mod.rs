@@ -8,7 +8,9 @@ use super::tray::process_tray_action;
 use crate::{
     capture::CaptureManager,
     config::Config,
+    input::state::UI_TOAST_DURATION_MS,
     input::{BoardMode, InputState, UiToastKind},
+    onboarding::OnboardingStore,
 };
 
 mod config;
@@ -39,11 +41,16 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
-    if matches!(source, crate::config::ConfigSource::Default) {
-        input_state.set_ui_toast(
+    let mut onboarding = OnboardingStore::load();
+    if !onboarding.state().welcome_shown {
+        input_state.toggle_help_overlay();
+        input_state.set_ui_toast_with_duration(
             UiToastKind::Info,
-            "Choose layout: click Mode S/F in the toolbar header.",
+            "Welcome! F1 help, F2/F9 toolbars, 1-5 presets, F11 configurator, Esc exits.",
+            UI_TOAST_DURATION_MS.saturating_mul(3),
         );
+        onboarding.state_mut().welcome_shown = true;
+        onboarding.save();
     }
     apply_initial_mode(backend, &config, &mut input_state);
 
@@ -64,6 +71,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         globals: setup.state_globals,
         config,
         input_state,
+        onboarding,
         capture_manager,
         session_options,
         tokio_handle,

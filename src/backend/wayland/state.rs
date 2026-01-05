@@ -78,6 +78,7 @@ mod capture;
 mod core;
 mod data;
 mod helpers;
+mod onboarding;
 mod render;
 mod toolbar;
 mod zoom;
@@ -110,6 +111,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub globals: WaylandGlobals,
     pub config: Config,
     pub input_state: InputState,
+    pub onboarding: crate::onboarding::OnboardingStore,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
     pub tokio_handle: tokio::runtime::Handle,
@@ -149,6 +151,7 @@ pub(super) struct WaylandState {
 
     // Input state
     pub(super) input_state: InputState,
+    pub(super) onboarding: crate::onboarding::OnboardingStore,
     // Next scheduled tick for UI animations (toasts/highlights/preset feedback).
     pub(super) ui_animation_next_tick: Option<Instant>,
     // Animation interval; None means uncapped (render every frame while active).
