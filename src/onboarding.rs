@@ -6,7 +6,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const ONBOARDING_VERSION: u32 = 1;
+const ONBOARDING_VERSION: u32 = 2;
 const ONBOARDING_FILE: &str = "onboarding.toml";
 const ONBOARDING_DIR: &str = "wayscriber";
 
@@ -18,6 +18,9 @@ pub struct OnboardingState {
     pub welcome_shown: bool,
     #[serde(default)]
     pub toolbar_hint_shown: bool,
+    /// Whether the guided tour has been shown to the user
+    #[serde(default, alias = "tour_completed")]
+    pub tour_shown: bool,
 }
 
 impl Default for OnboardingState {
@@ -26,6 +29,7 @@ impl Default for OnboardingState {
             version: ONBOARDING_VERSION,
             welcome_shown: false,
             toolbar_hint_shown: false,
+            tour_shown: false,
         }
     }
 }
@@ -165,6 +169,7 @@ fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
         version: ONBOARDING_VERSION,
         welcome_shown,
         toolbar_hint_shown,
+        tour_shown: true, // Don't show tour for recovered state
     };
     let store = OnboardingStore {
         state: state.clone(),

@@ -167,6 +167,8 @@ impl InputState {
             active_preset_slot: None,
             preset_feedback: vec![None; PRESET_SLOTS_MAX],
             pending_preset_action: None,
+            tour_active: false,
+            tour_step: 0,
         };
 
         if state.click_highlight.uses_pen_color() {

@@ -9,6 +9,7 @@ mod properties;
 mod selection;
 mod selection_actions;
 mod tool_controls;
+mod tour;
 mod utility;
 
 pub(crate) use base::TextClickState;
@@ -20,3 +21,4 @@ pub use base::{
 #[allow(unused_imports)]
 pub use menus::{ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand};
 pub use selection::SelectionState;
+pub use tour::TourStep;

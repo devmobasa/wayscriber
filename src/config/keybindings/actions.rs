@@ -123,4 +123,7 @@ pub enum Action {
     ClearPreset3,
     ClearPreset4,
     ClearPreset5,
+
+    // Onboarding
+    ReplayTour,
 }

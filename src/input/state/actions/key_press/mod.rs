@@ -20,6 +20,11 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
+        // Tour takes highest priority when active
+        if self.tour_active && self.handle_tour_key(key) {
+            return;
+        }
+
         if self.show_help && self.handle_help_overlay_key(key) {
             return;
         }

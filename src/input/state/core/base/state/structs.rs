@@ -246,4 +246,8 @@ pub struct InputState {
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Pending preset save/clear action for backend persistence
     pub(in crate::input::state::core) pending_preset_action: Option<PresetAction>,
+    /// Whether the guided tour is currently active
+    pub tour_active: bool,
+    /// Current step in the guided tour (0-indexed)
+    pub tour_step: usize,
 }
