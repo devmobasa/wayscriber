@@ -4,7 +4,7 @@ mod types;
 pub use state::InputState;
 pub(crate) use state::PresenterRestore;
 pub(crate) use types::{
-    DelayedHistory, HistoryMode, PresetFeedbackState, TextClickState, UiToastState,
+    DelayedHistory, HistoryMode, PresetFeedbackState, TextClickState, ToastAction, UiToastState,
 };
 pub use types::{
     DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS,

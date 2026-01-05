@@ -67,6 +67,19 @@ impl WaylandState {
             _ => return,
         };
 
+        // Check for toast click before other handling (toast uses screen coords)
+        if mb == MouseButton::Left {
+            let screen_x = event.position.0 as i32;
+            let screen_y = event.position.1 as i32;
+            let (hit, action) = self.input_state.check_toast_click(screen_x, screen_y);
+            if hit {
+                if let Some(action) = action {
+                    self.input_state.handle_action(action);
+                }
+                return;
+            }
+        }
+
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
         self.input_state.on_mouse_release(mb, wx, wy);
         self.input_state.needs_redraw = true;

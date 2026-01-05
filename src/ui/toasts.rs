@@ -96,22 +96,21 @@ pub fn render_preset_toast(
 }
 
 /// Render a transient UI toast (warnings/errors/info).
+/// Returns the toast bounds (x, y, width, height) if rendered, for click detection.
 pub fn render_ui_toast(
     ctx: &cairo::Context,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
-) {
-    let Some(toast) = input_state.ui_toast.as_ref() else {
-        return;
-    };
+) -> Option<(f64, f64, f64, f64)> {
+    let toast = input_state.ui_toast.as_ref()?;
 
     let now = Instant::now();
     let duration_secs = toast.duration_ms as f32 / 1000.0;
     let elapsed = now.saturating_duration_since(toast.started);
     let progress = (elapsed.as_secs_f32() / duration_secs).clamp(0.0, 1.0);
     if progress >= 1.0 {
-        return;
+        return None;
     }
 
     let label = toast.message.as_str();
@@ -120,13 +119,21 @@ pub fn render_ui_toast(
     let padding_y = 9.0;
     let radius = 10.0;
 
+    // Calculate label with optional action suffix
+    let action_suffix = toast
+        .action
+        .as_ref()
+        .map(|a| format!(" [{}]", a.label))
+        .unwrap_or_default();
+    let full_label = format!("{}{}", label, action_suffix);
+
     let extents = text_extents_for(
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
         cairo::FontWeight::Bold,
         font_size,
-        label,
+        &full_label,
     );
     let width = extents.width() + padding_x * 2.0;
     let height = extents.height() + padding_y * 2.0;
@@ -145,12 +152,34 @@ pub fn render_ui_toast(
     draw_rounded_rect(ctx, x, y, width, height, radius);
     let _ = ctx.fill();
 
+    // Draw main label
+    let label_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+        label,
+    );
     let text_x = x + (width - extents.width()) / 2.0 - extents.x_bearing();
     let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
+
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55 * fade);
     ctx.move_to(text_x + 1.0, text_y + 1.0);
     let _ = ctx.show_text(label);
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0 * fade);
     ctx.move_to(text_x, text_y);
     let _ = ctx.show_text(label);
+
+    // Draw action suffix in slightly dimmer color if present
+    if toast.action.is_some() {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7 * fade);
+        ctx.move_to(
+            text_x + label_extents.width() + label_extents.x_bearing(),
+            text_y,
+        );
+        let _ = ctx.show_text(&action_suffix);
+    }
+
+    Some((x, y, width, height))
 }

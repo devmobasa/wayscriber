@@ -133,6 +133,7 @@ impl InputState {
             show_preset_toasts: true,
             show_tool_preview: false,
             ui_toast: None,
+            ui_toast_bounds: None,
             selection_clipboard: None,
             clipboard_paste_offset: 0,
             last_capture_path: None,

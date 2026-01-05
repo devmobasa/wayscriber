@@ -262,9 +262,9 @@ impl ToolbarLayoutSpec {
     ) -> f64 {
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
-        let mut toggle_count = 3; // Tool preview + status bar + preset toasts
+        let mut toggle_count = 3; // Text controls + status bar + preset toasts
         if snapshot.layout_mode != ToolbarLayoutMode::Simple {
-            toggle_count += 7; // presets, actions, zoom actions, advanced actions, pages, step section, text controls
+            toggle_count += 6; // presets, actions, zoom actions, advanced actions, pages, step section
         }
         let rows = (toggle_count + 1) / 2;
         let toggle_rows_h = if rows > 0 {

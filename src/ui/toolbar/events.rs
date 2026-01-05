@@ -82,6 +82,7 @@ pub enum ToolbarEvent {
     /// Toggle preset action toast notifications
     TogglePresetToasts(bool),
     /// Toggle cursor tool preview bubble
+    #[allow(dead_code)]
     ToggleToolPreview(bool),
     /// Toggle status bar visibility
     ToggleStatusBar(bool),

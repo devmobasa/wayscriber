@@ -1,4 +1,5 @@
 use super::super::base::{InputState, PresenterRestore, UiToastKind};
+use crate::config::keybindings::Action;
 use crate::input::tool::Tool;
 
 impl InputState {
@@ -87,7 +88,12 @@ impl InputState {
         self.presenter_restore = Some(restore);
         self.presenter_mode = true;
         if config.show_toast {
-            self.set_ui_toast(UiToastKind::Info, "Starting Presenter Mode");
+            self.set_ui_toast_with_action(
+                UiToastKind::Info,
+                "Presenter Mode active",
+                "Exit",
+                Action::TogglePresenterMode,
+            );
         }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
