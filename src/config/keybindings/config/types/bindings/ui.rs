@@ -31,6 +31,9 @@ pub struct UiKeybindingsConfig {
 
     #[serde(default = "default_open_configurator")]
     pub open_configurator: Vec<String>,
+
+    #[serde(default = "default_toggle_command_palette")]
+    pub toggle_command_palette: Vec<String>,
 }
 
 impl Default for UiKeybindingsConfig {
@@ -45,6 +48,7 @@ impl Default for UiKeybindingsConfig {
             toggle_selection_properties: default_toggle_selection_properties(),
             open_context_menu: default_open_context_menu(),
             open_configurator: default_open_configurator(),
+            toggle_command_palette: default_toggle_command_palette(),
         }
     }
 }

@@ -124,6 +124,9 @@ pub enum Action {
     ClearPreset4,
     ClearPreset5,
 
+    // Command palette
+    ToggleCommandPalette,
+
     // Onboarding
     ReplayTour,
 }
