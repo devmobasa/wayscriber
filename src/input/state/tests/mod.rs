@@ -8,6 +8,7 @@ use crate::util;
 mod helpers;
 use helpers::create_test_input_state;
 
+mod arrow_labels;
 mod basics;
 mod drawing;
 mod erase;

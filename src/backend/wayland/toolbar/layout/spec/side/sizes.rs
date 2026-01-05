@@ -49,7 +49,12 @@ impl ToolbarLayoutSpec {
             add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
         }
         if show_arrow_controls {
-            add_section(Self::SIDE_TOGGLE_CARD_HEIGHT, &mut height);
+            let arrow_height = if snapshot.arrow_label_enabled {
+                Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET
+            } else {
+                Self::SIDE_TOGGLE_CARD_HEIGHT
+            };
+            add_section(arrow_height, &mut height);
         }
         if show_marker_opacity {
             add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);

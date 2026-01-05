@@ -22,6 +22,16 @@ impl InputState {
         self.arrow_label_counter = self.arrow_label_counter.saturating_add(1);
     }
 
+    pub(crate) fn reset_arrow_label_counter(&mut self) -> bool {
+        if self.arrow_label_counter == 1 {
+            return false;
+        }
+        self.arrow_label_counter = 1;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
+    }
+
     pub(crate) fn set_arrow_label_enabled(&mut self, enabled: bool) -> bool {
         if self.arrow_label_enabled == enabled {
             return false;

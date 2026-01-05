@@ -51,6 +51,8 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_SLIDER_CARD_HEIGHT: f64 = 52.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_ERASER_MODE_CARD_HEIGHT: f64 = 44.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_TOGGLE_CARD_HEIGHT: f64 = 44.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET: f64 =
+        Self::SIDE_TOGGLE_CARD_HEIGHT + Self::SIDE_TOGGLE_HEIGHT + Self::SIDE_TOGGLE_GAP;
     pub(in crate::backend::wayland::toolbar) const SIDE_FONT_CARD_HEIGHT: f64 = 50.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_DELAY_SECTION_HEIGHT: f64 = 55.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_TOGGLE_HEIGHT: f64 = 24.0;

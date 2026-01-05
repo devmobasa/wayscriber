@@ -68,6 +68,26 @@ fn arrow_bounding_box_includes_head() {
 }
 
 #[test]
+fn arrow_label_layout_offsets_from_line() {
+    let font = FontDescriptor::default();
+    let layout = super::arrow_label_layout(100, 0, 0, 0, 2.0, "1", 12.0, &font)
+        .expect("label layout should exist");
+    let center_x = layout.bounds.x + layout.bounds.width / 2;
+    let center_y = layout.bounds.y + layout.bounds.height / 2;
+
+    assert!(center_y > 0);
+    assert!((center_x - 50).abs() <= 20);
+
+    let layout = super::arrow_label_layout(0, 100, 0, 0, 2.0, "1", 12.0, &font)
+        .expect("label layout should exist");
+    let center_x = layout.bounds.x + layout.bounds.width / 2;
+    let center_y = layout.bounds.y + layout.bounds.height / 2;
+
+    assert!(center_x < 0);
+    assert!((center_y - 50).abs() <= 20);
+}
+
+#[test]
 fn ellipse_bounding_box_handles_radii_and_stroke() {
     let shape = Shape::Ellipse {
         cx: 200,
