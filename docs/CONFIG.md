@@ -720,7 +720,7 @@ toggle_status_bar = ["F12", "F4"]
 toggle_toolbar = ["F2", "F9"]
 
 # Toggle presenter mode
-toggle_presenter_mode = ["Ctrl+Shift+K"]
+toggle_presenter_mode = ["Ctrl+Shift+M"]
 
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]
