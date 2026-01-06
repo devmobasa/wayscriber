@@ -80,19 +80,36 @@ impl WaylandState {
                         }
                     }
                     2..=4 => {
-                        let mut indices = Vec::with_capacity(ids.len());
+                        // Use fixed array to avoid heap allocation for small counts
+                        let mut indices = [0usize; 4];
+                        let mut count = 0;
                         for id in &ids {
                             if let Some(index) = frame.find_index(*id) {
-                                indices.push(index);
+                                // Insert-sort to maintain order and skip duplicates
+                                let mut insert_pos = count;
+                                for (i, &existing) in indices[..count].iter().enumerate() {
+                                    if existing == index {
+                                        insert_pos = usize::MAX; // duplicate
+                                        break;
+                                    }
+                                    if existing > index {
+                                        insert_pos = i;
+                                        break;
+                                    }
+                                }
+                                if insert_pos != usize::MAX && count < 4 {
+                                    // Shift elements to make room
+                                    for j in (insert_pos..count).rev() {
+                                        indices[j + 1] = indices[j];
+                                    }
+                                    indices[insert_pos] = index;
+                                    count += 1;
+                                }
                             }
                         }
-                        if !indices.is_empty() {
-                            indices.sort_unstable();
-                            indices.dedup();
-                            for index in indices {
-                                if let Some(drawn) = frame.shapes.get(index) {
-                                    crate::draw::render_selection_halo(ctx, drawn);
-                                }
+                        for &index in &indices[..count] {
+                            if let Some(drawn) = frame.shapes.get(index) {
+                                crate::draw::render_selection_halo(ctx, drawn);
                             }
                         }
                     }
