@@ -1,19 +1,19 @@
 use super::super::base::{InputState, UiToastKind};
-use crate::draw::ShapeId;
 use crate::draw::frame::UndoAction;
 
 const COPY_PASTE_OFFSET: i32 = 12;
 
 impl InputState {
     pub(crate) fn duplicate_selection(&mut self) -> bool {
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
+        let ids_len = self.selected_shape_ids().len();
+        if ids_len == 0 {
             return false;
         }
 
         let mut created = Vec::new();
         let mut new_ids = Vec::new();
-        for id in ids {
+        for idx in 0..ids_len {
+            let id = self.selected_shape_ids()[idx];
             let original = {
                 let frame = self.canvas_set.active_frame();
                 frame.shape(id).cloned()
@@ -59,21 +59,24 @@ impl InputState {
     }
 
     pub(crate) fn copy_selection(&mut self) -> usize {
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
-            return 0;
-        }
-
-        let frame = self.canvas_set.active_frame();
-        let mut copied = Vec::new();
-        for id in ids {
-            if let Some(shape) = frame.shape(id) {
-                if shape.locked {
-                    continue;
-                }
-                copied.push(shape.shape.clone());
+        let copied = {
+            let ids = self.selected_shape_ids();
+            if ids.is_empty() {
+                return 0;
             }
-        }
+
+            let frame = self.canvas_set.active_frame();
+            let mut copied = Vec::new();
+            for id in ids {
+                if let Some(shape) = frame.shape(*id) {
+                    if shape.locked {
+                        continue;
+                    }
+                    copied.push(shape.shape.clone());
+                }
+            }
+            copied
+        };
 
         if copied.is_empty() {
             return 0;

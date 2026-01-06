@@ -2,7 +2,6 @@ use super::super::base::InputState;
 use super::panel_layout::selection_panel_anchor;
 use super::types::{PropertiesPanelLayout, ShapePropertiesPanel};
 use super::utils::format_timestamp;
-use crate::draw::ShapeId;
 
 impl InputState {
     pub fn properties_panel(&self) -> Option<&ShapePropertiesPanel> {
@@ -36,100 +35,17 @@ impl InputState {
     }
 
     pub(crate) fn show_properties_panel(&mut self) -> bool {
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
+        if self.selected_shape_ids().is_empty() {
             return false;
         }
 
-        let frame = self.canvas_set.active_frame();
-        let anchor_rect = self.selection_bounding_box(&ids);
-        let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
+        let panel = (|| {
+            let ids = self.selected_shape_ids();
+            let frame = self.canvas_set.active_frame();
+            let anchor_rect = self.selection_bounding_box(ids);
+            let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
+            let entries = self.build_selection_property_entries(ids);
 
-        let entries = self.build_selection_property_entries(&ids);
-
-        if ids.len() > 1 {
-            let total = ids.len();
-            let locked = ids
-                .iter()
-                .filter(|id| frame.shape(**id).map(|shape| shape.locked).unwrap_or(false))
-                .count();
-            let mut lines = Vec::new();
-            lines.push(format!("Shapes selected: {total}"));
-            if locked > 0 {
-                lines.push(format!("Locked: {locked}/{total}"));
-            }
-            if let Some(bounds) = anchor_rect {
-                lines.push(format!(
-                    "Bounds: {}×{} px",
-                    bounds.width.max(0),
-                    bounds.height.max(0)
-                ));
-            }
-            self.set_properties_panel(ShapePropertiesPanel {
-                title: "Selection Properties".to_string(),
-                anchor,
-                anchor_rect,
-                lines,
-                entries,
-                hover_index: None,
-                keyboard_focus: None,
-                multiple_selection: true,
-            });
-            return true;
-        }
-
-        let shape_id = ids[0];
-        let index = match frame.find_index(shape_id) {
-            Some(idx) => idx,
-            None => return false,
-        };
-        let drawn = match frame.shape(shape_id) {
-            Some(shape) => shape,
-            None => return false,
-        };
-
-        let mut lines = Vec::new();
-        lines.push(format!("Shape ID: {shape_id}"));
-        lines.push(format!("Type: {}", drawn.shape.kind_name()));
-        lines.push(format!("Layer: {} of {}", index + 1, frame.shapes.len()));
-        lines.push(format!(
-            "Locked: {}",
-            if drawn.locked { "Yes" } else { "No" }
-        ));
-        if let Some(timestamp) = format_timestamp(drawn.created_at) {
-            lines.push(format!("Created: {timestamp}"));
-        }
-        if let Some(bounds) = drawn.shape.bounding_box() {
-            lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
-        }
-
-        self.set_properties_panel(ShapePropertiesPanel {
-            title: "Shape Properties".to_string(),
-            anchor,
-            anchor_rect,
-            lines,
-            entries,
-            hover_index: None,
-            keyboard_focus: None,
-            multiple_selection: false,
-        });
-        true
-    }
-
-    pub(super) fn refresh_properties_panel(&mut self) {
-        self.properties_panel_needs_refresh = false;
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
-            self.close_properties_panel();
-            return;
-        }
-
-        let entries = self.build_selection_property_entries(&ids);
-        let frame = self.canvas_set.active_frame();
-        let anchor_rect = self.selection_bounding_box(&ids);
-        let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
-
-        let details = (|| {
             if ids.len() > 1 {
                 let total = ids.len();
                 let locked = ids
@@ -148,12 +64,22 @@ impl InputState {
                         bounds.height.max(0)
                     ));
                 }
-                return Some(("Selection Properties".to_string(), lines, true));
+                return Some(ShapePropertiesPanel {
+                    title: "Selection Properties".to_string(),
+                    anchor,
+                    anchor_rect,
+                    lines,
+                    entries,
+                    hover_index: None,
+                    keyboard_focus: None,
+                    multiple_selection: true,
+                });
             }
 
             let shape_id = *ids.first()?;
             let index = frame.find_index(shape_id)?;
             let drawn = frame.shape(shape_id)?;
+
             let mut lines = Vec::new();
             lines.push(format!("Shape ID: {shape_id}"));
             lines.push(format!("Type: {}", drawn.shape.kind_name()));
@@ -168,10 +94,90 @@ impl InputState {
             if let Some(bounds) = drawn.shape.bounding_box() {
                 lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
             }
-            Some(("Shape Properties".to_string(), lines, false))
+
+            Some(ShapePropertiesPanel {
+                title: "Shape Properties".to_string(),
+                anchor,
+                anchor_rect,
+                lines,
+                entries,
+                hover_index: None,
+                keyboard_focus: None,
+                multiple_selection: false,
+            })
         })();
 
-        let Some((title, lines, multiple_selection)) = details else {
+        let Some(panel) = panel else {
+            return false;
+        };
+        self.set_properties_panel(panel);
+        true
+    }
+
+    pub(super) fn refresh_properties_panel(&mut self) {
+        self.properties_panel_needs_refresh = false;
+        let update = (|| {
+            let ids = self.selected_shape_ids();
+            if ids.is_empty() {
+                return None;
+            }
+
+            let entries = self.build_selection_property_entries(ids);
+            let frame = self.canvas_set.active_frame();
+            let anchor_rect = self.selection_bounding_box(ids);
+            let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
+
+            let (title, lines, multiple_selection) = if ids.len() > 1 {
+                let total = ids.len();
+                let locked = ids
+                    .iter()
+                    .filter(|id| frame.shape(**id).map(|shape| shape.locked).unwrap_or(false))
+                    .count();
+                let mut lines = Vec::new();
+                lines.push(format!("Shapes selected: {total}"));
+                if locked > 0 {
+                    lines.push(format!("Locked: {locked}/{total}"));
+                }
+                if let Some(bounds) = anchor_rect {
+                    lines.push(format!(
+                        "Bounds: {}×{} px",
+                        bounds.width.max(0),
+                        bounds.height.max(0)
+                    ));
+                }
+                ("Selection Properties".to_string(), lines, true)
+            } else {
+                let shape_id = *ids.first()?;
+                let index = frame.find_index(shape_id)?;
+                let drawn = frame.shape(shape_id)?;
+                let mut lines = Vec::new();
+                lines.push(format!("Shape ID: {shape_id}"));
+                lines.push(format!("Type: {}", drawn.shape.kind_name()));
+                lines.push(format!("Layer: {} of {}", index + 1, frame.shapes.len()));
+                lines.push(format!(
+                    "Locked: {}",
+                    if drawn.locked { "Yes" } else { "No" }
+                ));
+                if let Some(timestamp) = format_timestamp(drawn.created_at) {
+                    lines.push(format!("Created: {timestamp}"));
+                }
+                if let Some(bounds) = drawn.shape.bounding_box() {
+                    lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
+                }
+                ("Shape Properties".to_string(), lines, false)
+            };
+
+            Some((
+                title,
+                lines,
+                entries,
+                anchor_rect,
+                anchor,
+                multiple_selection,
+            ))
+        })();
+
+        let Some((title, lines, entries, anchor_rect, anchor, multiple_selection)) = update else {
             self.close_properties_panel();
             return;
         };

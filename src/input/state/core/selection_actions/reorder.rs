@@ -1,5 +1,4 @@
 use super::super::base::InputState;
-use crate::draw::ShapeId;
 use crate::draw::frame::UndoAction;
 
 impl InputState {
@@ -12,14 +11,15 @@ impl InputState {
     }
 
     fn reorder_selection(&mut self, to_front: bool) -> bool {
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
+        let ids_len = self.selected_shape_ids().len();
+        if ids_len == 0 {
             return false;
         }
 
         let mut actions = Vec::new();
         let len = self.canvas_set.active_frame().shapes.len();
-        for id in ids {
+        for idx in 0..ids_len {
+            let id = self.selected_shape_ids()[idx];
             let movement = {
                 let frame = self.canvas_set.active_frame_mut();
                 if let Some(from) = frame.find_index(id) {

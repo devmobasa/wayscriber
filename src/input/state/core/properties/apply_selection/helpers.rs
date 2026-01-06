@@ -1,6 +1,6 @@
 use super::super::super::base::{InputState, UiToastKind};
 use super::super::summary::shape_color;
-use crate::draw::{Color, Shape, ShapeId};
+use crate::draw::{Color, Shape};
 
 #[derive(Default)]
 pub(super) struct SelectionApplyResult {
@@ -63,8 +63,8 @@ impl InputState {
         A: FnMut(&Shape) -> bool,
         F: FnMut(&mut Shape) -> bool,
     {
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
+        let ids_len = self.selected_shape_ids().len();
+        if ids_len == 0 {
             return SelectionApplyResult::default();
         }
 
@@ -72,46 +72,45 @@ impl InputState {
         let mut actions = Vec::new();
         let mut dirty_regions = Vec::new();
 
-        {
+        for idx in 0..ids_len {
+            let id = self.selected_shape_ids()[idx];
             let frame = self.canvas_set.active_frame_mut();
-            for id in ids {
-                let Some(drawn) = frame.shape_mut(id) else {
-                    continue;
-                };
-                if !applicable(&drawn.shape) {
-                    continue;
-                }
-                result.applicable += 1;
-                if drawn.locked {
-                    result.locked += 1;
-                    continue;
-                }
-
-                let before_bounds = drawn.shape.bounding_box();
-                let before_snapshot = crate::draw::frame::ShapeSnapshot {
-                    shape: drawn.shape.clone(),
-                    locked: drawn.locked,
-                };
-
-                let changed = apply(&mut drawn.shape);
-                if !changed {
-                    continue;
-                }
-
-                let after_bounds = drawn.shape.bounding_box();
-                let after_snapshot = crate::draw::frame::ShapeSnapshot {
-                    shape: drawn.shape.clone(),
-                    locked: drawn.locked,
-                };
-
-                actions.push(crate::draw::frame::UndoAction::Modify {
-                    shape_id: drawn.id,
-                    before: before_snapshot,
-                    after: after_snapshot,
-                });
-                dirty_regions.push((drawn.id, before_bounds, after_bounds));
-                result.changed += 1;
+            let Some(drawn) = frame.shape_mut(id) else {
+                continue;
+            };
+            if !applicable(&drawn.shape) {
+                continue;
             }
+            result.applicable += 1;
+            if drawn.locked {
+                result.locked += 1;
+                continue;
+            }
+
+            let before_bounds = drawn.shape.bounding_box();
+            let before_snapshot = crate::draw::frame::ShapeSnapshot {
+                shape: drawn.shape.clone(),
+                locked: drawn.locked,
+            };
+
+            let changed = apply(&mut drawn.shape);
+            if !changed {
+                continue;
+            }
+
+            let after_bounds = drawn.shape.bounding_box();
+            let after_snapshot = crate::draw::frame::ShapeSnapshot {
+                shape: drawn.shape.clone(),
+                locked: drawn.locked,
+            };
+
+            actions.push(crate::draw::frame::UndoAction::Modify {
+                shape_id: drawn.id,
+                before: before_snapshot,
+                after: after_snapshot,
+            });
+            dirty_regions.push((drawn.id, before_bounds, after_bounds));
+            result.changed += 1;
         }
 
         if actions.is_empty() {

@@ -6,8 +6,14 @@ use std::collections::HashSet;
 
 impl InputState {
     pub(crate) fn delete_selection(&mut self) -> bool {
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        self.delete_shapes_by_ids(&ids)
+        let id_set: HashSet<ShapeId> = {
+            let ids = self.selected_shape_ids();
+            if ids.is_empty() {
+                return false;
+            }
+            ids.iter().copied().collect()
+        };
+        self.delete_shapes_by_id_set(&id_set)
     }
 
     pub(crate) fn delete_shapes_by_ids(&mut self, ids: &[ShapeId]) -> bool {
@@ -16,6 +22,10 @@ impl InputState {
         }
 
         let id_set: HashSet<ShapeId> = ids.iter().copied().collect();
+        self.delete_shapes_by_id_set(&id_set)
+    }
+
+    fn delete_shapes_by_id_set(&mut self, id_set: &HashSet<ShapeId>) -> bool {
         if id_set.is_empty() {
             return false;
         }
