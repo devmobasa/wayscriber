@@ -26,6 +26,11 @@ pub struct SurfaceState {
     kind: Option<SurfaceKind>,
     wl_surface: Option<wl_surface::WlSurface>,
     pool: Option<SlotPool>,
+    /// Generation counter incremented when pool is recreated.
+    /// Used by damage tracker to detect pool reallocation.
+    pool_generation: u64,
+    /// Last known pool size, used to detect pool growth.
+    pool_size: usize,
     current_output: Option<wl_output::WlOutput>,
     width: u32,
     height: u32,
@@ -41,6 +46,8 @@ impl SurfaceState {
             kind: None,
             wl_surface: None,
             pool: None,
+            pool_generation: 0,
+            pool_size: 0,
             current_output: None,
             width: 0,
             height: 0,
@@ -106,6 +113,7 @@ impl SurfaceState {
         self.height = height;
         if changed {
             self.pool = None;
+            self.pool_size = 0;
         }
         changed
     }
@@ -116,6 +124,7 @@ impl SurfaceState {
         if self.scale != scale {
             self.scale = scale;
             self.pool = None;
+            self.pool_size = 0;
             if let Some(layer_surface) = self.layer_surface_mut() {
                 let _ = layer_surface.set_buffer_scale(scale as u32);
             } else if let Some(wl_surface) = self.wl_surface() {
@@ -167,22 +176,57 @@ impl SurfaceState {
         self.frame_callback_pending
     }
 
+    /// Returns the current pool generation counter.
+    #[allow(dead_code)]
+    pub fn pool_generation(&self) -> u64 {
+        self.pool_generation
+    }
+
+    /// Updates the stored pool size and returns true if it grew.
+    ///
+    /// Call this after `create_buffer` to detect if the pool grew during allocation.
+    pub fn update_pool_size(&mut self, new_size: usize) -> bool {
+        let grew = new_size > self.pool_size;
+        if grew {
+            info!(
+                "Pool grew during create_buffer: {} -> {} bytes",
+                self.pool_size, new_size
+            );
+        }
+        self.pool_size = new_size;
+        grew
+    }
+
     /// Ensures a shared memory pool of the appropriate size exists.
-    pub fn ensure_pool(&mut self, shm: &Shm, buffer_count: usize) -> Result<&mut SlotPool> {
+    ///
+    /// Returns the pool and the current generation counter. The generation is
+    /// incremented when a new pool is created, which can be used to detect when
+    /// damage tracking should be reset (all previous canvas pointers become invalid).
+    pub fn ensure_pool(&mut self, shm: &Shm, buffer_count: usize) -> Result<(&mut SlotPool, u64)> {
         if self.pool.is_none() {
             let (phys_w, phys_h) = self.physical_dimensions();
             let buffer_size = (phys_w * phys_h * 4) as usize;
-            let pool_size = buffer_size * buffer_count;
+            let initial_pool_size = buffer_size * buffer_count;
             info!(
-                "Creating new SlotPool ({}x{} @ scale {}, {} bytes, {} buffers)",
-                phys_w, phys_h, self.scale, pool_size, buffer_count
+                "Creating new SlotPool ({}x{} @ scale {}, {} bytes, {} buffers, gen {})",
+                phys_w,
+                phys_h,
+                self.scale,
+                initial_pool_size,
+                buffer_count,
+                self.pool_generation + 1
             );
-            let pool = SlotPool::new(pool_size, shm).context("Failed to create slot pool")?;
+            let pool =
+                SlotPool::new(initial_pool_size, shm).context("Failed to create slot pool")?;
+            self.pool_size = pool.len();
             self.pool = Some(pool);
+            self.pool_generation += 1;
         }
 
+        let generation = self.pool_generation;
         self.pool
             .as_mut()
+            .map(|p| (p, generation))
             .context("Buffer pool not initialized despite previous check")
     }
 }
