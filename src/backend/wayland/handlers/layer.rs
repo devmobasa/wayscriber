@@ -58,6 +58,7 @@ impl LayerShellHandler for WaylandState {
 
             if size_changed {
                 info!("Surface size changed - recreating SlotPool");
+                self.buffer_damage.mark_all_full();
             }
 
             self.input_state

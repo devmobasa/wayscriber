@@ -74,6 +74,7 @@ use super::{
 };
 
 mod activation;
+mod buffer_damage;
 mod capture;
 mod core;
 mod data;
@@ -90,7 +91,7 @@ type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_scr
 
 pub(super) use helpers::{
     damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
-    force_inline_toolbars_requested, resolve_damage_regions, scale_damage_regions, surface_id,
+    force_inline_toolbars_requested, scale_damage_regions, surface_id,
     toolbar_drag_preview_enabled, toolbar_pointer_lock_enabled,
 };
 
@@ -145,6 +146,8 @@ pub(super) struct WaylandState {
     pub(super) surface: SurfaceState,
     pub(super) toolbar: ToolbarSurfaceManager,
     data: StateData,
+    /// Per-buffer damage tracking for correct incremental rendering.
+    pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
 
     // Configuration
     pub(super) config: Config,

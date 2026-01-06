@@ -448,6 +448,7 @@ size = 3.0
 [performance]
 buffer_count = 3
 enable_vsync = true
+max_fps_no_vsync = 60
 ui_animation_fps = 30
 
 [ui]

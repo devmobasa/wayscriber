@@ -40,13 +40,14 @@ impl InputState {
         if dx == 0 && dy == 0 {
             return false;
         }
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
+        let ids_len = self.selected_shape_ids().len();
+        if ids_len == 0 {
             return false;
         }
 
         let mut moved_any = false;
-        for id in ids {
+        for idx in 0..ids_len {
+            let id = self.selected_shape_ids()[idx];
             let bounds = {
                 let frame = self.canvas_set.active_frame_mut();
                 if let Some(shape) = frame.shape_mut(id) {

@@ -6,16 +6,25 @@ use super::Shape;
 use crate::util::Rect;
 
 /// Tracks dirty rectangles accumulated between renders.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DirtyTracker {
     regions: Vec<Rect>,
     force_full: bool,
 }
 
+impl Default for DirtyTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DirtyTracker {
-    /// Creates a new, empty tracker.
+    /// Creates a new, empty tracker with pre-allocated capacity.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            regions: Vec::with_capacity(8), // Typical frame has 4-8 dirty regions
+            force_full: false,
+        }
     }
 
     /// Marks the entire surface as dirty. Clears any accumulated rectangles.

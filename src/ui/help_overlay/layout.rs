@@ -1,7 +1,8 @@
 use super::super::primitives::text_extents_for;
 use super::keycaps::measure_key_combo;
-use super::types::{MeasuredSection, Section};
+use super::types::{BadgeTextMetrics, MeasuredSection, Section};
 
+#[derive(Clone)]
 pub(crate) struct GridLayout {
     pub(crate) rows: Vec<Vec<MeasuredSection>>,
     pub(crate) row_widths: Vec<f64>,
@@ -101,6 +102,7 @@ pub(crate) fn measure_sections(
         if !section.badges.is_empty() {
             section_height += badge_top_gap;
             let mut badges_width = 0.0;
+            let mut badge_text_metrics = Vec::with_capacity(section.badges.len());
 
             for (index, badge) in section.badges.iter().enumerate() {
                 let badge_extents = text_extents_for(
@@ -111,6 +113,11 @@ pub(crate) fn measure_sections(
                     badge_font_size,
                     badge.label,
                 );
+                badge_text_metrics.push(BadgeTextMetrics {
+                    width: badge_extents.width(),
+                    height: badge_extents.height(),
+                    y_bearing: badge_extents.y_bearing(),
+                });
                 let badge_width = badge_extents.width() + badge_padding_x * 2.0;
                 if index > 0 {
                     badges_width += badge_gap;
@@ -120,13 +127,22 @@ pub(crate) fn measure_sections(
 
             section_width = section_width.max(badges_width);
             section_height += badge_height;
-        }
 
+            measured_sections.push(MeasuredSection {
+                section,
+                width: section_width + section_card_padding * 2.0,
+                height: section_height + section_card_padding * 2.0,
+                key_column_width: key_max_width,
+                badge_text_metrics,
+            });
+            continue;
+        }
         measured_sections.push(MeasuredSection {
             section,
             width: section_width + section_card_padding * 2.0,
             height: section_height + section_card_padding * 2.0,
             key_column_width: key_max_width,
+            badge_text_metrics: Vec::new(),
         });
     }
 
