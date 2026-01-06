@@ -35,6 +35,10 @@ impl KeybindingsConfig {
         )?;
         inserter.insert_all(&self.tools.increase_font_size, Action::IncreaseFontSize)?;
         inserter.insert_all(&self.tools.decrease_font_size, Action::DecreaseFontSize)?;
+        inserter.insert_all(
+            &self.tools.reset_arrow_labels,
+            Action::ResetArrowLabelCounter,
+        )?;
         Ok(())
     }
 }

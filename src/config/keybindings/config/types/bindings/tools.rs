@@ -52,6 +52,9 @@ pub struct ToolKeybindingsConfig {
 
     #[serde(default = "default_decrease_font_size")]
     pub decrease_font_size: Vec<String>,
+
+    #[serde(default = "default_reset_arrow_labels")]
+    pub reset_arrow_labels: Vec<String>,
 }
 
 impl Default for ToolKeybindingsConfig {
@@ -73,6 +76,7 @@ impl Default for ToolKeybindingsConfig {
             toggle_highlight_tool: default_toggle_highlight_tool(),
             increase_font_size: default_increase_font_size(),
             decrease_font_size: default_decrease_font_size(),
+            reset_arrow_labels: default_reset_arrow_labels(),
         }
     }
 }

@@ -52,6 +52,7 @@ pub enum Action {
     SelectHighlightTool,
     IncreaseFontSize,
     DecreaseFontSize,
+    ResetArrowLabelCounter,
 
     // Board mode toggles
     ToggleWhiteboard,

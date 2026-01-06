@@ -61,3 +61,7 @@ pub(crate) fn default_increase_font_size() -> Vec<String> {
 pub(crate) fn default_decrease_font_size() -> Vec<String> {
     vec!["Ctrl+Shift+-".to_string(), "Ctrl+Shift+_".to_string()]
 }
+
+pub(crate) fn default_reset_arrow_labels() -> Vec<String> {
+    vec!["Ctrl+Shift+R".to_string()]
+}

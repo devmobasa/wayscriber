@@ -133,6 +133,12 @@ fn test_build_action_map() {
         map.get(&toggle_highlight_tool),
         Some(&Action::ToggleHighlightTool)
     );
+
+    let reset_arrow_labels = KeyBinding::parse("Ctrl+Shift+R").unwrap();
+    assert_eq!(
+        map.get(&reset_arrow_labels),
+        Some(&Action::ResetArrowLabelCounter)
+    );
 }
 
 #[test]

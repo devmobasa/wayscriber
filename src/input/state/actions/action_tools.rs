@@ -77,6 +77,11 @@ impl InputState {
             Action::DecreaseFontSize => {
                 self.adjust_font_size(-2.0);
             }
+            Action::ResetArrowLabelCounter => {
+                if self.reset_arrow_label_counter() {
+                    info!("Arrow label counter reset");
+                }
+            }
             Action::ToggleFill => {
                 let enable = !self.fill_enabled;
                 if self.set_fill_enabled(enable) {
