@@ -26,6 +26,14 @@ pub(crate) struct MeasuredSection {
     pub(crate) width: f64,
     pub(crate) height: f64,
     pub(crate) key_column_width: f64,
+    pub(crate) badge_text_metrics: Vec<BadgeTextMetrics>,
+}
+
+#[derive(Clone)]
+pub(crate) struct BadgeTextMetrics {
+    pub(crate) width: f64,
+    pub(crate) height: f64,
+    pub(crate) y_bearing: f64,
 }
 
 pub(crate) fn row<T: Into<String>>(key: T, action: &'static str) -> Row {

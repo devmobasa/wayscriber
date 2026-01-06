@@ -220,15 +220,22 @@ pub(crate) fn draw_sections_grid(
                     }
 
                     ctx.new_path();
-                    let badge_text_extents = text_extents_for(
-                        ctx,
-                        style.help_font_family,
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Bold,
-                        style.badge_font_size,
-                        badge.label,
-                    );
-                    let badge_width = badge_text_extents.width() + style.badge_padding_x * 2.0;
+                    let badge_metrics = measured
+                        .badge_text_metrics
+                        .get(badge_index)
+                        .map(|metrics| (metrics.width, metrics.height, metrics.y_bearing))
+                        .unwrap_or_else(|| {
+                            let extents = text_extents_for(
+                                ctx,
+                                style.help_font_family,
+                                cairo::FontSlant::Normal,
+                                cairo::FontWeight::Bold,
+                                style.badge_font_size,
+                                badge.label,
+                            );
+                            (extents.width(), extents.height(), extents.y_bearing())
+                        });
+                    let badge_width = badge_metrics.0 + style.badge_padding_x * 2.0;
 
                     draw_rounded_rect(
                         ctx,
@@ -253,9 +260,8 @@ pub(crate) fn draw_sections_grid(
                     ctx.set_font_size(style.badge_font_size);
                     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
                     let text_x = badge_x + style.badge_padding_x;
-                    let text_y = section_y
-                        + (style.badge_height - badge_text_extents.height()) / 2.0
-                        - badge_text_extents.y_bearing();
+                    let text_y =
+                        section_y + (style.badge_height - badge_metrics.1) / 2.0 - badge_metrics.2;
                     ctx.move_to(text_x, text_y);
                     let _ = ctx.show_text(badge.label);
 
