@@ -1,6 +1,7 @@
 use super::super::base::InputState;
 use crate::draw::ShapeId;
 use crate::draw::frame::UndoAction;
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 impl InputState {
@@ -65,26 +66,30 @@ impl InputState {
         self.delete_shapes_by_ids(&ids)
     }
 
-    pub(crate) fn sample_eraser_path_points(&self, points: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    /// Samples eraser path points to ensure adequate coverage for hit testing.
+    /// Returns borrowed slice when points are already dense enough, avoiding allocation.
+    pub(crate) fn sample_eraser_path_points<'a>(
+        &self,
+        points: &'a [(i32, i32)],
+    ) -> Cow<'a, [(i32, i32)]> {
         if points.len() < 2 {
-            return points.to_vec();
+            return Cow::Borrowed(points);
         }
 
         let step = (self.eraser_hit_radius() * 0.9).max(1.0);
-        let mut needs_sampling = false;
-        for window in points.windows(2) {
-            let dx = (window[1].0 - window[0].0) as f64;
-            let dy = (window[1].1 - window[0].1) as f64;
-            if (dx * dx + dy * dy).sqrt() > step {
-                needs_sampling = true;
-                break;
-            }
-        }
+
+        // Check if any segment needs densification
+        let needs_sampling = points.windows(2).any(|w| {
+            let dx = (w[1].0 - w[0].0) as f64;
+            let dy = (w[1].1 - w[0].1) as f64;
+            (dx * dx + dy * dy).sqrt() > step
+        });
 
         if !needs_sampling {
-            return points.to_vec();
+            return Cow::Borrowed(points);
         }
 
+        // Only allocate when sampling is actually needed
         let mut sampled = Vec::with_capacity(points.len());
         sampled.push(points[0]);
         for window in points.windows(2) {
@@ -105,7 +110,7 @@ impl InputState {
                 }
             }
         }
-        sampled
+        Cow::Owned(sampled)
     }
 }
 

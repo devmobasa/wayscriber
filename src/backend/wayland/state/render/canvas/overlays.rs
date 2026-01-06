@@ -3,13 +3,8 @@ use std::collections::HashSet;
 
 impl WaylandState {
     pub(super) fn render_selection_overlays(&mut self, ctx: &cairo::Context) {
-        if self.input_state.has_selection() {
-            let selected: HashSet<_> = self
-                .input_state
-                .selected_shape_ids()
-                .iter()
-                .copied()
-                .collect();
+        // Use cached HashSet from selection state to avoid allocation every render
+        if let Some(selected) = self.input_state.selected_shape_ids_set() {
             let frame = self.input_state.canvas_set.active_frame();
             for drawn in &frame.shapes {
                 if selected.contains(&drawn.id) {
