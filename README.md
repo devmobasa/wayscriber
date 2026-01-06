@@ -7,6 +7,10 @@ A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rus
 
 Docs: https://wayscriber.com/docs/
 
+Contribution principles: wayscriber is shared as a gift exchange, not a contract. Requests
+are welcome, but there is no guaranteed timeline or support obligation. For the full
+principles, see https://wayscriber.com/docs/ethos/gift-exchange.html
+
 <details>
 <summary>Screenshots</summary>
 
@@ -543,6 +547,10 @@ ui_animation_fps = 30
 ---
 
 ## Contributing
+
+Contribution principles: wayscriber is shared as a gift exchange, not a contract. Requests
+are welcome, but there is no guaranteed timeline or support obligation. For the full
+principles, see https://wayscriber.com/docs/ethos/gift-exchange.html
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure, and workflow notes.
 
