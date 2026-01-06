@@ -148,6 +148,7 @@ impl ConfigDraft {
             TextField::DrawingUndoStackLimit => self.drawing_undo_stack_limit = value,
             TextField::ArrowLength => self.arrow_length = value,
             TextField::ArrowAngle => self.arrow_angle = value,
+            TextField::PerformanceMaxFpsNoVsync => self.performance_max_fps_no_vsync = value,
             TextField::PerformanceUiAnimationFps => self.performance_ui_animation_fps = value,
             TextField::HistoryUndoAllDelayMs => self.history_undo_all_delay_ms = value,
             TextField::HistoryRedoAllDelayMs => self.history_redo_all_delay_ms = value,

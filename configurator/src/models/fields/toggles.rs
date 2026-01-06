@@ -76,6 +76,7 @@ pub enum TextField {
     DrawingUndoStackLimit,
     ArrowLength,
     ArrowAngle,
+    PerformanceMaxFpsNoVsync,
     PerformanceUiAnimationFps,
     HistoryUndoAllDelayMs,
     HistoryRedoAllDelayMs,

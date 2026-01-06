@@ -148,6 +148,10 @@ buffer_count = 3
 # Prevents tearing and limits rendering to display refresh rate
 enable_vsync = true
 
+# Max FPS when VSync is disabled (0 = unlimited)
+# Prevents CPU spinning at very high FPS; set to match your monitor (60/120/144/240)
+max_fps_no_vsync = 60
+
 # UI animation frame rate (0 = unlimited)
 # Higher values smooth UI effects at the cost of more redraws
 ui_animation_fps = 30

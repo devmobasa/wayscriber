@@ -50,6 +50,7 @@ impl ConfigDraft {
 
             performance_buffer_count: config.performance.buffer_count,
             performance_enable_vsync: config.performance.enable_vsync,
+            performance_max_fps_no_vsync: config.performance.max_fps_no_vsync.to_string(),
             performance_ui_animation_fps: config.performance.ui_animation_fps.to_string(),
 
             ui_show_status_bar: config.ui.show_status_bar,
