@@ -27,7 +27,7 @@ pub use render::{
     render_sticky_note, render_text,
 };
 #[allow(unused_imports)]
-pub use shape::{EraserBrush, EraserKind, Shape};
+pub use shape::{EraserBrush, EraserKind, Shape, invalidate_text_cache};
 
 // Re-export color constants for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

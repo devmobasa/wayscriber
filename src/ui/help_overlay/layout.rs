@@ -2,6 +2,7 @@ use super::super::primitives::text_extents_for;
 use super::keycaps::measure_key_combo;
 use super::types::{MeasuredSection, Section};
 
+#[derive(Clone)]
 pub(crate) struct GridLayout {
     pub(crate) rows: Vec<Vec<MeasuredSection>>,
     pub(crate) row_widths: Vec<f64>,

@@ -1,4 +1,4 @@
-use crate::draw::shape::{sticky_note_layout, sticky_note_text_layout};
+use crate::draw::shape::{measure_text_with_context, sticky_note_layout, sticky_note_text_layout};
 use crate::draw::{Color, FontDescriptor};
 use std::f64::consts::{FRAC_PI_2, PI};
 
@@ -57,14 +57,21 @@ pub fn render_text(
         layout.set_wrap(pango::WrapMode::WordChar);
     }
 
-    // Get layout extents for background and effects
-    let (ink_rect, _logical_rect) = layout.extents();
-
-    // Include ink rect offsets for italic/stroked glyphs with negative bearings
-    let ink_x = ink_rect.x() as f64 / pango::SCALE as f64;
-    let ink_y = ink_rect.y() as f64 / pango::SCALE as f64;
-    let ink_width = ink_rect.width() as f64 / pango::SCALE as f64;
-    let ink_height = ink_rect.height() as f64 / pango::SCALE as f64;
+    // Use cached measurements for ink rect (avoids repeated Pango measurement)
+    let (ink_x, ink_y, ink_width, ink_height, baseline) =
+        if let Some(m) = measure_text_with_context(ctx, text, &font_desc_str, size, wrap_width) {
+            (m.ink_x, m.ink_y, m.ink_width, m.ink_height, m.baseline)
+        } else {
+            // Fallback: measure directly
+            let (ink_rect, _logical_rect) = layout.extents();
+            (
+                ink_rect.x() as f64 / pango::SCALE as f64,
+                ink_rect.y() as f64 / pango::SCALE as f64,
+                ink_rect.width() as f64 / pango::SCALE as f64,
+                ink_rect.height() as f64 / pango::SCALE as f64,
+                layout.baseline() as f64 / pango::SCALE as f64,
+            )
+        };
 
     // Calculate brightness to determine background/stroke color
     let brightness = color.r * 0.299 + color.g * 0.587 + color.b * 0.114;
@@ -75,7 +82,6 @@ pub fn render_text(
     };
 
     // Adjust y position (Pango measures from top-left, we want baseline)
-    let baseline = layout.baseline() as f64 / pango::SCALE as f64;
     let adjusted_y = y as f64 - baseline;
 
     // First pass: draw semi-transparent background rectangle (if enabled)

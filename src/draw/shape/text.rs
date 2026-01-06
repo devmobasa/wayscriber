@@ -2,6 +2,7 @@ use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
 
 use super::bounds::ensure_positive_rect_f64;
+use super::text_cache::measure_text_cached;
 
 pub(crate) fn bounding_box_for_text(
     x: i32,
@@ -16,34 +17,15 @@ pub(crate) fn bounding_box_for_text(
         return None;
     }
 
-    // Use a tiny image surface for measurement; the layout is all we need.
-    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
-    let ctx = cairo::Context::new(&surface).ok()?;
-
-    ctx.set_antialias(cairo::Antialias::Best);
-
-    let layout = pangocairo::functions::create_layout(&ctx);
-
+    // Use cached text measurement instead of creating a new surface each time
     let font_desc_str = font_descriptor.to_pango_string(size);
-    let font_desc = pango::FontDescription::from_string(&font_desc_str);
-    layout.set_font_description(Some(&font_desc));
-    layout.set_text(text);
-    if let Some(width) = wrap_width {
-        let width = width.max(1);
-        let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
-        layout.set_width(width_pango);
-        layout.set_wrap(pango::WrapMode::WordChar);
-    }
+    let measurement = measure_text_cached(text, &font_desc_str, size, wrap_width)?;
 
-    let (ink_rect, _logical_rect) = layout.extents();
-
-    // Convert Pango units to floats
-    let scale = pango::SCALE as f64;
-    let ink_x = ink_rect.x() as f64 / scale;
-    let ink_y = ink_rect.y() as f64 / scale;
-    let ink_width = ink_rect.width() as f64 / scale;
-    let ink_height = ink_rect.height() as f64 / scale;
-    let baseline = layout.baseline() as f64 / scale;
+    let ink_x = measurement.ink_x;
+    let ink_y = measurement.ink_y;
+    let ink_width = measurement.ink_width;
+    let ink_height = measurement.ink_height;
+    let baseline = measurement.baseline;
 
     let base_x = x as f64;
     let base_y = y as f64 - baseline;
@@ -154,8 +136,10 @@ pub(crate) fn sticky_note_text_layout(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) -> StickyNoteTextLayout {
-    let layout = pangocairo::functions::create_layout(ctx);
     let font_desc_str = font_descriptor.to_pango_string(size);
+
+    // Create layout for rendering (required for draw operations)
+    let layout = pangocairo::functions::create_layout(ctx);
     let font_desc = pango::FontDescription::from_string(&font_desc_str);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);
@@ -166,18 +150,32 @@ pub(crate) fn sticky_note_text_layout(
         layout.set_wrap(pango::WrapMode::WordChar);
     }
 
-    let (ink_rect, _logical_rect) = layout.extents();
-    let scale = pango::SCALE as f64;
+    // Use cached measurements if available, otherwise measure and cache
+    if let Some(measurement) =
+        super::text_cache::measure_text_with_context(ctx, text, &font_desc_str, size, wrap_width)
+    {
+        StickyNoteTextLayout {
+            layout,
+            ink_x: measurement.ink_x,
+            ink_y: measurement.ink_y,
+            ink_width: measurement.ink_width,
+            ink_height: measurement.ink_height,
+            baseline: measurement.baseline,
+        }
+    } else {
+        // Fallback: measure directly (shouldn't happen for non-empty text)
+        let (ink_rect, _logical_rect) = layout.extents();
+        let scale = pango::SCALE as f64;
+        let baseline = layout.baseline() as f64 / scale;
 
-    let baseline = layout.baseline() as f64 / scale;
-
-    StickyNoteTextLayout {
-        layout,
-        ink_x: ink_rect.x() as f64 / scale,
-        ink_y: ink_rect.y() as f64 / scale,
-        ink_width: ink_rect.width() as f64 / scale,
-        ink_height: ink_rect.height() as f64 / scale,
-        baseline,
+        StickyNoteTextLayout {
+            layout,
+            ink_x: ink_rect.x() as f64 / scale,
+            ink_y: ink_rect.y() as f64 / scale,
+            ink_width: ink_rect.width() as f64 / scale,
+            ink_height: ink_rect.height() as f64 / scale,
+            baseline,
+        }
     }
 }
 
@@ -193,28 +191,26 @@ pub(crate) fn bounding_box_for_sticky_note(
         return None;
     }
 
-    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
-    let ctx = cairo::Context::new(&surface).ok()?;
+    // Use cached text measurement instead of creating a new surface each time
+    let font_desc_str = font_descriptor.to_pango_string(size);
+    let measurement = measure_text_cached(text, &font_desc_str, size, wrap_width)?;
 
-    ctx.set_antialias(cairo::Antialias::Best);
-
-    let text_layout = sticky_note_text_layout(&ctx, text, size, font_descriptor, wrap_width);
     let base_x = x as f64;
-    let base_y = y as f64 - text_layout.baseline;
-    let ink_max = text_layout.ink_x + text_layout.ink_width;
+    let base_y = y as f64 - measurement.baseline;
+    let ink_max = measurement.ink_x + measurement.ink_width;
     let effective_max = if let Some(width) = wrap_width {
         ink_max.max(width.max(1) as f64)
     } else {
         ink_max
     };
-    let effective_ink_width = effective_max - text_layout.ink_x;
+    let effective_ink_width = effective_max - measurement.ink_x;
     let layout = sticky_note_layout(
         base_x,
         base_y,
-        text_layout.ink_x,
-        text_layout.ink_y,
+        measurement.ink_x,
+        measurement.ink_y,
         effective_ink_width,
-        text_layout.ink_height,
+        measurement.ink_height,
         size,
     );
 

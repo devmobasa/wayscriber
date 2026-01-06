@@ -2,13 +2,16 @@ use super::grid::{GridColors, GridStyle, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
 use super::nav::{NavDrawStyle, draw_nav};
 
+mod cache;
 mod frame;
 mod metrics;
 mod palette;
 mod state;
 
+use cache::get_or_build_overlay_layout;
 use frame::draw_overlay_frame;
-use state::build_overlay_layout;
+
+pub use cache::invalidate_help_overlay_cache;
 
 const BULLET: &str = "\u{2022}";
 const ARROW: &str = "\u{2192}";
@@ -42,7 +45,7 @@ pub fn render_help_overlay(
     let note_text_base = "Note: Each board mode has independent pages";
     let close_hint_text = "F1 / Esc to close";
 
-    let layout = build_overlay_layout(
+    let layout = get_or_build_overlay_layout(
         ctx,
         style,
         screen_width,

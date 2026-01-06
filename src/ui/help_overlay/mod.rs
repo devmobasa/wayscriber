@@ -8,4 +8,4 @@ mod search;
 mod sections;
 mod types;
 
-pub use render::render_help_overlay;
+pub use render::{invalidate_help_overlay_cache, render_help_overlay};

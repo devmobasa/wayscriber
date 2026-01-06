@@ -4,6 +4,7 @@ use super::super::search::ellipsize_to_fit;
 
 const BULLET: &str = "\u{2022}";
 
+#[derive(Clone)]
 pub(crate) struct NavState {
     pub(crate) nav_text_primary: String,
     pub(crate) nav_secondary_segments: Vec<(String, [f64; 4])>,

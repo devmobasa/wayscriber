@@ -20,6 +20,7 @@ pub(crate) struct Section {
     pub(crate) icon: Option<IconFn>,
 }
 
+#[derive(Clone)]
 pub(crate) struct MeasuredSection {
     pub(crate) section: Section,
     pub(crate) width: f64,

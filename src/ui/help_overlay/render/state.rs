@@ -7,6 +7,7 @@ use super::BULLET;
 use super::metrics::RenderMetrics;
 use super::palette::RenderPalette;
 
+#[derive(Clone)]
 pub(super) struct OverlayLayout {
     pub(super) search_active: bool,
     pub(super) search_lower: String,
