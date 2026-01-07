@@ -1,3 +1,8 @@
+use super::constants::{
+    COLOR_TEXT_PRIMARY, COLOR_TOOLTIP_BACKGROUND, COLOR_TOOLTIP_BORDER, COLOR_TOOLTIP_SHADOW,
+    FONT_FAMILY_DEFAULT, FONT_SIZE_TOOLTIP, LINE_WIDTH_THIN, RADIUS_STD, SPACING_LG, SPACING_MD,
+    SPACING_STD, SPACING_XS, set_color,
+};
 use super::draw_round_rect;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 
@@ -14,11 +19,15 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
         if hit.contains(hx, hy)
             && let Some(text) = &hit.tooltip
         {
-            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-            ctx.set_font_size(12.0);
+            ctx.select_font_face(
+                FONT_FAMILY_DEFAULT,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+            );
+            ctx.set_font_size(FONT_SIZE_TOOLTIP);
 
-            let pad = 6.0;
-            let max_tooltip_w = (panel_width - 8.0).max(40.0);
+            let pad = SPACING_STD;
+            let max_tooltip_w = (panel_width - SPACING_LG).max(40.0);
             let max_text_w = (max_tooltip_w - pad * 2.0).max(20.0);
             let lines = wrap_tooltip_lines(ctx, text, max_text_w);
             let mut max_line_w: f64 = 0.0;
@@ -32,9 +41,9 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
             let line_height = font_extents
                 .as_ref()
                 .map(|ext| ext.height())
-                .unwrap_or(12.0)
-                .max(12.0);
-            let line_gap = 2.0;
+                .unwrap_or(FONT_SIZE_TOOLTIP)
+                .max(FONT_SIZE_TOOLTIP);
+            let line_gap = SPACING_XS;
             let text_h = if lines.is_empty() {
                 0.0
             } else {
@@ -44,39 +53,39 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
 
             let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
             let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
-            let gap = 6.0;
+            let gap = SPACING_STD;
             let tooltip_y = if above {
                 hit.rect.1 - tooltip_h - gap
             } else {
                 hit.rect.1 + hit.rect.3 + gap
             };
 
-            if tooltip_x < 4.0 {
-                tooltip_x = 4.0;
+            if tooltip_x < SPACING_MD {
+                tooltip_x = SPACING_MD;
             }
-            if tooltip_x + tooltip_w > panel_width - 4.0 {
-                tooltip_x = panel_width - tooltip_w - 4.0;
+            if tooltip_x + tooltip_w > panel_width - SPACING_MD {
+                tooltip_x = panel_width - tooltip_w - SPACING_MD;
             }
 
-            let shadow_offset = 2.0;
-            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+            let shadow_offset = SPACING_XS;
+            set_color(ctx, COLOR_TOOLTIP_SHADOW);
             draw_round_rect(
                 ctx,
                 tooltip_x + shadow_offset,
                 tooltip_y + shadow_offset,
                 tooltip_w,
                 tooltip_h,
-                4.0,
+                RADIUS_STD,
             );
             let _ = ctx.fill();
 
-            ctx.set_source_rgba(0.1, 0.1, 0.15, 0.95);
-            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+            set_color(ctx, COLOR_TOOLTIP_BACKGROUND);
+            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, RADIUS_STD);
             let _ = ctx.fill();
 
-            ctx.set_source_rgba(0.4, 0.4, 0.5, 0.8);
-            ctx.set_line_width(1.0);
-            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, 4.0);
+            set_color(ctx, COLOR_TOOLTIP_BORDER);
+            ctx.set_line_width(LINE_WIDTH_THIN);
+            draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, RADIUS_STD);
             let _ = ctx.stroke();
 
             let ascent = font_extents
@@ -86,7 +95,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
             for (idx, line) in lines.iter().enumerate() {
                 let line_y = tooltip_y + pad + ascent + idx as f64 * (line_height + line_gap);
                 if let Ok(ext) = ctx.text_extents(line) {
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+                    set_color(ctx, COLOR_TEXT_PRIMARY);
                     ctx.move_to(tooltip_x + pad - ext.x_bearing(), line_y);
                     let _ = ctx.show_text(line);
                 }
