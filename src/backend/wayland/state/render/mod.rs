@@ -32,7 +32,11 @@ impl WaylandState {
         let highlight_active = self.input_state.advance_click_highlights(now);
         let preset_feedback_active = self.input_state.advance_preset_feedback(now);
         let ui_toast_active = self.input_state.advance_ui_toast(now);
-        let ui_animation_active = highlight_active || preset_feedback_active || ui_toast_active;
+        let blocked_feedback_active = self.input_state.advance_blocked_feedback(now);
+        let ui_animation_active = highlight_active
+            || preset_feedback_active
+            || ui_toast_active
+            || blocked_feedback_active;
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 

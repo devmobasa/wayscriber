@@ -97,6 +97,15 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let icon_x = more_x + (btn_size - icon_size) / 2.0;
     let icon_y = header_btn_y + (btn_size - icon_size) / 2.0;
     toolbar_icons::draw_icon_more(ctx, icon_x, icon_y, icon_size);
+    // Draw attention dot when drawer is closed
+    if !snapshot.drawer_open {
+        let dot_radius = 4.0;
+        let dot_x = more_x + btn_size - dot_radius - 2.0;
+        let dot_y = header_btn_y + dot_radius + 2.0;
+        ctx.arc(dot_x, dot_y, dot_radius, 0.0, std::f64::consts::TAU);
+        ctx.set_source_rgba(0.95, 0.45, 0.15, 0.95); // Orange attention color
+        let _ = ctx.fill();
+    }
     hits.push(HitRegion {
         rect: (more_x, header_btn_y, btn_size, btn_size),
         event: ToolbarEvent::ToggleDrawer(!snapshot.drawer_open),
@@ -136,5 +145,76 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         tooltip: Some("Close".to_string()),
     });
 
+    // Draw onboarding hint for the "More" button (first-time users)
+    if snapshot.show_drawer_hint {
+        draw_onboarding_hint(ctx, more_x, header_btn_y, btn_size);
+    }
+
     spec.side_content_start_y()
+}
+
+/// Draws a floating onboarding hint pointing to the More button.
+fn draw_onboarding_hint(ctx: &cairo::Context, more_x: f64, more_y: f64, btn_size: f64) {
+    let hint_text = "More options here!";
+    let padding_h = 8.0;
+    let padding_v = 6.0;
+    let arrow_size = 6.0;
+    let corner_radius = 4.0;
+
+    ctx.set_font_size(12.0);
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    let Ok(extents) = ctx.text_extents(hint_text) else {
+        return;
+    };
+
+    let box_w = extents.width() + padding_h * 2.0;
+    let box_h = extents.height() + padding_v * 2.0;
+
+    // Position: below and to the left of the More button
+    let box_x = more_x + btn_size / 2.0 - box_w / 2.0;
+    let box_y = more_y + btn_size + arrow_size + 4.0;
+
+    // Draw arrow pointing up
+    let arrow_x = more_x + btn_size / 2.0;
+    let arrow_y = box_y - arrow_size;
+    ctx.move_to(arrow_x, arrow_y);
+    ctx.line_to(arrow_x - arrow_size, box_y);
+    ctx.line_to(arrow_x + arrow_size, box_y);
+    ctx.close_path();
+    ctx.set_source_rgba(0.95, 0.45, 0.15, 0.95);
+    let _ = ctx.fill();
+
+    // Draw rounded rectangle background
+    let x = box_x;
+    let y = box_y;
+    let w = box_w;
+    let h = box_h;
+    let r = corner_radius;
+    ctx.new_path();
+    ctx.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
+    ctx.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
+    ctx.arc(
+        x + r,
+        y + h - r,
+        r,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
+    ctx.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        3.0 * std::f64::consts::FRAC_PI_2,
+    );
+    ctx.close_path();
+    ctx.set_source_rgba(0.95, 0.45, 0.15, 0.95);
+    let _ = ctx.fill();
+
+    // Draw text
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    let text_x = box_x + padding_h;
+    let text_y = box_y + padding_v + extents.height();
+    ctx.move_to(text_x, text_y);
+    let _ = ctx.show_text(hint_text);
 }

@@ -5,7 +5,9 @@ pub const MAX_STROKE_THICKNESS: f64 = 50.0;
 pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 pub const UI_TOAST_DURATION_MS: u64 = 5000;
+pub const BLOCKED_ACTION_DURATION_MS: u64 = 200;
 
+use crate::capture::file::FileSaveConfig;
 use crate::config::ToolPresetConfig;
 use crate::draw::ShapeId;
 use crate::draw::frame::ShapeSnapshot;
@@ -190,4 +192,51 @@ pub(crate) struct DelayedHistory {
 pub(crate) enum HistoryMode {
     Undo,
     Redo,
+}
+
+/// Tracks which compositor features are available.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CompositorCapabilities {
+    pub layer_shell: bool,
+    pub screencopy: bool,
+    pub pointer_constraints: bool,
+}
+
+impl CompositorCapabilities {
+    pub fn all_available(&self) -> bool {
+        self.layer_shell && self.screencopy && self.pointer_constraints
+    }
+
+    pub fn limitations_summary(&self) -> Option<String> {
+        let mut issues = Vec::new();
+        if !self.layer_shell {
+            issues.push("Toolbars limited");
+        }
+        if !self.screencopy {
+            issues.push("Freeze unavailable");
+        }
+        if !self.pointer_constraints {
+            issues.push("Pointer lock unavailable");
+        }
+        if issues.is_empty() {
+            None
+        } else {
+            Some(issues.join(", "))
+        }
+    }
+}
+
+/// State for blocked action visual feedback (red flash).
+#[derive(Debug, Clone)]
+pub(crate) struct BlockedActionFeedback {
+    pub started: Instant,
+}
+
+/// Pending clipboard fallback data for when clipboard copy fails.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingClipboardFallback {
+    pub image_data: Vec<u8>,
+    pub save_config: FileSaveConfig,
+    /// Whether to exit after successful fallback save (from exit-after-capture mode).
+    pub exit_after_save: bool,
 }

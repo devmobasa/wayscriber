@@ -1,6 +1,8 @@
 use super::super::base::{
-    InputState, ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
+    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback,
+    ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
 };
+use crate::capture::file::{FileSaveConfig, save_screenshot};
 use crate::config::keybindings::Action;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -116,5 +118,94 @@ impl InputState {
             return (true, action);
         }
         (false, None)
+    }
+
+    /// Trigger the blocked action visual feedback (red flash on screen edges).
+    pub(crate) fn trigger_blocked_feedback(&mut self) {
+        self.blocked_action_feedback = Some(BlockedActionFeedback {
+            started: Instant::now(),
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Advance the blocked action feedback animation. Returns true if still active.
+    pub fn advance_blocked_feedback(&mut self, now: Instant) -> bool {
+        let Some(feedback) = &self.blocked_action_feedback else {
+            return false;
+        };
+        let duration = Duration::from_millis(BLOCKED_ACTION_DURATION_MS);
+        if now.saturating_duration_since(feedback.started) >= duration {
+            self.blocked_action_feedback = None;
+            return false;
+        }
+        true
+    }
+
+    /// Get the progress (0.0 to 1.0) of the blocked action feedback animation.
+    pub fn blocked_feedback_progress(&self) -> Option<f64> {
+        let feedback = self.blocked_action_feedback.as_ref()?;
+        let elapsed = Instant::now()
+            .saturating_duration_since(feedback.started)
+            .as_millis() as f64;
+        let total = BLOCKED_ACTION_DURATION_MS as f64;
+        Some((elapsed / total).min(1.0))
+    }
+
+    /// Store image data for clipboard fallback (when clipboard copy fails).
+    /// Used by wayland backend when capture clipboard copy fails.
+    #[allow(dead_code)]
+    pub(crate) fn set_clipboard_fallback(
+        &mut self,
+        image_data: Vec<u8>,
+        save_config: FileSaveConfig,
+        exit_after_save: bool,
+    ) {
+        self.pending_clipboard_fallback = Some(PendingClipboardFallback {
+            image_data,
+            save_config,
+            exit_after_save,
+        });
+    }
+
+    /// Save pending clipboard fallback image to file.
+    /// On success, clears the fallback and exits if exit-after-capture was enabled.
+    /// On error, retains it for retry.
+    pub(crate) fn save_pending_clipboard_to_file(&mut self) {
+        let Some(fallback) = self.pending_clipboard_fallback.take() else {
+            self.set_ui_toast(UiToastKind::Warning, "No pending image to save");
+            self.trigger_blocked_feedback();
+            return;
+        };
+
+        match save_screenshot(&fallback.image_data, &fallback.save_config) {
+            Ok(path) => {
+                log::info!("Saved pending screenshot to: {}", path.display());
+                self.last_capture_path = Some(path.clone());
+                if let Some(filename) = path.file_name() {
+                    self.set_ui_toast(
+                        UiToastKind::Info,
+                        format!("Saved to {}", filename.to_string_lossy()),
+                    );
+                } else {
+                    self.set_ui_toast(UiToastKind::Info, "Screenshot saved");
+                }
+                // Exit if exit-after-capture was originally enabled
+                if fallback.exit_after_save {
+                    self.should_exit = true;
+                }
+            }
+            Err(err) => {
+                log::error!("Failed to save pending screenshot: {}", err);
+                // Restore fallback so user can retry
+                self.pending_clipboard_fallback = Some(fallback);
+                self.set_ui_toast_with_action(
+                    UiToastKind::Error,
+                    format!("Save failed: {}", err),
+                    "Retry",
+                    Action::SavePendingToFile,
+                );
+                self.trigger_blocked_feedback();
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 use super::super::super::{menus::ContextMenuState, selection::SelectionState};
 use super::super::types::{
-    DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, TextInputMode, ToolbarDrawerTab,
+    CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
+    TextInputMode, ToolbarDrawerTab,
 };
 use super::structs::InputState;
 use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX};
@@ -175,6 +176,10 @@ impl InputState {
             pending_preset_action: None,
             tour_active: false,
             tour_step: 0,
+            compositor_capabilities: CompositorCapabilities::default(),
+            capability_toast_shown: false,
+            blocked_action_feedback: None,
+            pending_clipboard_fallback: None,
         };
 
         if state.click_highlight.uses_pen_color() {

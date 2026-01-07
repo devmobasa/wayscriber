@@ -4,6 +4,9 @@ use std::time::Instant;
 
 use super::primitives::{draw_rounded_rect, text_extents_for};
 
+/// Border width for blocked action feedback edge flash.
+const BLOCKED_FEEDBACK_BORDER: f64 = 6.0;
+
 /// Vertical position for UI toasts (percentage of screen height from top)
 const UI_TOAST_Y_RATIO: f64 = 0.12;
 /// Portion of toast lifetime to keep fully opaque before fading
@@ -182,4 +185,48 @@ pub fn render_ui_toast(
     }
 
     Some((x, y, width, height))
+}
+
+/// Render blocked action feedback - a brief red flash on screen edges.
+pub fn render_blocked_feedback(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    let Some(progress) = input_state.blocked_feedback_progress() else {
+        return;
+    };
+
+    // Quick fade in, then fade out
+    let alpha = if progress < 0.2 {
+        // Fade in during first 20%
+        (progress / 0.2) * 0.18
+    } else {
+        // Fade out during remaining 80%
+        0.18 * (1.0 - (progress - 0.2) / 0.8)
+    };
+
+    let w = screen_width as f64;
+    let h = screen_height as f64;
+    let b = BLOCKED_FEEDBACK_BORDER;
+
+    // Red tint on all four screen edges
+    ctx.set_source_rgba(0.9, 0.2, 0.2, alpha);
+
+    // Top edge
+    ctx.rectangle(0.0, 0.0, w, b);
+    let _ = ctx.fill();
+
+    // Bottom edge
+    ctx.rectangle(0.0, h - b, w, b);
+    let _ = ctx.fill();
+
+    // Left edge (between top and bottom)
+    ctx.rectangle(0.0, b, b, h - 2.0 * b);
+    let _ = ctx.fill();
+
+    // Right edge (between top and bottom)
+    ctx.rectangle(w - b, b, b, h - 2.0 * b);
+    let _ = ctx.fill();
 }

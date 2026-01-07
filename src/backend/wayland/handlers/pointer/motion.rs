@@ -30,6 +30,7 @@ impl WaylandState {
             }
             self.toolbar.mark_dirty();
             if inline_active {
+                self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
             return;
@@ -54,6 +55,7 @@ impl WaylandState {
                 self.toolbar.mark_dirty();
             }
             if inline_active {
+                self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
             self.refresh_keyboard_interactivity();
@@ -75,6 +77,7 @@ impl WaylandState {
                 self.toolbar.mark_dirty();
             }
             if inline_active {
+                self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
             self.refresh_keyboard_interactivity();
@@ -88,6 +91,7 @@ impl WaylandState {
                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                 self.handle_toolbar_event(evt);
                 self.toolbar.mark_dirty();
+                self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
             return;

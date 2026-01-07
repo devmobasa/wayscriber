@@ -5,7 +5,8 @@ use super::super::super::{
     selection::SelectionState,
 };
 use super::super::types::{
-    DelayedHistory, DrawingState, PresetAction, PresetFeedbackState, SelectionAxis, TextClickState,
+    BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
+    PendingClipboardFallback, PresetAction, PresetFeedbackState, SelectionAxis, TextClickState,
     TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
@@ -262,4 +263,13 @@ pub struct InputState {
     pub tour_active: bool,
     /// Current step in the guided tour (0-indexed)
     pub tour_step: usize,
+    /// Compositor capabilities (layer-shell, screencopy, etc.)
+    pub compositor_capabilities: CompositorCapabilities,
+    /// Whether the capability warning toast has been shown (used by wayland backend)
+    #[allow(dead_code)]
+    pub(crate) capability_toast_shown: bool,
+    /// Blocked action visual feedback state (red flash)
+    pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
+    /// Pending clipboard fallback for failed copy operations
+    pub(crate) pending_clipboard_fallback: Option<PendingClipboardFallback>,
 }

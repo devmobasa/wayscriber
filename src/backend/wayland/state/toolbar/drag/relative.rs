@@ -38,6 +38,7 @@ impl WaylandState {
         ));
 
         if self.inline_toolbars_render_active() {
+            self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
         }
     }
@@ -56,6 +57,7 @@ impl WaylandState {
                 self.toolbar.set_suppressed(&self.compositor_state, false);
                 self.clear_inline_toolbar_hits();
                 self.clear_inline_toolbar_hover();
+                self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
             self.save_toolbar_pin_config();

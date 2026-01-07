@@ -1,6 +1,7 @@
 use crate::capture::types::CaptureError;
 
 /// Decode a PNG buffer into raw ARGB8888 bytes.
+#[allow(dead_code)]
 pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureError> {
     let decoder = png::Decoder::new(std::io::Cursor::new(data));
     let mut reader = decoder
