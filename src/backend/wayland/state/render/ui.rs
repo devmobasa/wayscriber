@@ -120,6 +120,12 @@ impl WaylandState {
 
                 // Render context menu if open
                 crate::ui::render_context_menu(ctx, &self.input_state, width, height);
+
+                // Render radial menu if open
+                if self.input_state.is_radial_menu_open() {
+                    self.input_state.update_radial_menu_layout(width, height);
+                    crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
+                }
             } else {
                 self.input_state.clear_context_menu_layout();
                 self.input_state.clear_properties_panel_layout();

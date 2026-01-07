@@ -2,6 +2,7 @@ use super::super::super::{
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
+    radial_menu::{RadialMenuLayout, RadialMenuState},
     selection::SelectionState,
 };
 use super::super::types::{
@@ -272,4 +273,8 @@ pub struct InputState {
     pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
     /// Pending clipboard fallback for failed copy operations
     pub(crate) pending_clipboard_fallback: Option<PendingClipboardFallback>,
+    /// Current radial menu state
+    pub radial_menu_state: RadialMenuState,
+    /// Cached layout for radial menu
+    pub radial_menu_layout: Option<RadialMenuLayout>,
 }

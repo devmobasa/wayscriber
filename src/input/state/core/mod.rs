@@ -7,6 +7,7 @@ mod history;
 mod index;
 mod menus;
 mod properties;
+mod radial_menu;
 mod selection;
 mod selection_actions;
 mod tool_controls;
@@ -22,5 +23,6 @@ pub use base::{
 };
 #[allow(unused_imports)]
 pub use menus::{ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand};
+pub use radial_menu::{RadialMenuLayout, RadialMenuState};
 pub use selection::SelectionState;
 pub use tour::TourStep;

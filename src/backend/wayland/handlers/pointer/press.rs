@@ -73,10 +73,18 @@ impl WaylandState {
             "Button {} pressed at ({}, {})",
             button, event.position.0, event.position.1
         );
-        if self.zoom.active && button == BTN_MIDDLE && !self.zoom.locked {
-            self.zoom.start_pan(event.position.0, event.position.1);
-            self.input_state.dirty_tracker.mark_full();
-            self.input_state.needs_redraw = true;
+
+        // Middle-click handling: zoom pan or radial menu
+        if button == BTN_MIDDLE {
+            if self.zoom.active && !self.zoom.locked {
+                self.zoom.start_pan(event.position.0, event.position.1);
+                self.input_state.dirty_tracker.mark_full();
+                self.input_state.needs_redraw = true;
+            } else {
+                // Open radial preset menu
+                let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+                self.input_state.open_radial_menu((wx, wy));
+            }
             return;
         }
 

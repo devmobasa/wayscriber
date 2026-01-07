@@ -114,6 +114,12 @@ impl WaylandState {
         }
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
         self.input_state.update_pointer_position(wx, wy);
+
+        // Update radial menu hover if open
+        if self.input_state.is_radial_menu_open() {
+            self.input_state.update_radial_menu_hover(wx, wy);
+        }
+
         self.input_state.on_mouse_motion(wx, wy);
     }
 }

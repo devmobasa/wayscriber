@@ -70,6 +70,11 @@ impl InputState {
             }
         }
 
+        if self.is_radial_menu_open() && matches!(key, Key::Escape) {
+            self.close_radial_menu();
+            return;
+        }
+
         if matches!(key, Key::Escape)
             && matches!(self.state, DrawingState::Idle)
             && self.has_selection()

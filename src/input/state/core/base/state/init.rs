@@ -180,6 +180,8 @@ impl InputState {
             capability_toast_shown: false,
             blocked_action_feedback: None,
             pending_clipboard_fallback: None,
+            radial_menu_state: Default::default(),
+            radial_menu_layout: None,
         };
 
         if state.click_highlight.uses_pen_color() {

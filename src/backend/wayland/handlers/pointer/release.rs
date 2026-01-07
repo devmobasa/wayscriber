@@ -56,6 +56,24 @@ impl WaylandState {
             return;
         }
         debug!("Button {} released", button);
+
+        // Handle radial menu selection on middle-click or left-click release
+        if self.input_state.is_radial_menu_open() {
+            if button == BTN_MIDDLE || button == BTN_LEFT {
+                let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+                if let Some(slot) = self.input_state.radial_menu_segment_at(wx, wy) {
+                    // Presets are 1-indexed
+                    self.input_state.apply_preset(slot + 1);
+                }
+                self.input_state.close_radial_menu();
+                return;
+            } else if button == BTN_RIGHT {
+                // Right-click cancels the radial menu
+                self.input_state.close_radial_menu();
+                return;
+            }
+        }
+
         if self.zoom.active && button == BTN_MIDDLE {
             if self.zoom.panning {
                 self.zoom.stop_pan();
