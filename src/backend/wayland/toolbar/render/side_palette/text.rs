@@ -1,3 +1,7 @@
+use super::super::widgets::constants::{
+    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, SPACING_STD, set_color,
+};
+use super::super::widgets::*;
 use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
@@ -5,8 +9,6 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::draw::FontDescriptor;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
-
-use super::super::widgets::*;
 
 pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -55,7 +57,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         false,
         false,
     );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     toolbar_icons::draw_icon_minus(
         ctx,
         fs_minus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -79,7 +81,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         false,
         false,
     );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     toolbar_icons::draw_icon_plus(
         ctx,
         fs_plus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -93,16 +95,16 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         tooltip: None,
     });
 
-    let fs_track_x = fs_minus_x + btn_size + 6.0;
-    let fs_track_w = fs_plus_x - fs_track_x - 6.0;
+    let fs_track_x = fs_minus_x + btn_size + SPACING_STD;
+    let fs_track_w = fs_plus_x - fs_track_x - SPACING_STD;
     let fs_track_y = fs_slider_row_y + (btn_size - track_h) / 2.0;
     let fs_t = ((snapshot.font_size - fs_min) / (fs_max - fs_min)).clamp(0.0, 1.0);
     let fs_knob_x = fs_track_x + fs_t * (fs_track_w - knob_r * 2.0) + knob_r;
 
-    ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+    set_color(ctx, COLOR_TRACK_BACKGROUND);
     draw_round_rect(ctx, fs_track_x, fs_track_y, fs_track_w, track_h, 4.0);
     let _ = ctx.fill();
-    ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+    set_color(ctx, COLOR_TRACK_KNOB);
     ctx.arc(
         fs_knob_x,
         fs_track_y + track_h / 2.0,

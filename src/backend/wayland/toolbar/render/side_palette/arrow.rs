@@ -1,11 +1,13 @@
+use super::super::widgets::constants::{
+    COLOR_LABEL_HINT, FONT_FAMILY_DEFAULT, FONT_SIZE_SMALL, set_color,
+};
+use super::super::widgets::*;
 use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
-
-use super::super::widgets::*;
 
 pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -38,12 +40,16 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     if snapshot.arrow_label_enabled {
         let hint = format!("Next: {}", snapshot.arrow_label_next);
         let _ = ctx.save();
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(10.0);
+        ctx.select_font_face(
+            FONT_FAMILY_DEFAULT,
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+        );
+        ctx.set_font_size(FONT_SIZE_SMALL);
         if let Ok(ext) = ctx.text_extents(&hint) {
             let hint_x = card_x + card_w - ext.width() - 8.0 - ext.x_bearing();
             let hint_y = *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL;
-            ctx.set_source_rgba(0.7, 0.7, 0.75, 0.8);
+            set_color(ctx, COLOR_LABEL_HINT);
             ctx.move_to(hint_x, hint_y);
             let _ = ctx.show_text(&hint);
         }

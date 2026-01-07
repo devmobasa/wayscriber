@@ -1,3 +1,8 @@
+use super::constants::{
+    ALPHA_DEFAULT, ALPHA_HOVER, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER,
+    COLOR_CLOSE_DEFAULT, COLOR_CLOSE_HOVER, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
+    COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
+};
 use super::draw_round_rect;
 use std::f64::consts::PI;
 
@@ -9,21 +14,21 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
     h: f64,
     hover: bool,
 ) {
-    draw_round_rect(ctx, x, y, w, h, 4.0);
-    let alpha = if hover { 0.9 } else { 0.6 };
+    draw_round_rect(ctx, x, y, w, h, RADIUS_STD);
+    let alpha = if hover { ALPHA_HOVER } else { ALPHA_DEFAULT };
     ctx.set_source_rgba(1.0, 1.0, 1.0, alpha * 0.5);
     let _ = ctx.fill();
 
     ctx.set_line_width(1.1);
     ctx.set_source_rgba(1.0, 1.0, 1.0, alpha);
     let bar_w = w * 0.55;
-    let bar_h = 2.0;
+    let bar_h = SPACING_XS;
     let bar_x = x + (w - bar_w) / 2.0;
     let mut bar_y = y + (h - 3.0 * bar_h) / 2.0;
     for _ in 0..3 {
         draw_round_rect(ctx, bar_x, bar_y, bar_w, bar_h, 1.0);
         let _ = ctx.fill();
-        bar_y += bar_h + 2.0;
+        bar_y += bar_h + SPACING_XS;
     }
 }
 
@@ -38,16 +43,19 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(
     let cx = x + r;
     let cy = y + r;
 
-    if hover {
-        ctx.set_source_rgba(0.8, 0.3, 0.3, 0.9);
-    } else {
-        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.7);
-    }
+    set_color(
+        ctx,
+        if hover {
+            COLOR_CLOSE_HOVER
+        } else {
+            COLOR_CLOSE_DEFAULT
+        },
+    );
     ctx.arc(cx, cy, r, 0.0, PI * 2.0);
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-    ctx.set_line_width(2.0);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
+    ctx.set_line_width(LINE_WIDTH_THICK);
     let inset = size * 0.3;
     ctx.move_to(x + inset, y + inset);
     ctx.line_to(x + size - inset, y + size - inset);
@@ -65,18 +73,18 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     pinned: bool,
     hover: bool,
 ) {
-    let (r, g, b, a) = if pinned {
-        (0.25, 0.6, 0.35, 0.95)
+    let color = if pinned {
+        COLOR_PIN_ACTIVE
     } else if hover {
-        (0.35, 0.35, 0.45, 0.85)
+        COLOR_PIN_HOVER
     } else {
-        (0.3, 0.3, 0.35, 0.7)
+        COLOR_PIN_DEFAULT
     };
-    ctx.set_source_rgba(r, g, b, a);
-    draw_round_rect(ctx, x, y, size, size, 4.0);
+    set_color(ctx, color);
+    draw_round_rect(ctx, x, y, size, size, RADIUS_STD);
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     let cx = x + size / 2.0;
     let cy = y + size / 2.0;
     let pin_r = size * 0.2;
@@ -84,7 +92,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     ctx.arc(cx, cy - pin_r * 0.5, pin_r, 0.0, PI * 2.0);
     let _ = ctx.fill();
 
-    ctx.set_line_width(2.0);
+    ctx.set_line_width(LINE_WIDTH_THICK);
     ctx.move_to(cx, cy + pin_r * 0.5);
     ctx.line_to(cx, cy + pin_r * 2.0);
     let _ = ctx.stroke();
@@ -99,14 +107,14 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
     active: bool,
     hover: bool,
 ) {
-    let (r, g, b, a) = if active {
-        (0.25, 0.5, 0.95, 0.95)
+    let color = if active {
+        COLOR_BUTTON_ACTIVE
     } else if hover {
-        (0.35, 0.35, 0.45, 0.85)
+        COLOR_BUTTON_HOVER
     } else {
-        (0.2, 0.22, 0.26, 0.75)
+        COLOR_BUTTON_DEFAULT
     };
-    ctx.set_source_rgba(r, g, b, a);
-    draw_round_rect(ctx, x, y, w, h, 6.0);
+    set_color(ctx, color);
+    draw_round_rect(ctx, x, y, w, h, RADIUS_LG);
     let _ = ctx.fill();
 }

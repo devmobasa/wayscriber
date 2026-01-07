@@ -1,3 +1,5 @@
+use super::constants::{COLOR_LABEL_SECTION, COLOR_TEXT_PRIMARY, set_color};
+
 pub(in crate::backend::wayland::toolbar::render) fn draw_label_center(
     ctx: &cairo::Context,
     x: f64,
@@ -9,7 +11,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_label_center(
     if let Ok(ext) = ctx.text_extents(text) {
         let tx = x + (w - ext.width()) / 2.0 - ext.x_bearing();
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        set_color(ctx, COLOR_TEXT_PRIMARY);
         ctx.move_to(tx, ty);
         let _ = ctx.show_text(text);
     }
@@ -43,7 +45,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_label_left(
 ) {
     if let Ok(ext) = ctx.text_extents(text) {
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+        set_color(ctx, COLOR_TEXT_PRIMARY);
         ctx.move_to(x, ty);
         let _ = ctx.show_text(text);
     }
@@ -55,7 +57,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_section_label(
     y: f64,
     text: &str,
 ) {
-    ctx.set_source_rgba(0.8, 0.8, 0.85, 0.9);
+    set_color(ctx, COLOR_LABEL_SECTION);
     ctx.move_to(x, y);
     let _ = ctx.show_text(text);
 }

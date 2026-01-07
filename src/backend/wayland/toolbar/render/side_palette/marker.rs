@@ -1,11 +1,13 @@
+use super::super::widgets::constants::{
+    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, SPACING_STD, set_color,
+};
+use super::super::widgets::*;
 use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
-
-use super::super::widgets::*;
 
 pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -49,7 +51,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         false,
         false,
     );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     toolbar_icons::draw_icon_minus(
         ctx,
         minus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -73,7 +75,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         false,
         false,
     );
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    set_color(ctx, COLOR_TEXT_PRIMARY);
     toolbar_icons::draw_icon_plus(
         ctx,
         plus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -87,18 +89,18 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         tooltip: None,
     });
 
-    let track_x = minus_x + btn_size + 6.0;
-    let track_w = plus_x - track_x - 6.0;
+    let track_x = minus_x + btn_size + SPACING_STD;
+    let track_w = plus_x - track_x - SPACING_STD;
     let marker_track_y = marker_slider_row_y + (btn_size - track_h) / 2.0;
     let min_opacity = 0.05;
     let max_opacity = 0.9;
     let t = ((snapshot.marker_opacity - min_opacity) / (max_opacity - min_opacity)).clamp(0.0, 1.0);
     let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
 
-    ctx.set_source_rgba(0.5, 0.5, 0.6, 0.6);
+    set_color(ctx, COLOR_TRACK_BACKGROUND);
     draw_round_rect(ctx, track_x, marker_track_y, track_w, track_h, 4.0);
     let _ = ctx.fill();
-    ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
+    set_color(ctx, COLOR_TRACK_KNOB);
     ctx.arc(
         knob_x,
         marker_track_y + track_h / 2.0,
