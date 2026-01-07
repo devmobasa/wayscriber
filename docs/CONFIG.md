@@ -177,6 +177,10 @@ buffer_count = 3
 # Prevents tearing and limits rendering to display refresh rate
 enable_vsync = true
 
+# Max FPS when VSync is disabled (0 = unlimited)
+# Prevents CPU spinning at very high FPS; set to match your monitor
+max_fps_no_vsync = 60
+
 # UI animation frame rate (0 = unlimited)
 # Higher values smooth UI effects at the cost of more redraws
 ui_animation_fps = 30
@@ -189,7 +193,12 @@ ui_animation_fps = 30
 
 **VSync:**
 - **true** (default): Synchronizes with display refresh rate, no tearing
-- **false**: Uncapped rendering, may cause tearing but lower latency
+- **false**: Capped by `max_fps_no_vsync` (set to 0 for uncapped); may cause tearing but lower latency
+
+**Max FPS (VSync off):**
+- **60** (default): Suitable for most displays
+- **0**: Unlimited (uncapped; higher CPU usage)
+- Set to your monitor refresh (60/120/144/240) for best balance
 
 **UI Animation FPS:**
 - **30** (default): Smooth enough for most effects
@@ -199,6 +208,7 @@ ui_animation_fps = 30
 **Defaults:**
 - Buffer count: 3 (triple buffering)
 - VSync: true
+- Max FPS (VSync off): 60
 - UI animation FPS: 30
 
 ### `[ui]` - User Interface

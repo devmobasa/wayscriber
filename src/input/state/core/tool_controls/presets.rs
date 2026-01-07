@@ -158,6 +158,11 @@ impl InputState {
     }
 
     pub fn advance_preset_feedback(&mut self, now: Instant) -> bool {
+        // Early exit if no feedback is active
+        if !self.preset_feedback.iter().any(|s| s.is_some()) {
+            return false;
+        }
+
         let duration_ms = if self.show_preset_toasts {
             PRESET_TOAST_DURATION_MS
         } else {

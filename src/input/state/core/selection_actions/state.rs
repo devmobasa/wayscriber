@@ -1,5 +1,4 @@
 use super::super::base::InputState;
-use crate::draw::ShapeId;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::util::Rect;
 
@@ -7,13 +6,14 @@ const SELECTION_HALO_PADDING: i32 = 6;
 
 impl InputState {
     pub(crate) fn set_selection_locked(&mut self, locked: bool) -> bool {
-        let ids: Vec<ShapeId> = self.selected_shape_ids().to_vec();
-        if ids.is_empty() {
+        let ids_len = self.selected_shape_ids().len();
+        if ids_len == 0 {
             return false;
         }
 
         let mut actions = Vec::new();
-        for id in ids {
+        for idx in 0..ids_len {
+            let id = self.selected_shape_ids()[idx];
             let result = {
                 let frame = self.canvas_set.active_frame_mut();
                 if let Some(shape) = frame.shape_mut(id) {

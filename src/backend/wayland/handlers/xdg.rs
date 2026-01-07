@@ -70,6 +70,7 @@ impl WindowHandler for WaylandState {
 
         if self.surface.update_dimensions(width, height) {
             info!("xdg window configured: {}x{}", width, height);
+            self.buffer_damage.mark_all_full();
         } else {
             debug!(
                 "xdg window configure acknowledged without size change ({}x{})",

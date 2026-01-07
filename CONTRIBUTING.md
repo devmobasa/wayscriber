@@ -3,6 +3,12 @@
 Thanks for your interest in improving wayscriber. This guide covers development setup,
 useful scripts, and the current project structure.
 
+## Contribution principles
+
+Wayscriber is shared as a gift exchange, not a contract. Requests are welcome, but there
+is no guaranteed timeline or support obligation. For the full principles, see
+https://wayscriber.com/docs/ethos/gift-exchange.html
+
 ## Where help is most valuable
 
 Priority areas for contributions:

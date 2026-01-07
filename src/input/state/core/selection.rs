@@ -6,14 +6,27 @@ use std::collections::HashSet;
 #[derive(Debug, Clone)]
 pub enum SelectionState {
     None,
-    Active { shape_ids: Vec<ShapeId> },
+    Active {
+        shape_ids: Vec<ShapeId>,
+        /// Cached HashSet for O(1) membership tests during rendering.
+        shape_ids_set: HashSet<ShapeId>,
+    },
 }
 
 impl InputState {
     pub fn selected_shape_ids(&self) -> &[ShapeId] {
         match &self.selection_state {
-            SelectionState::Active { shape_ids } => shape_ids,
+            SelectionState::Active { shape_ids, .. } => shape_ids,
             _ => &[],
+        }
+    }
+
+    /// Returns a reference to the cached HashSet of selected shape IDs.
+    /// Use this for O(1) membership tests instead of creating a new HashSet.
+    pub fn selected_shape_ids_set(&self) -> Option<&HashSet<ShapeId>> {
+        match &self.selection_state {
+            SelectionState::Active { shape_ids_set, .. } => Some(shape_ids_set),
+            _ => None,
         }
     }
 
@@ -35,14 +48,17 @@ impl InputState {
             return;
         }
 
-        let mut seen = HashSet::new();
-        let mut ordered = Vec::new();
+        let mut seen = HashSet::with_capacity(ids.len());
+        let mut ordered = Vec::with_capacity(ids.len());
         for id in ids {
             if seen.insert(id) {
                 ordered.push(id);
             }
         }
-        self.selection_state = SelectionState::Active { shape_ids: ordered };
+        self.selection_state = SelectionState::Active {
+            shape_ids: ordered,
+            shape_ids_set: seen,
+        };
         self.last_selection_axis = None;
         self.close_properties_panel();
     }
@@ -52,10 +68,12 @@ impl InputState {
         I: IntoIterator<Item = ShapeId>,
     {
         match &mut self.selection_state {
-            SelectionState::Active { shape_ids } => {
-                let mut seen: HashSet<ShapeId> = shape_ids.iter().copied().collect();
+            SelectionState::Active {
+                shape_ids,
+                shape_ids_set,
+            } => {
                 for id in iter {
-                    if seen.insert(id) {
+                    if shape_ids_set.insert(id) {
                         shape_ids.push(id);
                     }
                 }

@@ -8,6 +8,12 @@ impl ConfigDraft {
         config.performance.buffer_count = self.performance_buffer_count;
         config.performance.enable_vsync = self.performance_enable_vsync;
         parse_u32_field(
+            &self.performance_max_fps_no_vsync,
+            "performance.max_fps_no_vsync",
+            errors,
+            |value| config.performance.max_fps_no_vsync = value,
+        );
+        parse_u32_field(
             &self.performance_ui_animation_fps,
             "performance.ui_animation_fps",
             errors,

@@ -7,37 +7,24 @@ use crate::util;
 use super::{DrawingState, InputState};
 
 impl InputState {
-    /// Returns the shape currently being drawn for live preview.
-    ///
-    /// # Arguments
-    /// * `current_x` - Current mouse X coordinate
-    /// * `current_y` - Current mouse Y coordinate
-    ///
-    /// # Returns
-    /// - `Some(Shape)` if actively drawing (for preview rendering)
-    /// - `None` if idle or in text input mode
+    /// Returns the shape currently being drawn for non-freehand tools.
     ///
     /// # Note
-    /// For Pen tool (freehand), this clones the points vector. For better performance
-    /// with long strokes, consider using `render_provisional_shape` directly with a
-    /// borrow instead of calling this method and rendering separately.
-    ///
-    /// This allows the backend to render a preview of the shape being drawn
-    /// before the mouse button is released.
-    pub fn get_provisional_shape(&self, current_x: i32, current_y: i32) -> Option<Shape> {
+    /// This is only for Line, Rect, Ellipse, Arrow tools which don't require
+    /// cloning. Pen/Marker/Eraser are handled directly in `render_provisional_shape()`
+    /// using borrowed rendering to avoid per-frame allocations.
+    fn get_provisional_shape(&self, current_x: i32, current_y: i32) -> Option<Shape> {
         if let DrawingState::Drawing {
             tool,
             start_x,
             start_y,
-            points,
+            ..
         } = &self.state
         {
             match tool {
-                Tool::Pen => Some(Shape::Freehand {
-                    points: points.clone(), // TODO: Consider using Cow or separate borrow API
-                    color: self.current_color,
-                    thick: self.current_thickness,
-                }),
+                // Pen, Marker, Eraser are handled by render_provisional_shape() directly
+                // with borrowed rendering - never call this method for those tools.
+                Tool::Pen | Tool::Marker | Tool::Eraser | Tool::Highlight | Tool::Select => None,
                 Tool::Line => Some(Shape::Line {
                     x1: *start_x,
                     y1: *start_y,
@@ -93,15 +80,6 @@ impl InputState {
                     head_at_end: self.arrow_head_at_end,
                     label: self.next_arrow_label(),
                 }),
-                Tool::Marker => Some(Shape::MarkerStroke {
-                    points: points.clone(),
-                    color: self.marker_color(),
-                    thick: self.current_thickness,
-                }),
-                Tool::Eraser => None, // Preview handled separately to avoid clearing the buffer
-                Tool::Highlight => None,
-                Tool::Select => None,
-                // No provisional shape for other tools
             }
         } else {
             None

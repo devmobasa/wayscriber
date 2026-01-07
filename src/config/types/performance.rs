@@ -19,6 +19,12 @@ pub struct PerformanceConfig {
     #[serde(default = "default_enable_vsync")]
     pub enable_vsync: bool,
 
+    /// Maximum frame rate when vsync is disabled (0 = unlimited)
+    /// Prevents CPU spinning at very high FPS. Set to match your monitor's
+    /// refresh rate (e.g., 60, 120, 144, 240) or 0 for no limit.
+    #[serde(default = "default_max_fps_no_vsync")]
+    pub max_fps_no_vsync: u32,
+
     /// Target UI animation frame rate (0 = unlimited)
     /// Higher values make UI effects smoother at the cost of more redraws.
     #[serde(default = "default_ui_animation_fps")]
@@ -30,6 +36,7 @@ impl Default for PerformanceConfig {
         Self {
             buffer_count: default_buffer_count(),
             enable_vsync: default_enable_vsync(),
+            max_fps_no_vsync: default_max_fps_no_vsync(),
             ui_animation_fps: default_ui_animation_fps(),
         }
     }
@@ -41,6 +48,10 @@ fn default_buffer_count() -> u32 {
 
 fn default_enable_vsync() -> bool {
     true
+}
+
+fn default_max_fps_no_vsync() -> u32 {
+    60
 }
 
 fn default_ui_animation_fps() -> u32 {

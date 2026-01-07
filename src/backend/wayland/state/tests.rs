@@ -2,19 +2,20 @@ use super::helpers;
 use super::*;
 use crate::util::Rect;
 
-// NOTE: The functions below are used for diagnostic logging only; the renderer currently applies
-// full-surface damage for correctness. These tests document the intended behavior if we ever
-// reintroduce partial damage handling.
+// NOTE: The renderer now uses per-buffer damage tracking via BufferDamageTracker.
+// Each buffer slot is tracked by its canvas memory address (stable across SlotPool
+// reuse), ensuring correct incremental damage with multi-buffering. These helper
+// functions are used for diagnostic logging and damage region processing.
 #[test]
 fn resolve_damage_returns_full_when_empty() {
-    let regions = resolve_damage_regions(1920, 1080, Vec::new());
+    let regions = helpers::resolve_damage_regions(1920, 1080, Vec::new());
     assert_eq!(regions.len(), 1);
     assert_eq!(regions[0], Rect::new(0, 0, 1920, 1080).unwrap());
 }
 
 #[test]
 fn resolve_damage_filters_invalid_rects() {
-    let regions = resolve_damage_regions(
+    let regions = helpers::resolve_damage_regions(
         800,
         600,
         vec![
@@ -39,7 +40,7 @@ fn resolve_damage_filters_invalid_rects() {
 
 #[test]
 fn resolve_damage_preserves_existing_regions() {
-    let regions = resolve_damage_regions(
+    let regions = helpers::resolve_damage_regions(
         800,
         600,
         vec![Rect {
@@ -55,10 +56,11 @@ fn resolve_damage_preserves_existing_regions() {
 }
 
 #[test]
-fn full_damage_policy_is_explicit() {
-    // This documents that we intentionally call damage_buffer over the full surface to avoid
-    // stale pixels with buffer reuse. If you switch back to partial damage, implement
-    // per-buffer damage tracking instead of draining a single accumulator.
+fn per_buffer_damage_tracking_is_implemented() {
+    // The BufferDamageTracker tracks damage per buffer slot using the canvas
+    // memory address as a stable identifier (SlotPool reuses the same memory
+    // regions). A pool generation counter handles pool recreation.
+    // See buffer_damage.rs for the implementation and tests.
 }
 
 #[test]
@@ -112,7 +114,7 @@ fn damage_summary_truncates_after_five_regions() {
 
 #[test]
 fn resolve_then_scale_damage_regions_keeps_full_region() {
-    let regions = resolve_damage_regions(100, 50, Vec::new());
+    let regions = helpers::resolve_damage_regions(100, 50, Vec::new());
     let scaled = scale_damage_regions(regions, 2);
     assert_eq!(scaled.len(), 1);
     assert_eq!(scaled[0], Rect::new(0, 0, 200, 100).unwrap());

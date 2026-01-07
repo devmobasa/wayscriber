@@ -36,11 +36,15 @@ impl WaylandState {
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 
-        // Get a buffer from the pool
-        let (buffer, canvas) = {
-            let pool = self.surface.ensure_pool(&self.shm, buffer_count)?;
-            debug!("Requesting buffer from pool");
-            let result = pool
+        // Get a buffer from the pool for rendering
+        let (buffer, canvas_ptr, pool_gen, pool_size) = {
+            let (pool, generation) = self.surface.ensure_pool(&self.shm, buffer_count)?;
+            debug!(
+                "Requesting buffer from pool (gen {}, size {})",
+                generation,
+                pool.len()
+            );
+            let (buf, cvs) = pool
                 .create_buffer(
                     phys_width as i32,
                     phys_height as i32,
@@ -48,13 +52,20 @@ impl WaylandState {
                     wl_shm::Format::Argb8888,
                 )
                 .context("Failed to create buffer")?;
-            debug!("Buffer acquired from pool");
-            result
+            // Capture canvas pointer as stable slot identifier for damage tracking.
+            // SlotPool reuses the same memory regions, so this pointer identifies the slot.
+            let ptr = cvs.as_mut_ptr();
+            let key = ptr as usize;
+            // Drop the slice borrow so we can query pool metadata; keep raw pointer for Cairo.
+            let _ = cvs;
+            let pool_size = pool.len();
+            debug!("Buffer acquired from pool (slot ptr: 0x{:x})", key);
+            (buf, key, generation, pool_size)
         };
 
         // SAFETY: This unsafe block creates a Cairo surface from raw memory buffer.
         // Safety invariants that must be maintained:
-        // 1. `canvas` is a valid mutable slice from SlotPool with exactly (width * height * 4) bytes
+        // 1. `canvas_ptr` comes from a valid SlotPool slice with exactly (width * height * 4) bytes
         // 2. The buffer format ARgb32 matches the allocation (4 bytes per pixel: alpha, red, green, blue)
         // 3. The stride (width * 4) correctly represents the number of bytes per row
         // 4. `cairo_surface` and `ctx` are explicitly dropped before the buffer is committed to Wayland,
@@ -63,7 +74,7 @@ impl WaylandState {
         // 6. The buffer remains valid throughout Cairo's usage (enforced by Rust's borrow checker)
         let cairo_surface = unsafe {
             cairo::ImageSurface::create_for_data_unsafe(
-                canvas.as_mut_ptr(),
+                canvas_ptr as *mut u8,
                 cairo::Format::ARgb32,
                 phys_width as i32,
                 phys_height as i32,
@@ -110,27 +121,40 @@ impl WaylandState {
         wl_surface.set_buffer_scale(scale);
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
-        // Capture damage hints for diagnostics. We still apply full damage below to avoid missed
-        // redraws, but logging the computed regions helps pinpoint under-reporting issues.
-        let logical_damage = resolve_damage_regions(
+        // Add new dirty regions from input state to the per-buffer damage tracker.
+        // This ensures each buffer accumulates damage since it was last rendered.
+        let input_damage = self.input_state.take_dirty_regions();
+        self.buffer_damage.add_regions(input_damage);
+
+        // Record pool size after create_buffer to detect growth.
+        self.surface.update_pool_size(pool_size);
+
+        // Take damage for this buffer slot (identified by canvas memory address).
+        // Pool identity (generation + size) is passed to detect pool recreation/growth.
+        // SlotPool reuses the same memory regions for released buffers, so the
+        // canvas pointer serves as a stable slot identifier across buffer reuse.
+        let logical_damage = self.buffer_damage.take_buffer_damage(
+            canvas_ptr,
             self.surface.width().min(i32::MAX as u32) as i32,
             self.surface.height().min(i32::MAX as u32) as i32,
-            self.input_state.take_dirty_regions(),
+            pool_gen,
+            pool_size,
         );
+        let scaled_damage = scale_damage_regions(logical_damage.clone(), scale);
+
         if debug_damage_logging_enabled() {
-            let scaled_damage = scale_damage_regions(logical_damage.clone(), scale);
             debug!(
-                "Damage hints (scaled): count={}, {}",
+                "Damage (scaled): count={}, {}",
                 scaled_damage.len(),
                 damage_summary(&scaled_damage)
             );
         }
 
-        // Prefer correctness over micro-optimizations: full damage avoids cases where incomplete
-        // hints result in stale pixels (reported as disappearing/reappearing strokes). If we ever
-        // return to partial damage, implement per-buffer damage tracking instead of draining a
-        // single accumulator.
-        wl_surface.damage_buffer(0, 0, phys_width as i32, phys_height as i32);
+        // Apply per-buffer damage regions for correct incremental rendering.
+        // Each buffer tracks damage since it was last displayed, avoiding stale pixels.
+        for region in &scaled_damage {
+            wl_surface.damage_buffer(region.x, region.y, region.width, region.height);
+        }
 
         let force_frame_callback = self.frozen.preflight_pending()
             || self.zoom.preflight_pending()

@@ -1,3 +1,4 @@
+use super::super::buffer_damage::BufferDamageTracker;
 use super::super::*;
 
 impl WaylandState {
@@ -69,6 +70,8 @@ impl WaylandState {
         let ui_animation_interval =
             WaylandState::ui_animation_interval_from_fps(config.performance.ui_animation_fps);
 
+        let buffer_count = config.performance.buffer_count as usize;
+
         Self {
             registry_state,
             compositor_state,
@@ -83,6 +86,7 @@ impl WaylandState {
             surface: SurfaceState::new(),
             toolbar: ToolbarSurfaceManager::new(),
             data,
+            buffer_damage: BufferDamageTracker::new(buffer_count),
             config,
             input_state,
             onboarding,

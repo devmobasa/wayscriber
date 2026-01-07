@@ -28,10 +28,9 @@ impl InputState {
             }
             MenuCommand::SelectHoveredShape => {
                 if let Some(hovered_shape) = self.hovered_context_menu_shape() {
-                    let previous_ids = self.selected_shape_ids().to_vec();
                     let previous_bounds = {
                         let frame = self.canvas_set.active_frame();
-                        previous_ids
+                        self.selected_shape_ids()
                             .iter()
                             .filter_map(|id| {
                                 frame

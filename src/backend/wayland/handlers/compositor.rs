@@ -21,6 +21,7 @@ impl CompositorHandler for WaylandState {
         let scale = new_factor.max(1);
         debug!("Scale factor changed to {}", scale);
         self.surface.set_scale(scale);
+        self.buffer_damage.mark_all_full();
         let (phys_w, phys_h) = self.surface.physical_dimensions();
         self.frozen
             .handle_resize(phys_w, phys_h, &mut self.input_state);
@@ -101,6 +102,8 @@ impl CompositorHandler for WaylandState {
         if let Some(info) = self.output_state.info(output) {
             let scale = info.scale_factor.max(1);
             self.surface.set_scale(scale);
+            // Mark full damage when entering output - scale may have changed, pool may be new
+            self.buffer_damage.mark_all_full();
             self.toolbar.maybe_update_scale(Some(output), scale);
             self.toolbar.mark_dirty();
             let (logical_w, logical_h) = info
