@@ -21,6 +21,7 @@ mod pipeline;
 mod tests;
 
 pub use manager::CaptureManager;
+#[allow(unused_imports)]
 pub(crate) use pipeline::CaptureRequest;
 #[allow(unused_imports)]
 pub use types::{

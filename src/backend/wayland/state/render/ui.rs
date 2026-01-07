@@ -100,6 +100,7 @@ impl WaylandState {
             self.input_state.ui_toast_bounds =
                 crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
             crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
+            crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
 
             if !self.zoom.active {
                 if self.input_state.is_properties_panel_open() {

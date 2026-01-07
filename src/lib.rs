@@ -4,6 +4,7 @@
 //! rely on so that external tools (e.g. GUI configurators) can share validation
 //! logic and serialization code with the main binary.
 
+pub mod capture;
 pub mod config;
 pub mod draw;
 pub mod input;

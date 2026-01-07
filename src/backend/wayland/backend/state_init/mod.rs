@@ -1,5 +1,6 @@
 use anyhow::Result;
 use log::{info, warn};
+use smithay_client_toolkit::globals::ProvidesBoundGlobal;
 
 use super::super::state::{WaylandState, WaylandStateInit};
 use super::WaylandBackend;
@@ -8,7 +9,7 @@ use super::tray::process_tray_action;
 use crate::{
     capture::CaptureManager,
     config::Config,
-    input::{BoardMode, InputState},
+    input::{BoardMode, InputState, state::CompositorCapabilities},
     onboarding::OnboardingStore,
 };
 
@@ -40,6 +41,18 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+
+    // Set compositor capabilities based on detected Wayland protocols
+    input_state.compositor_capabilities = CompositorCapabilities {
+        layer_shell: setup.layer_shell_available,
+        screencopy: setup.screencopy_manager.is_some(),
+        pointer_constraints: setup
+            .state_globals
+            .pointer_constraints_state
+            .bound_global()
+            .is_ok(),
+    };
+
     let mut onboarding = OnboardingStore::load();
     if !onboarding.state().welcome_shown {
         // Start the guided tour for new users

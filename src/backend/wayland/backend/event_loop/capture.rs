@@ -4,6 +4,9 @@ use wayland_client::Connection;
 use super::super::super::state::{OverlaySuppression, WaylandState};
 use super::super::helpers::friendly_capture_error;
 use crate::capture::CaptureOutcome;
+use crate::capture::file::{FileSaveConfig, expand_tilde};
+use crate::config::Action;
+use crate::input::state::UiToastKind;
 use crate::notification;
 
 pub(super) fn poll_portal_captures(state: &mut WaylandState) {
@@ -76,8 +79,9 @@ fn handle_capture_results(state: &mut WaylandState) {
     state.show_overlay();
     state.capture.clear_in_progress();
 
-    let exit_on_success =
-        state.capture.take_exit_on_success() && matches!(&outcome, CaptureOutcome::Success(_));
+    let exit_after_capture = state.capture.take_exit_on_success();
+    let mut should_exit = false;
+
     match outcome {
         CaptureOutcome::Success(result) => {
             // Build notification message.
@@ -95,32 +99,73 @@ fn handle_capture_results(state: &mut WaylandState) {
                 message_parts.push("Copied to clipboard".to_string());
             }
 
-            // Send notification.
-            let notification_body = if message_parts.is_empty() {
-                "Screenshot captured".to_string()
+            // Handle clipboard failure with fallback option
+            let clipboard_failed = !result.copied_to_clipboard
+                && result.saved_path.is_none()
+                && !result.image_data.is_empty();
+
+            if clipboard_failed {
+                // Clipboard was the only destination and it failed - don't exit,
+                // keep overlay open so user can click "Save to file"
+                warn!("Clipboard copy failed, offering save-to-file fallback");
+
+                // Build save config from user preferences for fallback save
+                let save_config = FileSaveConfig {
+                    save_directory: expand_tilde(&state.config.capture.save_directory),
+                    filename_template: state.config.capture.filename_template.clone(),
+                    format: state.config.capture.format.clone(),
+                };
+                // Pass exit_after_capture so we can exit after successful fallback save
+                state.input_state.set_clipboard_fallback(
+                    result.image_data.clone(),
+                    save_config,
+                    exit_after_capture,
+                );
+                state.input_state.set_ui_toast_with_action(
+                    UiToastKind::Error,
+                    "Clipboard failed",
+                    "Save to file",
+                    Action::SavePendingToFile,
+                );
+
+                notification::send_notification_async(
+                    &state.tokio_handle,
+                    "Screenshot Clipboard Failed".to_string(),
+                    "Could not copy to clipboard. Use overlay to save to file.".to_string(),
+                    Some("dialog-warning".to_string()),
+                );
+                // Don't set should_exit - keep overlay open for fallback action
             } else {
-                message_parts.join(" - ")
-            };
+                // Send normal notification.
+                let notification_body = if message_parts.is_empty() {
+                    "Screenshot captured".to_string()
+                } else {
+                    message_parts.join(" - ")
+                };
 
-            let open_folder_binding = state
-                .config
-                .keybindings
-                .capture
-                .open_capture_folder
-                .first()
-                .map(|binding| binding.as_str());
-            state.input_state.set_capture_feedback(
-                result.saved_path.as_deref(),
-                result.copied_to_clipboard,
-                open_folder_binding,
-            );
+                let open_folder_binding = state
+                    .config
+                    .keybindings
+                    .capture
+                    .open_capture_folder
+                    .first()
+                    .map(|binding| binding.as_str());
+                state.input_state.set_capture_feedback(
+                    result.saved_path.as_deref(),
+                    result.copied_to_clipboard,
+                    open_folder_binding,
+                );
 
-            notification::send_notification_async(
-                &state.tokio_handle,
-                "Screenshot Captured".to_string(),
-                notification_body,
-                Some("camera-photo".to_string()),
-            );
+                notification::send_notification_async(
+                    &state.tokio_handle,
+                    "Screenshot Captured".to_string(),
+                    notification_body,
+                    Some("camera-photo".to_string()),
+                );
+
+                // Only exit on actual success (not clipboard failure)
+                should_exit = exit_after_capture;
+            }
         }
         CaptureOutcome::Failed(error) => {
             let friendly_error = friendly_capture_error(&error);
@@ -138,7 +183,7 @@ fn handle_capture_results(state: &mut WaylandState) {
             info!("Capture cancelled: {}", reason);
         }
     }
-    if exit_on_success {
+    if should_exit {
         state.input_state.should_exit = true;
     }
 }

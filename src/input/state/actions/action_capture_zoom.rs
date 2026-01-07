@@ -57,6 +57,12 @@ impl InputState {
                 self.reset_modifiers();
                 true
             }
+            Action::SavePendingToFile => {
+                // This action is handled directly by InputState since we have the image data
+                // and can use default save config
+                self.save_pending_clipboard_to_file();
+                true
+            }
             _ => false,
         }
     }

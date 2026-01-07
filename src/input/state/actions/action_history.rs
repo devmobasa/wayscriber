@@ -8,12 +8,18 @@ impl InputState {
             Action::Undo => {
                 if let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
                     self.apply_action_side_effects(&action);
+                } else {
+                    // Nothing to undo - show blocked feedback
+                    self.trigger_blocked_feedback();
                 }
                 true
             }
             Action::Redo => {
                 if let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
                     self.apply_action_side_effects(&action);
+                } else {
+                    // Nothing to redo - show blocked feedback
+                    self.trigger_blocked_feedback();
                 }
                 true
             }

@@ -130,4 +130,7 @@ pub enum Action {
 
     // Onboarding
     ReplayTour,
+
+    // Clipboard fallback
+    SavePendingToFile,
 }
