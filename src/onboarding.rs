@@ -21,6 +21,9 @@ pub struct OnboardingState {
     /// Whether the guided tour has been shown to the user
     #[serde(default, alias = "tour_completed")]
     pub tour_shown: bool,
+    /// Whether the "More" drawer hint has been shown
+    #[serde(default)]
+    pub drawer_hint_shown: bool,
 }
 
 impl Default for OnboardingState {
@@ -30,6 +33,7 @@ impl Default for OnboardingState {
             welcome_shown: false,
             toolbar_hint_shown: false,
             tour_shown: false,
+            drawer_hint_shown: false,
         }
     }
 }
@@ -169,7 +173,8 @@ fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
         version: ONBOARDING_VERSION,
         welcome_shown,
         toolbar_hint_shown,
-        tour_shown: true, // Don't show tour for recovered state
+        tour_shown: true,        // Don't show tour for recovered state
+        drawer_hint_shown: true, // Don't show drawer hint for recovered state
     };
     let store = OnboardingStore {
         state: state.clone(),

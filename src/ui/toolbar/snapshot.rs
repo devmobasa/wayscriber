@@ -122,17 +122,28 @@ pub struct ToolbarSnapshot {
     pub preset_feedback: Vec<Option<PresetFeedbackSnapshot>>,
     /// Binding hints for tooltips
     pub binding_hints: ToolbarBindingHints,
+    /// Whether to show the drawer onboarding hint (first-time users)
+    pub show_drawer_hint: bool,
 }
 
 impl ToolbarSnapshot {
     #[allow(dead_code)]
     pub fn from_input(state: &InputState) -> Self {
-        Self::from_input_with_bindings(state, ToolbarBindingHints::default())
+        Self::from_input_with_options(state, ToolbarBindingHints::default(), false)
     }
 
+    #[allow(dead_code)]
     pub fn from_input_with_bindings(
         state: &InputState,
         binding_hints: ToolbarBindingHints,
+    ) -> Self {
+        Self::from_input_with_options(state, binding_hints, false)
+    }
+
+    pub fn from_input_with_options(
+        state: &InputState,
+        binding_hints: ToolbarBindingHints,
+        show_drawer_hint: bool,
     ) -> Self {
         let frame = state.canvas_set.active_frame();
         let active_tool = state.active_tool();
@@ -267,6 +278,7 @@ impl ToolbarSnapshot {
             drawer_open,
             drawer_tab,
             binding_hints,
+            show_drawer_hint,
         }
     }
 }
