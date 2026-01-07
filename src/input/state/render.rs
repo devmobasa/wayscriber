@@ -78,6 +78,7 @@ impl InputState {
                     arrow_length: self.arrow_length,
                     arrow_angle: self.arrow_angle,
                     head_at_end: self.arrow_head_at_end,
+                    label: self.next_arrow_label(),
                 }),
             }
         } else {

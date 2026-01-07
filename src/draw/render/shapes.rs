@@ -6,6 +6,7 @@ use super::text::{render_sticky_note, render_text};
 use super::types::EraserReplayContext;
 use crate::draw::frame::DrawnShape;
 use crate::draw::shape::Shape;
+use crate::draw::shape::{ARROW_LABEL_BACKGROUND, arrow_label_layout};
 
 /// Renders all shapes in a collection to a Cairo context.
 ///
@@ -92,7 +93,13 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             arrow_length,
             arrow_angle,
             head_at_end,
+            label,
         } => {
+            let (tip_x, tip_y, tail_x, tail_y) = if *head_at_end {
+                (*x2, *y2, *x1, *y1)
+            } else {
+                (*x1, *y1, *x2, *y2)
+            };
             render_arrow(
                 ctx,
                 *x1,
@@ -105,6 +112,31 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 *arrow_angle,
                 *head_at_end,
             );
+            if let Some(label) = label {
+                let label_text = label.value.to_string();
+                if let Some(layout) = arrow_label_layout(
+                    tip_x,
+                    tip_y,
+                    tail_x,
+                    tail_y,
+                    *thick,
+                    &label_text,
+                    label.size,
+                    &label.font_descriptor,
+                ) {
+                    render_text(
+                        ctx,
+                        layout.x,
+                        layout.y,
+                        &label_text,
+                        *color,
+                        label.size,
+                        &label.font_descriptor,
+                        ARROW_LABEL_BACKGROUND,
+                        None,
+                    );
+                }
+            }
         }
         Shape::Text {
             x,

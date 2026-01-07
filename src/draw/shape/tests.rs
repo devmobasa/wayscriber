@@ -48,6 +48,7 @@ fn arrow_bounding_box_includes_head() {
         arrow_length: 20.0,
         arrow_angle: 30.0,
         head_at_end: false,
+        label: None,
     };
 
     let rect = shape.bounding_box().expect("arrow should have bounds");
@@ -64,6 +65,26 @@ fn arrow_bounding_box_includes_head() {
         assert!(px >= x_min as f64 && px <= x_max as f64);
         assert!(py >= y_min as f64 && py <= y_max as f64);
     }
+}
+
+#[test]
+fn arrow_label_layout_offsets_from_line() {
+    let font = FontDescriptor::default();
+    let layout = super::arrow_label_layout(100, 0, 0, 0, 2.0, "1", 12.0, &font)
+        .expect("label layout should exist");
+    let center_x = layout.bounds.x + layout.bounds.width / 2;
+    let center_y = layout.bounds.y + layout.bounds.height / 2;
+
+    assert!(center_y > 0);
+    assert!((center_x - 50).abs() <= 20);
+
+    let layout = super::arrow_label_layout(0, 100, 0, 0, 2.0, "1", 12.0, &font)
+        .expect("label layout should exist");
+    let center_x = layout.bounds.x + layout.bounds.width / 2;
+    let center_y = layout.bounds.y + layout.bounds.height / 2;
+
+    assert!(center_x < 0);
+    assert!((center_y - 50).abs() <= 20);
 }
 
 #[test]

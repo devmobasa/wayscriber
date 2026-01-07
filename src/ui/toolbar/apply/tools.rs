@@ -43,6 +43,14 @@ impl InputState {
         self.set_fill_enabled(enable)
     }
 
+    pub(super) fn apply_toolbar_toggle_arrow_labels(&mut self, enable: bool) -> bool {
+        self.set_arrow_label_enabled(enable)
+    }
+
+    pub(super) fn apply_toolbar_reset_arrow_label_counter(&mut self) -> bool {
+        self.reset_arrow_label_counter()
+    }
+
     pub(super) fn apply_toolbar_nudge_thickness(&mut self, delta: f64) -> bool {
         self.nudge_thickness_for_active_tool(delta)
     }

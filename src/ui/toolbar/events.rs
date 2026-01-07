@@ -15,6 +15,8 @@ pub enum ToolbarEvent {
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
+    ToggleArrowLabels(bool),
+    ResetArrowLabelCounter,
     SetUndoDelay(f64),
     SetRedoDelay(f64),
     UndoAll,

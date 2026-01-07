@@ -6,6 +6,7 @@ mod shapes;
 #[cfg(test)]
 mod tests;
 
+use crate::draw::shape::arrow_label_layout;
 use crate::draw::{DrawnShape, Shape};
 use crate::util::Rect;
 
@@ -56,6 +57,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             arrow_length,
             arrow_angle,
             head_at_end,
+            label,
             ..
         } => {
             let (tip_x, tip_y, tail_x, tail_y) = if *head_at_end {
@@ -64,7 +66,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
                 (*x1, *y1, *x2, *y2)
             };
 
-            shapes::segment_hit(*x1, *y1, *x2, *y2, *thick, point, tolerance)
+            let mut hit = shapes::segment_hit(*x1, *y1, *x2, *y2, *thick, point, tolerance)
                 || shapes::arrowhead_hit(
                     tip_x,
                     tip_y,
@@ -74,7 +76,25 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
                     *arrow_angle,
                     point,
                     tolerance,
-                )
+                );
+            if !hit && let Some(label) = label {
+                let label_text = label.value.to_string();
+                if let Some(layout) = arrow_label_layout(
+                    tip_x,
+                    tip_y,
+                    tail_x,
+                    tail_y,
+                    *thick,
+                    &label_text,
+                    label.size,
+                    &label.font_descriptor,
+                ) {
+                    let inflate = tolerance.ceil() as i32;
+                    let bounds = layout.bounds.inflated(inflate).unwrap_or(layout.bounds);
+                    hit = bounds.contains(point.0, point.1);
+                }
+            }
+            hit
         }
         Shape::Text { .. } | Shape::StickyNote { .. } => {
             if let Some(bounds) = shape.shape.bounding_box() {

@@ -62,6 +62,10 @@ pub struct InputState {
     pub arrow_angle: f64,
     /// Whether the arrowhead is placed at the end of the line
     pub arrow_head_at_end: bool,
+    /// Whether auto-numbered arrow labels are enabled
+    pub arrow_label_enabled: bool,
+    /// Next label value for auto-numbered arrows
+    pub arrow_label_counter: u32,
     /// Current modifier key state
     pub modifiers: Modifiers,
     /// Current drawing mode state machine

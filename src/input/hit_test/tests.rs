@@ -1,5 +1,5 @@
 use super::*;
-use crate::draw::{BLACK, DrawnShape, EraserBrush, EraserKind, Shape};
+use crate::draw::{ArrowLabel, BLACK, DrawnShape, EraserBrush, EraserKind, FontDescriptor, Shape};
 
 #[test]
 fn compute_hit_bounds_inflates_bounds_for_tolerance() {
@@ -108,6 +108,50 @@ fn arrowhead_hit_detects_point_near_tip_and_rejects_distant_point() {
     assert!(
         !shapes::arrowhead_hit(tip.0, tip.1, tail.0, tail.1, 10.0, 30.0, (50, 50), 0.5),
         "faraway point should not be inside arrowhead even with tolerance"
+    );
+}
+
+#[test]
+fn arrow_label_hit_detects_label_bounds() {
+    let font = FontDescriptor::default();
+    let label = ArrowLabel {
+        value: 12,
+        size: 12.0,
+        font_descriptor: font.clone(),
+    };
+    let drawn = DrawnShape {
+        id: 3,
+        shape: Shape::Arrow {
+            x1: 0,
+            y1: 0,
+            x2: 100,
+            y2: 0,
+            color: BLACK,
+            thick: 2.0,
+            arrow_length: 10.0,
+            arrow_angle: 30.0,
+            head_at_end: true,
+            label: Some(label),
+        },
+        created_at: 0,
+        locked: false,
+    };
+
+    let label_text = "12";
+    let layout = crate::draw::shape::arrow_label_layout(100, 0, 0, 0, 2.0, label_text, 12.0, &font)
+        .expect("label layout should exist");
+    let hit_point = (
+        layout.bounds.x + layout.bounds.width / 2,
+        layout.bounds.y + layout.bounds.height / 2,
+    );
+
+    assert!(
+        hit_test(&drawn, hit_point, 0.1),
+        "label center should be hittable"
+    );
+    assert!(
+        !hit_test(&drawn, (hit_point.0, hit_point.1 + 200), 0.1),
+        "distant point should not hit label"
     );
 }
 
