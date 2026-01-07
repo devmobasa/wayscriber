@@ -16,6 +16,7 @@ impl WaylandState {
                 drag_log("enable inline drag preview (layer-shell toolbars hidden)");
                 self.set_toolbar_drag_preview_active(true);
                 self.toolbar.set_suppressed(&self.compositor_state, true);
+                self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
             log::debug!(
@@ -150,6 +151,7 @@ impl WaylandState {
         let inline_render_active = self.inline_toolbars_render_active();
         if inline_render_active {
             self.toolbar.mark_dirty();
+            self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
         }
         if self.layer_shell.is_none() || inline_render_active {
@@ -237,6 +239,7 @@ impl WaylandState {
         let inline_render_active = self.inline_toolbars_render_active();
         if inline_render_active {
             self.toolbar.mark_dirty();
+            self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
         }
         if self.layer_shell.is_none() || inline_render_active {
