@@ -2,7 +2,7 @@ use super::super::super::primitives::text_extents_for;
 use super::super::fonts::resolve_help_font_family;
 use super::super::layout::{GridLayout, build_grid, measure_sections};
 use super::super::nav::{NavState, build_nav_state};
-use super::super::sections::{build_section_sets, filter_sections_for_search};
+use super::super::sections::{HelpOverlayBindings, build_section_sets, filter_sections_for_search};
 use super::BULLET;
 use super::metrics::RenderMetrics;
 use super::palette::RenderPalette;
@@ -36,8 +36,7 @@ pub(super) fn build_overlay_layout(
     screen_height: u32,
     frozen_enabled: bool,
     page_index: usize,
-    page_prev_label: &str,
-    page_next_label: &str,
+    bindings: &HelpOverlayBindings,
     search_query: &str,
     context_filter: bool,
     board_enabled: bool,
@@ -54,12 +53,11 @@ pub(super) fn build_overlay_layout(
     let help_font_family = resolve_help_font_family(&style.font_family);
 
     let section_sets = build_section_sets(
+        bindings,
         frozen_enabled,
         context_filter,
         board_enabled,
         capture_enabled,
-        page_prev_label,
-        page_next_label,
     );
     let page_count = if section_sets.page2.is_empty() { 1 } else { 2 };
     let page_index = page_index.min(page_count - 1);

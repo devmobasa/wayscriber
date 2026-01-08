@@ -3,9 +3,11 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::{action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::bindings::action_for_event;
 
 use super::super::widgets::*;
 
@@ -50,37 +52,33 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let buttons = [
         (
             ToolbarEvent::PagePrev,
-            "Prev",
             toolbar_icons::draw_icon_undo as fn(&cairo::Context, f64, f64, f64),
             can_prev,
         ),
         (
             ToolbarEvent::PageNext,
-            "Next",
             toolbar_icons::draw_icon_redo as fn(&cairo::Context, f64, f64, f64),
             can_next,
         ),
         (
             ToolbarEvent::PageNew,
-            "New",
             toolbar_icons::draw_icon_plus as fn(&cairo::Context, f64, f64, f64),
             true,
         ),
         (
             ToolbarEvent::PageDuplicate,
-            "Dup",
             toolbar_icons::draw_icon_save as fn(&cairo::Context, f64, f64, f64),
             true,
         ),
         (
             ToolbarEvent::PageDelete,
-            "Del",
             toolbar_icons::draw_icon_clear as fn(&cairo::Context, f64, f64, f64),
             true,
         ),
     ];
 
-    for (idx, (evt, label, icon_fn, enabled)) in buttons.iter().enumerate() {
+    for (idx, (evt, icon_fn, enabled)) in buttons.iter().enumerate() {
+        let label = button_label(evt);
         let bx = x + (btn_w + btn_gap) * idx as f64;
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, bx, pages_y, btn_w, btn_h))
@@ -105,7 +103,7 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
                 event: evt.clone(),
                 kind: HitKind::Click,
                 tooltip: Some(format_binding_label(
-                    label,
+                    tooltip_label(evt),
                     snapshot.binding_hints.binding_for_event(evt),
                 )),
             });
@@ -113,4 +111,16 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     }
 
     *y += pages_card_h + section_gap;
+}
+
+fn button_label(event: &ToolbarEvent) -> &'static str {
+    action_for_event(event)
+        .map(action_short_label)
+        .unwrap_or("Page")
+}
+
+fn tooltip_label(event: &ToolbarEvent) -> &'static str {
+    action_for_event(event)
+        .map(action_label)
+        .unwrap_or("Page")
 }

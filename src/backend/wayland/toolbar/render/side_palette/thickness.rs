@@ -7,6 +7,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::Action;
 use crate::input::EraserMode;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
@@ -163,7 +164,9 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         );
         let toggle_tooltip = format_binding_label(
             "Erase by stroke",
-            snapshot.binding_hints.toggle_eraser_mode.as_deref(),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::ToggleEraserMode),
         );
         hits.push(HitRegion {
             rect: (x, toggle_y, toggle_w, toggle_h),

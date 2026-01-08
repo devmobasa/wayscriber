@@ -1,8 +1,10 @@
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::config::action_label;
 use crate::toolbar_icons;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use crate::ui::toolbar::bindings::{action_for_clear_preset, action_for_save_preset};
 
 use super::super::super::super::widgets::{draw_button, point_in_rect, set_icon_color};
 use super::PresetSlotLayout;
@@ -56,7 +58,9 @@ pub(super) fn draw_preset_actions(
         event: ToolbarEvent::SavePreset(slot),
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            &format!("Save preset {}", slot),
+            action_for_save_preset(slot)
+                .map(action_label)
+                .unwrap_or("Save Preset"),
             snapshot.binding_hints.save_preset(slot),
         )),
     });
@@ -102,7 +106,9 @@ pub(super) fn draw_preset_actions(
             event: ToolbarEvent::ClearPreset(slot),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                &format!("Clear preset {}", slot),
+                action_for_clear_preset(slot)
+                    .map(action_label)
+                    .unwrap_or("Clear Preset"),
                 snapshot.binding_hints.clear_preset(slot),
             )),
         });

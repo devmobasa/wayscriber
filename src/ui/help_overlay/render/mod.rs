@@ -1,6 +1,7 @@
 use super::grid::{GridColors, GridStyle, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
 use super::nav::{NavDrawStyle, draw_nav};
+use super::sections::HelpOverlayBindings;
 
 mod cache;
 mod frame;
@@ -10,6 +11,7 @@ mod state;
 
 use cache::get_or_build_overlay_layout;
 use frame::draw_overlay_frame;
+use crate::config::{Action, action_label};
 
 pub use cache::invalidate_help_overlay_cache;
 
@@ -25,8 +27,7 @@ pub fn render_help_overlay(
     screen_height: u32,
     frozen_enabled: bool,
     page_index: usize,
-    page_prev_label: &str,
-    page_next_label: &str,
+    bindings: &HelpOverlayBindings,
     search_query: &str,
     context_filter: bool,
     board_enabled: bool,
@@ -35,12 +36,19 @@ pub fn render_help_overlay(
 ) -> f64 {
     let title_text = "Wayscriber Controls";
     let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
+    let config_binding = bindings
+        .labels_for(Action::OpenConfigurator)
+        .and_then(|labels| labels.first())
+        .map(|label| label.as_str())
+        .unwrap_or("Not bound");
     let version_line = format!(
-        "Wayscriber {} ({})  {}  F11 {} Open Configurator",
+        "Wayscriber {} ({})  {}  {} {} {}",
         env!("CARGO_PKG_VERSION"),
         commit_hash,
         BULLET,
-        ARROW
+        config_binding,
+        ARROW,
+        action_label(Action::OpenConfigurator)
     );
     let note_text_base = "Note: Each board mode has independent pages";
     let close_hint_text = "F1 / Esc to close";
@@ -52,8 +60,7 @@ pub fn render_help_overlay(
         screen_height,
         frozen_enabled,
         page_index,
-        page_prev_label,
-        page_next_label,
+        bindings,
         search_query,
         context_filter,
         board_enabled,

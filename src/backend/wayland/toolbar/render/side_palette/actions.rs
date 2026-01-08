@@ -3,9 +3,11 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use crate::ui::toolbar::bindings::action_for_event;
 
 use super::super::widgets::*;
 
@@ -44,48 +46,37 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 
     let actions_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     type IconFn = fn(&cairo::Context, f64, f64, f64);
-    let basic_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
+    let basic_actions: &[(ToolbarEvent, IconFn, bool)] = &[
         (
             ToolbarEvent::Undo,
             toolbar_icons::draw_icon_undo as IconFn,
-            "Undo",
             snapshot.undo_available,
         ),
         (
             ToolbarEvent::Redo,
             toolbar_icons::draw_icon_redo as IconFn,
-            "Redo",
             snapshot.redo_available,
         ),
         (
             ToolbarEvent::ClearCanvas,
             toolbar_icons::draw_icon_clear as IconFn,
-            "Clear",
             true,
         ),
     ];
-    let lock_label = if snapshot.zoom_locked {
-        "Unlock Zoom"
-    } else {
-        "Lock Zoom"
-    };
-    let view_actions: Vec<(ToolbarEvent, IconFn, &str, bool)> = vec![
+    let view_actions: Vec<(ToolbarEvent, IconFn, bool)> = vec![
         (
             ToolbarEvent::ZoomIn,
             toolbar_icons::draw_icon_zoom_in as IconFn,
-            "Zoom In",
             true,
         ),
         (
             ToolbarEvent::ZoomOut,
             toolbar_icons::draw_icon_zoom_out as IconFn,
-            "Zoom Out",
             true,
         ),
         (
             ToolbarEvent::ResetZoom,
             toolbar_icons::draw_icon_zoom_reset as IconFn,
-            "Reset Zoom",
             snapshot.zoom_active,
         ),
         (
@@ -95,35 +86,30 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             } else {
                 toolbar_icons::draw_icon_unlock as IconFn
             },
-            lock_label,
             snapshot.zoom_active,
         ),
     ];
     let show_delay_actions = show_advanced && snapshot.delay_actions_enabled;
-    let mut advanced_actions: Vec<(ToolbarEvent, IconFn, &str, bool)> = Vec::new();
+    let mut advanced_actions: Vec<(ToolbarEvent, IconFn, bool)> = Vec::new();
     advanced_actions.push((
         ToolbarEvent::UndoAll,
         toolbar_icons::draw_icon_undo_all as IconFn,
-        "Undo All",
         snapshot.undo_available,
     ));
     advanced_actions.push((
         ToolbarEvent::RedoAll,
         toolbar_icons::draw_icon_redo_all as IconFn,
-        "Redo All",
         snapshot.redo_available,
     ));
     if show_delay_actions {
         advanced_actions.push((
             ToolbarEvent::UndoAllDelayed,
             toolbar_icons::draw_icon_undo_all_delay as IconFn,
-            "Undo All Delay",
             snapshot.undo_available,
         ));
         advanced_actions.push((
             ToolbarEvent::RedoAllDelayed,
             toolbar_icons::draw_icon_redo_all_delay as IconFn,
-            "Redo All Delay",
             snapshot.redo_available,
         ));
     }
@@ -133,11 +119,6 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             toolbar_icons::draw_icon_unfreeze as IconFn
         } else {
             toolbar_icons::draw_icon_freeze as IconFn
-        },
-        if snapshot.frozen_active {
-            "Unfreeze"
-        } else {
-            "Freeze"
         },
         true,
     ));
@@ -155,7 +136,8 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             let row_width =
                 total_icons as f64 * icon_btn_size + (total_icons as f64 - 1.0) * icon_gap;
             let row_x = x + (content_width - row_width) / 2.0;
-            for (idx, (evt, icon_fn, label, enabled)) in basic_actions.iter().enumerate() {
+            for (idx, (evt, icon_fn, enabled)) in basic_actions.iter().enumerate() {
+                let tooltip_label = tooltip_label(evt, snapshot);
                 let bx = row_x + (icon_btn_size + icon_gap) * idx as f64;
                 let by = action_y;
                 let is_hover = hover
@@ -176,7 +158,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        label,
+                        tooltip_label,
                         snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -205,7 +187,8 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let row_x = x + (content_width - row_width) / 2.0;
                 for col in 0..icons_in_row {
                     let idx = row_start + col;
-                    let (evt, icon_fn, label, enabled) = &view_actions[idx];
+                    let (evt, icon_fn, enabled) = &view_actions[idx];
+                    let tooltip_label = tooltip_label(evt, snapshot);
                     let bx = row_x + (icon_btn_size + icon_gap) * col as f64;
                     let by = action_y + (icon_btn_size + icon_gap) * row as f64;
                     let is_hover = hover
@@ -226,7 +209,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
@@ -258,7 +241,8 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let row_x = x + (content_width - row_width) / 2.0;
                 for col in 0..icons_in_row {
                     let idx = row_start + col;
-                    let (evt, icon_fn, label, enabled) = &advanced_actions[idx];
+                    let (evt, icon_fn, enabled) = &advanced_actions[idx];
+                    let tooltip_label = tooltip_label(evt, snapshot);
                     let bx = row_x + (icon_btn_size + icon_gap) * col as f64;
                     let by = action_y + (icon_btn_size + icon_gap) * row as f64;
                     let is_hover = hover
@@ -279,7 +263,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
@@ -295,7 +279,9 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
         let mut has_group = false;
 
         if snapshot.show_actions_section {
-            for (idx, (evt, _icon, label, enabled)) in basic_actions.iter().enumerate() {
+            for (idx, (evt, _icon, enabled)) in basic_actions.iter().enumerate() {
+                let label = button_label(evt, snapshot);
+                let tooltip_label = tooltip_label(evt, snapshot);
                 let by = action_y + (action_h + action_gap) * idx as f64;
                 let is_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, x, by, content_width, action_h))
@@ -308,7 +294,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
@@ -323,7 +309,9 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             if has_group {
                 action_y += ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
             }
-            for (idx, (evt, _icon, label, enabled)) in view_actions.iter().enumerate() {
+            for (idx, (evt, _icon, enabled)) in view_actions.iter().enumerate() {
+                let label = button_label(evt, snapshot);
+                let tooltip_label = tooltip_label(evt, snapshot);
                 let row = idx / 2;
                 let col = idx % 2;
                 let bx = x + (action_w + action_col_gap) * col as f64;
@@ -339,7 +327,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
@@ -356,7 +344,9 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             if has_group {
                 action_y += ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
             }
-            for (idx, (evt, _icon, label, enabled)) in advanced_actions.iter().enumerate() {
+            for (idx, (evt, _icon, enabled)) in advanced_actions.iter().enumerate() {
+                let label = button_label(evt, snapshot);
+                let tooltip_label = tooltip_label(evt, snapshot);
                 let row = idx / 2;
                 let col = idx % 2;
                 let bx = x + (action_w + action_col_gap) * col as f64;
@@ -372,7 +362,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
@@ -382,4 +372,48 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     }
 
     *y += actions_card_h + section_gap;
+}
+
+fn button_label(event: &ToolbarEvent, snapshot: &ToolbarSnapshot) -> &'static str {
+    match event {
+        ToolbarEvent::ToggleFreeze => {
+            if snapshot.frozen_active {
+                "Unfreeze"
+            } else {
+                action_short_label(Action::ToggleFrozenMode)
+            }
+        }
+        ToolbarEvent::ToggleZoomLock => {
+            if snapshot.zoom_locked {
+                "Unlock Zoom"
+            } else {
+                action_short_label(Action::ToggleZoomLock)
+            }
+        }
+        _ => action_for_event(event)
+            .map(action_short_label)
+            .unwrap_or("Action"),
+    }
+}
+
+fn tooltip_label(event: &ToolbarEvent, snapshot: &ToolbarSnapshot) -> &'static str {
+    match event {
+        ToolbarEvent::ToggleFreeze => {
+            if snapshot.frozen_active {
+                "Unfreeze"
+            } else {
+                action_label(Action::ToggleFrozenMode)
+            }
+        }
+        ToolbarEvent::ToggleZoomLock => {
+            if snapshot.zoom_locked {
+                "Unlock Zoom"
+            } else {
+                action_label(Action::ToggleZoomLock)
+            }
+        }
+        _ => action_for_event(event)
+            .map(action_label)
+            .unwrap_or("Action"),
+    }
 }

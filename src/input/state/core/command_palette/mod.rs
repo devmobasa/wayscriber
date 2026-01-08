@@ -2,7 +2,7 @@
 
 mod registry;
 
-pub use registry::{COMMAND_REGISTRY, CommandEntry};
+pub use registry::{CommandEntry, command_palette_entries};
 
 use super::base::InputState;
 use crate::config::keybindings::Action;
@@ -113,11 +113,10 @@ impl InputState {
     pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
         let query = self.command_palette_query.to_lowercase();
         if query.is_empty() {
-            return COMMAND_REGISTRY.iter().collect();
+            return command_palette_entries().collect();
         }
 
-        let mut results: Vec<(&'static CommandEntry, i32)> = COMMAND_REGISTRY
-            .iter()
+        let mut results: Vec<(&'static CommandEntry, i32)> = command_palette_entries()
             .filter_map(|cmd| {
                 let score = fuzzy_score(&query, cmd.label) + fuzzy_score(&query, cmd.description);
                 if score > 0 { Some((cmd, score)) } else { None }

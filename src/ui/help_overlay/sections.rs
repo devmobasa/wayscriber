@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+
+use crate::config::{ACTION_META, Action, action_label};
+use crate::input::InputState;
 use crate::toolbar_icons;
 
 use super::search::{find_match_range, row_matches};
@@ -9,20 +13,131 @@ pub(crate) struct SectionSets {
     pub(crate) page2: Vec<Section>,
 }
 
+pub struct HelpOverlayBindings {
+    labels: HashMap<Action, Vec<String>>,
+    cache_key: String,
+}
+
+impl HelpOverlayBindings {
+    pub fn from_input_state(state: &InputState) -> Self {
+        let mut labels = HashMap::new();
+        for meta in ACTION_META.iter().filter(|meta| meta.in_help) {
+            let bindings = state.action_binding_labels(meta.action);
+            if !bindings.is_empty() {
+                labels.insert(meta.action, bindings);
+            }
+        }
+
+        let mut cache_parts = Vec::new();
+        for meta in ACTION_META.iter().filter(|meta| meta.in_help) {
+            if let Some(values) = labels.get(&meta.action) {
+                cache_parts.push(format!("{:?}={}", meta.action, values.join("/")));
+            }
+        }
+
+        Self {
+            labels,
+            cache_key: cache_parts.join("|"),
+        }
+    }
+
+    pub(crate) fn labels_for(&self, action: Action) -> Option<&[String]> {
+        self.labels.get(&action).map(|values| values.as_slice())
+    }
+
+    pub(crate) fn cache_key(&self) -> &str {
+        self.cache_key.as_str()
+    }
+}
+
+const NOT_BOUND_LABEL: &str = "Not bound";
+
+fn collect_labels(bindings: &HelpOverlayBindings, actions: &[Action]) -> Vec<String> {
+    let mut labels = Vec::new();
+    for action in actions {
+        if let Some(values) = bindings.labels_for(*action) {
+            labels.extend(values.iter().cloned());
+        }
+    }
+    labels.sort();
+    labels.dedup();
+    labels
+}
+
+fn joined_labels(bindings: &HelpOverlayBindings, actions: &[Action]) -> Option<String> {
+    let labels = collect_labels(bindings, actions);
+    if labels.is_empty() {
+        None
+    } else {
+        Some(labels.join(" / "))
+    }
+}
+
+fn binding_or_fallback(bindings: &HelpOverlayBindings, action: Action, fallback: &str) -> String {
+    joined_labels(bindings, &[action]).unwrap_or_else(|| fallback.to_string())
+}
+
+fn bindings_or_fallback(
+    bindings: &HelpOverlayBindings,
+    actions: &[Action],
+    fallback: &str,
+) -> String {
+    joined_labels(bindings, actions).unwrap_or_else(|| fallback.to_string())
+}
+
+fn bindings_with_fallback(
+    bindings: &HelpOverlayBindings,
+    actions: &[Action],
+    fallback: &str,
+) -> String {
+    match joined_labels(bindings, actions) {
+        Some(label) => format!("{fallback} / {label}"),
+        None => fallback.to_string(),
+    }
+}
+
+fn primary_or_fallback(bindings: &HelpOverlayBindings, action: Action, fallback: &str) -> String {
+    bindings
+        .labels_for(action)
+        .and_then(|values| values.first())
+        .cloned()
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn color_badge(
+    bindings: &HelpOverlayBindings,
+    action: Action,
+    fallback: &str,
+    color: [f64; 3],
+) -> Badge {
+    Badge {
+        label: primary_or_fallback(bindings, action, fallback),
+        color,
+    }
+}
+
 pub(crate) fn build_section_sets(
+    bindings: &HelpOverlayBindings,
     frozen_enabled: bool,
     context_filter: bool,
     board_enabled: bool,
     capture_enabled: bool,
-    page_prev_label: &str,
-    page_next_label: &str,
 ) -> SectionSets {
     let board_modes_section = (!context_filter || board_enabled).then(|| Section {
         title: "Board Modes",
         rows: vec![
-            row("Ctrl+W", "Toggle Whiteboard"),
-            row("Ctrl+B", "Toggle Blackboard"),
-            row("Ctrl+Shift+T", "Return to Transparent"),
+            row(
+                binding_or_fallback(bindings, Action::ToggleWhiteboard, NOT_BOUND_LABEL),
+                action_label(Action::ToggleWhiteboard),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ToggleBlackboard, NOT_BOUND_LABEL),
+                action_label(Action::ToggleBlackboard),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ReturnToTransparent, NOT_BOUND_LABEL),
+                action_label(Action::ReturnToTransparent),
+            ),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_settings),
@@ -31,63 +146,87 @@ pub(crate) fn build_section_sets(
     let pages_section = Section {
         title: "Pages",
         rows: vec![
-            row(page_prev_label, "Previous page"),
-            row(page_next_label, "Next page"),
-            row("Ctrl+Alt+N", "New page"),
-            row("Ctrl+Alt+D", "Duplicate page"),
-            row("Ctrl+Alt+Delete", "Delete page"),
+            row(
+                binding_or_fallback(bindings, Action::PagePrev, NOT_BOUND_LABEL),
+                action_label(Action::PagePrev),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::PageNext, NOT_BOUND_LABEL),
+                action_label(Action::PageNext),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::PageNew, NOT_BOUND_LABEL),
+                action_label(Action::PageNew),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::PageDuplicate, NOT_BOUND_LABEL),
+                action_label(Action::PageDuplicate),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::PageDelete, NOT_BOUND_LABEL),
+                action_label(Action::PageDelete),
+            ),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_file),
     };
 
+    let color_badges = vec![
+        color_badge(bindings, Action::SetColorRed, "R", [0.95, 0.41, 0.38]),
+        color_badge(bindings, Action::SetColorGreen, "G", [0.46, 0.82, 0.45]),
+        color_badge(bindings, Action::SetColorBlue, "B", [0.32, 0.58, 0.92]),
+        color_badge(bindings, Action::SetColorYellow, "Y", [0.98, 0.80, 0.10]),
+        color_badge(bindings, Action::SetColorOrange, "O", [0.98, 0.55, 0.26]),
+        color_badge(bindings, Action::SetColorPink, "P", [0.78, 0.47, 0.96]),
+        color_badge(bindings, Action::SetColorWhite, "W", [0.90, 0.92, 0.96]),
+        color_badge(bindings, Action::SetColorBlack, "K", [0.28, 0.30, 0.38]),
+    ];
+
     let drawing_section = Section {
         title: "Drawing",
         rows: vec![
-            row("P", "Freehand pen"),
-            row("Shift+Drag", "Line"),
-            row("Ctrl+Drag", "Rectangle"),
-            row("Tab+Drag", "Circle"),
-            row("Ctrl+Shift+Drag", "Arrow"),
-            row("Ctrl+Alt+H", "Highlight"),
-            row("Ctrl+Alt+M", "Marker"),
-            row("Ctrl+Alt+E", "Eraser"),
-            row("+ / -", "Adjust thickness"),
+            row(
+                binding_or_fallback(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectPenTool),
+            ),
+            row(
+                bindings_with_fallback(bindings, &[Action::SelectLineTool], "Shift+Drag"),
+                action_label(Action::SelectLineTool),
+            ),
+            row(
+                bindings_with_fallback(bindings, &[Action::SelectRectTool], "Ctrl+Drag"),
+                action_label(Action::SelectRectTool),
+            ),
+            row(
+                bindings_with_fallback(bindings, &[Action::SelectEllipseTool], "Tab+Drag"),
+                action_label(Action::SelectEllipseTool),
+            ),
+            row(
+                bindings_with_fallback(bindings, &[Action::SelectArrowTool], "Ctrl+Shift+Drag"),
+                action_label(Action::SelectArrowTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ToggleHighlightTool, NOT_BOUND_LABEL),
+                action_label(Action::ToggleHighlightTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectMarkerTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectMarkerTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectEraserTool),
+            ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::IncreaseThickness, Action::DecreaseThickness],
+                    "+ / -",
+                ),
+                "Adjust thickness",
+            ),
         ],
-        badges: vec![
-            Badge {
-                label: "R",
-                color: [0.95, 0.41, 0.38],
-            },
-            Badge {
-                label: "G",
-                color: [0.46, 0.82, 0.45],
-            },
-            Badge {
-                label: "B",
-                color: [0.32, 0.58, 0.92],
-            },
-            Badge {
-                label: "Y",
-                color: [0.98, 0.80, 0.10],
-            },
-            Badge {
-                label: "O",
-                color: [0.98, 0.55, 0.26],
-            },
-            Badge {
-                label: "P",
-                color: [0.78, 0.47, 0.96],
-            },
-            Badge {
-                label: "W",
-                color: [0.90, 0.92, 0.96],
-            },
-            Badge {
-                label: "K",
-                color: [0.28, 0.30, 0.38],
-            },
-        ],
+        badges: color_badges.clone(),
         icon: Some(toolbar_icons::draw_icon_pen),
     };
 
@@ -95,46 +234,67 @@ pub(crate) fn build_section_sets(
         title: "Selection",
         rows: vec![
             row("S", "Selection tool"),
-            row("Ctrl+A", "Select all"),
+            row(
+                binding_or_fallback(bindings, Action::SelectAll, NOT_BOUND_LABEL),
+                action_label(Action::SelectAll),
+            ),
             row("Ctrl+D", "Deselect"),
-            row("Ctrl+C", "Copy selection"),
-            row("Ctrl+V", "Paste selection"),
-            row("Delete", "Delete selection"),
-            row("Ctrl+Alt+P", "Selection properties"),
-            row("Shift+Scroll", "Adjust font size"),
+            row(
+                binding_or_fallback(bindings, Action::CopySelection, NOT_BOUND_LABEL),
+                action_label(Action::CopySelection),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::PasteSelection, NOT_BOUND_LABEL),
+                action_label(Action::PasteSelection),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::DeleteSelection, NOT_BOUND_LABEL),
+                action_label(Action::DeleteSelection),
+            ),
+            row(
+                binding_or_fallback(
+                    bindings,
+                    Action::ToggleSelectionProperties,
+                    NOT_BOUND_LABEL,
+                ),
+                action_label(Action::ToggleSelectionProperties),
+            ),
+            row(
+                bindings_with_fallback(
+                    bindings,
+                    &[Action::IncreaseFontSize, Action::DecreaseFontSize],
+                    "Shift+Scroll",
+                ),
+                "Adjust font size",
+            ),
         ],
-        badges: vec![
-            Badge {
-                label: "F",
-                color: [0.98, 0.80, 0.10],
-            },
-            Badge {
-                label: "O",
-                color: [0.98, 0.55, 0.26],
-            },
-            Badge {
-                label: "P",
-                color: [0.78, 0.47, 0.96],
-            },
-            Badge {
-                label: "W",
-                color: [0.90, 0.92, 0.96],
-            },
-            Badge {
-                label: "K",
-                color: [0.28, 0.30, 0.38],
-            },
-        ],
+        badges: color_badges.clone(),
         icon: Some(toolbar_icons::draw_icon_select),
     };
 
     let pen_text_section = Section {
         title: "Pen & Text",
         rows: vec![
-            row("T", "Text tool"),
-            row("Shift+T", "Sticky note"),
-            row("Shift+Scroll", "Adjust font size"),
-            row("Ctrl+Alt+F", "Toggle fill"),
+            row(
+                binding_or_fallback(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
+                action_label(Action::EnterTextMode),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::EnterStickyNoteMode, NOT_BOUND_LABEL),
+                action_label(Action::EnterStickyNoteMode),
+            ),
+            row(
+                bindings_with_fallback(
+                    bindings,
+                    &[Action::IncreaseFontSize, Action::DecreaseFontSize],
+                    "Shift+Scroll",
+                ),
+                "Adjust font size",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ToggleFill, NOT_BOUND_LABEL),
+                action_label(Action::ToggleFill),
+            ),
             row("Ctrl+Alt+B", "Text background"),
         ],
         badges: Vec::new(),
@@ -144,31 +304,80 @@ pub(crate) fn build_section_sets(
     let zoom_section = Section {
         title: "Zoom",
         rows: vec![
-            row("Ctrl+Alt+Scroll", "Zoom in/out"),
-            row("Ctrl+Alt+0", "Reset zoom"),
-            row("Ctrl+Alt+L", "Lock zoom"),
+            row(
+                bindings_with_fallback(
+                    bindings,
+                    &[Action::ZoomIn, Action::ZoomOut],
+                    "Ctrl+Alt+Scroll",
+                ),
+                "Zoom in/out",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ResetZoom, NOT_BOUND_LABEL),
+                action_label(Action::ResetZoom),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ToggleZoomLock, NOT_BOUND_LABEL),
+                action_label(Action::ToggleZoomLock),
+            ),
             row("Ctrl+Alt+Arrow", "Pan view"),
             row("Middle drag", "Pan view"),
-            row("Ctrl+Alt+R", "Refresh zoom capture"),
+            row(
+                binding_or_fallback(bindings, Action::RefreshZoomCapture, NOT_BOUND_LABEL),
+                action_label(Action::RefreshZoomCapture),
+            ),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_zoom_in),
     };
 
     let mut action_rows = vec![
-        row("E", "Clear frame"),
-        row("Ctrl+Z", "Undo"),
-        row("Ctrl+Shift+H", "Toggle click highlight"),
-        row("Right Click / Shift+F10", "Context menu"),
-        row("Escape / Ctrl+Q", "Exit"),
-        row("F1 / F10", "Toggle help"),
-        row("F2 / F9", "Toggle toolbar"),
-        row("Ctrl+Shift+M", "Toggle presenter mode"),
-        row("F11", "Open configurator"),
-        row("F4 / F12", "Toggle status bar"),
+        row(
+            binding_or_fallback(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
+            action_label(Action::ClearCanvas),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::Undo, NOT_BOUND_LABEL),
+            action_label(Action::Undo),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ToggleClickHighlight, NOT_BOUND_LABEL),
+            action_label(Action::ToggleClickHighlight),
+        ),
+        row(
+            bindings_with_fallback(bindings, &[Action::OpenContextMenu], "Right Click"),
+            action_label(Action::OpenContextMenu),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::Exit, NOT_BOUND_LABEL),
+            action_label(Action::Exit),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
+            action_label(Action::ToggleHelp),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ToggleToolbar, NOT_BOUND_LABEL),
+            action_label(Action::ToggleToolbar),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::TogglePresenterMode, NOT_BOUND_LABEL),
+            action_label(Action::TogglePresenterMode),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::OpenConfigurator, NOT_BOUND_LABEL),
+            action_label(Action::OpenConfigurator),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ToggleStatusBar, NOT_BOUND_LABEL),
+            action_label(Action::ToggleStatusBar),
+        ),
     ];
     if frozen_enabled {
-        action_rows.push(row("Ctrl+Shift+F", "Freeze/unfreeze active monitor"));
+        action_rows.push(row(
+            binding_or_fallback(bindings, Action::ToggleFrozenMode, NOT_BOUND_LABEL),
+            action_label(Action::ToggleFrozenMode),
+        ));
     }
     let actions_section = Section {
         title: "Actions",
@@ -180,13 +389,38 @@ pub(crate) fn build_section_sets(
     let screenshots_section = (!context_filter || capture_enabled).then(|| Section {
         title: "Screenshots",
         rows: vec![
-            row("Ctrl+C", "Full screen \u{2192} clipboard"),
-            row("Ctrl+S", "Full screen \u{2192} file"),
-            row("Ctrl+Shift+C", "Region \u{2192} clipboard"),
-            row("Ctrl+Shift+S", "Region \u{2192} file"),
-            row("Ctrl+Shift+O", "Active window (Hyprland)"),
-            row("Ctrl+Shift+I", "Selection (capture defaults)"),
-            row("Ctrl+Alt+O", "Open capture folder"),
+            row(
+                binding_or_fallback(bindings, Action::CaptureClipboardFull, NOT_BOUND_LABEL),
+                "Full screen \u{2192} clipboard",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::CaptureFileFull, NOT_BOUND_LABEL),
+                "Full screen \u{2192} file",
+            ),
+            row(
+                binding_or_fallback(
+                    bindings,
+                    Action::CaptureClipboardSelection,
+                    NOT_BOUND_LABEL,
+                ),
+                "Region \u{2192} clipboard",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::CaptureFileSelection, NOT_BOUND_LABEL),
+                "Region \u{2192} file",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::CaptureActiveWindow, NOT_BOUND_LABEL),
+                "Active window (Hyprland)",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::CaptureSelection, NOT_BOUND_LABEL),
+                "Selection (capture defaults)",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
+                action_label(Action::OpenCaptureFolder),
+            ),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_save),

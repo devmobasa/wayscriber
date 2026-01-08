@@ -8,7 +8,7 @@ pub(crate) struct Row {
 
 #[derive(Clone)]
 pub(crate) struct Badge {
-    pub(crate) label: &'static str,
+    pub(crate) label: String,
     pub(crate) color: [f64; 3],
 }
 

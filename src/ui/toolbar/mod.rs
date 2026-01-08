@@ -1,5 +1,5 @@
 mod apply;
-mod bindings;
+pub(crate) mod bindings;
 mod events;
 mod snapshot;
 

@@ -2,6 +2,7 @@ use super::{
     HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutMode, ToolbarLayoutSpec,
     format_binding_label,
 };
+use crate::config::{Action, action_label};
 
 pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut Vec<HitRegion>) {
     if !ctx.snapshot.show_settings_section
@@ -80,8 +81,10 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
         event: ToolbarEvent::OpenConfigurator,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Config UI",
-            ctx.snapshot.binding_hints.open_configurator.as_deref(),
+            action_label(Action::OpenConfigurator),
+            ctx.snapshot
+                .binding_hints
+                .binding_for_action(Action::OpenConfigurator),
         )),
     });
     hits.push(HitRegion {

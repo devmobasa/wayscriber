@@ -83,6 +83,8 @@ fn render_status_bar_draws_for_all_positions() {
 fn render_help_overlay_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
+    let input = make_input_state();
+    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
         &ctx,
         &style,
@@ -90,8 +92,7 @@ fn render_help_overlay_draws_content() {
         600,
         true,
         0,
-        "Not bound",
-        "Not bound",
+        &bindings,
         "",
         false,
         true,
@@ -137,6 +138,8 @@ fn render_status_bar_draws_in_board_modes() {
 fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
+    let input = make_input_state();
+    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
         &ctx,
         &style,
@@ -144,8 +147,7 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
         600,
         false,
         0,
-        "Not bound",
-        "Not bound",
+        &bindings,
         "",
         false,
         true,

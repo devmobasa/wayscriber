@@ -1,7 +1,9 @@
 use super::{
     HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec, format_binding_label,
 };
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
+use crate::ui::toolbar::bindings::action_for_event;
 
 pub(super) fn push_actions_hits(
     ctx: &SideLayoutContext<'_>,
@@ -58,7 +60,7 @@ pub(super) fn push_actions_hits(
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -74,7 +76,7 @@ pub(super) fn push_actions_hits(
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -116,7 +118,7 @@ pub(super) fn push_actions_hits(
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -139,7 +141,7 @@ pub(super) fn push_actions_hits(
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -177,7 +179,7 @@ pub(super) fn push_actions_hits(
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -197,7 +199,7 @@ pub(super) fn push_actions_hits(
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -208,32 +210,24 @@ pub(super) fn push_actions_hits(
     y + actions_card_h + ctx.section_gap
 }
 
-fn action_label(event: &ToolbarEvent, snapshot: &super::ToolbarSnapshot) -> &'static str {
+fn event_label(event: &ToolbarEvent, snapshot: &super::ToolbarSnapshot) -> &'static str {
     match event {
-        ToolbarEvent::Undo => "Undo",
-        ToolbarEvent::Redo => "Redo",
-        ToolbarEvent::ClearCanvas => "Clear",
-        ToolbarEvent::UndoAll => "Undo All",
-        ToolbarEvent::RedoAll => "Redo All",
-        ToolbarEvent::UndoAllDelayed => "Undo All Delay",
-        ToolbarEvent::RedoAllDelayed => "Redo All Delay",
         ToolbarEvent::ToggleFreeze => {
             if snapshot.frozen_active {
                 "Unfreeze"
             } else {
-                "Freeze"
+                action_short_label(Action::ToggleFrozenMode)
             }
         }
-        ToolbarEvent::ZoomIn => "Zoom In",
-        ToolbarEvent::ZoomOut => "Zoom Out",
-        ToolbarEvent::ResetZoom => "Reset Zoom",
         ToolbarEvent::ToggleZoomLock => {
             if snapshot.zoom_locked {
                 "Unlock Zoom"
             } else {
-                "Lock Zoom"
+                action_label(Action::ToggleZoomLock)
             }
         }
-        _ => "Action",
+        _ => action_for_event(event)
+            .map(action_label)
+            .unwrap_or("Action"),
     }
 }

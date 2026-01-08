@@ -4,6 +4,7 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::Tool;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::bindings::tool_tooltip_label;
 
 use super::super::super::widgets::*;
 use super::TopStripLayout;
@@ -19,13 +20,13 @@ pub(super) fn draw_shape_picker_row(
 ) {
     let shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
     let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + layout.gap;
-    let shapes: &[(Tool, IconFn, &str)] = &[
-        (Tool::Line, toolbar_icons::draw_icon_line, "Line"),
-        (Tool::Rect, toolbar_icons::draw_icon_rect, "Rect"),
-        (Tool::Ellipse, toolbar_icons::draw_icon_circle, "Circle"),
-        (Tool::Arrow, toolbar_icons::draw_icon_arrow, "Arrow"),
+    let shapes: &[(Tool, IconFn)] = &[
+        (Tool::Line, toolbar_icons::draw_icon_line),
+        (Tool::Rect, toolbar_icons::draw_icon_rect),
+        (Tool::Ellipse, toolbar_icons::draw_icon_circle),
+        (Tool::Arrow, toolbar_icons::draw_icon_arrow),
     ];
-    for (tool, icon_fn, label) in shapes {
+    for (tool, icon_fn) in shapes {
         let is_active =
             layout.snapshot.active_tool == *tool || layout.snapshot.tool_override == Some(*tool);
         let is_hover = layout
@@ -39,7 +40,7 @@ pub(super) fn draw_shape_picker_row(
         let icon_x = shape_x + (btn_size - icon_size) / 2.0;
         let icon_y = shape_y + (btn_size - icon_size) / 2.0;
         icon_fn(layout.ctx, icon_x, icon_y, icon_size);
-        let tooltip = layout.tool_tooltip(*tool, label);
+        let tooltip = layout.tool_tooltip(*tool, tool_tooltip_label(*tool));
         layout.hits.push(HitRegion {
             rect: (shape_x, shape_y, btn_size, btn_size),
             event: ToolbarEvent::SelectTool(*tool),

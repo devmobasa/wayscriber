@@ -3,6 +3,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
@@ -159,15 +160,24 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             icon_size,
         );
     } else {
-        draw_label_center(ctx, x, buttons_y, button_w, button_h, "Config UI");
+        draw_label_center(
+            ctx,
+            x,
+            buttons_y,
+            button_w,
+            button_h,
+            action_short_label(Action::OpenConfigurator),
+        );
     }
     hits.push(HitRegion {
         rect: (x, buttons_y, button_w, button_h),
         event: ToolbarEvent::OpenConfigurator,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Config UI",
-            snapshot.binding_hints.open_configurator.as_deref(),
+            action_label(Action::OpenConfigurator),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::OpenConfigurator),
         )),
     });
 

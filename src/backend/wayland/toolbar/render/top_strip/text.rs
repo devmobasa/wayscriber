@@ -3,8 +3,10 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
 
 use super::super::widgets::*;
 
@@ -24,34 +26,31 @@ pub(super) fn draw_text_strip(
     let (btn_w, btn_h) = layout.spec.top_button_size();
     let y = layout.spec.top_button_y(layout.height);
 
-    let tool_buttons: &[(Tool, &str)] = if is_simple {
-        &[
-            (Tool::Select, "Select"),
-            (Tool::Pen, "Pen"),
-            (Tool::Marker, "Marker"),
-            (Tool::Eraser, "Eraser"),
-        ]
+    let tool_buttons: &[Tool] = if is_simple {
+        &[Tool::Select, Tool::Pen, Tool::Marker, Tool::Eraser]
     } else {
         &[
-            (Tool::Select, "Select"),
-            (Tool::Pen, "Pen"),
-            (Tool::Marker, "Marker"),
-            (Tool::Eraser, "Eraser"),
-            (Tool::Line, "Line"),
-            (Tool::Rect, "Rect"),
-            (Tool::Ellipse, "Circle"),
-            (Tool::Arrow, "Arrow"),
+            Tool::Select,
+            Tool::Pen,
+            Tool::Marker,
+            Tool::Eraser,
+            Tool::Line,
+            Tool::Rect,
+            Tool::Ellipse,
+            Tool::Arrow,
         ]
     };
 
-    for (tool, label) in tool_buttons {
+    for tool in tool_buttons {
+        let label = tool_label(*tool);
+        let tooltip_label = tool_tooltip_label(*tool);
         let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_w, btn_h, is_active, is_hover);
         draw_label_center(ctx, x, y, btn_w, btn_h, label);
-        let tooltip = layout.tool_tooltip(*tool, label);
+        let tooltip = layout.tool_tooltip(*tool, tooltip_label);
         layout.hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::SelectTool(*tool),
@@ -82,6 +81,7 @@ pub(super) fn draw_text_strip(
         let fill_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, fill_w, btn_h))
             .unwrap_or(false);
+        let fill_label = action_short_label(Action::ToggleFill);
         draw_checkbox(
             ctx,
             x,
@@ -90,15 +90,15 @@ pub(super) fn draw_text_strip(
             btn_h,
             snapshot.fill_enabled,
             fill_hover,
-            "Fill",
+            fill_label,
         );
         layout.hits.push(HitRegion {
             rect: (x, y, fill_w, btn_h),
             event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Fill",
-                snapshot.binding_hints.fill.as_deref(),
+                action_label(Action::ToggleFill),
+                snapshot.binding_hints.binding_for_action(Action::ToggleFill),
             )),
         });
         x += fill_w + gap;
@@ -108,14 +108,21 @@ pub(super) fn draw_text_strip(
         .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
         .unwrap_or(false);
     draw_button(ctx, x, y, btn_w, btn_h, snapshot.text_active, is_hover);
-    draw_label_center(ctx, x, y, btn_w, btn_h, "Text");
+    draw_label_center(
+        ctx,
+        x,
+        y,
+        btn_w,
+        btn_h,
+        action_short_label(Action::EnterTextMode),
+    );
     layout.hits.push(HitRegion {
         rect: (x, y, btn_w, btn_h),
         event: ToolbarEvent::EnterTextMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Text",
-            snapshot.binding_hints.text.as_deref(),
+            action_label(Action::EnterTextMode),
+            snapshot.binding_hints.binding_for_action(Action::EnterTextMode),
         )),
     });
     x += btn_w + gap;
@@ -124,14 +131,22 @@ pub(super) fn draw_text_strip(
         .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
         .unwrap_or(false);
     draw_button(ctx, x, y, btn_w, btn_h, snapshot.note_active, note_hover);
-    draw_label_center(ctx, x, y, btn_w, btn_h, "Note");
+    draw_label_center(
+        ctx,
+        x,
+        y,
+        btn_w,
+        btn_h,
+        action_short_label(Action::EnterStickyNoteMode),
+    );
     layout.hits.push(HitRegion {
         rect: (x, y, btn_w, btn_h),
         event: ToolbarEvent::EnterStickyNoteMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Note",
-            snapshot.binding_hints.note.as_deref(),
+            action_label(Action::EnterStickyNoteMode),
+            snapshot.binding_hints
+                .binding_for_action(Action::EnterStickyNoteMode),
         )),
     });
     x += btn_w + gap;
@@ -141,14 +156,21 @@ pub(super) fn draw_text_strip(
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_w, btn_h, false, clear_hover);
-        draw_label_center(ctx, x, y, btn_w, btn_h, "Clear");
+        draw_label_center(
+            ctx,
+            x,
+            y,
+            btn_w,
+            btn_h,
+            action_short_label(Action::ClearCanvas),
+        );
         layout.hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::ClearCanvas,
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Clear",
-                snapshot.binding_hints.clear.as_deref(),
+                action_label(Action::ClearCanvas),
+                snapshot.binding_hints.binding_for_action(Action::ClearCanvas),
             )),
         });
         x += btn_w + gap;
@@ -171,20 +193,17 @@ pub(super) fn draw_text_strip(
     if is_simple && snapshot.shape_picker_open {
         let shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
         let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + gap;
-        let shapes: &[(Tool, &str)] = &[
-            (Tool::Line, "Line"),
-            (Tool::Rect, "Rect"),
-            (Tool::Ellipse, "Circle"),
-            (Tool::Arrow, "Arrow"),
-        ];
-        for (tool, label) in shapes {
+        let shapes: &[Tool] = &[Tool::Line, Tool::Rect, Tool::Ellipse, Tool::Arrow];
+        for tool in shapes {
+            let label = tool_label(*tool);
+            let tooltip_label = tool_tooltip_label(*tool);
             let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);
             let is_hover = hover
                 .map(|(hx, hy)| point_in_rect(hx, hy, shape_x, shape_y, btn_w, btn_h))
                 .unwrap_or(false);
             draw_button(ctx, shape_x, shape_y, btn_w, btn_h, is_active, is_hover);
             draw_label_center(ctx, shape_x, shape_y, btn_w, btn_h, label);
-            let tooltip = layout.tool_tooltip(*tool, label);
+            let tooltip = layout.tool_tooltip(*tool, tooltip_label);
             layout.hits.push(HitRegion {
                 rect: (shape_x, shape_y, btn_w, btn_h),
                 event: ToolbarEvent::SelectTool(*tool),

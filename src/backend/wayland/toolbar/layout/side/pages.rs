@@ -1,7 +1,9 @@
 use super::{
     HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec, format_binding_label,
 };
+use crate::config::action_label;
 use crate::input::ToolbarDrawerTab;
+use crate::ui::toolbar::bindings::action_for_event;
 
 pub(super) fn push_pages_hits(
     ctx: &SideLayoutContext<'_>,
@@ -25,24 +27,31 @@ pub(super) fn push_pages_hits(
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
     let btn_w = (ctx.content_width - btn_gap * 4.0) / 5.0;
     let buttons = [
-        (ToolbarEvent::PagePrev, "Prev"),
-        (ToolbarEvent::PageNext, "Next"),
-        (ToolbarEvent::PageNew, "New"),
-        (ToolbarEvent::PageDuplicate, "Dup"),
-        (ToolbarEvent::PageDelete, "Del"),
+        ToolbarEvent::PagePrev,
+        ToolbarEvent::PageNext,
+        ToolbarEvent::PageNew,
+        ToolbarEvent::PageDuplicate,
+        ToolbarEvent::PageDelete,
     ];
-    for (idx, (evt, label)) in buttons.iter().enumerate() {
+    for (idx, evt) in buttons.iter().enumerate() {
+        let tooltip_label = tooltip_label(evt);
         let bx = ctx.x + (btn_w + btn_gap) * idx as f64;
         hits.push(HitRegion {
             rect: (bx, pages_y, btn_w, btn_h),
             event: evt.clone(),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                label,
+                tooltip_label,
                 ctx.snapshot.binding_hints.binding_for_event(evt),
             )),
         });
     }
 
     y + pages_card_h + ctx.section_gap
+}
+
+fn tooltip_label(event: &ToolbarEvent) -> &'static str {
+    action_for_event(event)
+        .map(action_label)
+        .unwrap_or("Page")
 }

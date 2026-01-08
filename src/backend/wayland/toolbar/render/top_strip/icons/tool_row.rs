@@ -3,6 +3,7 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::input::Tool;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::bindings::tool_tooltip_label;
 
 use super::super::super::widgets::*;
 use super::TopStripLayout;
@@ -28,54 +29,40 @@ pub(super) fn draw_tool_row(
 
     type IconFn = fn(&cairo::Context, f64, f64, f64);
 
-    let tool_buttons: &[(Tool, IconFn, &str)] = if is_simple {
+    let tool_buttons: &[(Tool, IconFn)] = if is_simple {
         &[
-            (
-                Tool::Select,
-                toolbar_icons::draw_icon_select as IconFn,
-                "Select",
-            ),
-            (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
+            (Tool::Select, toolbar_icons::draw_icon_select as IconFn),
+            (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn),
             (
                 Tool::Marker,
                 toolbar_icons::draw_icon_marker as IconFn,
-                "Marker",
             ),
             (
                 Tool::Eraser,
                 toolbar_icons::draw_icon_eraser as IconFn,
-                "Eraser",
             ),
         ]
     } else {
         &[
-            (
-                Tool::Select,
-                toolbar_icons::draw_icon_select as IconFn,
-                "Select",
-            ),
-            (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn, "Pen"),
+            (Tool::Select, toolbar_icons::draw_icon_select as IconFn),
+            (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn),
             (
                 Tool::Marker,
                 toolbar_icons::draw_icon_marker as IconFn,
-                "Marker",
             ),
             (
                 Tool::Eraser,
                 toolbar_icons::draw_icon_eraser as IconFn,
-                "Eraser",
             ),
-            (Tool::Line, toolbar_icons::draw_icon_line as IconFn, "Line"),
-            (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn, "Rect"),
+            (Tool::Line, toolbar_icons::draw_icon_line as IconFn),
+            (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn),
             (
                 Tool::Ellipse,
                 toolbar_icons::draw_icon_circle as IconFn,
-                "Circle",
             ),
             (
                 Tool::Arrow,
                 toolbar_icons::draw_icon_arrow as IconFn,
-                "Arrow",
             ),
         ]
     };
@@ -83,7 +70,7 @@ pub(super) fn draw_tool_row(
     let mut fill_anchor: Option<(f64, f64)> = None;
     let mut rect_x = None;
     let mut circle_end_x = None;
-    for (tool, icon_fn, label) in tool_buttons {
+    for (tool, icon_fn) in tool_buttons {
         if *tool == Tool::Rect {
             rect_x = Some(x);
         }
@@ -103,7 +90,7 @@ pub(super) fn draw_tool_row(
         let icon_y = y + (btn_size - icon_size) / 2.0;
         icon_fn(layout.ctx, icon_x, icon_y, icon_size);
 
-        let tooltip = layout.tool_tooltip(*tool, label);
+        let tooltip = layout.tool_tooltip(*tool, tool_tooltip_label(*tool));
         layout.hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::SelectTool(*tool),
