@@ -25,8 +25,8 @@ mod tests;
 // Re-export commonly used types at module level
 #[allow(unused_imports)]
 pub use action_meta::{
-    ACTION_META, ActionCategory, ActionMeta, action_description, action_label, action_meta,
-    action_short_label,
+    ActionCategory, ActionMeta, action_description, action_display_label, action_label,
+    action_meta, action_meta_iter, action_short_label,
 };
 pub use core::Config;
 pub use enums::StatusPosition;

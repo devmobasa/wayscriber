@@ -1,7 +1,8 @@
 use std::f64::consts::PI;
 
-use crate::config::StatusPosition;
+use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardMode, DrawingState, InputState, TextInputMode, Tool};
+use crate::ui::toolbar::bindings::action_for_tool;
 
 // ============================================================================
 // UI Layout Constants (not configurable)
@@ -54,15 +55,16 @@ pub fn render_status_bar(
 
     let font_size = input_state.current_font_size;
     let highlight_badge = if input_state.click_highlight_enabled() {
-        " [Click HL]"
+        format!(" [{}]", action_display_label(Action::ToggleClickHighlight))
     } else {
-        ""
+        String::new()
     };
     let highlight_tool_badge = if input_state.highlight_tool_active() {
-        " [Highlight pen]"
+        format!(" [{}]", action_display_label(Action::SelectHighlightTool))
     } else {
-        ""
+        String::new()
     };
+    let help_binding = input_state.action_binding_label(Action::ToggleHelp);
 
     let frozen_badge = if input_state.frozen_active() {
         "[FROZEN] "
@@ -81,7 +83,7 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  F1=Help",
+        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
         frozen_badge,
         zoom_badge,
         mode_badge,
@@ -91,7 +93,9 @@ pub fn render_status_bar(
         tool_name,
         font_size as i32,
         highlight_badge,
-        highlight_tool_badge
+        highlight_tool_badge,
+        help_binding,
+        action_display_label(Action::ToggleHelp)
     );
 
     log::debug!("Status bar font_size from config: {}", style.font_size);
@@ -156,33 +160,19 @@ pub fn render_status_bar(
 fn tool_display_name(input_state: &InputState, tool: Tool) -> &'static str {
     match &input_state.state {
         DrawingState::TextInput { .. } => match input_state.text_input_mode {
-            TextInputMode::Plain => "Text",
-            TextInputMode::StickyNote => "Sticky Note",
+            TextInputMode::Plain => action_display_label(Action::EnterTextMode),
+            TextInputMode::StickyNote => action_display_label(Action::EnterStickyNoteMode),
         },
-        DrawingState::Drawing { tool, .. } => match tool {
-            Tool::Select => "Select",
-            Tool::Pen => "Pen",
-            Tool::Line => "Line",
-            Tool::Rect => "Rectangle",
-            Tool::Ellipse => "Circle",
-            Tool::Arrow => "Arrow",
-            Tool::Marker => "Marker",
-            Tool::Highlight => "Highlight",
-            Tool::Eraser => "Eraser",
-        },
+        DrawingState::Drawing { tool, .. } => tool_action_label(*tool),
         DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Selecting { .. } => "Select",
         DrawingState::ResizingText { .. } => "Resize",
-        DrawingState::PendingTextClick { .. } | DrawingState::Idle => match tool {
-            Tool::Select => "Select",
-            Tool::Pen => "Pen",
-            Tool::Line => "Line",
-            Tool::Rect => "Rectangle",
-            Tool::Ellipse => "Circle",
-            Tool::Arrow => "Arrow",
-            Tool::Marker => "Marker",
-            Tool::Highlight => "Highlight",
-            Tool::Eraser => "Eraser",
-        },
+        DrawingState::PendingTextClick { .. } | DrawingState::Idle => tool_action_label(tool),
     }
+}
+
+fn tool_action_label(tool: Tool) -> &'static str {
+    action_for_tool(tool)
+        .map(action_display_label)
+        .unwrap_or("Select")
 }

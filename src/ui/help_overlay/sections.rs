@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::config::{ACTION_META, Action, action_label};
+use crate::config::{Action, action_label, action_meta_iter};
 use crate::input::InputState;
 use crate::toolbar_icons;
 
@@ -21,7 +21,7 @@ pub struct HelpOverlayBindings {
 impl HelpOverlayBindings {
     pub fn from_input_state(state: &InputState) -> Self {
         let mut labels = HashMap::new();
-        for meta in ACTION_META.iter().filter(|meta| meta.in_help) {
+        for meta in action_meta_iter().filter(|meta| meta.in_help) {
             let bindings = state.action_binding_labels(meta.action);
             if !bindings.is_empty() {
                 labels.insert(meta.action, bindings);
@@ -29,7 +29,7 @@ impl HelpOverlayBindings {
         }
 
         let mut cache_parts = Vec::new();
-        for meta in ACTION_META.iter().filter(|meta| meta.in_help) {
+        for meta in action_meta_iter().filter(|meta| meta.in_help) {
             if let Some(values) = labels.get(&meta.action) {
                 cache_parts.push(format!("{:?}={}", meta.action, values.join("/")));
             }
@@ -86,17 +86,6 @@ fn bindings_or_fallback(
     fallback: &str,
 ) -> String {
     joined_labels(bindings, actions).unwrap_or_else(|| fallback.to_string())
-}
-
-fn bindings_with_fallback(
-    bindings: &HelpOverlayBindings,
-    actions: &[Action],
-    fallback: &str,
-) -> String {
-    match joined_labels(bindings, actions) {
-        Some(label) => format!("{fallback} / {label}"),
-        None => fallback.to_string(),
-    }
 }
 
 fn primary_or_fallback(bindings: &HelpOverlayBindings, action: Action, fallback: &str) -> String {
@@ -193,19 +182,19 @@ pub(crate) fn build_section_sets(
                 action_label(Action::SelectPenTool),
             ),
             row(
-                bindings_with_fallback(bindings, &[Action::SelectLineTool], "Shift+Drag"),
+                binding_or_fallback(bindings, Action::SelectLineTool, "Shift+Drag"),
                 action_label(Action::SelectLineTool),
             ),
             row(
-                bindings_with_fallback(bindings, &[Action::SelectRectTool], "Ctrl+Drag"),
+                binding_or_fallback(bindings, Action::SelectRectTool, "Ctrl+Drag"),
                 action_label(Action::SelectRectTool),
             ),
             row(
-                bindings_with_fallback(bindings, &[Action::SelectEllipseTool], "Tab+Drag"),
+                binding_or_fallback(bindings, Action::SelectEllipseTool, "Tab+Drag"),
                 action_label(Action::SelectEllipseTool),
             ),
             row(
-                bindings_with_fallback(bindings, &[Action::SelectArrowTool], "Ctrl+Shift+Drag"),
+                binding_or_fallback(bindings, Action::SelectArrowTool, "Ctrl+Shift+Drag"),
                 action_label(Action::SelectArrowTool),
             ),
             row(
@@ -224,7 +213,7 @@ pub(crate) fn build_section_sets(
                 bindings_or_fallback(
                     bindings,
                     &[Action::IncreaseThickness, Action::DecreaseThickness],
-                    "+ / -",
+                    NOT_BOUND_LABEL,
                 ),
                 "Adjust thickness",
             ),
@@ -236,12 +225,15 @@ pub(crate) fn build_section_sets(
     let selection_section = Section {
         title: "Selection",
         rows: vec![
-            row("S", "Selection tool"),
+            row("Drag", "Selection tool"),
             row(
                 binding_or_fallback(bindings, Action::SelectAll, NOT_BOUND_LABEL),
                 action_label(Action::SelectAll),
             ),
-            row("Ctrl+D", "Deselect"),
+            row(
+                binding_or_fallback(bindings, Action::DuplicateSelection, NOT_BOUND_LABEL),
+                action_label(Action::DuplicateSelection),
+            ),
             row(
                 binding_or_fallback(bindings, Action::CopySelection, NOT_BOUND_LABEL),
                 action_label(Action::CopySelection),
@@ -259,10 +251,10 @@ pub(crate) fn build_section_sets(
                 action_label(Action::ToggleSelectionProperties),
             ),
             row(
-                bindings_with_fallback(
+                bindings_or_fallback(
                     bindings,
                     &[Action::IncreaseFontSize, Action::DecreaseFontSize],
-                    "Shift+Scroll",
+                    NOT_BOUND_LABEL,
                 ),
                 "Adjust font size",
             ),
@@ -283,10 +275,10 @@ pub(crate) fn build_section_sets(
                 action_label(Action::EnterStickyNoteMode),
             ),
             row(
-                bindings_with_fallback(
+                bindings_or_fallback(
                     bindings,
                     &[Action::IncreaseFontSize, Action::DecreaseFontSize],
-                    "Shift+Scroll",
+                    NOT_BOUND_LABEL,
                 ),
                 "Adjust font size",
             ),
@@ -294,7 +286,7 @@ pub(crate) fn build_section_sets(
                 binding_or_fallback(bindings, Action::ToggleFill, NOT_BOUND_LABEL),
                 action_label(Action::ToggleFill),
             ),
-            row("Ctrl+Alt+B", "Text background"),
+            row("Selection properties panel", "Text background"),
         ],
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_text),
@@ -304,10 +296,10 @@ pub(crate) fn build_section_sets(
         title: "Zoom",
         rows: vec![
             row(
-                bindings_with_fallback(
+                bindings_or_fallback(
                     bindings,
                     &[Action::ZoomIn, Action::ZoomOut],
-                    "Ctrl+Alt+Scroll",
+                    NOT_BOUND_LABEL,
                 ),
                 "Zoom in/out",
             ),
@@ -319,8 +311,7 @@ pub(crate) fn build_section_sets(
                 binding_or_fallback(bindings, Action::ToggleZoomLock, NOT_BOUND_LABEL),
                 action_label(Action::ToggleZoomLock),
             ),
-            row("Ctrl+Alt+Arrow", "Pan view"),
-            row("Middle drag", "Pan view"),
+            row("Middle drag / arrow keys", "Pan view"),
             row(
                 binding_or_fallback(bindings, Action::RefreshZoomCapture, NOT_BOUND_LABEL),
                 action_label(Action::RefreshZoomCapture),
@@ -344,7 +335,10 @@ pub(crate) fn build_section_sets(
             action_label(Action::ToggleClickHighlight),
         ),
         row(
-            bindings_with_fallback(bindings, &[Action::OpenContextMenu], "Right Click"),
+            match joined_labels(bindings, &[Action::OpenContextMenu]) {
+                Some(label) => format!("Right Click / {label}"),
+                None => "Right Click".to_string(),
+            },
             action_label(Action::OpenContextMenu),
         ),
         row(
