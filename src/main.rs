@@ -14,6 +14,7 @@ mod session;
 mod session_override;
 mod time_utils;
 mod toolbar_icons;
+mod tray_action;
 mod ui;
 mod util;
 

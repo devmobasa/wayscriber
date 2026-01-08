@@ -18,9 +18,11 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::Ordering;
 
 #[cfg(feature = "tray")]
-use super::{TrayAction, WayscriberTray};
+use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
+#[cfg(feature = "tray")]
+use crate::tray_action::TrayAction;
 
 #[cfg(feature = "tray")]
 impl WayscriberTray {

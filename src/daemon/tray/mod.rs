@@ -5,38 +5,6 @@ mod runtime;
 
 pub(crate) use runtime::start_system_tray;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TrayAction {
-    ToggleFreeze,
-    CaptureFull,
-    CaptureWindow,
-    CaptureRegion,
-    ToggleHelp,
-}
-
-impl TrayAction {
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            TrayAction::ToggleFreeze => "toggle_freeze",
-            TrayAction::CaptureFull => "capture_full",
-            TrayAction::CaptureWindow => "capture_window",
-            TrayAction::CaptureRegion => "capture_region",
-            TrayAction::ToggleHelp => "toggle_help",
-        }
-    }
-
-    pub(crate) fn parse(action: &str) -> Option<Self> {
-        match action {
-            "toggle_freeze" => Some(TrayAction::ToggleFreeze),
-            "capture_full" => Some(TrayAction::CaptureFull),
-            "capture_window" => Some(TrayAction::CaptureWindow),
-            "capture_region" => Some(TrayAction::CaptureRegion),
-            "toggle_help" => Some(TrayAction::ToggleHelp),
-            _ => None,
-        }
-    }
-}
-
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
 #[cfg(all(feature = "tray", test))]

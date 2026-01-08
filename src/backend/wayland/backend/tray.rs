@@ -3,7 +3,7 @@ use std::fs;
 
 use super::super::state::WaylandState;
 use crate::config::Action;
-use crate::daemon::TrayAction;
+use crate::tray_action::TrayAction;
 
 pub(super) fn process_tray_action(state: &mut WaylandState) {
     let action_path = crate::paths::tray_action_file();
