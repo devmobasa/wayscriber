@@ -1,6 +1,8 @@
 #[cfg(feature = "tray")]
 use super::super::types::TrayStatus;
 #[cfg(feature = "tray")]
+use super::TrayAction;
+#[cfg(feature = "tray")]
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use super::runtime::update_session_resume_in_config;
@@ -103,7 +105,7 @@ impl ksni::Tray for WayscriberTray {
                 label: action_label(Action::ToggleFrozenMode).to_string(),
                 icon_name: "media-playback-pause".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("toggle_freeze");
+                    this.dispatch_overlay_action(TrayAction::ToggleFreeze);
                 }),
                 ..Default::default()
             }
@@ -112,7 +114,7 @@ impl ksni::Tray for WayscriberTray {
                 label: action_label(Action::CaptureFullScreen).to_string(),
                 icon_name: "camera-photo".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("capture_full");
+                    this.dispatch_overlay_action(TrayAction::CaptureFull);
                 }),
                 ..Default::default()
             }
@@ -121,7 +123,7 @@ impl ksni::Tray for WayscriberTray {
                 label: action_label(Action::CaptureActiveWindow).to_string(),
                 icon_name: "window-duplicate".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("capture_window");
+                    this.dispatch_overlay_action(TrayAction::CaptureWindow);
                 }),
                 ..Default::default()
             }
@@ -130,7 +132,7 @@ impl ksni::Tray for WayscriberTray {
                 label: action_label(Action::CaptureSelection).to_string(),
                 icon_name: "selection-rectangular".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("capture_region");
+                    this.dispatch_overlay_action(TrayAction::CaptureRegion);
                 }),
                 ..Default::default()
             }
@@ -139,7 +141,7 @@ impl ksni::Tray for WayscriberTray {
                 label: action_label(Action::ToggleHelp).to_string(),
                 icon_name: "help-browser".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("toggle_help");
+                    this.dispatch_overlay_action(TrayAction::ToggleHelp);
                 }),
                 ..Default::default()
             }

@@ -10,4 +10,5 @@ mod types;
 mod tests;
 
 pub use core::Daemon;
+pub(crate) use tray::TrayAction;
 pub use types::AlreadyRunningError;

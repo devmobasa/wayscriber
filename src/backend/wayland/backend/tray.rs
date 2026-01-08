@@ -3,6 +3,7 @@ use std::fs;
 
 use super::super::state::WaylandState;
 use crate::config::Action;
+use crate::daemon::TrayAction;
 
 pub(super) fn process_tray_action(state: &mut WaylandState) {
     let action_path = crate::paths::tray_action_file();
@@ -27,14 +28,23 @@ pub(super) fn process_tray_action(state: &mut WaylandState) {
         return;
     }
 
-    match action_str.as_str() {
-        "toggle_freeze" => {
+    let action = match TrayAction::parse(action_str.as_str()) {
+        Some(action) => action,
+        None => {
+            warn!("Unknown tray action '{}'", action_str);
+            let _ = fs::remove_file(&action_path);
+            return;
+        }
+    };
+
+    match action {
+        TrayAction::ToggleFreeze => {
             state.input_state.request_frozen_toggle();
             state.input_state.needs_redraw = true;
         }
-        "capture_full" => state.handle_capture_action(Action::CaptureFullScreen),
-        "capture_window" => state.handle_capture_action(Action::CaptureActiveWindow),
-        "capture_region" => {
+        TrayAction::CaptureFull => state.handle_capture_action(Action::CaptureFullScreen),
+        TrayAction::CaptureWindow => state.handle_capture_action(Action::CaptureActiveWindow),
+        TrayAction::CaptureRegion => {
             // Honor clipboard preference for region captures
             if state.config.capture.copy_to_clipboard {
                 state.handle_capture_action(Action::CaptureClipboardRegion);
@@ -42,10 +52,9 @@ pub(super) fn process_tray_action(state: &mut WaylandState) {
                 state.handle_capture_action(Action::CaptureFileRegion);
             }
         }
-        "toggle_help" => {
+        TrayAction::ToggleHelp => {
             state.input_state.toggle_help_overlay();
         }
-        other => warn!("Unknown tray action '{}'", other),
     }
 
     let _ = fs::remove_file(&action_path);
