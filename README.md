@@ -192,6 +192,47 @@ yay -S wayscriber-bin    # prebuilt binary
 yay -S wayscriber-configurator
 ```
 
+### NixOS / Nix
+
+**Run without installing:**
+```bash
+nix run github:devmobasa/wayscriber
+```
+
+**Install to profile:**
+```bash
+nix profile install github:devmobasa/wayscriber
+# Optional GUI configurator:
+nix profile install github:devmobasa/wayscriber#wayscriber-configurator
+```
+
+**Add to NixOS configuration (flake-based):**
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    wayscriber.url = "github:devmobasa/wayscriber";
+  };
+
+  outputs = { nixpkgs, wayscriber, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [{
+        environment.systemPackages = [
+          wayscriber.packages.x86_64-linux.default
+        ];
+      }];
+    };
+  };
+}
+```
+
+**Development shell:**
+```bash
+nix develop github:devmobasa/wayscriber
+```
+
 ### From Source
 
 **Dependencies:**
