@@ -4,6 +4,8 @@ use super::super::super::hit::HitRegion;
 use super::super::spec::ToolbarLayoutSpec;
 use super::shape_buttons;
 use super::tool_buttons;
+use crate::config::{Action, action_label};
+use crate::ui::toolbar::bindings::tool_tooltip_label;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 pub(super) fn build_hits(
@@ -21,13 +23,14 @@ pub(super) fn build_hits(
     let y = spec.top_button_y(height);
     let tool_buttons = tool_buttons(is_simple);
 
-    for (tool, label) in tool_buttons {
+    for tool in tool_buttons {
+        let tooltip_label = tool_tooltip_label(*tool);
         hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::SelectTool(*tool),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                label,
+                tooltip_label,
                 snapshot.binding_hints.for_tool(*tool),
             )),
         });
@@ -51,8 +54,10 @@ pub(super) fn build_hits(
             event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Fill",
-                snapshot.binding_hints.fill.as_deref(),
+                action_label(Action::ToggleFill),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleFill),
             )),
         });
         x += fill_w + gap;
@@ -63,8 +68,10 @@ pub(super) fn build_hits(
         event: ToolbarEvent::EnterTextMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Text",
-            snapshot.binding_hints.text.as_deref(),
+            action_label(Action::EnterTextMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterTextMode),
         )),
     });
     x += btn_w + gap;
@@ -74,8 +81,10 @@ pub(super) fn build_hits(
         event: ToolbarEvent::EnterStickyNoteMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Note",
-            snapshot.binding_hints.note.as_deref(),
+            action_label(Action::EnterStickyNoteMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterStickyNoteMode),
         )),
     });
     x += btn_w + gap;
@@ -86,8 +95,10 @@ pub(super) fn build_hits(
             event: ToolbarEvent::ClearCanvas,
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Clear",
-                snapshot.binding_hints.clear.as_deref(),
+                action_label(Action::ClearCanvas),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ClearCanvas),
             )),
         });
         x += btn_w + gap;
@@ -103,13 +114,14 @@ pub(super) fn build_hits(
     if is_simple && snapshot.shape_picker_open {
         let shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
         let mut shape_x = ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
-        for (tool, label) in shape_buttons() {
+        for tool in shape_buttons() {
+            let tooltip_label = tool_tooltip_label(*tool);
             hits.push(HitRegion {
                 rect: (shape_x, shape_y, btn_w, btn_h),
                 event: ToolbarEvent::SelectTool(*tool),
                 kind: HitKind::Click,
                 tooltip: Some(format_binding_label(
-                    label,
+                    tooltip_label,
                     snapshot.binding_hints.for_tool(*tool),
                 )),
             });

@@ -3,9 +3,12 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::backend::wayland::toolbar::rows::{centered_grid_layout, grid_layout, row_item_width};
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::bindings::action_for_event;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use super::super::widgets::*;
 
@@ -44,48 +47,37 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 
     let actions_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     type IconFn = fn(&cairo::Context, f64, f64, f64);
-    let basic_actions: &[(ToolbarEvent, IconFn, &str, bool)] = &[
+    let basic_actions: &[(ToolbarEvent, IconFn, bool)] = &[
         (
             ToolbarEvent::Undo,
             toolbar_icons::draw_icon_undo as IconFn,
-            "Undo",
             snapshot.undo_available,
         ),
         (
             ToolbarEvent::Redo,
             toolbar_icons::draw_icon_redo as IconFn,
-            "Redo",
             snapshot.redo_available,
         ),
         (
             ToolbarEvent::ClearCanvas,
             toolbar_icons::draw_icon_clear as IconFn,
-            "Clear",
             true,
         ),
     ];
-    let lock_label = if snapshot.zoom_locked {
-        "Unlock Zoom"
-    } else {
-        "Lock Zoom"
-    };
-    let view_actions: Vec<(ToolbarEvent, IconFn, &str, bool)> = vec![
+    let view_actions: Vec<(ToolbarEvent, IconFn, bool)> = vec![
         (
             ToolbarEvent::ZoomIn,
             toolbar_icons::draw_icon_zoom_in as IconFn,
-            "Zoom In",
             true,
         ),
         (
             ToolbarEvent::ZoomOut,
             toolbar_icons::draw_icon_zoom_out as IconFn,
-            "Zoom Out",
             true,
         ),
         (
             ToolbarEvent::ResetZoom,
             toolbar_icons::draw_icon_zoom_reset as IconFn,
-            "Reset Zoom",
             snapshot.zoom_active,
         ),
         (
@@ -95,35 +87,30 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             } else {
                 toolbar_icons::draw_icon_unlock as IconFn
             },
-            lock_label,
             snapshot.zoom_active,
         ),
     ];
     let show_delay_actions = show_advanced && snapshot.delay_actions_enabled;
-    let mut advanced_actions: Vec<(ToolbarEvent, IconFn, &str, bool)> = Vec::new();
+    let mut advanced_actions: Vec<(ToolbarEvent, IconFn, bool)> = Vec::new();
     advanced_actions.push((
         ToolbarEvent::UndoAll,
         toolbar_icons::draw_icon_undo_all as IconFn,
-        "Undo All",
         snapshot.undo_available,
     ));
     advanced_actions.push((
         ToolbarEvent::RedoAll,
         toolbar_icons::draw_icon_redo_all as IconFn,
-        "Redo All",
         snapshot.redo_available,
     ));
     if show_delay_actions {
         advanced_actions.push((
             ToolbarEvent::UndoAllDelayed,
             toolbar_icons::draw_icon_undo_all_delay as IconFn,
-            "Undo All Delay",
             snapshot.undo_available,
         ));
         advanced_actions.push((
             ToolbarEvent::RedoAllDelayed,
             toolbar_icons::draw_icon_redo_all_delay as IconFn,
-            "Redo All Delay",
             snapshot.redo_available,
         ));
     }
@@ -133,11 +120,6 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             toolbar_icons::draw_icon_unfreeze as IconFn
         } else {
             toolbar_icons::draw_icon_freeze as IconFn
-        },
-        if snapshot.frozen_active {
-            "Unfreeze"
-        } else {
-            "Freeze"
         },
         true,
     ));
@@ -150,14 +132,19 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
         let mut has_group = false;
 
         if snapshot.show_actions_section {
-            let icons_per_row = basic_actions.len();
-            let total_icons = icons_per_row;
-            let row_width =
-                total_icons as f64 * icon_btn_size + (total_icons as f64 - 1.0) * icon_gap;
-            let row_x = x + (content_width - row_width) / 2.0;
-            for (idx, (evt, icon_fn, label, enabled)) in basic_actions.iter().enumerate() {
-                let bx = row_x + (icon_btn_size + icon_gap) * idx as f64;
-                let by = action_y;
+            let layout = centered_grid_layout(
+                x,
+                content_width,
+                action_y,
+                icon_btn_size,
+                icon_gap,
+                basic_actions.len(),
+                basic_actions.len(),
+            );
+            for (item, (evt, icon_fn, enabled)) in layout.items.iter().zip(basic_actions.iter()) {
+                let tooltip_label = tooltip_label(evt, snapshot);
+                let bx = item.x;
+                let by = item.y;
                 let is_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
                     .unwrap_or(false);
@@ -176,64 +163,57 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        label,
+                        tooltip_label,
                         snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
             }
-            action_y += icon_btn_size;
-            has_group = true;
+            action_y += layout.height;
+            has_group = layout.rows > 0;
         }
 
         if show_view_actions {
             if has_group {
                 action_y += icon_gap;
             }
-            let icons_per_row = 5usize;
-            let total_icons = view_actions.len();
-            let rows = if total_icons > 0 {
-                total_icons.div_ceil(icons_per_row)
-            } else {
-                0
-            };
-            for row in 0..rows {
-                let row_start = row * icons_per_row;
-                let row_end = (row_start + icons_per_row).min(total_icons);
-                let icons_in_row = row_end - row_start;
-                let row_width =
-                    icons_in_row as f64 * icon_btn_size + (icons_in_row as f64 - 1.0) * icon_gap;
-                let row_x = x + (content_width - row_width) / 2.0;
-                for col in 0..icons_in_row {
-                    let idx = row_start + col;
-                    let (evt, icon_fn, label, enabled) = &view_actions[idx];
-                    let bx = row_x + (icon_btn_size + icon_gap) * col as f64;
-                    let by = action_y + (icon_btn_size + icon_gap) * row as f64;
-                    let is_hover = hover
-                        .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
-                        .unwrap_or(false);
-                    if *enabled {
-                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
-                        set_icon_color(ctx, is_hover);
-                    } else {
-                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
-                        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
-                    }
-                    let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
-                    let icon_y = by + (icon_btn_size - icon_size) / 2.0;
-                    icon_fn(ctx, icon_x, icon_y, icon_size);
-                    hits.push(HitRegion {
-                        rect: (bx, by, icon_btn_size, icon_btn_size),
-                        event: evt.clone(),
-                        kind: HitKind::Click,
-                        tooltip: Some(format_binding_label(
-                            label,
-                            snapshot.binding_hints.binding_for_event(evt),
-                        )),
-                    });
+            let layout = centered_grid_layout(
+                x,
+                content_width,
+                action_y,
+                icon_btn_size,
+                icon_gap,
+                5,
+                view_actions.len(),
+            );
+            for (item, (evt, icon_fn, enabled)) in layout.items.iter().zip(view_actions.iter()) {
+                let tooltip_label = tooltip_label(evt, snapshot);
+                let bx = item.x;
+                let by = item.y;
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
+                    .unwrap_or(false);
+                if *enabled {
+                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                    set_icon_color(ctx, is_hover);
+                } else {
+                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
+                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
                 }
+                let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
+                let icon_y = by + (icon_btn_size - icon_size) / 2.0;
+                icon_fn(ctx, icon_x, icon_y, icon_size);
+                hits.push(HitRegion {
+                    rect: (bx, by, icon_btn_size, icon_btn_size),
+                    event: evt.clone(),
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        tooltip_label,
+                        snapshot.binding_hints.binding_for_event(evt),
+                    )),
+                });
             }
-            if rows > 0 {
-                action_y += icon_btn_size * rows as f64 + icon_gap * (rows as f64 - 1.0);
+            if layout.rows > 0 {
+                action_y += layout.height;
                 has_group = true;
             }
         }
@@ -242,112 +222,123 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             if has_group {
                 action_y += icon_gap;
             }
-            let icons_per_row = 5usize;
-            let total_icons = advanced_actions.len();
-            let rows = if total_icons > 0 {
-                total_icons.div_ceil(icons_per_row)
-            } else {
-                0
-            };
-            for row in 0..rows {
-                let row_start = row * icons_per_row;
-                let row_end = (row_start + icons_per_row).min(total_icons);
-                let icons_in_row = row_end - row_start;
-                let row_width =
-                    icons_in_row as f64 * icon_btn_size + (icons_in_row as f64 - 1.0) * icon_gap;
-                let row_x = x + (content_width - row_width) / 2.0;
-                for col in 0..icons_in_row {
-                    let idx = row_start + col;
-                    let (evt, icon_fn, label, enabled) = &advanced_actions[idx];
-                    let bx = row_x + (icon_btn_size + icon_gap) * col as f64;
-                    let by = action_y + (icon_btn_size + icon_gap) * row as f64;
-                    let is_hover = hover
-                        .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
-                        .unwrap_or(false);
-                    if *enabled {
-                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
-                        set_icon_color(ctx, is_hover);
-                    } else {
-                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
-                        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
-                    }
-                    let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
-                    let icon_y = by + (icon_btn_size - icon_size) / 2.0;
-                    icon_fn(ctx, icon_x, icon_y, icon_size);
-                    hits.push(HitRegion {
-                        rect: (bx, by, icon_btn_size, icon_btn_size),
-                        event: evt.clone(),
-                        kind: HitKind::Click,
-                        tooltip: Some(format_binding_label(
-                            label,
-                            snapshot.binding_hints.binding_for_event(evt),
-                        )),
-                    });
+            let layout = centered_grid_layout(
+                x,
+                content_width,
+                action_y,
+                icon_btn_size,
+                icon_gap,
+                5,
+                advanced_actions.len(),
+            );
+            for (item, (evt, icon_fn, enabled)) in layout.items.iter().zip(advanced_actions.iter())
+            {
+                let tooltip_label = tooltip_label(evt, snapshot);
+                let bx = item.x;
+                let by = item.y;
+                let is_hover = hover
+                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
+                    .unwrap_or(false);
+                if *enabled {
+                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                    set_icon_color(ctx, is_hover);
+                } else {
+                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
+                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
                 }
+                let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
+                let icon_y = by + (icon_btn_size - icon_size) / 2.0;
+                icon_fn(ctx, icon_x, icon_y, icon_size);
+                hits.push(HitRegion {
+                    rect: (bx, by, icon_btn_size, icon_btn_size),
+                    event: evt.clone(),
+                    kind: HitKind::Click,
+                    tooltip: Some(format_binding_label(
+                        tooltip_label,
+                        snapshot.binding_hints.binding_for_event(evt),
+                    )),
+                });
             }
         }
     } else {
         let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
         let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
         let action_col_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-        let action_w = (content_width - action_col_gap) / 2.0;
+        let action_w = row_item_width(content_width, 2, action_col_gap);
         let mut action_y = actions_y;
         let mut has_group = false;
 
         if snapshot.show_actions_section {
-            for (idx, (evt, _icon, label, enabled)) in basic_actions.iter().enumerate() {
-                let by = action_y + (action_h + action_gap) * idx as f64;
+            let layout = grid_layout(
+                x,
+                action_y,
+                content_width,
+                action_h,
+                0.0,
+                action_gap,
+                1,
+                basic_actions.len(),
+            );
+            for (item, (evt, _icon, enabled)) in layout.items.iter().zip(basic_actions.iter()) {
+                let label = button_label(evt, snapshot);
+                let tooltip_label = tooltip_label(evt, snapshot);
                 let is_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, x, by, content_width, action_h))
+                    .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
-                draw_button(ctx, x, by, content_width, action_h, *enabled, is_hover);
-                draw_label_center(ctx, x, by, content_width, action_h, label);
+                draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
+                draw_label_center(ctx, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {
-                        rect: (x, by, content_width, action_h),
+                        rect: (item.x, item.y, item.w, item.h),
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
                 }
             }
-            action_y += action_h * basic_actions.len() as f64
-                + action_gap * (basic_actions.len() as f64 - 1.0);
-            has_group = true;
+            action_y += layout.height;
+            has_group = layout.rows > 0;
         }
 
         if show_view_actions {
             if has_group {
                 action_y += ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
             }
-            for (idx, (evt, _icon, label, enabled)) in view_actions.iter().enumerate() {
-                let row = idx / 2;
-                let col = idx % 2;
-                let bx = x + (action_w + action_col_gap) * col as f64;
-                let by = action_y + (action_h + action_gap) * row as f64;
+            let layout = grid_layout(
+                x,
+                action_y,
+                action_w,
+                action_h,
+                action_col_gap,
+                action_gap,
+                2,
+                view_actions.len(),
+            );
+            for (item, (evt, _icon, enabled)) in layout.items.iter().zip(view_actions.iter()) {
+                let label = button_label(evt, snapshot);
+                let tooltip_label = tooltip_label(evt, snapshot);
                 let is_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
+                    .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
-                draw_button(ctx, bx, by, action_w, action_h, *enabled, is_hover);
-                draw_label_center(ctx, bx, by, action_w, action_h, label);
+                draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
+                draw_label_center(ctx, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {
-                        rect: (bx, by, action_w, action_h),
+                        rect: (item.x, item.y, item.w, item.h),
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
                 }
             }
-            let rows = view_actions.len().div_ceil(2);
-            if rows > 0 {
-                action_y += action_h * rows as f64 + action_gap * (rows as f64 - 1.0);
+            if layout.rows > 0 {
+                action_y += layout.height;
                 has_group = true;
             }
         }
@@ -356,23 +347,31 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
             if has_group {
                 action_y += ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
             }
-            for (idx, (evt, _icon, label, enabled)) in advanced_actions.iter().enumerate() {
-                let row = idx / 2;
-                let col = idx % 2;
-                let bx = x + (action_w + action_col_gap) * col as f64;
-                let by = action_y + (action_h + action_gap) * row as f64;
+            let layout = grid_layout(
+                x,
+                action_y,
+                action_w,
+                action_h,
+                action_col_gap,
+                action_gap,
+                2,
+                advanced_actions.len(),
+            );
+            for (item, (evt, _icon, enabled)) in layout.items.iter().zip(advanced_actions.iter()) {
+                let label = button_label(evt, snapshot);
+                let tooltip_label = tooltip_label(evt, snapshot);
                 let is_hover = hover
-                    .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, action_w, action_h))
+                    .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
-                draw_button(ctx, bx, by, action_w, action_h, *enabled, is_hover);
-                draw_label_center(ctx, bx, by, action_w, action_h, label);
+                draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
+                draw_label_center(ctx, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {
-                        rect: (bx, by, action_w, action_h),
+                        rect: (item.x, item.y, item.w, item.h),
                         event: evt.clone(),
                         kind: HitKind::Click,
                         tooltip: Some(format_binding_label(
-                            label,
+                            tooltip_label,
                             snapshot.binding_hints.binding_for_event(evt),
                         )),
                     });
@@ -382,4 +381,48 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     }
 
     *y += actions_card_h + section_gap;
+}
+
+fn button_label(event: &ToolbarEvent, snapshot: &ToolbarSnapshot) -> &'static str {
+    match event {
+        ToolbarEvent::ToggleFreeze => {
+            if snapshot.frozen_active {
+                "Unfreeze"
+            } else {
+                action_short_label(Action::ToggleFrozenMode)
+            }
+        }
+        ToolbarEvent::ToggleZoomLock => {
+            if snapshot.zoom_locked {
+                "Unlock Zoom"
+            } else {
+                action_short_label(Action::ToggleZoomLock)
+            }
+        }
+        _ => action_for_event(event)
+            .map(action_short_label)
+            .unwrap_or("Action"),
+    }
+}
+
+fn tooltip_label(event: &ToolbarEvent, snapshot: &ToolbarSnapshot) -> &'static str {
+    match event {
+        ToolbarEvent::ToggleFreeze => {
+            if snapshot.frozen_active {
+                "Unfreeze"
+            } else {
+                action_label(Action::ToggleFrozenMode)
+            }
+        }
+        ToolbarEvent::ToggleZoomLock => {
+            if snapshot.zoom_locked {
+                "Unlock Zoom"
+            } else {
+                action_label(Action::ToggleZoomLock)
+            }
+        }
+        _ => action_for_event(event)
+            .map(action_label)
+            .unwrap_or("Action"),
+    }
 }

@@ -1,5 +1,7 @@
 use super::super::base::InputState;
-use crate::config::Action;
+use crate::config::{Action, KeyBinding};
+use crate::label_format::format_binding_labels;
+use std::collections::{HashMap, HashSet};
 
 impl InputState {
     /// Look up an action for the given key and modifiers.
@@ -17,7 +19,22 @@ impl InputState {
         None
     }
 
-    pub fn action_binding_label(&self, action: Action) -> String {
+    pub fn set_action_bindings(&mut self, action_bindings: HashMap<Action, Vec<KeyBinding>>) {
+        self.action_bindings = action_bindings;
+    }
+
+    pub fn action_binding_labels(&self, action: Action) -> Vec<String> {
+        if let Some(bindings) = self.action_bindings.get(&action) {
+            let mut labels = Vec::new();
+            let mut seen = HashSet::new();
+            for binding in bindings {
+                let label = binding.to_string();
+                if seen.insert(label.clone()) {
+                    labels.push(label);
+                }
+            }
+            return labels;
+        }
         let mut labels: Vec<String> = self
             .action_map
             .iter()
@@ -26,10 +43,16 @@ impl InputState {
             .collect();
         labels.sort();
         labels.dedup();
-        if labels.is_empty() {
-            "Not bound".to_string()
-        } else {
-            labels.join(" / ")
-        }
+        labels
+    }
+
+    #[allow(dead_code)]
+    pub fn action_binding_primary_label(&self, action: Action) -> Option<String> {
+        self.action_binding_labels(action).into_iter().next()
+    }
+
+    #[allow(dead_code)]
+    pub fn action_binding_label(&self, action: Action) -> String {
+        format_binding_labels(&self.action_binding_labels(action))
     }
 }

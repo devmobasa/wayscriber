@@ -12,6 +12,8 @@ mod tour;
 pub use command_palette::render_command_palette;
 pub use context_menu::render_context_menu;
 #[allow(unused_imports)]
+pub use help_overlay::HelpOverlayBindings;
+#[allow(unused_imports)]
 pub use help_overlay::{invalidate_help_overlay_cache, render_help_overlay};
 pub use properties_panel::render_properties_panel;
 pub use status::{render_frozen_badge, render_page_badge, render_status_bar, render_zoom_badge};

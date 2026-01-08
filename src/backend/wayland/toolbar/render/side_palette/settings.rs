@@ -3,6 +3,8 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
@@ -100,101 +102,113 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         ]);
     }
 
-    let mut toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
+    let toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let toggle_col_gap = toggle_gap;
-    let toggle_col_w = (content_width - toggle_col_gap) / 2.0;
+    let toggle_col_w = row_item_width(content_width, 2, toggle_col_gap);
+    let toggle_layout = grid_layout(
+        x,
+        toggle_y,
+        toggle_col_w,
+        toggle_h,
+        toggle_col_gap,
+        toggle_gap,
+        2,
+        toggles.len(),
+    );
     ctx.set_font_size(12.0);
-    for row in 0..toggles.len().div_ceil(2) {
-        for col in 0..2 {
-            let idx = row * 2 + col;
-            if idx >= toggles.len() {
-                break;
-            }
-            let (label, value, event, tooltip) = &toggles[idx];
-            let toggle_x = x + col as f64 * (toggle_col_w + toggle_col_gap);
-            let toggle_hover = hover
-                .map(|(hx, hy)| point_in_rect(hx, hy, toggle_x, toggle_y, toggle_col_w, toggle_h))
-                .unwrap_or(false);
-            draw_checkbox(
-                ctx,
-                toggle_x,
-                toggle_y,
-                toggle_col_w,
-                toggle_h,
-                *value,
-                toggle_hover,
-                label,
-            );
-            hits.push(HitRegion {
-                rect: (toggle_x, toggle_y, toggle_col_w, toggle_h),
-                event: event.clone(),
-                kind: HitKind::Click,
-                tooltip: tooltip.map(|text| text.to_string()),
-            });
-        }
-        if row + 1 < toggles.len().div_ceil(2) {
-            toggle_y += toggle_h + toggle_gap;
-        } else {
-            toggle_y += toggle_h;
-        }
+    for (item, (label, value, event, tooltip)) in toggle_layout.items.iter().zip(toggles.iter()) {
+        let toggle_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
+            .unwrap_or(false);
+        draw_checkbox(
+            ctx,
+            item.x,
+            item.y,
+            item.w,
+            item.h,
+            *value,
+            toggle_hover,
+            label,
+        );
+        hits.push(HitRegion {
+            rect: (item.x, item.y, item.w, item.h),
+            event: event.clone(),
+            kind: HitKind::Click,
+            tooltip: tooltip.map(|text| text.to_string()),
+        });
     }
     ctx.set_font_size(13.0);
 
-    let buttons_y = toggle_y + toggle_gap;
+    let mut buttons_y = toggle_y;
+    if toggle_layout.rows > 0 {
+        buttons_y += toggle_layout.height;
+    }
+    buttons_y += toggle_gap;
     let button_h = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_HEIGHT;
     let button_gap = ToolbarLayoutSpec::SIDE_SETTINGS_BUTTON_GAP;
-    let button_w = (content_width - button_gap) / 2.0;
+    let button_w = row_item_width(content_width, 2, button_gap);
     let icon_size = 16.0;
 
-    let config_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, buttons_y, button_w, button_h))
-        .unwrap_or(false);
-    draw_button(ctx, x, buttons_y, button_w, button_h, false, config_hover);
-    if use_icons {
-        set_icon_color(ctx, config_hover);
-        toolbar_icons::draw_icon_settings(
-            ctx,
-            x + (button_w - icon_size) / 2.0,
-            buttons_y + (button_h - icon_size) / 2.0,
-            icon_size,
-        );
-    } else {
-        draw_label_center(ctx, x, buttons_y, button_w, button_h, "Config UI");
+    let button_layout = grid_layout(x, buttons_y, button_w, button_h, button_gap, 0.0, 2, 2);
+    if let Some(item) = button_layout.items.first() {
+        let config_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
+            .unwrap_or(false);
+        draw_button(ctx, item.x, item.y, item.w, item.h, false, config_hover);
+        if use_icons {
+            set_icon_color(ctx, config_hover);
+            toolbar_icons::draw_icon_settings(
+                ctx,
+                item.x + (item.w - icon_size) / 2.0,
+                item.y + (item.h - icon_size) / 2.0,
+                icon_size,
+            );
+        } else {
+            draw_label_center(
+                ctx,
+                item.x,
+                item.y,
+                item.w,
+                item.h,
+                action_short_label(Action::OpenConfigurator),
+            );
+        }
+        hits.push(HitRegion {
+            rect: (item.x, item.y, item.w, item.h),
+            event: ToolbarEvent::OpenConfigurator,
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                action_label(Action::OpenConfigurator),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::OpenConfigurator),
+            )),
+        });
     }
-    hits.push(HitRegion {
-        rect: (x, buttons_y, button_w, button_h),
-        event: ToolbarEvent::OpenConfigurator,
-        kind: HitKind::Click,
-        tooltip: Some(format_binding_label(
-            "Config UI",
-            snapshot.binding_hints.open_configurator.as_deref(),
-        )),
-    });
 
-    let file_x = x + button_w + button_gap;
-    let file_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, file_x, buttons_y, button_w, button_h))
-        .unwrap_or(false);
-    draw_button(
-        ctx, file_x, buttons_y, button_w, button_h, false, file_hover,
-    );
-    if use_icons {
-        set_icon_color(ctx, file_hover);
-        toolbar_icons::draw_icon_file(
-            ctx,
-            file_x + (button_w - icon_size) / 2.0,
-            buttons_y + (button_h - icon_size) / 2.0,
-            icon_size,
-        );
-    } else {
-        draw_label_center(ctx, file_x, buttons_y, button_w, button_h, "Config file");
+    if let Some(item) = button_layout.items.get(1) {
+        let file_hover = hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
+            .unwrap_or(false);
+        draw_button(ctx, item.x, item.y, item.w, item.h, false, file_hover);
+        if use_icons {
+            set_icon_color(ctx, file_hover);
+            toolbar_icons::draw_icon_file(
+                ctx,
+                item.x + (item.w - icon_size) / 2.0,
+                item.y + (item.h - icon_size) / 2.0,
+                icon_size,
+            );
+        } else {
+            draw_label_center(ctx, item.x, item.y, item.w, item.h, "Config file");
+        }
+        hits.push(HitRegion {
+            rect: (item.x, item.y, item.w, item.h),
+            event: ToolbarEvent::OpenConfigFile,
+            kind: HitKind::Click,
+            tooltip: Some("Config file".to_string()),
+        });
     }
-    hits.push(HitRegion {
-        rect: (file_x, buttons_y, button_w, button_h),
-        event: ToolbarEvent::OpenConfigFile,
-        kind: HitKind::Click,
-        tooltip: Some("Config file".to_string()),
-    });
 
     *y += settings_card_h + section_gap;
 }

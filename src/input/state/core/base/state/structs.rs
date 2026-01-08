@@ -141,6 +141,8 @@ pub struct InputState {
     pub(crate) last_text_preview_bounds: Option<Rect>,
     /// Keybinding action map for efficient lookup
     pub(in crate::input::state::core) action_map: HashMap<KeyBinding, Action>,
+    /// Ordered keybindings per action (as configured)
+    pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
     /// Pending capture action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_capture_action: Option<Action>,
     /// Pending zoom action (to be handled by WaylandState)

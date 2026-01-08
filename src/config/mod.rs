@@ -6,6 +6,7 @@
 //!
 //! If no config file exists, sensible defaults are used automatically.
 
+pub mod action_meta;
 pub mod enums;
 pub mod keybindings;
 pub mod types;
@@ -22,6 +23,11 @@ pub(crate) mod test_helpers;
 mod tests;
 
 // Re-export commonly used types at module level
+#[allow(unused_imports)]
+pub use action_meta::{
+    ActionCategory, ActionMeta, action_description, action_display_label, action_label,
+    action_meta, action_meta_iter, action_short_label,
+};
 pub use core::Config;
 pub use enums::StatusPosition;
 #[allow(unused_imports)]

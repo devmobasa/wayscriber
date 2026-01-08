@@ -5,8 +5,9 @@ pub(super) fn create_test_input_state() -> InputState {
 
     let keybindings = KeybindingsConfig::default();
     let action_map = keybindings.build_action_map().unwrap();
+    let action_bindings = keybindings.build_action_bindings().unwrap();
 
-    InputState::with_defaults(
+    let mut state = InputState::with_defaults(
         Color {
             r: 1.0,
             g: 0.0,
@@ -41,5 +42,7 @@ pub(super) fn create_test_input_state() -> InputState {
         5,     // custom_undo_steps
         5,     // custom_redo_steps
         crate::config::PresenterModeConfig::default(),
-    )
+    );
+    state.set_action_bindings(action_bindings);
+    state
 }

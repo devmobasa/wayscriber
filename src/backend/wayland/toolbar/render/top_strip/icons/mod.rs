@@ -7,6 +7,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -63,15 +64,17 @@ pub(super) fn draw_icon_strip(
             fill_h,
             snapshot.fill_enabled,
             fill_hover,
-            "Fill",
+            action_short_label(Action::ToggleFill),
         );
         layout.hits.push(HitRegion {
             rect: (fill_x, fill_y, fill_w, fill_h),
             event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Fill",
-                snapshot.binding_hints.fill.as_deref(),
+                action_label(Action::ToggleFill),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleFill),
             )),
         });
     }

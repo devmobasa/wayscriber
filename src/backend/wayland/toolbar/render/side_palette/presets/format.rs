@@ -4,17 +4,7 @@ use crate::ui::toolbar::PresetSlotSnapshot;
 use crate::util::color_to_name;
 
 pub(super) fn tool_label(tool: Tool) -> &'static str {
-    match tool {
-        Tool::Select => "Select",
-        Tool::Pen => "Pen",
-        Tool::Line => "Line",
-        Tool::Rect => "Rect",
-        Tool::Ellipse => "Circle",
-        Tool::Arrow => "Arrow",
-        Tool::Marker => "Marker",
-        Tool::Highlight => "Highlight",
-        Tool::Eraser => "Eraser",
-    }
+    crate::ui::toolbar::bindings::tool_label(tool)
 }
 
 pub(super) fn px_label(value: f64) -> String {

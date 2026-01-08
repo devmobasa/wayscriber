@@ -231,7 +231,7 @@ pub(crate) fn draw_sections_grid(
                                 cairo::FontSlant::Normal,
                                 cairo::FontWeight::Bold,
                                 style.badge_font_size,
-                                badge.label,
+                                badge.label.as_str(),
                             );
                             (extents.width(), extents.height(), extents.y_bearing())
                         });
@@ -263,7 +263,7 @@ pub(crate) fn draw_sections_grid(
                     let text_y =
                         section_y + (style.badge_height - badge_metrics.1) / 2.0 - badge_metrics.2;
                     ctx.move_to(text_x, text_y);
-                    let _ = ctx.show_text(badge.label);
+                    let _ = ctx.show_text(badge.label.as_str());
 
                     badge_x += badge_width;
                 }

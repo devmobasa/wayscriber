@@ -5,6 +5,12 @@ use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use super::runtime::update_session_resume_in_config;
 #[cfg(feature = "tray")]
+use crate::config::{Action, action_label};
+#[cfg(feature = "tray")]
+use crate::label_format::format_binding_label;
+#[cfg(feature = "tray")]
+use crate::tray_action::TrayAction;
+#[cfg(feature = "tray")]
 use log::{info, warn};
 #[cfg(feature = "tray")]
 use std::sync::atomic::Ordering;
@@ -98,52 +104,52 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: "Toggle Freeze (overlay)".to_string(),
+                label: format_binding_label(action_label(Action::ToggleFrozenMode), None),
                 icon_name: "media-playback-pause".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("toggle_freeze");
+                    this.dispatch_overlay_action(TrayAction::ToggleFreeze);
                 }),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Capture: Full Screen".to_string(),
+                label: format_binding_label(action_label(Action::CaptureFullScreen), None),
                 icon_name: "camera-photo".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("capture_full");
+                    this.dispatch_overlay_action(TrayAction::CaptureFull);
                 }),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Capture: Active Window".to_string(),
+                label: format_binding_label(action_label(Action::CaptureActiveWindow), None),
                 icon_name: "window-duplicate".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("capture_window");
+                    this.dispatch_overlay_action(TrayAction::CaptureWindow);
                 }),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Capture: Region".to_string(),
+                label: format_binding_label(action_label(Action::CaptureSelection), None),
                 icon_name: "selection-rectangular".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("capture_region");
+                    this.dispatch_overlay_action(TrayAction::CaptureRegion);
                 }),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Toggle Help Overlay".to_string(),
+                label: format_binding_label(action_label(Action::ToggleHelp), None),
                 icon_name: "help-browser".into(),
                 activate: Box::new(|this: &mut Self| {
-                    this.dispatch_overlay_action("toggle_help");
+                    this.dispatch_overlay_action(TrayAction::ToggleHelp);
                 }),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Open Configurator".to_string(),
+                label: format_binding_label(action_label(Action::OpenConfigurator), None),
                 icon_name: "preferences-desktop".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.launch_configurator();

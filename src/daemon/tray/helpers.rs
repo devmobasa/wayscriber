@@ -21,6 +21,8 @@ use std::sync::atomic::Ordering;
 use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use crate::daemon::icons::{decode_tray_icon_png, fallback_tray_icon};
+#[cfg(feature = "tray")]
+use crate::tray_action::TrayAction;
 
 #[cfg(feature = "tray")]
 impl WayscriberTray {
@@ -113,7 +115,8 @@ impl WayscriberTray {
         }
     }
 
-    pub(super) fn dispatch_overlay_action(&self, action: &str) {
+    pub(super) fn dispatch_overlay_action(&self, action: TrayAction) {
+        let action_str = action.as_str();
         if let Some(parent) = self.tray_action_path.parent()
             && let Err(err) = fs::create_dir_all(parent)
         {
@@ -125,10 +128,10 @@ impl WayscriberTray {
             return;
         }
 
-        if let Err(err) = fs::write(&self.tray_action_path, action) {
+        if let Err(err) = fs::write(&self.tray_action_path, action_str) {
             warn!(
                 "Failed to write tray action {} to {}: {}",
-                action,
+                action_str,
                 self.tray_action_path.display(),
                 err
             );
@@ -144,7 +147,7 @@ impl WayscriberTray {
                     warn!(
                         "Failed to signal overlay process {} for tray action {}: {}",
                         pid,
-                        action,
+                        action_str,
                         std::io::Error::last_os_error()
                     );
                 }

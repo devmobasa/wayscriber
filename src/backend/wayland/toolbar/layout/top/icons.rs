@@ -4,7 +4,9 @@ use super::super::super::hit::HitRegion;
 use super::super::spec::ToolbarLayoutSpec;
 use super::shape_buttons;
 use super::tool_buttons;
+use crate::config::{Action, action_label};
 use crate::input::Tool;
+use crate::ui::toolbar::bindings::tool_tooltip_label;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 pub(super) fn build_hits(
@@ -25,7 +27,7 @@ pub(super) fn build_hits(
 
     let mut rect_x = None;
     let mut circle_end_x = None;
-    for (tool, label) in tool_buttons {
+    for tool in tool_buttons {
         if *tool == Tool::Rect {
             rect_x = Some(x);
         }
@@ -37,7 +39,7 @@ pub(super) fn build_hits(
             event: ToolbarEvent::SelectTool(*tool),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                label,
+                tool_tooltip_label(*tool),
                 snapshot.binding_hints.for_tool(*tool),
             )),
         });
@@ -74,8 +76,10 @@ pub(super) fn build_hits(
             event: ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Fill",
-                snapshot.binding_hints.fill.as_deref(),
+                action_label(Action::ToggleFill),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleFill),
             )),
         });
     }
@@ -85,8 +89,10 @@ pub(super) fn build_hits(
         event: ToolbarEvent::EnterTextMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Text",
-            snapshot.binding_hints.text.as_deref(),
+            action_label(Action::EnterTextMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterTextMode),
         )),
     });
     x += btn_size + gap;
@@ -96,8 +102,10 @@ pub(super) fn build_hits(
         event: ToolbarEvent::EnterStickyNoteMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Note",
-            snapshot.binding_hints.note.as_deref(),
+            action_label(Action::EnterStickyNoteMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterStickyNoteMode),
         )),
     });
     x += btn_size + gap;
@@ -108,8 +116,10 @@ pub(super) fn build_hits(
             event: ToolbarEvent::ClearCanvas,
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Clear",
-                snapshot.binding_hints.clear.as_deref(),
+                action_label(Action::ClearCanvas),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ClearCanvas),
             )),
         });
         x += btn_size + gap;
@@ -119,8 +129,10 @@ pub(super) fn build_hits(
             event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Click highlight",
-                snapshot.binding_hints.toggle_highlight.as_deref(),
+                action_label(Action::ToggleHighlightTool),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleHighlightTool),
             )),
         });
         x += btn_size + gap;
@@ -136,13 +148,13 @@ pub(super) fn build_hits(
     if is_simple && snapshot.shape_picker_open {
         let shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
         let mut shape_x = ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
-        for (tool, label) in shape_buttons() {
+        for tool in shape_buttons() {
             hits.push(HitRegion {
                 rect: (shape_x, shape_y, btn_size, btn_size),
                 event: ToolbarEvent::SelectTool(*tool),
                 kind: HitKind::Click,
                 tooltip: Some(format_binding_label(
-                    label,
+                    tool_tooltip_label(*tool),
                     snapshot.binding_hints.for_tool(*tool),
                 )),
             });

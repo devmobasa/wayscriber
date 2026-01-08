@@ -10,28 +10,18 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 mod icons;
 mod text;
 
-const TOOL_BUTTONS_SIMPLE: &[(Tool, &str)] = &[
-    (Tool::Select, "Select"),
-    (Tool::Pen, "Pen"),
-    (Tool::Marker, "Marker"),
-    (Tool::Eraser, "Eraser"),
+const TOOL_BUTTONS_SIMPLE: &[Tool] = &[Tool::Select, Tool::Pen, Tool::Marker, Tool::Eraser];
+const TOOL_BUTTONS_FULL: &[Tool] = &[
+    Tool::Select,
+    Tool::Pen,
+    Tool::Marker,
+    Tool::Eraser,
+    Tool::Line,
+    Tool::Rect,
+    Tool::Ellipse,
+    Tool::Arrow,
 ];
-const TOOL_BUTTONS_FULL: &[(Tool, &str)] = &[
-    (Tool::Select, "Select"),
-    (Tool::Pen, "Pen"),
-    (Tool::Marker, "Marker"),
-    (Tool::Eraser, "Eraser"),
-    (Tool::Line, "Line"),
-    (Tool::Rect, "Rect"),
-    (Tool::Ellipse, "Circle"),
-    (Tool::Arrow, "Arrow"),
-];
-const SHAPE_BUTTONS: &[(Tool, &str)] = &[
-    (Tool::Line, "Line"),
-    (Tool::Rect, "Rect"),
-    (Tool::Ellipse, "Circle"),
-    (Tool::Arrow, "Arrow"),
-];
+const SHAPE_BUTTONS: &[Tool] = &[Tool::Line, Tool::Rect, Tool::Ellipse, Tool::Arrow];
 
 pub fn build_top_hits(
     width: f64,
@@ -74,7 +64,7 @@ pub fn build_top_hits(
     });
 }
 
-fn tool_buttons(is_simple: bool) -> &'static [(Tool, &'static str)] {
+fn tool_buttons(is_simple: bool) -> &'static [Tool] {
     if is_simple {
         TOOL_BUTTONS_SIMPLE
     } else {
@@ -82,6 +72,6 @@ fn tool_buttons(is_simple: bool) -> &'static [(Tool, &'static str)] {
     }
 }
 
-fn shape_buttons() -> &'static [(Tool, &'static str)] {
+fn shape_buttons() -> &'static [Tool] {
     SHAPE_BUTTONS
 }

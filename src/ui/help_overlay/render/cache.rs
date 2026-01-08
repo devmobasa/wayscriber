@@ -1,3 +1,4 @@
+use super::super::sections::HelpOverlayBindings;
 use super::state::{OverlayLayout, build_overlay_layout};
 use std::cell::RefCell;
 
@@ -51,8 +52,7 @@ struct LayoutCacheKey {
     screen_height: u32,
     frozen_enabled: bool,
     page_index: usize,
-    page_prev_label: String,
-    page_next_label: String,
+    bindings_key: String,
     search_query: String,
     context_filter: bool,
     board_enabled: bool,
@@ -80,8 +80,7 @@ pub(super) fn get_or_build_overlay_layout(
     screen_height: u32,
     frozen_enabled: bool,
     page_index: usize,
-    page_prev_label: &str,
-    page_next_label: &str,
+    bindings: &HelpOverlayBindings,
     search_query: &str,
     context_filter: bool,
     board_enabled: bool,
@@ -98,8 +97,7 @@ pub(super) fn get_or_build_overlay_layout(
         screen_height,
         frozen_enabled,
         page_index,
-        page_prev_label: page_prev_label.to_string(),
-        page_next_label: page_next_label.to_string(),
+        bindings_key: bindings.cache_key().to_string(),
         search_query: search_query.to_string(),
         context_filter,
         board_enabled,
@@ -125,8 +123,7 @@ pub(super) fn get_or_build_overlay_layout(
             screen_height,
             frozen_enabled,
             page_index,
-            page_prev_label,
-            page_next_label,
+            bindings,
             search_query,
             context_filter,
             board_enabled,

@@ -1,6 +1,7 @@
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::config::{Action, action_label};
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -43,8 +44,10 @@ pub(super) fn draw_utility_row(
         event: ToolbarEvent::EnterTextMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Text",
-            snapshot.binding_hints.text.as_deref(),
+            action_label(Action::EnterTextMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterTextMode),
         )),
     });
     x += btn_size + gap;
@@ -73,8 +76,10 @@ pub(super) fn draw_utility_row(
         event: ToolbarEvent::EnterStickyNoteMode,
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
-            "Note",
-            snapshot.binding_hints.note.as_deref(),
+            action_label(Action::EnterStickyNoteMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterStickyNoteMode),
         )),
     });
     x += btn_size + gap;
@@ -96,8 +101,10 @@ pub(super) fn draw_utility_row(
             event: ToolbarEvent::ClearCanvas,
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Clear",
-                snapshot.binding_hints.clear.as_deref(),
+                action_label(Action::ClearCanvas),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ClearCanvas),
             )),
         });
         x += btn_size + gap;
@@ -126,8 +133,10 @@ pub(super) fn draw_utility_row(
             event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
-                "Click highlight",
-                snapshot.binding_hints.toggle_highlight.as_deref(),
+                action_label(Action::ToggleHighlightTool),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleHighlightTool),
             )),
         });
         x += btn_size + gap;

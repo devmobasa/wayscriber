@@ -1,7 +1,10 @@
 use super::{
     HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec, format_binding_label,
 };
+use crate::backend::wayland::toolbar::rows::{centered_grid_layout, grid_layout, row_item_width};
+use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
+use crate::ui::toolbar::bindings::action_for_event;
 
 pub(super) fn push_actions_hits(
     ctx: &SideLayoutContext<'_>,
@@ -47,40 +50,52 @@ pub(super) fn push_actions_hits(
         if ctx.use_icons {
             let icon_btn = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
             let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let icons_per_row = basic_actions.len();
-            let total_icons_w =
-                icons_per_row as f64 * icon_btn + (icons_per_row as f64 - 1.0) * icon_gap;
-            let icons_start_x = ctx.x + (ctx.content_width - total_icons_w) / 2.0;
-            for (idx, evt) in basic_actions.iter().enumerate() {
-                let bx = icons_start_x + (icon_btn + icon_gap) * idx as f64;
+            let layout = centered_grid_layout(
+                ctx.x,
+                ctx.content_width,
+                action_y,
+                icon_btn,
+                icon_gap,
+                basic_actions.len(),
+                basic_actions.len(),
+            );
+            for (item, evt) in layout.items.iter().zip(basic_actions.iter()) {
                 hits.push(HitRegion {
-                    rect: (bx, action_y, icon_btn, icon_btn),
+                    rect: (item.x, item.y, item.w, item.h),
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
             }
-            action_y += icon_btn;
+            action_y += layout.height;
         } else {
             let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
             let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
-            for (idx, evt) in basic_actions.iter().enumerate() {
-                let by = action_y + (action_h + action_gap) * idx as f64;
+            let layout = grid_layout(
+                ctx.x,
+                action_y,
+                ctx.content_width,
+                action_h,
+                0.0,
+                action_gap,
+                1,
+                basic_actions.len(),
+            );
+            for (item, evt) in layout.items.iter().zip(basic_actions.iter()) {
                 hits.push(HitRegion {
-                    rect: (ctx.x, by, ctx.content_width, action_h),
+                    rect: (item.x, item.y, item.w, item.h),
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
             }
-            action_y += action_h * basic_actions.len() as f64
-                + action_gap * (basic_actions.len() as f64 - 1.0);
+            action_y += layout.height;
         }
     }
 
@@ -93,60 +108,57 @@ pub(super) fn push_actions_hits(
         if ctx.use_icons {
             let icon_btn = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
             let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let icons_per_row = 5usize;
-            let total_icons = view_actions.len();
-            let rows = if total_icons > 0 {
-                total_icons.div_ceil(icons_per_row)
-            } else {
-                0
-            };
-            for (idx, evt) in view_actions.iter().enumerate() {
-                let row = idx / icons_per_row;
-                let col = idx % icons_per_row;
-                let row_start = row * icons_per_row;
-                let row_end = (row_start + icons_per_row).min(total_icons);
-                let icons_in_row = row_end - row_start;
-                let row_width =
-                    icons_in_row as f64 * icon_btn + (icons_in_row as f64 - 1.0) * icon_gap;
-                let icons_start_x = ctx.x + (ctx.content_width - row_width) / 2.0;
-                let bx = icons_start_x + (icon_btn + icon_gap) * col as f64;
-                let by = action_y + (icon_btn + icon_gap) * row as f64;
+            let layout = centered_grid_layout(
+                ctx.x,
+                ctx.content_width,
+                action_y,
+                icon_btn,
+                icon_gap,
+                5,
+                view_actions.len(),
+            );
+            for (item, evt) in layout.items.iter().zip(view_actions.iter()) {
                 hits.push(HitRegion {
-                    rect: (bx, by, icon_btn, icon_btn),
+                    rect: (item.x, item.y, item.w, item.h),
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
             }
-            if rows > 0 {
-                action_y += icon_btn * rows as f64 + icon_gap * (rows as f64 - 1.0);
+            if layout.rows > 0 {
+                action_y += layout.height;
             }
         } else {
             let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
             let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
             let action_col_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let action_w = (ctx.content_width - action_col_gap) / 2.0;
-            for (idx, evt) in view_actions.iter().enumerate() {
-                let row = idx / 2;
-                let col = idx % 2;
-                let bx = ctx.x + (action_w + action_col_gap) * col as f64;
-                let by = action_y + (action_h + action_gap) * row as f64;
+            let action_w = row_item_width(ctx.content_width, 2, action_col_gap);
+            let layout = grid_layout(
+                ctx.x,
+                action_y,
+                action_w,
+                action_h,
+                action_col_gap,
+                action_gap,
+                2,
+                view_actions.len(),
+            );
+            for (item, evt) in layout.items.iter().zip(view_actions.iter()) {
                 hits.push(HitRegion {
-                    rect: (bx, by, action_w, action_h),
+                    rect: (item.x, item.y, item.w, item.h),
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
             }
-            let rows = view_actions.len().div_ceil(2);
-            if rows > 0 {
-                action_y += action_h * rows as f64 + action_gap * (rows as f64 - 1.0);
+            if layout.rows > 0 {
+                action_y += layout.height;
             }
         }
         has_group = true;
@@ -159,25 +171,22 @@ pub(super) fn push_actions_hits(
         if ctx.use_icons {
             let icon_btn = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON;
             let icon_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let icons_per_row = 5usize;
-            let total_icons = advanced_actions.len();
-            for (idx, evt) in advanced_actions.iter().enumerate() {
-                let row = idx / icons_per_row;
-                let col = idx % icons_per_row;
-                let row_start = row * icons_per_row;
-                let row_end = (row_start + icons_per_row).min(total_icons);
-                let icons_in_row = row_end - row_start;
-                let row_width =
-                    icons_in_row as f64 * icon_btn + (icons_in_row as f64 - 1.0) * icon_gap;
-                let icons_start_x = ctx.x + (ctx.content_width - row_width) / 2.0;
-                let bx = icons_start_x + (icon_btn + icon_gap) * col as f64;
-                let by = action_y + (icon_btn + icon_gap) * row as f64;
+            let layout = centered_grid_layout(
+                ctx.x,
+                ctx.content_width,
+                action_y,
+                icon_btn,
+                icon_gap,
+                5,
+                advanced_actions.len(),
+            );
+            for (item, evt) in layout.items.iter().zip(advanced_actions.iter()) {
                 hits.push(HitRegion {
-                    rect: (bx, by, icon_btn, icon_btn),
+                    rect: (item.x, item.y, item.w, item.h),
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -186,18 +195,24 @@ pub(super) fn push_actions_hits(
             let action_h = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT;
             let action_gap = ToolbarLayoutSpec::SIDE_ACTION_CONTENT_GAP_TEXT;
             let action_col_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-            let action_w = (ctx.content_width - action_col_gap) / 2.0;
-            for (idx, evt) in advanced_actions.iter().enumerate() {
-                let row = idx / 2;
-                let col = idx % 2;
-                let bx = ctx.x + (action_w + action_col_gap) * col as f64;
-                let by = action_y + (action_h + action_gap) * row as f64;
+            let action_w = row_item_width(ctx.content_width, 2, action_col_gap);
+            let layout = grid_layout(
+                ctx.x,
+                action_y,
+                action_w,
+                action_h,
+                action_col_gap,
+                action_gap,
+                2,
+                advanced_actions.len(),
+            );
+            for (item, evt) in layout.items.iter().zip(advanced_actions.iter()) {
                 hits.push(HitRegion {
-                    rect: (bx, by, action_w, action_h),
+                    rect: (item.x, item.y, item.w, item.h),
                     event: evt.clone(),
                     kind: HitKind::Click,
                     tooltip: Some(format_binding_label(
-                        action_label(evt, ctx.snapshot),
+                        event_label(evt, ctx.snapshot),
                         ctx.snapshot.binding_hints.binding_for_event(evt),
                     )),
                 });
@@ -208,32 +223,24 @@ pub(super) fn push_actions_hits(
     y + actions_card_h + ctx.section_gap
 }
 
-fn action_label(event: &ToolbarEvent, snapshot: &super::ToolbarSnapshot) -> &'static str {
+fn event_label(event: &ToolbarEvent, snapshot: &super::ToolbarSnapshot) -> &'static str {
     match event {
-        ToolbarEvent::Undo => "Undo",
-        ToolbarEvent::Redo => "Redo",
-        ToolbarEvent::ClearCanvas => "Clear",
-        ToolbarEvent::UndoAll => "Undo All",
-        ToolbarEvent::RedoAll => "Redo All",
-        ToolbarEvent::UndoAllDelayed => "Undo All Delay",
-        ToolbarEvent::RedoAllDelayed => "Redo All Delay",
         ToolbarEvent::ToggleFreeze => {
             if snapshot.frozen_active {
                 "Unfreeze"
             } else {
-                "Freeze"
+                action_short_label(Action::ToggleFrozenMode)
             }
         }
-        ToolbarEvent::ZoomIn => "Zoom In",
-        ToolbarEvent::ZoomOut => "Zoom Out",
-        ToolbarEvent::ResetZoom => "Reset Zoom",
         ToolbarEvent::ToggleZoomLock => {
             if snapshot.zoom_locked {
                 "Unlock Zoom"
             } else {
-                "Lock Zoom"
+                action_label(Action::ToggleZoomLock)
             }
         }
-        _ => "Action",
+        _ => action_for_event(event)
+            .map(action_label)
+            .unwrap_or("Action"),
     }
 }

@@ -8,7 +8,8 @@ use wayscriber::input::{ClickHighlightSettings, EraserMode, InputState};
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
     let action_map = keybindings.build_action_map().unwrap();
-    InputState::with_defaults(
+    let action_bindings = keybindings.build_action_bindings().unwrap();
+    let mut input = InputState::with_defaults(
         Color {
             r: 1.0,
             g: 0.0,
@@ -39,7 +40,9 @@ fn make_input_state() -> InputState {
         5,
         5,
         PresenterModeConfig::default(),
-    )
+    );
+    input.set_action_bindings(action_bindings);
+    input
 }
 
 fn surface_with_context(width: i32, height: i32) -> (ImageSurface, Context) {
@@ -83,20 +86,10 @@ fn render_status_bar_draws_for_all_positions() {
 fn render_help_overlay_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
+    let input = make_input_state();
+    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx,
-        &style,
-        800,
-        600,
-        true,
-        0,
-        "Not bound",
-        "Not bound",
-        "",
-        false,
-        true,
-        true,
-        0.0,
+        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -137,20 +130,10 @@ fn render_status_bar_draws_in_board_modes() {
 fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
+    let input = make_input_state();
+    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx,
-        &style,
-        800,
-        600,
-        false,
-        0,
-        "Not bound",
-        "Not bound",
-        "",
-        false,
-        true,
-        true,
-        0.0,
+        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));

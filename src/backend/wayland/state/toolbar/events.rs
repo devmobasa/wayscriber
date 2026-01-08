@@ -3,7 +3,7 @@ use super::*;
 impl WaylandState {
     /// Returns a snapshot of the current input state for toolbar UI consumption.
     pub(in crate::backend::wayland) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
-        let hints = ToolbarBindingHints::from_keybindings(&self.config.keybindings);
+        let hints = ToolbarBindingHints::from_input_state(&self.input_state);
         let show_drawer_hint =
             !self.onboarding.state().drawer_hint_shown && !self.input_state.toolbar_drawer_open;
         ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint)

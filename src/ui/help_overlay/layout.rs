@@ -111,7 +111,7 @@ pub(crate) fn measure_sections(
                     cairo::FontSlant::Normal,
                     cairo::FontWeight::Bold,
                     badge_font_size,
-                    badge.label,
+                    badge.label.as_str(),
                 );
                 badge_text_metrics.push(BadgeTextMetrics {
                     width: badge_extents.width(),
