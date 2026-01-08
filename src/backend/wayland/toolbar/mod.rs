@@ -3,6 +3,7 @@ pub mod hit;
 pub mod layout;
 mod main;
 pub mod render;
+mod rows;
 pub mod surfaces;
 
 #[allow(unused_imports)]
@@ -21,9 +22,5 @@ pub enum ToolbarFocusTarget {
 }
 
 pub fn format_binding_label(label: &str, binding: Option<&str>) -> String {
-    if let Some(binding) = binding {
-        format!("{label} ({binding})")
-    } else {
-        label.to_string()
-    }
+    crate::label_format::format_binding_label(label, binding)
 }

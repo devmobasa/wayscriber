@@ -10,6 +10,7 @@ mod palette;
 mod state;
 
 use crate::config::{Action, action_label};
+use crate::label_format::NOT_BOUND_LABEL;
 use cache::get_or_build_overlay_layout;
 use frame::draw_overlay_frame;
 
@@ -40,7 +41,7 @@ pub fn render_help_overlay(
         .labels_for(Action::OpenConfigurator)
         .and_then(|labels| labels.first())
         .map(|label| label.as_str())
-        .unwrap_or("Not bound");
+        .unwrap_or(NOT_BOUND_LABEL);
     let version_line = format!(
         "Wayscriber {} ({})  {}  {} {} {}",
         env!("CARGO_PKG_VERSION"),

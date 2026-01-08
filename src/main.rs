@@ -7,6 +7,7 @@ mod config;
 mod daemon;
 mod draw;
 mod input;
+mod label_format;
 mod notification;
 mod onboarding;
 mod paths;

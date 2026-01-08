@@ -2,6 +2,7 @@ use std::f64::consts::PI;
 
 use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardMode, DrawingState, InputState, TextInputMode, Tool};
+use crate::label_format::format_binding_labels;
 use crate::ui::toolbar::bindings::action_for_tool;
 
 // ============================================================================
@@ -64,7 +65,8 @@ pub fn render_status_bar(
     } else {
         String::new()
     };
-    let help_binding = input_state.action_binding_label(Action::ToggleHelp);
+    let help_binding =
+        format_binding_labels(&input_state.action_binding_labels(Action::ToggleHelp));
 
     let frozen_badge = if input_state.frozen_active() {
         "[FROZEN] "

@@ -1,6 +1,7 @@
 use super::{
     HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec, format_binding_label,
 };
+use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
 use crate::config::action_label;
 use crate::input::ToolbarDrawerTab;
 use crate::ui::toolbar::bindings::action_for_event;
@@ -25,7 +26,6 @@ pub(super) fn push_pages_hits(
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
     };
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-    let btn_w = (ctx.content_width - btn_gap * 4.0) / 5.0;
     let buttons = [
         ToolbarEvent::PagePrev,
         ToolbarEvent::PageNext,
@@ -33,11 +33,21 @@ pub(super) fn push_pages_hits(
         ToolbarEvent::PageDuplicate,
         ToolbarEvent::PageDelete,
     ];
-    for (idx, evt) in buttons.iter().enumerate() {
+    let btn_w = row_item_width(ctx.content_width, buttons.len(), btn_gap);
+    let layout = grid_layout(
+        ctx.x,
+        pages_y,
+        btn_w,
+        btn_h,
+        btn_gap,
+        0.0,
+        buttons.len(),
+        buttons.len(),
+    );
+    for (item, evt) in layout.items.iter().zip(buttons.iter()) {
         let tooltip_label = tooltip_label(evt);
-        let bx = ctx.x + (btn_w + btn_gap) * idx as f64;
         hits.push(HitRegion {
-            rect: (bx, pages_y, btn_w, btn_h),
+            rect: (item.x, item.y, item.w, item.h),
             event: evt.clone(),
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(

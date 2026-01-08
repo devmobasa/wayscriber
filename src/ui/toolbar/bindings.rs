@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::config::{Action, action_label, action_meta_iter, action_short_label};
 use crate::input::{InputState, Tool};
+use crate::label_format::join_binding_labels;
 
 use super::events::ToolbarEvent;
 
@@ -19,8 +20,8 @@ impl ToolbarBindingHints {
         let mut bindings = HashMap::new();
         for meta in action_meta_iter().filter(|meta| meta.in_toolbar) {
             let labels = state.action_binding_labels(meta.action);
-            if !labels.is_empty() {
-                bindings.insert(meta.action, labels.join(" / "));
+            if let Some(label) = join_binding_labels(&labels) {
+                bindings.insert(meta.action, label);
             }
         }
         Self { bindings }

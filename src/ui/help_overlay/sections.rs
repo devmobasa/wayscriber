@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::config::{Action, action_label, action_meta_iter};
 use crate::input::InputState;
+use crate::label_format::{NOT_BOUND_LABEL, format_binding_labels_or, join_binding_labels};
 use crate::toolbar_icons;
 
 use super::search::{find_match_range, row_matches};
@@ -50,8 +51,6 @@ impl HelpOverlayBindings {
     }
 }
 
-const NOT_BOUND_LABEL: &str = "Not bound";
-
 fn collect_labels(bindings: &HelpOverlayBindings, actions: &[Action]) -> Vec<String> {
     let mut labels = Vec::new();
     let mut seen = HashSet::new();
@@ -68,16 +67,11 @@ fn collect_labels(bindings: &HelpOverlayBindings, actions: &[Action]) -> Vec<Str
 }
 
 fn joined_labels(bindings: &HelpOverlayBindings, actions: &[Action]) -> Option<String> {
-    let labels = collect_labels(bindings, actions);
-    if labels.is_empty() {
-        None
-    } else {
-        Some(labels.join(" / "))
-    }
+    join_binding_labels(&collect_labels(bindings, actions))
 }
 
 fn binding_or_fallback(bindings: &HelpOverlayBindings, action: Action, fallback: &str) -> String {
-    joined_labels(bindings, &[action]).unwrap_or_else(|| fallback.to_string())
+    format_binding_labels_or(&collect_labels(bindings, &[action]), fallback)
 }
 
 fn bindings_or_fallback(
@@ -85,7 +79,7 @@ fn bindings_or_fallback(
     actions: &[Action],
     fallback: &str,
 ) -> String {
-    joined_labels(bindings, actions).unwrap_or_else(|| fallback.to_string())
+    format_binding_labels_or(&collect_labels(bindings, actions), fallback)
 }
 
 fn primary_or_fallback(bindings: &HelpOverlayBindings, action: Action, fallback: &str) -> String {
@@ -477,4 +471,46 @@ pub(crate) fn filter_sections_for_search(
     }
 
     filtered
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn empty_bindings() -> HelpOverlayBindings {
+        HelpOverlayBindings {
+            labels: HashMap::new(),
+            cache_key: String::new(),
+        }
+    }
+
+    #[test]
+    fn gesture_hints_remain_present() {
+        let bindings = empty_bindings();
+        let sections = build_section_sets(&bindings, false, false, true, true).all;
+        let rows: Vec<(&str, &str)> = sections
+            .iter()
+            .flat_map(|section| section.rows.iter())
+            .map(|row| (row.key.as_str(), row.action))
+            .collect();
+
+        let expected = [
+            ("Shift+Drag", action_label(Action::SelectLineTool)),
+            ("Ctrl+Drag", action_label(Action::SelectRectTool)),
+            ("Tab+Drag", action_label(Action::SelectEllipseTool)),
+            ("Ctrl+Shift+Drag", action_label(Action::SelectArrowTool)),
+            ("Drag", "Selection tool"),
+            ("Selection properties panel", "Text background"),
+            ("Middle drag / arrow keys", "Pan view"),
+        ];
+
+        for (key, action) in expected {
+            assert!(
+                rows.iter()
+                    .any(|(row_key, row_action)| *row_key == key && *row_action == action),
+                "Missing gesture hint row: '{key}' -> '{action}'"
+            );
+        }
+    }
 }

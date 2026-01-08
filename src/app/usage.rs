@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::{Action, KeyBinding, KeybindingsConfig, action_display_label, action_label};
-
-const NOT_BOUND_LABEL: &str = "Not bound";
+use crate::label_format::format_binding_labels;
 
 fn default_action_bindings() -> HashMap<Action, Vec<KeyBinding>> {
     match KeybindingsConfig::default().build_action_bindings() {
@@ -25,12 +24,7 @@ fn action_binding_labels(
 }
 
 fn action_binding_label(bindings: &HashMap<Action, Vec<KeyBinding>>, action: Action) -> String {
-    let labels = action_binding_labels(bindings, action);
-    if labels.is_empty() {
-        NOT_BOUND_LABEL.to_string()
-    } else {
-        labels.join(" / ")
-    }
+    format_binding_labels(&action_binding_labels(bindings, action))
 }
 
 fn action_primary_binding_label(

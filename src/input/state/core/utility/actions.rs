@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use crate::config::{Action, KeyBinding};
+use crate::label_format::format_binding_labels;
 use std::collections::{HashMap, HashSet};
 
 impl InputState {
@@ -52,11 +53,6 @@ impl InputState {
 
     #[allow(dead_code)]
     pub fn action_binding_label(&self, action: Action) -> String {
-        let labels = self.action_binding_labels(action);
-        if labels.is_empty() {
-            "Not bound".to_string()
-        } else {
-            labels.join(" / ")
-        }
+        format_binding_labels(&self.action_binding_labels(action))
     }
 }

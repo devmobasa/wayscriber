@@ -7,6 +7,8 @@ use super::runtime::update_session_resume_in_config;
 #[cfg(feature = "tray")]
 use crate::config::{Action, action_label};
 #[cfg(feature = "tray")]
+use crate::label_format::format_binding_label;
+#[cfg(feature = "tray")]
 use crate::tray_action::TrayAction;
 #[cfg(feature = "tray")]
 use log::{info, warn};
@@ -102,7 +104,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: action_label(Action::ToggleFrozenMode).to_string(),
+                label: format_binding_label(action_label(Action::ToggleFrozenMode), None),
                 icon_name: "media-playback-pause".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.dispatch_overlay_action(TrayAction::ToggleFreeze);
@@ -111,7 +113,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: action_label(Action::CaptureFullScreen).to_string(),
+                label: format_binding_label(action_label(Action::CaptureFullScreen), None),
                 icon_name: "camera-photo".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.dispatch_overlay_action(TrayAction::CaptureFull);
@@ -120,7 +122,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: action_label(Action::CaptureActiveWindow).to_string(),
+                label: format_binding_label(action_label(Action::CaptureActiveWindow), None),
                 icon_name: "window-duplicate".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.dispatch_overlay_action(TrayAction::CaptureWindow);
@@ -129,7 +131,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: action_label(Action::CaptureSelection).to_string(),
+                label: format_binding_label(action_label(Action::CaptureSelection), None),
                 icon_name: "selection-rectangular".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.dispatch_overlay_action(TrayAction::CaptureRegion);
@@ -138,7 +140,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: action_label(Action::ToggleHelp).to_string(),
+                label: format_binding_label(action_label(Action::ToggleHelp), None),
                 icon_name: "help-browser".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.dispatch_overlay_action(TrayAction::ToggleHelp);
@@ -147,7 +149,7 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
-                label: action_label(Action::OpenConfigurator).to_string(),
+                label: format_binding_label(action_label(Action::OpenConfigurator), None),
                 icon_name: "preferences-desktop".into(),
                 activate: Box::new(|this: &mut Self| {
                     this.launch_configurator();
