@@ -120,7 +120,5 @@ fn button_label(event: &ToolbarEvent) -> &'static str {
 }
 
 fn tooltip_label(event: &ToolbarEvent) -> &'static str {
-    action_for_event(event)
-        .map(action_label)
-        .unwrap_or("Page")
+    action_for_event(event).map(action_label).unwrap_or("Page")
 }

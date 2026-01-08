@@ -115,6 +115,7 @@ impl InputState {
             last_provisional_bounds: None,
             last_text_preview_bounds: None,
             action_map,
+            action_bindings: HashMap::new(),
             pending_capture_action: None,
             pending_zoom_action: None,
             max_shapes_per_frame,

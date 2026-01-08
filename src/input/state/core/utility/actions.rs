@@ -1,5 +1,6 @@
 use super::super::base::InputState;
-use crate::config::Action;
+use crate::config::{Action, KeyBinding};
+use std::collections::{HashMap, HashSet};
 
 impl InputState {
     /// Look up an action for the given key and modifiers.
@@ -17,7 +18,22 @@ impl InputState {
         None
     }
 
+    pub fn set_action_bindings(&mut self, action_bindings: HashMap<Action, Vec<KeyBinding>>) {
+        self.action_bindings = action_bindings;
+    }
+
     pub fn action_binding_labels(&self, action: Action) -> Vec<String> {
+        if let Some(bindings) = self.action_bindings.get(&action) {
+            let mut labels = Vec::new();
+            let mut seen = HashSet::new();
+            for binding in bindings {
+                let label = binding.to_string();
+                if seen.insert(label.clone()) {
+                    labels.push(label);
+                }
+            }
+            return labels;
+        }
         let mut labels: Vec<String> = self
             .action_map
             .iter()

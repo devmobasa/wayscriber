@@ -6,8 +6,8 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
-use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui::toolbar::bindings::action_for_event;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use super::super::widgets::*;
 

@@ -72,7 +72,9 @@ pub(super) fn draw_icon_strip(
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
                 action_label(Action::ToggleFill),
-                snapshot.binding_hints.binding_for_action(Action::ToggleFill),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleFill),
             )),
         });
     }

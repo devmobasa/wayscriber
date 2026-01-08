@@ -98,7 +98,9 @@ pub(super) fn draw_text_strip(
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
                 action_label(Action::ToggleFill),
-                snapshot.binding_hints.binding_for_action(Action::ToggleFill),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleFill),
             )),
         });
         x += fill_w + gap;
@@ -122,7 +124,9 @@ pub(super) fn draw_text_strip(
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
             action_label(Action::EnterTextMode),
-            snapshot.binding_hints.binding_for_action(Action::EnterTextMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterTextMode),
         )),
     });
     x += btn_w + gap;
@@ -145,7 +149,8 @@ pub(super) fn draw_text_strip(
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
             action_label(Action::EnterStickyNoteMode),
-            snapshot.binding_hints
+            snapshot
+                .binding_hints
                 .binding_for_action(Action::EnterStickyNoteMode),
         )),
     });
@@ -170,7 +175,9 @@ pub(super) fn draw_text_strip(
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
                 action_label(Action::ClearCanvas),
-                snapshot.binding_hints.binding_for_action(Action::ClearCanvas),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ClearCanvas),
             )),
         });
         x += btn_w + gap;

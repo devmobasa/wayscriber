@@ -9,9 +9,9 @@ mod metrics;
 mod palette;
 mod state;
 
+use crate::config::{Action, action_label};
 use cache::get_or_build_overlay_layout;
 use frame::draw_overlay_frame;
-use crate::config::{Action, action_label};
 
 pub use cache::invalidate_help_overlay_cache;
 

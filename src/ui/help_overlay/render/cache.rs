@@ -1,5 +1,5 @@
-use super::state::{OverlayLayout, build_overlay_layout};
 use super::super::sections::HelpOverlayBindings;
+use super::state::{OverlayLayout, build_overlay_layout};
 use std::cell::RefCell;
 
 /// Style fields converted to integers for stable comparison.

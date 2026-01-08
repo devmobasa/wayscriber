@@ -71,8 +71,7 @@ impl WaylandState {
 
             // Render help overlay if toggled
             if self.input_state.show_help {
-                let bindings =
-                    crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
+                let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
                 let scroll_max = crate::ui::render_help_overlay(
                     ctx,
                     &self.config.ui.help_overlay_style,

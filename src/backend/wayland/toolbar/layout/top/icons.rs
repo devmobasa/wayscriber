@@ -77,7 +77,9 @@ pub(super) fn build_hits(
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
                 action_label(Action::ToggleFill),
-                snapshot.binding_hints.binding_for_action(Action::ToggleFill),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ToggleFill),
             )),
         });
     }
@@ -88,7 +90,9 @@ pub(super) fn build_hits(
         kind: HitKind::Click,
         tooltip: Some(format_binding_label(
             action_label(Action::EnterTextMode),
-            snapshot.binding_hints.binding_for_action(Action::EnterTextMode),
+            snapshot
+                .binding_hints
+                .binding_for_action(Action::EnterTextMode),
         )),
     });
     x += btn_size + gap;
@@ -113,7 +117,9 @@ pub(super) fn build_hits(
             kind: HitKind::Click,
             tooltip: Some(format_binding_label(
                 action_label(Action::ClearCanvas),
-                snapshot.binding_hints.binding_for_action(Action::ClearCanvas),
+                snapshot
+                    .binding_hints
+                    .binding_for_action(Action::ClearCanvas),
             )),
         });
         x += btn_size + gap;

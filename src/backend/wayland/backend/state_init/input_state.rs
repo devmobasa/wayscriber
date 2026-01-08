@@ -13,6 +13,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     );
 
     let action_map = build_action_map(config);
+    let action_bindings = build_action_bindings(config);
 
     let mut input_state = InputState::with_defaults(
         config.drawing.default_color.to_color(),
@@ -41,6 +42,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.history.custom_redo_steps,
         config.presenter_mode.clone(),
     );
+    input_state.set_action_bindings(action_bindings);
 
     input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
     input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
@@ -82,6 +84,27 @@ fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
             );
             KeybindingsConfig::default()
                 .build_action_map()
+                .unwrap_or_else(|err| {
+                    warn!(
+                        "Failed to build default keybindings: {}. Continuing with no bindings.",
+                        err
+                    );
+                    HashMap::new()
+                })
+        }
+    }
+}
+
+fn build_action_bindings(config: &Config) -> HashMap<Action, Vec<KeyBinding>> {
+    match config.keybindings.build_action_bindings() {
+        Ok(map) => map,
+        Err(err) => {
+            warn!(
+                "Invalid keybindings config: {}. Falling back to defaults.",
+                err
+            );
+            KeybindingsConfig::default()
+                .build_action_bindings()
                 .unwrap_or_else(|err| {
                     warn!(
                         "Failed to build default keybindings: {}. Continuing with no bindings.",

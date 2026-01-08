@@ -3,8 +3,8 @@ use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::config::action_label;
 use crate::toolbar_icons;
-use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui::toolbar::bindings::{action_for_clear_preset, action_for_save_preset};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 use super::super::super::super::widgets::{draw_button, point_in_rect, set_icon_color};
 use super::PresetSlotLayout;

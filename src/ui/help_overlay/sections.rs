@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::config::{ACTION_META, Action, action_label};
 use crate::input::InputState;
@@ -54,13 +54,16 @@ const NOT_BOUND_LABEL: &str = "Not bound";
 
 fn collect_labels(bindings: &HelpOverlayBindings, actions: &[Action]) -> Vec<String> {
     let mut labels = Vec::new();
+    let mut seen = HashSet::new();
     for action in actions {
         if let Some(values) = bindings.labels_for(*action) {
-            labels.extend(values.iter().cloned());
+            for value in values {
+                if seen.insert(value.clone()) {
+                    labels.push(value.clone());
+                }
+            }
         }
     }
-    labels.sort();
-    labels.dedup();
     labels
 }
 
@@ -252,11 +255,7 @@ pub(crate) fn build_section_sets(
                 action_label(Action::DeleteSelection),
             ),
             row(
-                binding_or_fallback(
-                    bindings,
-                    Action::ToggleSelectionProperties,
-                    NOT_BOUND_LABEL,
-                ),
+                binding_or_fallback(bindings, Action::ToggleSelectionProperties, NOT_BOUND_LABEL),
                 action_label(Action::ToggleSelectionProperties),
             ),
             row(
@@ -398,11 +397,7 @@ pub(crate) fn build_section_sets(
                 "Full screen \u{2192} file",
             ),
             row(
-                binding_or_fallback(
-                    bindings,
-                    Action::CaptureClipboardSelection,
-                    NOT_BOUND_LABEL,
-                ),
+                binding_or_fallback(bindings, Action::CaptureClipboardSelection, NOT_BOUND_LABEL),
                 "Region \u{2192} clipboard",
             ),
             row(

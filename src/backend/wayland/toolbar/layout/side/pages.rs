@@ -51,7 +51,5 @@ pub(super) fn push_pages_hits(
 }
 
 fn tooltip_label(event: &ToolbarEvent) -> &'static str {
-    action_for_event(event)
-        .map(action_label)
-        .unwrap_or("Page")
+    action_for_event(event).map(action_label).unwrap_or("Page")
 }

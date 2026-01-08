@@ -15,11 +15,22 @@ mod zoom;
 
 struct BindingInserter<'a> {
     map: &'a mut HashMap<KeyBinding, Action>,
+    ordered: Option<&'a mut HashMap<Action, Vec<KeyBinding>>>,
 }
 
 impl<'a> BindingInserter<'a> {
     fn new(map: &'a mut HashMap<KeyBinding, Action>) -> Self {
-        Self { map }
+        Self { map, ordered: None }
+    }
+
+    fn new_with_order(
+        map: &'a mut HashMap<KeyBinding, Action>,
+        ordered: &'a mut HashMap<Action, Vec<KeyBinding>>,
+    ) -> Self {
+        Self {
+            map,
+            ordered: Some(ordered),
+        }
     }
 
     fn insert(&mut self, binding_str: &str, action: Action) -> Result<(), String> {
@@ -29,6 +40,9 @@ impl<'a> BindingInserter<'a> {
                 "Duplicate keybinding '{}' assigned to both {:?} and {:?}",
                 binding_str, existing_action, action
             ));
+        }
+        if let Some(ordered) = self.ordered.as_mut() {
+            ordered.entry(action).or_default().push(binding);
         }
         Ok(())
     }
@@ -59,5 +73,25 @@ impl KeybindingsConfig {
         self.insert_preset_bindings(&mut inserter)?;
 
         Ok(map)
+    }
+
+    /// Build an ordered list of keybindings per action.
+    /// Returns an error if any keybinding string is invalid or if duplicates are detected.
+    pub fn build_action_bindings(&self) -> Result<HashMap<Action, Vec<KeyBinding>>, String> {
+        let mut map = HashMap::new();
+        let mut ordered = HashMap::new();
+        let mut inserter = BindingInserter::new_with_order(&mut map, &mut ordered);
+
+        self.insert_core_bindings(&mut inserter)?;
+        self.insert_selection_bindings(&mut inserter)?;
+        self.insert_tool_bindings(&mut inserter)?;
+        self.insert_board_bindings(&mut inserter)?;
+        self.insert_ui_bindings(&mut inserter)?;
+        self.insert_color_bindings(&mut inserter)?;
+        self.insert_capture_bindings(&mut inserter)?;
+        self.insert_zoom_bindings(&mut inserter)?;
+        self.insert_preset_bindings(&mut inserter)?;
+
+        Ok(ordered)
     }
 }

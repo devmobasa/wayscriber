@@ -33,37 +33,19 @@ pub(super) fn draw_tool_row(
         &[
             (Tool::Select, toolbar_icons::draw_icon_select as IconFn),
             (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn),
-            (
-                Tool::Marker,
-                toolbar_icons::draw_icon_marker as IconFn,
-            ),
-            (
-                Tool::Eraser,
-                toolbar_icons::draw_icon_eraser as IconFn,
-            ),
+            (Tool::Marker, toolbar_icons::draw_icon_marker as IconFn),
+            (Tool::Eraser, toolbar_icons::draw_icon_eraser as IconFn),
         ]
     } else {
         &[
             (Tool::Select, toolbar_icons::draw_icon_select as IconFn),
             (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn),
-            (
-                Tool::Marker,
-                toolbar_icons::draw_icon_marker as IconFn,
-            ),
-            (
-                Tool::Eraser,
-                toolbar_icons::draw_icon_eraser as IconFn,
-            ),
+            (Tool::Marker, toolbar_icons::draw_icon_marker as IconFn),
+            (Tool::Eraser, toolbar_icons::draw_icon_eraser as IconFn),
             (Tool::Line, toolbar_icons::draw_icon_line as IconFn),
             (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn),
-            (
-                Tool::Ellipse,
-                toolbar_icons::draw_icon_circle as IconFn,
-            ),
-            (
-                Tool::Arrow,
-                toolbar_icons::draw_icon_arrow as IconFn,
-            ),
+            (Tool::Ellipse, toolbar_icons::draw_icon_circle as IconFn),
+            (Tool::Arrow, toolbar_icons::draw_icon_arrow as IconFn),
         ]
     };
 

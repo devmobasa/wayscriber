@@ -1,6 +1,6 @@
 //! Registry of all commands available in the command palette.
 
-use crate::config::action_meta::{ActionMeta, ACTION_META};
+use crate::config::action_meta::{ACTION_META, ActionMeta};
 
 pub type CommandEntry = ActionMeta;
 
