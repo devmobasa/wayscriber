@@ -4,11 +4,13 @@ use crate::draw::{Color, FontDescriptor};
 use crate::input::{ClickHighlightSettings, EraserMode};
 
 fn create_test_input_state() -> InputState {
-    let action_map = KeybindingsConfig::default()
-        .build_action_map()
-        .expect("action map");
+    let keybindings = KeybindingsConfig::default();
+    let action_map = keybindings.build_action_map().expect("action map");
+    let action_bindings = keybindings
+        .build_action_bindings()
+        .expect("action bindings");
 
-    InputState::with_defaults(
+    let mut state = InputState::with_defaults(
         Color {
             r: 1.0,
             g: 0.0,
@@ -43,7 +45,9 @@ fn create_test_input_state() -> InputState {
         5,
         5,
         PresenterModeConfig::default(),
-    )
+    );
+    state.set_action_bindings(action_bindings);
+    state
 }
 
 #[test]

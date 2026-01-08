@@ -8,8 +8,9 @@ use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 fn create_test_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
     let action_map = keybindings.build_action_map().unwrap();
+    let action_bindings = keybindings.build_action_bindings().unwrap();
 
-    InputState::with_defaults(
+    let mut state = InputState::with_defaults(
         Color {
             r: 1.0,
             g: 0.0,
@@ -44,7 +45,9 @@ fn create_test_input_state() -> InputState {
         5,
         5,
         PresenterModeConfig::default(),
-    )
+    );
+    state.set_action_bindings(action_bindings);
+    state
 }
 
 fn snapshot_from_state(state: &InputState) -> ToolbarSnapshot {

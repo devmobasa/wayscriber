@@ -8,7 +8,8 @@ use wayscriber::input::{ClickHighlightSettings, EraserMode, InputState};
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
     let action_map = keybindings.build_action_map().unwrap();
-    InputState::with_defaults(
+    let action_bindings = keybindings.build_action_bindings().unwrap();
+    let mut input = InputState::with_defaults(
         Color {
             r: 1.0,
             g: 0.0,
@@ -39,7 +40,9 @@ fn make_input_state() -> InputState {
         5,
         5,
         PresenterModeConfig::default(),
-    )
+    );
+    input.set_action_bindings(action_bindings);
+    input
 }
 
 fn surface_with_context(width: i32, height: i32) -> (ImageSurface, Context) {
