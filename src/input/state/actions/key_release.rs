@@ -1,7 +1,7 @@
 use crate::input::events::Key;
 
-use super::key_press::bindings::key_to_action_label;
 use super::super::InputState;
+use super::key_press::bindings::key_to_action_label;
 
 impl InputState {
     /// Processes a key release event.
