@@ -19,6 +19,7 @@ const HELP_ACTIONS: &[Action] = &[
     Action::SetColorWhite,
     Action::SetColorBlack,
     Action::SelectPenTool,
+    Action::SelectCursorTool,
     Action::SelectLineTool,
     Action::SelectRectTool,
     Action::SelectEllipseTool,
@@ -47,6 +48,8 @@ const HELP_ACTIONS: &[Action] = &[
     Action::ClearCanvas,
     Action::Undo,
     Action::ToggleClickHighlight,
+    Action::ToggleClickthrough,
+    Action::HoldToDraw,
     Action::OpenContextMenu,
     Action::Exit,
     Action::ToggleHelp,
@@ -66,6 +69,7 @@ const HELP_ACTIONS: &[Action] = &[
 
 const TOOLBAR_ACTIONS: &[Action] = &[
     Action::SelectPenTool,
+    Action::SelectCursorTool,
     Action::SelectLineTool,
     Action::SelectRectTool,
     Action::SelectEllipseTool,
@@ -120,6 +124,7 @@ const PALETTE_ACTIONS: &[Action] = &[
     Action::Undo,
     Action::Redo,
     Action::SelectPenTool,
+    Action::SelectCursorTool,
     Action::SelectLineTool,
     Action::SelectRectTool,
     Action::SelectEllipseTool,

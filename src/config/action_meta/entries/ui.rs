@@ -52,6 +52,26 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ToggleClickthrough,
+        "Click-through Override",
+        None,
+        "Toggle click-through override",
+        UI,
+        false,
+        true,
+        false
+    ),
+    meta!(
+        HoldToDraw,
+        "Hold to Draw",
+        None,
+        "Temporarily disable click-through",
+        UI,
+        false,
+        true,
+        false
+    ),
+    meta!(
         ToggleSelectionProperties,
         "Selection Properties",
         None,

@@ -59,6 +59,8 @@ impl KeyboardHandler for WaylandState {
         // and breaking shortcuts/tools, aggressively reset our modifier state on
         // focus loss.
         self.input_state.reset_modifiers();
+        self.input_state.clear_hold_to_draw();
+        self.input_state.clear_clickthrough_override();
 
         if self.surface.is_xdg_window() {
             warn!("Keyboard focus lost in xdg fallback; exiting overlay");

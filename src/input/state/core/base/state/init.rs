@@ -8,7 +8,7 @@ use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX};
 use crate::draw::{CanvasSet, DirtyTracker, EraserKind, FontDescriptor};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{modifiers::Modifiers, tool::EraserMode};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 impl InputState {
     /// Creates a new InputState with specified defaults.
@@ -121,6 +121,9 @@ impl InputState {
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
+            clickthrough_enabled: false,
+            clickthrough_override: false,
+            hold_to_draw_keys: HashSet::new(),
             selection_state: SelectionState::None,
             last_selection_axis: None,
             context_menu_state: ContextMenuState::Hidden,

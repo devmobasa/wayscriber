@@ -105,6 +105,7 @@ pub(super) fn run_event_loop(
         }
         // Adjust keyboard interactivity if toolbar visibility changed.
         state.sync_toolbar_visibility(qh);
+        state.refresh_overlay_clickthrough();
 
         // Advance any delayed history playback (undo/redo with delay).
         if state

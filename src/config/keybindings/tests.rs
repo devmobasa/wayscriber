@@ -128,10 +128,25 @@ fn test_build_action_map() {
         Some(&Action::ToggleClickHighlight)
     );
 
+    let toggle_clickthrough = KeyBinding::parse("Ctrl+Alt+I").unwrap();
+    assert_eq!(
+        map.get(&toggle_clickthrough),
+        Some(&Action::ToggleClickthrough)
+    );
+
+    let hold_to_draw = KeyBinding::parse("Space").unwrap();
+    assert_eq!(map.get(&hold_to_draw), Some(&Action::HoldToDraw));
+
     let toggle_highlight_tool = KeyBinding::parse("Ctrl+Alt+H").unwrap();
     assert_eq!(
         map.get(&toggle_highlight_tool),
         Some(&Action::ToggleHighlightTool)
+    );
+
+    let select_cursor_tool = KeyBinding::parse("V").unwrap();
+    assert_eq!(
+        map.get(&select_cursor_tool),
+        Some(&Action::SelectCursorTool)
     );
 
     let reset_arrow_labels = KeyBinding::parse("Ctrl+Shift+R").unwrap();

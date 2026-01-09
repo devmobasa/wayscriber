@@ -62,6 +62,10 @@ impl InputState {
                 return override_tool;
             }
 
+            if self.hold_to_draw_active() && override_tool == Tool::Select {
+                return modifier_tool;
+            }
+
             // Allow temporary modifier-based tools when the override is a drawing tool
             if modifier_tool != Tool::Pen && modifier_tool != override_tool {
                 return modifier_tool;

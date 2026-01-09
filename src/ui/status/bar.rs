@@ -65,8 +65,17 @@ pub fn render_status_bar(
     } else {
         String::new()
     };
-    let help_binding =
-        format_binding_labels(&input_state.action_binding_labels(Action::ToggleHelp));
+    let clickthrough_badge = if input_state.clickthrough_active() {
+        " [Click-through]"
+    } else if input_state.clickthrough_overridden() {
+        " [Interactive]"
+    } else {
+        ""
+    };
+    let mut help_labels = input_state.action_binding_labels(Action::ToggleHelp);
+    help_labels.sort();
+    help_labels.dedup();
+    let help_binding = format_binding_labels(&help_labels);
 
     let frozen_badge = if input_state.frozen_active() {
         "[FROZEN] "
@@ -85,7 +94,7 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
+        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}{}  {}={}",
         frozen_badge,
         zoom_badge,
         mode_badge,
@@ -96,6 +105,7 @@ pub fn render_status_bar(
         font_size as i32,
         highlight_badge,
         highlight_tool_badge,
+        clickthrough_badge,
         help_binding,
         action_display_label(Action::ToggleHelp)
     );

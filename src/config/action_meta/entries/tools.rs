@@ -32,6 +32,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        SelectCursorTool,
+        "Select Tool",
+        Some("Select"),
+        "Cursor/select tool",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         SelectLineTool,
         "Line Tool",
         Some("Line"),

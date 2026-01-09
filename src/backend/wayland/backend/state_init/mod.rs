@@ -96,6 +96,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
 
     // Ensure pinned toolbars are created immediately if visible on startup.
     state.sync_toolbar_visibility(&setup.qh);
+    state.refresh_overlay_clickthrough();
     // Process any pending tray action that may have been queued before overlay start.
     process_tray_action(&mut state);
 

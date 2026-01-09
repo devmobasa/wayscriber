@@ -97,6 +97,10 @@ pub(crate) fn build_section_sets(
         title: "Drawing",
         rows: vec![
             row(
+                binding_or_fallback(bindings, Action::SelectCursorTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectCursorTool),
+            ),
+            row(
                 binding_or_fallback(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
                 action_label(Action::SelectPenTool),
             ),
@@ -253,6 +257,15 @@ pub(crate) fn build_section_sets(
             binding_or_fallback(bindings, Action::ToggleClickHighlight, NOT_BOUND_LABEL),
             action_label(Action::ToggleClickHighlight),
         ),
+        row(
+            binding_or_fallback(bindings, Action::HoldToDraw, NOT_BOUND_LABEL),
+            "Hold to draw (disable click-through)",
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ToggleClickthrough, NOT_BOUND_LABEL),
+            action_label(Action::ToggleClickthrough),
+        ),
+        row("Click CT", "Exit click-through"),
         row(
             match joined_labels(bindings, &[Action::OpenContextMenu]) {
                 Some(label) => format!("Right Click / {label}"),

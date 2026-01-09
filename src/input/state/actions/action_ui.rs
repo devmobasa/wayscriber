@@ -1,4 +1,5 @@
 use crate::config::Action;
+use crate::input::tool::Tool;
 use log::info;
 
 use super::super::{DrawingState, InputState, UiToastKind};
@@ -30,6 +31,32 @@ impl InputState {
                     "Click highlight disabled"
                 };
                 info!("{}", message);
+                true
+            }
+            Action::ToggleClickthrough => {
+                if self.tool_override() != Some(Tool::Select) {
+                    if matches!(self.state, DrawingState::TextInput { .. }) {
+                        self.cancel_text_input();
+                    }
+                    self.set_tool_override(Some(Tool::Select));
+                    self.enable_clickthrough();
+                    self.clear_hold_to_draw();
+                    self.clear_clickthrough_override();
+                    info!("Click-through enabled (Select tool)");
+                } else if !self.clickthrough_enabled() {
+                    self.enable_clickthrough();
+                    self.clear_hold_to_draw();
+                    self.clear_clickthrough_override();
+                    info!("Click-through enabled");
+                } else {
+                    let interactive = self.toggle_clickthrough_override();
+                    let message = if interactive {
+                        "Click-through disabled (interactive mode)"
+                    } else {
+                        "Click-through enabled"
+                    };
+                    info!("{}", message);
+                }
                 true
             }
             Action::ToggleToolbar => {
@@ -88,6 +115,7 @@ impl InputState {
                 self.toggle_command_palette();
                 true
             }
+            Action::HoldToDraw => true,
             _ => false,
         }
     }

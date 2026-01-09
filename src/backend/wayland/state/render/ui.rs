@@ -57,6 +57,8 @@ impl WaylandState {
                 }
             }
 
+            crate::ui::render_clickthrough_hotspot(ctx, &self.input_state);
+
             // Render status bar if enabled
             if self.input_state.show_status_bar {
                 crate::ui::render_status_bar(

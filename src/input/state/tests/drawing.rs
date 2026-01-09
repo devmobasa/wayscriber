@@ -59,6 +59,68 @@ fn toggle_click_highlight_action_changes_state() {
 }
 
 #[test]
+fn toggle_clickthrough_action_changes_state() {
+    let mut state = create_test_input_state();
+    state.set_tool_override(Some(Tool::Select));
+    assert!(!state.clickthrough_active());
+    assert!(!state.clickthrough_overridden());
+
+    state.handle_action(Action::ToggleClickthrough);
+    assert!(state.clickthrough_active());
+    assert!(!state.clickthrough_overridden());
+    assert!(state.needs_redraw);
+
+    state.needs_redraw = false;
+    state.handle_action(Action::ToggleClickthrough);
+    assert!(!state.clickthrough_active());
+    assert!(state.clickthrough_overridden());
+    assert!(state.needs_redraw);
+}
+
+#[test]
+fn hold_to_draw_tracks_press_and_release() {
+    let mut state = create_test_input_state();
+    assert!(!state.hold_to_draw_active());
+
+    state.on_key_press(Key::Space);
+    assert!(state.hold_to_draw_active());
+
+    state.on_key_release(Key::Space);
+    assert!(!state.hold_to_draw_active());
+}
+
+#[test]
+fn hold_to_draw_allows_drawing_from_select() {
+    let mut state = create_test_input_state();
+    state.set_tool_override(Some(Tool::Select));
+
+    state.on_key_press(Key::Space);
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+
+    assert!(matches!(
+        state.state,
+        DrawingState::Drawing {
+            tool: Tool::Pen,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn clickthrough_hotspot_updates_with_screen_size() {
+    let mut state = create_test_input_state();
+    state.screen_width = 800;
+    state.screen_height = 600;
+    let first = state.clickthrough_hotspot_rect().expect("hotspot");
+
+    state.screen_width = 1024;
+    state.screen_height = 768;
+    let second = state.clickthrough_hotspot_rect().expect("hotspot");
+
+    assert_ne!(first, second);
+}
+
+#[test]
 fn highlight_tool_prevents_drawing() {
     let mut state = create_test_input_state();
     assert_eq!(state.active_tool(), Tool::Pen);

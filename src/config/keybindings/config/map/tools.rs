@@ -21,6 +21,7 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.tools.select_eraser_tool, Action::SelectEraserTool)?;
         inserter.insert_all(&self.tools.toggle_eraser_mode, Action::ToggleEraserMode)?;
         inserter.insert_all(&self.tools.select_pen_tool, Action::SelectPenTool)?;
+        inserter.insert_all(&self.tools.select_cursor_tool, Action::SelectCursorTool)?;
         inserter.insert_all(&self.tools.select_line_tool, Action::SelectLineTool)?;
         inserter.insert_all(&self.tools.select_rect_tool, Action::SelectRectTool)?;
         inserter.insert_all(&self.tools.select_ellipse_tool, Action::SelectEllipseTool)?;

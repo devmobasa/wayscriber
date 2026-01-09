@@ -46,7 +46,7 @@ impl ToolbarSurface {
         }
         self.suppressed = suppressed;
         if let Some(surface) = self.wl_surface.as_ref() {
-            set_surface_clickthrough(compositor, surface, suppressed);
+            set_surface_clickthrough(compositor, surface, suppressed, None);
         }
         self.hit_regions.clear();
         self.dirty = true;

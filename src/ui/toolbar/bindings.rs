@@ -58,7 +58,7 @@ pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
         Tool::Marker => Some(Action::SelectMarkerTool),
         Tool::Highlight => Some(Action::SelectHighlightTool),
         Tool::Eraser => Some(Action::SelectEraserTool),
-        Tool::Select => None,
+        Tool::Select => Some(Action::SelectCursorTool),
     }
 }
 

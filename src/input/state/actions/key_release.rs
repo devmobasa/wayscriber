@@ -1,5 +1,6 @@
 use crate::input::events::Key;
 
+use super::key_press::bindings::key_to_action_label;
 use super::super::InputState;
 
 impl InputState {
@@ -13,6 +14,10 @@ impl InputState {
             Key::Alt => self.modifiers.alt = false,
             Key::Tab => self.modifiers.tab = false,
             _ => {}
+        }
+
+        if let Some(key_str) = key_to_action_label(key) {
+            self.remove_hold_to_draw_key(&key_str);
         }
     }
 }

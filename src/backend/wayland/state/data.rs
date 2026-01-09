@@ -1,4 +1,5 @@
 use crate::backend::wayland::toolbar::{ToolbarFocusTarget, hit::HitRegion};
+use crate::util::Rect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveDragKind {
@@ -69,6 +70,8 @@ pub struct StateData {
     pub(super) preferred_output_identity: Option<String>,
     pub(super) xdg_fullscreen: bool,
     pub(super) overlay_suppression: OverlaySuppression,
+    pub(super) overlay_clickthrough: bool,
+    pub(super) overlay_clickthrough_hotspot: Option<Rect>,
     /// True when surface is configured and has keyboard focus; keys are blocked until ready.
     pub(super) overlay_ready: bool,
 }
@@ -117,6 +120,8 @@ impl StateData {
             preferred_output_identity: None,
             xdg_fullscreen: false,
             overlay_suppression: OverlaySuppression::None,
+            overlay_clickthrough: false,
+            overlay_clickthrough_hotspot: None,
             overlay_ready: false,
         }
     }

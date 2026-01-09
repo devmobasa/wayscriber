@@ -694,6 +694,7 @@ decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
 
 # Tool selection shortcuts (optional; keep empty to rely on modifiers)
 select_pen_tool = ["F"]
+select_cursor_tool = ["V"]
 select_marker_tool = ["H"]
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
@@ -734,6 +735,12 @@ toggle_presenter_mode = ["Ctrl+Shift+M"]
 
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]
+
+# Toggle click-through override (force interactive mode)
+toggle_clickthrough = ["Ctrl+Alt+I"]
+
+# Hold to temporarily disable click-through (draw while in Select)
+hold_to_draw = ["Space"]
 
 # Toggle fill for rectangle/ellipse
 toggle_fill = []

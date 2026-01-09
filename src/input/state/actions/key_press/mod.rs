@@ -1,4 +1,4 @@
-mod bindings;
+pub(super) mod bindings;
 mod panels;
 mod text_input;
 
@@ -103,6 +103,10 @@ impl InputState {
 
         // Look up action based on keybinding
         if let Some(action) = self.find_action(&key_str) {
+            if action == Action::HoldToDraw {
+                self.add_hold_to_draw_key(&key_str);
+                return;
+            }
             self.handle_action(action);
             return;
         }

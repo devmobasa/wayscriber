@@ -10,6 +10,14 @@ pub(crate) fn default_toggle_click_highlight() -> Vec<String> {
     vec!["Ctrl+Shift+H".to_string()]
 }
 
+pub(crate) fn default_toggle_clickthrough() -> Vec<String> {
+    vec!["Ctrl+Alt+I".to_string()]
+}
+
+pub(crate) fn default_hold_to_draw() -> Vec<String> {
+    vec!["Space".to_string()]
+}
+
 pub(crate) fn default_toggle_toolbar() -> Vec<String> {
     vec!["F2".to_string(), "F9".to_string()]
 }

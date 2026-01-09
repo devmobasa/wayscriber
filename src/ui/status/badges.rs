@@ -1,4 +1,5 @@
-use super::super::primitives::{draw_rounded_rect, fallback_text_extents};
+use super::super::primitives::{draw_rounded_rect, fallback_text_extents, text_extents_for};
+use crate::input::InputState;
 
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
@@ -108,4 +109,53 @@ pub fn render_page_badge(
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
     ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
     let _ = ctx.show_text(&label);
+}
+
+/// Render the click-through escape hatch indicator.
+pub fn render_clickthrough_hotspot(ctx: &cairo::Context, input_state: &InputState) {
+    if !input_state.clickthrough_active() {
+        return;
+    }
+    let Some(rect) = input_state.clickthrough_hotspot_rect() else {
+        return;
+    };
+
+    let x = rect.x as f64;
+    let y = rect.y as f64;
+    let width = rect.width as f64;
+    let height = rect.height as f64;
+    let radius = (width.min(height) * 0.25).max(4.0);
+
+    ctx.set_source_rgba(0.05, 0.05, 0.05, 0.6);
+    draw_rounded_rect(ctx, x, y, width, height, radius);
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.85);
+    ctx.set_line_width(1.5);
+    let inner_radius = (radius - 1.0).max(0.0);
+    draw_rounded_rect(
+        ctx,
+        x + 1.0,
+        y + 1.0,
+        (width - 2.0).max(1.0),
+        (height - 2.0).max(1.0),
+        inner_radius,
+    );
+    let _ = ctx.stroke();
+
+    let label = "CT";
+    let font_size = (height * 0.45).clamp(10.0, 14.0);
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+        label,
+    );
+    let text_x = x + (width - extents.width()) / 2.0 - extents.x_bearing();
+    let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+    ctx.move_to(text_x, text_y);
+    let _ = ctx.show_text(label);
 }

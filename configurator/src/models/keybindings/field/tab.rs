@@ -24,6 +24,7 @@ impl KeybindingField {
             | Self::SetColorWhite
             | Self::SetColorBlack => KeybindingsTabId::Drawing,
             Self::SelectPenTool
+            | Self::SelectCursorTool
             | Self::SelectEraserTool
             | Self::ToggleEraserMode
             | Self::SelectMarkerTool
@@ -67,6 +68,8 @@ impl KeybindingField {
             | Self::ToggleHelp
             | Self::ToggleStatusBar
             | Self::ToggleClickHighlight
+            | Self::ToggleClickthrough
+            | Self::HoldToDraw
             | Self::ToggleToolbar
             | Self::OpenContextMenu => KeybindingsTabId::UiModes,
             Self::CaptureFullScreen

@@ -40,6 +40,10 @@ impl InputState {
             && let Some(key_str) = key_to_action_label(key)
             && let Some(action) = self.find_action(&key_str)
         {
+            if action == crate::config::Action::HoldToDraw {
+                self.add_hold_to_draw_key(&key_str);
+                return;
+            }
             // Actions work in text mode.
             // Exit action has special logic in handle_action.
             self.handle_action(action);

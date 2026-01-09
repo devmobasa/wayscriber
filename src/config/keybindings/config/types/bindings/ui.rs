@@ -14,6 +14,12 @@ pub struct UiKeybindingsConfig {
     #[serde(default = "default_toggle_click_highlight")]
     pub toggle_click_highlight: Vec<String>,
 
+    #[serde(default = "default_toggle_clickthrough")]
+    pub toggle_clickthrough: Vec<String>,
+
+    #[serde(default = "default_hold_to_draw")]
+    pub hold_to_draw: Vec<String>,
+
     #[serde(default = "default_toggle_toolbar")]
     pub toggle_toolbar: Vec<String>,
 
@@ -42,6 +48,8 @@ impl Default for UiKeybindingsConfig {
             toggle_help: default_toggle_help(),
             toggle_status_bar: default_toggle_status_bar(),
             toggle_click_highlight: default_toggle_click_highlight(),
+            toggle_clickthrough: default_toggle_clickthrough(),
+            hold_to_draw: default_hold_to_draw(),
             toggle_toolbar: default_toggle_toolbar(),
             toggle_presenter_mode: default_toggle_presenter_mode(),
             toggle_fill: default_toggle_fill(),

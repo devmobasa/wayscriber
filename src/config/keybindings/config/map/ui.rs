@@ -10,6 +10,8 @@ impl KeybindingsConfig {
             &self.ui.toggle_click_highlight,
             Action::ToggleClickHighlight,
         )?;
+        inserter.insert_all(&self.ui.toggle_clickthrough, Action::ToggleClickthrough)?;
+        inserter.insert_all(&self.ui.hold_to_draw, Action::HoldToDraw)?;
         inserter.insert_all(&self.ui.toggle_toolbar, Action::ToggleToolbar)?;
         inserter.insert_all(&self.ui.toggle_presenter_mode, Action::TogglePresenterMode)?;
         inserter.insert_all(&self.ui.toggle_fill, Action::ToggleFill)?;
