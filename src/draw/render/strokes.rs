@@ -33,7 +33,7 @@ pub fn render_freehand_borrowed(
     let _ = ctx.stroke();
 }
 
-pub(super) fn render_eraser_stroke(
+pub(crate) fn render_eraser_stroke(
     ctx: &cairo::Context,
     points: &[(i32, i32)],
     brush: &EraserBrush,

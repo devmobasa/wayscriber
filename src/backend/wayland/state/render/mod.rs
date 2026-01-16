@@ -40,6 +40,12 @@ impl WaylandState {
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 
+        // Add new dirty regions from input state to the per-buffer damage tracker.
+        // We do this BEFORE acquiring the buffer/damage so the current frame's changes
+        // are included in the damage for the current buffer.
+        let input_damage = self.input_state.take_dirty_regions();
+        self.buffer_damage.add_regions(input_damage);
+
         // Get a buffer from the pool for rendering
         let (buffer, canvas_ptr, pool_gen, pool_size) = {
             let (pool, generation) = self.surface.ensure_pool(&self.shm, buffer_count)?;
@@ -67,6 +73,21 @@ impl WaylandState {
             (buf, key, generation, pool_size)
         };
 
+        // Record pool size after create_buffer to detect growth.
+        self.surface.update_pool_size(pool_size);
+
+        // Take damage for this buffer slot (identified by canvas memory address).
+        // Pool identity (generation + size) is passed to detect pool recreation/growth.
+        // SlotPool reuses the same memory regions for released buffers, so the
+        // canvas pointer serves as a stable slot identifier across buffer reuse.
+        let logical_damage = self.buffer_damage.take_buffer_damage(
+            canvas_ptr,
+            self.surface.width().min(i32::MAX as u32) as i32,
+            self.surface.height().min(i32::MAX as u32) as i32,
+            pool_gen,
+            pool_size,
+        );
+
         // SAFETY: This unsafe block creates a Cairo surface from raw memory buffer.
         // Safety invariants that must be maintained:
         // 1. `canvas_ptr` comes from a valid SlotPool slice with exactly (width * height * 4) bytes
@@ -91,7 +112,24 @@ impl WaylandState {
         let draw_start = std::time::Instant::now();
         let ctx = cairo::Context::new(&cairo_surface).context("Failed to create Cairo context")?;
 
-        // Clear with fully transparent background
+        // Optimization: Clip drawing to the damage regions.
+        // This dramatically reduces CPU fill rate pressure on high-res screens by
+        // avoiding redraws of static content (which is preserved in the back-buffer).
+        // Note: Cairo works in logical coordinates if we scale it, but here we are
+        // pre-scale (identity transform). We must scale the logical damage rects to pixels.
+        if !logical_damage.is_empty() {
+            for rect in &logical_damage {
+                // Scale logical rect to physical pixels
+                let x = rect.x as f64 * scale as f64;
+                let y = rect.y as f64 * scale as f64;
+                let w = rect.width as f64 * scale as f64;
+                let h = rect.height as f64 * scale as f64;
+                ctx.rectangle(x, y, w, h);
+            }
+            ctx.clip();
+        }
+
+        // Clear with fully transparent background (only clears within clip)
         debug!("Clearing background");
         ctx.set_operator(cairo::Operator::Clear);
         ctx.paint().context("Failed to clear background")?;
@@ -107,6 +145,7 @@ impl WaylandState {
                 phys_height,
                 render_ui,
                 now,
+                &logical_damage,
             )?;
         }
 
@@ -131,25 +170,9 @@ impl WaylandState {
         wl_surface.set_buffer_scale(scale);
         wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
 
-        // Add new dirty regions from input state to the per-buffer damage tracker.
-        // This ensures each buffer accumulates damage since it was last rendered.
-        let input_damage = self.input_state.take_dirty_regions();
-        self.buffer_damage.add_regions(input_damage);
+        // Damage logic moved to top of function (add_regions and take_buffer_damage)
+        // We now just use the computed logical_damage.
 
-        // Record pool size after create_buffer to detect growth.
-        self.surface.update_pool_size(pool_size);
-
-        // Take damage for this buffer slot (identified by canvas memory address).
-        // Pool identity (generation + size) is passed to detect pool recreation/growth.
-        // SlotPool reuses the same memory regions for released buffers, so the
-        // canvas pointer serves as a stable slot identifier across buffer reuse.
-        let logical_damage = self.buffer_damage.take_buffer_damage(
-            canvas_ptr,
-            self.surface.width().min(i32::MAX as u32) as i32,
-            self.surface.height().min(i32::MAX as u32) as i32,
-            pool_gen,
-            pool_size,
-        );
         let scaled_damage = scale_damage_regions(logical_damage.clone(), scale);
 
         if debug_damage_logging_enabled() {
