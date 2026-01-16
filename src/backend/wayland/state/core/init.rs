@@ -136,6 +136,12 @@ impl WaylandState {
             stylus_last_pos: None,
             #[cfg(tablet)]
             stylus_peak_thickness: None,
+            #[cfg(tablet)]
+            stylus_tool_types: std::collections::HashMap::new(),
+            #[cfg(tablet)]
+            stylus_auto_switched_to_eraser: false,
+            #[cfg(tablet)]
+            stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
             tokio_handle,
         }

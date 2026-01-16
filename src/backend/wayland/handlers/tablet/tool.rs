@@ -3,7 +3,7 @@ use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2;
 
 use crate::backend::wayland::toolbar_intent::intent_to_event;
-use crate::input::MouseButton;
+use crate::input::{MouseButton, Tool};
 
 use crate::backend::wayland::state::WaylandState;
 
@@ -19,6 +19,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Event;
         match event {
             Event::ProximityIn { surface, .. } => {
+                let tool_id = _proxy.id();
+                let tool_type = state.stylus_tool_types.get(&tool_id).copied();
+                debug!(
+                    "Tablet proximity in: tool {:?}, type: {:?}",
+                    tool_id, tool_type
+                );
                 let on_overlay = state
                     .surface
                     .wl_surface()
@@ -32,6 +38,27 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_base_thickness = Some(state.input_state.current_thickness);
                 state.stylus_pressure_thickness = None;
                 state.stylus_last_pos = None;
+
+                // Auto-switch to eraser if physical tool is eraser (and config enables it)
+                if state.config.tablet.auto_eraser_switch {
+                    if let Some(tool_type) = tool_type {
+                        if tool_type.is_eraser() {
+                            // Only auto-switch if not already on eraser
+                            if state.input_state.active_tool() != Tool::Eraser {
+                                // Save the current tool override before switching
+                                state.stylus_pre_eraser_tool_override =
+                                    state.input_state.tool_override();
+                                state.input_state.set_tool_override(Some(Tool::Eraser));
+                                state.stylus_auto_switched_to_eraser = true;
+                                info!(
+                                    "Auto-switched to eraser (physical eraser detected), saved previous: {:?}",
+                                    state.stylus_pre_eraser_tool_override
+                                );
+                            }
+                        }
+                    }
+                }
+
                 if on_overlay {
                     info!("✏️  Stylus ENTERED overlay surface");
                 } else if state.toolbar.is_toolbar_surface(&surface) {
@@ -41,7 +68,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
             }
             Event::ProximityOut => {
-                info!("✏️  Stylus LEFT surface");
+                let tool_id = _proxy.id();
+                let tool_type = state.stylus_tool_types.get(&tool_id).copied();
+                debug!(
+                    "Tablet proximity out: tool {:?}, type: {:?}",
+                    tool_id, tool_type
+                );
                 state.stylus_tip_down = false;
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
@@ -56,6 +88,20 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
                 state.stylus_pressure_thickness = None;
                 state.stylus_last_pos = None;
+
+                // Restore previous tool if we auto-switched to eraser
+                if state.stylus_auto_switched_to_eraser {
+                    let restored_tool = state.stylus_pre_eraser_tool_override;
+                    state.input_state.set_tool_override(restored_tool);
+                    state.stylus_auto_switched_to_eraser = false;
+                    state.stylus_pre_eraser_tool_override = None;
+                    info!(
+                        "Restored previous tool after eraser proximity out: {:?}",
+                        restored_tool
+                    );
+                }
+
+                // Note: We keep the tool type in the map - tools persist across proximity events
             }
             Event::Down { .. } => {
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
@@ -225,15 +271,22 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 if pressure > 0 {
                     use crate::input::tablet::apply_pressure_to_state;
                     apply_pressure_to_state(p01, &mut state.input_state, state.tablet_settings);
-
-                    // We now allow variable thickness (no longer monotonic) because we store
-                    // per-point thickness in the stroke.
                     state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
                     state.record_stylus_peak(state.input_state.current_thickness);
                 } else {
                     // Ignore zero-pressure while tip is down to avoid flickers
                     debug!("Stylus pressure reported 0; deferring to peak/base");
                 }
+            }
+            Event::Type { tool_type } => {
+                use crate::backend::wayland::TabletToolType;
+                let physical_type = TabletToolType::from(tool_type);
+                let tool_id = _proxy.id();
+                debug!("Tablet tool type: {:?} -> {:?}", tool_id, physical_type);
+                state.stylus_tool_types.insert(tool_id, physical_type);
+
+                // Note: We don't switch tools here - this event comes during initial
+                // tool setup, before proximity_in. The actual switch happens in proximity_in.
             }
             Event::Frame { .. } => {
                 debug!("Tablet frame event");
