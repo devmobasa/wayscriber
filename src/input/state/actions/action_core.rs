@@ -78,7 +78,7 @@ impl InputState {
             }
             Action::ClearCanvas => {
                 let (has_locked, has_unlocked) = {
-                    let frame = self.canvas_set.active_frame();
+                    let frame = self.boards.active_frame();
                     let mut has_locked = false;
                     let mut has_unlocked = false;
                     for shape in &frame.shapes {

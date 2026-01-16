@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::draw::ArrowLabel;
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD};
 
 fn arrow_with_label(value: u32, font_descriptor: &FontDescriptor) -> Shape {
     Shape::Arrow {
@@ -32,19 +33,19 @@ fn sync_arrow_label_counter_uses_max_across_boards() {
     let font_descriptor = state.font_descriptor.clone();
 
     state
-        .canvas_set
+        .boards
         .active_frame_mut()
         .add_shape(arrow_with_label(2, &font_descriptor));
 
-    state.switch_board_mode(BoardMode::Whiteboard);
+    state.switch_board(BOARD_ID_WHITEBOARD);
     state
-        .canvas_set
+        .boards
         .active_frame_mut()
         .add_shape(arrow_with_label(7, &font_descriptor));
 
-    state.switch_board_mode(BoardMode::Blackboard);
+    state.switch_board(BOARD_ID_BLACKBOARD);
     state
-        .canvas_set
+        .boards
         .active_frame_mut()
         .add_shape(arrow_with_label(4, &font_descriptor));
 

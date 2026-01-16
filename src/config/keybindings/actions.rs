@@ -59,6 +59,31 @@ pub enum Action {
     ToggleBlackboard,
     ReturnToTransparent,
 
+    // Board switching
+    #[serde(rename = "board_1")]
+    Board1,
+    #[serde(rename = "board_2")]
+    Board2,
+    #[serde(rename = "board_3")]
+    Board3,
+    #[serde(rename = "board_4")]
+    Board4,
+    #[serde(rename = "board_5")]
+    Board5,
+    #[serde(rename = "board_6")]
+    Board6,
+    #[serde(rename = "board_7")]
+    Board7,
+    #[serde(rename = "board_8")]
+    Board8,
+    #[serde(rename = "board_9")]
+    Board9,
+    BoardNext,
+    BoardPrev,
+    BoardNew,
+    BoardDelete,
+    BoardPicker,
+
     // Page navigation
     PagePrev,
     PageNext,

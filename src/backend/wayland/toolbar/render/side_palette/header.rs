@@ -162,12 +162,114 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         tooltip: Some("Close".to_string()),
     });
 
+    let chip_y = spec.side_header_board_y();
+    let chip_h = ToolbarLayoutSpec::SIDE_HEADER_BOARD_ROW_HEIGHT;
+    let chip_w = layout.content_width;
+    let chip_x = x;
+    let chip_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, chip_x, chip_y, chip_w, chip_h))
+        .unwrap_or(false);
+    let chip_bg = if chip_hover { 0.28 } else { 0.22 };
+    draw_round_rect(ctx, chip_x, chip_y, chip_w, chip_h, 8.0);
+    ctx.set_source_rgba(chip_bg, chip_bg + 0.02, chip_bg + 0.06, 0.95);
+    let _ = ctx.fill();
+    ctx.set_source_rgba(0.08, 0.1, 0.13, 0.7);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+
+    let dot_size = ToolbarLayoutSpec::SIDE_BOARD_COLOR_DOT_SIZE;
+    let dot_x = chip_x + 8.0;
+    let dot_y = chip_y + (chip_h - dot_size) * 0.5;
+    if let Some(color) = snapshot.board_color {
+        draw_swatch(ctx, dot_x, dot_y, dot_size, color, false);
+    } else {
+        ctx.set_source_rgba(0.62, 0.68, 0.76, 0.7);
+        draw_round_rect(ctx, dot_x, dot_y, dot_size, dot_size, 3.0);
+        let _ = ctx.stroke();
+        ctx.move_to(dot_x, dot_y);
+        ctx.line_to(dot_x + dot_size, dot_y + dot_size);
+        ctx.move_to(dot_x + dot_size, dot_y);
+        ctx.line_to(dot_x, dot_y + dot_size);
+        let _ = ctx.stroke();
+    }
+
+    let label_x = dot_x + dot_size + 8.0;
+    let label_w = chip_x + chip_w - 8.0 - label_x;
+    let label = board_chip_label(snapshot);
+    let display_label = ellipsize_to_width(ctx, label_style, &label, label_w);
+    draw_label_left(
+        ctx,
+        label_style,
+        label_x,
+        chip_y,
+        label_w,
+        chip_h,
+        &display_label,
+    );
+    hits.push(HitRegion {
+        rect: (chip_x, chip_y, chip_w, chip_h),
+        event: ToolbarEvent::ToggleBoardPicker,
+        kind: HitKind::Click,
+        tooltip: Some("Boards".to_string()),
+    });
+
     // Draw onboarding hint for the "More" button (first-time users)
     if snapshot.show_drawer_hint {
         draw_onboarding_hint(ctx, more_x, header_btn_y, btn_size);
     }
 
     spec.side_content_start_y()
+}
+
+fn board_chip_label(snapshot: &crate::ui::toolbar::ToolbarSnapshot) -> String {
+    let board_index = snapshot.board_index + 1;
+    let board_count = snapshot.board_count.max(1);
+    let name = snapshot.board_name.trim();
+    let board_label = if board_count > 1 {
+        if name.is_empty() {
+            format!("B{}/{}", board_index, board_count)
+        } else {
+            format!("B{}/{} {}", board_index, board_count, name)
+        }
+    } else if name.is_empty() {
+        "Board".to_string()
+    } else {
+        format!("Board {}", name)
+    };
+    let pages = snapshot.page_count.max(1);
+    if pages > 1 {
+        format!("{board_label} - {pages}p")
+    } else {
+        board_label
+    }
+}
+
+fn ellipsize_to_width(
+    ctx: &cairo::Context,
+    style: UiTextStyle<'_>,
+    text: &str,
+    max_width: f64,
+) -> String {
+    if max_width <= 0.0 {
+        return String::new();
+    }
+    if text_layout(ctx, style, text, None).ink_extents().width() <= max_width {
+        return text.to_string();
+    }
+    let mut chars: Vec<char> = text.chars().collect();
+    while chars.len() > 3 {
+        chars.pop();
+        let candidate: String = chars.iter().collect();
+        let candidate = format!("{candidate}...");
+        if text_layout(ctx, style, &candidate, None)
+            .ink_extents()
+            .width()
+            <= max_width
+        {
+            return candidate;
+        }
+    }
+    "...".to_string()
 }
 
 /// Draws a floating onboarding hint pointing to the More button.

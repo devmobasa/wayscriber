@@ -27,7 +27,7 @@ impl InputState {
             snapshot,
             locked,
         ) = {
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             let Some(drawn) = frame.shape(shape_id) else {
                 return false;
             };
@@ -110,7 +110,7 @@ impl InputState {
         self.update_text_preview_dirty();
 
         let cleared = {
-            let frame = self.canvas_set.active_frame_mut();
+            let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
                 let before = shape.shape.bounding_box();
                 match &mut shape.shape {
@@ -147,7 +147,7 @@ impl InputState {
         };
 
         let restored = {
-            let frame = self.canvas_set.active_frame_mut();
+            let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
                 let before = shape.shape.bounding_box();
                 shape.shape = snapshot.shape.clone();
@@ -176,7 +176,7 @@ impl InputState {
         };
 
         let updated = {
-            let frame = self.canvas_set.active_frame_mut();
+            let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
                 let before_bounds = shape.shape.bounding_box();
                 shape.shape = new_shape;

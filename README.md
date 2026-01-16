@@ -82,8 +82,8 @@ Works on layer-shell compositors (wlroots, Smithay-based like Niri/Cosmic, Plasm
 ### Drawing & Editing
 Freehand pen, translucent highlighter, eraser (circle/rect), straight lines, rectangles/ellipses with fill toggle, arrows, multiline text + sticky notes with smoothing; selection editing + properties panel; undo/redo; quick size/color changes via hotkeys or scroll; color picker + palettes.
 
-### Board Modes
-Whiteboard, blackboard, and transparent overlays with isolated frames and auto pen contrast. Snap back to transparent with <kbd>Ctrl+Shift+T</kbd>. Use board pages (prev/next/new/duplicate/delete) for multi-step walkthroughs.
+### Boards
+Named boards (transparent overlay + custom backgrounds) with isolated pages per board and auto-contrast pens. Jump slots with <kbd>Ctrl+Shift+1..9</kbd>, toggle whiteboard/blackboard, or open the board picker with <kbd>Ctrl+Shift+B</kbd>.
 
 ### Capture & Screenshots
 Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard`. Falls back to xdg-desktop-portal if missing.
@@ -280,7 +280,7 @@ Launch wayscriber when you need it, exit when done:
 ```bash
 wayscriber --active
 wayscriber --active --mode whiteboard
-wayscriber --active --mode blackboard
+wayscriber --active --mode blueprint
 wayscriber --freeze   # start with screen frozen
 ```
 
@@ -344,7 +344,7 @@ journalctl --user -u wayscriber.service -f
 | <kbd>Ctrl+Shift+C</kbd> | Select region → clipboard |
 | <kbd>Ctrl+Shift+S</kbd> | Select region → save PNG |
 | <kbd>Ctrl+6</kbd> | Region → clipboard (explicit) |
-| <kbd>Ctrl+Shift+6</kbd> | Region → save PNG (explicit) |
+| <kbd>Ctrl+Alt+6</kbd> | Region → save PNG (explicit) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
 Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if missing.
@@ -369,13 +369,18 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-### Board Modes
+### Boards
 
 | Action | Key |
 |--------|-----|
 | Toggle Whiteboard | <kbd>Ctrl+W</kbd> |
 | Toggle Blackboard | <kbd>Ctrl+B</kbd> |
 | Return to Transparent | <kbd>Ctrl+Shift+T</kbd> |
+| Switch board slot | <kbd>Ctrl+Shift+1..9</kbd> |
+| Previous/next board | <kbd>Ctrl+Shift</kbd> + <kbd>←</kbd>/<kbd>→</kbd> |
+| New board | <kbd>Ctrl+Shift+N</kbd> |
+| Delete board | <kbd>Ctrl+Shift+Delete</kbd> |
+| Board picker | <kbd>Ctrl+Shift+B</kbd> |
 
 ### Colors
 
@@ -495,8 +500,8 @@ ui_animation_fps = 30
 [ui]
 # status bar visibility and position
 
-[board]
-# whiteboard/blackboard presets
+[boards]
+# named boards + backgrounds
 ```
 
 ### Session Persistence
@@ -613,7 +618,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 | Feature | ZoomIt (Windows) | wayscriber |
 |---------|------------------|------------|
 | Drawing tools | ✅ | ✅ |
-| Whiteboard/Blackboard | ✅ | ✅ |
+| Boards/Backgrounds | ✅ | ✅ |
 | Multi-line text | ❌ | ✅ |
 | Custom fonts | ❌ | ✅ |
 | Config file | ❌ | ✅ |
@@ -625,7 +630,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 
 - [x] Native Wayland layer-shell
 - [x] Daemon mode with system tray
-- [x] Whiteboard/blackboard modes
+- [x] Boards/backgrounds
 - [x] Session persistence (with CLI override + tray config toggle)
 - [x] Highlighter & eraser tools
 - [x] Additional shapes (filled shapes)

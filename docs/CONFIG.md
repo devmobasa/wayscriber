@@ -439,95 +439,89 @@ force_inline = false
 
 **Defaults:** all set as above.
 
-### `[board]` - Board Modes (Whiteboard/Blackboard)
+### `[boards]` - Boards (Backgrounds + Names)
 
-Controls whiteboard and blackboard mode settings.
+Configure multiple boards (each with its own pages) plus the special transparent overlay.
 
 ```toml
-[board]
-# Enable board mode features
-enabled = true
+[boards]
+max_count = 9
+auto_create = true
+show_board_badge = true
+persist_customizations = true
+default_board = "transparent"
 
-# Default mode on startup
-# Options: "transparent" (default overlay), "whiteboard" (light), "blackboard" (dark)
-default_mode = "transparent"
+[[boards.items]]
+id = "transparent"
+name = "Overlay"
+background = "transparent"
+persist = true
 
-# Whiteboard background color [R, G, B] (0.0-1.0 range)
-# Default: off-white (253, 253, 253) for softer appearance
-whiteboard_color = [0.992, 0.992, 0.992]
-
-# Blackboard background color [R, G, B] (0.0-1.0 range)
-# Default: near-black (17, 17, 17) for softer appearance
-blackboard_color = [0.067, 0.067, 0.067]
-
-# Default pen color for whiteboard mode [R, G, B] (0.0-1.0 range)
-# Default: black for contrast on light background
-whiteboard_pen_color = [0.0, 0.0, 0.0]
-
-# Default pen color for blackboard mode [R, G, B] (0.0-1.0 range)
-# Default: white for contrast on dark background
-blackboard_pen_color = [1.0, 1.0, 1.0]
-
-# Automatically adjust pen color when entering board modes
-# Set to false if you want to keep your current color when switching modes
+[[boards.items]]
+id = "whiteboard"
+name = "Whiteboard"
+background = { rgb = [0.992, 0.992, 0.992] }
+default_pen_color = { rgb = [0.0, 0.0, 0.0] }
 auto_adjust_pen = true
+
+[[boards.items]]
+id = "blackboard"
+name = "Blackboard"
+background = { rgb = [0.067, 0.067, 0.067] }
+default_pen_color = { rgb = [1.0, 1.0, 1.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "blueprint"
+name = "Blueprint"
+background = { rgb = [0.063, 0.125, 0.251] }
+default_pen_color = { rgb = [0.902, 0.945, 1.0] }
+
+[[boards.items]]
+id = "corkboard"
+name = "Corkboard"
+background = { rgb = [0.420, 0.294, 0.165] }
+default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 ```
 
-**Board Modes:**
-- **Transparent**: Default overlay mode showing the screen underneath
-- **Whiteboard**: Light background for drawing (like a physical whiteboard)
-- **Blackboard**: Dark background for drawing (like a chalkboard)
+**Fields:**
+- `max_count` — hard cap on total boards.
+- `auto_create` — create a board when switching to an empty slot.
+- `show_board_badge` — show board name/slot in the status bar.
+- `persist_customizations` — runtime edits (rename/background) are written back to config.
+- `default_board` — board id to activate on startup.
+- `items` — ordered list of boards; each board has:
+  - `id` — stable identifier (used by keybindings and persistence).
+  - `name` — display name in the UI.
+  - `background` — `"transparent"` or `{ rgb = [..] }`.
+  - `default_pen_color` — optional; if omitted and `auto_adjust_pen = true`, pen color is auto-contrasted.
+  - `auto_adjust_pen` — auto-switch pen color on entry.
+  - `persist` — include this board in session saves.
 
 **Keybindings:**
-- <kbd>Ctrl+W</kbd>: Toggle whiteboard mode (press again to exit)
-- <kbd>Ctrl+B</kbd>: Toggle blackboard mode (press again to exit)
-- <kbd>Ctrl+Shift+T</kbd>: Return to transparent mode
+- <kbd>Ctrl+Shift+1..9</kbd>: Switch board slots
+- <kbd>Ctrl+Shift+Left/Right</kbd>: Previous/next board
+- <kbd>Ctrl+Shift+N</kbd>: New board
+- <kbd>Ctrl+Shift+Delete</kbd>: Delete board
+- <kbd>Ctrl+Shift+B</kbd>: Board picker (inline rename/color)
+- Aliases (configurable): <kbd>Ctrl+W</kbd> = whiteboard, <kbd>Ctrl+B</kbd> = blackboard, <kbd>Ctrl+Shift+T</kbd> = transparent
 
-**Frame Isolation:**
-- Each mode maintains independent drawings
-- Switching modes preserves all work
-- Undo/clear operations affect only the current mode
-
-**Pages:**
-- Each board mode supports multiple pages; use the page controls (toolbar or <kbd>Ctrl+Alt</kbd> shortcuts) for multi-step walkthroughs.
-
-**Color Themes:**
-
-High Contrast (pure white/black):
-```toml
-[board]
-whiteboard_color = [1.0, 1.0, 1.0]
-blackboard_color = [0.0, 0.0, 0.0]
-```
-
-Chalkboard Theme (green board):
-```toml
-[board]
-blackboard_color = [0.11, 0.18, 0.13]
-blackboard_pen_color = [0.95, 0.95, 0.8]
-```
-
-Sepia Theme (vintage):
-```toml
-[board]
-whiteboard_color = [0.96, 0.93, 0.86]
-whiteboard_pen_color = [0.29, 0.23, 0.18]
-```
+**Board Picker:**
+- Modal list for switching, renaming, and recoloring boards.
+- Inline edits persist immediately when `persist_customizations = true`.
 
 **CLI Override:**
-You can override the default mode from the command line:
+Use a board id with `--mode`:
 ```bash
 wayscriber --active --mode whiteboard
-wayscriber --active --mode blackboard
-wayscriber --daemon --mode whiteboard
+wayscriber --active --mode blueprint
+wayscriber --daemon --mode transparent
 ```
 
-**Defaults:**
-- Enabled: true
-- Default mode: transparent
-- Whiteboard: off-white background, black pen
-- Blackboard: near-black background, white pen
-- Auto-adjust pen: true
+### `[board]` - Legacy Board Modes
+
+This section is still recognized for backward compatibility. If `[boards]` is missing,
+wayscriber will synthesize boards from `[board]`. New configurations should prefer `[boards]`.
 
 ### `[capture]` - Screenshot Capture
 
@@ -600,7 +594,7 @@ backup_retention = 1
 # max_persisted_undo_depth = 200
 ```
 
-- `persist_*` — choose which board modes (transparent/whiteboard/blackboard) survive restarts
+- `persist_*` — choose which boards survive restarts (`persist_transparent` for overlay, `persist_whiteboard`/`persist_blackboard` gate non-transparent boards for legacy compatibility)
 - `persist_history` — when `true`, persist undo/redo stacks so that history survives restarts; set to `false` to save only visible drawings
 - `restore_tool_state` — save pen colour, thickness, font size, arrow settings (including head placement), and status bar visibility; when `true`, the last-used tool state overrides config defaults at startup
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
@@ -708,10 +702,24 @@ toggle_highlight_tool = ["Ctrl+Alt+H"]
 increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
 decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
 
-# Board mode toggles
+# Boards
 toggle_whiteboard = ["Ctrl+W"]
 toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
+board_1 = ["Ctrl+Shift+1"]
+board_2 = ["Ctrl+Shift+2"]
+board_3 = ["Ctrl+Shift+3"]
+board_4 = ["Ctrl+Shift+4"]
+board_5 = ["Ctrl+Shift+5"]
+board_6 = ["Ctrl+Shift+6"]
+board_7 = ["Ctrl+Shift+7"]
+board_8 = ["Ctrl+Shift+8"]
+board_9 = ["Ctrl+Shift+9"]
+board_prev = ["Ctrl+Shift+ArrowLeft"]
+board_next = ["Ctrl+Shift+ArrowRight"]
+board_new = ["Ctrl+Shift+N"]
+board_delete = ["Ctrl+Shift+Delete"]
+board_picker = ["Ctrl+Shift+B"]
 
 # Page navigation
 page_prev = ["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+PageUp"]
@@ -768,7 +776,7 @@ capture_file_full = ["Ctrl+S"]
 capture_clipboard_selection = ["Ctrl+Shift+C"]
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
-capture_file_region = ["Ctrl+Shift+6"]
+capture_file_region = ["Ctrl+Alt+6"]
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]
@@ -1000,9 +1008,8 @@ show_status_bar = false
 
 **Teaching/presentation mode (start in whiteboard):**
 ```toml
-[board]
-default_mode = "whiteboard"
-auto_adjust_pen = true
+[boards]
+default_board = "whiteboard"
 
 [drawing]
 default_thickness = 4.0

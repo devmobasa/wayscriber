@@ -2,7 +2,7 @@ use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{Color, Shape};
-use crate::input::board_mode::BoardMode;
+use crate::input::BOARD_ID_TRANSPARENT;
 use std::fs;
 
 #[test]
@@ -13,7 +13,7 @@ fn snapshot_preserves_history_only_frames() {
     options.persist_history = true;
 
     let mut input = dummy_input_state();
-    let frame = input.canvas_set.active_frame_mut();
+    let frame = input.boards.active_frame_mut();
     let id = frame.add_shape(Shape::Line {
         x1: 0,
         y1: 0,
@@ -49,8 +49,8 @@ fn snapshot_preserves_history_only_frames() {
 
     let mut restored = dummy_input_state();
     apply_snapshot(&mut restored, loaded, &options);
-    restored.canvas_set.switch_mode(BoardMode::Transparent);
-    let frame = restored.canvas_set.active_frame_mut();
+    restored.switch_board(BOARD_ID_TRANSPARENT);
+    let frame = restored.boards.active_frame_mut();
     assert_eq!(frame.shapes.len(), 0);
     assert_eq!(frame.redo_stack_len(), 1);
     frame.redo_last();
@@ -65,7 +65,7 @@ fn modify_delete_cycle_survives_restore() {
     options.persist_history = true;
 
     let mut input = dummy_input_state();
-    let frame = input.canvas_set.active_frame_mut();
+    let frame = input.boards.active_frame_mut();
     let id = frame.add_shape(Shape::Line {
         x1: 0,
         y1: 0,
@@ -135,8 +135,8 @@ fn modify_delete_cycle_survives_restore() {
 
     let mut restored = dummy_input_state();
     apply_snapshot(&mut restored, loaded, &options);
-    restored.canvas_set.switch_mode(BoardMode::Transparent);
-    let frame = restored.canvas_set.active_frame_mut();
+    restored.switch_board(BOARD_ID_TRANSPARENT);
+    let frame = restored.boards.active_frame_mut();
 
     // Undo should re-create the deleted shape, then undo the modify, restoring original coords.
     frame.undo_last(); // undo delete -> shape back (modified version)
@@ -158,7 +158,7 @@ fn clear_all_can_be_undone_after_restore() {
     options.persist_history = true;
 
     let mut input = dummy_input_state();
-    let frame = input.canvas_set.active_frame_mut();
+    let frame = input.boards.active_frame_mut();
     for i in 0..3 {
         frame.add_shape(Shape::Rect {
             x: i * 10,
@@ -178,8 +178,8 @@ fn clear_all_can_be_undone_after_restore() {
 
     assert_eq!(frame.shapes.len(), 3);
     assert!(input.clear_all());
-    assert_eq!(input.canvas_set.active_frame().shapes.len(), 0);
-    assert!(input.canvas_set.active_frame().undo_stack_len() > 0);
+    assert_eq!(input.boards.active_frame().shapes.len(), 0);
+    assert!(input.boards.active_frame().undo_stack_len() > 0);
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
     save_snapshot(&snapshot, &options).expect("save snapshot");
@@ -189,8 +189,8 @@ fn clear_all_can_be_undone_after_restore() {
 
     let mut restored = dummy_input_state();
     apply_snapshot(&mut restored, loaded, &options);
-    restored.canvas_set.switch_mode(BoardMode::Transparent);
-    let frame = restored.canvas_set.active_frame_mut();
+    restored.switch_board(BOARD_ID_TRANSPARENT);
+    let frame = restored.boards.active_frame_mut();
     assert_eq!(frame.shapes.len(), 0);
     assert!(frame.undo_stack_len() > 0);
     frame.undo_last();
@@ -205,7 +205,7 @@ fn corrupted_history_is_dropped_but_shapes_load() {
     options.persist_history = true;
 
     let mut input = dummy_input_state();
-    let frame = input.canvas_set.active_frame_mut();
+    let frame = input.boards.active_frame_mut();
     let id = frame.add_shape(Shape::Line {
         x1: 1,
         y1: 1,
@@ -245,8 +245,8 @@ fn corrupted_history_is_dropped_but_shapes_load() {
 
     let mut restored = dummy_input_state();
     apply_snapshot(&mut restored, loaded, &options);
-    restored.canvas_set.switch_mode(BoardMode::Transparent);
-    let frame = restored.canvas_set.active_frame();
+    restored.switch_board(BOARD_ID_TRANSPARENT);
+    let frame = restored.boards.active_frame();
     assert_eq!(frame.shapes.len(), 1);
     assert_eq!(frame.undo_stack_len(), 0);
     assert_eq!(frame.redo_stack_len(), 0);

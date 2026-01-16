@@ -25,7 +25,7 @@ impl InputState {
     }
 
     pub(crate) fn shape_ids_in_rect(&self, rect: Rect) -> Vec<ShapeId> {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         frame
             .shapes
             .iter()

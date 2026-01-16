@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn edit_selected_text_commit_updates_and_undo() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 100,
         y: 100,
         text: "Hello".to_string(),
@@ -27,7 +27,7 @@ fn edit_selected_text_commit_updates_and_undo() {
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_edit_target.is_none());
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::Text { text, .. } => assert_eq!(text, "Hello world"),
@@ -35,11 +35,11 @@ fn edit_selected_text_commit_updates_and_undo() {
     }
     assert_eq!(frame.undo_stack_len(), 1);
 
-    if let Some(action) = state.canvas_set.active_frame_mut().undo_last() {
+    if let Some(action) = state.boards.active_frame_mut().undo_last() {
         state.apply_action_side_effects(&action);
     }
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::Text { text, .. } => assert_eq!(text, "Hello"),
@@ -50,7 +50,7 @@ fn edit_selected_text_commit_updates_and_undo() {
 #[test]
 fn edit_selected_text_cancel_restores_original() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,
         y: 80,
         text: "Original".to_string(),
@@ -74,7 +74,7 @@ fn edit_selected_text_cancel_restores_original() {
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_edit_target.is_none());
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::Text { text, .. } => assert_eq!(text, "Original"),
@@ -93,7 +93,7 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
         a: 1.0,
     };
     let shape_id = state
-        .canvas_set
+        .boards
         .active_frame_mut()
         .add_shape(Shape::StickyNote {
             x: 100,
@@ -118,7 +118,7 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_edit_target.is_none());
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::StickyNote {
@@ -133,11 +133,11 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
     }
     assert_eq!(frame.undo_stack_len(), 1);
 
-    if let Some(action) = state.canvas_set.active_frame_mut().undo_last() {
+    if let Some(action) = state.boards.active_frame_mut().undo_last() {
         state.apply_action_side_effects(&action);
     }
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::StickyNote {
@@ -162,7 +162,7 @@ fn edit_selected_sticky_note_cancel_restores_original() {
         a: 1.0,
     };
     let shape_id = state
-        .canvas_set
+        .boards
         .active_frame_mut()
         .add_shape(Shape::StickyNote {
             x: 40,
@@ -187,7 +187,7 @@ fn edit_selected_sticky_note_cancel_restores_original() {
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_edit_target.is_none());
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
     match &shape.shape {
         Shape::StickyNote {

@@ -49,11 +49,22 @@ impl WaylandState {
                 );
             }
             if !self.input_state.show_status_bar {
-                let mode = self.input_state.board_mode();
-                let page_count = self.input_state.canvas_set.page_count(mode);
-                if page_count > 1 {
-                    let page_index = self.input_state.canvas_set.active_page_index(mode);
-                    crate::ui::render_page_badge(ctx, width, height, page_index, page_count);
+                let board_count = self.input_state.boards.board_count();
+                let page_count = self.input_state.boards.page_count();
+                if board_count > 1 || page_count > 1 {
+                    let board_index = self.input_state.boards.active_index();
+                    let board_name = self.input_state.board_name();
+                    let page_index = self.input_state.boards.active_page_index();
+                    crate::ui::render_page_badge(
+                        ctx,
+                        width,
+                        height,
+                        board_index,
+                        board_count,
+                        board_name,
+                        page_index,
+                        page_count,
+                    );
                 }
             }
 
@@ -82,7 +93,7 @@ impl WaylandState {
                     &bindings,
                     self.input_state.help_overlay_search.as_str(),
                     self.config.ui.help_overlay_context_filter,
-                    self.input_state.board_config.enabled,
+                    self.input_state.boards.board_count() > 1,
                     self.config.capture.enabled,
                     self.input_state.help_overlay_scroll,
                 );
@@ -91,12 +102,20 @@ impl WaylandState {
                     self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
             }
 
+            if self.input_state.is_board_picker_open() {
+                self.input_state
+                    .update_board_picker_layout(ctx, width, height);
+                crate::ui::render_board_picker(ctx, &self.input_state, width, height);
+            } else {
+                self.input_state.clear_board_picker_layout();
+            }
+
             self.input_state.ui_toast_bounds =
                 crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
             crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
             crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
 
-            if !self.zoom.active {
+            if !self.zoom.active && !self.input_state.is_board_picker_open() {
                 if self.input_state.is_properties_panel_open() {
                     self.input_state
                         .update_properties_panel_layout(ctx, width, height);

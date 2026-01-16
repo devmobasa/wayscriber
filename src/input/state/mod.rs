@@ -6,6 +6,7 @@ mod render;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use core::board_picker::BoardPickerEditMode;
 #[allow(unused_imports)]
 pub use core::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, ContextMenuEntry, ContextMenuKind,

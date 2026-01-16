@@ -1,9 +1,10 @@
 use super::compression::is_gzip;
 use super::load::load_snapshot_inner;
-use super::types::{BoardPagesSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot};
+use super::types::{
+    BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
+};
 use super::{load_snapshot, save_snapshot};
 use crate::draw::{Color, Frame, Shape};
-use crate::input::board_mode::BoardMode;
 use crate::session::options::{CompressionMode, SessionOptions};
 use crate::time_utils::now_rfc3339;
 use tempfile::tempdir;
@@ -25,13 +26,14 @@ fn sample_snapshot() -> SessionSnapshot {
     });
 
     SessionSnapshot {
-        active_mode: BoardMode::Transparent,
-        transparent: Some(BoardPagesSnapshot {
-            pages: vec![frame],
-            active: 0,
-        }),
-        whiteboard: None,
-        blackboard: None,
+        active_board_id: "transparent".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            },
+        }],
         tool_state: None,
     }
 }
@@ -76,7 +78,13 @@ fn load_snapshot_inner_reports_compression_and_version() {
         .expect("snapshot should be present");
     assert!(loaded.compressed);
     assert_eq!(loaded.version, CURRENT_VERSION);
-    assert!(loaded.snapshot.transparent.is_some());
+    assert!(
+        loaded
+            .snapshot
+            .boards
+            .iter()
+            .any(|board| board.id == "transparent")
+    );
 }
 
 #[test]
@@ -87,7 +95,9 @@ fn load_snapshot_inner_skips_newer_versions() {
     let file = SessionFile {
         version: CURRENT_VERSION + 1,
         last_modified: now_rfc3339(),
-        active_mode: "transparent".to_string(),
+        active_board_id: Some("transparent".to_string()),
+        active_mode: None,
+        boards: Vec::new(),
         transparent: None,
         whiteboard: None,
         blackboard: None,
@@ -146,13 +156,14 @@ fn save_snapshot_preserves_multiple_pages() {
     });
 
     let snapshot = SessionSnapshot {
-        active_mode: BoardMode::Transparent,
-        transparent: Some(BoardPagesSnapshot {
-            pages: vec![first, second],
-            active: 1,
-        }),
-        whiteboard: None,
-        blackboard: None,
+        active_board_id: "transparent".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![first, second],
+                active: 1,
+            },
+        }],
         tool_state: None,
     };
 
@@ -162,12 +173,14 @@ fn save_snapshot_preserves_multiple_pages() {
         .expect("load_snapshot should succeed")
         .expect("snapshot should be present");
     let pages = loaded
-        .transparent
+        .boards
+        .iter()
+        .find(|board| board.id == "transparent")
         .expect("transparent pages should be present");
-    assert_eq!(pages.pages.len(), 2);
-    assert_eq!(pages.active, 1);
-    assert_eq!(pages.pages[0].shapes.len(), 1);
-    assert_eq!(pages.pages[1].shapes.len(), 1);
+    assert_eq!(pages.pages.pages.len(), 2);
+    assert_eq!(pages.pages.active, 1);
+    assert_eq!(pages.pages.pages[0].shapes.len(), 1);
+    assert_eq!(pages.pages.pages[1].shapes.len(), 1);
 }
 
 #[test]
@@ -177,13 +190,14 @@ fn save_snapshot_keeps_empty_pages() {
     options.persist_transparent = true;
 
     let snapshot = SessionSnapshot {
-        active_mode: BoardMode::Transparent,
-        transparent: Some(BoardPagesSnapshot {
-            pages: vec![Frame::new(), Frame::new(), Frame::new()],
-            active: 2,
-        }),
-        whiteboard: None,
-        blackboard: None,
+        active_board_id: "transparent".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![Frame::new(), Frame::new(), Frame::new()],
+                active: 2,
+            },
+        }],
         tool_state: None,
     };
 
@@ -193,10 +207,12 @@ fn save_snapshot_keeps_empty_pages() {
         .expect("load_snapshot should succeed")
         .expect("snapshot should be present");
     let pages = loaded
-        .transparent
+        .boards
+        .iter()
+        .find(|board| board.id == "transparent")
         .expect("transparent pages should be present");
-    assert_eq!(pages.pages.len(), 3);
-    assert_eq!(pages.active, 2);
+    assert_eq!(pages.pages.pages.len(), 3);
+    assert_eq!(pages.pages.active, 2);
 }
 
 #[test]
@@ -222,7 +238,9 @@ fn load_snapshot_inner_migrates_legacy_frame_to_pages() {
     let file = SessionFile {
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
-        active_mode: "transparent".to_string(),
+        active_board_id: None,
+        active_mode: Some("transparent".to_string()),
+        boards: Vec::new(),
         transparent: Some(frame),
         whiteboard: None,
         blackboard: None,
@@ -241,8 +259,13 @@ fn load_snapshot_inner_migrates_legacy_frame_to_pages() {
     let loaded = load_snapshot_inner(&session_path, &options)
         .expect("load_snapshot_inner should succeed")
         .expect("snapshot should be present");
-    let pages = loaded.snapshot.transparent.expect("transparent pages");
-    assert_eq!(pages.pages.len(), 1);
-    assert_eq!(pages.active, 0);
-    assert_eq!(pages.pages[0].shapes.len(), 1);
+    let pages = loaded
+        .snapshot
+        .boards
+        .iter()
+        .find(|board| board.id == "transparent")
+        .expect("transparent pages");
+    assert_eq!(pages.pages.pages.len(), 1);
+    assert_eq!(pages.pages.active, 0);
+    assert_eq!(pages.pages.pages[0].shapes.len(), 1);
 }

@@ -1,5 +1,6 @@
 mod base;
 mod board;
+pub(crate) mod board_picker;
 mod command_palette;
 mod dirty;
 mod highlight_controls;

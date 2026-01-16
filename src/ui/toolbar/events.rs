@@ -31,6 +31,7 @@ pub enum ToolbarEvent {
     PageNew,
     PageDuplicate,
     PageDelete,
+    ToggleBoardPicker,
     EnterTextMode,
     EnterStickyNoteMode,
     /// Toggle both highlight tool and click highlight together

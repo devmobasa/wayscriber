@@ -421,52 +421,78 @@ border_width = 2.0
 text_color = [0.95, 0.96, 0.98, 1.0]
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# BOARD MODE SETTINGS (Whiteboard/Blackboard)
+# BOARD SETTINGS (Named Boards + Backgrounds)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-[board]
-# Enable board mode features
-enabled = true
+[boards]
+# Maximum number of boards allowed
+max_count = 9
 
-# Default mode on startup
-# Options: "transparent" (default overlay), "whiteboard" (light), "blackboard" (dark)
-default_mode = "transparent"
+# Auto-create boards when switching to an empty slot
+auto_create = true
 
-# Whiteboard background color [R, G, B] (0.0-1.0 range)
-# Default: off-white (253, 253, 253) for softer appearance
-whiteboard_color = [0.992, 0.992, 0.992]
+# Show board name/slot in the status bar
+show_board_badge = true
 
-# Blackboard background color [R, G, B] (0.0-1.0 range)
-# Default: near-black (17, 17, 17) for softer appearance
-blackboard_color = [0.067, 0.067, 0.067]
+# Persist runtime edits (rename/background) back to config
+persist_customizations = true
 
-# Default pen color for whiteboard mode [R, G, B] (0.0-1.0 range)
-# Default: black for contrast on light background
-whiteboard_pen_color = [0.0, 0.0, 0.0]
+# Default board id on startup
+default_board = "transparent"
 
-# Default pen color for blackboard mode [R, G, B] (0.0-1.0 range)
-# Default: white for contrast on dark background
-blackboard_pen_color = [1.0, 1.0, 1.0]
+[[boards.items]]
+id = "transparent"
+name = "Overlay"
+background = "transparent"
+persist = true
 
-# Automatically adjust pen color when entering board modes
-# Set to false if you want to keep your current color when switching modes
+[[boards.items]]
+id = "whiteboard"
+name = "Whiteboard"
+background = { rgb = [0.992, 0.992, 0.992] }
+default_pen_color = { rgb = [0.0, 0.0, 0.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "blackboard"
+name = "Blackboard"
+background = { rgb = [0.067, 0.067, 0.067] }
+default_pen_color = { rgb = [1.0, 1.0, 1.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "blueprint"
+name = "Blueprint"
+background = { rgb = [0.063, 0.125, 0.251] }
+default_pen_color = { rgb = [0.902, 0.945, 1.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "corkboard"
+name = "Corkboard"
+background = { rgb = [0.420, 0.294, 0.165] }
+default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 auto_adjust_pen = true
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Color Theme Examples
 # ───────────────────────────────────────────────────────────────────────────────
 
-# High Contrast Theme (pure white/black):
-#   whiteboard_color = [1.0, 1.0, 1.0]
-#   blackboard_color = [0.0, 0.0, 0.0]
-
 # Chalkboard Theme (green board):
-#   blackboard_color = [0.11, 0.18, 0.13]
-#   blackboard_pen_color = [0.95, 0.95, 0.8]
+# [[boards.items]]
+# id = "chalkboard"
+# name = "Chalkboard"
+# background = { rgb = [0.11, 0.18, 0.13] }
+# default_pen_color = { rgb = [0.95, 0.95, 0.8] }
+# auto_adjust_pen = true
 
-# Sepia Theme (vintage):
-#   whiteboard_color = [0.96, 0.93, 0.86]
-#   whiteboard_pen_color = [0.29, 0.23, 0.18]
+# Sepia Theme (vintage whiteboard):
+# [[boards.items]]
+# id = "sepia"
+# name = "Sepia"
+# background = { rgb = [0.96, 0.93, 0.86] }
+# default_pen_color = { rgb = [0.29, 0.23, 0.18] }
+# auto_adjust_pen = true
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABLET / STYLUS INPUT (Wayland tablet-unstable-v2)

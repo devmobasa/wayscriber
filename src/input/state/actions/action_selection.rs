@@ -39,7 +39,7 @@ impl InputState {
             Action::SelectAll => {
                 let previous_bounds = self.selection_bounding_box(self.selected_shape_ids());
                 let ids: Vec<_> = self
-                    .canvas_set
+                    .boards
                     .active_frame()
                     .shapes
                     .iter()

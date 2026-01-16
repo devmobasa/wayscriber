@@ -34,6 +34,10 @@ impl InputState {
             return;
         }
 
+        if self.is_board_picker_open() && self.handle_board_picker_key(key) {
+            return;
+        }
+
         // Handle modifier keys first
         match key {
             Key::Shift => {

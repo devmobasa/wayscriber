@@ -81,4 +81,144 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true
     ),
+    meta!(
+        Board1,
+        "Board 1",
+        None,
+        "Switch to board 1",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board2,
+        "Board 2",
+        None,
+        "Switch to board 2",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board3,
+        "Board 3",
+        None,
+        "Switch to board 3",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board4,
+        "Board 4",
+        None,
+        "Switch to board 4",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board5,
+        "Board 5",
+        None,
+        "Switch to board 5",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board6,
+        "Board 6",
+        None,
+        "Switch to board 6",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board7,
+        "Board 7",
+        None,
+        "Switch to board 7",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board8,
+        "Board 8",
+        None,
+        "Switch to board 8",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        Board9,
+        "Board 9",
+        None,
+        "Switch to board 9",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        BoardNext,
+        "Next Board",
+        Some("Next"),
+        "Switch to next board",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        BoardPrev,
+        "Previous Board",
+        Some("Prev"),
+        "Switch to previous board",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        BoardNew,
+        "New Board",
+        Some("New"),
+        "Create a new board",
+        Board,
+        false,
+        true,
+        false
+    ),
+    meta!(
+        BoardDelete,
+        "Delete Board",
+        Some("Del"),
+        "Delete the active board",
+        Board,
+        false,
+        true,
+        false
+    ),
+    meta!(
+        BoardPicker,
+        "Board Picker",
+        None,
+        "Open the board picker",
+        Board,
+        true,
+        true,
+        true
+    ),
 ];

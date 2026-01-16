@@ -118,7 +118,7 @@ pub(super) fn finish_drawing(
 
     let mut limit_reached = false;
     let addition = {
-        let frame = state.canvas_set.active_frame_mut();
+        let frame = state.boards.active_frame_mut();
         match frame.try_add_shape_with_id(shape.clone(), state.max_shapes_per_frame) {
             Some(new_id) => {
                 if let Some(index) = frame.find_index(new_id) {

@@ -35,7 +35,7 @@ pub(crate) fn build_section_sets(
     capture_enabled: bool,
 ) -> SectionSets {
     let board_modes_section = (!context_filter || board_enabled).then(|| Section {
-        title: "Board Modes",
+        title: "Boards",
         rows: vec![
             row(
                 binding_or_fallback(bindings, Action::ToggleWhiteboard, NOT_BOUND_LABEL),
@@ -48,6 +48,44 @@ pub(crate) fn build_section_sets(
             row(
                 binding_or_fallback(bindings, Action::ReturnToTransparent, NOT_BOUND_LABEL),
                 action_label(Action::ReturnToTransparent),
+            ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[
+                        Action::Board1,
+                        Action::Board2,
+                        Action::Board3,
+                        Action::Board4,
+                        Action::Board5,
+                        Action::Board6,
+                        Action::Board7,
+                        Action::Board8,
+                        Action::Board9,
+                    ],
+                    "Ctrl+Shift+1..9",
+                ),
+                "Switch board slot",
+            ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::BoardPrev, Action::BoardNext],
+                    "Ctrl+Shift+Left/Right",
+                ),
+                "Previous/next board",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::BoardNew, NOT_BOUND_LABEL),
+                action_label(Action::BoardNew),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::BoardDelete, NOT_BOUND_LABEL),
+                action_label(Action::BoardDelete),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::BoardPicker, NOT_BOUND_LABEL),
+                action_label(Action::BoardPicker),
             ),
         ],
         badges: Vec::new(),

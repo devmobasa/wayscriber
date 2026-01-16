@@ -129,7 +129,7 @@ impl InputState {
     /// Begin delayed undo playback.
     pub fn start_undo_all_delayed(&mut self, delay_ms: u64) {
         const MIN_DELAY_MS: u64 = 50;
-        let count = self.canvas_set.active_frame().undo_stack_len();
+        let count = self.boards.active_frame().undo_stack_len();
         if count == 0 {
             return;
         }
@@ -145,7 +145,7 @@ impl InputState {
     /// Begin delayed redo playback.
     pub fn start_redo_all_delayed(&mut self, delay_ms: u64) {
         const MIN_DELAY_MS: u64 = 50;
-        let count = self.canvas_set.active_frame().redo_stack_len();
+        let count = self.boards.active_frame().redo_stack_len();
         if count == 0 {
             return;
         }
@@ -164,7 +164,7 @@ impl InputState {
         if steps == 0 {
             return;
         }
-        let available = self.canvas_set.active_frame().undo_stack_len();
+        let available = self.boards.active_frame().undo_stack_len();
         let remaining = available.min(steps);
         if remaining == 0 {
             return;
@@ -184,7 +184,7 @@ impl InputState {
         if steps == 0 {
             return;
         }
-        let available = self.canvas_set.active_frame().redo_stack_len();
+        let available = self.boards.active_frame().redo_stack_len();
         let remaining = available.min(steps);
         if remaining == 0 {
             return;
@@ -204,8 +204,8 @@ impl InputState {
         if let Some(mut pending) = self.pending_history.take() {
             while pending.remaining > 0 && now >= pending.next_due {
                 let action = match pending.mode {
-                    HistoryMode::Undo => self.canvas_set.active_frame_mut().undo_last(),
-                    HistoryMode::Redo => self.canvas_set.active_frame_mut().redo_last(),
+                    HistoryMode::Undo => self.boards.active_frame_mut().undo_last(),
+                    HistoryMode::Redo => self.boards.active_frame_mut().redo_last(),
                 };
 
                 if let Some(action) = action {

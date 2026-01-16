@@ -2,10 +2,11 @@ use super::compression::maybe_decompress;
 use super::history::{
     apply_history_policies, enforce_shape_limits, max_history_depth, strip_history_fields,
 };
-use super::types::{BoardPagesSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot};
+use super::types::{
+    BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
+};
 use crate::draw::Frame;
 use crate::draw::frame::MAX_COMPOUND_DEPTH;
-use crate::input::board_mode::BoardMode;
 use crate::session::lock::{lock_shared, unlock};
 use crate::session::options::SessionOptions;
 use anyhow::{Context, Result};
@@ -14,7 +15,6 @@ use serde_json::Value;
 use std::fs::{self, File, OpenOptions};
 use std::io::Read;
 use std::path::Path;
-use std::str::FromStr;
 
 pub struct LoadedSnapshot {
     pub snapshot: SessionSnapshot,
@@ -84,20 +84,14 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
 
     match result {
         Ok(Some(loaded)) => {
-            let boards = (
-                loaded.snapshot.transparent.is_some(),
-                loaded.snapshot.whiteboard.is_some(),
-                loaded.snapshot.blackboard.is_some(),
-            );
             let tool_state = loaded.snapshot.tool_state.is_some();
             info!(
-                "Loaded session from {} (version {}, compressed={}, boards[T/W/B]={}/{}/{}, tool_state={})",
+                "Loaded session from {} (version {}, compressed={}, boards={}, active_board={}, tool_state={})",
                 session_path.display(),
                 loaded.version,
                 loaded.compressed,
-                boards.0,
-                boards.1,
-                boards.2,
+                loaded.snapshot.boards.len(),
+                loaded.snapshot.active_board_id,
                 tool_state
             );
             Ok(Some(loaded.snapshot))
@@ -176,10 +170,10 @@ pub(crate) fn load_snapshot_inner(
         return Ok(None);
     }
 
-    let active_mode =
-        BoardMode::from_str(&session_file.active_mode).unwrap_or(BoardMode::Transparent);
-
     let SessionFile {
+        active_board_id,
+        active_mode,
+        boards,
         transparent,
         whiteboard,
         blackboard,
@@ -210,12 +204,63 @@ pub(crate) fn load_snapshot_inner(
         })
     };
 
-    let mut snapshot = SessionSnapshot {
-        active_mode,
-        transparent: pages_from_file(transparent_pages, transparent_active_page, transparent),
-        whiteboard: pages_from_file(whiteboard_pages, whiteboard_active_page, whiteboard),
-        blackboard: pages_from_file(blackboard_pages, blackboard_active_page, blackboard),
-        tool_state,
+    let mut snapshot = if !boards.is_empty() || active_board_id.is_some() {
+        let mut board_snaps = Vec::new();
+        for BoardFile {
+            id,
+            mut pages,
+            active_page,
+        } in boards
+        {
+            if pages.is_empty() {
+                pages.push(Frame::new());
+            }
+            let active = active_page.min(pages.len().saturating_sub(1));
+            board_snaps.push(BoardSnapshot {
+                id,
+                pages: BoardPagesSnapshot { pages, active },
+            });
+        }
+        let fallback_id = board_snaps
+            .first()
+            .map(|board| board.id.clone())
+            .unwrap_or_else(|| "transparent".to_string());
+        let active_board_id = active_board_id.unwrap_or(fallback_id);
+        SessionSnapshot {
+            active_board_id,
+            boards: board_snaps,
+            tool_state,
+        }
+    } else {
+        let mut board_snaps = Vec::new();
+        if let Some(pages) =
+            pages_from_file(transparent_pages, transparent_active_page, transparent)
+        {
+            board_snaps.push(BoardSnapshot {
+                id: "transparent".to_string(),
+                pages,
+            });
+        }
+        if let Some(pages) = pages_from_file(whiteboard_pages, whiteboard_active_page, whiteboard) {
+            board_snaps.push(BoardSnapshot {
+                id: "whiteboard".to_string(),
+                pages,
+            });
+        }
+        if let Some(pages) = pages_from_file(blackboard_pages, blackboard_active_page, blackboard) {
+            board_snaps.push(BoardSnapshot {
+                id: "blackboard".to_string(),
+                pages,
+            });
+        }
+        let active_board_id = active_mode
+            .unwrap_or_else(|| "transparent".to_string())
+            .to_lowercase();
+        SessionSnapshot {
+            active_board_id,
+            boards: board_snaps,
+            tool_state,
+        }
     };
 
     enforce_shape_limits(&mut snapshot, options.max_shapes_per_frame);
@@ -224,9 +269,9 @@ pub(crate) fn load_snapshot_inner(
     } else {
         Some(0)
     };
-    apply_history_policies(&mut snapshot.transparent, "transparent", disk_history_limit);
-    apply_history_policies(&mut snapshot.whiteboard, "whiteboard", disk_history_limit);
-    apply_history_policies(&mut snapshot.blackboard, "blackboard", disk_history_limit);
+    for board in &mut snapshot.boards {
+        apply_history_policies(&mut board.pages, &board.id, disk_history_limit);
+    }
 
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
         debug!(

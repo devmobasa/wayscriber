@@ -292,8 +292,14 @@ impl ToolbarLayoutSpec {
         Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_HANDLE_SIZE + Self::SIDE_HEADER_HANDLE_GAP
     }
 
+    pub(in crate::backend::wayland::toolbar) fn side_header_board_y(&self) -> f64 {
+        self.side_header_y() + Self::SIDE_HEADER_ROW_HEIGHT + Self::SIDE_HEADER_BOARD_GAP
+    }
+
     pub(in crate::backend::wayland::toolbar) fn side_content_start_y(&self) -> f64 {
-        self.side_header_y() + Self::SIDE_HEADER_ROW_HEIGHT + Self::SIDE_HEADER_BOTTOM_GAP
+        self.side_header_board_y()
+            + Self::SIDE_HEADER_BOARD_ROW_HEIGHT
+            + Self::SIDE_HEADER_BOTTOM_GAP
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_card_x(&self) -> f64 {

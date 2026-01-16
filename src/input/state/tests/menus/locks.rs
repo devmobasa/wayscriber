@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn shape_menu_disables_edit_for_locked_text() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Text {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 15,
         y: 25,
         text: "Locked".to_string(),
@@ -14,8 +14,8 @@ fn shape_menu_disables_edit_for_locked_text() {
         wrap_width: None,
     });
 
-    if let Some(index) = state.canvas_set.active_frame().find_index(shape_id) {
-        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    if let Some(index) = state.boards.active_frame().find_index(shape_id) {
+        state.boards.active_frame_mut().shapes[index].locked = true;
     }
 
     state.set_selection(vec![shape_id]);
@@ -37,7 +37,7 @@ fn shape_menu_disables_edit_for_locked_text() {
 #[test]
 fn shape_menu_disables_delete_when_all_locked() {
     let mut state = create_test_input_state();
-    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 5,
         y: 5,
         w: 10,
@@ -46,7 +46,7 @@ fn shape_menu_disables_delete_when_all_locked() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 25,
         y: 25,
         w: 10,
@@ -56,11 +56,11 @@ fn shape_menu_disables_delete_when_all_locked() {
         thick: state.current_thickness,
     });
 
-    if let Some(index) = state.canvas_set.active_frame().find_index(first) {
-        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    if let Some(index) = state.boards.active_frame().find_index(first) {
+        state.boards.active_frame_mut().shapes[index].locked = true;
     }
-    if let Some(index) = state.canvas_set.active_frame().find_index(second) {
-        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    if let Some(index) = state.boards.active_frame().find_index(second) {
+        state.boards.active_frame_mut().shapes[index].locked = true;
     }
 
     state.set_selection(vec![first, second]);
@@ -82,7 +82,7 @@ fn shape_menu_disables_delete_when_all_locked() {
 #[test]
 fn shape_menu_allows_delete_when_mixed_lock_state() {
     let mut state = create_test_input_state();
-    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let locked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 10,
         w: 10,
@@ -91,7 +91,7 @@ fn shape_menu_allows_delete_when_mixed_lock_state() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let unlocked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 30,
         y: 30,
         w: 10,
@@ -101,8 +101,8 @@ fn shape_menu_allows_delete_when_mixed_lock_state() {
         thick: state.current_thickness,
     });
 
-    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
-        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    if let Some(index) = state.boards.active_frame().find_index(locked_id) {
+        state.boards.active_frame_mut().shapes[index].locked = true;
     }
 
     state.set_selection(vec![locked_id, unlocked_id]);

@@ -1,13 +1,15 @@
-use super::super::super::{menus::ContextMenuState, selection::SelectionState};
+use super::super::super::{
+    board_picker::BoardPickerState, menus::ContextMenuState, selection::SelectionState,
+};
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     TextInputMode, ToolbarDrawerTab,
 };
 use super::structs::InputState;
-use crate::config::{Action, BoardConfig, KeyBinding, PRESET_SLOTS_MAX};
-use crate::draw::{CanvasSet, DirtyTracker, EraserKind, FontDescriptor};
+use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX};
+use crate::draw::{DirtyTracker, EraserKind, FontDescriptor};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
-use crate::input::{modifiers::Modifiers, tool::EraserMode};
+use crate::input::{BoardManager, modifiers::Modifiers, tool::EraserMode};
 use std::collections::HashMap;
 
 impl InputState {
@@ -28,7 +30,7 @@ impl InputState {
     /// * `arrow_angle` - Arrowhead angle in degrees
     /// * `arrow_head_at_end` - Whether arrowhead is drawn at the end
     /// * `show_status_bar` - Whether the status bar starts visible
-    /// * `board_config` - Board mode configuration
+    /// * `boards_config` - Multi-board configuration
     /// * `action_map` - Keybinding action map
     /// * `presenter_mode_config` - Presenter mode behavior configuration
     #[allow(clippy::too_many_arguments)]
@@ -46,7 +48,7 @@ impl InputState {
         arrow_angle: f64,
         arrow_head_at_end: bool,
         show_status_bar: bool,
-        board_config: BoardConfig,
+        boards_config: BoardsConfig,
         action_map: HashMap<KeyBinding, Action>,
         max_shapes_per_frame: usize,
         click_highlight_settings: ClickHighlightSettings,
@@ -61,7 +63,7 @@ impl InputState {
     ) -> Self {
         let clamped_eraser = eraser_size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let mut state = Self {
-            canvas_set: CanvasSet::new(),
+            boards: BoardManager::from_config(boards_config),
             current_color: color,
             current_thickness: thickness,
             eraser_size: clamped_eraser,
@@ -87,6 +89,8 @@ impl InputState {
             help_overlay_search: String::new(),
             help_overlay_scroll: 0.0,
             help_overlay_scroll_max: 0.0,
+            board_picker_search: String::new(),
+            board_picker_search_last_input: None,
             command_palette_open: false,
             command_palette_query: String::new(),
             command_palette_selected: 0,
@@ -110,7 +114,7 @@ impl InputState {
             screen_width: 0,
             screen_height: 0,
             board_previous_color: None,
-            board_config,
+            board_recent: Vec::new(),
             dirty_tracker: DirtyTracker::new(),
             last_provisional_bounds: None,
             last_text_preview_bounds: None,
@@ -125,6 +129,8 @@ impl InputState {
             last_selection_axis: None,
             context_menu_state: ContextMenuState::Hidden,
             context_menu_enabled: true,
+            board_picker_state: BoardPickerState::Hidden,
+            board_picker_drag: None,
             hit_test_cache: HashMap::new(),
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,
@@ -149,6 +155,7 @@ impl InputState {
             text_edit_target: None,
             pending_history: None,
             context_menu_layout: None,
+            board_picker_layout: None,
             spatial_index: None,
             last_pointer_position: (0, 0),
             pending_menu_hover_recalc: false,
@@ -175,6 +182,7 @@ impl InputState {
             active_preset_slot: None,
             preset_feedback: vec![None; PRESET_SLOTS_MAX],
             pending_preset_action: None,
+            pending_board_config: None,
             tour_active: false,
             tour_step: 0,
             compositor_capabilities: CompositorCapabilities::default(),

@@ -83,14 +83,44 @@ pub fn render_zoom_badge(
 }
 
 /// Render a small badge indicating the current page (visible even when status bar is hidden).
+#[allow(clippy::too_many_arguments)]
 pub fn render_page_badge(
     ctx: &cairo::Context,
     _screen_width: u32,
     _screen_height: u32,
+    board_index: usize,
+    board_count: usize,
+    board_name: &str,
     page_index: usize,
     page_count: usize,
 ) {
-    let label = format!("Page {}/{}", page_index + 1, page_count.max(1));
+    let board_label = if !board_name.trim().is_empty() {
+        if board_count > 1 {
+            Some(format!(
+                "Board {}/{}: {}",
+                board_index + 1,
+                board_count.max(1),
+                board_name
+            ))
+        } else {
+            Some(format!("Board: {}", board_name))
+        }
+    } else if board_count > 1 {
+        Some(format!("Board {}/{}", board_index + 1, board_count.max(1)))
+    } else {
+        None
+    };
+    let page_label = if page_count > 1 {
+        Some(format!("Page {}/{}", page_index + 1, page_count.max(1)))
+    } else {
+        None
+    };
+    let label = match (board_label, page_label) {
+        (Some(board), Some(page)) => format!("{board} | {page}"),
+        (Some(board), None) => board,
+        (None, Some(page)) => page,
+        (None, None) => return,
+    };
     let padding = 12.0;
     let radius = 8.0;
     let font_size = 15.0;

@@ -2,8 +2,8 @@ use super::*;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn sync_zoom_board_mode(&mut self) {
-        let board_mode = self.input_state.board_mode();
-        if board_mode != BoardMode::Transparent {
+        let board_is_transparent = self.input_state.board_is_transparent();
+        if !board_is_transparent {
             if self.data.overlay_suppression == OverlaySuppression::Zoom {
                 self.exit_overlay_suppression(OverlaySuppression::Zoom);
             }
@@ -75,7 +75,7 @@ impl WaylandState {
                 }
             }
             ZoomAction::RefreshCapture => {
-                if self.input_state.board_mode() != BoardMode::Transparent {
+                if !self.input_state.board_is_transparent() {
                     info!("Zoom capture refresh ignored in board mode");
                 } else if self.zoom.active
                     && let Err(err) = self.start_zoom_capture(true)
@@ -127,7 +127,7 @@ impl WaylandState {
     ) {
         let screen_w = self.surface.width();
         let screen_h = self.surface.height();
-        let board_zoom = self.input_state.board_mode() != BoardMode::Transparent;
+        let board_zoom = !self.input_state.board_is_transparent();
         if board_zoom {
             let mut cleared = false;
             if self.zoom.abort_capture() {
@@ -189,7 +189,7 @@ impl WaylandState {
         if !force && self.zoom.image().is_some() {
             return Ok(());
         }
-        if self.input_state.board_mode() != BoardMode::Transparent {
+        if !self.input_state.board_is_transparent() {
             debug!("Zoom capture skipped in board mode");
             return Ok(());
         }

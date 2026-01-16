@@ -31,7 +31,7 @@ pub(crate) fn default_capture_clipboard_region() -> Vec<String> {
 }
 
 pub(crate) fn default_capture_file_region() -> Vec<String> {
-    vec!["Ctrl+Shift+6".to_string()]
+    vec!["Ctrl+Alt+6".to_string()]
 }
 
 pub(crate) fn default_open_capture_folder() -> Vec<String> {

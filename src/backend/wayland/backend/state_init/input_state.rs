@@ -29,7 +29,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.arrow.angle_degrees,
         config.arrow.head_at_end,
         config.ui.show_status_bar,
-        config.board.clone(),
+        config.resolved_boards(),
         action_map,
         config.session.max_shapes_per_frame,
         ClickHighlightSettings::from(&config.ui.click_highlight),

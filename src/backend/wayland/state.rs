@@ -50,7 +50,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, ColorSpec, Config},
-    input::{BoardMode, DrawingState, EraserMode, InputState, Tool, ZoomAction},
+    input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
@@ -74,6 +74,7 @@ use super::{
 };
 
 mod activation;
+mod boards;
 mod buffer_damage;
 mod capture;
 mod core;

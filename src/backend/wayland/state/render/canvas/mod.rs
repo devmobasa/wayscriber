@@ -35,12 +35,12 @@ impl WaylandState {
         // Render all completed shapes from active frame
         debug!(
             "Rendering {} completed shapes",
-            self.input_state.canvas_set.active_frame().shapes.len()
+            self.input_state.boards.active_frame().shapes.len()
         );
         let replay_ctx = eraser_ctx.replay_context();
         crate::draw::render_shapes(
             ctx,
-            &self.input_state.canvas_set.active_frame().shapes,
+            &self.input_state.boards.active_frame().shapes,
             Some(&replay_ctx),
         );
 

@@ -100,7 +100,7 @@ impl InputState {
             }
 
             let added = self
-                .canvas_set
+                .boards
                 .active_frame_mut()
                 .try_add_shape(shape, self.max_shapes_per_frame);
             if added {
