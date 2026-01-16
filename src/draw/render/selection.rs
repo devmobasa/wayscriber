@@ -19,6 +19,18 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
         Shape::Freehand { points, thick, .. } => {
             render_freehand_borrowed(ctx, points, glow, thick + outline_width);
         }
+        Shape::FreehandPressure { points, .. } => {
+            // For pressure lines, we render the same variable-width line but with extra thickness
+            // Split points into coords and thickness
+            let coords: Vec<(i32, i32)> = points.iter().map(|&(x, y, _)| (x, y)).collect();
+            let thickness: Vec<f32> = points
+                .iter()
+                .map(|&(_, _, t)| t + outline_width as f32)
+                .collect();
+
+            use super::strokes::render_freehand_pressure_borrowed;
+            render_freehand_pressure_borrowed(ctx, &coords, &thickness, glow);
+        }
         Shape::Line {
             x1,
             y1,

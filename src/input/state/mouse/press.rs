@@ -239,6 +239,7 @@ impl InputState {
                                 start_x: x,
                                 start_y: y,
                                 points: vec![(x, y)],
+                                point_thicknesses: vec![self.current_thickness as f32],
                             };
                             self.last_provisional_bounds = None;
                             self.update_provisional_dirty(x, y);
