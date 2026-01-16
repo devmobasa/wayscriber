@@ -8,6 +8,7 @@ pub(crate) enum TrayAction {
 }
 
 impl TrayAction {
+    #[cfg_attr(not(feature = "tray"), allow(dead_code))]
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             TrayAction::ToggleFreeze => "toggle_freeze",

@@ -73,10 +73,13 @@ pub fn tray_action_file() -> PathBuf {
     runtime_root().join("tray_action")
 }
 
-/// Location to open when showing logs or runtime artifacts.
+/// Location for persistent logs.
 #[allow(dead_code)]
 pub fn log_dir() -> PathBuf {
-    runtime_root().join("logs")
+    data_dir()
+        .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))
+        .join("wayscriber")
+        .join("logs")
 }
 
 /// Location for the daemon single-instance lock.
