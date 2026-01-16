@@ -1,38 +1,8 @@
 use super::primitives::{render_arrow, render_ellipse, render_line, render_rect};
-use super::strokes::{
-    render_eraser_stroke, render_freehand_borrowed, render_marker_stroke_borrowed,
-};
+use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
 use super::text::{render_sticky_note, render_text};
-use super::types::EraserReplayContext;
-use crate::draw::frame::DrawnShape;
 use crate::draw::shape::Shape;
 use crate::draw::shape::{ARROW_LABEL_BACKGROUND, arrow_label_layout};
-
-/// Renders all shapes in a collection to a Cairo context.
-///
-/// Iterates through the shapes slice and renders each one in order.
-/// Shapes are drawn in the order they appear (first shape = bottom layer).
-///
-/// # Arguments
-/// * `ctx` - Cairo drawing context to render to
-/// * `shapes` - Slice of shapes to render
-/// * `eraser_ctx` - Optional eraser replay context (required to render eraser strokes)
-pub fn render_shapes(
-    ctx: &cairo::Context,
-    shapes: &[DrawnShape],
-    eraser_ctx: Option<&EraserReplayContext>,
-) {
-    for drawn in shapes {
-        match &drawn.shape {
-            Shape::EraserStroke { points, brush } => {
-                if let Some(ctx_eraser) = eraser_ctx {
-                    render_eraser_stroke(ctx, points, brush, ctx_eraser);
-                }
-            }
-            other => render_shape(ctx, other),
-        }
-    }
-}
 
 /// Renders a single shape to a Cairo context.
 ///
