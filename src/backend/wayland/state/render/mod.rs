@@ -88,6 +88,7 @@ impl WaylandState {
         };
 
         // Render using Cairo
+        let draw_start = std::time::Instant::now();
         let ctx = cairo::Context::new(&cairo_surface).context("Failed to create Cairo context")?;
 
         // Clear with fully transparent background
@@ -114,6 +115,11 @@ impl WaylandState {
         cairo_surface.flush();
         drop(ctx);
         drop(cairo_surface);
+
+        let draw_duration = draw_start.elapsed();
+        if draw_duration > std::time::Duration::from_millis(2) {
+            debug!("Cairo draw took {:?}", draw_duration);
+        }
 
         // Attach buffer and commit
         debug!("Attaching buffer and committing surface");
