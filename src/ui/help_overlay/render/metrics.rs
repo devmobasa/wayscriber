@@ -76,7 +76,7 @@ impl RenderMetrics {
         let subtitle_bottom_spacing = 28.0 * scale;
         let nav_line_gap = 6.0 * scale;
         let nav_bottom_spacing = 18.0 * scale;
-        let extra_line_gap = 6.0 * scale;
+        let extra_line_gap = 30.0 * scale;
         let extra_line_bottom_spacing = 18.0 * scale;
         let columns_bottom_spacing = 28.0 * scale;
         let max_box_width = screen_width as f64 * 0.92;

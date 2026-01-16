@@ -4,7 +4,7 @@ use crate::draw::Shape;
 use crate::input::events::Key;
 use crate::input::state::{DrawingState, InputState, TextInputMode};
 
-use super::bindings::key_to_action_label;
+use super::bindings::{fallback_unshifted_label, key_to_action_label};
 
 const MAX_TEXT_LENGTH: usize = 10_000;
 
@@ -38,12 +38,20 @@ impl InputState {
 
         if should_check_actions
             && let Some(key_str) = key_to_action_label(key)
-            && let Some(action) = self.find_action(&key_str)
         {
-            // Actions work in text mode.
-            // Exit action has special logic in handle_action.
-            self.handle_action(action);
-            return;
+            if let Some(action) = self.find_action(&key_str) {
+                // Actions work in text mode.
+                // Exit action has special logic in handle_action.
+                self.handle_action(action);
+                return;
+            }
+            if self.modifiers.shift
+                && let Some(fallback) = fallback_unshifted_label(&key_str)
+                && let Some(action) = self.find_action(fallback)
+            {
+                self.handle_action(action);
+                return;
+            }
         }
 
         // Handle Return key for finalizing text input (only plain Return, not Shift+Return)

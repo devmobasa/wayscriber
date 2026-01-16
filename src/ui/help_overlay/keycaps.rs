@@ -8,6 +8,27 @@ pub(crate) struct KeyComboStyle<'a> {
     pub(crate) separator_color: [f64; 4],
 }
 
+fn for_each_key_token(combo: &str, mut emit: impl FnMut(&str)) {
+    if combo.trim().is_empty() {
+        return;
+    }
+
+    let mut last_was_plus = false;
+    for part in combo.split('+') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            if last_was_plus {
+                continue;
+            }
+            last_was_plus = true;
+            emit("+");
+        } else {
+            last_was_plus = false;
+            emit(trimmed);
+        }
+    }
+}
+
 /// Draw a keyboard key with keycap styling
 fn draw_keycap(
     ctx: &cairo::Context,
@@ -90,6 +111,7 @@ pub(crate) fn measure_key_combo(
     let separator_gap = 6.0;
 
     let mut total_width = 0.0;
+    let mut any_key = false;
 
     // Split by " / " for alternate bindings
     let alternatives: Vec<&str> = key_str.split(" / ").collect();
@@ -108,9 +130,8 @@ pub(crate) fn measure_key_combo(
             total_width += separator_gap * 2.0 + slash_ext.width();
         }
 
-        // Split by "+" for key combinations
-        let keys: Vec<&str> = alt.split('+').collect();
-        for (key_idx, key) in keys.iter().enumerate() {
+        let mut key_idx = 0;
+        for_each_key_token(alt, |key| {
             if key_idx > 0 {
                 // Add "+" separator width (matches draw_key_combo)
                 let plus_ext = text_extents_for(
@@ -130,13 +151,19 @@ pub(crate) fn measure_key_combo(
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Bold,
                 font_size,
-                key.trim(),
+                key,
             );
             total_width += ext.width() + keycap_padding_x * 2.0 + key_gap;
-        }
+            key_idx += 1;
+            any_key = true;
+        });
     }
 
-    total_width - key_gap // Remove trailing gap
+    if any_key {
+        total_width - key_gap
+    } else {
+        total_width
+    }
 }
 
 /// Draw a key combination string with keycap styling, returns total width
@@ -150,6 +177,7 @@ pub(crate) fn draw_key_combo(
     let key_gap = 5.0;
     let separator_gap = 6.0;
     let mut cursor_x = x;
+    let mut any_key = false;
 
     let alternatives: Vec<&str> = key_str.split(" / ").collect();
 
@@ -174,9 +202,8 @@ pub(crate) fn draw_key_combo(
             cursor_x += slash_ext.width() + separator_gap;
         }
 
-        // Split by "+" for key combinations
-        let keys: Vec<&str> = alt.split('+').collect();
-        for (key_idx, key) in keys.iter().enumerate() {
+        let mut key_idx = 0;
+        for_each_key_token(alt, |key| {
             if key_idx > 0 {
                 // Draw "+" separator between keys
                 let plus_style = UiTextStyle {
@@ -200,16 +227,22 @@ pub(crate) fn draw_key_combo(
                 ctx,
                 cursor_x,
                 baseline,
-                key.trim(),
+                key,
                 style.font_family,
                 style.font_size,
                 style.text_color,
             );
             cursor_x += cap_width + key_gap;
-        }
+            key_idx += 1;
+            any_key = true;
+        });
     }
 
-    cursor_x - x - key_gap // Return total width minus trailing gap
+    if any_key {
+        cursor_x - x - key_gap
+    } else {
+        0.0
+    }
 }
 
 pub(crate) fn draw_key_combo_highlight(

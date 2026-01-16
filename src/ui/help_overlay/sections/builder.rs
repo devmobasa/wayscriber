@@ -5,8 +5,8 @@ use crate::toolbar_icons;
 use super::super::search::{find_match_range, row_matches};
 use super::super::types::{Badge, Section, row};
 use super::bindings::{
-    HelpOverlayBindings, binding_or_fallback, bindings_or_fallback, joined_labels,
-    primary_or_fallback,
+    HelpOverlayBindings, binding_or_fallback, bindings_compact_or_fallback,
+    bindings_or_fallback, joined_labels, primary_or_fallback,
 };
 
 pub(crate) struct SectionSets {
@@ -50,7 +50,7 @@ pub(crate) fn build_section_sets(
                 action_label(Action::ReturnToTransparent),
             ),
             row(
-                bindings_or_fallback(
+                bindings_compact_or_fallback(
                     bindings,
                     &[
                         Action::Board1,
@@ -208,12 +208,12 @@ pub(crate) fn build_section_sets(
                 action_label(Action::ToggleSelectionProperties),
             ),
             row(
-                bindings_or_fallback(
-                    bindings,
-                    &[Action::IncreaseFontSize, Action::DecreaseFontSize],
-                    NOT_BOUND_LABEL,
-                ),
-                "Adjust font size",
+                binding_or_fallback(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::IncreaseFontSize),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::DecreaseFontSize),
             ),
         ],
         badges: color_badges.clone(),
@@ -232,12 +232,12 @@ pub(crate) fn build_section_sets(
                 action_label(Action::EnterStickyNoteMode),
             ),
             row(
-                bindings_or_fallback(
-                    bindings,
-                    &[Action::IncreaseFontSize, Action::DecreaseFontSize],
-                    NOT_BOUND_LABEL,
-                ),
-                "Adjust font size",
+                binding_or_fallback(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::IncreaseFontSize),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::DecreaseFontSize),
             ),
             row(
                 binding_or_fallback(bindings, Action::ToggleFill, NOT_BOUND_LABEL),
@@ -253,12 +253,12 @@ pub(crate) fn build_section_sets(
         title: "Zoom",
         rows: vec![
             row(
-                bindings_or_fallback(
-                    bindings,
-                    &[Action::ZoomIn, Action::ZoomOut],
-                    NOT_BOUND_LABEL,
-                ),
-                "Zoom in/out",
+                binding_or_fallback(bindings, Action::ZoomIn, NOT_BOUND_LABEL),
+                action_label(Action::ZoomIn),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ZoomOut, NOT_BOUND_LABEL),
+                action_label(Action::ZoomOut),
             ),
             row(
                 binding_or_fallback(bindings, Action::ResetZoom, NOT_BOUND_LABEL),

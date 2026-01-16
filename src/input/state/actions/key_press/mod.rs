@@ -6,7 +6,7 @@ use crate::config::Action;
 use crate::input::events::Key;
 
 use super::super::{DrawingState, InputState};
-use bindings::key_to_action_label;
+use bindings::{fallback_unshifted_label, key_to_action_label};
 
 impl InputState {
     /// Processes a key press event.
@@ -107,6 +107,13 @@ impl InputState {
 
         // Look up action based on keybinding
         if let Some(action) = self.find_action(&key_str) {
+            self.handle_action(action);
+            return;
+        }
+        if self.modifiers.shift
+            && let Some(fallback) = fallback_unshifted_label(&key_str)
+            && let Some(action) = self.find_action(fallback)
+        {
             self.handle_action(action);
             return;
         }
