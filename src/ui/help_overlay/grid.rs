@@ -2,6 +2,7 @@ use super::super::primitives::{draw_rounded_rect, text_extents_for};
 use super::keycaps::{KeyComboStyle, draw_key_combo, draw_key_combo_highlight, measure_key_combo};
 use super::layout::GridLayout;
 use super::search::{HighlightStyle, draw_highlight, find_match_range};
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 pub(crate) struct GridStyle<'a> {
     pub(crate) help_font_family: &'a str,
@@ -52,6 +53,25 @@ pub(crate) fn draw_sections_grid(
     if grid_view_height <= 0.0 {
         return;
     }
+
+    let heading_style = UiTextStyle {
+        family: style.help_font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: style.heading_font_size,
+    };
+    let body_style = UiTextStyle {
+        family: style.help_font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: style.body_font_size,
+    };
+    let badge_style = UiTextStyle {
+        family: style.help_font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: style.badge_font_size,
+    };
 
     let _ = ctx.save();
     ctx.rectangle(inner_x, grid_start_y, inner_width, grid_view_height);
@@ -107,12 +127,6 @@ pub(crate) fn draw_sections_grid(
             let mut section_y = row_y + style.section_card_padding;
             let desc_x = content_x + measured.key_column_width + style.key_desc_gap;
 
-            ctx.select_font_face(
-                style.help_font_family,
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Bold,
-            );
-            ctx.set_font_size(style.heading_font_size);
             ctx.set_source_rgba(
                 colors.accent[0],
                 colors.accent[1],
@@ -135,8 +149,14 @@ pub(crate) fn draw_sections_grid(
                 heading_text_x += style.heading_icon_size + style.heading_icon_gap;
             }
             let heading_baseline = section_y + style.heading_font_size;
-            ctx.move_to(heading_text_x, heading_baseline);
-            let _ = ctx.show_text(section.title);
+            draw_text_baseline(
+                ctx,
+                heading_style,
+                section.title,
+                heading_text_x,
+                heading_baseline,
+                None,
+            );
             section_y += style.heading_line_height;
 
             if !section.rows.is_empty() {
@@ -191,20 +211,13 @@ pub(crate) fn draw_sections_grid(
                     );
 
                     // Draw action description
-                    ctx.select_font_face(
-                        style.help_font_family,
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Normal,
-                    );
-                    ctx.set_font_size(style.body_font_size);
                     ctx.set_source_rgba(
                         colors.description[0],
                         colors.description[1],
                         colors.description[2],
                         colors.description[3],
                     );
-                    ctx.move_to(desc_x, baseline);
-                    let _ = ctx.show_text(row_data.action);
+                    draw_text_baseline(ctx, body_style, row_data.action, desc_x, baseline, None);
 
                     section_y += style.row_line_height;
                 }
@@ -252,18 +265,18 @@ pub(crate) fn draw_sections_grid(
                     ctx.set_line_width(1.0);
                     let _ = ctx.stroke();
 
-                    ctx.select_font_face(
-                        style.help_font_family,
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Bold,
-                    );
-                    ctx.set_font_size(style.badge_font_size);
                     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
                     let text_x = badge_x + style.badge_padding_x;
                     let text_y =
                         section_y + (style.badge_height - badge_metrics.1) / 2.0 - badge_metrics.2;
-                    ctx.move_to(text_x, text_y);
-                    let _ = ctx.show_text(badge.label.as_str());
+                    draw_text_baseline(
+                        ctx,
+                        badge_style,
+                        badge.label.as_str(),
+                        text_x,
+                        text_y,
+                        None,
+                    );
 
                     badge_x += badge_width;
                 }

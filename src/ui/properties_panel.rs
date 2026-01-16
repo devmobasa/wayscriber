@@ -1,4 +1,5 @@
 use crate::input::InputState;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 pub fn render_properties_panel(
     ctx: &cairo::Context,
@@ -18,6 +19,18 @@ pub fn render_properties_panel(
     let title_font_size = 15.0;
     let body_font_size = 13.0;
     let line_height = 18.0;
+    let title_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: title_font_size,
+    };
+    let body_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: body_font_size,
+    };
 
     let _ = ctx.save();
     ctx.set_source_rgba(0.08, 0.11, 0.17, 0.92);
@@ -39,15 +52,19 @@ pub fn render_properties_panel(
     );
     let _ = ctx.stroke();
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(title_font_size);
     if panel.multiple_selection {
         ctx.set_source_rgba(0.88, 0.91, 0.97, 1.0);
     } else {
         ctx.set_source_rgba(0.93, 0.95, 0.99, 1.0);
     }
-    ctx.move_to(layout.label_x, layout.title_baseline_y);
-    let _ = ctx.show_text(&panel.title);
+    draw_text_baseline(
+        ctx,
+        title_style,
+        &panel.title,
+        layout.label_x,
+        layout.title_baseline_y,
+        None,
+    );
 
     ctx.set_source_rgba(0.35, 0.4, 0.5, 0.9);
     ctx.move_to(layout.label_x, layout.title_baseline_y + 4.0);
@@ -57,13 +74,10 @@ pub fn render_properties_panel(
     );
     let _ = ctx.stroke();
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(body_font_size);
     ctx.set_source_rgba(0.86, 0.89, 0.95, 1.0);
     let mut text_y = layout.info_start_y;
     for line in &panel.lines {
-        ctx.move_to(layout.label_x, text_y);
-        let _ = ctx.show_text(line);
+        draw_text_baseline(ctx, body_style, line, layout.label_x, text_y, None);
         text_y += line_height;
     }
 
@@ -90,12 +104,24 @@ pub fn render_properties_panel(
                 (0.9, 0.92, 0.97, 1.0)
             };
             ctx.set_source_rgba(text_r, text_g, text_b, text_a);
-            ctx.move_to(layout.label_x, row_center + body_font_size * 0.35);
-            let _ = ctx.show_text(&entry.label);
+            draw_text_baseline(
+                ctx,
+                body_style,
+                &entry.label,
+                layout.label_x,
+                row_center + body_font_size * 0.35,
+                None,
+            );
 
             ctx.set_source_rgba(0.7, 0.73, 0.78, text_a);
-            ctx.move_to(layout.value_x, row_center + body_font_size * 0.35);
-            let _ = ctx.show_text(&entry.value);
+            draw_text_baseline(
+                ctx,
+                body_style,
+                &entry.value,
+                layout.value_x,
+                row_center + body_font_size * 0.35,
+                None,
+            );
         }
     }
 

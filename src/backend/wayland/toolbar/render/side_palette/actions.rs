@@ -9,7 +9,9 @@ use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::bindings::action_for_event;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use crate::ui_text::UiTextStyle;
 
+use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
 
 pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -23,6 +25,12 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     let content_width = layout.content_width;
     let section_gap = layout.section_gap;
     let use_icons = snapshot.use_icons;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     let show_drawer_view = snapshot.drawer_open && snapshot.drawer_tab == ToolbarDrawerTab::View;
     let show_advanced = snapshot.show_actions_advanced && show_drawer_view;
@@ -40,6 +48,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     draw_group_card(ctx, card_x, *y, card_w, actions_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
         "Actions",
@@ -286,7 +295,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
                 draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
-                draw_label_center(ctx, item.x, item.y, item.w, item.h, label);
+                draw_label_center(ctx, label_style, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {
                         rect: (item.x, item.y, item.w, item.h),
@@ -324,7 +333,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
                 draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
-                draw_label_center(ctx, item.x, item.y, item.w, item.h, label);
+                draw_label_center(ctx, label_style, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {
                         rect: (item.x, item.y, item.w, item.h),
@@ -364,7 +373,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
                 draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
-                draw_label_center(ctx, item.x, item.y, item.w, item.h, label);
+                draw_label_center(ctx, label_style, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {
                         rect: (item.x, item.y, item.w, item.h),

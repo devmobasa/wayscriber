@@ -8,6 +8,7 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::ToolbarDrawerTab;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextStyle;
 
 pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -19,6 +20,12 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let card_w = layout.card_w;
     let content_width = layout.content_width;
     let section_gap = layout.section_gap;
+    let label_style = UiTextStyle {
+        family: super::super::widgets::constants::FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: super::super::widgets::constants::FONT_SIZE_LABEL,
+    };
 
     if !snapshot.show_step_section
         || !snapshot.drawer_open
@@ -45,6 +52,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     draw_group_card(ctx, card_x, *y, card_w, custom_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
         "Step Undo/Redo",
@@ -64,6 +72,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         custom_toggle_h,
         snapshot.custom_section_enabled,
         step_hover,
+        label_style,
         "Step controls",
     );
     hits.push(HitRegion {
@@ -85,6 +94,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         custom_toggle_h,
         snapshot.show_delay_sliders,
         delay_hover,
+        label_style,
         "Delay sliders",
     );
     hits.push(HitRegion {

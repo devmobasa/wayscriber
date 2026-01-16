@@ -1,6 +1,7 @@
 //! Tour overlay rendering.
 
 use crate::input::state::{InputState, TourStep};
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 /// Render the guided tour overlay.
 pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
@@ -53,43 +54,46 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     let content_x = dialog_x + dialog_padding;
     let mut y = dialog_y + dialog_padding;
+    let step_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 14.0,
+    };
+    let title_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: 24.0,
+    };
+    let desc_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 16.0,
+    };
+    let nav_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 13.0,
+    };
 
     // Step counter
     ctx.set_source_rgba(0.6, 0.6, 0.7, 1.0);
-    ctx.select_font_face(
-        "sans-serif",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    );
-    ctx.set_font_size(14.0);
     let step_text = format!("Step {} of {}", input_state.tour_step + 1, TourStep::COUNT);
-    ctx.move_to(content_x, y + 12.0);
-    let _ = ctx.show_text(&step_text);
+    draw_text_baseline(ctx, step_style, &step_text, content_x, y + 12.0, None);
     y += 24.0;
 
     // Title
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    ctx.select_font_face(
-        "sans-serif",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    ctx.set_font_size(24.0);
-    ctx.move_to(content_x, y + 24.0);
-    let _ = ctx.show_text(step.title());
+    draw_text_baseline(ctx, title_style, step.title(), content_x, y + 24.0, None);
     y += title_height + 16.0;
 
     // Description
     ctx.set_source_rgba(0.85, 0.85, 0.9, 1.0);
-    ctx.select_font_face(
-        "sans-serif",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    );
-    ctx.set_font_size(16.0);
     for line in step.description().lines() {
-        ctx.move_to(content_x, y + 18.0);
-        let _ = ctx.show_text(line);
+        draw_text_baseline(ctx, desc_style, line, content_x, y + 18.0, None);
         y += desc_line_height;
     }
     y += 24.0;
@@ -110,9 +114,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     // Navigation hint
     ctx.set_source_rgba(0.5, 0.5, 0.6, 1.0);
-    ctx.set_font_size(13.0);
-    ctx.move_to(content_x, y + 13.0);
-    let _ = ctx.show_text(step.nav_hint());
+    draw_text_baseline(ctx, nav_style, step.nav_hint(), content_x, y + 13.0, None);
 }
 
 fn rounded_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {

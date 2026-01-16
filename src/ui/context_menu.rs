@@ -1,5 +1,6 @@
 use crate::input::InputState;
 use crate::input::state::ContextMenuState;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 /// Renders a floating context menu for shape or canvas actions.
 pub fn render_context_menu(
@@ -28,8 +29,12 @@ pub fn render_context_menu(
     };
 
     let _ = ctx.save();
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(layout.font_size);
+    let text_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: layout.font_size,
+    };
 
     // Background and border
     ctx.set_source_rgba(0.1, 0.13, 0.17, 0.95);
@@ -70,11 +75,14 @@ pub fn render_context_menu(
         };
 
         ctx.set_source_rgba(text_r, text_g, text_b, text_a);
-        ctx.move_to(
+        draw_text_baseline(
+            ctx,
+            text_style,
+            &entry.label,
             layout.origin_x + layout.padding_x,
             row_center + layout.font_size * 0.35,
+            None,
         );
-        let _ = ctx.show_text(&entry.label);
 
         if let Some(shortcut) = &entry.shortcut {
             ctx.set_source_rgba(0.7, 0.73, 0.78, text_a);
@@ -82,8 +90,14 @@ pub fn render_context_menu(
                 - layout.padding_x
                 - layout.arrow_width
                 - layout.shortcut_width;
-            ctx.move_to(shortcut_x, row_center + layout.font_size * 0.35);
-            let _ = ctx.show_text(shortcut);
+            draw_text_baseline(
+                ctx,
+                text_style,
+                shortcut,
+                shortcut_x,
+                row_center + layout.font_size * 0.35,
+                None,
+            );
         }
 
         if entry.has_submenu {

@@ -4,7 +4,9 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::{UiTextStyle, text_layout};
 
+use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
 
 pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
@@ -16,6 +18,12 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let x = layout.x;
     let y = ToolbarLayoutSpec::SIDE_TOP_PADDING;
     let width = layout.width;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     let btn_size = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
     let handle_w = ToolbarLayoutSpec::SIDE_HEADER_HANDLE_SIZE;
@@ -47,6 +55,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         icons_h,
         snapshot.use_icons,
         icons_hover,
+        label_style,
         "Icons",
     );
     hits.push(HitRegion {
@@ -70,7 +79,15 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
             ("Mode: F", crate::config::ToolbarLayoutMode::Simple)
         }
     };
-    draw_label_center(ctx, mode_x, header_y, mode_w, icons_h, mode_label);
+    draw_label_center(
+        ctx,
+        label_style,
+        mode_x,
+        header_y,
+        mode_w,
+        icons_h,
+        mode_label,
+    );
     let mode_tooltip = "Mode: Simple/Full".to_string();
     hits.push(HitRegion {
         rect: (mode_x, header_y, mode_w, icons_h),
@@ -160,13 +177,15 @@ fn draw_onboarding_hint(ctx: &cairo::Context, more_x: f64, more_y: f64, btn_size
     let padding_v = 6.0;
     let arrow_size = 6.0;
     let corner_radius = 4.0;
-
-    ctx.set_font_size(12.0);
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    let Ok(extents) = ctx.text_extents(hint_text) else {
-        return;
+    let hint_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 12.0,
     };
 
+    let layout = text_layout(ctx, hint_style, hint_text, None);
+    let extents = layout.ink_extents();
     let box_w = extents.width() + padding_h * 2.0;
     let box_h = extents.height() + padding_v * 2.0;
 
@@ -213,8 +232,7 @@ fn draw_onboarding_hint(ctx: &cairo::Context, more_x: f64, more_y: f64, btn_size
 
     // Draw text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    let text_x = box_x + padding_h;
-    let text_y = box_y + padding_v + extents.height();
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(hint_text);
+    let text_x = box_x + padding_h - extents.x_bearing();
+    let text_y = box_y + padding_v - extents.y_bearing();
+    layout.show_at_baseline(ctx, text_x, text_y);
 }

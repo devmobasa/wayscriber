@@ -5,7 +5,9 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextStyle;
 
+use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
 
 pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -> ColorSectionInfo {
@@ -18,6 +20,12 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     let card_w = layout.card_w;
     let content_width = layout.content_width;
     let section_gap = layout.section_gap;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     let basic_colors: &[(Color, &str)] = &[
         (RED, "Red"),
@@ -67,6 +75,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     draw_group_card(ctx, card_x, *y, card_w, colors_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
         "Colors",

@@ -1,4 +1,5 @@
-use super::super::primitives::{draw_rounded_rect, fallback_text_extents};
+use super::super::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
 
 pub(crate) struct KeyComboStyle<'a> {
     pub(crate) font_family: &'a str,
@@ -21,16 +22,14 @@ fn draw_keycap(
     let padding_y = 4.0;
     let radius = 5.0;
     let shadow_offset = 2.0;
-
-    ctx.select_font_face(
-        font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    ctx.set_font_size(font_size);
-    let extents = ctx
-        .text_extents(text)
-        .unwrap_or_else(|_| fallback_text_extents(font_size, text));
+    let key_style = UiTextStyle {
+        family: font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: font_size,
+    };
+    let layout = text_layout(ctx, key_style, text, None);
+    let extents = layout.ink_extents();
 
     let cap_width = extents.width() + padding_x * 2.0;
     let cap_height = font_size + padding_y * 2.0;
@@ -73,15 +72,8 @@ fn draw_keycap(
     let _ = ctx.stroke();
 
     // Text
-    ctx.select_font_face(
-        font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    ctx.set_font_size(font_size);
     ctx.set_source_rgba(text_color[0], text_color[1], text_color[2], text_color[3]);
-    ctx.move_to(x + padding_x, y);
-    let _ = ctx.show_text(text);
+    layout.show_at_baseline(ctx, x + padding_x, y);
 
     cap_width
 }
@@ -99,28 +91,20 @@ pub(crate) fn measure_key_combo(
 
     let mut total_width = 0.0;
 
-    ctx.select_font_face(
-        font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    ctx.set_font_size(font_size);
-
     // Split by " / " for alternate bindings
     let alternatives: Vec<&str> = key_str.split(" / ").collect();
 
     for (alt_idx, alt) in alternatives.iter().enumerate() {
         if alt_idx > 0 {
             // Add separator "/" width
-            ctx.select_font_face(
+            let slash_ext = text_extents_for(
+                ctx,
                 font_family,
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Normal,
+                font_size,
+                "/",
             );
-            ctx.set_font_size(font_size);
-            let slash_ext = ctx
-                .text_extents("/")
-                .unwrap_or_else(|_| fallback_text_extents(font_size, "/"));
             total_width += separator_gap * 2.0 + slash_ext.width();
         }
 
@@ -129,27 +113,25 @@ pub(crate) fn measure_key_combo(
         for (key_idx, key) in keys.iter().enumerate() {
             if key_idx > 0 {
                 // Add "+" separator width (matches draw_key_combo)
-                ctx.select_font_face(
+                let plus_ext = text_extents_for(
+                    ctx,
                     font_family,
                     cairo::FontSlant::Normal,
                     cairo::FontWeight::Bold,
+                    font_size * 0.9,
+                    "+",
                 );
-                ctx.set_font_size(font_size * 0.9);
-                let plus_ext = ctx
-                    .text_extents("+")
-                    .unwrap_or_else(|_| fallback_text_extents(font_size, "+"));
                 total_width += 6.0 + plus_ext.width();
             }
 
-            ctx.select_font_face(
+            let ext = text_extents_for(
+                ctx,
                 font_family,
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Bold,
+                font_size,
+                key.trim(),
             );
-            ctx.set_font_size(font_size);
-            let ext = ctx
-                .text_extents(key.trim())
-                .unwrap_or_else(|_| fallback_text_extents(font_size, key.trim()));
             total_width += ext.width() + keycap_padding_x * 2.0 + key_gap;
         }
     }
@@ -176,23 +158,19 @@ pub(crate) fn draw_key_combo(
             // Draw separator "/" between alternatives
             let slash_y = baseline;
             cursor_x += separator_gap;
-            ctx.select_font_face(
-                style.font_family,
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Normal,
-            );
-            ctx.set_font_size(style.font_size);
+            let slash_style = UiTextStyle {
+                family: style.font_family,
+                slant: cairo::FontSlant::Normal,
+                weight: cairo::FontWeight::Normal,
+                size: style.font_size,
+            };
             ctx.set_source_rgba(
                 style.separator_color[0],
                 style.separator_color[1],
                 style.separator_color[2],
                 0.85,
             );
-            ctx.move_to(cursor_x, slash_y);
-            let _ = ctx.show_text("/");
-            let slash_ext = ctx
-                .text_extents("/")
-                .unwrap_or_else(|_| fallback_text_extents(style.font_size, "/"));
+            let slash_ext = draw_text_baseline(ctx, slash_style, "/", cursor_x, slash_y, None);
             cursor_x += slash_ext.width() + separator_gap;
         }
 
@@ -201,12 +179,12 @@ pub(crate) fn draw_key_combo(
         for (key_idx, key) in keys.iter().enumerate() {
             if key_idx > 0 {
                 // Draw "+" separator between keys
-                ctx.select_font_face(
-                    style.font_family,
-                    cairo::FontSlant::Normal,
-                    cairo::FontWeight::Bold,
-                );
-                ctx.set_font_size(style.font_size * 0.9);
+                let plus_style = UiTextStyle {
+                    family: style.font_family,
+                    slant: cairo::FontSlant::Normal,
+                    weight: cairo::FontWeight::Bold,
+                    size: style.font_size * 0.9,
+                };
                 ctx.set_source_rgba(
                     style.separator_color[0],
                     style.separator_color[1],
@@ -214,11 +192,7 @@ pub(crate) fn draw_key_combo(
                     0.85,
                 );
                 cursor_x += 3.0;
-                ctx.move_to(cursor_x, baseline);
-                let _ = ctx.show_text("+");
-                let plus_ext = ctx
-                    .text_extents("+")
-                    .unwrap_or_else(|_| fallback_text_extents(style.font_size, "+"));
+                let plus_ext = draw_text_baseline(ctx, plus_style, "+", cursor_x, baseline, None);
                 cursor_x += plus_ext.width() + 3.0;
             }
 

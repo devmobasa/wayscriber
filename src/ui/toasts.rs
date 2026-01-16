@@ -2,7 +2,8 @@ use crate::input::InputState;
 use crate::input::state::{PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UiToastKind};
 use std::time::Instant;
 
-use super::primitives::{draw_rounded_rect, text_extents_for};
+use super::primitives::draw_rounded_rect;
+use crate::ui_text::{UiTextStyle, text_layout};
 
 /// Border width for blocked action feedback edge flash.
 const BLOCKED_FEEDBACK_BORDER: f64 = 6.0;
@@ -61,14 +62,14 @@ pub fn render_preset_toast(
     let padding_y = 9.0;
     let radius = 10.0;
 
-    let extents = text_extents_for(
-        ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        font_size,
-        &label,
-    );
+    let text_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: font_size,
+    };
+    let layout = text_layout(ctx, text_style, &label, None);
+    let extents = layout.ink_extents();
     let width = extents.width() + padding_x * 2.0;
     let height = extents.height() + padding_y * 2.0;
     let x = (screen_width as f64 - width) / 2.0;
@@ -94,8 +95,7 @@ pub fn render_preset_toast(
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95 * fade);
     let text_x = x + (width - extents.width()) / 2.0 - extents.x_bearing();
     let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(&label);
+    layout.show_at_baseline(ctx, text_x, text_y);
 }
 
 /// Render a transient UI toast (warnings/errors/info).
@@ -130,16 +130,16 @@ pub fn render_ui_toast(
         .unwrap_or_default();
     let full_label = format!("{}{}", label, action_suffix);
 
-    let extents = text_extents_for(
-        ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        font_size,
-        &full_label,
-    );
-    let width = extents.width() + padding_x * 2.0;
-    let height = extents.height() + padding_y * 2.0;
+    let text_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: font_size,
+    };
+    let full_layout = text_layout(ctx, text_style, &full_label, None);
+    let full_extents = full_layout.ink_extents();
+    let width = full_extents.width() + padding_x * 2.0;
+    let height = full_extents.height() + padding_y * 2.0;
     let x = (screen_width as f64 - width) / 2.0;
     let center_y = screen_height as f64 * UI_TOAST_Y_RATIO;
     let y = center_y - height / 2.0;
@@ -156,32 +156,25 @@ pub fn render_ui_toast(
     let _ = ctx.fill();
 
     // Draw main label
-    let label_extents = text_extents_for(
-        ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        font_size,
-        label,
-    );
-    let text_x = x + (width - extents.width()) / 2.0 - extents.x_bearing();
-    let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
+    let label_layout = text_layout(ctx, text_style, label, None);
+    let label_extents = label_layout.ink_extents();
+    let text_x = x + (width - full_extents.width()) / 2.0 - full_extents.x_bearing();
+    let text_y = y + (height - full_extents.height()) / 2.0 - full_extents.y_bearing();
 
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55 * fade);
-    ctx.move_to(text_x + 1.0, text_y + 1.0);
-    let _ = ctx.show_text(label);
+    label_layout.show_at_baseline(ctx, text_x + 1.0, text_y + 1.0);
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0 * fade);
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(label);
+    label_layout.show_at_baseline(ctx, text_x, text_y);
 
     // Draw action suffix in slightly dimmer color if present
     if toast.action.is_some() {
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7 * fade);
-        ctx.move_to(
+        let suffix_layout = text_layout(ctx, text_style, &action_suffix, None);
+        suffix_layout.show_at_baseline(
+            ctx,
             text_x + label_extents.width() + label_extents.x_bearing(),
             text_y,
         );
-        let _ = ctx.show_text(&action_suffix);
     }
 
     Some((x, y, width, height))

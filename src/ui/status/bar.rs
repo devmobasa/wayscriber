@@ -4,6 +4,7 @@ use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardMode, DrawingState, InputState, TextInputMode, Tool};
 use crate::label_format::format_binding_labels;
 use crate::ui::toolbar::bindings::action_for_tool;
+use crate::ui_text::{UiTextStyle, text_layout};
 
 // ============================================================================
 // UI Layout Constants (not configurable)
@@ -101,19 +102,18 @@ pub fn render_status_bar(
     );
 
     log::debug!("Status bar font_size from config: {}", style.font_size);
-    ctx.set_font_size(style.font_size);
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-
-    let extents = match ctx.text_extents(&status_text) {
-        Ok(ext) => ext,
-        Err(e) => {
-            log::warn!(
-                "Failed to measure status bar text: {}, skipping status bar",
-                e
-            );
-            return;
-        }
-    };
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: style.font_size,
+        },
+        &status_text,
+        None,
+    );
+    let extents = layout.ink_extents();
     let text_width = extents.width();
     let text_height = extents.height();
 
@@ -155,8 +155,7 @@ pub fn render_status_bar(
 
     let [r, g, b, a] = text_color;
     ctx.set_source_rgba(r, g, b, a);
-    ctx.move_to(x, y);
-    let _ = ctx.show_text(&status_text);
+    layout.show_at_baseline(ctx, x, y);
 }
 
 fn tool_display_name(input_state: &InputState, tool: Tool) -> &'static str {

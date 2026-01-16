@@ -2,7 +2,7 @@ mod shape_picker;
 mod tool_row;
 mod utility_row;
 
-use super::{ICON_TOGGLE_FONT_SIZE, TOP_LABEL_FONT_SIZE, TopStripLayout};
+use super::{ICON_TOGGLE_FONT_SIZE, TopStripLayout};
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
@@ -10,7 +10,9 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::{Action, action_label, action_short_label};
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextStyle;
 
+use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_SMALL};
 use super::super::widgets::*;
 use shape_picker::draw_shape_picker_row;
 use tool_row::draw_tool_row;
@@ -34,6 +36,18 @@ pub(super) fn draw_icon_strip(
     let y = layout.spec.top_button_y(layout.height);
     let icon_size = ToolbarLayoutSpec::TOP_ICON_SIZE;
     let fill_h = ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT;
+    let mini_label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: FONT_SIZE_SMALL,
+    };
+    let icon_toggle_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: ICON_TOGGLE_FONT_SIZE,
+    };
 
     let tool_row = draw_tool_row(
         layout,
@@ -64,6 +78,7 @@ pub(super) fn draw_icon_strip(
             fill_h,
             snapshot.fill_enabled,
             fill_hover,
+            mini_label_style,
             action_short_label(Action::ToggleFill),
         );
         layout.hits.push(HitRegion {
@@ -85,9 +100,17 @@ pub(super) fn draw_icon_strip(
     let icons_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_size))
         .unwrap_or(false);
-    ctx.set_font_size(ICON_TOGGLE_FONT_SIZE);
-    draw_checkbox(ctx, x, y, icons_w, btn_size, true, icons_hover, "Icons");
-    ctx.set_font_size(TOP_LABEL_FONT_SIZE);
+    draw_checkbox(
+        ctx,
+        x,
+        y,
+        icons_w,
+        btn_size,
+        true,
+        icons_hover,
+        icon_toggle_style,
+        "Icons",
+    );
     layout.hits.push(HitRegion {
         rect: (x, y, icons_w, btn_size),
         event: ToolbarEvent::ToggleIconMode(false),

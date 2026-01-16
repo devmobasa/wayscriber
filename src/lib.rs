@@ -14,6 +14,7 @@ pub mod session;
 pub mod time_utils;
 pub mod toolbar_icons;
 pub mod ui;
+pub(crate) mod ui_text;
 pub mod util;
 
 pub use config::Config;

@@ -1,5 +1,6 @@
 use super::super::primitives::text_extents_for;
 use super::types::Row;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 const ELLIPSIS: &str = "\u{2026}";
 
@@ -90,19 +91,15 @@ pub(crate) fn draw_segmented_text(
     segments: &[(String, [f64; 4])],
 ) {
     let mut cursor_x = x;
+    let style = UiTextStyle {
+        family: font_family,
+        slant: cairo::FontSlant::Normal,
+        weight,
+        size: font_size,
+    };
     for (text, color) in segments {
         ctx.set_source_rgba(color[0], color[1], color[2], color[3]);
-        ctx.move_to(cursor_x, baseline);
-        let _ = ctx.show_text(text);
-
-        let extents = text_extents_for(
-            ctx,
-            font_family,
-            cairo::FontSlant::Normal,
-            weight,
-            font_size,
-            text,
-        );
+        let extents = draw_text_baseline(ctx, style, text, cursor_x, baseline, None);
         cursor_x += extents.width();
     }
 }

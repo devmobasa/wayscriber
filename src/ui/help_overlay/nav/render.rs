@@ -1,4 +1,5 @@
 use crate::ui::primitives::draw_rounded_rect;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::super::search::{draw_segmented_text, ellipsize_to_fit};
 use super::NavState;
@@ -22,12 +23,12 @@ pub(crate) fn draw_nav(
     nav: &NavState,
     style: &NavDrawStyle<'_>,
 ) -> f64 {
-    ctx.select_font_face(
-        style.font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    );
-    ctx.set_font_size(nav.nav_font_size);
+    let nav_style = UiTextStyle {
+        family: style.font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: nav.nav_font_size,
+    };
     ctx.set_source_rgba(
         style.subtitle_color[0],
         style.subtitle_color[1],
@@ -35,8 +36,14 @@ pub(crate) fn draw_nav(
         style.subtitle_color[3],
     );
     let nav_baseline = cursor_y + nav.nav_font_size;
-    ctx.move_to(inner_x, nav_baseline);
-    let _ = ctx.show_text(&nav.nav_text_primary);
+    draw_text_baseline(
+        ctx,
+        nav_style,
+        &nav.nav_text_primary,
+        inner_x,
+        nav_baseline,
+        None,
+    );
     cursor_y += nav.nav_font_size + style.nav_line_gap;
 
     let nav_secondary_baseline = cursor_y + nav.nav_font_size;
@@ -111,8 +118,14 @@ pub(crate) fn draw_nav(
             style.search_color[2],
             style.search_color[3],
         );
-        ctx.move_to(inner_x + search_padding_x, extra_line_baseline);
-        let _ = ctx.show_text(&display_text);
+        draw_text_baseline(
+            ctx,
+            nav_style,
+            &display_text,
+            inner_x + search_padding_x,
+            extra_line_baseline,
+            None,
+        );
     } else {
         // Show placeholder text
         ctx.set_source_rgba(
@@ -121,8 +134,14 @@ pub(crate) fn draw_nav(
             style.search_color[2],
             0.5,
         );
-        ctx.move_to(inner_x + search_padding_x, extra_line_baseline);
-        let _ = ctx.show_text("Type to search... (Esc clears)");
+        draw_text_baseline(
+            ctx,
+            nav_style,
+            "Type to search... (Esc clears)",
+            inner_x + search_padding_x,
+            extra_line_baseline,
+            None,
+        );
     }
     cursor_y += search_box_height + style.extra_line_bottom_spacing;
 

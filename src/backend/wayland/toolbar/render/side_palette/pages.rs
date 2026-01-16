@@ -9,7 +9,9 @@ use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::bindings::action_for_event;
+use crate::ui_text::UiTextStyle;
 
+use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
 
 pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -23,6 +25,12 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let content_width = layout.content_width;
     let section_gap = layout.section_gap;
     let use_icons = snapshot.use_icons;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     if !snapshot.show_pages_section
         || !snapshot.drawer_open
@@ -35,6 +43,7 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     draw_group_card(ctx, card_x, *y, card_w, pages_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
         "Pages",
@@ -107,7 +116,7 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
             let icon_y = by + (btn_h - icon_size) / 2.0;
             icon_fn(ctx, icon_x, icon_y, icon_size);
         } else {
-            draw_label_center(ctx, bx, by, btn_w, btn_h, label);
+            draw_label_center(ctx, label_style, bx, by, btn_w, btn_h, label);
         }
         if *enabled {
             hits.push(HitRegion {

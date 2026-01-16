@@ -1,5 +1,7 @@
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::ui_text::{UiTextStyle, text_layout};
 
+use super::super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::super::widgets::draw_section_label;
 use super::SidePaletteLayout;
 
@@ -13,9 +15,16 @@ pub(super) fn draw_presets_header(
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
     let x = layout.x;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     draw_section_label(
         ctx,
+        label_style,
         x,
         section_y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
         "Presets",
@@ -37,16 +46,17 @@ pub(super) fn draw_presets_header(
         }
     };
     if let Some(hint) = apply_hint {
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(10.0);
-        if let Ok(ext) = ctx.text_extents(&hint) {
-            let hint_x = card_x + card_w - ext.width() - 8.0 - ext.x_bearing();
-            let hint_y = section_y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y;
-            ctx.set_source_rgba(0.7, 0.7, 0.75, 0.8);
-            ctx.move_to(hint_x, hint_y);
-            let _ = ctx.show_text(&hint);
-        }
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-        ctx.set_font_size(13.0);
+        let hint_style = UiTextStyle {
+            family: FONT_FAMILY_DEFAULT,
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: 10.0,
+        };
+        let layout = text_layout(ctx, hint_style, &hint, None);
+        let ext = layout.ink_extents();
+        let hint_x = card_x + card_w - ext.width() - 8.0 - ext.x_bearing();
+        let hint_y = section_y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y;
+        ctx.set_source_rgba(0.7, 0.7, 0.75, 0.8);
+        layout.show_at_baseline(ctx, hint_x, hint_y);
     }
 }

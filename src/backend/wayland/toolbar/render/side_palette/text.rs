@@ -1,5 +1,6 @@
 use super::super::widgets::constants::{
-    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, SPACING_STD, set_color,
+    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
+    FONT_SIZE_LABEL, SPACING_STD, set_color,
 };
 use super::super::widgets::*;
 use super::SidePaletteLayout;
@@ -9,6 +10,7 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::draw::FontDescriptor;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextStyle;
 
 pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -21,6 +23,12 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
     let content_width = layout.content_width;
     let section_gap = layout.section_gap;
     let width = layout.width;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     let show_text_controls =
         snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
@@ -38,6 +46,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
     draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
         "Text size",
@@ -124,6 +133,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
     let fs_text = format!("{:.0}pt", snapshot.font_size);
     draw_label_center(
         ctx,
+        label_style,
         width - x - value_w,
         fs_slider_row_y,
         value_w,
@@ -137,6 +147,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
     draw_group_card(ctx, card_x, *y, card_w, font_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
         "Font",
@@ -161,7 +172,15 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
             .map(|(hx, hy)| point_in_rect(hx, hy, fx, fy, font_btn_w, font_btn_h))
             .unwrap_or(false);
         draw_button(ctx, fx, fy, font_btn_w, font_btn_h, is_active, font_hover);
-        draw_label_left(ctx, fx + 8.0, fy, font_btn_w, font_btn_h, &font.family);
+        draw_label_left(
+            ctx,
+            label_style,
+            fx + 8.0,
+            fy,
+            font_btn_w,
+            font_btn_h,
+            &font.family,
+        );
         hits.push(HitRegion {
             rect: (fx, fy, font_btn_w, font_btn_h),
             event: ToolbarEvent::SetFont(font.clone()),
