@@ -7,7 +7,9 @@ use crate::config::{Action, action_label, action_short_label};
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
+use crate::ui_text::UiTextStyle;
 
+use super::super::widgets::constants::FONT_FAMILY_DEFAULT;
 use super::super::widgets::*;
 
 pub(super) fn draw_text_strip(
@@ -25,6 +27,18 @@ pub(super) fn draw_text_strip(
 
     let (btn_w, btn_h) = layout.spec.top_button_size();
     let y = layout.spec.top_button_y(layout.height);
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: TOP_LABEL_FONT_SIZE,
+    };
+    let icon_toggle_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: ICON_TOGGLE_FONT_SIZE,
+    };
 
     let tool_buttons: &[Tool] = if is_simple {
         &[Tool::Select, Tool::Pen, Tool::Marker, Tool::Eraser]
@@ -49,7 +63,7 @@ pub(super) fn draw_text_strip(
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_w, btn_h, is_active, is_hover);
-        draw_label_center(ctx, x, y, btn_w, btn_h, label);
+        draw_label_center(ctx, label_style, x, y, btn_w, btn_h, label);
         let tooltip = layout.tool_tooltip(*tool, tooltip_label);
         layout.hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
@@ -66,7 +80,7 @@ pub(super) fn draw_text_strip(
             .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_w, btn_h))
             .unwrap_or(false);
         draw_button(ctx, x, y, btn_w, btn_h, shapes_active, shapes_hover);
-        draw_label_center(ctx, x, y, btn_w, btn_h, "Shapes");
+        draw_label_center(ctx, label_style, x, y, btn_w, btn_h, "Shapes");
         layout.hits.push(HitRegion {
             rect: (x, y, btn_w, btn_h),
             event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
@@ -90,6 +104,7 @@ pub(super) fn draw_text_strip(
             btn_h,
             snapshot.fill_enabled,
             fill_hover,
+            label_style,
             fill_label,
         );
         layout.hits.push(HitRegion {
@@ -112,6 +127,7 @@ pub(super) fn draw_text_strip(
     draw_button(ctx, x, y, btn_w, btn_h, snapshot.text_active, is_hover);
     draw_label_center(
         ctx,
+        label_style,
         x,
         y,
         btn_w,
@@ -137,6 +153,7 @@ pub(super) fn draw_text_strip(
     draw_button(ctx, x, y, btn_w, btn_h, snapshot.note_active, note_hover);
     draw_label_center(
         ctx,
+        label_style,
         x,
         y,
         btn_w,
@@ -163,6 +180,7 @@ pub(super) fn draw_text_strip(
         draw_button(ctx, x, y, btn_w, btn_h, false, clear_hover);
         draw_label_center(
             ctx,
+            label_style,
             x,
             y,
             btn_w,
@@ -187,9 +205,17 @@ pub(super) fn draw_text_strip(
     let icons_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_h))
         .unwrap_or(false);
-    ctx.set_font_size(ICON_TOGGLE_FONT_SIZE);
-    draw_checkbox(ctx, x, y, icons_w, btn_h, false, icons_hover, "Icons");
-    ctx.set_font_size(TOP_LABEL_FONT_SIZE);
+    draw_checkbox(
+        ctx,
+        x,
+        y,
+        icons_w,
+        btn_h,
+        false,
+        icons_hover,
+        icon_toggle_style,
+        "Icons",
+    );
     layout.hits.push(HitRegion {
         rect: (x, y, icons_w, btn_h),
         event: ToolbarEvent::ToggleIconMode(true),
@@ -209,7 +235,7 @@ pub(super) fn draw_text_strip(
                 .map(|(hx, hy)| point_in_rect(hx, hy, shape_x, shape_y, btn_w, btn_h))
                 .unwrap_or(false);
             draw_button(ctx, shape_x, shape_y, btn_w, btn_h, is_active, is_hover);
-            draw_label_center(ctx, shape_x, shape_y, btn_w, btn_h, label);
+            draw_label_center(ctx, label_style, shape_x, shape_y, btn_w, btn_h, label);
             let tooltip = layout.tool_tooltip(*tool, tooltip_label);
             layout.hits.push(HitRegion {
                 rect: (shape_x, shape_y, btn_w, btn_h),

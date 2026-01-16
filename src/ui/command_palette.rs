@@ -1,6 +1,7 @@
 //! Command palette UI rendering.
 
 use crate::input::InputState;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::primitives::{draw_rounded_rect, text_extents_for};
 
@@ -62,18 +63,40 @@ pub fn render_command_palette(
 
     // Input text
     let font_size = 14.0;
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(font_size);
+    let input_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: font_size,
+    };
+    let desc_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 12.0,
+    };
 
     let text_y = cursor_y + INPUT_HEIGHT / 2.0 + font_size / 3.0;
     if input_state.command_palette_query.is_empty() {
         ctx.set_source_rgba(0.5, 0.5, 0.55, 0.7);
-        ctx.move_to(inner_x + 10.0, text_y);
-        let _ = ctx.show_text("Type to search commands...");
+        draw_text_baseline(
+            ctx,
+            input_style,
+            "Type to search commands...",
+            inner_x + 10.0,
+            text_y,
+            None,
+        );
     } else {
         ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-        ctx.move_to(inner_x + 10.0, text_y);
-        let _ = ctx.show_text(&input_state.command_palette_query);
+        draw_text_baseline(
+            ctx,
+            input_style,
+            &input_state.command_palette_query,
+            inner_x + 10.0,
+            text_y,
+            None,
+        );
     }
 
     cursor_y += INPUT_HEIGHT + 8.0;
@@ -100,8 +123,7 @@ pub fn render_command_palette(
         // Command label
         let label_y = item_y + ITEM_HEIGHT / 2.0 + font_size / 3.0;
         ctx.set_source_rgba(1.0, 1.0, 1.0, if is_selected { 1.0 } else { 0.85 });
-        ctx.move_to(inner_x + 10.0, label_y);
-        let _ = ctx.show_text(cmd.label);
+        draw_text_baseline(ctx, input_style, cmd.label, inner_x + 10.0, label_y, None);
 
         // Description (dimmer)
         let label_extents = text_extents_for(
@@ -114,19 +136,19 @@ pub fn render_command_palette(
         );
         let desc_x = inner_x + 10.0 + label_extents.width() + 12.0;
         ctx.set_source_rgba(0.6, 0.6, 0.65, if is_selected { 0.9 } else { 0.6 });
-        ctx.set_font_size(12.0);
-        ctx.move_to(desc_x, label_y);
-        let _ = ctx.show_text(cmd.description);
-        ctx.set_font_size(font_size);
+        draw_text_baseline(ctx, desc_style, cmd.description, desc_x, label_y, None);
     }
 
     // Show "no results" if empty
     if filtered.is_empty() && !input_state.command_palette_query.is_empty() {
         ctx.set_source_rgba(0.6, 0.6, 0.65, 0.8);
-        ctx.move_to(
+        draw_text_baseline(
+            ctx,
+            input_style,
+            "No matching commands",
             inner_x + 10.0,
             cursor_y + ITEM_HEIGHT / 2.0 + font_size / 3.0,
+            None,
         );
-        let _ = ctx.show_text("No matching commands");
     }
 }

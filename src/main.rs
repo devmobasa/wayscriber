@@ -17,6 +17,7 @@ mod time_utils;
 mod toolbar_icons;
 mod tray_action;
 mod ui;
+pub(crate) mod ui_text;
 mod util;
 
 use std::env;

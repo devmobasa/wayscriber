@@ -1,10 +1,11 @@
 use super::constants::{
     COLOR_CHECKBOX_CHECKED, COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_HOVER,
     COLOR_MINI_CHECKBOX_DEFAULT, COLOR_MINI_CHECKBOX_HOVER, COLOR_TEXT_SECONDARY,
-    COLOR_TEXT_TERTIARY, FONT_FAMILY_DEFAULT, FONT_SIZE_SMALL, LINE_WIDTH_STD, LINE_WIDTH_THIN,
-    RADIUS_SM, RADIUS_STD, SPACING_LG, SPACING_SM, SPACING_XS, set_color,
+    COLOR_TEXT_TERTIARY, LINE_WIDTH_STD, LINE_WIDTH_THIN, RADIUS_SM, RADIUS_STD, SPACING_LG,
+    SPACING_SM, SPACING_XS, set_color,
 };
 use super::{draw_label_left, draw_round_rect};
+use crate::ui_text::{UiTextStyle, text_layout};
 
 #[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_checkbox(
@@ -15,6 +16,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_checkbox(
     h: f64,
     checked: bool,
     hover: bool,
+    label_style: UiTextStyle<'_>,
     label: &str,
 ) {
     set_color(
@@ -43,7 +45,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_checkbox(
     }
 
     let label_x = box_x + box_size + SPACING_LG;
-    draw_label_left(ctx, label_x, y, w - (label_x - x), h, label);
+    draw_label_left(ctx, label_style, label_x, y, w - (label_x - x), h, label);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -55,6 +57,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_mini_checkbox(
     h: f64,
     checked: bool,
     hover: bool,
+    label_style: UiTextStyle<'_>,
     label: &str,
 ) {
     let color = if checked {
@@ -83,17 +86,10 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_mini_checkbox(
         let _ = ctx.stroke();
     }
 
-    ctx.select_font_face(
-        FONT_FAMILY_DEFAULT,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    );
-    ctx.set_font_size(FONT_SIZE_SMALL);
-    if let Ok(ext) = ctx.text_extents(label) {
-        let label_x = x + box_size + SPACING_LG + (w - box_size - 12.0 - ext.width()) / 2.0;
-        let label_y = y + (h + ext.height()) / 2.0;
-        set_color(ctx, COLOR_TEXT_SECONDARY);
-        ctx.move_to(label_x, label_y);
-        let _ = ctx.show_text(label);
-    }
+    let layout = text_layout(ctx, label_style, label, None);
+    let ext = layout.ink_extents();
+    let label_x = x + box_size + SPACING_LG + (w - box_size - 12.0 - ext.width()) / 2.0;
+    let label_y = y + (h + ext.height()) / 2.0;
+    set_color(ctx, COLOR_TEXT_SECONDARY);
+    layout.show_at_baseline(ctx, label_x, label_y);
 }

@@ -5,6 +5,7 @@ use super::constants::{
 };
 use super::draw_round_rect;
 use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::ui_text::{UiTextStyle, text_layout};
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
     ctx: &cairo::Context,
@@ -19,36 +20,20 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
         if hit.contains(hx, hy)
             && let Some(text) = &hit.tooltip
         {
-            ctx.select_font_face(
-                FONT_FAMILY_DEFAULT,
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Normal,
-            );
-            ctx.set_font_size(FONT_SIZE_TOOLTIP);
-
+            let style = UiTextStyle {
+                family: FONT_FAMILY_DEFAULT,
+                slant: cairo::FontSlant::Normal,
+                weight: cairo::FontWeight::Normal,
+                size: FONT_SIZE_TOOLTIP,
+            };
             let pad = SPACING_STD;
             let max_tooltip_w = (panel_width - SPACING_LG).max(40.0);
             let max_text_w = (max_tooltip_w - pad * 2.0).max(20.0);
-            let lines = wrap_tooltip_lines(ctx, text, max_text_w);
-            let mut max_line_w: f64 = 0.0;
-            for line in &lines {
-                if let Ok(ext) = ctx.text_extents(line) {
-                    max_line_w = max_line_w.max(ext.width() + ext.x_bearing().abs());
-                }
-            }
-            let tooltip_w = (max_line_w + pad * 2.0).min(max_tooltip_w);
-            let font_extents = ctx.font_extents().ok();
-            let line_height = font_extents
-                .as_ref()
-                .map(|ext| ext.height())
-                .unwrap_or(FONT_SIZE_TOOLTIP)
-                .max(FONT_SIZE_TOOLTIP);
-            let line_gap = SPACING_XS;
-            let text_h = if lines.is_empty() {
-                0.0
-            } else {
-                line_height * lines.len() as f64 + line_gap * (lines.len().saturating_sub(1)) as f64
-            };
+            let layout = text_layout(ctx, style, text, Some(max_text_w));
+            let ink_extents = layout.ink_extents();
+            let text_w = ink_extents.width().max(1.0);
+            let text_h = ink_extents.height().max(1.0);
+            let tooltip_w = (text_w + pad * 2.0).min(max_tooltip_w);
             let tooltip_h = text_h + pad * 2.0;
 
             let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
@@ -88,84 +73,11 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
             draw_round_rect(ctx, tooltip_x, tooltip_y, tooltip_w, tooltip_h, RADIUS_STD);
             let _ = ctx.stroke();
 
-            let ascent = font_extents
-                .as_ref()
-                .map(|ext| ext.ascent())
-                .unwrap_or(line_height * 0.8);
-            for (idx, line) in lines.iter().enumerate() {
-                let line_y = tooltip_y + pad + ascent + idx as f64 * (line_height + line_gap);
-                if let Ok(ext) = ctx.text_extents(line) {
-                    set_color(ctx, COLOR_TEXT_PRIMARY);
-                    ctx.move_to(tooltip_x + pad - ext.x_bearing(), line_y);
-                    let _ = ctx.show_text(line);
-                }
-            }
+            let text_x = tooltip_x + pad - ink_extents.x_bearing();
+            let text_y = tooltip_y + pad - ink_extents.y_bearing();
+            set_color(ctx, COLOR_TEXT_PRIMARY);
+            layout.show_at_baseline(ctx, text_x, text_y);
             break;
         }
     }
-}
-
-pub(in crate::backend::wayland::toolbar::render) fn wrap_tooltip_lines(
-    ctx: &cairo::Context,
-    text: &str,
-    max_width: f64,
-) -> Vec<String> {
-    if max_width <= 0.0 {
-        return vec![text.to_string()];
-    }
-
-    let mut lines = Vec::new();
-    let mut current = String::new();
-
-    for word in text.split_whitespace() {
-        if let Ok(ext) = ctx.text_extents(word)
-            && ext.width() > max_width
-        {
-            if !current.is_empty() {
-                lines.push(std::mem::take(&mut current));
-            }
-            let mut part = String::new();
-            for ch in word.chars() {
-                let candidate = format!("{part}{ch}");
-                let width = ctx
-                    .text_extents(&candidate)
-                    .map(|ext| ext.width())
-                    .unwrap_or(0.0);
-                if width <= max_width || part.is_empty() {
-                    part = candidate;
-                } else {
-                    lines.push(std::mem::take(&mut part));
-                    part = ch.to_string();
-                }
-            }
-            if !part.is_empty() {
-                lines.push(part);
-            }
-            continue;
-        }
-
-        let candidate = if current.is_empty() {
-            word.to_string()
-        } else {
-            format!("{current} {word}")
-        };
-        let width = ctx
-            .text_extents(&candidate)
-            .map(|ext| ext.width())
-            .unwrap_or(0.0);
-        if width <= max_width || current.is_empty() {
-            current = candidate;
-        } else {
-            lines.push(std::mem::take(&mut current));
-            current = word.to_string();
-        }
-    }
-
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    if lines.is_empty() {
-        lines.push(text.to_string());
-    }
-    lines
 }

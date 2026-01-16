@@ -17,7 +17,6 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::ToolbarSnapshot;
 
-use super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::widgets::{draw_panel_background, draw_tooltip};
 
 pub(super) struct SidePaletteLayout<'a> {
@@ -80,13 +79,6 @@ pub fn render_side_palette(
     hover: Option<(f64, f64)>,
 ) -> Result<()> {
     draw_panel_background(ctx, width, height);
-
-    ctx.select_font_face(
-        FONT_FAMILY_DEFAULT,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    ctx.set_font_size(FONT_SIZE_LABEL);
 
     let mut layout = SidePaletteLayout::new(ctx, width, snapshot, hits, hover);
 

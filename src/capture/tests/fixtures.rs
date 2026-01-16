@@ -70,6 +70,7 @@ impl CaptureClipboard for MockClipboard {
 }
 
 pub(super) fn create_placeholder_image() -> Vec<u8> {
+    use crate::ui_text::{UiTextStyle, draw_text_baseline};
     use cairo::{Context, FontSlant, FontWeight, Format, ImageSurface};
 
     let surface = ImageSurface::create(Format::ARgb32, 100, 100).unwrap();
@@ -79,10 +80,19 @@ pub(super) fn create_placeholder_image() -> Vec<u8> {
     ctx.paint().unwrap();
 
     ctx.set_source_rgb(1.0, 1.0, 1.0);
-    ctx.select_font_face("Sans", FontSlant::Normal, FontWeight::Bold);
-    ctx.set_font_size(20.0);
-    ctx.move_to(10.0, 50.0);
-    ctx.show_text("TEST").unwrap();
+    draw_text_baseline(
+        &ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: FontSlant::Normal,
+            weight: FontWeight::Bold,
+            size: 20.0,
+        },
+        "TEST",
+        10.0,
+        50.0,
+        None,
+    );
 
     let mut buffer = Vec::new();
     surface.write_to_png(&mut buffer).unwrap();

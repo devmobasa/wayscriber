@@ -3,7 +3,9 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use crate::ui_text::UiTextStyle;
 
+use super::super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::super::widgets::*;
 
 pub(super) fn draw_custom_rows(
@@ -15,6 +17,12 @@ pub(super) fn draw_custom_rows(
     snapshot: &ToolbarSnapshot,
     hover: Option<(f64, f64)>,
 ) {
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
     let mut context = CustomRowContext {
         ctx,
         hits,
@@ -22,6 +30,7 @@ pub(super) fn draw_custom_rows(
         card_w,
         snapshot,
         hover,
+        label_style,
     };
     let undo_row_h = context.draw_row(y, true);
     let redo_y = y + undo_row_h + 8.0;
@@ -35,6 +44,7 @@ struct CustomRowContext<'a> {
     card_w: f64,
     snapshot: &'a ToolbarSnapshot,
     hover: Option<(f64, f64)>,
+    label_style: UiTextStyle<'a>,
 }
 
 impl<'a> CustomRowContext<'a> {
@@ -81,7 +91,15 @@ impl<'a> CustomRowContext<'a> {
             }
         } else {
             draw_button(self.ctx, self.x, y, btn_w, row_h, false, btn_hover);
-            draw_label_left(self.ctx, self.x + 10.0, y, btn_w - 20.0, row_h, label);
+            draw_label_left(
+                self.ctx,
+                self.label_style,
+                self.x + 10.0,
+                y,
+                btn_w - 20.0,
+                row_h,
+                label,
+            );
         }
         self.hits.push(HitRegion {
             rect: (self.x, y, btn_w, row_h),
@@ -129,6 +147,7 @@ impl<'a> CustomRowContext<'a> {
         let steps_val_x = steps_x + steps_btn_w + 4.0;
         draw_label_center(
             self.ctx,
+            self.label_style,
             steps_val_x,
             y,
             54.0,

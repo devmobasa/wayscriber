@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use super::types::{ContextMenuLayout, ContextMenuState};
+use crate::ui_text::{UiTextStyle, text_layout};
 use crate::util::Rect;
 use cairo::Context as CairoContext;
 
@@ -41,18 +42,20 @@ impl InputState {
         const ARROW_WIDTH: f64 = 10.0;
 
         let _ = ctx.save();
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(FONT_SIZE);
+        let text_style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: FONT_SIZE,
+        };
 
         let mut max_label_width: f64 = 0.0;
         let mut max_shortcut_width: f64 = 0.0;
         for entry in &entries {
-            if let Ok(extents) = ctx.text_extents(&entry.label) {
-                max_label_width = max_label_width.max(extents.width());
-            }
-            if let Some(shortcut) = &entry.shortcut
-                && let Ok(extents) = ctx.text_extents(shortcut)
-            {
+            let extents = text_layout(ctx, text_style, &entry.label, None).ink_extents();
+            max_label_width = max_label_width.max(extents.width());
+            if let Some(shortcut) = &entry.shortcut {
+                let extents = text_layout(ctx, text_style, shortcut, None).ink_extents();
                 max_shortcut_width = max_shortcut_width.max(extents.width());
             }
         }

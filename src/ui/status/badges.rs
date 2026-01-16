@@ -1,4 +1,5 @@
-use super::super::primitives::{draw_rounded_rect, fallback_text_extents};
+use super::super::primitives::draw_rounded_rect;
+use crate::ui_text::{UiTextStyle, text_layout};
 
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
@@ -6,13 +7,18 @@ pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_heig
     let padding = 12.0;
     let radius = 8.0;
     let font_size = 16.0;
-
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(font_size);
-
-    let extents = ctx
-        .text_extents(label)
-        .unwrap_or_else(|_| fallback_text_extents(font_size, label));
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        label,
+        None,
+    );
+    let extents = layout.ink_extents();
 
     let width = extents.width() + padding * 1.4;
     let height = extents.height() + padding;
@@ -27,8 +33,7 @@ pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_heig
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
-    let _ = ctx.show_text(label);
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
 
 /// Render a small badge indicating zoom mode (visible even when status bar is hidden).
@@ -48,13 +53,18 @@ pub fn render_zoom_badge(
     let padding = 12.0;
     let radius = 8.0;
     let font_size = 15.0;
-
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(font_size);
-
-    let extents = ctx
-        .text_extents(&label)
-        .unwrap_or_else(|_| fallback_text_extents(font_size, &label));
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        &label,
+        None,
+    );
+    let extents = layout.ink_extents();
 
     let width = extents.width() + padding * 1.4;
     let height = extents.height() + padding;
@@ -69,8 +79,7 @@ pub fn render_zoom_badge(
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
-    let _ = ctx.show_text(&label);
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
 
 /// Render a small badge indicating the current page (visible even when status bar is hidden).
@@ -85,13 +94,18 @@ pub fn render_page_badge(
     let padding = 12.0;
     let radius = 8.0;
     let font_size = 15.0;
-
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(font_size);
-
-    let extents = ctx
-        .text_extents(&label)
-        .unwrap_or_else(|_| fallback_text_extents(font_size, &label));
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        &label,
+        None,
+    );
+    let extents = layout.ink_extents();
 
     let width = extents.width() + padding * 1.4;
     let height = extents.height() + padding;
@@ -106,6 +120,5 @@ pub fn render_page_badge(
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
-    let _ = ctx.show_text(&label);
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
