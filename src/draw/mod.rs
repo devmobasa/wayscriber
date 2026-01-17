@@ -21,13 +21,13 @@ pub use color::Color;
 pub use dirty::DirtyTracker;
 pub use font::FontDescriptor;
 pub use frame::{DrawnShape, Frame, ShapeId};
-pub use render::{
-    EraserReplayContext, render_board_background, render_click_highlight,
-    render_freehand_borrowed, render_marker_stroke_borrowed, render_selection_halo, render_shape,
-    render_sticky_note, render_text,
-};
 #[allow(unused_imports)]
 pub(crate) use render::render_eraser_stroke;
+pub use render::{
+    EraserReplayContext, render_board_background, render_click_highlight, render_freehand_borrowed,
+    render_marker_stroke_borrowed, render_selection_halo, render_shape, render_sticky_note,
+    render_text,
+};
 #[allow(unused_imports)]
 pub use shape::{ArrowLabel, EraserBrush, EraserKind, Shape, invalidate_text_cache};
 
