@@ -33,7 +33,7 @@ pub fn render_freehand_borrowed(
     let _ = ctx.stroke();
 }
 
-#[allow(dead_code)] // Used by Wayland rendering in the binary crate.
+#[allow(dead_code)] // Used by the Wayland backend; the lib crate doesn't compile backend modules.
 pub(crate) fn render_eraser_stroke(
     ctx: &cairo::Context,
     points: &[(i32, i32)],

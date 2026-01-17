@@ -16,7 +16,7 @@ impl WaylandState {
         phys_height: u32,
         render_ui: bool,
         now: Instant,
-        damage: &[crate::util::Rect],
+        damage_world: &[crate::util::Rect],
     ) -> Result<()> {
         let zoom_transform_active = self.zoom.active;
         let eraser_ctx = self.render_canvas_background(ctx, scale, phys_width, phys_height)?;
@@ -45,28 +45,35 @@ impl WaylandState {
         // Cairo's internal clipping is efficient for rasterization, but sending
         // thousands of shapes to Cairo still incurs overhead for geometry processing.
         // A simple bounding box check here eliminates that overhead.
+        let render_drawn_shape = |drawn_shape: &crate::draw::DrawnShape| match &drawn_shape.shape {
+            crate::draw::Shape::EraserStroke { points, brush } => {
+                crate::draw::render_eraser_stroke(ctx, points, brush, &replay_ctx);
+            }
+            other => {
+                crate::draw::render_shape(ctx, other);
+            }
+        };
 
         // Compute bounding box of all damage regions for fast rejection
-        // (Union of all dirty rects)
-        let damage_bounds = damage
+        // (Union of all dirty rects). These bounds are in world coordinates.
+        let damage_bounds = damage_world
             .iter()
-            .fold(None, |acc: Option<crate::util::Rect>, r| {
-                match acc {
-                    None => Some(*r),
-                    Some(u) => {
-                        // Manual union since Rect doesn't have it exposed directly in this scope maybe?
-                        // Let's implement min/max logic
-                        let min_x = u.x.min(r.x);
-                        let min_y = u.y.min(r.y);
-                        let max_x = (u.x + u.width).max(r.x + r.width);
-                        let max_y = (u.y + u.height).max(r.y + r.height);
-                        Some(crate::util::Rect {
-                            x: min_x,
-                            y: min_y,
-                            width: max_x - min_x,
-                            height: max_y - min_y,
-                        })
-                    }
+            .fold(None, |acc: Option<crate::util::Rect>, r| match acc {
+                None => Some(*r),
+                Some(u) => {
+                    // Manual union to avoid extra allocations.
+                    let min_x = u.x.min(r.x);
+                    let min_y = u.y.min(r.y);
+                    let max_x = u.x.saturating_add(u.width).max(r.x.saturating_add(r.width));
+                    let max_y =
+                        u.y.saturating_add(u.height)
+                            .max(r.y.saturating_add(r.height));
+                    Some(crate::util::Rect {
+                        x: min_x,
+                        y: min_y,
+                        width: max_x - min_x,
+                        height: max_y - min_y,
+                    })
                 }
             });
 
@@ -74,59 +81,56 @@ impl WaylandState {
             // Expand bounds slightly to account for line width/glow that might extend outside
             // the logical shape bounds (though Shape::bounding_box should theoretically cover it,
             // safety margin is good).
-            // Clamp to logical surface bounds to avoid negative coords or overflow.
             let margin = 2;
-            let logical_width = width as i32;
-            let logical_height = height as i32;
-            let safe_x = (bounds.x - margin).max(0);
-            let safe_y = (bounds.y - margin).max(0);
-            let safe_bounds = crate::util::Rect {
-                x: safe_x,
-                y: safe_y,
-                width: (bounds.width + 2 * margin).min(logical_width - safe_x),
-                height: (bounds.height + 2 * margin).min(logical_height - safe_y),
+            let safe_x = bounds.x.saturating_sub(margin);
+            let safe_y = bounds.y.saturating_sub(margin);
+            let safe_width = bounds.width.saturating_add(margin * 2);
+            let safe_height = bounds.height.saturating_add(margin * 2);
+            let safe_bounds = if zoom_transform_active {
+                crate::util::Rect::new(safe_x, safe_y, safe_width, safe_height)
+            } else {
+                // Clamp to logical surface bounds to avoid negative coords or overflow.
+                let logical_width = width as i32;
+                let logical_height = height as i32;
+                let clamped_x = safe_x.max(0);
+                let clamped_y = safe_y.max(0);
+                let max_width = logical_width.saturating_sub(clamped_x);
+                let max_height = logical_height.saturating_sub(clamped_y);
+                crate::util::Rect::new(
+                    clamped_x,
+                    clamped_y,
+                    safe_width.min(max_width),
+                    safe_height.min(max_height),
+                )
             };
 
-            for drawn_shape in shapes {
-                // If shape has no bounding box (e.g. empty freehand), skip it.
-                // If it has one, check intersection.
-                if let Some(bbox) = drawn_shape.shape.bounding_box() {
-                    // Check intersection:
-                    // !(bbox.left > safe.right || bbox.right < safe.left || ...)
-                    let bbox_right = bbox.x + bbox.width;
-                    let bbox_bottom = bbox.y + bbox.height;
-                    let safe_right = safe_bounds.x + safe_bounds.width;
-                    let safe_bottom = safe_bounds.y + safe_bounds.height;
+            if let Some(safe_bounds) = safe_bounds {
+                for drawn_shape in shapes {
+                    // If shape has no bounding box (e.g. empty freehand), skip it.
+                    // If it has one, check intersection.
+                    if let Some(bbox) = drawn_shape.shape.bounding_box() {
+                        // Check intersection:
+                        // !(bbox.left > safe.right || bbox.right < safe.left || ...)
+                        let bbox_right = bbox.x.saturating_add(bbox.width);
+                        let bbox_bottom = bbox.y.saturating_add(bbox.height);
+                        let safe_right = safe_bounds.x.saturating_add(safe_bounds.width);
+                        let safe_bottom = safe_bounds.y.saturating_add(safe_bounds.height);
 
-                    let intersects = !(bbox.x >= safe_right
-                        || bbox_right <= safe_bounds.x
-                        || bbox.y >= safe_bottom
-                        || bbox_bottom <= safe_bounds.y);
+                        let intersects = !(bbox.x >= safe_right
+                            || bbox_right <= safe_bounds.x
+                            || bbox.y >= safe_bottom
+                            || bbox_bottom <= safe_bounds.y);
 
-                    if intersects {
-                        // We must handle eraser strokes specially here, just like render_shapes does,
-                        // because render_shape() ignores them.
-                        match &drawn_shape.shape {
-                            crate::draw::Shape::EraserStroke { points, brush } => {
-                                crate::draw::render_eraser_stroke(ctx, points, brush, &replay_ctx);
-                            }
-                            other => {
-                                crate::draw::render_shape(ctx, other);
-                            }
+                        if intersects {
+                            render_drawn_shape(drawn_shape);
                         }
                     }
                 }
             }
         } else {
+            // If we don't have damage bounds, render everything to stay correct.
             for drawn_shape in shapes {
-                match &drawn_shape.shape {
-                    crate::draw::Shape::EraserStroke { points, brush } => {
-                        crate::draw::render_eraser_stroke(ctx, points, brush, &replay_ctx);
-                    }
-                    other => {
-                        crate::draw::render_shape(ctx, other);
-                    }
-                }
+                render_drawn_shape(drawn_shape);
             }
         }
 
