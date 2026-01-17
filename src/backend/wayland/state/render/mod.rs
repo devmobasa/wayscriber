@@ -99,11 +99,11 @@ impl WaylandState {
             pool_gen,
             pool_size,
         );
-        if logical_damage.is_empty() {
-            if let Some(full) = crate::util::Rect::new(0, 0, logical_width, logical_height) {
-                logical_damage = vec![full];
-                self.buffer_damage.mark_all_full();
-            }
+        if logical_damage.is_empty()
+            && let Some(full) = crate::util::Rect::new(0, 0, logical_width, logical_height)
+        {
+            logical_damage = vec![full];
+            self.buffer_damage.mark_all_full();
         }
         let damage_screen = logical_damage;
         let damage_world = if self.zoom.active {
