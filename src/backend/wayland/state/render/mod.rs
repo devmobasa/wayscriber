@@ -46,8 +46,10 @@ impl WaylandState {
         let input_damage = self.input_state.take_dirty_regions();
         let logical_width = width.min(i32::MAX as u32) as i32;
         let logical_height = height.min(i32::MAX as u32) as i32;
-        let force_full_damage =
-            self.zoom.active || ui_toast_active || preset_feedback_active || blocked_feedback_active;
+        let force_full_damage = self.zoom.active
+            || ui_toast_active
+            || preset_feedback_active
+            || blocked_feedback_active;
         if force_full_damage {
             // Zoom uses a world transform and some UI effects don't emit damage; full damage avoids
             // mismatched coordinate spaces and empty damage frames.

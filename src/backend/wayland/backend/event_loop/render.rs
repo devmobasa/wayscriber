@@ -67,7 +67,7 @@ pub(super) fn maybe_render(
                 if render_duration > Duration::from_millis(5) {
                     debug!("Render took {:?}", render_duration);
                 }
-                
+
                 // Reset failure counter and record render time.
                 *consecutive_render_failures = 0;
                 *last_render_time = Some(Instant::now());

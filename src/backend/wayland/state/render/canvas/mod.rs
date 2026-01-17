@@ -46,14 +46,12 @@ impl WaylandState {
         // thousands of shapes to Cairo still incurs overhead for geometry processing.
         // A simple bounding box check here eliminates that overhead.
 
-        let render_drawn_shape = |drawn_shape: &crate::draw::DrawnShape| {
-            match &drawn_shape.shape {
-                crate::draw::Shape::EraserStroke { points, brush } => {
-                    crate::draw::render_eraser_stroke(ctx, points, brush, &replay_ctx);
-                }
-                other => {
-                    crate::draw::render_shape(ctx, other);
-                }
+        let render_drawn_shape = |drawn_shape: &crate::draw::DrawnShape| match &drawn_shape.shape {
+            crate::draw::Shape::EraserStroke { points, brush } => {
+                crate::draw::render_eraser_stroke(ctx, points, brush, &replay_ctx);
+            }
+            other => {
+                crate::draw::render_shape(ctx, other);
             }
         };
 
@@ -67,14 +65,10 @@ impl WaylandState {
                     // Manual union to avoid extra allocations.
                     let min_x = u.x.min(r.x);
                     let min_y = u.y.min(r.y);
-                    let max_x = u
-                        .x
-                        .saturating_add(u.width)
-                        .max(r.x.saturating_add(r.width));
-                    let max_y = u
-                        .y
-                        .saturating_add(u.height)
-                        .max(r.y.saturating_add(r.height));
+                    let max_x = u.x.saturating_add(u.width).max(r.x.saturating_add(r.width));
+                    let max_y =
+                        u.y.saturating_add(u.height)
+                            .max(r.y.saturating_add(r.height));
                     Some(crate::util::Rect {
                         x: min_x,
                         y: min_y,
