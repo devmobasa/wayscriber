@@ -103,6 +103,12 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 Some("Advanced: undo-all/delay/freeze."),
             ),
             (
+                "Boards",
+                snapshot.show_boards_section,
+                ToolbarEvent::ToggleBoardsSection(!snapshot.show_boards_section),
+                Some("Boards: prev/next/new/del."),
+            ),
+            (
                 "Pages",
                 snapshot.show_pages_section,
                 ToolbarEvent::TogglePagesSection(!snapshot.show_pages_section),

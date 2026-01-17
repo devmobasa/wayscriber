@@ -49,6 +49,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_pages_section")]
     pub show_pages_section: bool,
 
+    /// Show the Boards section in the side toolbar
+    #[serde(default = "default_show_boards_section")]
+    pub show_boards_section: bool,
+
     /// Show the presets section in the side toolbar
     #[serde(default = "default_show_presets")]
     pub show_presets: bool,
@@ -115,6 +119,7 @@ impl Default for ToolbarConfig {
             show_actions_advanced: default_show_actions_advanced(),
             show_zoom_actions: default_show_zoom_actions(),
             show_pages_section: default_show_pages_section(),
+            show_boards_section: default_show_boards_section(),
             show_presets: default_show_presets(),
             show_step_section: default_show_step_section(),
             show_text_controls: default_show_text_controls(),
@@ -165,6 +170,10 @@ fn default_show_zoom_actions() -> bool {
 }
 
 fn default_show_pages_section() -> bool {
+    true
+}
+
+fn default_show_boards_section() -> bool {
     true
 }
 

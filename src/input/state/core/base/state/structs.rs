@@ -256,6 +256,8 @@ pub struct InputState {
     pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
+    /// Whether to show the Boards section
+    pub show_boards_section: bool,
     /// Whether to show the presets section
     pub show_presets: bool,
     /// Whether to show the Step Undo/Redo section

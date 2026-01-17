@@ -299,6 +299,7 @@ layout_mode = "full"
 # show_actions_advanced = false
 # show_zoom_actions = true
 # show_pages_section = true
+# show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
 # show_settings_section = false
@@ -309,6 +310,7 @@ layout_mode = "full"
 # show_actions_advanced = false
 # show_zoom_actions = true
 # show_pages_section = true
+# show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
 # show_settings_section = true
@@ -319,6 +321,7 @@ layout_mode = "full"
 # show_actions_advanced = true
 # show_zoom_actions = true
 # show_pages_section = true
+# show_boards_section = true
 # show_step_section = true
 # show_text_controls = true
 # show_settings_section = true
@@ -348,6 +351,9 @@ show_zoom_actions = true
 
 # Show page controls section (prev/next/new/dup/del)
 show_pages_section = true
+
+# Show board controls section (prev/next/new/del)
+show_boards_section = true
 
 # Show presets section in side toolbar
 show_presets = true

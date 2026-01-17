@@ -71,6 +71,7 @@ impl ConfigDraft {
             ui_toolbar_show_actions_advanced: config.ui.toolbar.show_actions_advanced,
             ui_toolbar_show_zoom_actions: config.ui.toolbar.show_zoom_actions,
             ui_toolbar_show_pages_section: config.ui.toolbar.show_pages_section,
+            ui_toolbar_show_boards_section: config.ui.toolbar.show_boards_section,
             ui_toolbar_show_step_section: config.ui.toolbar.show_step_section,
             ui_toolbar_show_text_controls: config.ui.toolbar.show_text_controls,
             ui_toolbar_show_settings_section: config.ui.toolbar.show_settings_section,

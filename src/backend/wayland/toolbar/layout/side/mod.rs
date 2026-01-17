@@ -1,5 +1,6 @@
 mod actions;
 mod arrow;
+mod boards;
 mod colors;
 mod delay;
 mod drawer;
@@ -49,6 +50,7 @@ pub fn build_side_hits(
     y = sliders::push_text_hits(&ctx, y, hits);
     y = drawer::push_drawer_tabs_hits(&ctx, y, hits);
     y = actions::push_actions_hits(&ctx, y, hits);
+    y = boards::push_boards_hits(&ctx, y, hits);
     y = pages::push_pages_hits(&ctx, y, hits);
     y = delay::push_delay_hits(&ctx, y, hits);
 

@@ -31,6 +31,10 @@ pub enum ToolbarEvent {
     PageNew,
     PageDuplicate,
     PageDelete,
+    BoardPrev,
+    BoardNext,
+    BoardNew,
+    BoardDelete,
     ToggleBoardPicker,
     EnterTextMode,
     EnterStickyNoteMode,
@@ -76,6 +80,8 @@ pub enum ToolbarEvent {
     ToggleZoomActions(bool),
     /// Toggle Pages section visibility
     TogglePagesSection(bool),
+    /// Toggle Boards section visibility
+    ToggleBoardsSection(bool),
     /// Toggle presets section visibility
     TogglePresets(bool),
     /// Toggle Step Undo/Redo section visibility

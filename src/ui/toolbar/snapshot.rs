@@ -96,6 +96,8 @@ pub struct ToolbarSnapshot {
     pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
+    /// Whether to show the Boards section
+    pub show_boards_section: bool,
     /// Whether to show the marker opacity slider section
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
@@ -222,6 +224,7 @@ impl ToolbarSnapshot {
         let show_actions_advanced = state.show_actions_advanced;
         let show_zoom_actions = state.show_zoom_actions;
         let show_pages_section = state.show_pages_section;
+        let show_boards_section = state.show_boards_section;
         let show_step_section = state.show_step_section;
         let show_settings_section = state.show_settings_section;
         let delay_actions_enabled = state.show_step_section && state.show_delay_sliders;
@@ -276,6 +279,7 @@ impl ToolbarSnapshot {
             show_actions_advanced,
             show_zoom_actions,
             show_pages_section,
+            show_boards_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
             show_preset_toasts: state.show_preset_toasts,
             show_presets: state.show_presets,

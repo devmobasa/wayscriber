@@ -336,6 +336,7 @@ layout_mode = "full"
 # show_actions_advanced = false
 # show_zoom_actions = true
 # show_pages_section = true
+# show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
 # show_settings_section = false
@@ -346,6 +347,7 @@ layout_mode = "full"
 # show_actions_advanced = false
 # show_zoom_actions = true
 # show_pages_section = true
+# show_boards_section = true
 # show_step_section = false
 # show_text_controls = true
 # show_settings_section = true
@@ -356,6 +358,7 @@ layout_mode = "full"
 # show_actions_advanced = true
 # show_zoom_actions = true
 # show_pages_section = true
+# show_boards_section = true
 # show_step_section = true
 # show_text_controls = true
 # show_settings_section = true
@@ -383,6 +386,9 @@ show_zoom_actions = true
 
 # Show page controls section (prev/next/new/dup/del)
 show_pages_section = true
+
+# Show board controls section (prev/next/new/del)
+show_boards_section = true
 
 # Show presets section in the side toolbar
 show_presets = true
@@ -425,6 +431,7 @@ force_inline = false
 - **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
 - **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the Canvas drawer.
 - **Pages**: `show_pages_section` toggles the page navigation block.
+- **Boards**: `show_boards_section` toggles the board navigation block.
 - **Presets**: `show_presets` hides/shows the preset slots section.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
 - **Step controls**: `show_step_section` hides/shows the Step Undo/Redo section.

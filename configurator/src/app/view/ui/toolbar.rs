@@ -87,6 +87,12 @@ impl ConfiguratorApp {
                 ToggleField::UiToolbarShowPagesSection,
             ),
             toggle_row(
+                "Show boards section",
+                self.draft.ui_toolbar_show_boards_section,
+                self.defaults.ui_toolbar_show_boards_section,
+                ToggleField::UiToolbarShowBoardsSection,
+            ),
+            toggle_row(
                 "Show Step Undo/Redo",
                 self.draft.ui_toolbar_show_step_section,
                 self.defaults.ui_toolbar_show_step_section,
@@ -155,6 +161,10 @@ impl ConfiguratorApp {
             override_row(
                 ToolbarOverrideField::ShowPagesSection,
                 overrides.show_pages_section,
+            ),
+            override_row(
+                ToolbarOverrideField::ShowBoardsSection,
+                overrides.show_boards_section,
             ),
             override_row(
                 ToolbarOverrideField::ShowStepSection,

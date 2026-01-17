@@ -114,6 +114,15 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_boards_section(&mut self, show: bool) -> bool {
+        if self.show_boards_section != show {
+            self.show_boards_section = show;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn apply_toolbar_toggle_presets(&mut self, show: bool) -> bool {
         if self.show_presets != show {
             self.show_presets = show;

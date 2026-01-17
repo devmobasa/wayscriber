@@ -179,7 +179,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Board,
         true,
         true,
-        false
+        true
     ),
     meta!(
         BoardPrev,
@@ -189,7 +189,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Board,
         true,
         true,
-        false
+        true
     ),
     meta!(
         BoardNew,
@@ -199,7 +199,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Board,
         false,
         true,
-        false
+        true
     ),
     meta!(
         BoardDelete,
@@ -209,7 +209,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Board,
         false,
         true,
-        false
+        true
     ),
     meta!(
         BoardPicker,

@@ -92,7 +92,7 @@ Full-screen saves, active-window grabs, and region capture to file or clipboard 
 Opt-in per board/monitor storage that restores your canvas plus pen color & thickness. One-off overrides via `--resume-session` / `--no-resume-session`; the tray checkmark flips the config on disk.
 
 ### Toolbars & UI
-Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), preset slots, icon or text modes, color picker, extended palettes, status bar, page controls, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
+Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), preset slots, icon or text modes, color picker, extended palettes, status bar, board/page controls, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
 
 ### Presets
 Save tool + color + size (plus optional fill/opacity/text settings) into 3-5 slots for fast recall. Apply with <kbd>1</kbd>-<kbd>5</kbd>, save with <kbd>Shift+1</kbd>-<kbd>Shift+5</kbd>.

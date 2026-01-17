@@ -1,5 +1,6 @@
 mod actions;
 mod arrow;
+mod boards;
 mod colors;
 mod drawer;
 mod header;
@@ -96,6 +97,7 @@ pub fn render_side_palette(
     text::draw_text_controls_section(&mut layout, &mut y);
     drawer::draw_drawer_tabs(&mut layout, &mut y);
     actions::draw_actions_section(&mut layout, &mut y);
+    boards::draw_boards_section(&mut layout, &mut y);
     pages::draw_pages_section(&mut layout, &mut y);
     step::draw_step_section(&mut layout, &mut y);
     settings::draw_settings_section(&mut layout, &mut y);

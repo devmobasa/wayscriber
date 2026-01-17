@@ -48,6 +48,10 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
                 Some("Advanced: undo-all/delay/freeze."),
             ),
             (
+                ToolbarEvent::ToggleBoardsSection(!ctx.snapshot.show_boards_section),
+                Some("Boards: prev/next/new/del."),
+            ),
+            (
                 ToolbarEvent::TogglePagesSection(!ctx.snapshot.show_pages_section),
                 Some("Pages: prev/next/new/dup/del."),
             ),

@@ -24,6 +24,9 @@ impl ToolbarLayoutSpec {
         let show_pages = snapshot.show_pages_section
             && snapshot.drawer_open
             && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
+        let show_boards = snapshot.show_boards_section
+            && snapshot.drawer_open
+            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
         let show_presets =
             snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
         let show_step_section = snapshot.show_step_section
@@ -74,6 +77,11 @@ impl ToolbarLayoutSpec {
             actions_snapshot.show_actions_advanced = show_advanced;
             let actions_card_h = self.side_actions_height(&actions_snapshot);
             add_section(actions_card_h, &mut height);
+        }
+
+        if show_boards {
+            let boards_h = self.side_boards_height(snapshot);
+            add_section(boards_h, &mut height);
         }
 
         if show_pages {
@@ -247,6 +255,21 @@ impl ToolbarLayoutSpec {
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + btn_h + Self::SIDE_ACTION_BUTTON_GAP
     }
 
+    pub(in crate::backend::wayland::toolbar) fn side_boards_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        if !snapshot.show_boards_section {
+            return 0.0;
+        }
+        let btn_h = if self.use_icons {
+            Self::SIDE_ACTION_BUTTON_HEIGHT_ICON
+        } else {
+            Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT
+        };
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y + btn_h + Self::SIDE_ACTION_BUTTON_GAP
+    }
+
     pub(in crate::backend::wayland::toolbar) fn side_step_height(
         &self,
         snapshot: &ToolbarSnapshot,
@@ -275,7 +298,7 @@ impl ToolbarLayoutSpec {
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
         let mut toggle_count = 3; // Text controls + status bar + preset toasts
         if snapshot.layout_mode != ToolbarLayoutMode::Simple {
-            toggle_count += 6; // presets, actions, zoom actions, advanced actions, pages, step section
+            toggle_count += 7; // presets, actions, zoom actions, advanced actions, pages, boards, step section
         }
         let rows = (toggle_count + 1) / 2;
         let toggle_rows_h = if rows > 0 {

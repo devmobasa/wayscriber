@@ -173,6 +173,7 @@ impl InputState {
             show_actions_advanced: false,
             show_zoom_actions: true,
             show_pages_section: true,
+            show_boards_section: true,
             show_presets: true,
             show_step_section: false,
             show_text_controls: true,
