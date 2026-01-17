@@ -29,7 +29,7 @@ impl Dispatch<ZwpTabletSeatV2, ()> for WaylandState {
                 }
             }
             Event::ToolAdded { id } => {
-                info!("🖊️  TABLET TOOL DETECTED (pen/stylus)");
+                info!("🖊️ TABLET TOOL DETECTED: {:?}", id.id());
                 state.tablet_tools.push(id);
                 if !state.tablet_found_logged {
                     state.tablet_found_logged = true;

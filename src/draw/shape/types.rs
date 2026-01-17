@@ -51,6 +51,13 @@ pub enum Shape {
         /// Line thickness in pixels
         thick: f64,
     },
+    /// Freehand drawing with variable thickness (pressure sensitivity)
+    FreehandPressure {
+        /// Sequence of (x, y, thickness) coordinates
+        points: Vec<(i32, i32, f32)>,
+        /// Stroke color
+        color: Color,
+    },
     /// Straight line between two points (drawn with Shift modifier)
     Line {
         /// Starting X coordinate
@@ -189,6 +196,32 @@ impl Shape {
     pub fn bounding_box(&self) -> Option<Rect> {
         match self {
             Shape::Freehand { points, thick, .. } => bounding_box_for_points(points, *thick),
+            Shape::FreehandPressure { points, .. } => {
+                if points.is_empty() {
+                    return None;
+                }
+                let mut min_x = points[0].0;
+                let mut min_y = points[0].1;
+                let mut max_x = points[0].0;
+                let mut max_y = points[0].1;
+                let mut max_thick = 0.0f32;
+
+                for &(x, y, t) in points {
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x);
+                    max_y = max_y.max(y);
+                    max_thick = max_thick.max(t);
+                }
+
+                let pad = (max_thick as i32 / 2).max(1);
+                Some(Rect {
+                    x: min_x - pad,
+                    y: min_y - pad,
+                    width: (max_x - min_x + 2 * pad).max(1),
+                    height: (max_y - min_y + 2 * pad).max(1),
+                })
+            }
             Shape::Line {
                 x1,
                 y1,
@@ -268,7 +301,7 @@ impl Shape {
     /// Returns a human-readable label for the shape variant.
     pub fn kind_name(&self) -> &'static str {
         match self {
-            Shape::Freehand { .. } => "Freehand",
+            Shape::Freehand { .. } | Shape::FreehandPressure { .. } => "Freehand",
             Shape::Line { .. } => "Line",
             Shape::Rect { .. } => "Rectangle",
             Shape::Ellipse { .. } => "Ellipse",

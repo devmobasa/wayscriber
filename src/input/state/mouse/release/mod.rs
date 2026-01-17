@@ -59,8 +59,18 @@ impl InputState {
                 start_x,
                 start_y,
                 points,
+                point_thicknesses,
             } => {
-                drawing::finish_drawing(self, tool, start_x, start_y, points, x, y);
+                drawing::finish_drawing(
+                    self,
+                    tool,
+                    start_x,
+                    start_y,
+                    points,
+                    point_thicknesses,
+                    x,
+                    y,
+                );
             }
             DrawingState::PendingTextClick { x, y, shape_id, .. } => {
                 text::handle_pending_text_click(self, x, y, shape_id);

@@ -41,8 +41,21 @@ impl InputState {
                 start_x,
                 start_y,
                 points,
+                point_thicknesses,
             } => match tool {
-                Tool::Pen => bounding_box_for_points(points, self.current_thickness),
+                Tool::Pen => {
+                    // Approximate bounding box for variable width
+                    // If we have pressure data, we should ideally use it, but for dirty tracking
+                    // utilizing the max possible width (current_thickness) is safe and fast.
+                    // Or we could scan the point_thicknesses vector.
+                    if !point_thicknesses.is_empty() {
+                        let max_thick =
+                            point_thicknesses.iter().fold(0.0f32, |a, &b| a.max(b)) as f64;
+                        bounding_box_for_points(points, max_thick)
+                    } else {
+                        bounding_box_for_points(points, self.current_thickness)
+                    }
+                }
                 Tool::Marker => {
                     let inflated =
                         (self.current_thickness * 1.35).max(self.current_thickness + 1.0);

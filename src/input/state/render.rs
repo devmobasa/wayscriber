@@ -110,15 +110,31 @@ impl InputState {
                 start_x: _,
                 start_y: _,
                 points,
+                point_thicknesses,
             } => match tool {
                 Tool::Pen => {
                     // Render freehand without cloning - just borrow the points
-                    render_freehand_borrowed(
-                        ctx,
-                        points,
-                        self.current_color,
-                        self.current_thickness,
-                    );
+                    // Check if we have pressure data available for this stroke
+                    let use_pressure =
+                        !point_thicknesses.is_empty() && point_thicknesses.len() == points.len();
+
+                    if use_pressure {
+                        // Pass separate slices to avoid allocation
+                        use crate::draw::render::render_freehand_pressure_borrowed;
+                        render_freehand_pressure_borrowed(
+                            ctx,
+                            points,
+                            point_thicknesses,
+                            self.current_color,
+                        );
+                    } else {
+                        render_freehand_borrowed(
+                            ctx,
+                            points,
+                            self.current_color,
+                            self.current_thickness,
+                        );
+                    }
                     true
                 }
                 Tool::Highlight => false,
