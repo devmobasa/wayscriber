@@ -5,8 +5,8 @@ use crate::toolbar_icons;
 use super::super::search::{find_match_range, row_matches};
 use super::super::types::{Badge, Section, row};
 use super::bindings::{
-    HelpOverlayBindings, binding_or_fallback, bindings_compact_or_fallback,
-    bindings_or_fallback, joined_labels, primary_or_fallback,
+    HelpOverlayBindings, binding_or_fallback, bindings_compact_or_fallback, bindings_or_fallback,
+    joined_labels, primary_or_fallback,
 };
 
 pub(crate) struct SectionSets {

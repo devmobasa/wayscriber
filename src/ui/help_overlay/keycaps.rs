@@ -238,11 +238,7 @@ pub(crate) fn draw_key_combo(
         });
     }
 
-    if any_key {
-        cursor_x - x - key_gap
-    } else {
-        0.0
-    }
+    if any_key { cursor_x - x - key_gap } else { 0.0 }
 }
 
 pub(crate) fn draw_key_combo_highlight(

@@ -36,9 +36,7 @@ impl InputState {
             _ => self.modifiers.ctrl || self.modifiers.alt,
         };
 
-        if should_check_actions
-            && let Some(key_str) = key_to_action_label(key)
-        {
+        if should_check_actions && let Some(key_str) = key_to_action_label(key) {
             if let Some(action) = self.find_action(&key_str) {
                 // Actions work in text mode.
                 // Exit action has special logic in handle_action.
