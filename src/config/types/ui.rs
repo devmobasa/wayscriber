@@ -24,8 +24,12 @@ pub struct UiConfig {
     pub show_status_page_badge: bool,
 
     /// Show the board/page badge even when the status bar is visible
-    #[serde(default = "default_show_page_badge_with_status_bar")]
-    pub show_page_badge_with_status_bar: bool,
+    /// (renamed from show_page_badge_with_status_bar for clarity)
+    #[serde(
+        default = "default_show_page_badge_with_status_bar",
+        alias = "show_page_badge_with_status_bar"
+    )]
+    pub show_floating_badge_always: bool,
 
     /// Show the frozen-mode badge when frozen is active
     #[serde(default = "default_show_frozen_badge")]
@@ -76,7 +80,7 @@ impl Default for UiConfig {
             show_status_bar: default_show_status(),
             show_status_board_badge: default_show_status_board_badge(),
             show_status_page_badge: default_show_status_page_badge(),
-            show_page_badge_with_status_bar: default_show_page_badge_with_status_bar(),
+            show_floating_badge_always: default_show_page_badge_with_status_bar(),
             show_frozen_badge: default_show_frozen_badge(),
             status_bar_position: default_status_position(),
             status_bar_style: StatusBarStyle::default(),

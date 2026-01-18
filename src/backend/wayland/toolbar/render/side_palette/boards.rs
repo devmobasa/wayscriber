@@ -57,15 +57,16 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     };
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
     let can_cycle = snapshot.board_count > 1;
+    let can_duplicate = !snapshot.is_transparent;
     let buttons = [
         (
             ToolbarEvent::BoardPrev,
-            toolbar_icons::draw_icon_undo as fn(&cairo::Context, f64, f64, f64),
+            toolbar_icons::draw_icon_chevron_left as fn(&cairo::Context, f64, f64, f64),
             can_cycle,
         ),
         (
             ToolbarEvent::BoardNext,
-            toolbar_icons::draw_icon_redo as fn(&cairo::Context, f64, f64, f64),
+            toolbar_icons::draw_icon_chevron_right as fn(&cairo::Context, f64, f64, f64),
             can_cycle,
         ),
         (
@@ -74,22 +75,28 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
             true,
         ),
         (
+            ToolbarEvent::BoardDuplicate,
+            toolbar_icons::draw_icon_copy as fn(&cairo::Context, f64, f64, f64),
+            can_duplicate,
+        ),
+        (
             ToolbarEvent::BoardDelete,
             toolbar_icons::draw_icon_clear as fn(&cairo::Context, f64, f64, f64),
             true,
         ),
     ];
 
-    let btn_w = row_item_width(content_width, buttons.len(), btn_gap);
+    let cols = buttons.len().min(5);
+    let btn_w = row_item_width(content_width, cols, btn_gap);
     let layout = grid_layout(
         x,
         boards_y,
         btn_w,
         btn_h,
         btn_gap,
-        0.0,
+        btn_gap,
         buttons.len(),
-        buttons.len(),
+        cols,
     );
     for (item, (evt, icon_fn, enabled)) in layout.items.iter().zip(buttons.iter()) {
         let label = button_label(evt);

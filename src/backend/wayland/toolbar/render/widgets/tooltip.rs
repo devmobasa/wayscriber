@@ -12,6 +12,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
     hits: &[HitRegion],
     hover: Option<(f64, f64)>,
     panel_width: f64,
+    panel_height: f64,
     above: bool,
 ) {
     let Some((hx, hy)) = hover else { return };
@@ -39,7 +40,17 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
             let btn_center_x = hit.rect.0 + hit.rect.2 / 2.0;
             let mut tooltip_x = btn_center_x - tooltip_w / 2.0;
             let gap = SPACING_STD;
-            let tooltip_y = if above {
+
+            // Determine if tooltip should render above or below
+            // If rendering below would extend past panel height, render above instead
+            let render_above = if above {
+                true
+            } else {
+                let below_y = hit.rect.1 + hit.rect.3 + gap + tooltip_h;
+                below_y > panel_height - SPACING_MD
+            };
+
+            let tooltip_y = if render_above {
                 hit.rect.1 - tooltip_h - gap
             } else {
                 hit.rect.1 + hit.rect.3 + gap

@@ -48,8 +48,7 @@ impl WaylandState {
                     self.input_state.zoom_locked(),
                 );
             }
-            if !self.input_state.show_status_bar || self.input_state.show_page_badge_with_status_bar
-            {
+            if !self.input_state.show_status_bar || self.input_state.show_floating_badge_always {
                 let board_count = self.input_state.boards.board_count();
                 let page_count = self.input_state.boards.page_count();
                 if board_count > 1 || page_count > 1 {

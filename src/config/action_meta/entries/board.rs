@@ -221,4 +221,34 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true
     ),
+    meta!(
+        BoardRestoreDeleted,
+        "Restore Deleted Board",
+        Some("Restore"),
+        "Restore the most recently deleted board",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        BoardDuplicate,
+        "Duplicate Board",
+        Some("Dup"),
+        "Duplicate the active board",
+        Board,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        BoardSwitchRecent,
+        "Recent Board",
+        Some("Recent"),
+        "Switch to most recent board",
+        Board,
+        true,
+        true,
+        false
+    ),
 ];

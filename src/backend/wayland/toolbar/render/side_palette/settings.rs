@@ -83,8 +83,8 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         ),
         (
             "Overlay badge",
-            snapshot.show_page_badge_with_status_bar,
-            ToolbarEvent::TogglePageBadgeWithStatusBar(!snapshot.show_page_badge_with_status_bar),
+            snapshot.show_floating_badge_always,
+            ToolbarEvent::ToggleFloatingBadgeAlways(!snapshot.show_floating_badge_always),
             Some("Board/page badge when status bar is visible."),
         ),
         (

@@ -78,7 +78,9 @@ impl InputState {
                 }
             }
             Key::End if !search_active => {
-                let last_page = self.help_overlay_page_count().saturating_sub(1);
+                // Use the max page constant; actual page count is computed during render
+                // and the page index will be clamped appropriately.
+                let last_page = 9; // HELP_OVERLAY_MAX_PAGES - 1
                 if self.help_overlay_page != last_page {
                     self.help_overlay_page = last_page;
                     self.help_overlay_scroll = 0.0;

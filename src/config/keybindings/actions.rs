@@ -83,6 +83,9 @@ pub enum Action {
     BoardNew,
     BoardDelete,
     BoardPicker,
+    BoardRestoreDeleted,
+    BoardDuplicate,
+    BoardSwitchRecent,
 
     // Page navigation
     PagePrev,
@@ -93,6 +96,7 @@ pub enum Action {
 
     // UI toggles
     ToggleHelp,
+    ToggleQuickHelp,
     ToggleStatusBar,
     ToggleClickHighlight,
     ToggleToolbar,

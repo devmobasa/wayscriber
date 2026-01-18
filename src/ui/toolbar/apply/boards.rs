@@ -30,4 +30,16 @@ impl InputState {
         self.toggle_board_picker_quick();
         true
     }
+
+    pub(super) fn apply_toolbar_board_duplicate(&mut self) -> bool {
+        self.duplicate_board();
+        true
+    }
+
+    pub(super) fn apply_toolbar_board_rename(&mut self) -> bool {
+        // Open board picker in rename mode for active board
+        self.toggle_board_picker_quick();
+        // The board picker handles rename mode internally via its UI
+        true
+    }
 }

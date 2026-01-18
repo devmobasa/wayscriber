@@ -230,3 +230,78 @@ pub fn draw_icon_refresh(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.close_path();
     let _ = ctx.fill();
 }
+
+/// Draw a copy/duplicate icon (two overlapping rectangles).
+pub fn draw_icon_copy(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    // Back rectangle
+    ctx.rectangle(x + s * 0.3, y + s * 0.15, s * 0.5, s * 0.55);
+    let _ = ctx.stroke();
+
+    // Front rectangle (overlapping)
+    ctx.rectangle(x + s * 0.2, y + s * 0.3, s * 0.5, s * 0.55);
+    let _ = ctx.stroke();
+}
+
+/// Draw a left chevron/arrow icon for navigation.
+pub fn draw_icon_chevron_left(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.12).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Chevron pointing left: >
+    ctx.move_to(x + s * 0.6, y + s * 0.2);
+    ctx.line_to(x + s * 0.35, y + s * 0.5);
+    ctx.line_to(x + s * 0.6, y + s * 0.8);
+    let _ = ctx.stroke();
+}
+
+/// Draw a right chevron/arrow icon for navigation.
+pub fn draw_icon_chevron_right(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.12).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Chevron pointing right: <
+    ctx.move_to(x + s * 0.4, y + s * 0.2);
+    ctx.line_to(x + s * 0.65, y + s * 0.5);
+    ctx.line_to(x + s * 0.4, y + s * 0.8);
+    let _ = ctx.stroke();
+}
+
+/// Draw a pencil/edit icon.
+#[allow(dead_code)]
+pub fn draw_icon_pencil(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.set_line_cap(cairo::LineCap::Round);
+
+    // Pencil body (diagonal)
+    ctx.move_to(x + s * 0.7, y + s * 0.15);
+    ctx.line_to(x + s * 0.85, y + s * 0.3);
+    ctx.line_to(x + s * 0.3, y + s * 0.85);
+    ctx.line_to(x + s * 0.15, y + s * 0.7);
+    ctx.close_path();
+    let _ = ctx.stroke();
+
+    // Tip line
+    ctx.move_to(x + s * 0.15, y + s * 0.7);
+    ctx.line_to(x + s * 0.3, y + s * 0.85);
+    let _ = ctx.stroke();
+
+    // Eraser line
+    ctx.move_to(x + s * 0.6, y + s * 0.25);
+    ctx.line_to(x + s * 0.75, y + s * 0.4);
+    let _ = ctx.stroke();
+}

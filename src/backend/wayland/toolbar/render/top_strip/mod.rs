@@ -168,6 +168,6 @@ pub fn render_top_strip(
         tooltip: Some("Close".to_string()),
     });
 
-    draw_tooltip(ctx, layout.hits, layout.hover, width, false);
+    draw_tooltip(ctx, layout.hits, layout.hover, width, height, false);
     Ok(())
 }

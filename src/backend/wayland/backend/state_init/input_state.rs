@@ -50,7 +50,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
-    input_state.show_page_badge_with_status_bar = config.ui.show_page_badge_with_status_bar;
+    input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
 
     input_state.init_toolbar_from_config(
         config.ui.toolbar.layout_mode,

@@ -33,9 +33,7 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
             Some("Status bar: page counter."),
         ),
         (
-            ToolbarEvent::TogglePageBadgeWithStatusBar(
-                !ctx.snapshot.show_page_badge_with_status_bar,
-            ),
+            ToolbarEvent::ToggleFloatingBadgeAlways(!ctx.snapshot.show_floating_badge_always),
             Some("Board/page badge when status bar is visible."),
         ),
         (

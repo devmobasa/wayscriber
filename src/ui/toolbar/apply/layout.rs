@@ -208,9 +208,9 @@ impl InputState {
         }
     }
 
-    pub(super) fn apply_toolbar_toggle_page_badge_with_status_bar(&mut self, show: bool) -> bool {
-        if self.show_page_badge_with_status_bar != show {
-            self.show_page_badge_with_status_bar = show;
+    pub(super) fn apply_toolbar_toggle_floating_badge_always(&mut self, show: bool) -> bool {
+        if self.show_floating_badge_always != show {
+            self.show_floating_badge_always = show;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             true

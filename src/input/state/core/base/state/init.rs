@@ -98,7 +98,7 @@ impl InputState {
             show_status_bar,
             show_status_board_badge: true,
             show_status_page_badge: true,
-            show_page_badge_with_status_bar: false,
+            show_floating_badge_always: false,
             presenter_mode: false,
             presenter_mode_config,
             presenter_restore: None,
@@ -193,6 +193,10 @@ impl InputState {
             capability_toast_shown: false,
             blocked_action_feedback: None,
             pending_clipboard_fallback: None,
+            deleted_boards: Vec::new(),
+            status_change_highlight: None,
+            help_overlay_quick_mode: false,
+            help_overlay_search_cursor: 0,
         };
 
         if state.click_highlight.uses_pen_color() {

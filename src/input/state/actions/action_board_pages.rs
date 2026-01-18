@@ -124,6 +124,18 @@ impl InputState {
                 self.toggle_board_picker();
                 true
             }
+            Action::BoardRestoreDeleted => {
+                self.restore_deleted_board();
+                true
+            }
+            Action::BoardDuplicate => {
+                self.duplicate_board();
+                true
+            }
+            Action::BoardSwitchRecent => {
+                self.switch_board_recent();
+                true
+            }
             _ => false,
         }
     }

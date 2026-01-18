@@ -6,6 +6,9 @@ pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 pub const UI_TOAST_DURATION_MS: u64 = 5000;
 pub const BLOCKED_ACTION_DURATION_MS: u64 = 200;
+pub const BOARD_UNDO_EXPIRE_MS: u64 = 30_000;
+#[allow(dead_code)]
+pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
 use crate::capture::file::FileSaveConfig;
 use crate::config::ToolPresetConfig;
@@ -239,4 +242,11 @@ pub(crate) struct PendingClipboardFallback {
     pub save_config: FileSaveConfig,
     /// Whether to exit after successful fallback save (from exit-after-capture mode).
     pub exit_after_save: bool,
+}
+
+/// State for status bar change highlight animation.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(crate) struct StatusChangeHighlight {
+    pub started: Instant,
 }

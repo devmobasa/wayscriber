@@ -114,7 +114,7 @@ pub struct ToolbarSnapshot {
     pub show_status_bar: bool,
     pub show_status_board_badge: bool,
     pub show_status_page_badge: bool,
-    pub show_page_badge_with_status_bar: bool,
+    pub show_floating_badge_always: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
     /// Whether the drawer is open
@@ -133,6 +133,8 @@ pub struct ToolbarSnapshot {
     pub binding_hints: ToolbarBindingHints,
     /// Whether to show the drawer onboarding hint (first-time users)
     pub show_drawer_hint: bool,
+    /// Whether the current board is the transparent overlay
+    pub is_transparent: bool,
 }
 
 impl ToolbarSnapshot {
@@ -293,7 +295,7 @@ impl ToolbarSnapshot {
             show_status_bar: state.show_status_bar,
             show_status_board_badge: state.show_status_board_badge,
             show_status_page_badge: state.show_status_page_badge,
-            show_page_badge_with_status_bar: state.show_page_badge_with_status_bar,
+            show_floating_badge_always: state.show_floating_badge_always,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,
@@ -303,6 +305,7 @@ impl ToolbarSnapshot {
             drawer_tab,
             binding_hints,
             show_drawer_hint,
+            is_transparent: state.board_is_transparent(),
         }
     }
 }

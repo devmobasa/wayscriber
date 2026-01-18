@@ -61,12 +61,12 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let buttons = [
         (
             ToolbarEvent::PagePrev,
-            toolbar_icons::draw_icon_undo as fn(&cairo::Context, f64, f64, f64),
+            toolbar_icons::draw_icon_chevron_left as fn(&cairo::Context, f64, f64, f64),
             can_prev,
         ),
         (
             ToolbarEvent::PageNext,
-            toolbar_icons::draw_icon_redo as fn(&cairo::Context, f64, f64, f64),
+            toolbar_icons::draw_icon_chevron_right as fn(&cairo::Context, f64, f64, f64),
             can_next,
         ),
         (
@@ -76,7 +76,7 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         ),
         (
             ToolbarEvent::PageDuplicate,
-            toolbar_icons::draw_icon_save as fn(&cairo::Context, f64, f64, f64),
+            toolbar_icons::draw_icon_copy as fn(&cairo::Context, f64, f64, f64),
             true,
         ),
         (

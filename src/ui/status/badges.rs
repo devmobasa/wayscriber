@@ -94,16 +94,17 @@ pub fn render_page_badge(
     page_index: usize,
     page_count: usize,
 ) {
-    let board_label = if !board_name.trim().is_empty() {
+    let truncated_name = crate::util::truncate_with_ellipsis(board_name, 20);
+    let board_label = if !truncated_name.trim().is_empty() {
         if board_count > 1 {
             Some(format!(
                 "Board {}/{}: {}",
                 board_index + 1,
                 board_count.max(1),
-                board_name
+                truncated_name
             ))
         } else {
-            Some(format!("Board: {}", board_name))
+            Some(format!("Board: {}", truncated_name))
         }
     } else if board_count > 1 {
         Some(format!("Board {}/{}", board_index + 1, board_count.max(1)))

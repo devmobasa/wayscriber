@@ -102,6 +102,6 @@ pub fn render_side_palette(
     step::draw_step_section(&mut layout, &mut y);
     settings::draw_settings_section(&mut layout, &mut y);
 
-    draw_tooltip(ctx, layout.hits, layout.hover, width, false);
+    draw_tooltip(ctx, layout.hits, layout.hover, width, height, false);
     Ok(())
 }

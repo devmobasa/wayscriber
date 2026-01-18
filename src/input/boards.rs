@@ -387,6 +387,40 @@ impl BoardManager {
         true
     }
 
+    /// Insert a board at the given index.
+    /// Returns true if successful, false if the board limit is reached.
+    pub fn insert_board(&mut self, index: usize, board: BoardState) -> bool {
+        if self.boards.len() >= self.max_count {
+            return false;
+        }
+        let insert_at = index.min(self.boards.len());
+        self.boards.insert(insert_at, board);
+        self.active_index = insert_at;
+        true
+    }
+
+    /// Duplicate the active board.
+    /// Returns the new board's id if successful, None if the board limit is reached.
+    pub fn duplicate_active_board(&mut self) -> Option<String> {
+        if self.boards.len() >= self.max_count {
+            return None;
+        }
+        let active = &self.boards[self.active_index];
+        let mut new_spec = active.spec.clone();
+        let base_id = format!("{}-copy", active.spec.id);
+        new_spec.id = self.unique_board_id(base_id);
+        new_spec.name = format!("{} (copy)", active.spec.name);
+
+        let mut new_board = BoardState::new(new_spec.clone());
+        // Clone pages from the active board
+        new_board.pages = active.pages.clone();
+
+        let insert_at = self.active_index + 1;
+        self.boards.insert(insert_at, new_board);
+        self.active_index = insert_at;
+        Some(new_spec.id)
+    }
+
     pub fn to_config(&self) -> BoardsConfig {
         BoardsConfig {
             max_count: self.max_count,

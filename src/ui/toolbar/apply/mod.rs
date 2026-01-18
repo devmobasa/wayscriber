@@ -63,6 +63,8 @@ impl InputState {
             ToolbarEvent::BoardNext => self.apply_toolbar_board_next(),
             ToolbarEvent::BoardNew => self.apply_toolbar_board_new(),
             ToolbarEvent::BoardDelete => self.apply_toolbar_board_delete(),
+            ToolbarEvent::BoardDuplicate => self.apply_toolbar_board_duplicate(),
+            ToolbarEvent::BoardRename => self.apply_toolbar_board_rename(),
             ToolbarEvent::ToggleBoardPicker => self.apply_toolbar_toggle_board_picker(),
             ToolbarEvent::EnterTextMode => self.apply_toolbar_enter_text_mode(),
             ToolbarEvent::EnterStickyNoteMode => self.apply_toolbar_enter_sticky_note_mode(),
@@ -112,8 +114,8 @@ impl InputState {
             ToolbarEvent::ToggleStatusPageBadge(show) => {
                 self.apply_toolbar_toggle_status_page_badge(show)
             }
-            ToolbarEvent::TogglePageBadgeWithStatusBar(show) => {
-                self.apply_toolbar_toggle_page_badge_with_status_bar(show)
+            ToolbarEvent::ToggleFloatingBadgeAlways(show) => {
+                self.apply_toolbar_toggle_floating_badge_always(show)
             }
             ToolbarEvent::ToggleDrawer(open) => self.apply_toolbar_toggle_drawer(open),
             ToolbarEvent::SetDrawerTab(tab) => self.apply_toolbar_set_drawer_tab(tab),

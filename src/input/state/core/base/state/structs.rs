@@ -7,13 +7,15 @@ use super::super::super::{
 };
 use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
-    PendingClipboardFallback, PresetAction, PresetFeedbackState, SelectionAxis, TextClickState,
-    TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
+    PendingClipboardFallback, PresetAction, PresetFeedbackState, SelectionAxis,
+    StatusChangeHighlight, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState,
+    ZoomAction,
 };
 use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::BoardManager;
+use crate::input::boards::BoardState;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     modifiers::Modifiers,
@@ -107,7 +109,7 @@ pub struct InputState {
     /// Whether to show the page counter in the status bar
     pub show_status_page_badge: bool,
     /// Whether to show the board/page badge when the status bar is visible
-    pub show_page_badge_with_status_bar: bool,
+    pub show_floating_badge_always: bool,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration
@@ -297,4 +299,14 @@ pub struct InputState {
     pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
     /// Pending clipboard fallback for failed copy operations
     pub(crate) pending_clipboard_fallback: Option<PendingClipboardFallback>,
+    /// Recently deleted boards available for undo (with deletion timestamp)
+    pub(in crate::input::state::core) deleted_boards: Vec<(BoardState, Instant)>,
+    /// Status bar change highlight animation state
+    #[allow(dead_code)]
+    pub(crate) status_change_highlight: Option<StatusChangeHighlight>,
+    /// Whether the help overlay is in quick-reference mode
+    pub help_overlay_quick_mode: bool,
+    /// Cursor position within the help overlay search input
+    #[allow(dead_code)]
+    pub help_overlay_search_cursor: usize,
 }

@@ -10,6 +10,10 @@ impl InputState {
                 self.toggle_help_overlay();
                 true
             }
+            Action::ToggleQuickHelp => {
+                self.toggle_quick_help();
+                true
+            }
             Action::ToggleStatusBar => {
                 if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
                     return true;

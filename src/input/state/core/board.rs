@@ -1,6 +1,8 @@
-use super::base::{InputState, UiToastKind};
+use super::base::{BOARD_UNDO_EXPIRE_MS, InputState, UiToastKind};
+use crate::config::Action;
 use crate::draw::Color;
 use crate::input::{BOARD_ID_TRANSPARENT, BoardBackground};
+use std::time::Instant;
 
 const BOARD_RECENT_LIMIT: usize = 5;
 
@@ -57,7 +59,9 @@ impl InputState {
         let current_id = self.boards.active_board_id().to_string();
         let created = self.switch_board_with(|boards| boards.create_board(), &current_id);
         if created {
+            let name = self.boards.active_board_name().to_string();
             self.queue_board_config_save();
+            self.set_ui_toast(UiToastKind::Info, format!("Board created: {name}"));
         }
         created
     }
@@ -94,10 +98,109 @@ impl InputState {
             return;
         }
 
+        // Save board state before deletion for potential undo
+        let deleted_board = self.boards.active_board().clone();
+        let deleted_name = deleted_board.spec.name.clone();
         let current_id = self.boards.active_board_id().to_string();
+
         if self.switch_board_with(|boards| boards.remove_active_board(), &current_id) {
             self.remove_board_recent(&current_id);
             self.queue_board_config_save();
+
+            // Store for undo
+            self.deleted_boards.push((deleted_board, Instant::now()));
+
+            // Show toast with undo action
+            self.set_ui_toast_with_action(
+                UiToastKind::Info,
+                format!("Board deleted: {deleted_name}"),
+                "Undo",
+                Action::BoardRestoreDeleted,
+            );
+        }
+    }
+
+    /// Restore the most recently deleted board.
+    pub fn restore_deleted_board(&mut self) {
+        // Expire old entries first
+        self.expire_deleted_boards();
+
+        let Some((board, _timestamp)) = self.deleted_boards.pop() else {
+            self.set_ui_toast(UiToastKind::Info, "No deleted board to restore.");
+            return;
+        };
+
+        let name = board.spec.name.clone();
+        let current_id = self.boards.active_board_id().to_string();
+
+        if self.switch_board_with(
+            |boards| boards.insert_board(boards.board_count(), board),
+            &current_id,
+        ) {
+            self.queue_board_config_save();
+            self.set_ui_toast(UiToastKind::Info, format!("Board restored: {name}"));
+        } else {
+            self.set_ui_toast(UiToastKind::Warning, "Board limit reached; cannot restore.");
+        }
+    }
+
+    /// Remove deleted boards that have expired (older than BOARD_UNDO_EXPIRE_MS).
+    fn expire_deleted_boards(&mut self) {
+        let now = Instant::now();
+        let expire_duration = std::time::Duration::from_millis(BOARD_UNDO_EXPIRE_MS);
+        self.deleted_boards.retain(|(_board, timestamp)| {
+            now.saturating_duration_since(*timestamp) < expire_duration
+        });
+    }
+
+    /// Duplicate the active board.
+    pub fn duplicate_board(&mut self) {
+        if self.board_is_transparent() {
+            self.set_ui_toast(UiToastKind::Info, "Overlay board cannot be duplicated.");
+            return;
+        }
+
+        let current_id = self.boards.active_board_id().to_string();
+        if let Some(new_id) = self.boards.duplicate_active_board() {
+            self.record_board_recent(&new_id);
+            self.queue_board_config_save();
+            let name = self.boards.active_board_name();
+            self.set_ui_toast(UiToastKind::Info, format!("Board duplicated: {name}"));
+
+            // Handle color auto-adjustment for the duplicated board
+            let current_spec = self.boards.active_board().spec.clone();
+            let target_auto =
+                current_spec.auto_adjust_pen && !current_spec.background.is_transparent();
+            if target_auto && let Some(default_color) = current_spec.effective_pen_color() {
+                self.current_color = default_color;
+                self.sync_highlight_color();
+            }
+
+            // Reset drawing state
+            self.state = super::base::DrawingState::Idle;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+
+            log::info!("Duplicated board '{}' to '{}'", current_id, new_id);
+        } else {
+            self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
+        }
+    }
+
+    /// Switch to the most recently used board (other than the current one).
+    pub fn switch_board_recent(&mut self) {
+        // Find the first recent board that isn't the current one
+        let current_id = self.boards.active_board_id();
+        let target = self
+            .board_recent
+            .iter()
+            .find(|id| id.as_str() != current_id && self.boards.has_board(id))
+            .cloned();
+
+        if let Some(target_id) = target {
+            self.switch_board_force(&target_id);
+        } else {
+            self.set_ui_toast(UiToastKind::Info, "No recent board to switch to.");
         }
     }
 
@@ -279,16 +382,41 @@ impl InputState {
     pub fn page_new(&mut self) {
         self.boards.new_page();
         self.prepare_page_switch();
+        let page_num = self.boards.active_page_index() + 1;
+        let page_count = self.boards.page_count();
+        self.set_ui_toast(
+            UiToastKind::Info,
+            format!("Page created ({page_num}/{page_count})"),
+        );
     }
 
     pub fn page_duplicate(&mut self) {
         self.boards.duplicate_page();
         self.prepare_page_switch();
+        let page_num = self.boards.active_page_index() + 1;
+        let page_count = self.boards.page_count();
+        self.set_ui_toast(
+            UiToastKind::Info,
+            format!("Page duplicated ({page_num}/{page_count})"),
+        );
     }
 
     pub fn page_delete(&mut self) -> crate::draw::PageDeleteOutcome {
         let outcome = self.boards.delete_page();
         self.prepare_page_switch();
+        let page_num = self.boards.active_page_index() + 1;
+        let page_count = self.boards.page_count();
+        match outcome {
+            crate::draw::PageDeleteOutcome::Removed => {
+                self.set_ui_toast(
+                    UiToastKind::Info,
+                    format!("Page deleted ({page_num}/{page_count})"),
+                );
+            }
+            crate::draw::PageDeleteOutcome::Cleared => {
+                self.set_ui_toast(UiToastKind::Info, "Page cleared (last page)");
+            }
+        }
         outcome
     }
 }
