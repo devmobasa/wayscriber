@@ -54,6 +54,9 @@ impl ConfigDraft {
             performance_ui_animation_fps: config.performance.ui_animation_fps.to_string(),
 
             ui_show_status_bar: config.ui.show_status_bar,
+            ui_show_status_board_badge: config.ui.show_status_board_badge,
+            ui_show_status_page_badge: config.ui.show_status_page_badge,
+            ui_show_page_badge_with_status_bar: config.ui.show_page_badge_with_status_bar,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_context_menu_enabled: config.ui.context_menu.enabled,
             ui_preferred_output: config.ui.preferred_output.clone().unwrap_or_default(),

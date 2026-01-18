@@ -112,6 +112,9 @@ pub struct ToolbarSnapshot {
     pub show_settings_section: bool,
     pub show_tool_preview: bool,
     pub show_status_bar: bool,
+    pub show_status_board_badge: bool,
+    pub show_status_page_badge: bool,
+    pub show_page_badge_with_status_bar: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
     /// Whether the drawer is open
@@ -288,6 +291,9 @@ impl ToolbarSnapshot {
             show_settings_section,
             show_tool_preview: state.show_tool_preview,
             show_status_bar: state.show_status_bar,
+            show_status_board_badge: state.show_status_board_badge,
+            show_status_page_badge: state.show_status_page_badge,
+            show_page_badge_with_status_bar: state.show_page_badge_with_status_bar,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,

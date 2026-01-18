@@ -122,6 +122,7 @@ pub fn render_page_badge(
         (None, None) => return,
     };
     let padding = 12.0;
+    let edge_padding = 4.0;
     let radius = 8.0;
     let font_size = 15.0;
     let layout = text_layout(
@@ -141,7 +142,7 @@ pub fn render_page_badge(
     let height = extents.height() + padding;
 
     let x = padding;
-    let y = padding + height;
+    let y = edge_padding + height;
 
     // Background with a neutral cool tone.
     ctx.set_source_rgba(0.2, 0.32, 0.45, 0.92);
@@ -150,5 +151,5 @@ pub fn render_page_badge(
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.5));
 }

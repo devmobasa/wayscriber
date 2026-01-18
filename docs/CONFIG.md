@@ -220,6 +220,15 @@ Controls visual indicators, overlays, and UI styling.
 # Show status bar with current color/thickness/tool
 show_status_bar = true
 
+# Show board label in the status bar
+show_status_board_badge = true
+
+# Show page counter in the status bar
+show_status_page_badge = true
+
+# Show the board/page badge even when the status bar is visible
+show_page_badge_with_status_bar = false
+
 # Show a small "FROZEN" badge when frozen mode is active
 show_frozen_badge = false
 

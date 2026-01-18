@@ -102,6 +102,12 @@ pub struct InputState {
     pub command_palette_scroll: usize,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether to show the board label in the status bar
+    pub show_status_board_badge: bool,
+    /// Whether to show the page counter in the status bar
+    pub show_status_page_badge: bool,
+    /// Whether to show the board/page badge when the status bar is visible
+    pub show_page_badge_with_status_bar: bool,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration

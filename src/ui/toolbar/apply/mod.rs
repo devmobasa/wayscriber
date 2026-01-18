@@ -106,6 +106,15 @@ impl InputState {
             ToolbarEvent::TogglePresetToasts(show) => self.apply_toolbar_toggle_preset_toasts(show),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
             ToolbarEvent::ToggleStatusBar(show) => self.apply_toolbar_toggle_status_bar(show),
+            ToolbarEvent::ToggleStatusBoardBadge(show) => {
+                self.apply_toolbar_toggle_status_board_badge(show)
+            }
+            ToolbarEvent::ToggleStatusPageBadge(show) => {
+                self.apply_toolbar_toggle_status_page_badge(show)
+            }
+            ToolbarEvent::TogglePageBadgeWithStatusBar(show) => {
+                self.apply_toolbar_toggle_page_badge_with_status_bar(show)
+            }
             ToolbarEvent::ToggleDrawer(open) => self.apply_toolbar_toggle_drawer(open),
             ToolbarEvent::SetDrawerTab(tab) => self.apply_toolbar_set_drawer_tab(tab),
             ToolbarEvent::SetToolbarLayoutMode(mode) => self.apply_toolbar_set_layout_mode(mode),

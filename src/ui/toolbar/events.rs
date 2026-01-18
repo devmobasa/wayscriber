@@ -95,6 +95,12 @@ pub enum ToolbarEvent {
     ToggleToolPreview(bool),
     /// Toggle status bar visibility
     ToggleStatusBar(bool),
+    /// Toggle board label in the status bar
+    ToggleStatusBoardBadge(bool),
+    /// Toggle page counter in the status bar
+    ToggleStatusPageBadge(bool),
+    /// Toggle the board/page badge when the status bar is visible
+    TogglePageBadgeWithStatusBar(bool),
     /// Toggle the side drawer (Canvas/Settings)
     ToggleDrawer(bool),
     /// Switch the active drawer tab

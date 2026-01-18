@@ -41,6 +41,11 @@ impl ConfigDraft {
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
+            ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,
+            ToggleField::UiShowStatusPageBadge => self.ui_show_status_page_badge = value,
+            ToggleField::UiShowPageBadgeWithStatusBar => {
+                self.ui_show_page_badge_with_status_bar = value;
+            }
             ToggleField::UiHelpOverlayContextFilter => self.help_context_filter = value,
             ToggleField::UiContextMenuEnabled => self.ui_context_menu_enabled = value,
             ToggleField::UiXdgFullscreen => self.ui_xdg_fullscreen = value,

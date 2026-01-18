@@ -25,6 +25,20 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
             Some("Status bar: color/tool readout."),
         ),
         (
+            ToolbarEvent::ToggleStatusBoardBadge(!ctx.snapshot.show_status_board_badge),
+            Some("Status bar: board label."),
+        ),
+        (
+            ToolbarEvent::ToggleStatusPageBadge(!ctx.snapshot.show_status_page_badge),
+            Some("Status bar: page counter."),
+        ),
+        (
+            ToolbarEvent::TogglePageBadgeWithStatusBar(
+                !ctx.snapshot.show_page_badge_with_status_bar,
+            ),
+            Some("Board/page badge when status bar is visible."),
+        ),
+        (
             ToolbarEvent::TogglePresetToasts(!ctx.snapshot.show_preset_toasts),
             Some("Preset toasts: apply/save/clear."),
         ),

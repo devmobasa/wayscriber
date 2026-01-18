@@ -47,6 +47,9 @@ pub struct ConfigDraft {
     pub performance_ui_animation_fps: String,
 
     pub ui_show_status_bar: bool,
+    pub ui_show_status_board_badge: bool,
+    pub ui_show_status_page_badge: bool,
+    pub ui_show_page_badge_with_status_bar: bool,
     pub ui_show_frozen_badge: bool,
     pub ui_context_menu_enabled: bool,
     pub ui_preferred_output: String,

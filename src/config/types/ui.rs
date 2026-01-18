@@ -15,6 +15,18 @@ pub struct UiConfig {
     #[serde(default = "default_show_status")]
     pub show_status_bar: bool,
 
+    /// Show the board label in the status bar
+    #[serde(default = "default_show_status_board_badge")]
+    pub show_status_board_badge: bool,
+
+    /// Show the page counter in the status bar
+    #[serde(default = "default_show_status_page_badge")]
+    pub show_status_page_badge: bool,
+
+    /// Show the board/page badge even when the status bar is visible
+    #[serde(default = "default_show_page_badge_with_status_bar")]
+    pub show_page_badge_with_status_bar: bool,
+
     /// Show the frozen-mode badge when frozen is active
     #[serde(default = "default_show_frozen_badge")]
     pub show_frozen_badge: bool,
@@ -62,6 +74,9 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             show_status_bar: default_show_status(),
+            show_status_board_badge: default_show_status_board_badge(),
+            show_status_page_badge: default_show_status_page_badge(),
+            show_page_badge_with_status_bar: default_show_page_badge_with_status_bar(),
             show_frozen_badge: default_show_frozen_badge(),
             status_bar_position: default_status_position(),
             status_bar_style: StatusBarStyle::default(),
@@ -78,6 +93,18 @@ impl Default for UiConfig {
 
 fn default_show_status() -> bool {
     true
+}
+
+fn default_show_status_board_badge() -> bool {
+    true
+}
+
+fn default_show_status_page_badge() -> bool {
+    true
+}
+
+fn default_show_page_badge_with_status_bar() -> bool {
+    false
 }
 
 fn default_show_frozen_badge() -> bool {

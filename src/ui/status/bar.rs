@@ -41,7 +41,7 @@ pub fn render_status_bar(
     let tool_name = tool_display_name(input_state, tool);
     let color_name = crate::util::color_to_name(color);
 
-    let board_badge = if input_state.boards.show_badge() && !input_state.board_is_transparent() {
+    let board_badge = if input_state.show_status_board_badge && input_state.boards.show_badge() {
         let board_index = input_state.boards.active_index() + 1;
         format!("[Board {}: {}] ", board_index, input_state.board_name())
     } else {
@@ -49,7 +49,11 @@ pub fn render_status_bar(
     };
     let page_count = input_state.boards.page_count().max(1);
     let page_index = input_state.boards.active_page_index();
-    let page_badge = format!("[Page {}/{}] ", page_index + 1, page_count);
+    let page_badge = if input_state.show_status_page_badge {
+        format!("[Page {}/{}] ", page_index + 1, page_count)
+    } else {
+        String::new()
+    };
 
     let font_size = input_state.current_font_size;
     let highlight_badge = if input_state.click_highlight_enabled() {
@@ -62,8 +66,7 @@ pub fn render_status_bar(
     } else {
         String::new()
     };
-    let help_binding =
-        format_binding_labels(&input_state.action_binding_labels(Action::ToggleHelp));
+    let help_binding = help_binding_label(input_state);
 
     let frozen_badge = if input_state.frozen_active() {
         "[FROZEN] "
@@ -165,6 +168,15 @@ fn tool_display_name(input_state: &InputState, tool: Tool) -> &'static str {
         DrawingState::ResizingText { .. } => "Resize",
         DrawingState::PendingTextClick { .. } | DrawingState::Idle => tool_action_label(tool),
     }
+}
+
+fn help_binding_label(input_state: &InputState) -> String {
+    let mut labels = input_state.action_binding_labels(Action::ToggleHelp);
+    if labels.iter().any(|label| label == "F1") {
+        // Prefer showing F1 in the status bar when both defaults are bound.
+        labels.retain(|label| label != "F10");
+    }
+    format_binding_labels(&labels)
 }
 
 fn tool_action_label(tool: Tool) -> &'static str {

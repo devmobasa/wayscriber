@@ -186,6 +186,39 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_status_board_badge(&mut self, show: bool) -> bool {
+        if self.show_status_board_badge != show {
+            self.show_status_board_badge = show;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn apply_toolbar_toggle_status_page_badge(&mut self, show: bool) -> bool {
+        if self.show_status_page_badge != show {
+            self.show_status_page_badge = show;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn apply_toolbar_toggle_page_badge_with_status_bar(&mut self, show: bool) -> bool {
+        if self.show_page_badge_with_status_bar != show {
+            self.show_page_badge_with_status_bar = show;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn apply_toolbar_toggle_drawer(&mut self, open: bool) -> bool {
         if self.toolbar_drawer_open != open {
             self.toolbar_drawer_open = open;
