@@ -1,8 +1,10 @@
-use super::base::{BOARD_UNDO_EXPIRE_MS, InputState, UiToastKind};
+use super::base::{
+    BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete, UI_TOAST_DURATION_MS, UiToastKind,
+};
 use crate::config::Action;
 use crate::draw::Color;
 use crate::input::{BOARD_ID_TRANSPARENT, BoardBackground};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const BOARD_RECENT_LIMIT: usize = 5;
 
@@ -84,24 +86,40 @@ impl InputState {
     pub fn delete_active_board(&mut self) {
         if self.board_is_transparent() {
             self.set_ui_toast(UiToastKind::Info, "Overlay board cannot be deleted.");
-            return;
-        }
-        if self.boards.active_pages().has_persistable_data() {
-            self.set_ui_toast(
-                UiToastKind::Warning,
-                "Board has content; deletion requires clearing first.",
-            );
+            self.pending_board_delete = None;
             return;
         }
         if self.boards.board_count() <= 1 {
             self.set_ui_toast(UiToastKind::Info, "At least one board must remain.");
+            self.pending_board_delete = None;
             return;
         }
+
+        let current_id = self.boards.active_board_id().to_string();
+        let now = Instant::now();
+        let confirmed = self
+            .pending_board_delete
+            .as_ref()
+            .is_some_and(|pending| pending.board_id == current_id && now <= pending.expires_at);
+        if !confirmed {
+            let name = self.boards.active_board_name();
+            self.pending_board_delete = Some(PendingBoardDelete {
+                board_id: current_id,
+                expires_at: now + Duration::from_millis(UI_TOAST_DURATION_MS),
+            });
+            self.set_ui_toast_with_action(
+                UiToastKind::Warning,
+                format!("Delete board '{name}'? Click to confirm."),
+                "Delete",
+                Action::BoardDelete,
+            );
+            return;
+        }
+        self.pending_board_delete = None;
 
         // Save board state before deletion for potential undo
         let deleted_board = self.boards.active_board().clone();
         let deleted_name = deleted_board.spec.name.clone();
-        let current_id = self.boards.active_board_id().to_string();
 
         if self.switch_board_with(|boards| boards.remove_active_board(), &current_id) {
             self.remove_board_recent(&current_id);
@@ -286,6 +304,7 @@ impl InputState {
         if target_spec.id == current_id {
             return false;
         }
+        self.pending_board_delete = None;
         if self.boards.board_count() > prev_count {
             self.queue_board_config_save();
         }

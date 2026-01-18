@@ -244,6 +244,13 @@ pub(crate) struct PendingClipboardFallback {
     pub exit_after_save: bool,
 }
 
+/// Pending board deletion confirmation state.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingBoardDelete {
+    pub board_id: String,
+    pub expires_at: Instant,
+}
+
 /// State for status bar change highlight animation.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]

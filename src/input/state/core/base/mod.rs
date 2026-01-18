@@ -10,6 +10,6 @@ pub use types::{
     ToolbarDrawerTab, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use types::{
-    BlockedActionFeedback, DelayedHistory, HistoryMode, PendingClipboardFallback,
-    PresetFeedbackState, TextClickState, ToastAction, UiToastState,
+    BlockedActionFeedback, DelayedHistory, HistoryMode, PendingBoardDelete,
+    PendingClipboardFallback, PresetFeedbackState, TextClickState, ToastAction, UiToastState,
 };

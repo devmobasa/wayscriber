@@ -7,7 +7,7 @@ use super::super::super::{
 };
 use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
-    PendingClipboardFallback, PresetAction, PresetFeedbackState, SelectionAxis,
+    PendingBoardDelete, PendingClipboardFallback, PresetAction, PresetFeedbackState, SelectionAxis,
     StatusChangeHighlight, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState,
     ZoomAction,
 };
@@ -148,6 +148,8 @@ pub struct InputState {
     pub board_previous_color: Option<Color>,
     /// Most recently used board ids (most recent first)
     pub board_recent: Vec<String>,
+    /// Pending confirmation for deleting a board
+    pub(in crate::input::state::core) pending_board_delete: Option<PendingBoardDelete>,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)
