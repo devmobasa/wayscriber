@@ -1,5 +1,5 @@
 use super::base::{
-    BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete, UI_TOAST_DURATION_MS, UiToastKind,
+    BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete, UiToastKind,
 };
 use crate::config::Action;
 use crate::draw::Color;
@@ -97,6 +97,13 @@ impl InputState {
 
         let current_id = self.boards.active_board_id().to_string();
         let now = Instant::now();
+        if self
+            .pending_board_delete
+            .as_ref()
+            .is_some_and(|pending| now > pending.expires_at)
+        {
+            self.pending_board_delete = None;
+        }
         let confirmed = self
             .pending_board_delete
             .as_ref()
@@ -105,13 +112,14 @@ impl InputState {
             let name = self.boards.active_board_name();
             self.pending_board_delete = Some(PendingBoardDelete {
                 board_id: current_id,
-                expires_at: now + Duration::from_millis(UI_TOAST_DURATION_MS),
+                expires_at: now + Duration::from_millis(BOARD_DELETE_CONFIRM_MS),
             });
-            self.set_ui_toast_with_action(
+            self.set_ui_toast_with_action_and_duration(
                 UiToastKind::Warning,
                 format!("Delete board '{name}'? Click to confirm."),
                 "Delete",
                 Action::BoardDelete,
+                BOARD_DELETE_CONFIRM_MS,
             );
             return;
         }

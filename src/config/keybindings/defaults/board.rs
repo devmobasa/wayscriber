@@ -84,6 +84,10 @@ pub(crate) fn default_board_new() -> Vec<String> {
     vec!["Ctrl+Shift+N".to_string()]
 }
 
+pub(crate) fn default_board_duplicate() -> Vec<String> {
+    vec!["Ctrl+Shift+D".to_string()]
+}
+
 pub(crate) fn default_board_delete() -> Vec<String> {
     vec!["Ctrl+Shift+Delete".to_string()]
 }

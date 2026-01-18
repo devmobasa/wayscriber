@@ -49,6 +49,27 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    pub(crate) fn set_ui_toast_with_action_and_duration(
+        &mut self,
+        kind: UiToastKind,
+        message: impl Into<String>,
+        action_label: impl Into<String>,
+        action: Action,
+        duration_ms: u64,
+    ) {
+        self.ui_toast = Some(UiToastState {
+            kind,
+            message: message.into(),
+            started: Instant::now(),
+            duration_ms,
+            action: Some(ToastAction {
+                label: action_label.into(),
+                action,
+            }),
+        });
+        self.needs_redraw = true;
+    }
+
     #[allow(dead_code)]
     pub(crate) fn set_capture_feedback(
         &mut self,

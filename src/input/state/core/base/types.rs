@@ -5,6 +5,7 @@ pub const MAX_STROKE_THICKNESS: f64 = 50.0;
 pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 pub const UI_TOAST_DURATION_MS: u64 = 5000;
+pub const BOARD_DELETE_CONFIRM_MS: u64 = 7000;
 pub const BLOCKED_ACTION_DURATION_MS: u64 = 200;
 pub const BOARD_UNDO_EXPIRE_MS: u64 = 30_000;
 #[allow(dead_code)]
