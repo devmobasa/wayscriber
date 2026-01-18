@@ -13,6 +13,7 @@ pub(crate) struct SectionSets {
     pub(crate) all: Vec<Section>,
     pub(crate) page1: Vec<Section>,
     pub(crate) page2: Vec<Section>,
+    pub(crate) quick: Vec<Section>,
 }
 
 fn color_badge(
@@ -399,10 +400,87 @@ pub(crate) fn build_section_sets(
         page2_sections.push(section);
     }
 
+    // Quick reference: essential shortcuts at a glance
+    let quick_drawing = Section {
+        title: "Drawing",
+        rows: vec![
+            row(
+                binding_or_fallback(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectPenTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectEraserTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectLineTool, "Shift+Drag"),
+                action_label(Action::SelectLineTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectRectTool, "Ctrl+Drag"),
+                action_label(Action::SelectRectTool),
+            ),
+        ],
+        badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_pen),
+    };
+    let quick_actions = Section {
+        title: "Actions",
+        rows: vec![
+            row(
+                binding_or_fallback(bindings, Action::Undo, NOT_BOUND_LABEL),
+                action_label(Action::Undo),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
+                action_label(Action::ClearCanvas),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
+                action_label(Action::EnterTextMode),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::Exit, NOT_BOUND_LABEL),
+                action_label(Action::Exit),
+            ),
+        ],
+        badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_undo),
+    };
+    let quick_navigation = Section {
+        title: "Navigation",
+        rows: vec![
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::BoardPrev, Action::BoardNext],
+                    NOT_BOUND_LABEL,
+                ),
+                "Previous/next board",
+            ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::PagePrev, Action::PageNext],
+                    NOT_BOUND_LABEL,
+                ),
+                "Previous/next page",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
+                "Full help",
+            ),
+        ],
+        badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_file),
+    };
+    let quick_sections = vec![quick_drawing, quick_actions, quick_navigation];
+
     SectionSets {
         all: all_sections,
         page1: page1_sections,
         page2: page2_sections,
+        quick: quick_sections,
     }
 }
 

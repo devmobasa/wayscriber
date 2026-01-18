@@ -91,7 +91,7 @@ fn render_help_overlay_draws_content() {
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0,
+        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0, false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -132,7 +132,7 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0,
+        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0, false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));

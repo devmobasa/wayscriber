@@ -96,6 +96,7 @@ impl WaylandState {
                     self.input_state.boards.board_count() > 1,
                     self.config.capture.enabled,
                     self.input_state.help_overlay_scroll,
+                    self.input_state.help_overlay_quick_mode,
                 );
                 self.input_state.help_overlay_scroll_max = scroll_max;
                 self.input_state.help_overlay_scroll =
