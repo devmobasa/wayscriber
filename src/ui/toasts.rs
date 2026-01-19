@@ -2,6 +2,10 @@ use crate::input::InputState;
 use crate::input::state::{PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UiToastKind};
 use std::time::Instant;
 
+use super::constants::{
+    self, BLOCKED_FLASH, PROGRESS_TRACK, RADIUS_SM, TEXT_WHITE, TOAST_ERROR, TOAST_INFO,
+    TOAST_SUCCESS, TOAST_WARNING,
+};
 use super::primitives::draw_rounded_rect;
 use crate::ui_text::{UiTextStyle, text_layout};
 
@@ -83,16 +87,16 @@ pub fn render_preset_toast(
         (1.0 - t).clamp(0.0, 1.0)
     };
     let (r, g, b) = match kind {
-        PresetFeedbackKind::Apply => (0.22, 0.5, 0.9),
-        PresetFeedbackKind::Save => (0.2, 0.7, 0.4),
-        PresetFeedbackKind::Clear => (0.88, 0.3, 0.3),
+        PresetFeedbackKind::Apply => TOAST_INFO,
+        PresetFeedbackKind::Save => TOAST_SUCCESS,
+        PresetFeedbackKind::Clear => TOAST_ERROR,
     };
 
-    ctx.set_source_rgba(r, g, b, 0.85 * fade);
+    constants::set_color_alpha(ctx, (r, g, b), 0.85 * fade);
     draw_rounded_rect(ctx, x, y, width, height, radius);
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95 * fade);
+    ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, 0.95 * fade);
     let text_x = x + (width - extents.width()) / 2.0 - extents.x_bearing();
     let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
     layout.show_at_baseline(ctx, text_x, text_y);
@@ -146,14 +150,48 @@ pub fn render_ui_toast(
 
     let fade = (1.0 - progress as f64).clamp(0.0, 1.0);
     let (r, g, b) = match toast.kind {
-        UiToastKind::Info => (0.25, 0.7, 0.9),
-        UiToastKind::Warning => (0.92, 0.62, 0.18),
-        UiToastKind::Error => (0.9, 0.3, 0.3),
+        UiToastKind::Info => TOAST_INFO,
+        UiToastKind::Warning => TOAST_WARNING,
+        UiToastKind::Error => TOAST_ERROR,
     };
 
-    ctx.set_source_rgba(r, g, b, 0.92 * fade);
+    constants::set_color_alpha(ctx, (r, g, b), 0.92 * fade);
     draw_rounded_rect(ctx, x, y, width, height, radius);
     let _ = ctx.fill();
+
+    // Draw countdown progress bar for confirmation toasts
+    if toast.action.is_some() {
+        let progress_height = 3.0;
+        let progress_y = y + height - progress_height - 2.0;
+        let progress_width = width - padding_x * 2.0;
+        let remaining_width = progress_width * (1.0 - progress as f64);
+
+        // Track background
+        constants::set_color(ctx, PROGRESS_TRACK);
+        draw_rounded_rect(
+            ctx,
+            x + padding_x,
+            progress_y,
+            progress_width,
+            progress_height,
+            1.5,
+        );
+        let _ = ctx.fill();
+
+        // Remaining time indicator (shrinks as time runs out)
+        if remaining_width > 0.0 {
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8 * fade);
+            draw_rounded_rect(
+                ctx,
+                x + padding_x,
+                progress_y,
+                remaining_width,
+                progress_height,
+                1.5,
+            );
+            let _ = ctx.fill();
+        }
+    }
 
     // Draw main label
     let label_layout = text_layout(ctx, text_style, label, None);
@@ -163,18 +201,29 @@ pub fn render_ui_toast(
 
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55 * fade);
     label_layout.show_at_baseline(ctx, text_x + 1.0, text_y + 1.0);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0 * fade);
+    ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, 1.0 * fade);
     label_layout.show_at_baseline(ctx, text_x, text_y);
 
-    // Draw action suffix in slightly dimmer color if present
+    // Draw action suffix with button-style background for better visibility
     if toast.action.is_some() {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7 * fade);
         let suffix_layout = text_layout(ctx, text_style, &action_suffix, None);
-        suffix_layout.show_at_baseline(
-            ctx,
-            text_x + label_extents.width() + label_extents.x_bearing(),
-            text_y,
-        );
+        let suffix_extents = suffix_layout.ink_extents();
+        let suffix_x = text_x + label_extents.width() + label_extents.x_bearing();
+
+        // Button-style background for action
+        let btn_padding = 4.0;
+        let btn_x = suffix_x - btn_padding + suffix_extents.x_bearing();
+        let btn_y = text_y - suffix_extents.height() - btn_padding + suffix_extents.y_bearing();
+        let btn_w = suffix_extents.width() + btn_padding * 2.0;
+        let btn_h = suffix_extents.height() + btn_padding * 2.0;
+
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.2 * fade);
+        draw_rounded_rect(ctx, btn_x, btn_y, btn_w, btn_h, RADIUS_SM);
+        let _ = ctx.fill();
+
+        // Action text
+        ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, 0.95 * fade);
+        suffix_layout.show_at_baseline(ctx, suffix_x, text_y);
     }
 
     Some((x, y, width, height))
@@ -191,13 +240,16 @@ pub fn render_blocked_feedback(
         return;
     };
 
-    // Quick fade in, then fade out
-    let alpha = if progress < 0.2 {
-        // Fade in during first 20%
-        (progress / 0.2) * 0.18
+    // Quick fade in, then fade out with smoother pulse
+    let alpha = if progress < 0.15 {
+        // Fade in during first 15%
+        (progress / 0.15) * 0.22
+    } else if progress < 0.4 {
+        // Hold at peak
+        0.22
     } else {
-        // Fade out during remaining 80%
-        0.18 * (1.0 - (progress - 0.2) / 0.8)
+        // Fade out during remaining time
+        0.22 * (1.0 - (progress - 0.4) / 0.6)
     };
 
     let w = screen_width as f64;
@@ -205,7 +257,7 @@ pub fn render_blocked_feedback(
     let b = BLOCKED_FEEDBACK_BORDER;
 
     // Red tint on all four screen edges
-    ctx.set_source_rgba(0.9, 0.2, 0.2, alpha);
+    constants::set_color_alpha(ctx, BLOCKED_FLASH, alpha);
 
     // Top edge
     ctx.rectangle(0.0, 0.0, w, b);

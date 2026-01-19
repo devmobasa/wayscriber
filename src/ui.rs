@@ -2,6 +2,7 @@ pub mod toolbar;
 
 mod board_picker;
 mod command_palette;
+pub mod constants;
 mod context_menu;
 mod help_overlay;
 mod primitives;

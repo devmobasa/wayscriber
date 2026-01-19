@@ -3,6 +3,13 @@ use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use std::f64::consts::PI;
 
+use super::constants::{
+    self, BG_SELECTED_INDICATOR, BG_SELECTION, BORDER_BOARD_PICKER, DIVIDER_LIGHT,
+    ICON_DRAG_HANDLE, ICON_PIN_ACTIVE, ICON_PIN_INACTIVE, INDICATOR_ACTIVE_BOARD, INPUT_CARET,
+    NAV_HINT_BOARD_PICKER, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM, PANEL_BG_BOARD_PICKER,
+    RADIUS_PANEL, TEXT_ACTIVE, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
+};
+
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
 const PALETTE_SWATCH_GAP: f64 = 6.0;
 
@@ -54,9 +61,9 @@ pub fn render_board_picker(
 
     // Dim background (lighter in quick mode for a popover feel)
     let dim_alpha = if input_state.board_picker_is_quick() {
-        0.15
+        OVERLAY_DIM_LIGHT
     } else {
-        0.35
+        OVERLAY_DIM_MEDIUM
     };
     ctx.set_source_rgba(0.0, 0.0, 0.0, dim_alpha);
     ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
@@ -69,11 +76,11 @@ pub fn render_board_picker(
         layout.origin_y,
         layout.width,
         layout.height,
-        12.0,
+        RADIUS_PANEL,
     );
-    ctx.set_source_rgba(0.09, 0.11, 0.15, 0.96);
+    constants::set_color(ctx, PANEL_BG_BOARD_PICKER);
     let _ = ctx.fill_preserve();
-    ctx.set_source_rgba(0.2, 0.24, 0.3, 0.9);
+    constants::set_color(ctx, BORDER_BOARD_PICKER);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
@@ -83,23 +90,38 @@ pub fn render_board_picker(
     let title = input_state.board_picker_title(board_count, max_count);
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
     ctx.set_font_size(layout.title_font_size);
-    ctx.set_source_rgba(0.92, 0.94, 0.98, 1.0);
+    constants::set_color(ctx, TEXT_PRIMARY);
     let title_y = layout.origin_y + layout.padding_y + layout.title_font_size;
     ctx.move_to(layout.origin_x + layout.padding_x, title_y);
     let _ = ctx.show_text(&title);
 
-    // Footer
+    // Footer with navigation hint
     let footer = input_state.board_picker_footer_text();
     let recent = input_state.board_picker_recent_label();
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     ctx.set_font_size(layout.footer_font_size);
-    ctx.set_source_rgba(0.64, 0.69, 0.76, 0.9);
+    constants::set_color(ctx, TEXT_TERTIARY);
     let footer_y = layout.origin_y + layout.height - layout.padding_y;
     ctx.move_to(layout.origin_x + layout.padding_x, footer_y);
     let _ = ctx.show_text(&footer);
+    // Navigation hint on right side
+    ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.7);
+    let nav_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        layout.footer_font_size,
+        NAV_HINT_BOARD_PICKER,
+    );
+    ctx.move_to(
+        layout.origin_x + layout.width - layout.padding_x - nav_extents.width(),
+        footer_y,
+    );
+    let _ = ctx.show_text(NAV_HINT_BOARD_PICKER);
     if let Some(recent) = recent {
         let recent_y = footer_y - layout.recent_height;
-        ctx.set_source_rgba(0.52, 0.58, 0.66, 0.9);
+        ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.8);
         ctx.move_to(layout.origin_x + layout.padding_x, recent_y);
         let _ = ctx.show_text(&recent);
     }
@@ -131,7 +153,7 @@ pub fn render_board_picker(
     // Draw pinned/unpinned section divider
     if pinned_count > 0 && pinned_count < board_count {
         let divider_y = rows_top + layout.row_height * pinned_count as f64;
-        ctx.set_source_rgba(0.35, 0.4, 0.48, 0.6);
+        constants::set_color(ctx, DIVIDER_LIGHT);
         ctx.set_line_width(1.0);
         ctx.move_to(layout.origin_x + layout.padding_x, divider_y);
         ctx.line_to(layout.origin_x + layout.width - layout.padding_x, divider_y);
@@ -153,7 +175,7 @@ pub fn render_board_picker(
         let is_active_board = row < board_count && board_index == active_board_index;
 
         if is_highlighted {
-            ctx.set_source_rgba(0.22, 0.28, 0.38, 0.9);
+            constants::set_color(ctx, BG_SELECTION);
             ctx.rectangle(
                 layout.origin_x + 6.0,
                 row_top,
@@ -164,7 +186,7 @@ pub fn render_board_picker(
         }
 
         if is_selected {
-            ctx.set_source_rgba(0.33, 0.42, 0.58, 0.9);
+            constants::set_color(ctx, BG_SELECTED_INDICATOR);
             ctx.rectangle(layout.origin_x + 6.0, row_top, 3.0, layout.row_height);
             let _ = ctx.fill();
         }
@@ -174,7 +196,7 @@ pub fn render_board_picker(
 
         let is_new_row = row >= board_count;
         if is_new_row {
-            ctx.set_source_rgba(0.45, 0.5, 0.58, 0.9);
+            constants::set_color(ctx, TEXT_HINT);
             ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
             let _ = ctx.stroke();
             ctx.set_line_width(1.5);
@@ -208,7 +230,7 @@ pub fn render_board_picker(
                 }
             }
             if is_active_board {
-                ctx.set_source_rgba(0.9, 0.83, 0.32, 0.95);
+                constants::set_color(ctx, INDICATOR_ACTIVE_BOARD);
                 ctx.rectangle(
                     swatch_x - 2.0,
                     swatch_y - 2.0,
@@ -228,7 +250,7 @@ pub fn render_board_picker(
             } else {
                 "New board"
             };
-            ctx.set_source_rgba(0.7, 0.74, 0.8, 0.9);
+            constants::set_color(ctx, TEXT_HINT);
             ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
             let _ = ctx.show_text(label);
             continue;
@@ -241,20 +263,20 @@ pub fn render_board_picker(
             let (color, filled) = if board.spec.pinned {
                 (
                     Color {
-                        r: 0.96,
-                        g: 0.82,
-                        b: 0.28,
-                        a: 0.95,
+                        r: ICON_PIN_ACTIVE.0,
+                        g: ICON_PIN_ACTIVE.1,
+                        b: ICON_PIN_ACTIVE.2,
+                        a: ICON_PIN_ACTIVE.3,
                     },
                     true,
                 )
             } else {
                 (
                     Color {
-                        r: 0.6,
-                        g: 0.65,
-                        b: 0.72,
-                        a: 0.5,
+                        r: ICON_PIN_INACTIVE.0,
+                        g: ICON_PIN_INACTIVE.1,
+                        b: ICON_PIN_INACTIVE.2,
+                        a: ICON_PIN_INACTIVE.3,
                     },
                     false,
                 )
@@ -276,11 +298,11 @@ pub fn render_board_picker(
         }
 
         let name_color = if is_active_board {
-            [0.96, 0.98, 1.0, 1.0]
+            TEXT_ACTIVE
         } else {
-            [0.86, 0.89, 0.94, 1.0]
+            TEXT_SECONDARY
         };
-        ctx.set_source_rgba(name_color[0], name_color[1], name_color[2], name_color[3]);
+        constants::set_color(ctx, name_color);
         ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
         let _ = ctx.show_text(&name);
 
@@ -296,7 +318,7 @@ pub fn render_board_picker(
                 &name,
             );
             let page_label = format!(" ({} pages)", page_count);
-            ctx.set_source_rgba(0.55, 0.6, 0.68, 0.85);
+            ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.85);
             ctx.move_to(
                 name_x + name_extents.width(),
                 row_center + layout.body_font_size * 0.35,
@@ -317,7 +339,7 @@ pub fn render_board_picker(
                 &name,
             );
             let caret_x = name_x + extents.width() + 2.0;
-            ctx.set_source_rgba(0.98, 0.92, 0.55, 1.0);
+            constants::set_color(ctx, INPUT_CARET);
             ctx.set_line_width(1.0);
             ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
             ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);
@@ -333,7 +355,7 @@ pub fn render_board_picker(
         if let Some(hint_x) = hint_x {
             let hint = hint_override.or_else(|| board_slot_hint(input_state, board_index));
             if let Some(hint) = hint {
-                ctx.set_source_rgba(0.6, 0.65, 0.72, 0.9);
+                constants::set_color(ctx, TEXT_HINT);
                 ctx.move_to(hint_x, row_center + layout.body_font_size * 0.35);
                 let _ = ctx.show_text(&hint);
 
@@ -350,7 +372,7 @@ pub fn render_board_picker(
                         &hint,
                     );
                     let caret_x = hint_x + extents.width() + 2.0;
-                    ctx.set_source_rgba(0.98, 0.92, 0.55, 1.0);
+                    constants::set_color(ctx, INPUT_CARET);
                     ctx.set_line_width(1.0);
                     ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
                     ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);
@@ -415,7 +437,7 @@ pub fn render_board_picker(
                 let _ = ctx.stroke();
 
                 if active_color.map(|active| active == color).unwrap_or(false) {
-                    ctx.set_source_rgba(0.98, 0.92, 0.55, 0.95);
+                    constants::set_color(ctx, INPUT_CARET);
                     ctx.set_line_width(1.5);
                     draw_rounded_rect(
                         ctx,
@@ -481,7 +503,7 @@ fn draw_drag_handle(ctx: &cairo::Context, x: f64, y: f64, width: f64) {
     let col_gap = dot_radius * 2.6;
     let start_x = x + width * 0.5 - col_gap * 0.5;
     let start_y = y - gap;
-    ctx.set_source_rgba(0.58, 0.63, 0.7, 0.85);
+    constants::set_color(ctx, ICON_DRAG_HANDLE);
     for row in 0..3 {
         for col in 0..2 {
             let cx = start_x + col as f64 * col_gap;
