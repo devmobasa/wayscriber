@@ -22,6 +22,10 @@ pub struct ToolbarModeOverride {
     #[serde(default)]
     pub show_pages_section: Option<bool>,
 
+    /// Show the Boards section in the side toolbar
+    #[serde(default)]
+    pub show_boards_section: Option<bool>,
+
     /// Show the presets section in the side toolbar
     #[serde(default)]
     pub show_presets: Option<bool>,

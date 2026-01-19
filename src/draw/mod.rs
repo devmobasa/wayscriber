@@ -16,13 +16,14 @@ pub mod shape;
 
 // Re-export commonly used types at module level
 #[allow(unused_imports)]
-pub use canvas_set::{BoardPages, CanvasSet, PageDeleteOutcome};
+pub use canvas_set::{BoardPages, PageDeleteOutcome};
 pub use color::Color;
 pub use dirty::DirtyTracker;
 pub use font::FontDescriptor;
 pub use frame::{DrawnShape, Frame, ShapeId};
 #[allow(unused_imports)]
 pub(crate) use render::render_eraser_stroke;
+#[allow(unused_imports)]
 pub use render::{
     EraserReplayContext, render_board_background, render_click_highlight, render_freehand_borrowed,
     render_marker_stroke_borrowed, render_selection_halo, render_shape, render_sticky_note,

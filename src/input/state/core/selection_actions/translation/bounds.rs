@@ -8,7 +8,7 @@ impl InputState {
             return None;
         }
 
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let mut min_x = i32::MAX;
         let mut min_y = i32::MAX;
         let mut max_x = i32::MIN;

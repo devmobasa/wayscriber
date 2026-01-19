@@ -33,7 +33,7 @@ impl InputState {
         let mut removed = Vec::new();
         let mut dirty = Vec::new();
         {
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             for (index, shape) in frame.shapes.iter().enumerate() {
                 if id_set.contains(&shape.id) {
                     if shape.locked {
@@ -50,7 +50,7 @@ impl InputState {
         }
 
         {
-            let frame = self.canvas_set.active_frame_mut();
+            let frame = self.boards.active_frame_mut();
             for (index, _) in removed.iter().rev() {
                 frame.shapes.remove(*index);
             }

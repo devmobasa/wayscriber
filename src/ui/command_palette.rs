@@ -3,6 +3,12 @@
 use crate::input::InputState;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
+use super::constants::{
+    self, BG_INPUT_SELECTION, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE,
+    EMPTY_COMMAND_SUGGESTIONS, HINT_PRESS_ESC, INPUT_BG, INPUT_BORDER_FOCUSED, OVERLAY_DIM_MEDIUM,
+    PANEL_BG_COMMAND_PALETTE, RADIUS_LG, RADIUS_SM, RADIUS_STD, SHADOW, SPACING_MD,
+    TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
+};
 use super::primitives::{draw_rounded_rect, text_extents_for};
 
 const PALETTE_WIDTH: f64 = 400.0;
@@ -33,19 +39,24 @@ pub fn render_command_palette(
     let x = (screen_width as f64 - PALETTE_WIDTH) / 2.0;
     let y = screen_height as f64 * 0.2;
 
-    // Background with shadow
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
-    draw_rounded_rect(ctx, x + 4.0, y + 4.0, PALETTE_WIDTH, height, 10.0);
+    // Dimmed background overlay
+    ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_MEDIUM);
+    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
+    let _ = ctx.fill();
+
+    // Drop shadow
+    constants::set_color(ctx, SHADOW);
+    draw_rounded_rect(ctx, x + 4.0, y + 4.0, PALETTE_WIDTH, height, RADIUS_LG);
     let _ = ctx.fill();
 
     // Main background
-    ctx.set_source_rgba(0.15, 0.15, 0.18, 0.98);
-    draw_rounded_rect(ctx, x, y, PALETTE_WIDTH, height, 10.0);
+    constants::set_color(ctx, PANEL_BG_COMMAND_PALETTE);
+    draw_rounded_rect(ctx, x, y, PALETTE_WIDTH, height, RADIUS_LG);
     let _ = ctx.fill();
 
     // Border
-    ctx.set_source_rgba(0.4, 0.4, 0.45, 0.5);
-    draw_rounded_rect(ctx, x, y, PALETTE_WIDTH, height, 10.0);
+    constants::set_color(ctx, BORDER_COMMAND_PALETTE);
+    draw_rounded_rect(ctx, x, y, PALETTE_WIDTH, height, RADIUS_LG);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
@@ -54,10 +65,17 @@ pub fn render_command_palette(
     let mut cursor_y = y + PADDING;
 
     // Input field
-    draw_rounded_rect(ctx, inner_x, cursor_y, inner_width, INPUT_HEIGHT, 6.0);
-    ctx.set_source_rgba(0.1, 0.1, 0.12, 1.0);
+    draw_rounded_rect(
+        ctx,
+        inner_x,
+        cursor_y,
+        inner_width,
+        INPUT_HEIGHT,
+        RADIUS_STD,
+    );
+    constants::set_color(ctx, INPUT_BG);
     let _ = ctx.fill_preserve();
-    ctx.set_source_rgba(0.3, 0.5, 0.8, 0.6);
+    constants::set_color(ctx, INPUT_BORDER_FOCUSED);
     ctx.set_line_width(1.5);
     let _ = ctx.stroke();
 
@@ -78,7 +96,7 @@ pub fn render_command_palette(
 
     let text_y = cursor_y + INPUT_HEIGHT / 2.0 + font_size / 3.0;
     if input_state.command_palette_query.is_empty() {
-        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.7);
+        constants::set_color(ctx, TEXT_PLACEHOLDER);
         draw_text_baseline(
             ctx,
             input_style,
@@ -88,7 +106,7 @@ pub fn render_command_palette(
             None,
         );
     } else {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+        constants::set_color(ctx, TEXT_WHITE);
         draw_text_baseline(
             ctx,
             input_style,
@@ -115,17 +133,25 @@ pub fn render_command_palette(
 
         // Selection highlight
         if is_selected {
-            draw_rounded_rect(ctx, inner_x, item_y, inner_width, ITEM_HEIGHT - 2.0, 4.0);
-            ctx.set_source_rgba(0.3, 0.5, 0.8, 0.4);
+            draw_rounded_rect(
+                ctx,
+                inner_x,
+                item_y,
+                inner_width,
+                ITEM_HEIGHT - 2.0,
+                RADIUS_SM,
+            );
+            constants::set_color(ctx, BG_INPUT_SELECTION);
             let _ = ctx.fill();
         }
 
         // Command label
         let label_y = item_y + ITEM_HEIGHT / 2.0 + font_size / 3.0;
-        ctx.set_source_rgba(1.0, 1.0, 1.0, if is_selected { 1.0 } else { 0.85 });
+        let text_alpha = if is_selected { 1.0 } else { 0.85 };
+        ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, text_alpha);
         draw_text_baseline(ctx, input_style, cmd.label, inner_x + 10.0, label_y, None);
 
-        // Description (dimmer)
+        // Description (dimmer but improved contrast)
         let label_extents = text_extents_for(
             ctx,
             "Sans",
@@ -135,20 +161,105 @@ pub fn render_command_palette(
             cmd.label,
         );
         let desc_x = inner_x + 10.0 + label_extents.width() + 12.0;
-        ctx.set_source_rgba(0.6, 0.6, 0.65, if is_selected { 0.9 } else { 0.6 });
+        let desc_alpha = if is_selected { 0.9 } else { 0.75 };
+        ctx.set_source_rgba(
+            TEXT_DESCRIPTION.0,
+            TEXT_DESCRIPTION.1,
+            TEXT_DESCRIPTION.2,
+            desc_alpha,
+        );
         draw_text_baseline(ctx, desc_style, cmd.description, desc_x, label_y, None);
     }
 
-    // Show "no results" if empty
+    // Enhanced empty state
     if filtered.is_empty() && !input_state.command_palette_query.is_empty() {
-        ctx.set_source_rgba(0.6, 0.6, 0.65, 0.8);
+        let empty_y = cursor_y + ITEM_HEIGHT;
+        let center_x = inner_x + inner_width / 2.0;
+
+        // Main message - larger and centered
+        let empty_style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        };
+        constants::set_color(ctx, TEXT_DESCRIPTION);
+        let msg_extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Bold,
+            font_size,
+            EMPTY_COMMAND_PALETTE,
+        );
         draw_text_baseline(
             ctx,
-            input_style,
-            "No matching commands",
-            inner_x + 10.0,
-            cursor_y + ITEM_HEIGHT / 2.0 + font_size / 3.0,
+            empty_style,
+            EMPTY_COMMAND_PALETTE,
+            center_x - msg_extents.width() / 2.0,
+            empty_y,
+            None,
+        );
+
+        // Suggestions
+        let suggest_style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Italic,
+            weight: cairo::FontWeight::Normal,
+            size: 11.0,
+        };
+        ctx.set_source_rgba(
+            TEXT_DESCRIPTION.0,
+            TEXT_DESCRIPTION.1,
+            TEXT_DESCRIPTION.2,
+            0.7,
+        );
+        let suggest_extents = text_extents_for(
+            ctx,
+            "Sans",
+            cairo::FontSlant::Italic,
+            cairo::FontWeight::Normal,
+            11.0,
+            EMPTY_COMMAND_SUGGESTIONS,
+        );
+        draw_text_baseline(
+            ctx,
+            suggest_style,
+            EMPTY_COMMAND_SUGGESTIONS,
+            center_x - suggest_extents.width() / 2.0,
+            empty_y + 20.0,
             None,
         );
     }
+
+    // Escape hint at bottom
+    let hint_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 11.0,
+    };
+    ctx.set_source_rgba(
+        TEXT_DESCRIPTION.0,
+        TEXT_DESCRIPTION.1,
+        TEXT_DESCRIPTION.2,
+        0.6,
+    );
+    let hint_y = y + height - SPACING_MD;
+    let hint_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        11.0,
+        HINT_PRESS_ESC,
+    );
+    draw_text_baseline(
+        ctx,
+        hint_style,
+        HINT_PRESS_ESC,
+        x + (PALETTE_WIDTH - hint_extents.width()) / 2.0,
+        hint_y,
+        None,
+    );
 }

@@ -29,7 +29,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.arrow.angle_degrees,
         config.arrow.head_at_end,
         config.ui.show_status_bar,
-        config.board.clone(),
+        config.resolved_boards(),
         action_map,
         config.session.max_shapes_per_frame,
         ClickHighlightSettings::from(&config.ui.click_highlight),
@@ -48,6 +48,9 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
     input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
     input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
+    input_state.show_status_board_badge = config.ui.show_status_board_badge;
+    input_state.show_status_page_badge = config.ui.show_status_page_badge;
+    input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
 
     input_state.init_toolbar_from_config(
         config.ui.toolbar.layout_mode,
@@ -60,6 +63,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.show_actions_advanced,
         config.ui.toolbar.show_zoom_actions,
         config.ui.toolbar.show_pages_section,
+        config.ui.toolbar.show_boards_section,
         config.ui.toolbar.show_presets,
         config.ui.toolbar.show_step_section,
         config.ui.toolbar.show_text_controls,

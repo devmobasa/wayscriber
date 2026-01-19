@@ -1,7 +1,6 @@
-use crate::config::BoardConfig;
-use crate::input::BoardMode;
+use crate::input::BoardBackground;
 
-/// Renders board background for whiteboard/blackboard modes.
+/// Renders board background for solid board modes.
 ///
 /// This function fills the entire canvas with a solid color when in
 /// whiteboard or blackboard mode. For transparent mode, it does nothing
@@ -11,10 +10,10 @@ use crate::input::BoardMode;
 ///
 /// # Arguments
 /// * `ctx` - Cairo drawing context to render to
-/// * `mode` - Current board mode
-/// * `config` - Board configuration with color settings
-pub fn render_board_background(ctx: &cairo::Context, mode: BoardMode, config: &BoardConfig) {
-    if let Some(bg_color) = mode.background_color(config) {
+/// * `background` - Current board background
+#[allow(dead_code)]
+pub fn render_board_background(ctx: &cairo::Context, background: &BoardBackground) {
+    if let BoardBackground::Solid(bg_color) = background {
         ctx.set_source_rgba(bg_color.r, bg_color.g, bg_color.b, bg_color.a);
         let _ = ctx.paint(); // Ignore errors - if paint fails, we'll just have transparent bg
     }

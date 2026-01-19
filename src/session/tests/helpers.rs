@@ -1,4 +1,4 @@
-use crate::config::{Action, BoardConfig, KeyBinding, PresenterModeConfig};
+use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig};
 use crate::draw::Color as DrawColor;
 use crate::draw::FontDescriptor;
 use crate::input::{ClickHighlightSettings, EraserMode, InputState};
@@ -26,7 +26,7 @@ pub(super) fn dummy_input_state() -> InputState {
         30.0,
         false,
         true,
-        BoardConfig::default(),
+        BoardsConfig::default(),
         action_map,
         usize::MAX,
         ClickHighlightSettings::disabled(),

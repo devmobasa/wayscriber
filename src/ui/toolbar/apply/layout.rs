@@ -114,6 +114,15 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_boards_section(&mut self, show: bool) -> bool {
+        if self.show_boards_section != show {
+            self.show_boards_section = show;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn apply_toolbar_toggle_presets(&mut self, show: bool) -> bool {
         if self.show_presets != show {
             self.show_presets = show;
@@ -169,6 +178,39 @@ impl InputState {
         }
         if self.show_status_bar != show {
             self.show_status_bar = show;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn apply_toolbar_toggle_status_board_badge(&mut self, show: bool) -> bool {
+        if self.show_status_board_badge != show {
+            self.show_status_board_badge = show;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn apply_toolbar_toggle_status_page_badge(&mut self, show: bool) -> bool {
+        if self.show_status_page_badge != show {
+            self.show_status_page_badge = show;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn apply_toolbar_toggle_floating_badge_always(&mut self, show: bool) -> bool {
+        if self.show_floating_badge_always != show {
+            self.show_floating_badge_always = show;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             true

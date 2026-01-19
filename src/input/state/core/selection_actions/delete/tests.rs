@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{BoardConfig, KeybindingsConfig, PresenterModeConfig};
+use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{ClickHighlightSettings, EraserMode};
 
@@ -33,7 +33,7 @@ fn create_test_input_state() -> InputState {
         30.0,
         false,
         true,
-        BoardConfig::default(),
+        BoardsConfig::default(),
         action_map,
         usize::MAX,
         ClickHighlightSettings::disabled(),

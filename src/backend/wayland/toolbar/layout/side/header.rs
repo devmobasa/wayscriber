@@ -51,4 +51,13 @@ pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRe
             "Pin".to_string()
         }),
     });
+
+    let chip_y = ctx.spec.side_header_board_y();
+    let chip_h = ToolbarLayoutSpec::SIDE_HEADER_BOARD_ROW_HEIGHT;
+    hits.push(HitRegion {
+        rect: (ctx.x, chip_y, ctx.content_width, chip_h),
+        event: ToolbarEvent::ToggleBoardPicker,
+        kind: HitKind::Click,
+        tooltip: Some("Boards".to_string()),
+    });
 }

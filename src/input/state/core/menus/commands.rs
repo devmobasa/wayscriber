@@ -1,7 +1,7 @@
 use super::super::base::{InputState, UiToastKind};
 use super::types::{ContextMenuKind, ContextMenuState, MenuCommand};
 use crate::draw::ShapeId;
-use crate::input::board_mode::BoardMode;
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
 impl InputState {
     fn hovered_context_menu_shape(&self) -> Option<ShapeId> {
@@ -28,9 +28,10 @@ impl InputState {
             }
             MenuCommand::SelectHoveredShape => {
                 if let Some(hovered_shape) = self.hovered_context_menu_shape() {
+                    let previous_ids = self.selected_shape_ids().to_vec();
                     let previous_bounds = {
-                        let frame = self.canvas_set.active_frame();
-                        self.selected_shape_ids()
+                        let frame = self.boards.active_frame();
+                        previous_ids
                             .iter()
                             .filter_map(|id| {
                                 frame
@@ -46,7 +47,7 @@ impl InputState {
                         self.mark_selection_dirty_region(Some(bounds));
                     }
                     let hovered_bounds = {
-                        let frame = self.canvas_set.active_frame();
+                        let frame = self.boards.active_frame();
                         frame
                             .shape(hovered_shape)
                             .and_then(|shape| shape.shape.bounding_box())
@@ -132,15 +133,15 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::SwitchToWhiteboard => {
-                self.switch_board_mode(BoardMode::Whiteboard);
+                self.switch_board(BOARD_ID_WHITEBOARD);
                 self.close_context_menu();
             }
             MenuCommand::SwitchToBlackboard => {
-                self.switch_board_mode(BoardMode::Blackboard);
+                self.switch_board(BOARD_ID_BLACKBOARD);
                 self.close_context_menu();
             }
             MenuCommand::ReturnToTransparent => {
-                self.switch_board_mode(BoardMode::Transparent);
+                self.switch_board(BOARD_ID_TRANSPARENT);
                 self.close_context_menu();
             }
             MenuCommand::ToggleHelp => {

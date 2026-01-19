@@ -19,7 +19,7 @@ impl InputState {
             return None;
         }
         let shape_id = self.selected_shape_ids()[0];
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let shape = frame.shape(shape_id)?;
         if shape.locked {
             return None;

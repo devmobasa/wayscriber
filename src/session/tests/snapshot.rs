@@ -24,7 +24,7 @@ fn snapshot_includes_frames_and_tool_state() {
     options.persist_transparent = true;
 
     let mut input = dummy_input_state();
-    input.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    input.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 10,
@@ -39,7 +39,12 @@ fn snapshot_includes_frames_and_tool_state() {
     });
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
-    assert!(snapshot.transparent.is_some());
+    assert!(
+        snapshot
+            .boards
+            .iter()
+            .any(|board| board.id == "transparent")
+    );
     assert!(snapshot.tool_state.is_some());
 }
 

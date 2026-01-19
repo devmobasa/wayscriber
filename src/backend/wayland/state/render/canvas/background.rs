@@ -23,12 +23,11 @@ impl WaylandState {
         phys_width: u32,
         phys_height: u32,
     ) -> Result<CanvasEraserContext> {
-        let board_mode = self.input_state.board_mode();
         let mut eraser_pattern: Option<cairo::SurfacePattern> = None;
         let mut eraser_bg_color: Option<Color> = None;
 
         let allow_background_image =
-            !(self.zoom.is_engaged() && board_mode != BoardMode::Transparent);
+            !self.zoom.is_engaged() || self.input_state.board_is_transparent();
         let zoom_render_image = if self.zoom.active && allow_background_image {
             self.zoom.image().or_else(|| self.frozen.image())
         } else {
@@ -95,16 +94,14 @@ impl WaylandState {
             pattern.set_matrix(matrix);
             eraser_pattern = Some(pattern);
         } else {
-            // Render board background if in board mode (whiteboard/blackboard)
-            crate::draw::render_board_background(
-                ctx,
-                self.input_state.board_mode(),
-                &self.input_state.board_config,
-            );
-            eraser_bg_color = self
-                .input_state
-                .board_mode()
-                .background_color(&self.input_state.board_config);
+            match self.input_state.boards.active_background() {
+                crate::input::BoardBackground::Solid(color) => {
+                    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+                    let _ = ctx.paint();
+                    eraser_bg_color = Some(*color);
+                }
+                crate::input::BoardBackground::Transparent => {}
+            }
         }
 
         Ok(CanvasEraserContext {

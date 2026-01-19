@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn select_all_action_selects_shapes() {
     let mut state = create_test_input_state();
-    let first = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 10,
         w: 10,
@@ -12,7 +12,7 @@ fn select_all_action_selects_shapes() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let second = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 30,
         y: 30,
         w: 10,
@@ -32,7 +32,7 @@ fn select_all_action_selects_shapes() {
 #[test]
 fn escape_clears_selection_before_exit() {
     let mut state = create_test_input_state();
-    let shape_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 0,
         y: 0,
         w: 10,
@@ -51,7 +51,7 @@ fn escape_clears_selection_before_exit() {
 #[test]
 fn select_tool_drag_selects_shapes_in_rect() {
     let mut state = create_test_input_state();
-    let inside = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let inside = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 12,
         y: 12,
         w: 8,
@@ -60,7 +60,7 @@ fn select_tool_drag_selects_shapes_in_rect() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let outside = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let outside = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 80,
         y: 80,
         w: 10,

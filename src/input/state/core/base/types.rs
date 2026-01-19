@@ -5,7 +5,13 @@ pub const MAX_STROKE_THICKNESS: f64 = 50.0;
 pub const PRESET_FEEDBACK_DURATION_MS: u64 = 450;
 pub const PRESET_TOAST_DURATION_MS: u64 = 1300;
 pub const UI_TOAST_DURATION_MS: u64 = 5000;
+pub const BOARD_DELETE_CONFIRM_MS: u64 = 7000;
 pub const BLOCKED_ACTION_DURATION_MS: u64 = 200;
+pub const BOARD_UNDO_EXPIRE_MS: u64 = 30_000;
+pub const PAGE_DELETE_CONFIRM_MS: u64 = 5000;
+pub const PAGE_UNDO_EXPIRE_MS: u64 = 30_000;
+#[allow(dead_code)]
+pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
 use crate::capture::file::FileSaveConfig;
 use crate::config::ToolPresetConfig;
@@ -239,4 +245,26 @@ pub(crate) struct PendingClipboardFallback {
     pub save_config: FileSaveConfig,
     /// Whether to exit after successful fallback save (from exit-after-capture mode).
     pub exit_after_save: bool,
+}
+
+/// Pending board deletion confirmation state.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingBoardDelete {
+    pub board_id: String,
+    pub expires_at: Instant,
+}
+
+/// Pending page deletion confirmation state.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingPageDelete {
+    pub board_id: String,
+    pub page_index: usize,
+    pub expires_at: Instant,
+}
+
+/// State for status bar change highlight animation.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(crate) struct StatusChangeHighlight {
+    pub started: Instant,
 }

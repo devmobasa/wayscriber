@@ -36,16 +36,15 @@ impl WaylandState {
         // Render all completed shapes from active frame
         debug!(
             "Rendering {} completed shapes",
-            self.input_state.canvas_set.active_frame().shapes.len()
+            self.input_state.boards.active_frame().shapes.len()
         );
-        let shapes = &self.input_state.canvas_set.active_frame().shapes;
+        let shapes = &self.input_state.boards.active_frame().shapes;
         let replay_ctx = eraser_ctx.replay_context();
 
         // Manual Culling: Only render shapes that intersect with the damage regions.
         // Cairo's internal clipping is efficient for rasterization, but sending
         // thousands of shapes to Cairo still incurs overhead for geometry processing.
         // A simple bounding box check here eliminates that overhead.
-
         let render_drawn_shape = |drawn_shape: &crate::draw::DrawnShape| match &drawn_shape.shape {
             crate::draw::Shape::EraserStroke { points, brush } => {
                 crate::draw::render_eraser_stroke(ctx, points, brush, &replay_ctx);

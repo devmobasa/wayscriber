@@ -42,7 +42,7 @@ impl InputState {
             return Vec::new();
         }
 
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let len = frame.shapes.len();
         if len == 0 {
             return Vec::new();
@@ -104,7 +104,7 @@ impl InputState {
 
         // Get the shape's new bounds (if it still exists)
         let new_bounds = self
-            .canvas_set
+            .boards
             .active_frame()
             .shape(id)
             .and_then(|drawn| drawn.shape.bounding_box());
@@ -139,7 +139,7 @@ impl InputState {
     }
 
     pub(crate) fn ensure_spatial_index_for_active_frame(&mut self) {
-        let len = self.canvas_set.active_frame().shapes.len();
+        let len = self.boards.active_frame().shapes.len();
         if len <= self.max_linear_hit_test {
             self.spatial_index = None;
             return;
@@ -155,13 +155,13 @@ impl InputState {
         };
 
         if needs_rebuild {
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             self.spatial_index = SpatialGrid::build(frame, SPATIAL_GRID_CELL_SIZE);
         }
     }
 
     fn hit_test_single(&mut self, index: usize, x: i32, y: i32, tolerance: f64) -> Option<ShapeId> {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         if index >= frame.shapes.len() {
             return None;
         }
@@ -187,7 +187,7 @@ impl InputState {
     }
 
     fn hit_test_by_id(&mut self, id: ShapeId, x: i32, y: i32, tolerance: f64) -> bool {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let Some(drawn) = frame.shape(id) else {
             return false;
         };
@@ -222,7 +222,7 @@ impl InputState {
     /// Performs hit-testing against the active frame and returns the top-most shape id.
     pub fn hit_test_at(&mut self, x: i32, y: i32) -> Option<ShapeId> {
         let tolerance = self.hit_test_tolerance;
-        let len = self.canvas_set.active_frame().shapes.len();
+        let len = self.boards.active_frame().shapes.len();
         let threshold = self.max_linear_hit_test;
 
         if len > threshold {
@@ -233,7 +233,7 @@ impl InputState {
                 let candidates = grid.query_with_tolerance((x, y), tolerance);
 
                 // Build index map for O(1) lookup instead of O(n) find_index per candidate
-                let frame = self.canvas_set.active_frame();
+                let frame = self.boards.active_frame();
                 let index_map: HashMap<ShapeId, usize> = frame
                     .shapes
                     .iter()

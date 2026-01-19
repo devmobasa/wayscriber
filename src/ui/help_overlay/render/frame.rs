@@ -1,4 +1,5 @@
 use crate::config::HelpOverlayStyle;
+use crate::ui::constants::OVERLAY_DIM_HELP;
 
 use super::palette::RenderPalette;
 use crate::ui::primitives::draw_rounded_rect;
@@ -18,7 +19,7 @@ pub(super) fn draw_overlay_frame(
     let corner_radius = 16.0;
 
     // Dim background behind overlay
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.55);
+    ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_HELP);
     ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
     let _ = ctx.fill();
 

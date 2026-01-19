@@ -24,6 +24,24 @@ impl ConfiguratorApp {
                 ToggleField::UiShowStatusBar,
             ),
             toggle_row(
+                "Show board label",
+                self.draft.ui_show_status_board_badge,
+                self.defaults.ui_show_status_board_badge,
+                ToggleField::UiShowStatusBoardBadge,
+            ),
+            toggle_row(
+                "Show page counter",
+                self.draft.ui_show_status_page_badge,
+                self.defaults.ui_show_status_page_badge,
+                ToggleField::UiShowStatusPageBadge,
+            ),
+            toggle_row(
+                "Show overlay badge with status bar",
+                self.draft.ui_show_page_badge_with_status_bar,
+                self.defaults.ui_show_page_badge_with_status_bar,
+                ToggleField::UiShowPageBadgeWithStatusBar,
+            ),
+            toggle_row(
                 "Show frozen badge",
                 self.draft.ui_show_frozen_badge,
                 self.defaults.ui_show_frozen_badge,

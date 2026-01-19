@@ -83,15 +83,47 @@ pub fn render_zoom_badge(
 }
 
 /// Render a small badge indicating the current page (visible even when status bar is hidden).
+#[allow(clippy::too_many_arguments)]
 pub fn render_page_badge(
     ctx: &cairo::Context,
     _screen_width: u32,
     _screen_height: u32,
+    board_index: usize,
+    board_count: usize,
+    board_name: &str,
     page_index: usize,
     page_count: usize,
 ) {
-    let label = format!("Page {}/{}", page_index + 1, page_count.max(1));
+    let truncated_name = crate::util::truncate_with_ellipsis(board_name, 20);
+    let board_label = if !truncated_name.trim().is_empty() {
+        if board_count > 1 {
+            Some(format!(
+                "Board {}/{}: {}",
+                board_index + 1,
+                board_count.max(1),
+                truncated_name
+            ))
+        } else {
+            Some(format!("Board: {}", truncated_name))
+        }
+    } else if board_count > 1 {
+        Some(format!("Board {}/{}", board_index + 1, board_count.max(1)))
+    } else {
+        None
+    };
+    let page_label = if page_count > 1 {
+        Some(format!("Page {}/{}", page_index + 1, page_count.max(1)))
+    } else {
+        None
+    };
+    let label = match (board_label, page_label) {
+        (Some(board), Some(page)) => format!("{board} | {page}"),
+        (Some(board), None) => board,
+        (None, Some(page)) => page,
+        (None, None) => return,
+    };
     let padding = 12.0;
+    let edge_padding = 4.0;
     let radius = 8.0;
     let font_size = 15.0;
     let layout = text_layout(
@@ -111,7 +143,7 @@ pub fn render_page_badge(
     let height = extents.height() + padding;
 
     let x = padding;
-    let y = padding + height;
+    let y = edge_padding + height;
 
     // Background with a neutral cool tone.
     ctx.set_source_rgba(0.2, 0.32, 0.45, 0.92);
@@ -120,5 +152,5 @@ pub fn render_page_badge(
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.5));
 }

@@ -16,6 +16,15 @@ impl InputState {
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
 
+        if self.is_board_picker_open() {
+            if self.board_picker_is_dragging() {
+                self.board_picker_update_drag_from_pointer(x, y);
+            } else {
+                self.update_board_picker_hover_from_pointer(x, y);
+            }
+            return;
+        }
+
         if self.is_properties_panel_open() {
             if self.properties_panel_layout().is_none() {
                 return;

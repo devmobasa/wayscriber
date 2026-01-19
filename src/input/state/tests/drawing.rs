@@ -8,14 +8,14 @@ fn mouse_drag_creates_shapes_for_each_tool() {
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_motion(10, 10);
     state.on_mouse_release(MouseButton::Left, 10, 10);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
+    assert_eq!(state.boards.active_frame().shapes.len(), 1);
     state.clear_selection();
 
     // Line (Shift)
     state.modifiers.shift = true;
     state.on_mouse_press(MouseButton::Left, 20, 20);
     state.on_mouse_release(MouseButton::Left, 25, 25);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 2);
+    assert_eq!(state.boards.active_frame().shapes.len(), 2);
     state.clear_selection();
 
     // Rectangle (Ctrl)
@@ -23,7 +23,7 @@ fn mouse_drag_creates_shapes_for_each_tool() {
     state.modifiers.ctrl = true;
     state.on_mouse_press(MouseButton::Left, 40, 40);
     state.on_mouse_release(MouseButton::Left, 45, 45);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 3);
+    assert_eq!(state.boards.active_frame().shapes.len(), 3);
     state.clear_selection();
 
     // Ellipse (Tab)
@@ -31,7 +31,7 @@ fn mouse_drag_creates_shapes_for_each_tool() {
     state.modifiers.tab = true;
     state.on_mouse_press(MouseButton::Left, 60, 60);
     state.on_mouse_release(MouseButton::Left, 64, 64);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 4);
+    assert_eq!(state.boards.active_frame().shapes.len(), 4);
     state.clear_selection();
 
     // Arrow (Ctrl+Shift)
@@ -40,7 +40,7 @@ fn mouse_drag_creates_shapes_for_each_tool() {
     state.modifiers.shift = true;
     state.on_mouse_press(MouseButton::Left, 80, 80);
     state.on_mouse_release(MouseButton::Left, 86, 86);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 5);
+    assert_eq!(state.boards.active_frame().shapes.len(), 5);
 }
 
 #[test]
@@ -71,10 +71,10 @@ fn highlight_tool_prevents_drawing() {
     // Enable highlight effect to ensure no shapes are added while clicks happen
     state.handle_action(Action::ToggleClickHighlight);
 
-    let initial_shapes = state.canvas_set.active_frame().shapes.len();
+    let initial_shapes = state.boards.active_frame().shapes.len();
     state.on_mouse_press(MouseButton::Left, 10, 10);
     state.on_mouse_release(MouseButton::Left, 20, 20);
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), initial_shapes);
+    assert_eq!(state.boards.active_frame().shapes.len(), initial_shapes);
     assert!(matches!(state.state, DrawingState::Idle));
 
     // Toggle highlight tool off and ensure pen drawing resumes
@@ -82,10 +82,7 @@ fn highlight_tool_prevents_drawing() {
     assert!(!state.highlight_tool_active());
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_release(MouseButton::Left, 5, 5);
-    assert_eq!(
-        state.canvas_set.active_frame().shapes.len(),
-        initial_shapes + 1
-    );
+    assert_eq!(state.boards.active_frame().shapes.len(), initial_shapes + 1);
 }
 
 #[test]

@@ -47,6 +47,9 @@ pub struct ConfigDraft {
     pub performance_ui_animation_fps: String,
 
     pub ui_show_status_bar: bool,
+    pub ui_show_status_board_badge: bool,
+    pub ui_show_status_page_badge: bool,
+    pub ui_show_page_badge_with_status_bar: bool,
     pub ui_show_frozen_badge: bool,
     pub ui_context_menu_enabled: bool,
     pub ui_preferred_output: String,
@@ -62,6 +65,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_actions_advanced: bool,
     pub ui_toolbar_show_zoom_actions: bool,
     pub ui_toolbar_show_pages_section: bool,
+    pub ui_toolbar_show_boards_section: bool,
     pub ui_toolbar_show_step_section: bool,
     pub ui_toolbar_show_text_controls: bool,
     pub ui_toolbar_show_settings_section: bool,

@@ -35,25 +35,42 @@ pub fn render_help_overlay(
     board_enabled: bool,
     capture_enabled: bool,
     scroll_offset: f64,
+    quick_mode: bool,
 ) -> f64 {
-    let title_text = "Wayscriber Controls";
+    let title_text = if quick_mode {
+        "Quick Reference"
+    } else {
+        "Wayscriber Controls"
+    };
     let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
     let config_binding = bindings
         .labels_for(Action::OpenConfigurator)
         .and_then(|labels| labels.first())
         .map(|label| label.as_str())
         .unwrap_or(NOT_BOUND_LABEL);
-    let version_line = format!(
-        "Wayscriber {} ({})  {}  {} {} {}",
-        env!("CARGO_PKG_VERSION"),
-        commit_hash,
-        BULLET,
-        config_binding,
-        ARROW,
-        action_label(Action::OpenConfigurator)
-    );
-    let note_text_base = "Note: Each board mode has independent pages";
-    let close_hint_text = "F1 / Esc to close";
+    let version_line = if quick_mode {
+        "Essential shortcuts at a glance".to_string()
+    } else {
+        format!(
+            "Wayscriber {} ({})  {}  {} {} {}",
+            env!("CARGO_PKG_VERSION"),
+            commit_hash,
+            BULLET,
+            config_binding,
+            ARROW,
+            action_label(Action::OpenConfigurator)
+        )
+    };
+    let note_text_base = if quick_mode {
+        "F1 for full help"
+    } else {
+        "Note: Each board has independent pages"
+    };
+    let close_hint_text = if quick_mode {
+        "Shift+F1 / Esc to close"
+    } else {
+        "F1 / Esc to close"
+    };
 
     let layout = get_or_build_overlay_layout(
         ctx,
@@ -72,6 +89,7 @@ pub fn render_help_overlay(
         &version_line,
         note_text_base,
         close_hint_text,
+        quick_mode,
     );
     let help_font_family = layout.help_font_family.as_str();
     let metrics = layout.metrics;

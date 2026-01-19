@@ -38,7 +38,8 @@ pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
 pub use types::TabletInputConfig;
 #[allow(unused_imports)]
 pub use types::{
-    ArrowConfig, BoardConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
+    ArrowConfig, BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig,
+    BoardsConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
     HistoryConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PerformanceConfig, PresenterModeConfig,
     PresenterToolBehavior, PresetSlotsConfig, SessionCompression, SessionConfig,
     SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig, ToolbarLayoutMode,

@@ -70,6 +70,24 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             Some("Status bar: color/tool readout."),
         ),
         (
+            "Status board",
+            snapshot.show_status_board_badge,
+            ToolbarEvent::ToggleStatusBoardBadge(!snapshot.show_status_board_badge),
+            Some("Status bar: board label."),
+        ),
+        (
+            "Status page",
+            snapshot.show_status_page_badge,
+            ToolbarEvent::ToggleStatusPageBadge(!snapshot.show_status_page_badge),
+            Some("Status bar: page counter."),
+        ),
+        (
+            "Overlay badge",
+            snapshot.show_floating_badge_always,
+            ToolbarEvent::ToggleFloatingBadgeAlways(!snapshot.show_floating_badge_always),
+            Some("Board/page badge when status bar is visible."),
+        ),
+        (
             "Preset toasts",
             snapshot.show_preset_toasts,
             ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
@@ -101,6 +119,12 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 snapshot.show_actions_advanced,
                 ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
                 Some("Advanced: undo-all/delay/freeze."),
+            ),
+            (
+                "Boards",
+                snapshot.show_boards_section,
+                ToolbarEvent::ToggleBoardsSection(!snapshot.show_boards_section),
+                Some("Boards: prev/next/new/del."),
             ),
             (
                 "Pages",

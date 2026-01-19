@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn duplicate_selection_via_action_creates_offset_shape() {
     let mut state = create_test_input_state();
-    let original_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 20,
         w: 100,
@@ -16,7 +16,7 @@ fn duplicate_selection_via_action_creates_offset_shape() {
     state.set_selection(vec![original_id]);
     state.handle_action(Action::DuplicateSelection);
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 2);
 
     let new_id = frame
@@ -40,7 +40,7 @@ fn duplicate_selection_via_action_creates_offset_shape() {
 #[test]
 fn copy_paste_selection_creates_offset_shape() {
     let mut state = create_test_input_state();
-    let original_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 20,
         w: 100,
@@ -54,7 +54,7 @@ fn copy_paste_selection_creates_offset_shape() {
     state.handle_action(Action::CopySelection);
     state.handle_action(Action::PasteSelection);
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 2);
 
     let new_id = frame
@@ -78,7 +78,7 @@ fn copy_paste_selection_creates_offset_shape() {
 #[test]
 fn duplicate_selection_skips_locked_shapes() {
     let mut state = create_test_input_state();
-    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let unlocked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 0,
         y: 0,
         w: 10,
@@ -87,7 +87,7 @@ fn duplicate_selection_skips_locked_shapes() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+    let locked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 20,
         y: 20,
         w: 10,
@@ -97,14 +97,14 @@ fn duplicate_selection_skips_locked_shapes() {
         thick: state.current_thickness,
     });
 
-    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
-        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    if let Some(index) = state.boards.active_frame().find_index(locked_id) {
+        state.boards.active_frame_mut().shapes[index].locked = true;
     }
 
     state.set_selection(vec![unlocked_id, locked_id]);
     state.handle_action(Action::DuplicateSelection);
 
-    let frame = state.canvas_set.active_frame();
+    let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 3, "only one duplicate should be added");
     assert!(
         frame.shape(locked_id).unwrap().locked,

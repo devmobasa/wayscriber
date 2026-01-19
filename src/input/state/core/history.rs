@@ -31,7 +31,7 @@ impl InputState {
                 self.invalidate_hit_cache_for(*shape_id);
             }
             UndoAction::Reorder { shape_id, .. } => {
-                if let Some(shape) = self.canvas_set.active_frame().shape(*shape_id) {
+                if let Some(shape) = self.boards.active_frame().shape(*shape_id) {
                     self.dirty_tracker.mark_shape(&shape.shape);
                     self.invalidate_hit_cache_for(*shape_id);
                 }
