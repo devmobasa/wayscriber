@@ -136,6 +136,8 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     config.session.max_shapes_per_frame = 0;
     config.session.max_file_size_mb = 2048;
     config.session.auto_compress_threshold_kb = 0;
+    config.session.autosave_idle_ms = 0;
+    config.session.autosave_interval_ms = 0;
     config.session.storage = SessionStorageMode::Custom;
     config.session.custom_directory = Some("  ".to_string());
     config.keybindings.core.exit = vec!["Ctrl+Shift".to_string()];
@@ -168,6 +170,8 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     assert_eq!(config.session.max_shapes_per_frame, 1);
     assert_eq!(config.session.max_file_size_mb, 1024);
     assert_eq!(config.session.auto_compress_threshold_kb, 1);
+    assert_eq!(config.session.autosave_idle_ms, 1000);
+    assert_eq!(config.session.autosave_interval_ms, 1000);
     assert!(matches!(config.session.storage, SessionStorageMode::Auto));
     assert!(config.session.custom_directory.is_none());
     assert_eq!(

@@ -74,6 +74,7 @@ pub(super) fn finish_text_resize(
                 },
                 state.undo_stack_limit,
             );
+            state.mark_session_dirty();
         }
     }
 }

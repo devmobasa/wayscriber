@@ -101,6 +101,7 @@ impl InputState {
             self.text_background_enabled = background_enabled;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
+            self.mark_session_dirty();
         }
         self.text_wrap_width = wrap_width;
 
@@ -204,6 +205,7 @@ impl InputState {
             self.dirty_tracker.mark_optional_rect(after_bounds);
             self.invalidate_hit_cache_for(shape_id);
             self.needs_redraw = true;
+            self.mark_session_dirty();
             true
         } else {
             false

@@ -10,6 +10,7 @@ mod menus;
 mod properties;
 mod selection;
 mod selection_actions;
+mod session;
 mod tool_controls;
 mod tour;
 mod utility;

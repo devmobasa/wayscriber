@@ -24,6 +24,18 @@ pub struct SessionConfig {
     #[serde(default = "default_restore_tool_state")]
     pub restore_tool_state: bool,
 
+    /// Enable autosaving session data while the overlay is running.
+    #[serde(default = "default_autosave_enabled")]
+    pub autosave_enabled: bool,
+
+    /// Idle debounce before autosave (milliseconds).
+    #[serde(default = "default_autosave_idle_ms")]
+    pub autosave_idle_ms: u64,
+
+    /// Maximum interval between autosaves while dirty (milliseconds).
+    #[serde(default = "default_autosave_interval_ms")]
+    pub autosave_interval_ms: u64,
+
     /// Storage location for session files.
     #[serde(default = "default_session_storage_mode")]
     pub storage: SessionStorageMode,
@@ -69,6 +81,9 @@ impl Default for SessionConfig {
             persist_blackboard: true,
             persist_history: default_persist_history(),
             restore_tool_state: default_restore_tool_state(),
+            autosave_enabled: default_autosave_enabled(),
+            autosave_idle_ms: default_autosave_idle_ms(),
+            autosave_interval_ms: default_autosave_interval_ms(),
             storage: default_session_storage_mode(),
             custom_directory: None,
             max_shapes_per_frame: default_max_shapes_per_frame(),
@@ -102,6 +117,22 @@ pub enum SessionCompression {
 
 fn default_restore_tool_state() -> bool {
     true
+}
+
+pub const DEFAULT_AUTOSAVE_ENABLED: bool = true;
+pub const DEFAULT_AUTOSAVE_IDLE_MS: u64 = 5_000;
+pub const DEFAULT_AUTOSAVE_INTERVAL_MS: u64 = 45_000;
+
+fn default_autosave_enabled() -> bool {
+    DEFAULT_AUTOSAVE_ENABLED
+}
+
+fn default_autosave_idle_ms() -> u64 {
+    DEFAULT_AUTOSAVE_IDLE_MS
+}
+
+fn default_autosave_interval_ms() -> u64 {
+    DEFAULT_AUTOSAVE_INTERVAL_MS
 }
 
 fn default_session_storage_mode() -> SessionStorageMode {

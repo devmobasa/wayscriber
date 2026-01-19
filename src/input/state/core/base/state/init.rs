@@ -84,6 +84,7 @@ impl InputState {
             state: DrawingState::Idle,
             should_exit: false,
             needs_redraw: true,
+            session_dirty: false,
             show_help: false,
             help_overlay_page: 0,
             help_overlay_search: String::new(),

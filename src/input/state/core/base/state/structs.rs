@@ -80,6 +80,8 @@ pub struct InputState {
     pub should_exit: bool,
     /// Whether the display needs to be redrawn
     pub needs_redraw: bool,
+    /// Whether session persistence should capture changes (cleared after autosave check)
+    pub(crate) session_dirty: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
     /// Active help overlay page index

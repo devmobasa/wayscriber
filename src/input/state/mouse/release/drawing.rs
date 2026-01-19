@@ -92,7 +92,9 @@ pub(super) fn finish_drawing(
                 if path.last().copied() != Some((end_x, end_y)) {
                     path.push((end_x, end_y));
                 }
-                state.erase_strokes_by_points(&path);
+                if state.erase_strokes_by_points(&path) {
+                    state.mark_session_dirty();
+                }
                 return;
             }
             Shape::EraserStroke {
@@ -150,6 +152,7 @@ pub(super) fn finish_drawing(
         state.dirty_tracker.mark_optional_rect(bounds);
         state.clear_selection();
         state.needs_redraw = true;
+        state.mark_session_dirty();
         if used_arrow_label {
             state.bump_arrow_label();
         }

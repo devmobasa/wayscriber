@@ -8,6 +8,7 @@ impl InputState {
         self.current_font_size = (self.current_font_size + delta).clamp(8.0, 72.0);
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         log::debug!("Font size adjusted to {:.1}px", self.current_font_size);
     }
 }

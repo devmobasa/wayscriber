@@ -19,6 +19,7 @@ impl InputState {
                         (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
+                    self.mark_session_dirty();
                 }
             },
             Action::DecreaseThickness => match self.active_tool() {
@@ -33,6 +34,7 @@ impl InputState {
                         (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
+                    self.mark_session_dirty();
                 }
             },
             Action::IncreaseMarkerOpacity => {

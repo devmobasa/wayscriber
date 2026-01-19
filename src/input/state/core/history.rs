@@ -8,6 +8,7 @@ impl InputState {
         self.mark_dirty_from_action(action);
         self.clear_selection();
         self.needs_redraw = true;
+        self.mark_session_dirty();
     }
 
     fn mark_dirty_from_action(&mut self, action: &UndoAction) {

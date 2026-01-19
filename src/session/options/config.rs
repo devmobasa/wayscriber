@@ -7,6 +7,7 @@ use crate::paths::{data_dir, expand_tilde};
 
 use super::identifiers::resolve_display_id;
 use super::types::{CompressionMode, SessionOptions};
+use std::time::Duration;
 
 /// Build runtime session options from configuration values.
 pub fn options_from_config(
@@ -40,6 +41,9 @@ pub fn options_from_config(
     options.persist_blackboard = session_cfg.persist_blackboard;
     options.persist_history = session_cfg.persist_history;
     options.restore_tool_state = session_cfg.restore_tool_state;
+    options.autosave_enabled = session_cfg.autosave_enabled;
+    options.autosave_idle = Duration::from_millis(session_cfg.autosave_idle_ms.max(1));
+    options.autosave_interval = Duration::from_millis(session_cfg.autosave_interval_ms.max(1));
     options.max_shapes_per_frame = session_cfg.max_shapes_per_frame;
     options.max_persisted_undo_depth = session_cfg
         .max_persisted_undo_depth
