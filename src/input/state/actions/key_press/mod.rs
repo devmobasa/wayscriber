@@ -74,6 +74,16 @@ impl InputState {
             }
         }
 
+        // Escape cancels pending board or page deletion
+        if matches!(key, Key::Escape) && self.has_pending_board_delete() {
+            self.cancel_pending_board_delete();
+            return;
+        }
+        if matches!(key, Key::Escape) && self.has_pending_page_delete() {
+            self.cancel_pending_page_delete();
+            return;
+        }
+
         if matches!(key, Key::Escape)
             && matches!(self.state, DrawingState::Idle)
             && self.has_selection()

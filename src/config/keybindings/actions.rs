@@ -93,6 +93,7 @@ pub enum Action {
     PageNew,
     PageDuplicate,
     PageDelete,
+    PageRestoreDeleted,
 
     // UI toggles
     ToggleHelp,

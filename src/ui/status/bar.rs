@@ -43,8 +43,9 @@ pub fn render_status_bar(
 
     let board_badge = if input_state.show_status_board_badge && input_state.boards.show_badge() {
         let board_index = input_state.boards.active_index() + 1;
+        let board_count = input_state.boards.board_count();
         let board_name = crate::util::truncate_with_ellipsis(input_state.board_name(), 20);
-        format!("[Board {}: {}] ", board_index, board_name)
+        format!("[Board {}/{}: {}] ", board_index, board_count, board_name)
     } else {
         String::new()
     };

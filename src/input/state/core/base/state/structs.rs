@@ -7,9 +7,9 @@ use super::super::super::{
 };
 use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
-    PendingBoardDelete, PendingClipboardFallback, PresetAction, PresetFeedbackState, SelectionAxis,
-    StatusChangeHighlight, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState,
-    ZoomAction,
+    PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
+    PresetFeedbackState, SelectionAxis, StatusChangeHighlight, TextClickState, TextInputMode,
+    ToolbarDrawerTab, UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -150,6 +150,10 @@ pub struct InputState {
     pub board_recent: Vec<String>,
     /// Pending confirmation for deleting a board
     pub(in crate::input::state::core) pending_board_delete: Option<PendingBoardDelete>,
+    /// Pending confirmation for deleting a page
+    pub(in crate::input::state::core) pending_page_delete: Option<PendingPageDelete>,
+    /// Recently deleted pages (for undo), with expiration timestamps
+    pub(in crate::input::state::core) deleted_pages: Vec<(String, crate::draw::Frame, Instant)>,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)

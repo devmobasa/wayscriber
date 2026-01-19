@@ -126,6 +126,17 @@ pub fn render_board_picker(
     let selected_index = input_state.board_picker_selected_index();
     let active_board_index = input_state.boards.active_index();
     let edit_state = input_state.board_picker_edit_state();
+    let pinned_count = input_state.board_picker_pinned_count();
+
+    // Draw pinned/unpinned section divider
+    if pinned_count > 0 && pinned_count < board_count {
+        let divider_y = rows_top + layout.row_height * pinned_count as f64;
+        ctx.set_source_rgba(0.35, 0.4, 0.48, 0.6);
+        ctx.set_line_width(1.0);
+        ctx.move_to(layout.origin_x + layout.padding_x, divider_y);
+        ctx.line_to(layout.origin_x + layout.width - layout.padding_x, divider_y);
+        let _ = ctx.stroke();
+    }
 
     for row in 0..layout.row_count {
         let row_top = rows_top + layout.row_height * row as f64;
@@ -272,6 +283,26 @@ pub fn render_board_picker(
         ctx.set_source_rgba(name_color[0], name_color[1], name_color[2], name_color[3]);
         ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
         let _ = ctx.show_text(&name);
+
+        // Show page count badge after board name
+        let page_count = board.pages.page_count();
+        if page_count > 1 {
+            let name_extents = text_extents_for(
+                ctx,
+                "Sans",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+                layout.body_font_size,
+                &name,
+            );
+            let page_label = format!(" ({} pages)", page_count);
+            ctx.set_source_rgba(0.55, 0.6, 0.68, 0.85);
+            ctx.move_to(
+                name_x + name_extents.width(),
+                row_center + layout.body_font_size * 0.35,
+            );
+            let _ = ctx.show_text(&page_label);
+        }
 
         if let Some((mode, edit_index, _buffer)) = edit_state
             && edit_index == row

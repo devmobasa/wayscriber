@@ -213,6 +213,10 @@ impl BoardManager {
         self.active_pages_mut().duplicate_page();
     }
 
+    pub fn insert_page(&mut self, page: crate::draw::Frame) {
+        self.active_pages_mut().insert_page(page);
+    }
+
     pub fn delete_page(&mut self) -> crate::draw::PageDeleteOutcome {
         self.active_pages_mut().delete_page()
     }

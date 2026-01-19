@@ -41,13 +41,28 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
 
     let boards_card_h = layout.spec.side_boards_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, boards_card_h);
-    draw_section_label(
-        ctx,
-        label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Boards",
-    );
+
+    // Section label with keybinding hint
+    let label_y = *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL;
+    draw_section_label(ctx, label_style, x, label_y, "Boards");
+
+    // Draw keybinding hint for board picker (right-aligned)
+    if let Some(binding) = snapshot
+        .binding_hints
+        .binding_for_event(&ToolbarEvent::ToggleBoardPicker)
+    {
+        let hint_style = UiTextStyle {
+            family: FONT_FAMILY_DEFAULT,
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: FONT_SIZE_LABEL * 0.85,
+        };
+        let hint_layout = crate::ui_text::text_layout(ctx, hint_style, binding, None);
+        let hint_width = hint_layout.ink_extents().width();
+        let hint_x = x + content_width - hint_width - 4.0;
+        ctx.set_source_rgba(0.55, 0.58, 0.65, 0.9);
+        hint_layout.show_at_baseline(ctx, hint_x, label_y);
+    }
 
     let boards_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let btn_h = if use_icons {

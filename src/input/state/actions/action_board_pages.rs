@@ -56,14 +56,14 @@ impl InputState {
                 true
             }
             Action::PageDelete => {
-                match self.page_delete() {
-                    PageDeleteOutcome::Removed => {
-                        info!("Deleted page");
-                    }
-                    PageDeleteOutcome::Cleared => {
-                        self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
-                    }
+                let outcome = self.page_delete();
+                if matches!(outcome, PageDeleteOutcome::Removed) {
+                    info!("Deleted page");
                 }
+                true
+            }
+            Action::PageRestoreDeleted => {
+                self.restore_deleted_page();
                 true
             }
             Action::Board1 => {

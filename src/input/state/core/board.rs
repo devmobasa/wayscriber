@@ -1,5 +1,6 @@
 use super::base::{
-    BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete, UiToastKind,
+    BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PAGE_DELETE_CONFIRM_MS,
+    PAGE_UNDO_EXPIRE_MS, PendingBoardDelete, PendingPageDelete, UiToastKind,
 };
 use crate::config::Action;
 use crate::draw::Color;
@@ -9,6 +10,34 @@ use std::time::{Duration, Instant};
 const BOARD_RECENT_LIMIT: usize = 5;
 
 impl InputState {
+    /// Returns true if there's a pending board deletion confirmation.
+    pub fn has_pending_board_delete(&self) -> bool {
+        self.pending_board_delete.is_some()
+    }
+
+    /// Cancels pending board deletion and clears the toast.
+    pub fn cancel_pending_board_delete(&mut self) {
+        if self.pending_board_delete.is_some() {
+            self.pending_board_delete = None;
+            self.ui_toast = None;
+            self.set_ui_toast(UiToastKind::Info, "Board deletion cancelled.");
+        }
+    }
+
+    /// Returns true if there's a pending page deletion confirmation.
+    pub fn has_pending_page_delete(&self) -> bool {
+        self.pending_page_delete.is_some()
+    }
+
+    /// Cancels pending page deletion and clears the toast.
+    pub fn cancel_pending_page_delete(&mut self) {
+        if self.pending_page_delete.is_some() {
+            self.pending_page_delete = None;
+            self.ui_toast = None;
+            self.set_ui_toast(UiToastKind::Info, "Page deletion cancelled.");
+        }
+    }
+
     /// Returns the active board id.
     pub fn board_id(&self) -> &str {
         self.boards.active_board_id()
@@ -429,22 +458,114 @@ impl InputState {
     }
 
     pub fn page_delete(&mut self) -> crate::draw::PageDeleteOutcome {
+        let page_count = self.boards.page_count();
+        let page_index = self.boards.active_page_index();
+        let board_id = self.boards.active_board_id().to_string();
+
+        // If this is the last page, skip confirmation (just clears)
+        if page_count <= 1 {
+            let outcome = self.boards.delete_page();
+            self.prepare_page_switch();
+            self.set_ui_toast(UiToastKind::Info, "Page cleared (last page)");
+            return outcome;
+        }
+
+        let now = Instant::now();
+
+        // Expire old pending confirmation
+        if self
+            .pending_page_delete
+            .as_ref()
+            .is_some_and(|pending| now > pending.expires_at)
+        {
+            self.pending_page_delete = None;
+        }
+
+        // Check if we have a valid pending confirmation
+        let confirmed = self.pending_page_delete.as_ref().is_some_and(|pending| {
+            pending.board_id == board_id
+                && pending.page_index == page_index
+                && now <= pending.expires_at
+        });
+
+        if !confirmed {
+            // First press: request confirmation
+            self.pending_page_delete = Some(PendingPageDelete {
+                board_id,
+                page_index,
+                expires_at: now + Duration::from_millis(PAGE_DELETE_CONFIRM_MS),
+            });
+            self.set_ui_toast_with_action_and_duration(
+                UiToastKind::Warning,
+                format!(
+                    "Delete page {}/{}? Click to confirm.",
+                    page_index + 1,
+                    page_count
+                ),
+                "Delete",
+                Action::PageDelete,
+                PAGE_DELETE_CONFIRM_MS,
+            );
+            return crate::draw::PageDeleteOutcome::Pending;
+        }
+
+        // Confirmed: proceed with deletion
+        self.pending_page_delete = None;
+
+        // Save page before deletion for undo
+        let deleted_page = self.boards.active_pages().active_frame().clone();
+
         let outcome = self.boards.delete_page();
         self.prepare_page_switch();
-        let page_num = self.boards.active_page_index() + 1;
-        let page_count = self.boards.page_count();
-        match outcome {
-            crate::draw::PageDeleteOutcome::Removed => {
-                self.set_ui_toast(
-                    UiToastKind::Info,
-                    format!("Page deleted ({page_num}/{page_count})"),
-                );
-            }
-            crate::draw::PageDeleteOutcome::Cleared => {
-                self.set_ui_toast(UiToastKind::Info, "Page cleared (last page)");
-            }
+        let new_page_num = self.boards.active_page_index() + 1;
+        let new_page_count = self.boards.page_count();
+
+        if matches!(outcome, crate::draw::PageDeleteOutcome::Removed) {
+            // Store for undo
+            let board_id = self.boards.active_board_id().to_string();
+            self.deleted_pages
+                .push((board_id, deleted_page, Instant::now()));
+
+            // Show toast with undo action
+            self.set_ui_toast_with_action(
+                UiToastKind::Info,
+                format!("Page deleted ({new_page_num}/{new_page_count})"),
+                "Undo",
+                Action::PageRestoreDeleted,
+            );
         }
         outcome
+    }
+
+    /// Restore the most recently deleted page.
+    pub fn restore_deleted_page(&mut self) {
+        // Expire old entries
+        let now = Instant::now();
+        let expire_duration = Duration::from_millis(PAGE_UNDO_EXPIRE_MS);
+        self.deleted_pages.retain(|(_, _, deleted_at)| {
+            now.saturating_duration_since(*deleted_at) < expire_duration
+        });
+
+        // Get the most recent deleted page for the current board
+        let board_id = self.boards.active_board_id().to_string();
+        let position = self
+            .deleted_pages
+            .iter()
+            .rposition(|(id, _, _)| id == &board_id);
+
+        if let Some(idx) = position {
+            let (_, page, _) = self.deleted_pages.remove(idx);
+            self.boards.insert_page(page);
+            self.prepare_page_switch();
+            let page_num = self.boards.active_page_index() + 1;
+            let page_count = self.boards.page_count();
+            self.set_ui_toast(
+                UiToastKind::Info,
+                format!("Page restored ({page_num}/{page_count})"),
+            );
+        } else {
+            self.set_ui_toast(UiToastKind::Info, "No deleted page to restore.");
+        }
     }
 }
 

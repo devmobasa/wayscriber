@@ -648,6 +648,15 @@ impl InputState {
         self.board_picker_board_index_for_row_in_mode(row, self.board_picker_mode())
     }
 
+    /// Returns the count of pinned boards.
+    pub fn board_picker_pinned_count(&self) -> usize {
+        self.boards
+            .board_states()
+            .iter()
+            .filter(|b| b.spec.pinned)
+            .count()
+    }
+
     pub(crate) fn board_picker_row_for_board(&self, board_index: usize) -> Option<usize> {
         self.board_picker_row_for_board_in_mode(board_index, self.board_picker_mode())
     }

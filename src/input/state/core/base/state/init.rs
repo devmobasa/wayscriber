@@ -119,6 +119,8 @@ impl InputState {
             board_previous_color: None,
             board_recent: Vec::new(),
             pending_board_delete: None,
+            pending_page_delete: None,
+            deleted_pages: Vec::new(),
             dirty_tracker: DirtyTracker::new(),
             last_provisional_bounds: None,
             last_text_preview_bounds: None,
