@@ -179,3 +179,15 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
         KeybindingsConfig::default().core.exit
     );
 }
+
+#[test]
+fn validate_does_not_clamp_autosave_interval_to_idle() {
+    let mut config = Config::default();
+    config.session.autosave_idle_ms = 60_000;
+    config.session.autosave_interval_ms = 5_000;
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.session.autosave_idle_ms, 60_000);
+    assert_eq!(config.session.autosave_interval_ms, 5_000);
+}
