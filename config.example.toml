@@ -5,625 +5,6 @@
 # Delete this file to reset to defaults.
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DRAWING SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[drawing]
-# Default pen color
-# Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
-# Or RGB array: [255, 0, 0]
-default_color = "red"
-
-# Default pen thickness in pixels (1.0 - 50.0)
-default_thickness = 3.0
-
-# Default eraser size in pixels (1.0 - 50.0)
-default_eraser_size = 12.0
-
-# Default eraser mode: "brush" (pixel erase) or "stroke" (erase whole stroke)
-default_eraser_mode = "brush"
-
-# Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
-marker_opacity = 0.32
-
-# Default fill state for shapes (rect/ellipse)
-default_fill_enabled = false
-
-# Default font size for text mode (8.0 - 72.0)
-default_font_size = 32.0
-
-# Hit-test tolerance in pixels (1.0 - 20.0)
-hit_test_tolerance = 6.0
-
-# Number of shapes processed linearly before spatial indexing kicks in
-hit_test_linear_threshold = 400
-
-# Undo history size (10 - 1000)
-undo_stack_limit = 100
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Font Configuration (Pango-based text rendering)
-# ───────────────────────────────────────────────────────────────────────────────
-
-# Font family name for text rendering
-# Install fonts system-wide and reference by family name
-# Examples to try:
-#   font_family = "Sans"              # Default sans-serif
-#   font_family = "Monospace"         # Fixed-width font
-#   font_family = "Serif"             # Serif font
-#   font_family = "JetBrains Mono"    # If installed
-#   font_family = "Fira Code"         # If installed
-#   font_family = "Maple Mono NF"     # If installed
-#   font_family = "DejaVu Sans"       # Common on Linux
-#   font_family = "Liberation Sans"   # Common on Linux
-#   font_family = "Noto Sans"         # Google Noto fonts
-# Falls back to "Sans" if the specified font is not available
-font_family = "Sans"
-
-# Font weight: "normal", "bold", "light", "ultralight", "heavy", "ultrabold"
-# Or numeric: 100-900 (400=normal, 700=bold)
-# Try different weights:
-#   font_weight = "normal"    # Regular weight
-#   font_weight = "bold"      # Bold (default, best visibility)
-#   font_weight = "light"     # Light weight
-#   font_weight = "600"       # Semi-bold (numeric)
-font_weight = "bold"
-
-# Font style: "normal", "italic", "oblique"
-# Try different styles:
-#   font_style = "normal"     # Standard upright text
-#   font_style = "italic"     # Italic/cursive
-#   font_style = "oblique"    # Slanted text
-font_style = "normal"
-
-# Enable semi-transparent background box behind text for better contrast
-# Set to true if you find text hard to read against complex backgrounds
-# Default: false (no background, cleaner look with just stroke outline)
-text_background_enabled = false
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PRESET SLOTS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[presets]
-# Number of visible preset slots (3-5)
-slot_count = 5
-
-# Each preset requires tool + color + size (thickness or eraser size).
-# Optional fields let you capture fill, marker opacity, font size, etc.
-
-[presets.slot_1]
-# Optional label shown in UI tooltips
-name = "Red pen"
-# Tool: "pen", "line", "rect", "ellipse", "arrow", "marker", "highlight", "eraser", "select"
-tool = "pen"
-# Color: name or RGB array
-color = "red"
-# Size: pen thickness or eraser size
-size = 3.0
-# Optional overrides
-marker_opacity = 0.32
-fill_enabled = false
-font_size = 32.0
-text_background_enabled = false
-arrow_length = 20.0
-arrow_angle = 30.0
-arrow_head_at_end = false
-show_status_bar = true
-
-# [presets.slot_2]
-# name = "Blue marker"
-# tool = "marker"
-# color = "blue"
-# size = 8.0
-# marker_opacity = 0.32
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ARROW SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[arrow]
-# Arrowhead length in pixels
-length = 20.0
-
-# Arrowhead angle in degrees (15-60)
-# 30 degrees gives a nice balanced arrow
-angle_degrees = 30.0
-
-# Place the arrowhead at the end of the line instead of the start
-head_at_end = false
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PERFORMANCE SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[performance]
-# Number of buffers for rendering (2, 3, or 4)
-# 2 = double buffering (low memory)
-# 3 = triple buffering (recommended, smooth)
-# 4 = quad buffering (ultra-smooth on high refresh displays)
-buffer_count = 3
-
-# Enable vsync frame synchronization
-# Prevents tearing and limits rendering to display refresh rate
-enable_vsync = true
-
-# Max FPS when VSync is disabled (0 = unlimited)
-# Prevents CPU spinning at very high FPS; set to match your monitor (60/120/144/240)
-max_fps_no_vsync = 60
-
-# UI animation frame rate (0 = unlimited)
-# Higher values smooth UI effects at the cost of more redraws
-ui_animation_fps = 30
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# HISTORY / STEP UNDO SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[history]
-# Delay in milliseconds between steps for undo-all (50 - 5000)
-undo_all_delay_ms = 1000
-
-# Delay in milliseconds between steps for redo-all (50 - 5000)
-redo_all_delay_ms = 1000
-
-# Show the custom step undo/redo section in the toolbar
-custom_section_enabled = false
-
-# Delay in milliseconds between steps for custom undo (50 - 5000)
-custom_undo_delay_ms = 1000
-
-# Delay in milliseconds between steps for custom redo (50 - 5000)
-custom_redo_delay_ms = 1000
-
-# Number of steps to run for custom undo/redo (1 - 500)
-custom_undo_steps = 5
-custom_redo_steps = 5
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# UI SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[ui]
-# Show status bar with current color/thickness/tool
-show_status_bar = true
-
-# Show board label in the status bar
-show_status_board_badge = true
-
-# Show page counter in the status bar
-show_status_page_badge = true
-
-# Show the board/page badge even when the status bar is visible
-show_page_badge_with_status_bar = false
-
-# Show a "FROZEN" badge when frozen mode is active
-show_frozen_badge = false
-
-# Status bar position
-# Options: "top-left", "top-right", "bottom-left", "bottom-right"
-status_bar_position = "bottom-left"
-
-# Filter help overlay sections based on enabled features
-help_overlay_context_filter = true
-
-# Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
-# against monitor identity; leave empty to use the current/first monitor.
-#preferred_output = "eDP-1"
-
-# Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
-#xdg_fullscreen = false
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Status Bar Styling
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.status_bar_style]
-# Font size for status bar text
-font_size = 21.0
-
-# Padding around status bar text
-padding = 15.0
-
-# Background color [R, G, B, A] (0.0-1.0 range)
-# Default: semi-transparent black (85% opaque for visibility)
-bg_color = [0.0, 0.0, 0.0, 0.85]
-
-# Text color [R, G, B, A] (0.0-1.0 range)
-# Default: white
-text_color = [1.0, 1.0, 1.0, 1.0]
-
-# Color indicator dot radius
-dot_radius = 6.0
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Click Highlight (visual feedback for mouse clicks)
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.click_highlight]
-# Start with the highlight effect enabled when the overlay launches
-enabled = false
-
-# Radius of the highlight circle in pixels (16 - 160)
-radius = 24.0
-
-# Outline thickness in pixels (1 - 12)
-outline_thickness = 4.0
-
-# Highlight lifetime in milliseconds (150 - 1500)
-duration_ms = 750
-
-# Fill color [R, G, B, A]
-fill_color = [1.0, 0.8, 0.0, 0.35]
-
-# Outline color [R, G, B, A]
-outline_color = [1.0, 0.6, 0.0, 0.9]
-
-# Use current pen color for highlight fill/outline (alpha still comes from above colors)
-# Note: active highlights update immediately when the pen color changes
-use_pen_color = true
-
-[ui.context_menu]
-# Enable right-click / keyboard context menus
-enabled = true
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Presenter Mode
-# ───────────────────────────────────────────────────────────────────────────────
-
-[presenter_mode]
-# Hide UI chrome while presenting
-hide_status_bar = true
-hide_toolbars = true
-hide_tool_preview = true
-
-# Close the help overlay when entering presenter mode
-close_help_overlay = true
-
-# Force click highlights on while presenting
-enable_click_highlight = true
-
-# Tool behavior while presenting:
-# "keep" / "force-highlight" / "force-highlight-locked"
-tool_behavior = "force-highlight"
-
-# Show enter/exit toast notifications
-show_toast = true
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Floating Toolbars (Press F2/F9 to toggle)
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.toolbar]
-# Toolbar layout preset (simple / full)
-# Legacy values: regular / advanced
-layout_mode = "full"
-
-# Optional per-mode overrides for toolbar sections
-# Use true/false to override a section; omit to use the mode default.
-#
-# [ui.toolbar.mode_overrides.simple]
-# show_presets = false
-# show_actions_section = true
-# show_actions_advanced = false
-# show_zoom_actions = true
-# show_pages_section = true
-# show_boards_section = true
-# show_step_section = false
-# show_text_controls = true
-# show_settings_section = false
-#
-# [ui.toolbar.mode_overrides.regular] # Full mode overrides
-# show_presets = true
-# show_actions_section = true
-# show_actions_advanced = false
-# show_zoom_actions = true
-# show_pages_section = true
-# show_boards_section = true
-# show_step_section = false
-# show_text_controls = true
-# show_settings_section = true
-#
-# [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
-# show_presets = true
-# show_actions_section = true
-# show_actions_advanced = true
-# show_zoom_actions = true
-# show_pages_section = true
-# show_boards_section = true
-# show_step_section = true
-# show_text_controls = true
-# show_settings_section = true
-
-# Show top toolbar on startup (pinned)
-top_pinned = true
-
-# Show side toolbar on startup (pinned)
-side_pinned = true
-
-# Use icons instead of text labels in toolbars
-# Icons are more compact; text labels are more explicit
-use_icons = true
-
-# Show extended color palette in top toolbar
-# When enabled, displays additional color options beyond the basic 8
-show_more_colors = false
-
-# Show basic actions (undo/redo/clear) in side toolbar
-show_actions_section = true
-
-# Show advanced actions (undo all, delay, freeze, etc.)
-show_actions_advanced = false
-
-# Show zoom actions (zoom in/out/reset/lock)
-show_zoom_actions = true
-
-# Show page controls section (prev/next/new/dup/del)
-show_pages_section = true
-
-# Show board controls section (prev/next/new/del)
-show_boards_section = true
-
-# Show presets section in side toolbar
-show_presets = true
-
-# Show step undo/redo section
-show_step_section = false
-
-# Keep text controls visible even when text is inactive
-show_text_controls = true
-
-# Show settings section (config buttons and advanced toggles)
-show_settings_section = true
-
-# Show timing delay sliders in side toolbar
-# Allows configuring delayed undo/redo all timing
-show_delay_sliders = false
-
-# Show marker opacity slider in side toolbar even when the marker tool isn't active
-# Enable to keep marker transparency control visible at all times
-show_marker_opacity_section = false
-
-# Show preset action toast notifications on apply/save/clear
-show_preset_toasts = true
-
-# Show cursor tool preview bubble near the pointer
-show_tool_preview = false
-
-# Initial toolbar offsets (layer-shell/inline)
-# Horizontal offset for the top toolbar
-top_offset = 0.0
-# Vertical offset for the top toolbar (move top bar down/up)
-top_offset_y = 0.0
-# Vertical offset for the side toolbar
-side_offset = 0.0
-# Horizontal offset for the side toolbar (move side bar left/right)
-side_offset_x = 0.0
-
-# Force inline toolbars even when layer-shell is available
-force_inline = false
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Help Overlay Styling (Press F10 to toggle)
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.help_overlay_style]
-# Font size for help overlay text
-font_size = 14.0
-
-# Font family for help overlay text (comma-separated fallback list)
-font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
-
-# Line height for help text
-line_height = 22.0
-
-# Padding around help box
-padding = 32.0
-
-# Background color [R, G, B, A] (0.0-1.0 range)
-# Default: deep slate (higher contrast than status bar)
-bg_color = [0.09, 0.1, 0.13, 0.92]
-
-# Border color [R, G, B, A] (0.0-1.0 range)
-# Default: muted steel
-border_color = [0.33, 0.39, 0.52, 0.88]
-
-# Border line width
-border_width = 2.0
-
-# Text color [R, G, B, A] (0.0-1.0 range)
-# Default: near-white
-text_color = [0.95, 0.96, 0.98, 1.0]
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# BOARD SETTINGS (Named Boards + Backgrounds)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[boards]
-# Maximum number of boards allowed
-max_count = 9
-
-# Auto-create boards when switching to an empty slot
-auto_create = true
-
-# Show board name/slot in the status bar
-show_board_badge = true
-
-# Persist runtime edits (rename/background) back to config
-persist_customizations = true
-
-# Default board id on startup
-default_board = "transparent"
-
-[[boards.items]]
-id = "transparent"
-name = "Overlay"
-background = "transparent"
-persist = true
-
-[[boards.items]]
-id = "whiteboard"
-name = "Whiteboard"
-background = { rgb = [0.992, 0.992, 0.992] }
-default_pen_color = { rgb = [0.0, 0.0, 0.0] }
-auto_adjust_pen = true
-
-[[boards.items]]
-id = "blackboard"
-name = "Blackboard"
-background = { rgb = [0.067, 0.067, 0.067] }
-default_pen_color = { rgb = [1.0, 1.0, 1.0] }
-auto_adjust_pen = true
-
-[[boards.items]]
-id = "blueprint"
-name = "Blueprint"
-background = { rgb = [0.063, 0.125, 0.251] }
-default_pen_color = { rgb = [0.902, 0.945, 1.0] }
-auto_adjust_pen = true
-
-[[boards.items]]
-id = "corkboard"
-name = "Corkboard"
-background = { rgb = [0.420, 0.294, 0.165] }
-default_pen_color = { rgb = [0.969, 0.890, 0.784] }
-auto_adjust_pen = true
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Color Theme Examples
-# ───────────────────────────────────────────────────────────────────────────────
-
-# Chalkboard Theme (green board):
-# [[boards.items]]
-# id = "chalkboard"
-# name = "Chalkboard"
-# background = { rgb = [0.11, 0.18, 0.13] }
-# default_pen_color = { rgb = [0.95, 0.95, 0.8] }
-# auto_adjust_pen = true
-
-# Sepia Theme (vintage whiteboard):
-# [[boards.items]]
-# id = "sepia"
-# name = "Sepia"
-# background = { rgb = [0.96, 0.93, 0.86] }
-# default_pen_color = { rgb = [0.29, 0.23, 0.18] }
-# auto_adjust_pen = true
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# TABLET / STYLUS INPUT (Wayland tablet-unstable-v2)
-# Build with `--features tablet-input` and enable below to use
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[tablet]
-# Enable tablet/stylus input at runtime
-enabled = false
-
-# Map pressure to thickness
-pressure_enabled = true
-
-# Thickness range for pressure mapping
-min_thickness = 1.0
-max_thickness = 8.0
-
-# Automatically switch to eraser when physical eraser is detected
-auto_eraser_switch = true
-
-# Threshold (in pixels) before saving a stroke as pressure-sensitive
-pressure_variation_threshold = 0.1
-
-# How thickness edits apply to pressure strokes: disabled, add, scale
-pressure_thickness_edit_mode = "disabled"
-
-# When to show thickness entry for pressure strokes: never, pressure_only, any_pressure
-pressure_thickness_entry_mode = "pressure_only"
-
-# Per-step scale factor when using scale mode (0.1 = +/-10%)
-pressure_thickness_scale_step = 0.1
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CAPTURE SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[capture]
-# Enable screenshot shortcuts (set to false to disable all capture actions)
-enabled = true
-
-# Directory where PNG files are saved (supports ~ expansion)
-save_directory = "~/Pictures/Wayscriber"
-
-# Filename template (strftime-like subset: %Y, %m, %d, %H, %M, %S)
-filename_template = "screenshot_%Y-%m-%d_%H%M%S"
-
-# Image format for saved screenshots
-format = "png"
-
-# Copy screenshots to clipboard by default
-# Shortcut-specific actions may override this
-copy_to_clipboard = true
-
-# Exit overlay after any capture completes (forces exit for all capture types)
-# When false, clipboard-only captures still auto-exit by default.
-# Use --no-exit-after-capture to keep the overlay open for a run.
-exit_after_capture = false
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SESSION PERSISTENCE
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[session]
-# Enable persistence per mode (default to true)
-persist_transparent = true
-persist_whiteboard = true
-persist_blackboard = true
-
-# Persist undo/redo history alongside shapes (set false to save only visible drawings)
-persist_history = true
-
-# Restore pen colour/thickness/font size (and arrow placement) between runs.
-# When true, the last-used tool state overrides config defaults at startup.
-# Set to false if you always want to use the values above (e.g., arrow head placement).
-restore_tool_state = true
-
-# Autosave session data while the overlay is running
-autosave_enabled = true
-
-# Save after this much idle time following a change (ms)
-autosave_idle_ms = 5000
-
-# Maximum interval between saves while dirty (ms)
-autosave_interval_ms = 45000
-
-# Backoff before retrying autosave after a failure (ms)
-autosave_failure_backoff_ms = 5000
-
-# Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
-storage = "auto"
-
-# Store separate sessions per monitor (set false to reuse one file per display)
-per_output = true
-
-# When storage = "custom", set the directory here (supports ~ expansion)
-# custom_directory = "/path/to/persistent/sessions"
-
-# Clamp runaway files by limiting shapes per frame
-max_shapes_per_frame = 10000
-
-# Optional cap for serialized undo history (defaults to runtime undo limit)
-# max_persisted_undo_depth = 200
-
-# Maximum session file size (in megabytes); larger files are ignored
-max_file_size_mb = 10
-
-# Compression mode: "auto", "on", or "off"
-compress = "auto"
-
-# For compress = "auto": minimum file size (KiB) before gzip is used
-auto_compress_threshold_kb = 100
-
-# Number of rotated backups to retain (0 disables backups)
-backup_retention = 1
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # KEYBINDING SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -826,3 +207,622 @@ clear_preset_5 = []
 #   undo = ["Z"]
 #   redo = ["X"]
 #   clear_canvas = ["C"]
+# ═══════════════════════════════════════════════════════════════════════════════
+# UI SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[ui]
+# Show status bar with current color/thickness/tool
+show_status_bar = true
+
+# Show board label in the status bar
+show_status_board_badge = true
+
+# Show page counter in the status bar
+show_status_page_badge = true
+
+# Show the board/page badge even when the status bar is visible
+show_page_badge_with_status_bar = false
+
+# Show a "FROZEN" badge when frozen mode is active
+show_frozen_badge = false
+
+# Status bar position
+# Options: "top-left", "top-right", "bottom-left", "bottom-right"
+status_bar_position = "bottom-left"
+
+# Filter help overlay sections based on enabled features
+help_overlay_context_filter = true
+
+# Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
+# against monitor identity; leave empty to use the current/first monitor.
+#preferred_output = "eDP-1"
+
+# Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
+#xdg_fullscreen = false
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Floating Toolbars (Press F2/F9 to toggle)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.toolbar]
+# Toolbar layout preset (simple / full)
+# Legacy values: regular / advanced
+layout_mode = "full"
+
+# Optional per-mode overrides for toolbar sections
+# Use true/false to override a section; omit to use the mode default.
+#
+# [ui.toolbar.mode_overrides.simple]
+# show_presets = false
+# show_actions_section = true
+# show_actions_advanced = false
+# show_zoom_actions = true
+# show_pages_section = true
+# show_boards_section = true
+# show_step_section = false
+# show_text_controls = true
+# show_settings_section = false
+#
+# [ui.toolbar.mode_overrides.regular] # Full mode overrides
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = false
+# show_zoom_actions = true
+# show_pages_section = true
+# show_boards_section = true
+# show_step_section = false
+# show_text_controls = true
+# show_settings_section = true
+#
+# [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = true
+# show_zoom_actions = true
+# show_pages_section = true
+# show_boards_section = true
+# show_step_section = true
+# show_text_controls = true
+# show_settings_section = true
+
+# Show top toolbar on startup (pinned)
+top_pinned = true
+
+# Show side toolbar on startup (pinned)
+side_pinned = true
+
+# Use icons instead of text labels in toolbars
+# Icons are more compact; text labels are more explicit
+use_icons = true
+
+# Show extended color palette in top toolbar
+# When enabled, displays additional color options beyond the basic 8
+show_more_colors = false
+
+# Show basic actions (undo/redo/clear) in side toolbar
+show_actions_section = true
+
+# Show advanced actions (undo all, delay, freeze, etc.)
+show_actions_advanced = false
+
+# Show zoom actions (zoom in/out/reset/lock)
+show_zoom_actions = true
+
+# Show page controls section (prev/next/new/dup/del)
+show_pages_section = true
+
+# Show board controls section (prev/next/new/del)
+show_boards_section = true
+
+# Show presets section in side toolbar
+show_presets = true
+
+# Show step undo/redo section
+show_step_section = false
+
+# Keep text controls visible even when text is inactive
+show_text_controls = true
+
+# Show settings section (config buttons and advanced toggles)
+show_settings_section = true
+
+# Show timing delay sliders in side toolbar
+# Allows configuring delayed undo/redo all timing
+show_delay_sliders = false
+
+# Show marker opacity slider in side toolbar even when the marker tool isn't active
+# Enable to keep marker transparency control visible at all times
+show_marker_opacity_section = false
+
+# Show preset action toast notifications on apply/save/clear
+show_preset_toasts = true
+
+# Show cursor tool preview bubble near the pointer
+show_tool_preview = false
+
+# Initial toolbar offsets (layer-shell/inline)
+# Horizontal offset for the top toolbar
+top_offset = 0.0
+# Vertical offset for the top toolbar (move top bar down/up)
+top_offset_y = 0.0
+# Vertical offset for the side toolbar
+side_offset = 0.0
+# Horizontal offset for the side toolbar (move side bar left/right)
+side_offset_x = 0.0
+
+# Force inline toolbars even when layer-shell is available
+force_inline = false
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Status Bar Styling
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.status_bar_style]
+# Font size for status bar text
+font_size = 21.0
+
+# Padding around status bar text
+padding = 15.0
+
+# Background color [R, G, B, A] (0.0-1.0 range)
+# Default: semi-transparent black (85% opaque for visibility)
+bg_color = [0.0, 0.0, 0.0, 0.85]
+
+# Text color [R, G, B, A] (0.0-1.0 range)
+# Default: white
+text_color = [1.0, 1.0, 1.0, 1.0]
+
+# Color indicator dot radius
+dot_radius = 6.0
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Click Highlight (visual feedback for mouse clicks)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.click_highlight]
+# Start with the highlight effect enabled when the overlay launches
+enabled = false
+
+# Radius of the highlight circle in pixels (16 - 160)
+radius = 24.0
+
+# Outline thickness in pixels (1 - 12)
+outline_thickness = 4.0
+
+# Highlight lifetime in milliseconds (150 - 1500)
+duration_ms = 750
+
+# Fill color [R, G, B, A]
+fill_color = [1.0, 0.8, 0.0, 0.35]
+
+# Outline color [R, G, B, A]
+outline_color = [1.0, 0.6, 0.0, 0.9]
+
+# Use current pen color for highlight fill/outline (alpha still comes from above colors)
+# Note: active highlights update immediately when the pen color changes
+use_pen_color = true
+
+[ui.context_menu]
+# Enable right-click / keyboard context menus
+enabled = true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Presenter Mode
+# ───────────────────────────────────────────────────────────────────────────────
+
+[presenter_mode]
+# Hide UI chrome while presenting
+hide_status_bar = true
+hide_toolbars = true
+hide_tool_preview = true
+
+# Close the help overlay when entering presenter mode
+close_help_overlay = true
+
+# Force click highlights on while presenting
+enable_click_highlight = true
+
+# Tool behavior while presenting:
+# "keep" / "force-highlight" / "force-highlight-locked"
+tool_behavior = "force-highlight"
+
+# Show enter/exit toast notifications
+show_toast = true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Help Overlay Styling (Press F10 to toggle)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.help_overlay_style]
+# Font size for help overlay text
+font_size = 14.0
+
+# Font family for help overlay text (comma-separated fallback list)
+font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
+
+# Line height for help text
+line_height = 22.0
+
+# Padding around help box
+padding = 32.0
+
+# Background color [R, G, B, A] (0.0-1.0 range)
+# Default: deep slate (higher contrast than status bar)
+bg_color = [0.09, 0.1, 0.13, 0.92]
+
+# Border color [R, G, B, A] (0.0-1.0 range)
+# Default: muted steel
+border_color = [0.33, 0.39, 0.52, 0.88]
+
+# Border line width
+border_width = 2.0
+
+# Text color [R, G, B, A] (0.0-1.0 range)
+# Default: near-white
+text_color = [0.95, 0.96, 0.98, 1.0]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BOARD SETTINGS (Named Boards + Backgrounds)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[boards]
+# Maximum number of boards allowed
+max_count = 9
+
+# Auto-create boards when switching to an empty slot
+auto_create = true
+
+# Show board name/slot in the status bar
+show_board_badge = true
+
+# Persist runtime edits (rename/background) back to config
+persist_customizations = true
+
+# Default board id on startup
+default_board = "transparent"
+
+[[boards.items]]
+id = "transparent"
+name = "Overlay"
+background = "transparent"
+persist = true
+
+[[boards.items]]
+id = "whiteboard"
+name = "Whiteboard"
+background = { rgb = [0.992, 0.992, 0.992] }
+default_pen_color = { rgb = [0.0, 0.0, 0.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "blackboard"
+name = "Blackboard"
+background = { rgb = [0.067, 0.067, 0.067] }
+default_pen_color = { rgb = [1.0, 1.0, 1.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "blueprint"
+name = "Blueprint"
+background = { rgb = [0.063, 0.125, 0.251] }
+default_pen_color = { rgb = [0.902, 0.945, 1.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "corkboard"
+name = "Corkboard"
+background = { rgb = [0.420, 0.294, 0.165] }
+default_pen_color = { rgb = [0.969, 0.890, 0.784] }
+auto_adjust_pen = true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Color Theme Examples
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Chalkboard Theme (green board):
+# [[boards.items]]
+# id = "chalkboard"
+# name = "Chalkboard"
+# background = { rgb = [0.11, 0.18, 0.13] }
+# default_pen_color = { rgb = [0.95, 0.95, 0.8] }
+# auto_adjust_pen = true
+
+# Sepia Theme (vintage whiteboard):
+# [[boards.items]]
+# id = "sepia"
+# name = "Sepia"
+# background = { rgb = [0.96, 0.93, 0.86] }
+# default_pen_color = { rgb = [0.29, 0.23, 0.18] }
+# auto_adjust_pen = true
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SESSION PERSISTENCE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[session]
+# Enable persistence per mode (default to true)
+persist_transparent = true
+persist_whiteboard = true
+persist_blackboard = true
+
+# Persist undo/redo history alongside shapes (set false to save only visible drawings)
+persist_history = true
+
+# Restore pen colour/thickness/font size (and arrow placement) between runs.
+# When true, the last-used tool state overrides config defaults at startup.
+# Set to false if you always want to use the values above (e.g., arrow head placement).
+restore_tool_state = true
+
+# Autosave session data while the overlay is running
+autosave_enabled = true
+
+# Save after this much idle time following a change (ms)
+autosave_idle_ms = 5000
+
+# Maximum interval between saves while dirty (ms)
+autosave_interval_ms = 45000
+
+# Backoff before retrying autosave after a failure (ms)
+autosave_failure_backoff_ms = 5000
+
+# Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
+storage = "auto"
+
+# Store separate sessions per monitor (set false to reuse one file per display)
+per_output = true
+
+# When storage = "custom", set the directory here (supports ~ expansion)
+# custom_directory = "/path/to/persistent/sessions"
+
+# Clamp runaway files by limiting shapes per frame
+max_shapes_per_frame = 10000
+
+# Optional cap for serialized undo history (defaults to runtime undo limit)
+# max_persisted_undo_depth = 200
+
+# Maximum session file size (in megabytes); larger files are ignored
+max_file_size_mb = 10
+
+# Compression mode: "auto", "on", or "off"
+compress = "auto"
+
+# For compress = "auto": minimum file size (KiB) before gzip is used
+auto_compress_threshold_kb = 100
+
+# Number of rotated backups to retain (0 disables backups)
+backup_retention = 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DRAWING SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[drawing]
+# Default pen color
+# Options: "red", "green", "blue", "yellow", "orange", "pink", "white", "black"
+# Or RGB array: [255, 0, 0]
+default_color = "red"
+
+# Default pen thickness in pixels (1.0 - 50.0)
+default_thickness = 3.0
+
+# Default eraser size in pixels (1.0 - 50.0)
+default_eraser_size = 12.0
+
+# Default eraser mode: "brush" (pixel erase) or "stroke" (erase whole stroke)
+default_eraser_mode = "brush"
+
+# Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
+marker_opacity = 0.32
+
+# Default fill state for shapes (rect/ellipse)
+default_fill_enabled = false
+
+# Default font size for text mode (8.0 - 72.0)
+default_font_size = 32.0
+
+# Hit-test tolerance in pixels (1.0 - 20.0)
+hit_test_tolerance = 6.0
+
+# Number of shapes processed linearly before spatial indexing kicks in
+hit_test_linear_threshold = 400
+
+# Undo history size (10 - 1000)
+undo_stack_limit = 100
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Font Configuration (Pango-based text rendering)
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Font family name for text rendering
+# Install fonts system-wide and reference by family name
+# Examples to try:
+#   font_family = "Sans"              # Default sans-serif
+#   font_family = "Monospace"         # Fixed-width font
+#   font_family = "Serif"             # Serif font
+#   font_family = "JetBrains Mono"    # If installed
+#   font_family = "Fira Code"         # If installed
+#   font_family = "Maple Mono NF"     # If installed
+#   font_family = "DejaVu Sans"       # Common on Linux
+#   font_family = "Liberation Sans"   # Common on Linux
+#   font_family = "Noto Sans"         # Google Noto fonts
+# Falls back to "Sans" if the specified font is not available
+font_family = "Sans"
+
+# Font weight: "normal", "bold", "light", "ultralight", "heavy", "ultrabold"
+# Or numeric: 100-900 (400=normal, 700=bold)
+# Try different weights:
+#   font_weight = "normal"    # Regular weight
+#   font_weight = "bold"      # Bold (default, best visibility)
+#   font_weight = "light"     # Light weight
+#   font_weight = "600"       # Semi-bold (numeric)
+font_weight = "bold"
+
+# Font style: "normal", "italic", "oblique"
+# Try different styles:
+#   font_style = "normal"     # Standard upright text
+#   font_style = "italic"     # Italic/cursive
+#   font_style = "oblique"    # Slanted text
+font_style = "normal"
+
+# Enable semi-transparent background box behind text for better contrast
+# Set to true if you find text hard to read against complex backgrounds
+# Default: false (no background, cleaner look with just stroke outline)
+text_background_enabled = false
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRESET SLOTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[presets]
+# Number of visible preset slots (3-5)
+slot_count = 5
+
+# Each preset requires tool + color + size (thickness or eraser size).
+# Optional fields let you capture fill, marker opacity, font size, etc.
+
+[presets.slot_1]
+# Optional label shown in UI tooltips
+name = "Red pen"
+# Tool: "pen", "line", "rect", "ellipse", "arrow", "marker", "highlight", "eraser", "select"
+tool = "pen"
+# Color: name or RGB array
+color = "red"
+# Size: pen thickness or eraser size
+size = 3.0
+# Optional overrides
+marker_opacity = 0.32
+fill_enabled = false
+font_size = 32.0
+text_background_enabled = false
+arrow_length = 20.0
+arrow_angle = 30.0
+arrow_head_at_end = false
+show_status_bar = true
+
+# [presets.slot_2]
+# name = "Blue marker"
+# tool = "marker"
+# color = "blue"
+# size = 8.0
+# marker_opacity = 0.32
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ARROW SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[arrow]
+# Arrowhead length in pixels
+length = 20.0
+
+# Arrowhead angle in degrees (15-60)
+# 30 degrees gives a nice balanced arrow
+angle_degrees = 30.0
+
+# Place the arrowhead at the end of the line instead of the start
+head_at_end = false
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[performance]
+# Number of buffers for rendering (2, 3, or 4)
+# 2 = double buffering (low memory)
+# 3 = triple buffering (recommended, smooth)
+# 4 = quad buffering (ultra-smooth on high refresh displays)
+buffer_count = 3
+
+# Enable vsync frame synchronization
+# Prevents tearing and limits rendering to display refresh rate
+enable_vsync = true
+
+# Max FPS when VSync is disabled (0 = unlimited)
+# Prevents CPU spinning at very high FPS; set to match your monitor (60/120/144/240)
+max_fps_no_vsync = 60
+
+# UI animation frame rate (0 = unlimited)
+# Higher values smooth UI effects at the cost of more redraws
+ui_animation_fps = 30
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HISTORY / STEP UNDO SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[history]
+# Delay in milliseconds between steps for undo-all (50 - 5000)
+undo_all_delay_ms = 1000
+
+# Delay in milliseconds between steps for redo-all (50 - 5000)
+redo_all_delay_ms = 1000
+
+# Show the custom step undo/redo section in the toolbar
+custom_section_enabled = false
+
+# Delay in milliseconds between steps for custom undo (50 - 5000)
+custom_undo_delay_ms = 1000
+
+# Delay in milliseconds between steps for custom redo (50 - 5000)
+custom_redo_delay_ms = 1000
+
+# Number of steps to run for custom undo/redo (1 - 500)
+custom_undo_steps = 5
+custom_redo_steps = 5
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLET / STYLUS INPUT (Wayland tablet-unstable-v2)
+# Build with `--features tablet-input` and enable below to use
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[tablet]
+# Enable tablet/stylus input at runtime
+enabled = false
+
+# Map pressure to thickness
+pressure_enabled = true
+
+# Thickness range for pressure mapping
+min_thickness = 1.0
+max_thickness = 8.0
+
+# Automatically switch to eraser when physical eraser is detected
+auto_eraser_switch = true
+
+# Threshold (in pixels) before saving a stroke as pressure-sensitive
+pressure_variation_threshold = 0.1
+
+# How thickness edits apply to pressure strokes: disabled, add, scale
+pressure_thickness_edit_mode = "disabled"
+
+# When to show thickness entry for pressure strokes: never, pressure_only, any_pressure
+pressure_thickness_entry_mode = "pressure_only"
+
+# Per-step scale factor when using scale mode (0.1 = +/-10%)
+pressure_thickness_scale_step = 0.1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CAPTURE SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[capture]
+# Enable screenshot shortcuts (set to false to disable all capture actions)
+enabled = true
+
+# Directory where PNG files are saved (supports ~ expansion)
+save_directory = "~/Pictures/Wayscriber"
+
+# Filename template (strftime-like subset: %Y, %m, %d, %H, %M, %S)
+filename_template = "screenshot_%Y-%m-%d_%H%M%S"
+
+# Image format for saved screenshots
+format = "png"
+
+# Copy screenshots to clipboard by default
+# Shortcut-specific actions may override this
+copy_to_clipboard = true
+
+# Exit overlay after any capture completes (forces exit for all capture types)
+# When false, clipboard-only captures still auto-exit by default.
+# Use --no-exit-after-capture to keep the overlay open for a run.
+exit_after_capture = false
+
