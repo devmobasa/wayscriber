@@ -14,6 +14,7 @@ pub struct SessionState {
     dirty_since: Option<Instant>,
     last_dirty_at: Option<Instant>,
     last_save_at: Option<Instant>,
+    autosave_retry_at: Option<Instant>,
     notified_failure: bool,
 }
 
@@ -27,6 +28,7 @@ impl SessionState {
             dirty_since: None,
             last_dirty_at: None,
             last_save_at: None,
+            autosave_retry_at: None,
             notified_failure: false,
         }
     }
@@ -67,10 +69,12 @@ impl SessionState {
         self.dirty_since = None;
         self.last_dirty_at = None;
         self.last_save_at = Some(now);
+        self.autosave_retry_at = None;
         self.notified_failure = false;
     }
 
-    pub fn mark_autosave_failure(&mut self) -> bool {
+    pub fn mark_autosave_failure(&mut self, now: Instant, backoff: Duration) -> bool {
+        self.autosave_retry_at = Some(now + backoff);
         if self.notified_failure {
             false
         } else {
@@ -81,6 +85,11 @@ impl SessionState {
 
     pub fn autosave_due(&self, now: Instant, options: &SessionOptions) -> bool {
         if !autosave_active(options) || !self.dirty {
+            return false;
+        }
+        if let Some(retry_at) = self.autosave_retry_at
+            && now < retry_at
+        {
             return false;
         }
         let Some(last_dirty_at) = self.last_dirty_at else {
@@ -113,11 +122,49 @@ impl SessionState {
         } else {
             periodic_due
         };
-        Some(next_due.saturating_duration_since(now))
+        let next_time = match self.autosave_retry_at {
+            Some(retry_at) => std::cmp::max(next_due, retry_at),
+            None => next_due,
+        };
+        Some(next_time.saturating_duration_since(now))
     }
 }
 
 fn autosave_active(options: &SessionOptions) -> bool {
     options.autosave_enabled
         && (options.any_enabled() || options.restore_tool_state || options.persist_history)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn autosave_failure_backoff_delays_retry() {
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+        options.autosave_enabled = true;
+        options.persist_transparent = true;
+        options.autosave_idle = Duration::from_millis(1);
+        options.autosave_interval = Duration::from_millis(1);
+        options.autosave_failure_backoff = Duration::from_millis(50);
+
+        let mut state = SessionState::new(Some(options.clone()));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+        state.mark_autosave_failure(now, options.autosave_failure_backoff);
+
+        assert!(!state.autosave_due(now, &options));
+        assert_eq!(
+            state.autosave_timeout(now, &options),
+            Some(options.autosave_failure_backoff)
+        );
+
+        let later = now + options.autosave_failure_backoff;
+        assert!(state.autosave_due(later, &options));
+        assert_eq!(
+            state.autosave_timeout(later, &options),
+            Some(Duration::from_millis(0))
+        );
+    }
 }

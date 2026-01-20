@@ -6,16 +6,21 @@ use crate::draw::shape::EraserBrush;
 use crate::input::{EraserMode, InputState, Tool};
 use crate::util;
 
-pub(super) fn finish_drawing(
-    state: &mut InputState,
-    tool: Tool,
-    start_x: i32,
-    start_y: i32,
-    points: Vec<(i32, i32)>,
-    point_thicknesses: Vec<f32>,
-    end_x: i32,
-    end_y: i32,
-) {
+pub(super) struct DrawingRelease {
+    pub(super) start: (i32, i32),
+    pub(super) end: (i32, i32),
+    pub(super) points: Vec<(i32, i32)>,
+    pub(super) point_thicknesses: Vec<f32>,
+}
+
+pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: DrawingRelease) {
+    let (start_x, start_y) = release.start;
+    let (end_x, end_y) = release.end;
+    let DrawingRelease {
+        points,
+        point_thicknesses,
+        ..
+    } = release;
     let label = if matches!(tool, Tool::Arrow) {
         state.next_arrow_label()
     } else {
@@ -32,7 +37,7 @@ pub(super) fn finish_drawing(
                 let max_t = point_thicknesses
                     .iter()
                     .fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-                (max_t - min_t).abs() > 0.1
+                (max_t - min_t).abs() > state.pressure_variation_threshold as f32
             } else {
                 false
             };

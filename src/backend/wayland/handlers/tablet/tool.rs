@@ -40,22 +40,20 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_last_pos = None;
 
                 // Auto-switch to eraser if physical tool is eraser (and config enables it)
-                if state.config.tablet.auto_eraser_switch {
-                    if let Some(tool_type) = tool_type {
-                        if tool_type.is_eraser() {
-                            // Only auto-switch if not already on eraser
-                            if state.input_state.active_tool() != Tool::Eraser {
-                                // Save the current tool override before switching
-                                state.stylus_pre_eraser_tool_override =
-                                    state.input_state.tool_override();
-                                state.input_state.set_tool_override(Some(Tool::Eraser));
-                                state.stylus_auto_switched_to_eraser = true;
-                                info!(
-                                    "Auto-switched to eraser (physical eraser detected), saved previous: {:?}",
-                                    state.stylus_pre_eraser_tool_override
-                                );
-                            }
-                        }
+                if state.config.tablet.auto_eraser_switch
+                    && let Some(tool_type) = tool_type
+                    && tool_type.is_eraser()
+                {
+                    // Only auto-switch if not already on eraser
+                    if state.input_state.active_tool() != Tool::Eraser {
+                        // Save the current tool override before switching
+                        state.stylus_pre_eraser_tool_override = state.input_state.tool_override();
+                        state.input_state.set_tool_override(Some(Tool::Eraser));
+                        state.stylus_auto_switched_to_eraser = true;
+                        info!(
+                            "Auto-switched to eraser (physical eraser detected), saved previous: {:?}",
+                            state.stylus_pre_eraser_tool_override
+                        );
                     }
                 }
 

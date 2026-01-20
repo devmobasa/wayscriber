@@ -54,7 +54,7 @@ pub(super) fn build_session_options(
 
     if let Some(ref opts) = session_options {
         info!(
-            "Session persistence: base_dir={}, per_output={}, display_id='{}', output_identity={:?}, boards[T/W/B]={}/{}/{}, history={}, max_persisted_history={:?}, restore_tool_state={}, autosave_enabled={}, autosave_idle_ms={}, autosave_interval_ms={}, max_file_size={} bytes, compression={:?}",
+            "Session persistence: base_dir={}, per_output={}, display_id='{}', output_identity={:?}, boards[T/W/B]={}/{}/{}, history={}, max_persisted_history={:?}, restore_tool_state={}, autosave_enabled={}, autosave_idle_ms={}, autosave_interval_ms={}, autosave_failure_backoff_ms={}, max_file_size={} bytes, compression={:?}",
             opts.base_dir.display(),
             opts.per_output,
             opts.display_id,
@@ -68,6 +68,7 @@ pub(super) fn build_session_options(
             opts.autosave_enabled,
             opts.autosave_idle.as_millis(),
             opts.autosave_interval.as_millis(),
+            opts.autosave_failure_backoff.as_millis(),
             opts.max_file_size_bytes,
             opts.compression
         );

@@ -44,6 +44,8 @@ pub fn options_from_config(
     options.autosave_enabled = session_cfg.autosave_enabled;
     options.autosave_idle = Duration::from_millis(session_cfg.autosave_idle_ms.max(1));
     options.autosave_interval = Duration::from_millis(session_cfg.autosave_interval_ms.max(1));
+    options.autosave_failure_backoff =
+        Duration::from_millis(session_cfg.autosave_failure_backoff_ms.max(1));
     options.max_shapes_per_frame = session_cfg.max_shapes_per_frame;
     options.max_persisted_undo_depth = session_cfg
         .max_persisted_undo_depth

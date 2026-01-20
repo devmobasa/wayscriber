@@ -40,7 +40,10 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
             }
         }
         Err(err) => {
-            if state.session.mark_autosave_failure() {
+            if state
+                .session
+                .mark_autosave_failure(now, options.autosave_failure_backoff)
+            {
                 notify_session_failure(state, &err);
             }
             return Err(err);

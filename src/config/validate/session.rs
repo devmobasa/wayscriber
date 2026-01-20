@@ -5,6 +5,7 @@ impl Config {
     pub(super) fn validate_session(&mut self) {
         const MIN_AUTOSAVE_IDLE_MS: u64 = 1_000;
         const MIN_AUTOSAVE_INTERVAL_MS: u64 = 1_000;
+        const MIN_AUTOSAVE_FAILURE_BACKOFF_MS: u64 = 1_000;
 
         if self.session.max_shapes_per_frame == 0 {
             log::warn!("session.max_shapes_per_frame must be positive; using 1 instead");
@@ -43,6 +44,15 @@ impl Config {
                 MIN_AUTOSAVE_INTERVAL_MS
             );
             self.session.autosave_interval_ms = MIN_AUTOSAVE_INTERVAL_MS;
+        }
+
+        if self.session.autosave_failure_backoff_ms < MIN_AUTOSAVE_FAILURE_BACKOFF_MS {
+            log::warn!(
+                "session.autosave_failure_backoff_ms must be at least {} ms; using {} instead",
+                MIN_AUTOSAVE_FAILURE_BACKOFF_MS,
+                MIN_AUTOSAVE_FAILURE_BACKOFF_MS
+            );
+            self.session.autosave_failure_backoff_ms = MIN_AUTOSAVE_FAILURE_BACKOFF_MS;
         }
 
         if matches!(self.session.storage, SessionStorageMode::Custom) {

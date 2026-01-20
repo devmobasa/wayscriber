@@ -3,7 +3,7 @@ use super::super::super::{
 };
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
-    TextInputMode, ToolbarDrawerTab,
+    PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode, ToolbarDrawerTab,
 };
 use super::structs::InputState;
 use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX};
@@ -66,6 +66,10 @@ impl InputState {
             boards: BoardManager::from_config(boards_config),
             current_color: color,
             current_thickness: thickness,
+            pressure_variation_threshold: 0.1,
+            pressure_thickness_edit_mode: PressureThicknessEditMode::Disabled,
+            pressure_thickness_entry_mode: PressureThicknessEntryMode::PressureOnly,
+            pressure_thickness_scale_step: 0.1,
             eraser_size: clamped_eraser,
             eraser_kind: EraserKind::Circle,
             eraser_mode,

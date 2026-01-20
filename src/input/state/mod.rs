@@ -12,7 +12,7 @@ pub use core::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, ContextMenuEntry, ContextMenuKind,
     ContextMenuState, DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
-    SelectionAxis, SelectionState, TextInputMode, ToolbarDrawerTab, TourStep, UI_TOAST_DURATION_MS,
-    UiToastKind, ZoomAction,
+    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionState,
+    TextInputMode, ToolbarDrawerTab, TourStep, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub use highlight::ClickHighlightSettings;

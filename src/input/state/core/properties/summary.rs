@@ -67,6 +67,7 @@ where
 pub(super) fn shape_color(shape: &Shape) -> Option<Color> {
     match shape {
         Shape::Freehand { color, .. }
+        | Shape::FreehandPressure { color, .. }
         | Shape::Line { color, .. }
         | Shape::Rect { color, .. }
         | Shape::Ellipse { color, .. }

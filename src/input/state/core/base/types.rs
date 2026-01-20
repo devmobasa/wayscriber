@@ -18,6 +18,8 @@ use crate::config::ToolPresetConfig;
 use crate::draw::ShapeId;
 use crate::draw::frame::ShapeSnapshot;
 use crate::input::tool::Tool;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
 /// Current drawing mode state machine.
@@ -99,6 +101,24 @@ pub enum DrawingState {
 pub enum TextInputMode {
     Plain,
     StickyNote,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PressureThicknessEditMode {
+    #[default]
+    Disabled,
+    Add,
+    Scale,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PressureThicknessEntryMode {
+    Never,
+    #[default]
+    PressureOnly,
+    AnyPressure,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
