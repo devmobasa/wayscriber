@@ -53,6 +53,7 @@ impl InputState {
             UndoAction::Create { shapes: created },
             self.undo_stack_limit,
         );
+        self.mark_session_dirty();
         self.needs_redraw = true;
         self.set_selection(new_ids);
         true
@@ -148,6 +149,7 @@ impl InputState {
             UndoAction::Create { shapes: created },
             self.undo_stack_limit,
         );
+        self.mark_session_dirty();
         self.needs_redraw = true;
         self.set_selection(new_ids);
         self.clipboard_paste_offset = offset;

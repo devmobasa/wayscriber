@@ -54,6 +54,7 @@ impl InputState {
         self.boards
             .active_frame_mut()
             .push_undo_action(UndoAction::Compound(actions), self.undo_stack_limit);
+        self.mark_session_dirty();
         true
     }
 
@@ -89,6 +90,7 @@ impl InputState {
         self.clear_selection();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 

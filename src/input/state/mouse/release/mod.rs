@@ -67,12 +67,12 @@ impl InputState {
                 drawing::finish_drawing(
                     self,
                     tool,
-                    start_x,
-                    start_y,
-                    points,
-                    point_thicknesses,
-                    x,
-                    y,
+                    drawing::DrawingRelease {
+                        start: (start_x, start_y),
+                        end: (x, y),
+                        points,
+                        point_thicknesses,
+                    },
                 );
             }
             DrawingState::PendingTextClick { x, y, shape_id, .. } => {

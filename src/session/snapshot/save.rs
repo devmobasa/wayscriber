@@ -10,7 +10,7 @@ use std::io::Write;
 
 /// Persist the provided snapshot to disk according to the configured options.
 pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
-    if !options.any_enabled() && snapshot.tool_state.is_none() {
+    if !options.any_enabled() && !options.persist_history && snapshot.tool_state.is_none() {
         debug!("Session persistence disabled for all boards; skipping save");
         return Ok(());
     }

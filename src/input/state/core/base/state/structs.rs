@@ -8,8 +8,9 @@ use super::super::super::{
 use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
     PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
-    PresetFeedbackState, SelectionAxis, StatusChangeHighlight, TextClickState, TextInputMode,
-    ToolbarDrawerTab, UiToastState, ZoomAction,
+    PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
+    StatusChangeHighlight, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState,
+    ZoomAction,
 };
 use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -44,6 +45,14 @@ pub struct InputState {
     pub current_color: Color,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
+    /// Threshold (in pixels) before storing pressure-sensitive strokes.
+    pub(crate) pressure_variation_threshold: f64,
+    /// How selection thickness edits apply to pressure-sensitive strokes.
+    pub(crate) pressure_thickness_edit_mode: PressureThicknessEditMode,
+    /// When to show a thickness entry for pressure-sensitive selections.
+    pub(crate) pressure_thickness_entry_mode: PressureThicknessEntryMode,
+    /// Per-step scale factor when using scale mode for pressure thickness edits.
+    pub(crate) pressure_thickness_scale_step: f64,
     /// Current eraser size in pixels
     pub eraser_size: f64,
     /// Current eraser brush shape
@@ -80,6 +89,8 @@ pub struct InputState {
     pub should_exit: bool,
     /// Whether the display needs to be redrawn
     pub needs_redraw: bool,
+    /// Whether session persistence should capture changes (cleared after autosave check)
+    pub(crate) session_dirty: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
     /// Active help overlay page index

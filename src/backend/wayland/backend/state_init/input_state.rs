@@ -51,6 +51,13 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
     input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
+    #[cfg(tablet)]
+    {
+        input_state.pressure_variation_threshold = config.tablet.pressure_variation_threshold;
+        input_state.pressure_thickness_edit_mode = config.tablet.pressure_thickness_edit_mode;
+        input_state.pressure_thickness_entry_mode = config.tablet.pressure_thickness_entry_mode;
+        input_state.pressure_thickness_scale_step = config.tablet.pressure_thickness_scale_step;
+    }
 
     input_state.init_toolbar_from_config(
         config.ui.toolbar.layout_mode,

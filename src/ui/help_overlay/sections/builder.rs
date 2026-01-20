@@ -308,6 +308,10 @@ pub(crate) fn build_section_sets(
             action_label(Action::ToggleHelp),
         ),
         row(
+            binding_or_fallback(bindings, Action::ToggleCommandPalette, NOT_BOUND_LABEL),
+            action_label(Action::ToggleCommandPalette),
+        ),
+        row(
             binding_or_fallback(bindings, Action::ToggleToolbar, NOT_BOUND_LABEL),
             action_label(Action::ToggleToolbar),
         ),

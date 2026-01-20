@@ -235,6 +235,7 @@ impl InputState {
             self.state = super::base::DrawingState::Idle;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
+            self.mark_session_dirty();
 
             log::info!("Duplicated board '{}' to '{}'", current_id, new_id);
         } else {
@@ -380,6 +381,7 @@ impl InputState {
         // Trigger redraw
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
 
         log::info!(
             "Switched from '{}' to '{}' board",
@@ -415,6 +417,7 @@ impl InputState {
         self.invalidate_hit_cache();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
     }
 
     pub fn page_prev(&mut self) -> bool {

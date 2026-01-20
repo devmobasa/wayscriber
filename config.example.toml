@@ -525,6 +525,21 @@ pressure_enabled = true
 min_thickness = 1.0
 max_thickness = 8.0
 
+# Automatically switch to eraser when physical eraser is detected
+auto_eraser_switch = true
+
+# Threshold (in pixels) before saving a stroke as pressure-sensitive
+pressure_variation_threshold = 0.1
+
+# How thickness edits apply to pressure strokes: disabled, add, scale
+pressure_thickness_edit_mode = "disabled"
+
+# When to show thickness entry for pressure strokes: never, pressure_only, any_pressure
+pressure_thickness_entry_mode = "pressure_only"
+
+# Per-step scale factor when using scale mode (0.1 = +/-10%)
+pressure_thickness_scale_step = 0.1
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CAPTURE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -568,6 +583,18 @@ persist_history = true
 # When true, the last-used tool state overrides config defaults at startup.
 # Set to false if you always want to use the values above (e.g., arrow head placement).
 restore_tool_state = true
+
+# Autosave session data while the overlay is running
+autosave_enabled = true
+
+# Save after this much idle time following a change (ms)
+autosave_idle_ms = 5000
+
+# Maximum interval between saves while dirty (ms)
+autosave_interval_ms = 45000
+
+# Backoff before retrying autosave after a failure (ms)
+autosave_failure_backoff_ms = 5000
 
 # Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
 storage = "auto"

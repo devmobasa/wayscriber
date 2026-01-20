@@ -1,8 +1,13 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::identifiers::sanitize_identifier;
 
 pub const DEFAULT_AUTO_COMPRESS_THRESHOLD_BYTES: u64 = 100 * 1024; // 100 KiB
+pub const DEFAULT_AUTOSAVE_ENABLED: bool = true;
+pub const DEFAULT_AUTOSAVE_IDLE_MS: u64 = 5_000;
+pub const DEFAULT_AUTOSAVE_INTERVAL_MS: u64 = 45_000;
+pub const DEFAULT_AUTOSAVE_FAILURE_BACKOFF_MS: u64 = 5_000;
 
 /// Compression preference for session files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +29,10 @@ pub struct SessionOptions {
     pub persist_blackboard: bool,
     pub persist_history: bool,
     pub restore_tool_state: bool,
+    pub autosave_enabled: bool,
+    pub autosave_idle: Duration,
+    pub autosave_interval: Duration,
+    pub autosave_failure_backoff: Duration,
     pub max_shapes_per_frame: usize,
     pub max_persisted_undo_depth: Option<usize>,
     pub max_file_size_bytes: u64,
@@ -47,6 +56,10 @@ impl SessionOptions {
             persist_blackboard: false,
             persist_history: true,
             restore_tool_state: true,
+            autosave_enabled: DEFAULT_AUTOSAVE_ENABLED,
+            autosave_idle: Duration::from_millis(DEFAULT_AUTOSAVE_IDLE_MS),
+            autosave_interval: Duration::from_millis(DEFAULT_AUTOSAVE_INTERVAL_MS),
+            autosave_failure_backoff: Duration::from_millis(DEFAULT_AUTOSAVE_FAILURE_BACKOFF_MS),
             max_shapes_per_frame: 10_000,
             max_persisted_undo_depth: None,
             max_file_size_bytes: 10 * 1024 * 1024,

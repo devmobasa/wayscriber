@@ -136,6 +136,9 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     config.session.max_shapes_per_frame = 0;
     config.session.max_file_size_mb = 2048;
     config.session.auto_compress_threshold_kb = 0;
+    config.session.autosave_idle_ms = 0;
+    config.session.autosave_interval_ms = 0;
+    config.session.autosave_failure_backoff_ms = 0;
     config.session.storage = SessionStorageMode::Custom;
     config.session.custom_directory = Some("  ".to_string());
     config.keybindings.core.exit = vec!["Ctrl+Shift".to_string()];
@@ -168,10 +171,38 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     assert_eq!(config.session.max_shapes_per_frame, 1);
     assert_eq!(config.session.max_file_size_mb, 1024);
     assert_eq!(config.session.auto_compress_threshold_kb, 1);
+    assert_eq!(config.session.autosave_idle_ms, 1000);
+    assert_eq!(config.session.autosave_interval_ms, 1000);
+    assert_eq!(config.session.autosave_failure_backoff_ms, 1000);
     assert!(matches!(config.session.storage, SessionStorageMode::Auto));
     assert!(config.session.custom_directory.is_none());
     assert_eq!(
         config.keybindings.core.exit,
         KeybindingsConfig::default().core.exit
     );
+}
+
+#[cfg(tablet)]
+#[test]
+fn validate_clamps_pressure_thickness_scale_step() {
+    let mut config = Config::default();
+    config.tablet.pressure_thickness_scale_step = 0.0;
+    config.validate_and_clamp();
+    assert_eq!(config.tablet.pressure_thickness_scale_step, 0.0);
+
+    config.tablet.pressure_thickness_scale_step = 1.5;
+    config.validate_and_clamp();
+    assert_eq!(config.tablet.pressure_thickness_scale_step, 1.0);
+}
+
+#[test]
+fn validate_does_not_clamp_autosave_interval_to_idle() {
+    let mut config = Config::default();
+    config.session.autosave_idle_ms = 60_000;
+    config.session.autosave_interval_ms = 5_000;
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.session.autosave_idle_ms, 60_000);
+    assert_eq!(config.session.autosave_interval_ms, 5_000);
 }

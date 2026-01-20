@@ -41,6 +41,7 @@ impl InputState {
         }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 

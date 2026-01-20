@@ -51,6 +51,7 @@ impl InputState {
             self.eraser_kind = kind;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
+            self.mark_session_dirty();
         }
         if let Some(mode) = preset.eraser_mode {
             let _ = self.set_eraser_mode(mode);
@@ -70,6 +71,7 @@ impl InputState {
             self.text_background_enabled = text_background_enabled;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
+            self.mark_session_dirty();
         }
         if let Some(length) = preset.arrow_length {
             let clamped = length.clamp(5.0, 50.0);
@@ -77,6 +79,7 @@ impl InputState {
                 self.arrow_length = clamped;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.mark_session_dirty();
             }
         }
         if let Some(angle) = preset.arrow_angle {
@@ -85,6 +88,7 @@ impl InputState {
                 self.arrow_angle = clamped;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.mark_session_dirty();
             }
         }
         if let Some(head_at_end) = preset.arrow_head_at_end
@@ -93,6 +97,7 @@ impl InputState {
             self.arrow_head_at_end = head_at_end;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
+            self.mark_session_dirty();
         }
         if let Some(show_status_bar) = preset.show_status_bar
             && !(self.presenter_mode && self.presenter_mode_config.hide_status_bar)
@@ -101,6 +106,7 @@ impl InputState {
             self.show_status_bar = show_status_bar;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
+            self.mark_session_dirty();
         }
 
         self.active_preset_slot = Some(slot);

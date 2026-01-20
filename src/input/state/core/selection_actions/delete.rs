@@ -67,6 +67,7 @@ impl InputState {
 
         self.clear_selection();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 

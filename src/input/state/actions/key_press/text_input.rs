@@ -112,6 +112,7 @@ impl InputState {
             if added {
                 self.dirty_tracker.mark_optional_rect(bounds);
                 self.needs_redraw = true;
+                self.mark_session_dirty();
             } else {
                 warn!(
                     "Shape limit ({}) reached; new text not added",

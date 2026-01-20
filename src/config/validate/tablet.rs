@@ -17,5 +17,10 @@ impl Config {
             .tablet
             .max_thickness
             .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        if self.tablet.pressure_variation_threshold < 0.0 {
+            self.tablet.pressure_variation_threshold = 0.0;
+        }
+        self.tablet.pressure_thickness_scale_step =
+            self.tablet.pressure_thickness_scale_step.clamp(0.0, 1.0);
     }
 }
