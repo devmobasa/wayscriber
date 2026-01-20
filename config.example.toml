@@ -717,6 +717,7 @@ toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
 
 # Page navigation
+# Ubuntu/GNOME defaults avoid Ctrl+Alt workspace shortcuts (Ctrl+ArrowLeft/Right, Ctrl+PageUp/PageDown).
 page_prev = ["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+PageUp"]
 page_next = ["Ctrl+Alt+ArrowRight", "Ctrl+Alt+PageDown"]
 page_new = ["Ctrl+Alt+N"]
