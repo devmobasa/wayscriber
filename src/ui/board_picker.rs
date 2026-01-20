@@ -1,46 +1,19 @@
-use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
+use crate::draw::Color;
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
-use std::f64::consts::PI;
 
 use super::constants::{
-    self, BG_SELECTED_INDICATOR, BG_SELECTION, BORDER_BOARD_PICKER, DIVIDER_LIGHT,
-    ICON_DRAG_HANDLE, ICON_PIN_ACTIVE, ICON_PIN_INACTIVE, INDICATOR_ACTIVE_BOARD, INPUT_CARET,
-    NAV_HINT_BOARD_PICKER, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM, PANEL_BG_BOARD_PICKER,
-    RADIUS_PANEL, TEXT_ACTIVE, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
+    self, BG_SELECTED_INDICATOR, BG_SELECTION, BORDER_BOARD_PICKER, DIVIDER_LIGHT, ICON_PIN_ACTIVE,
+    ICON_PIN_INACTIVE, INDICATOR_ACTIVE_BOARD, INPUT_CARET, NAV_HINT_BOARD_PICKER,
+    OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM, PANEL_BG_BOARD_PICKER, RADIUS_PANEL, TEXT_ACTIVE,
+    TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
 };
+
+mod helpers;
+use helpers::{BOARD_PALETTE, board_slot_hint, draw_drag_handle, draw_pin_icon};
 
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
 const PALETTE_SWATCH_GAP: f64 = 6.0;
-
-const BOARD_PALETTE: [Color; 11] = [
-    RED,
-    GREEN,
-    BLUE,
-    YELLOW,
-    WHITE,
-    BLACK,
-    ORANGE,
-    PINK,
-    Color {
-        r: 0.0,
-        g: 1.0,
-        b: 1.0,
-        a: 1.0,
-    },
-    Color {
-        r: 0.6,
-        g: 0.4,
-        b: 0.8,
-        a: 1.0,
-    },
-    Color {
-        r: 0.4,
-        g: 0.4,
-        b: 0.4,
-        a: 1.0,
-    },
-];
 
 pub fn render_board_picker(
     ctx: &cairo::Context,
@@ -102,6 +75,14 @@ pub fn render_board_picker(
     ctx.set_font_size(layout.footer_font_size);
     constants::set_color(ctx, TEXT_TERTIARY);
     let footer_y = layout.origin_y + layout.height - layout.padding_y;
+    let footer_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        layout.footer_font_size,
+        &footer,
+    );
     ctx.move_to(layout.origin_x + layout.padding_x, footer_y);
     let _ = ctx.show_text(&footer);
     // Navigation hint on right side
@@ -114,11 +95,12 @@ pub fn render_board_picker(
         layout.footer_font_size,
         NAV_HINT_BOARD_PICKER,
     );
-    ctx.move_to(
-        layout.origin_x + layout.width - layout.padding_x - nav_extents.width(),
-        footer_y,
-    );
-    let _ = ctx.show_text(NAV_HINT_BOARD_PICKER);
+    let nav_start = layout.origin_x + layout.width - layout.padding_x - nav_extents.width();
+    let footer_end = layout.origin_x + layout.padding_x + footer_extents.width();
+    if footer_end + layout.footer_font_size * 0.5 <= nav_start {
+        ctx.move_to(nav_start, footer_y);
+        let _ = ctx.show_text(NAV_HINT_BOARD_PICKER);
+    }
     if let Some(recent) = recent {
         let recent_y = footer_y - layout.recent_height;
         ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.8);
@@ -455,61 +437,4 @@ pub fn render_board_picker(
     }
 
     let _ = ctx.restore();
-}
-
-fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
-    use crate::config::Action;
-    let action = match index {
-        0 => Action::Board1,
-        1 => Action::Board2,
-        2 => Action::Board3,
-        3 => Action::Board4,
-        4 => Action::Board5,
-        5 => Action::Board6,
-        6 => Action::Board7,
-        7 => Action::Board8,
-        8 => Action::Board9,
-        _ => return None,
-    };
-    let label = state.action_binding_label(action);
-    if label == "Not bound" {
-        None
-    } else {
-        Some(label)
-    }
-}
-
-fn draw_pin_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color, filled: bool) {
-    let head_radius = (size * 0.22).clamp(2.0, 3.2);
-    let stem_length = size * 0.6;
-    let head_y = y - stem_length * 0.35;
-    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-    ctx.arc(x, head_y, head_radius, 0.0, PI * 2.0);
-    if filled {
-        let _ = ctx.fill();
-    } else {
-        ctx.set_line_width(1.2);
-        let _ = ctx.stroke();
-    }
-    ctx.set_line_width(1.2);
-    ctx.move_to(x, head_y + head_radius);
-    ctx.line_to(x, head_y + head_radius + stem_length);
-    let _ = ctx.stroke();
-}
-
-fn draw_drag_handle(ctx: &cairo::Context, x: f64, y: f64, width: f64) {
-    let dot_radius = (width * 0.18).clamp(1.2, 2.2);
-    let gap = dot_radius * 2.2;
-    let col_gap = dot_radius * 2.6;
-    let start_x = x + width * 0.5 - col_gap * 0.5;
-    let start_y = y - gap;
-    constants::set_color(ctx, ICON_DRAG_HANDLE);
-    for row in 0..3 {
-        for col in 0..2 {
-            let cx = start_x + col as f64 * col_gap;
-            let cy = start_y + row as f64 * gap;
-            ctx.arc(cx, cy, dot_radius, 0.0, PI * 2.0);
-            let _ = ctx.fill();
-        }
-    }
 }

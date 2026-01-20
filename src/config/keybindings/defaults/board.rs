@@ -1,3 +1,22 @@
+use std::env;
+
+fn use_ubuntu_page_navigation_defaults() -> bool {
+    if !cfg!(target_os = "linux") {
+        return false;
+    }
+    [
+        "XDG_CURRENT_DESKTOP",
+        "XDG_SESSION_DESKTOP",
+        "DESKTOP_SESSION",
+    ]
+    .iter()
+    .filter_map(|key| env::var(key).ok())
+    .any(|value| {
+        let value = value.to_lowercase();
+        value.contains("ubuntu") || value.contains("gnome")
+    })
+}
+
 pub(crate) fn default_toggle_whiteboard() -> Vec<String> {
     vec!["Ctrl+W".to_string()]
 }
@@ -11,17 +30,25 @@ pub(crate) fn default_return_to_transparent() -> Vec<String> {
 }
 
 pub(crate) fn default_page_prev() -> Vec<String> {
-    vec![
-        "Ctrl+Alt+ArrowLeft".to_string(),
-        "Ctrl+Alt+PageUp".to_string(),
-    ]
+    if use_ubuntu_page_navigation_defaults() {
+        vec!["Ctrl+ArrowLeft".to_string(), "Ctrl+PageUp".to_string()]
+    } else {
+        vec![
+            "Ctrl+Alt+ArrowLeft".to_string(),
+            "Ctrl+Alt+PageUp".to_string(),
+        ]
+    }
 }
 
 pub(crate) fn default_page_next() -> Vec<String> {
-    vec![
-        "Ctrl+Alt+ArrowRight".to_string(),
-        "Ctrl+Alt+PageDown".to_string(),
-    ]
+    if use_ubuntu_page_navigation_defaults() {
+        vec!["Ctrl+ArrowRight".to_string(), "Ctrl+PageDown".to_string()]
+    } else {
+        vec![
+            "Ctrl+Alt+ArrowRight".to_string(),
+            "Ctrl+Alt+PageDown".to_string(),
+        ]
+    }
 }
 
 pub(crate) fn default_page_new() -> Vec<String> {

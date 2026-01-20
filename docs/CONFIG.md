@@ -738,6 +738,7 @@ board_delete = ["Ctrl+Shift+Delete"]
 board_picker = ["Ctrl+Shift+B"]
 
 # Page navigation
+# Ubuntu/GNOME defaults avoid Ctrl+Alt workspace shortcuts (Ctrl+ArrowLeft/Right, Ctrl+PageUp/PageDown).
 page_prev = ["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+PageUp"]
 page_next = ["Ctrl+Alt+ArrowRight", "Ctrl+Alt+PageDown"]
 page_new = ["Ctrl+Alt+N"]

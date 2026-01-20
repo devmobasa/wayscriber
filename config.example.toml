@@ -5,6 +5,595 @@
 # Delete this file to reset to defaults.
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# KEYBINDING SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[keybindings]
+# Customize keyboard shortcuts for all actions
+# Format: key names with modifiers separated by +
+# Examples: "Escape", "Ctrl+Z", "Ctrl+Shift+T", "F10"
+# Each action can have multiple keybindings (e.g., ["+", "="])
+
+# Exit overlay (or cancel current action)
+exit = ["Escape", "Ctrl+Q"]
+
+# Enter text mode
+enter_text_mode = ["T"]
+
+# Enter sticky note mode
+enter_sticky_note_mode = ["N"]
+
+# Clear all annotations on current canvas
+clear_canvas = ["E"]
+
+# Undo last annotation
+undo = ["Ctrl+Z"]
+
+# Redo last undone annotation
+redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
+
+# Duplicate currently selected annotations
+duplicate_selection = ["Ctrl+D"]
+
+# Copy/paste selected annotations
+copy_selection = ["Ctrl+Alt+C"]
+paste_selection = ["Ctrl+Alt+V"]
+
+# Select all annotations
+select_all = ["Ctrl+A"]
+
+# Reorder selected annotations within the stack
+move_selection_to_front = ["]"]
+move_selection_to_back = ["["]
+
+# Nudge selected annotations (hold Shift for a larger step)
+nudge_selection_up = ["ArrowUp"]
+nudge_selection_down = ["ArrowDown"]
+nudge_selection_left = ["ArrowLeft", "Shift+PageUp"]
+nudge_selection_right = ["ArrowRight", "Shift+PageDown"]
+
+# Nudge selected annotations (large step)
+nudge_selection_up_large = ["PageUp"]
+nudge_selection_down_large = ["PageDown"]
+
+# Move selection to horizontal edges (left/right)
+move_selection_to_start = ["Home"]
+move_selection_to_end = ["End"]
+
+# Move selection to vertical edges
+move_selection_to_top = ["Ctrl+Home"]
+move_selection_to_bottom = ["Ctrl+End"]
+
+# Delete selected annotations
+delete_selection = ["Delete"]
+
+# Adjust pen thickness
+increase_thickness = ["+", "="]
+decrease_thickness = ["-", "_"]
+
+# Adjust marker opacity (when using the marker tool)
+increase_marker_opacity = ["Ctrl+Alt+ArrowUp"]
+decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
+
+# Tool selection shortcuts (optional; keep empty to rely on modifiers)
+select_pen_tool = ["F"]
+select_marker_tool = ["H"]
+select_eraser_tool = ["D"]
+# Toggle eraser behavior mode
+toggle_eraser_mode = ["Ctrl+Shift+E"]
+select_line_tool = []
+select_rect_tool = []
+select_ellipse_tool = []
+select_arrow_tool = []
+select_highlight_tool = []
+toggle_highlight_tool = ["Ctrl+Alt+H"]
+
+# Adjust font size
+increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
+decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
+
+# Board mode toggles (only if board.enabled = true)
+toggle_whiteboard = ["Ctrl+W"]
+toggle_blackboard = ["Ctrl+B"]
+return_to_transparent = ["Ctrl+Shift+T"]
+
+# Page navigation
+# Ubuntu/GNOME defaults avoid Ctrl+Alt workspace shortcuts (Ctrl+ArrowLeft/Right, Ctrl+PageUp/PageDown).
+page_prev = ["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+PageUp"]
+page_next = ["Ctrl+Alt+ArrowRight", "Ctrl+Alt+PageDown"]
+page_new = ["Ctrl+Alt+N"]
+page_duplicate = ["Ctrl+Alt+D"]
+page_delete = ["Ctrl+Alt+Delete"]
+
+# Toggle help overlay
+toggle_help = ["F10", "F1"]
+
+# Toggle status bar
+toggle_status_bar = ["F12", "F4"]
+
+# Toggle toolbars
+toggle_toolbar = ["F2", "F9"]
+
+# Toggle click highlight
+toggle_click_highlight = ["Ctrl+Shift+H"]
+
+# Toggle presenter mode
+toggle_presenter_mode = ["Ctrl+Shift+M"]
+
+# Toggle fill for rectangle/ellipse
+toggle_fill = []
+
+# Toggle selection properties panel
+toggle_selection_properties = ["Ctrl+Alt+P"]
+
+# Toggle context menu (keyboard alternative to right-click)
+open_context_menu = ["Shift+F10", "Menu"]
+
+# Launch the desktop configurator (requires wayscriber-configurator)
+open_configurator = ["F11"]
+
+# Color selection shortcuts
+set_color_red = ["R"]
+set_color_green = ["G"]
+set_color_blue = ["B"]
+set_color_yellow = ["Y"]
+set_color_orange = ["O"]
+set_color_pink = ["P"]
+set_color_white = ["W"]
+set_color_black = ["K"]
+
+# Screenshot shortcuts
+capture_full_screen = ["Ctrl+Shift+P"]
+capture_active_window = ["Ctrl+Shift+O"]
+capture_selection = ["Ctrl+Shift+I"]
+
+# Clipboard/File capture variants
+capture_clipboard_full = ["Ctrl+C"]
+capture_file_full = ["Ctrl+S"]
+capture_clipboard_selection = ["Ctrl+Shift+C"]
+capture_file_selection = ["Ctrl+Shift+S"]
+capture_clipboard_region = ["Ctrl+6"]
+capture_file_region = ["Ctrl+Shift+6"]
+
+# Open the most recent capture folder
+open_capture_folder = ["Ctrl+Alt+O"]
+
+# Toggle frozen mode
+toggle_frozen_mode = ["Ctrl+Shift+F"]
+
+# Zoom controls
+zoom_in = ["Ctrl+Alt++", "Ctrl+Alt+="]
+zoom_out = ["Ctrl+Alt+-", "Ctrl+Alt+_"]
+reset_zoom = ["Ctrl+Alt+0"]
+toggle_zoom_lock = ["Ctrl+Alt+L"]
+refresh_zoom_capture = ["Ctrl+Alt+R"]
+
+# Preset slots (apply/save/clear).
+apply_preset_1 = ["1"]
+apply_preset_2 = ["2"]
+apply_preset_3 = ["3"]
+apply_preset_4 = ["4"]
+apply_preset_5 = ["5"]
+save_preset_1 = ["Shift+1"]
+save_preset_2 = ["Shift+2"]
+save_preset_3 = ["Shift+3"]
+save_preset_4 = ["Shift+4"]
+save_preset_5 = ["Shift+5"]
+clear_preset_1 = []
+clear_preset_2 = []
+clear_preset_3 = []
+clear_preset_4 = []
+clear_preset_5 = []
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Keybinding Examples
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Vim-style keybindings:
+#   exit = ["Escape", "Q"]
+#   clear_canvas = ["D"]
+#   undo = ["U"]
+#   redo = ["R"]
+
+# Emacs-style keybindings:
+#   exit = ["Ctrl+G"]
+#   undo = ["Ctrl+/"]
+#   redo = ["Ctrl+?"]
+#   clear_canvas = ["Ctrl+K"]
+
+# Gaming-friendly (WASD area):
+#   exit = ["Q"]
+#   toggle_help = ["H"]
+#   undo = ["Z"]
+#   redo = ["X"]
+#   clear_canvas = ["C"]
+# ═══════════════════════════════════════════════════════════════════════════════
+# UI SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[ui]
+# Show status bar with current color/thickness/tool
+show_status_bar = true
+
+# Show board label in the status bar
+show_status_board_badge = true
+
+# Show page counter in the status bar
+show_status_page_badge = true
+
+# Show the board/page badge even when the status bar is visible
+show_page_badge_with_status_bar = false
+
+# Show a "FROZEN" badge when frozen mode is active
+show_frozen_badge = false
+
+# Status bar position
+# Options: "top-left", "top-right", "bottom-left", "bottom-right"
+status_bar_position = "bottom-left"
+
+# Filter help overlay sections based on enabled features
+help_overlay_context_filter = true
+
+# Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
+# against monitor identity; leave empty to use the current/first monitor.
+#preferred_output = "eDP-1"
+
+# Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
+#xdg_fullscreen = false
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Floating Toolbars (Press F2/F9 to toggle)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.toolbar]
+# Toolbar layout preset (simple / full)
+# Legacy values: regular / advanced
+layout_mode = "full"
+
+# Optional per-mode overrides for toolbar sections
+# Use true/false to override a section; omit to use the mode default.
+#
+# [ui.toolbar.mode_overrides.simple]
+# show_presets = false
+# show_actions_section = true
+# show_actions_advanced = false
+# show_zoom_actions = true
+# show_pages_section = true
+# show_boards_section = true
+# show_step_section = false
+# show_text_controls = true
+# show_settings_section = false
+#
+# [ui.toolbar.mode_overrides.regular] # Full mode overrides
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = false
+# show_zoom_actions = true
+# show_pages_section = true
+# show_boards_section = true
+# show_step_section = false
+# show_text_controls = true
+# show_settings_section = true
+#
+# [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
+# show_presets = true
+# show_actions_section = true
+# show_actions_advanced = true
+# show_zoom_actions = true
+# show_pages_section = true
+# show_boards_section = true
+# show_step_section = true
+# show_text_controls = true
+# show_settings_section = true
+
+# Show top toolbar on startup (pinned)
+top_pinned = true
+
+# Show side toolbar on startup (pinned)
+side_pinned = true
+
+# Use icons instead of text labels in toolbars
+# Icons are more compact; text labels are more explicit
+use_icons = true
+
+# Show extended color palette in top toolbar
+# When enabled, displays additional color options beyond the basic 8
+show_more_colors = false
+
+# Show basic actions (undo/redo/clear) in side toolbar
+show_actions_section = true
+
+# Show advanced actions (undo all, delay, freeze, etc.)
+show_actions_advanced = false
+
+# Show zoom actions (zoom in/out/reset/lock)
+show_zoom_actions = true
+
+# Show page controls section (prev/next/new/dup/del)
+show_pages_section = true
+
+# Show board controls section (prev/next/new/del)
+show_boards_section = true
+
+# Show presets section in side toolbar
+show_presets = true
+
+# Show step undo/redo section
+show_step_section = false
+
+# Keep text controls visible even when text is inactive
+show_text_controls = true
+
+# Show settings section (config buttons and advanced toggles)
+show_settings_section = true
+
+# Show timing delay sliders in side toolbar
+# Allows configuring delayed undo/redo all timing
+show_delay_sliders = false
+
+# Show marker opacity slider in side toolbar even when the marker tool isn't active
+# Enable to keep marker transparency control visible at all times
+show_marker_opacity_section = false
+
+# Show preset action toast notifications on apply/save/clear
+show_preset_toasts = true
+
+# Show cursor tool preview bubble near the pointer
+show_tool_preview = false
+
+# Initial toolbar offsets (layer-shell/inline)
+# Horizontal offset for the top toolbar
+top_offset = 0.0
+# Vertical offset for the top toolbar (move top bar down/up)
+top_offset_y = 0.0
+# Vertical offset for the side toolbar
+side_offset = 0.0
+# Horizontal offset for the side toolbar (move side bar left/right)
+side_offset_x = 0.0
+
+# Force inline toolbars even when layer-shell is available
+force_inline = false
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Status Bar Styling
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.status_bar_style]
+# Font size for status bar text
+font_size = 21.0
+
+# Padding around status bar text
+padding = 15.0
+
+# Background color [R, G, B, A] (0.0-1.0 range)
+# Default: semi-transparent black (85% opaque for visibility)
+bg_color = [0.0, 0.0, 0.0, 0.85]
+
+# Text color [R, G, B, A] (0.0-1.0 range)
+# Default: white
+text_color = [1.0, 1.0, 1.0, 1.0]
+
+# Color indicator dot radius
+dot_radius = 6.0
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Click Highlight (visual feedback for mouse clicks)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.click_highlight]
+# Start with the highlight effect enabled when the overlay launches
+enabled = false
+
+# Radius of the highlight circle in pixels (16 - 160)
+radius = 24.0
+
+# Outline thickness in pixels (1 - 12)
+outline_thickness = 4.0
+
+# Highlight lifetime in milliseconds (150 - 1500)
+duration_ms = 750
+
+# Fill color [R, G, B, A]
+fill_color = [1.0, 0.8, 0.0, 0.35]
+
+# Outline color [R, G, B, A]
+outline_color = [1.0, 0.6, 0.0, 0.9]
+
+# Use current pen color for highlight fill/outline (alpha still comes from above colors)
+# Note: active highlights update immediately when the pen color changes
+use_pen_color = true
+
+[ui.context_menu]
+# Enable right-click / keyboard context menus
+enabled = true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Presenter Mode
+# ───────────────────────────────────────────────────────────────────────────────
+
+[presenter_mode]
+# Hide UI chrome while presenting
+hide_status_bar = true
+hide_toolbars = true
+hide_tool_preview = true
+
+# Close the help overlay when entering presenter mode
+close_help_overlay = true
+
+# Force click highlights on while presenting
+enable_click_highlight = true
+
+# Tool behavior while presenting:
+# "keep" / "force-highlight" / "force-highlight-locked"
+tool_behavior = "force-highlight"
+
+# Show enter/exit toast notifications
+show_toast = true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Help Overlay Styling (Press F10 to toggle)
+# ───────────────────────────────────────────────────────────────────────────────
+
+[ui.help_overlay_style]
+# Font size for help overlay text
+font_size = 14.0
+
+# Font family for help overlay text (comma-separated fallback list)
+font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
+
+# Line height for help text
+line_height = 22.0
+
+# Padding around help box
+padding = 32.0
+
+# Background color [R, G, B, A] (0.0-1.0 range)
+# Default: deep slate (higher contrast than status bar)
+bg_color = [0.09, 0.1, 0.13, 0.92]
+
+# Border color [R, G, B, A] (0.0-1.0 range)
+# Default: muted steel
+border_color = [0.33, 0.39, 0.52, 0.88]
+
+# Border line width
+border_width = 2.0
+
+# Text color [R, G, B, A] (0.0-1.0 range)
+# Default: near-white
+text_color = [0.95, 0.96, 0.98, 1.0]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BOARD SETTINGS (Named Boards + Backgrounds)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[boards]
+# Maximum number of boards allowed
+max_count = 9
+
+# Auto-create boards when switching to an empty slot
+auto_create = true
+
+# Show board name/slot in the status bar
+show_board_badge = true
+
+# Persist runtime edits (rename/background) back to config
+persist_customizations = true
+
+# Default board id on startup
+default_board = "transparent"
+
+[[boards.items]]
+id = "transparent"
+name = "Overlay"
+background = "transparent"
+persist = true
+
+[[boards.items]]
+id = "whiteboard"
+name = "Whiteboard"
+background = { rgb = [0.992, 0.992, 0.992] }
+default_pen_color = { rgb = [0.0, 0.0, 0.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "blackboard"
+name = "Blackboard"
+background = { rgb = [0.067, 0.067, 0.067] }
+default_pen_color = { rgb = [1.0, 1.0, 1.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "blueprint"
+name = "Blueprint"
+background = { rgb = [0.063, 0.125, 0.251] }
+default_pen_color = { rgb = [0.902, 0.945, 1.0] }
+auto_adjust_pen = true
+
+[[boards.items]]
+id = "corkboard"
+name = "Corkboard"
+background = { rgb = [0.420, 0.294, 0.165] }
+default_pen_color = { rgb = [0.969, 0.890, 0.784] }
+auto_adjust_pen = true
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Color Theme Examples
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Chalkboard Theme (green board):
+# [[boards.items]]
+# id = "chalkboard"
+# name = "Chalkboard"
+# background = { rgb = [0.11, 0.18, 0.13] }
+# default_pen_color = { rgb = [0.95, 0.95, 0.8] }
+# auto_adjust_pen = true
+
+# Sepia Theme (vintage whiteboard):
+# [[boards.items]]
+# id = "sepia"
+# name = "Sepia"
+# background = { rgb = [0.96, 0.93, 0.86] }
+# default_pen_color = { rgb = [0.29, 0.23, 0.18] }
+# auto_adjust_pen = true
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SESSION PERSISTENCE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[session]
+# Enable persistence per mode (default to true)
+persist_transparent = true
+persist_whiteboard = true
+persist_blackboard = true
+
+# Persist undo/redo history alongside shapes (set false to save only visible drawings)
+persist_history = true
+
+# Restore pen colour/thickness/font size (and arrow placement) between runs.
+# When true, the last-used tool state overrides config defaults at startup.
+# Set to false if you always want to use the values above (e.g., arrow head placement).
+restore_tool_state = true
+
+# Autosave session data while the overlay is running
+autosave_enabled = true
+
+# Save after this much idle time following a change (ms)
+autosave_idle_ms = 5000
+
+# Maximum interval between saves while dirty (ms)
+autosave_interval_ms = 45000
+
+# Backoff before retrying autosave after a failure (ms)
+autosave_failure_backoff_ms = 5000
+
+# Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
+storage = "auto"
+
+# Store separate sessions per monitor (set false to reuse one file per display)
+per_output = true
+
+# When storage = "custom", set the directory here (supports ~ expansion)
+# custom_directory = "/path/to/persistent/sessions"
+
+# Clamp runaway files by limiting shapes per frame
+max_shapes_per_frame = 10000
+
+# Optional cap for serialized undo history (defaults to runtime undo limit)
+# max_persisted_undo_depth = 200
+
+# Maximum session file size (in megabytes); larger files are ignored
+max_file_size_mb = 10
+
+# Compression mode: "auto", "on", or "off"
+compress = "auto"
+
+# For compress = "auto": minimum file size (KiB) before gzip is used
+auto_compress_threshold_kb = 100
+
+# Number of rotated backups to retain (0 disables backups)
+backup_retention = 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # DRAWING SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -181,335 +770,6 @@ custom_undo_steps = 5
 custom_redo_steps = 5
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# UI SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[ui]
-# Show status bar with current color/thickness/tool
-show_status_bar = true
-
-# Show board label in the status bar
-show_status_board_badge = true
-
-# Show page counter in the status bar
-show_status_page_badge = true
-
-# Show the board/page badge even when the status bar is visible
-show_page_badge_with_status_bar = false
-
-# Show a "FROZEN" badge when frozen mode is active
-show_frozen_badge = false
-
-# Status bar position
-# Options: "top-left", "top-right", "bottom-left", "bottom-right"
-status_bar_position = "bottom-left"
-
-# Filter help overlay sections based on enabled features
-help_overlay_context_filter = true
-
-# Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
-# against monitor identity; leave empty to use the current/first monitor.
-#preferred_output = "eDP-1"
-
-# Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
-#xdg_fullscreen = false
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Status Bar Styling
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.status_bar_style]
-# Font size for status bar text
-font_size = 21.0
-
-# Padding around status bar text
-padding = 15.0
-
-# Background color [R, G, B, A] (0.0-1.0 range)
-# Default: semi-transparent black (85% opaque for visibility)
-bg_color = [0.0, 0.0, 0.0, 0.85]
-
-# Text color [R, G, B, A] (0.0-1.0 range)
-# Default: white
-text_color = [1.0, 1.0, 1.0, 1.0]
-
-# Color indicator dot radius
-dot_radius = 6.0
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Click Highlight (visual feedback for mouse clicks)
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.click_highlight]
-# Start with the highlight effect enabled when the overlay launches
-enabled = false
-
-# Radius of the highlight circle in pixels (16 - 160)
-radius = 24.0
-
-# Outline thickness in pixels (1 - 12)
-outline_thickness = 4.0
-
-# Highlight lifetime in milliseconds (150 - 1500)
-duration_ms = 750
-
-# Fill color [R, G, B, A]
-fill_color = [1.0, 0.8, 0.0, 0.35]
-
-# Outline color [R, G, B, A]
-outline_color = [1.0, 0.6, 0.0, 0.9]
-
-# Use current pen color for highlight fill/outline (alpha still comes from above colors)
-# Note: active highlights update immediately when the pen color changes
-use_pen_color = true
-
-[ui.context_menu]
-# Enable right-click / keyboard context menus
-enabled = true
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Presenter Mode
-# ───────────────────────────────────────────────────────────────────────────────
-
-[presenter_mode]
-# Hide UI chrome while presenting
-hide_status_bar = true
-hide_toolbars = true
-hide_tool_preview = true
-
-# Close the help overlay when entering presenter mode
-close_help_overlay = true
-
-# Force click highlights on while presenting
-enable_click_highlight = true
-
-# Tool behavior while presenting:
-# "keep" / "force-highlight" / "force-highlight-locked"
-tool_behavior = "force-highlight"
-
-# Show enter/exit toast notifications
-show_toast = true
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Floating Toolbars (Press F2/F9 to toggle)
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.toolbar]
-# Toolbar layout preset (simple / full)
-# Legacy values: regular / advanced
-layout_mode = "full"
-
-# Optional per-mode overrides for toolbar sections
-# Use true/false to override a section; omit to use the mode default.
-#
-# [ui.toolbar.mode_overrides.simple]
-# show_presets = false
-# show_actions_section = true
-# show_actions_advanced = false
-# show_zoom_actions = true
-# show_pages_section = true
-# show_boards_section = true
-# show_step_section = false
-# show_text_controls = true
-# show_settings_section = false
-#
-# [ui.toolbar.mode_overrides.regular] # Full mode overrides
-# show_presets = true
-# show_actions_section = true
-# show_actions_advanced = false
-# show_zoom_actions = true
-# show_pages_section = true
-# show_boards_section = true
-# show_step_section = false
-# show_text_controls = true
-# show_settings_section = true
-#
-# [ui.toolbar.mode_overrides.advanced] # Legacy mode overrides
-# show_presets = true
-# show_actions_section = true
-# show_actions_advanced = true
-# show_zoom_actions = true
-# show_pages_section = true
-# show_boards_section = true
-# show_step_section = true
-# show_text_controls = true
-# show_settings_section = true
-
-# Show top toolbar on startup (pinned)
-top_pinned = true
-
-# Show side toolbar on startup (pinned)
-side_pinned = true
-
-# Use icons instead of text labels in toolbars
-# Icons are more compact; text labels are more explicit
-use_icons = true
-
-# Show extended color palette in top toolbar
-# When enabled, displays additional color options beyond the basic 8
-show_more_colors = false
-
-# Show basic actions (undo/redo/clear) in side toolbar
-show_actions_section = true
-
-# Show advanced actions (undo all, delay, freeze, etc.)
-show_actions_advanced = false
-
-# Show zoom actions (zoom in/out/reset/lock)
-show_zoom_actions = true
-
-# Show page controls section (prev/next/new/dup/del)
-show_pages_section = true
-
-# Show board controls section (prev/next/new/del)
-show_boards_section = true
-
-# Show presets section in side toolbar
-show_presets = true
-
-# Show step undo/redo section
-show_step_section = false
-
-# Keep text controls visible even when text is inactive
-show_text_controls = true
-
-# Show settings section (config buttons and advanced toggles)
-show_settings_section = true
-
-# Show timing delay sliders in side toolbar
-# Allows configuring delayed undo/redo all timing
-show_delay_sliders = false
-
-# Show marker opacity slider in side toolbar even when the marker tool isn't active
-# Enable to keep marker transparency control visible at all times
-show_marker_opacity_section = false
-
-# Show preset action toast notifications on apply/save/clear
-show_preset_toasts = true
-
-# Show cursor tool preview bubble near the pointer
-show_tool_preview = false
-
-# Initial toolbar offsets (layer-shell/inline)
-# Horizontal offset for the top toolbar
-top_offset = 0.0
-# Vertical offset for the top toolbar (move top bar down/up)
-top_offset_y = 0.0
-# Vertical offset for the side toolbar
-side_offset = 0.0
-# Horizontal offset for the side toolbar (move side bar left/right)
-side_offset_x = 0.0
-
-# Force inline toolbars even when layer-shell is available
-force_inline = false
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Help Overlay Styling (Press F10 to toggle)
-# ───────────────────────────────────────────────────────────────────────────────
-
-[ui.help_overlay_style]
-# Font size for help overlay text
-font_size = 14.0
-
-# Font family for help overlay text (comma-separated fallback list)
-font_family = "Noto Sans, DejaVu Sans, Liberation Sans, Sans"
-
-# Line height for help text
-line_height = 22.0
-
-# Padding around help box
-padding = 32.0
-
-# Background color [R, G, B, A] (0.0-1.0 range)
-# Default: deep slate (higher contrast than status bar)
-bg_color = [0.09, 0.1, 0.13, 0.92]
-
-# Border color [R, G, B, A] (0.0-1.0 range)
-# Default: muted steel
-border_color = [0.33, 0.39, 0.52, 0.88]
-
-# Border line width
-border_width = 2.0
-
-# Text color [R, G, B, A] (0.0-1.0 range)
-# Default: near-white
-text_color = [0.95, 0.96, 0.98, 1.0]
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# BOARD SETTINGS (Named Boards + Backgrounds)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[boards]
-# Maximum number of boards allowed
-max_count = 9
-
-# Auto-create boards when switching to an empty slot
-auto_create = true
-
-# Show board name/slot in the status bar
-show_board_badge = true
-
-# Persist runtime edits (rename/background) back to config
-persist_customizations = true
-
-# Default board id on startup
-default_board = "transparent"
-
-[[boards.items]]
-id = "transparent"
-name = "Overlay"
-background = "transparent"
-persist = true
-
-[[boards.items]]
-id = "whiteboard"
-name = "Whiteboard"
-background = { rgb = [0.992, 0.992, 0.992] }
-default_pen_color = { rgb = [0.0, 0.0, 0.0] }
-auto_adjust_pen = true
-
-[[boards.items]]
-id = "blackboard"
-name = "Blackboard"
-background = { rgb = [0.067, 0.067, 0.067] }
-default_pen_color = { rgb = [1.0, 1.0, 1.0] }
-auto_adjust_pen = true
-
-[[boards.items]]
-id = "blueprint"
-name = "Blueprint"
-background = { rgb = [0.063, 0.125, 0.251] }
-default_pen_color = { rgb = [0.902, 0.945, 1.0] }
-auto_adjust_pen = true
-
-[[boards.items]]
-id = "corkboard"
-name = "Corkboard"
-background = { rgb = [0.420, 0.294, 0.165] }
-default_pen_color = { rgb = [0.969, 0.890, 0.784] }
-auto_adjust_pen = true
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Color Theme Examples
-# ───────────────────────────────────────────────────────────────────────────────
-
-# Chalkboard Theme (green board):
-# [[boards.items]]
-# id = "chalkboard"
-# name = "Chalkboard"
-# background = { rgb = [0.11, 0.18, 0.13] }
-# default_pen_color = { rgb = [0.95, 0.95, 0.8] }
-# auto_adjust_pen = true
-
-# Sepia Theme (vintage whiteboard):
-# [[boards.items]]
-# id = "sepia"
-# name = "Sepia"
-# background = { rgb = [0.96, 0.93, 0.86] }
-# default_pen_color = { rgb = [0.29, 0.23, 0.18] }
-# auto_adjust_pen = true
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # TABLET / STYLUS INPUT (Wayland tablet-unstable-v2)
 # Build with `--features tablet-input` and enable below to use
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -566,262 +826,3 @@ copy_to_clipboard = true
 # Use --no-exit-after-capture to keep the overlay open for a run.
 exit_after_capture = false
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SESSION PERSISTENCE
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[session]
-# Enable persistence per mode (default to true)
-persist_transparent = true
-persist_whiteboard = true
-persist_blackboard = true
-
-# Persist undo/redo history alongside shapes (set false to save only visible drawings)
-persist_history = true
-
-# Restore pen colour/thickness/font size (and arrow placement) between runs.
-# When true, the last-used tool state overrides config defaults at startup.
-# Set to false if you always want to use the values above (e.g., arrow head placement).
-restore_tool_state = true
-
-# Autosave session data while the overlay is running
-autosave_enabled = true
-
-# Save after this much idle time following a change (ms)
-autosave_idle_ms = 5000
-
-# Maximum interval between saves while dirty (ms)
-autosave_interval_ms = 45000
-
-# Backoff before retrying autosave after a failure (ms)
-autosave_failure_backoff_ms = 5000
-
-# Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
-storage = "auto"
-
-# Store separate sessions per monitor (set false to reuse one file per display)
-per_output = true
-
-# When storage = "custom", set the directory here (supports ~ expansion)
-# custom_directory = "/path/to/persistent/sessions"
-
-# Clamp runaway files by limiting shapes per frame
-max_shapes_per_frame = 10000
-
-# Optional cap for serialized undo history (defaults to runtime undo limit)
-# max_persisted_undo_depth = 200
-
-# Maximum session file size (in megabytes); larger files are ignored
-max_file_size_mb = 10
-
-# Compression mode: "auto", "on", or "off"
-compress = "auto"
-
-# For compress = "auto": minimum file size (KiB) before gzip is used
-auto_compress_threshold_kb = 100
-
-# Number of rotated backups to retain (0 disables backups)
-backup_retention = 1
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# KEYBINDING SETTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-[keybindings]
-# Customize keyboard shortcuts for all actions
-# Format: key names with modifiers separated by +
-# Examples: "Escape", "Ctrl+Z", "Ctrl+Shift+T", "F10"
-# Each action can have multiple keybindings (e.g., ["+", "="])
-
-# Exit overlay (or cancel current action)
-exit = ["Escape", "Ctrl+Q"]
-
-# Enter text mode
-enter_text_mode = ["T"]
-
-# Enter sticky note mode
-enter_sticky_note_mode = ["N"]
-
-# Clear all annotations on current canvas
-clear_canvas = ["E"]
-
-# Undo last annotation
-undo = ["Ctrl+Z"]
-
-# Redo last undone annotation
-redo = ["Ctrl+Shift+Z", "Ctrl+Y"]
-
-# Duplicate currently selected annotations
-duplicate_selection = ["Ctrl+D"]
-
-# Copy/paste selected annotations
-copy_selection = ["Ctrl+Alt+C"]
-paste_selection = ["Ctrl+Alt+V"]
-
-# Select all annotations
-select_all = ["Ctrl+A"]
-
-# Reorder selected annotations within the stack
-move_selection_to_front = ["]"]
-move_selection_to_back = ["["]
-
-# Nudge selected annotations (hold Shift for a larger step)
-nudge_selection_up = ["ArrowUp"]
-nudge_selection_down = ["ArrowDown"]
-nudge_selection_left = ["ArrowLeft", "Shift+PageUp"]
-nudge_selection_right = ["ArrowRight", "Shift+PageDown"]
-
-# Nudge selected annotations (large step)
-nudge_selection_up_large = ["PageUp"]
-nudge_selection_down_large = ["PageDown"]
-
-# Move selection to horizontal edges (left/right)
-move_selection_to_start = ["Home"]
-move_selection_to_end = ["End"]
-
-# Move selection to vertical edges
-move_selection_to_top = ["Ctrl+Home"]
-move_selection_to_bottom = ["Ctrl+End"]
-
-# Delete selected annotations
-delete_selection = ["Delete"]
-
-# Adjust pen thickness
-increase_thickness = ["+", "="]
-decrease_thickness = ["-", "_"]
-
-# Adjust marker opacity (when using the marker tool)
-increase_marker_opacity = ["Ctrl+Alt+ArrowUp"]
-decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
-
-# Tool selection shortcuts (optional; keep empty to rely on modifiers)
-select_pen_tool = ["F"]
-select_marker_tool = ["H"]
-select_eraser_tool = ["D"]
-# Toggle eraser behavior mode
-toggle_eraser_mode = ["Ctrl+Shift+E"]
-select_line_tool = []
-select_rect_tool = []
-select_ellipse_tool = []
-select_arrow_tool = []
-select_highlight_tool = []
-toggle_highlight_tool = ["Ctrl+Alt+H"]
-
-# Adjust font size
-increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]
-decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
-
-# Board mode toggles (only if board.enabled = true)
-toggle_whiteboard = ["Ctrl+W"]
-toggle_blackboard = ["Ctrl+B"]
-return_to_transparent = ["Ctrl+Shift+T"]
-
-# Page navigation
-page_prev = ["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+PageUp"]
-page_next = ["Ctrl+Alt+ArrowRight", "Ctrl+Alt+PageDown"]
-page_new = ["Ctrl+Alt+N"]
-page_duplicate = ["Ctrl+Alt+D"]
-page_delete = ["Ctrl+Alt+Delete"]
-
-# Toggle help overlay
-toggle_help = ["F10", "F1"]
-
-# Toggle status bar
-toggle_status_bar = ["F12", "F4"]
-
-# Toggle toolbars
-toggle_toolbar = ["F2", "F9"]
-
-# Toggle click highlight
-toggle_click_highlight = ["Ctrl+Shift+H"]
-
-# Toggle presenter mode
-toggle_presenter_mode = ["Ctrl+Shift+M"]
-
-# Toggle fill for rectangle/ellipse
-toggle_fill = []
-
-# Toggle selection properties panel
-toggle_selection_properties = ["Ctrl+Alt+P"]
-
-# Toggle context menu (keyboard alternative to right-click)
-open_context_menu = ["Shift+F10", "Menu"]
-
-# Launch the desktop configurator (requires wayscriber-configurator)
-open_configurator = ["F11"]
-
-# Color selection shortcuts
-set_color_red = ["R"]
-set_color_green = ["G"]
-set_color_blue = ["B"]
-set_color_yellow = ["Y"]
-set_color_orange = ["O"]
-set_color_pink = ["P"]
-set_color_white = ["W"]
-set_color_black = ["K"]
-
-# Screenshot shortcuts
-capture_full_screen = ["Ctrl+Shift+P"]
-capture_active_window = ["Ctrl+Shift+O"]
-capture_selection = ["Ctrl+Shift+I"]
-
-# Clipboard/File capture variants
-capture_clipboard_full = ["Ctrl+C"]
-capture_file_full = ["Ctrl+S"]
-capture_clipboard_selection = ["Ctrl+Shift+C"]
-capture_file_selection = ["Ctrl+Shift+S"]
-capture_clipboard_region = ["Ctrl+6"]
-capture_file_region = ["Ctrl+Shift+6"]
-
-# Open the most recent capture folder
-open_capture_folder = ["Ctrl+Alt+O"]
-
-# Toggle frozen mode
-toggle_frozen_mode = ["Ctrl+Shift+F"]
-
-# Zoom controls
-zoom_in = ["Ctrl+Alt++", "Ctrl+Alt+="]
-zoom_out = ["Ctrl+Alt+-", "Ctrl+Alt+_"]
-reset_zoom = ["Ctrl+Alt+0"]
-toggle_zoom_lock = ["Ctrl+Alt+L"]
-refresh_zoom_capture = ["Ctrl+Alt+R"]
-
-# Preset slots (apply/save/clear).
-apply_preset_1 = ["1"]
-apply_preset_2 = ["2"]
-apply_preset_3 = ["3"]
-apply_preset_4 = ["4"]
-apply_preset_5 = ["5"]
-save_preset_1 = ["Shift+1"]
-save_preset_2 = ["Shift+2"]
-save_preset_3 = ["Shift+3"]
-save_preset_4 = ["Shift+4"]
-save_preset_5 = ["Shift+5"]
-clear_preset_1 = []
-clear_preset_2 = []
-clear_preset_3 = []
-clear_preset_4 = []
-clear_preset_5 = []
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Keybinding Examples
-# ───────────────────────────────────────────────────────────────────────────────
-
-# Vim-style keybindings:
-#   exit = ["Escape", "Q"]
-#   clear_canvas = ["D"]
-#   undo = ["U"]
-#   redo = ["R"]
-
-# Emacs-style keybindings:
-#   exit = ["Ctrl+G"]
-#   undo = ["Ctrl+/"]
-#   redo = ["Ctrl+?"]
-#   clear_canvas = ["Ctrl+K"]
-
-# Gaming-friendly (WASD area):
-#   exit = ["Q"]
-#   toggle_help = ["H"]
-#   undo = ["Z"]
-#   redo = ["X"]
-#   clear_canvas = ["C"]
