@@ -1,5 +1,7 @@
 use super::primitives::{render_arrow, render_ellipse, render_line, render_rect};
-use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
+use super::strokes::{
+    render_freehand_borrowed, render_freehand_pressure_borrowed, render_marker_stroke_borrowed,
+};
 use super::text::{render_sticky_note, render_text};
 use crate::draw::shape::Shape;
 use crate::draw::shape::{ARROW_LABEL_BACKGROUND, arrow_label_layout};
@@ -20,6 +22,11 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             thick,
         } => {
             render_freehand_borrowed(ctx, points, *color, *thick);
+        }
+        Shape::FreehandPressure { points, color } => {
+            let coords: Vec<(i32, i32)> = points.iter().map(|&(x, y, _)| (x, y)).collect();
+            let thickness: Vec<f32> = points.iter().map(|&(_, _, t)| t).collect();
+            render_freehand_pressure_borrowed(ctx, &coords, &thickness, *color);
         }
         Shape::Line {
             x1,

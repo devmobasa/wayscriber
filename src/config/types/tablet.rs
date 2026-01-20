@@ -19,6 +19,10 @@ pub struct TabletInputConfig {
     /// Maximum thickness when pressure is 1.0.
     #[serde(default = "default_tablet_max_thickness")]
     pub max_thickness: f64,
+
+    /// Automatically switch to eraser tool when physical eraser is detected.
+    #[serde(default = "default_auto_eraser_switch")]
+    pub auto_eraser_switch: bool,
 }
 
 impl Default for TabletInputConfig {
@@ -28,6 +32,7 @@ impl Default for TabletInputConfig {
             pressure_enabled: true,
             min_thickness: 1.0,
             max_thickness: 8.0,
+            auto_eraser_switch: true,
         }
     }
 }
@@ -46,4 +51,8 @@ fn default_tablet_min_thickness() -> f64 {
 
 fn default_tablet_max_thickness() -> f64 {
     8.0
+}
+
+fn default_auto_eraser_switch() -> bool {
+    true
 }
