@@ -12,6 +12,7 @@ pub(super) fn finish_drawing(
     start_x: i32,
     start_y: i32,
     points: Vec<(i32, i32)>,
+    point_thicknesses: Vec<f32>,
     end_x: i32,
     end_y: i32,
 ) {
@@ -22,11 +23,39 @@ pub(super) fn finish_drawing(
     };
     let used_arrow_label = label.is_some();
     let shape = match tool {
-        Tool::Pen => Shape::Freehand {
-            points,
-            color: state.current_color,
-            thick: state.current_thickness,
-        },
+        Tool::Pen => {
+            // Check if we have pressure data and if it varies enough to matter
+            let use_pressure = if point_thicknesses.len() == points.len() {
+                let min_t = point_thicknesses
+                    .iter()
+                    .fold(f32::INFINITY, |a, &b| a.min(b));
+                let max_t = point_thicknesses
+                    .iter()
+                    .fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+                (max_t - min_t).abs() > 0.1
+            } else {
+                false
+            };
+
+            if use_pressure {
+                let points_with_pressure: Vec<(i32, i32, f32)> = points
+                    .iter()
+                    .zip(point_thicknesses.iter())
+                    .map(|(&(x, y), &t)| (x, y, t))
+                    .collect();
+
+                Shape::FreehandPressure {
+                    points: points_with_pressure,
+                    color: state.current_color,
+                }
+            } else {
+                Shape::Freehand {
+                    points,
+                    color: state.current_color,
+                    thick: state.current_thickness,
+                }
+            }
+        }
         Tool::Line => Shape::Line {
             x1: start_x,
             y1: start_y,

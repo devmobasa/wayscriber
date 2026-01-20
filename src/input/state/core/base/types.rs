@@ -38,6 +38,8 @@ pub enum DrawingState {
         start_y: i32,
         /// Accumulated points for freehand drawing
         points: Vec<(i32, i32)>,
+        /// Accumulated thickness values for freehand drawing (pressure sensitivity)
+        point_thicknesses: Vec<f32>,
     },
     /// Text input mode - user is typing text to place on screen
     TextInput {

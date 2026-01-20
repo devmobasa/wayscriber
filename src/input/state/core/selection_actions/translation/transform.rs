@@ -45,6 +45,12 @@ impl InputState {
                     point.1 += dy;
                 }
             }
+            Shape::FreehandPressure { points, .. } => {
+                for point in points {
+                    point.0 += dx;
+                    point.1 += dy;
+                }
+            }
             Shape::Line { x1, y1, x2, y2, .. } => {
                 *x1 += dx;
                 *x2 += dx;
