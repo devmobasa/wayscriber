@@ -4,12 +4,12 @@ use std::sync::Arc;
 use wayscriber::config::Config;
 
 use crate::models::{
-    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, EraserModeOption,
-    FontStyleOption, FontWeightOption, KeybindingField, KeybindingsTabId, NamedColorOption,
-    OverrideOption, PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption,
-    PresetTextField, PresetToggleField, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField, ToolOption,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
+    ColorPickerValue, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
+    KeybindingsTabId, NamedColorOption, OverrideOption, PresenterToolBehaviorOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -28,6 +28,10 @@ pub enum Message {
     TextChanged(TextField, String),
     TripletChanged(TripletField, usize, String),
     QuadChanged(QuadField, usize, String),
+    ColorPickerToggled(ColorPickerId),
+    ColorPickerAdvancedToggled(ColorPickerId, bool),
+    ColorPickerHexChanged(ColorPickerId, String),
+    ColorPickerChanged(ColorPickerId, ColorPickerValue),
     ColorModeChanged(ColorMode),
     NamedColorSelected(NamedColorOption),
     EraserModeChanged(EraserModeOption),

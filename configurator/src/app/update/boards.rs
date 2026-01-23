@@ -1,7 +1,9 @@
 use iced::Command;
 
 use crate::messages::Message;
-use crate::models::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField};
+use crate::models::{
+    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorPickerId,
+};
 
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
@@ -11,6 +13,7 @@ impl ConfiguratorApp {
         let new_item = self.draft.boards.new_item();
         self.draft.boards.items.push(new_item);
         self.boards_collapsed.push(false);
+        self.clear_board_color_pickers();
         self.draft.boards.ensure_default_exists();
         self.refresh_dirty_flag();
         Command::none()
@@ -23,6 +26,7 @@ impl ConfiguratorApp {
             if index < self.boards_collapsed.len() {
                 self.boards_collapsed.remove(index);
             }
+            self.clear_board_color_pickers();
             self.draft.boards.ensure_default_exists();
             self.refresh_dirty_flag();
         }
@@ -50,6 +54,7 @@ impl ConfiguratorApp {
         if index < self.boards_collapsed.len() && target < self.boards_collapsed.len() {
             self.boards_collapsed.swap(index, target);
         }
+        self.clear_board_color_pickers();
         self.refresh_dirty_flag();
         Command::none()
     }
@@ -65,6 +70,7 @@ impl ConfiguratorApp {
             let insert_index = index + 1;
             self.draft.boards.items.insert(insert_index, duplicate);
             self.boards_collapsed.insert(insert_index, false);
+            self.clear_board_color_pickers();
             self.draft.boards.ensure_default_exists();
             self.refresh_dirty_flag();
         }
@@ -142,6 +148,7 @@ impl ConfiguratorApp {
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.background_color.set_component(component, value);
         }
+        self.sync_color_picker_hex_for_id(ColorPickerId::BoardBackground(index));
         self.refresh_dirty_flag();
         Command::none()
     }
@@ -169,6 +176,7 @@ impl ConfiguratorApp {
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.default_pen_color.color.set_component(component, value);
         }
+        self.sync_color_picker_hex_for_id(ColorPickerId::BoardPen(index));
         self.refresh_dirty_flag();
         Command::none()
     }
@@ -189,5 +197,27 @@ impl ConfiguratorApp {
         }
         self.refresh_dirty_flag();
         Command::none()
+    }
+
+    fn clear_board_color_pickers(&mut self) {
+        if matches!(
+            self.color_picker_open,
+            Some(ColorPickerId::BoardBackground(_) | ColorPickerId::BoardPen(_))
+        ) {
+            self.color_picker_open = None;
+        }
+        self.color_picker_hex.retain(|id, _| {
+            !matches!(
+                id,
+                ColorPickerId::BoardBackground(_) | ColorPickerId::BoardPen(_)
+            )
+        });
+        self.color_picker_advanced.retain(|id| {
+            !matches!(
+                id,
+                ColorPickerId::BoardBackground(_) | ColorPickerId::BoardPen(_)
+            )
+        });
+        self.sync_board_color_picker_hex();
     }
 }

@@ -3,10 +3,12 @@ use iced::widget::{button, checkbox, column, container, pick_list, row, text, te
 use iced::{Element, Length};
 
 use crate::messages::Message;
-use crate::models::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField};
+use crate::models::{
+    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorPickerId,
+};
 
 use super::super::super::state::ConfiguratorApp;
-use super::super::widgets::color_preview_labeled;
+use super::super::widgets::{ColorPickerUi, color_triplet_picker};
 
 impl ConfiguratorApp {
     pub(super) fn board_item_section(&self, index: usize) -> Element<'_, Message> {
@@ -64,11 +66,23 @@ impl ConfiguratorApp {
         let background_control = labeled_control_row("Background", background_picker.into());
 
         let background_color_row = if item.background_kind == BoardBackgroundOption::Color {
-            color_triplet_row(
+            let picker_id = ColorPickerId::BoardBackground(index);
+            let hex_value = self
+                .color_picker_hex
+                .get(&picker_id)
+                .map(String::as_str)
+                .unwrap_or("");
+            color_triplet_picker(
                 "Background color (0-1)",
+                ColorPickerUi {
+                    id: picker_id,
+                    is_open: self.color_picker_open == Some(picker_id),
+                    show_advanced: self.color_picker_advanced.contains(&picker_id),
+                    hex_value,
+                },
                 &item.background_color,
                 index,
-                true,
+                Message::BoardsBackgroundColorChanged,
             )
         } else {
             text("Background color disabled for transparent boards")
@@ -85,11 +99,23 @@ impl ConfiguratorApp {
         .align_items(iced::Alignment::Center);
 
         let pen_color_row = if item.default_pen_color.enabled {
-            color_triplet_row(
+            let picker_id = ColorPickerId::BoardPen(index);
+            let hex_value = self
+                .color_picker_hex
+                .get(&picker_id)
+                .map(String::as_str)
+                .unwrap_or("");
+            color_triplet_picker(
                 "Pen color (0-1)",
+                ColorPickerUi {
+                    id: picker_id,
+                    is_open: self.color_picker_open == Some(picker_id),
+                    show_advanced: self.color_picker_advanced.contains(&picker_id),
+                    hex_value,
+                },
                 &item.default_pen_color.color,
                 index,
-                false,
+                Message::BoardsDefaultPenColorChanged,
             )
         } else {
             text("Pen color override disabled")
@@ -152,52 +178,4 @@ fn labeled_control_row<'a>(
     column![row![text(label).size(14)], control]
         .spacing(4)
         .into()
-}
-
-fn color_triplet_row<'a>(
-    label: &'static str,
-    triplet: &'a crate::models::ColorTripletInput,
-    index: usize,
-    is_background: bool,
-) -> Element<'a, Message> {
-    let preview = color_preview(triplet);
-    let row_inputs = row![
-        text_input("R", &triplet.components[0]).on_input(move |val| {
-            if is_background {
-                Message::BoardsBackgroundColorChanged(index, 0, val)
-            } else {
-                Message::BoardsDefaultPenColorChanged(index, 0, val)
-            }
-        }),
-        text_input("G", &triplet.components[1]).on_input(move |val| {
-            if is_background {
-                Message::BoardsBackgroundColorChanged(index, 1, val)
-            } else {
-                Message::BoardsDefaultPenColorChanged(index, 1, val)
-            }
-        }),
-        text_input("B", &triplet.components[2]).on_input(move |val| {
-            if is_background {
-                Message::BoardsBackgroundColorChanged(index, 2, val)
-            } else {
-                Message::BoardsDefaultPenColorChanged(index, 2, val)
-            }
-        }),
-        color_preview_labeled(preview),
-    ]
-    .spacing(8)
-    .align_items(iced::Alignment::Center);
-
-    column![text(label).size(14), row_inputs].spacing(4).into()
-}
-
-fn color_preview(triplet: &crate::models::ColorTripletInput) -> Option<iced::Color> {
-    let parse = |value: &str| value.trim().parse::<f64>().ok();
-    let r = parse(&triplet.components[0])?;
-    let g = parse(&triplet.components[1])?;
-    let b = parse(&triplet.components[2])?;
-    if !(0.0..=1.0).contains(&r) || !(0.0..=1.0).contains(&g) || !(0.0..=1.0).contains(&b) {
-        return None;
-    }
-    Some(iced::Color::from_rgb(r as f32, g as f32, b as f32))
 }

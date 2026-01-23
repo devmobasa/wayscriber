@@ -1,4 +1,5 @@
 mod boards;
+mod color_picker;
 mod config;
 mod fields;
 mod presets;
@@ -29,6 +30,14 @@ impl ConfiguratorApp {
             Message::QuadChanged(field, index, value) => {
                 self.handle_quad_changed(field, index, value)
             }
+            Message::ColorPickerToggled(id) => self.handle_color_picker_toggled(id),
+            Message::ColorPickerAdvancedToggled(id, value) => {
+                self.handle_color_picker_advanced_toggled(id, value)
+            }
+            Message::ColorPickerHexChanged(id, value) => {
+                self.handle_color_picker_hex_changed(id, value)
+            }
+            Message::ColorPickerChanged(id, value) => self.handle_color_picker_changed(id, value),
             Message::ColorModeChanged(mode) => self.handle_color_mode_changed(mode),
             Message::NamedColorSelected(option) => self.handle_named_color_selected(option),
             Message::EraserModeChanged(option) => self.handle_eraser_mode_changed(option),

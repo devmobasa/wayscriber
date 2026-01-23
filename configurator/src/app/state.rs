@@ -1,10 +1,13 @@
+use std::collections::{HashMap, HashSet};
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
 use iced::Command;
 use wayscriber::config::{Config, PRESET_SLOTS_MAX};
 
 use crate::messages::Message;
-use crate::models::{ConfigDraft, KeybindingsTabId, TabId, ToolbarLayoutModeOption, UiTabId};
+use crate::models::{
+    ColorPickerId, ConfigDraft, KeybindingsTabId, TabId, ToolbarLayoutModeOption, UiTabId,
+};
 
 use super::io::load_config_from_disk;
 
@@ -21,6 +24,9 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) active_keybindings_tab: KeybindingsTabId,
     pub(crate) preset_collapsed: Vec<bool>,
     pub(crate) boards_collapsed: Vec<bool>,
+    pub(crate) color_picker_open: Option<ColorPickerId>,
+    pub(crate) color_picker_advanced: HashSet<ColorPickerId>,
+    pub(crate) color_picker_hex: HashMap<ColorPickerId, String>,
     pub(crate) override_mode: ToolbarLayoutModeOption,
     pub(crate) is_loading: bool,
     pub(crate) is_saving: bool,
@@ -66,7 +72,7 @@ impl ConfiguratorApp {
         let config_path = Config::get_config_path().ok();
         let base_config = Arc::new(default_config.clone());
 
-        let app = Self {
+        let mut app = Self {
             draft: baseline.clone(),
             baseline,
             defaults,
@@ -77,6 +83,9 @@ impl ConfiguratorApp {
             active_keybindings_tab: KeybindingsTabId::General,
             preset_collapsed: vec![false; PRESET_SLOTS_MAX],
             boards_collapsed: vec![false; boards_len],
+            color_picker_open: None,
+            color_picker_advanced: HashSet::new(),
+            color_picker_hex: HashMap::new(),
             override_mode,
             is_loading: true,
             is_saving: false,
@@ -85,6 +94,7 @@ impl ConfiguratorApp {
             config_mtime: None,
             last_backup_path: None,
         };
+        app.sync_all_color_picker_hex();
 
         let command = Command::batch(vec![Command::perform(
             load_config_from_disk(),

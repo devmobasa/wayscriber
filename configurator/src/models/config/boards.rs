@@ -268,7 +268,17 @@ impl BoardsDraft {
         }
 
         let default_id = self.default_board.trim();
-        if !default_id.is_empty() {
+        if default_id.is_empty() {
+            if let Some((index, item)) = self
+                .items
+                .iter()
+                .enumerate()
+                .find(|(_, item)| item.id.trim().is_empty())
+            {
+                self.default_board = self.effective_id_for_value(&item.id, index);
+                return;
+            }
+        } else {
             let has_default =
                 self.items.iter().enumerate().any(|(index, item)| {
                     self.effective_id_for_value(&item.id, index) == default_id

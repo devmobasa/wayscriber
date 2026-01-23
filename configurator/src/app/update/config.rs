@@ -24,6 +24,10 @@ impl ConfiguratorApp {
                 self.base_config = config.clone();
                 self.override_mode = self.draft.ui_toolbar_layout_mode;
                 self.boards_collapsed = vec![false; self.draft.boards.items.len()];
+                self.color_picker_open = None;
+                self.color_picker_advanced.clear();
+                self.color_picker_hex.clear();
+                self.sync_all_color_picker_hex();
                 self.config_mtime = load_config_mtime(&self.config_path);
                 self.is_dirty = false;
                 self.status = StatusMessage::success("Configuration loaded from disk.");
@@ -52,6 +56,10 @@ impl ConfiguratorApp {
             self.draft = self.defaults.clone();
             self.override_mode = self.draft.ui_toolbar_layout_mode;
             self.boards_collapsed = vec![false; self.draft.boards.items.len()];
+            self.color_picker_open = None;
+            self.color_picker_advanced.clear();
+            self.color_picker_hex.clear();
+            self.sync_all_color_picker_hex();
             self.status = StatusMessage::info("Loaded default configuration (not saved).");
             self.refresh_dirty_flag();
         }
@@ -104,6 +112,10 @@ impl ConfiguratorApp {
                 self.base_config = saved_config.clone();
                 self.config_mtime = load_config_mtime(&self.config_path);
                 self.boards_collapsed = vec![false; self.draft.boards.items.len()];
+                self.color_picker_open = None;
+                self.color_picker_advanced.clear();
+                self.color_picker_hex.clear();
+                self.sync_all_color_picker_hex();
                 self.is_dirty = false;
                 let mut msg = "Configuration saved successfully.".to_string();
                 if let Some(path) = backup {

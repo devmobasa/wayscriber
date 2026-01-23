@@ -2,7 +2,7 @@ use iced::Command;
 
 use crate::messages::Message;
 use crate::models::{
-    ColorMode, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
+    ColorMode, ColorPickerId, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
     NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
     ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
@@ -55,6 +55,9 @@ impl ConfiguratorApp {
     ) -> Command<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_quad(field, index, value);
+        if let Some(id) = quad_field_picker_id(field) {
+            self.sync_color_picker_hex_for_id(id);
+        }
         self.refresh_dirty_flag();
         Command::none()
     }
@@ -236,5 +239,17 @@ impl ConfiguratorApp {
         self.draft.tablet_pressure_thickness_entry_mode = option;
         self.refresh_dirty_flag();
         Command::none()
+    }
+}
+
+fn quad_field_picker_id(field: QuadField) -> Option<ColorPickerId> {
+    match field {
+        QuadField::StatusBarBg => Some(ColorPickerId::StatusBarBg),
+        QuadField::StatusBarText => Some(ColorPickerId::StatusBarText),
+        QuadField::HighlightFill => Some(ColorPickerId::HighlightFill),
+        QuadField::HighlightOutline => Some(ColorPickerId::HighlightOutline),
+        QuadField::HelpBg => Some(ColorPickerId::HelpBg),
+        QuadField::HelpBorder => Some(ColorPickerId::HelpBorder),
+        QuadField::HelpText => Some(ColorPickerId::HelpText),
     }
 }

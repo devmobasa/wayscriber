@@ -1,4 +1,5 @@
 pub mod color;
+pub mod color_picker;
 pub mod config;
 pub mod error;
 pub mod fields;
@@ -7,6 +8,7 @@ pub mod tab;
 pub mod util;
 
 pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
+pub use color_picker::{ColorPickerId, ColorPickerValue};
 pub use config::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft};
 pub use fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
