@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const ONBOARDING_VERSION: u32 = 2;
+pub(crate) const DRAWER_HINT_MAX: u32 = 2;
 const ONBOARDING_FILE: &str = "onboarding.toml";
 const ONBOARDING_DIR: &str = "wayscriber";
 
@@ -24,6 +25,9 @@ pub struct OnboardingState {
     /// Whether the "More" drawer hint has been shown
     #[serde(default)]
     pub drawer_hint_shown: bool,
+    /// Number of times the drawer hint has been acknowledged (opened)
+    #[serde(default)]
+    pub drawer_hint_count: u32,
 }
 
 impl Default for OnboardingState {
@@ -34,6 +38,7 @@ impl Default for OnboardingState {
             toolbar_hint_shown: false,
             tour_shown: false,
             drawer_hint_shown: false,
+            drawer_hint_count: 0,
         }
     }
 }
@@ -62,6 +67,14 @@ impl OnboardingStore {
                     let mut needs_save = false;
                     if state.version != ONBOARDING_VERSION {
                         state.version = ONBOARDING_VERSION;
+                        needs_save = true;
+                    }
+                    if state.drawer_hint_count == 0 && state.drawer_hint_shown {
+                        state.drawer_hint_count = DRAWER_HINT_MAX;
+                        needs_save = true;
+                    }
+                    if state.drawer_hint_count >= DRAWER_HINT_MAX && !state.drawer_hint_shown {
+                        state.drawer_hint_shown = true;
                         needs_save = true;
                     }
                     let store = Self {
@@ -175,6 +188,7 @@ fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
         toolbar_hint_shown,
         tour_shown: true,        // Don't show tour for recovered state
         drawer_hint_shown: true, // Don't show drawer hint for recovered state
+        drawer_hint_count: DRAWER_HINT_MAX,
     };
     let store = OnboardingStore {
         state: state.clone(),
