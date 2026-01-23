@@ -4,19 +4,23 @@ impl WaylandState {
     /// Returns a snapshot of the current input state for toolbar UI consumption.
     pub(in crate::backend::wayland) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
         let hints = ToolbarBindingHints::from_input_state(&self.input_state);
-        let show_drawer_hint =
-            !self.onboarding.state().drawer_hint_shown && !self.input_state.toolbar_drawer_open;
+        let hint_max = crate::onboarding::DRAWER_HINT_MAX;
+        let show_drawer_hint = self.onboarding.state().drawer_hint_count < hint_max
+            && !self.input_state.toolbar_drawer_open;
         ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint)
     }
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
     pub(in crate::backend::wayland) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
         // Mark drawer hint as shown when user opens the drawer
-        if matches!(event, ToolbarEvent::ToggleDrawer(true))
-            && !self.onboarding.state().drawer_hint_shown
-        {
-            self.onboarding.state_mut().drawer_hint_shown = true;
-            self.onboarding.save();
+        let hint_max = crate::onboarding::DRAWER_HINT_MAX;
+        if matches!(event, ToolbarEvent::ToggleDrawer(true)) {
+            let state = self.onboarding.state_mut();
+            if state.drawer_hint_count < hint_max {
+                state.drawer_hint_count = state.drawer_hint_count.saturating_add(1);
+                state.drawer_hint_shown = state.drawer_hint_count >= hint_max;
+                self.onboarding.save();
+            }
         }
 
         match event {

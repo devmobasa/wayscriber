@@ -90,7 +90,10 @@ pub(in crate::backend::wayland) fn debug_toolbar_drag_logging_enabled() -> bool 
 pub(in crate::backend::wayland) fn toolbar_pointer_lock_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        parse_boolish_env(&std::env::var("WAYSCRIBER_TOOLBAR_POINTER_LOCK").unwrap_or_default())
+        // Default ON: without pointer lock, layer-shell toolbar drags jitter/flicker as surfaces move.
+        parse_boolish_env(
+            &std::env::var("WAYSCRIBER_TOOLBAR_POINTER_LOCK").unwrap_or_else(|_| "1".into()),
+        )
     })
 }
 

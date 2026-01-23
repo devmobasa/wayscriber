@@ -41,6 +41,7 @@ pub enum Action {
     DecreaseThickness,
     IncreaseMarkerOpacity,
     DecreaseMarkerOpacity,
+    SelectSelectionTool,
     SelectMarkerTool,
     SelectEraserTool,
     ToggleEraserMode,

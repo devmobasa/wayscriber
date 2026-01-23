@@ -703,6 +703,7 @@ increase_marker_opacity = ["Ctrl+Alt+ArrowUp"]
 decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
 
 # Tool selection shortcuts (optional; keep empty to rely on modifiers)
+select_selection_tool = ["V"]
 select_pen_tool = ["F"]
 select_marker_tool = ["H"]
 select_eraser_tool = ["D"]

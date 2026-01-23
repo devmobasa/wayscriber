@@ -36,6 +36,7 @@ pub enum KeybindingField {
     DecreaseThickness,
     IncreaseMarkerOpacity,
     DecreaseMarkerOpacity,
+    SelectSelectionTool,
     SelectPenTool,
     SelectEraserTool,
     ToggleEraserMode,

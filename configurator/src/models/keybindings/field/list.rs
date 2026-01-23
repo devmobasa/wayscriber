@@ -34,6 +34,7 @@ impl KeybindingField {
             Self::DecreaseThickness,
             Self::IncreaseMarkerOpacity,
             Self::DecreaseMarkerOpacity,
+            Self::SelectSelectionTool,
             Self::SelectPenTool,
             Self::SelectEraserTool,
             Self::ToggleEraserMode,

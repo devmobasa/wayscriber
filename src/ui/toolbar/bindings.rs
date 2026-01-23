@@ -50,6 +50,7 @@ impl ToolbarBindingHints {
 
 pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
     match tool {
+        Tool::Select => Some(Action::SelectSelectionTool),
         Tool::Pen => Some(Action::SelectPenTool),
         Tool::Line => Some(Action::SelectLineTool),
         Tool::Rect => Some(Action::SelectRectTool),
@@ -58,7 +59,6 @@ pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
         Tool::Marker => Some(Action::SelectMarkerTool),
         Tool::Highlight => Some(Action::SelectHighlightTool),
         Tool::Eraser => Some(Action::SelectEraserTool),
-        Tool::Select => None,
     }
 }
 

@@ -17,6 +17,10 @@ impl KeybindingsConfig {
             &self.tools.decrease_marker_opacity,
             Action::DecreaseMarkerOpacity,
         )?;
+        inserter.insert_all(
+            &self.tools.select_selection_tool,
+            Action::SelectSelectionTool,
+        )?;
         inserter.insert_all(&self.tools.select_marker_tool, Action::SelectMarkerTool)?;
         inserter.insert_all(&self.tools.select_eraser_tool, Action::SelectEraserTool)?;
         inserter.insert_all(&self.tools.toggle_eraser_mode, Action::ToggleEraserMode)?;

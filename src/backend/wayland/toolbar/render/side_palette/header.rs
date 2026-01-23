@@ -114,8 +114,8 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let icon_x = more_x + (btn_size - icon_size) / 2.0;
     let icon_y = header_btn_y + (btn_size - icon_size) / 2.0;
     toolbar_icons::draw_icon_more(ctx, icon_x, icon_y, icon_size);
-    // Draw attention dot when drawer is closed
-    if !snapshot.drawer_open {
+    // Draw attention dot only for the onboarding hint
+    if snapshot.show_drawer_hint {
         let dot_radius = 4.0;
         let dot_x = more_x + btn_size - dot_radius - 2.0;
         let dot_y = header_btn_y + dot_radius + 2.0;

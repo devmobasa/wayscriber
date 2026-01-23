@@ -23,7 +23,8 @@ impl KeybindingField {
             | Self::SetColorPink
             | Self::SetColorWhite
             | Self::SetColorBlack => KeybindingsTabId::Drawing,
-            Self::SelectPenTool
+            Self::SelectSelectionTool
+            | Self::SelectPenTool
             | Self::SelectEraserTool
             | Self::ToggleEraserMode
             | Self::SelectMarkerTool

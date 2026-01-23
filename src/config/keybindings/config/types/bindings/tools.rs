@@ -17,6 +17,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_decrease_marker_opacity")]
     pub decrease_marker_opacity: Vec<String>,
 
+    #[serde(default = "default_select_selection_tool")]
+    pub select_selection_tool: Vec<String>,
+
     #[serde(default = "default_select_marker_tool")]
     pub select_marker_tool: Vec<String>,
 
@@ -64,6 +67,7 @@ impl Default for ToolKeybindingsConfig {
             decrease_thickness: default_decrease_thickness(),
             increase_marker_opacity: default_increase_marker_opacity(),
             decrease_marker_opacity: default_decrease_marker_opacity(),
+            select_selection_tool: default_select_selection_tool(),
             select_marker_tool: default_select_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
             toggle_eraser_mode: default_toggle_eraser_mode(),

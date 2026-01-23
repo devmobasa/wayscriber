@@ -9,7 +9,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
     meta!(
         SetColorGreen,
@@ -19,7 +19,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
     meta!(
         SetColorBlue,
@@ -29,7 +29,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
     meta!(
         SetColorYellow,
@@ -39,7 +39,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
     meta!(
         SetColorOrange,
@@ -49,7 +49,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
     meta!(
         SetColorPink,
@@ -59,7 +59,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
     meta!(
         SetColorWhite,
@@ -69,7 +69,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
     meta!(
         SetColorBlack,
@@ -79,6 +79,6 @@ pub const ENTRIES: &[ActionMeta] = &[
         Colors,
         true,
         true,
-        false
+        true
     ),
 ];

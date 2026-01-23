@@ -42,15 +42,16 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
             let gap = SPACING_STD;
 
             // Determine if tooltip should render above or below
-            // If rendering below would extend past panel height, render above instead
+            // If rendering below would extend past panel height, render above only when there's room.
             let render_above = if above {
                 true
             } else {
                 let below_y = hit.rect.1 + hit.rect.3 + gap + tooltip_h;
-                below_y > panel_height - SPACING_MD
+                let space_above = hit.rect.1 - tooltip_h - gap >= SPACING_MD;
+                below_y > panel_height - SPACING_MD && space_above
             };
 
-            let tooltip_y = if render_above {
+            let mut tooltip_y = if render_above {
                 hit.rect.1 - tooltip_h - gap
             } else {
                 hit.rect.1 + hit.rect.3 + gap
@@ -61,6 +62,17 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
             }
             if tooltip_x + tooltip_w > panel_width - SPACING_MD {
                 tooltip_x = panel_width - tooltip_w - SPACING_MD;
+            }
+            let min_y = SPACING_MD;
+            let max_y = panel_height - tooltip_h - SPACING_MD;
+            if max_y >= min_y {
+                if tooltip_y < min_y {
+                    tooltip_y = min_y;
+                } else if tooltip_y > max_y {
+                    tooltip_y = max_y;
+                }
+            } else {
+                tooltip_y = min_y;
             }
 
             let shadow_offset = SPACING_XS;

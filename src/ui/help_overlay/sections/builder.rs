@@ -183,6 +183,10 @@ pub(crate) fn build_section_sets(
     let selection_section = Section {
         title: "Selection",
         rows: vec![
+            row(
+                binding_or_fallback(bindings, Action::SelectSelectionTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectSelectionTool),
+            ),
             row("Drag", "Selection tool"),
             row(
                 binding_or_fallback(bindings, Action::SelectAll, NOT_BOUND_LABEL),
