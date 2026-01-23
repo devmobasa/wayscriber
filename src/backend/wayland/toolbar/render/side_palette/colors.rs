@@ -2,6 +2,7 @@ use super::{ColorSectionInfo, SidePaletteLayout};
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::Action;
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
@@ -27,17 +28,17 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
         size: FONT_SIZE_LABEL,
     };
 
-    let basic_colors: &[(Color, &str)] = &[
-        (RED, "Red"),
-        (GREEN, "Green"),
-        (BLUE, "Blue"),
-        (YELLOW, "Yellow"),
-        (WHITE, "White"),
-        (BLACK, "Black"),
+    let basic_colors: &[(Color, &str, Option<Action>)] = &[
+        (RED, "Red", Some(Action::SetColorRed)),
+        (GREEN, "Green", Some(Action::SetColorGreen)),
+        (BLUE, "Blue", Some(Action::SetColorBlue)),
+        (YELLOW, "Yellow", Some(Action::SetColorYellow)),
+        (WHITE, "White", Some(Action::SetColorWhite)),
+        (BLACK, "Black", Some(Action::SetColorBlack)),
     ];
-    let extended_colors: &[(Color, &str)] = &[
-        (ORANGE, "Orange"),
-        (PINK, "Pink"),
+    let extended_colors: &[(Color, &str, Option<Action>)] = &[
+        (ORANGE, "Orange", Some(Action::SetColorOrange)),
+        (PINK, "Pink", Some(Action::SetColorPink)),
         (
             Color {
                 r: 0.0,
@@ -46,6 +47,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
                 a: 1.0,
             },
             "Cyan",
+            None,
         ),
         (
             Color {
@@ -55,6 +57,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
                 a: 1.0,
             },
             "Purple",
+            None,
         ),
         (
             Color {
@@ -64,6 +67,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
                 a: 1.0,
             },
             "Gray",
+            None,
         ),
     ];
 
@@ -98,13 +102,15 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     let mut cx = x;
     let mut row_y = picker_y + picker_h + 8.0;
-    for (color, _name) in basic_colors {
+    for (color, name, action) in basic_colors {
         draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
+        let binding = action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
+        let tooltip = crate::backend::wayland::toolbar::format_binding_label(name, binding);
         hits.push(HitRegion {
             rect: (cx, row_y, swatch, swatch),
             event: ToolbarEvent::SetColor(*color),
             kind: HitKind::Click,
-            tooltip: None,
+            tooltip: Some(tooltip),
         });
         cx += swatch + swatch_gap;
     }
@@ -132,13 +138,16 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     if snapshot.show_more_colors {
         cx = x;
-        for (color, _name) in extended_colors {
+        for (color, name, action) in extended_colors {
             draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
+            let binding =
+                action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
+            let tooltip = crate::backend::wayland::toolbar::format_binding_label(name, binding);
             hits.push(HitRegion {
                 rect: (cx, row_y, swatch, swatch),
                 event: ToolbarEvent::SetColor(*color),
                 kind: HitKind::Click,
-                tooltip: None,
+                tooltip: Some(tooltip),
             });
             cx += swatch + swatch_gap;
         }
