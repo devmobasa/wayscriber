@@ -50,7 +50,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
                 below_y > panel_height - SPACING_MD
             };
 
-            let tooltip_y = if render_above {
+            let mut tooltip_y = if render_above {
                 hit.rect.1 - tooltip_h - gap
             } else {
                 hit.rect.1 + hit.rect.3 + gap
@@ -61,6 +61,17 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
             }
             if tooltip_x + tooltip_w > panel_width - SPACING_MD {
                 tooltip_x = panel_width - tooltip_w - SPACING_MD;
+            }
+            let min_y = SPACING_MD;
+            let max_y = panel_height - tooltip_h - SPACING_MD;
+            if max_y >= min_y {
+                if tooltip_y < min_y {
+                    tooltip_y = min_y;
+                } else if tooltip_y > max_y {
+                    tooltip_y = max_y;
+                }
+            } else {
+                tooltip_y = min_y;
             }
 
             let shadow_offset = SPACING_XS;

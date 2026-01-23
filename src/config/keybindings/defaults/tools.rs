@@ -14,6 +14,10 @@ pub(crate) fn default_decrease_marker_opacity() -> Vec<String> {
     vec!["Ctrl+Alt+ArrowDown".to_string()]
 }
 
+pub(crate) fn default_select_selection_tool() -> Vec<String> {
+    vec!["V".to_string()]
+}
+
 pub(crate) fn default_select_marker_tool() -> Vec<String> {
     vec!["H".to_string()]
 }

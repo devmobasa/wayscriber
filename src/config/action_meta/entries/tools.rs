@@ -22,6 +22,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        SelectSelectionTool,
+        "Selection Tool",
+        Some("Select"),
+        "Select and move items",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         SelectPenTool,
         "Pen Tool",
         Some("Pen"),

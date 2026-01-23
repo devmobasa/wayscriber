@@ -43,6 +43,9 @@ impl InputState {
             Action::DecreaseMarkerOpacity => {
                 self.set_marker_opacity(self.marker_opacity - 0.05);
             }
+            Action::SelectSelectionTool => {
+                self.set_tool_override(Some(Tool::Select));
+            }
             Action::SelectMarkerTool => {
                 self.set_tool_override(Some(Tool::Marker));
             }
