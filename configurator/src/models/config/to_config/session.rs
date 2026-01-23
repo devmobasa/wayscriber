@@ -11,6 +11,7 @@ impl ConfigDraft {
         config.session.persist_history = self.session_persist_history;
         config.session.restore_tool_state = self.session_restore_tool_state;
         config.session.per_output = self.session_per_output;
+        config.session.autosave_enabled = self.session_autosave_enabled;
         config.session.storage = self.session_storage_mode.to_mode();
         let custom_dir = self.session_custom_directory.trim();
         config.session.custom_directory = if custom_dir.is_empty() {
@@ -48,6 +49,24 @@ impl ConfigDraft {
             "session.backup_retention",
             errors,
             |value| config.session.backup_retention = value,
+        );
+        parse_u64_field(
+            &self.session_autosave_idle_ms,
+            "session.autosave_idle_ms",
+            errors,
+            |value| config.session.autosave_idle_ms = value,
+        );
+        parse_u64_field(
+            &self.session_autosave_interval_ms,
+            "session.autosave_interval_ms",
+            errors,
+            |value| config.session.autosave_interval_ms = value,
+        );
+        parse_u64_field(
+            &self.session_autosave_failure_backoff_ms,
+            "session.autosave_failure_backoff_ms",
+            errors,
+            |value| config.session.autosave_failure_backoff_ms = value,
         );
     }
 }

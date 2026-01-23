@@ -4,13 +4,15 @@ use std::sync::Arc;
 use wayscriber::config::Config;
 
 use crate::models::{
-    BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption,
-    PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
-    PresetToggleField, QuadField, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, TripletField, UiTabId,
+    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
+    ColorPickerValue, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
+    KeybindingsTabId, NamedColorOption, OverrideOption, PresenterToolBehaviorOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
+#[cfg(feature = "tablet-input")]
+use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -26,6 +28,10 @@ pub enum Message {
     TextChanged(TextField, String),
     TripletChanged(TripletField, usize, String),
     QuadChanged(QuadField, usize, String),
+    ColorPickerToggled(ColorPickerId),
+    ColorPickerAdvancedToggled(ColorPickerId, bool),
+    ColorPickerHexChanged(ColorPickerId, String),
+    ColorPickerChanged(ColorPickerId, ColorPickerValue),
     ColorModeChanged(ColorMode),
     NamedColorSelected(NamedColorOption),
     EraserModeChanged(EraserModeOption),
@@ -33,7 +39,19 @@ pub enum Message {
     ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideChanged(ToolbarOverrideField, OverrideOption),
-    BoardModeChanged(BoardModeOption),
+    BoardsAddItem,
+    BoardsRemoveItem(usize),
+    BoardsMoveItemUp(usize),
+    BoardsMoveItemDown(usize),
+    BoardsDuplicateItem(usize),
+    BoardsCollapseToggled(usize),
+    BoardsDefaultChanged(String),
+    BoardsItemTextChanged(usize, BoardItemTextField, String),
+    BoardsBackgroundKindChanged(usize, BoardBackgroundOption),
+    BoardsBackgroundColorChanged(usize, usize, String),
+    BoardsDefaultPenEnabledChanged(usize, bool),
+    BoardsDefaultPenColorChanged(usize, usize, String),
+    BoardsItemToggleChanged(usize, BoardItemToggleField, bool),
     SessionStorageModeChanged(SessionStorageModeOption),
     SessionCompressionChanged(SessionCompressionOption),
     PresenterToolBehaviorChanged(PresenterToolBehaviorOption),
@@ -41,6 +59,10 @@ pub enum Message {
     KeybindingChanged(KeybindingField, String),
     FontStyleOptionSelected(FontStyleOption),
     FontWeightOptionSelected(FontWeightOption),
+    #[cfg(feature = "tablet-input")]
+    TabletPressureEditModeChanged(PressureThicknessEditModeOption),
+    #[cfg(feature = "tablet-input")]
+    TabletPressureEntryModeChanged(PressureThicknessEntryModeOption),
     PresetSlotCountChanged(usize),
     PresetSlotEnabledChanged(usize, bool),
     PresetCollapseToggled(usize),

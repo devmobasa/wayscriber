@@ -1,3 +1,4 @@
+mod boards;
 mod draft;
 mod parse;
 mod presets;
@@ -8,4 +9,5 @@ mod toolbar_overrides;
 #[cfg(test)]
 mod tests;
 
+pub use boards::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField};
 pub use draft::ConfigDraft;

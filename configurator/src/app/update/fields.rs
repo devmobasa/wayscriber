@@ -2,11 +2,13 @@ use iced::Command;
 
 use crate::messages::Message;
 use crate::models::{
-    BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
+    ColorMode, ColorPickerId, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
+    NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
     ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
+#[cfg(feature = "tablet-input")]
+use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
@@ -53,6 +55,9 @@ impl ConfiguratorApp {
     ) -> Command<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_quad(field, index, value);
+        if let Some(id) = quad_field_picker_id(field) {
+            self.sync_color_picker_hex_for_id(id);
+        }
         self.refresh_dirty_flag();
         Command::none()
     }
@@ -140,16 +145,6 @@ impl ConfiguratorApp {
         Command::none()
     }
 
-    pub(super) fn handle_board_mode_changed(
-        &mut self,
-        option: BoardModeOption,
-    ) -> Command<Message> {
-        self.status = StatusMessage::idle();
-        self.draft.board_default_mode = option;
-        self.refresh_dirty_flag();
-        Command::none()
-    }
-
     pub(super) fn handle_session_storage_mode_changed(
         &mut self,
         option: SessionStorageModeOption,
@@ -222,5 +217,39 @@ impl ConfiguratorApp {
         }
         self.refresh_dirty_flag();
         Command::none()
+    }
+
+    #[cfg(feature = "tablet-input")]
+    pub(super) fn handle_tablet_pressure_edit_mode_changed(
+        &mut self,
+        option: PressureThicknessEditModeOption,
+    ) -> Command<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.tablet_pressure_thickness_edit_mode = option;
+        self.refresh_dirty_flag();
+        Command::none()
+    }
+
+    #[cfg(feature = "tablet-input")]
+    pub(super) fn handle_tablet_pressure_entry_mode_changed(
+        &mut self,
+        option: PressureThicknessEntryModeOption,
+    ) -> Command<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.tablet_pressure_thickness_entry_mode = option;
+        self.refresh_dirty_flag();
+        Command::none()
+    }
+}
+
+fn quad_field_picker_id(field: QuadField) -> Option<ColorPickerId> {
+    match field {
+        QuadField::StatusBarBg => Some(ColorPickerId::StatusBarBg),
+        QuadField::StatusBarText => Some(ColorPickerId::StatusBarText),
+        QuadField::HighlightFill => Some(ColorPickerId::HighlightFill),
+        QuadField::HighlightOutline => Some(ColorPickerId::HighlightOutline),
+        QuadField::HelpBg => Some(ColorPickerId::HelpBg),
+        QuadField::HelpBorder => Some(ColorPickerId::HelpBorder),
+        QuadField::HelpText => Some(ColorPickerId::HelpText),
     }
 }

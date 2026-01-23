@@ -1,11 +1,16 @@
-use super::super::super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
+use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::{
-    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption,
-    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, ToolbarLayoutModeOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, PresenterToolBehaviorOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    ToolbarLayoutModeOption,
+};
+#[cfg(feature = "tablet-input")]
+use super::super::super::fields::{
+    PressureThicknessEditModeOption, PressureThicknessEntryModeOption,
 };
 use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;
+use super::super::boards::BoardsDraft;
 use super::super::presets::PresetsDraft;
 use super::super::toolbar_overrides::ToolbarModeOverridesDraft;
 use super::ConfigDraft;
@@ -130,14 +135,7 @@ impl ConfigDraft {
             help_text_color: ColorQuadInput::from(config.ui.help_overlay_style.text_color),
             help_context_filter: config.ui.help_overlay_context_filter,
 
-            board_enabled: config.board.enabled,
-            board_default_mode: BoardModeOption::from_str(&config.board.default_mode)
-                .unwrap_or(BoardModeOption::Transparent),
-            board_whiteboard_color: ColorTripletInput::from(config.board.whiteboard_color),
-            board_blackboard_color: ColorTripletInput::from(config.board.blackboard_color),
-            board_whiteboard_pen: ColorTripletInput::from(config.board.whiteboard_pen_color),
-            board_blackboard_pen: ColorTripletInput::from(config.board.blackboard_pen_color),
-            board_auto_adjust_pen: config.board.auto_adjust_pen,
+            boards: BoardsDraft::from_config(config),
 
             capture_enabled: config.capture.enabled,
             capture_save_directory: config.capture.save_directory.clone(),
@@ -171,6 +169,13 @@ impl ConfigDraft {
                 .map(|value| value.to_string())
                 .unwrap_or_default(),
             session_backup_retention: config.session.backup_retention.to_string(),
+            session_autosave_enabled: config.session.autosave_enabled,
+            session_autosave_idle_ms: config.session.autosave_idle_ms.to_string(),
+            session_autosave_interval_ms: config.session.autosave_interval_ms.to_string(),
+            session_autosave_failure_backoff_ms: config
+                .session
+                .autosave_failure_backoff_ms
+                .to_string(),
 
             #[cfg(feature = "tablet-input")]
             tablet_enabled: config.tablet.enabled,
@@ -180,6 +185,24 @@ impl ConfigDraft {
             tablet_min_thickness: format_float(config.tablet.min_thickness),
             #[cfg(feature = "tablet-input")]
             tablet_max_thickness: format_float(config.tablet.max_thickness),
+            #[cfg(feature = "tablet-input")]
+            tablet_auto_eraser_switch: config.tablet.auto_eraser_switch,
+            #[cfg(feature = "tablet-input")]
+            tablet_pressure_variation_threshold: format_float(
+                config.tablet.pressure_variation_threshold,
+            ),
+            #[cfg(feature = "tablet-input")]
+            tablet_pressure_thickness_edit_mode: PressureThicknessEditModeOption::from_mode(
+                config.tablet.pressure_thickness_edit_mode,
+            ),
+            #[cfg(feature = "tablet-input")]
+            tablet_pressure_thickness_entry_mode: PressureThicknessEntryModeOption::from_mode(
+                config.tablet.pressure_thickness_entry_mode,
+            ),
+            #[cfg(feature = "tablet-input")]
+            tablet_pressure_thickness_scale_step: format_float(
+                config.tablet.pressure_thickness_scale_step,
+            ),
 
             presets: PresetsDraft::from_config(config),
 

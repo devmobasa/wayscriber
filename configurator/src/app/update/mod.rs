@@ -1,3 +1,5 @@
+mod boards;
+mod color_picker;
 mod config;
 mod fields;
 mod presets;
@@ -28,6 +30,14 @@ impl ConfiguratorApp {
             Message::QuadChanged(field, index, value) => {
                 self.handle_quad_changed(field, index, value)
             }
+            Message::ColorPickerToggled(id) => self.handle_color_picker_toggled(id),
+            Message::ColorPickerAdvancedToggled(id, value) => {
+                self.handle_color_picker_advanced_toggled(id, value)
+            }
+            Message::ColorPickerHexChanged(id, value) => {
+                self.handle_color_picker_hex_changed(id, value)
+            }
+            Message::ColorPickerChanged(id, value) => self.handle_color_picker_changed(id, value),
             Message::ColorModeChanged(mode) => self.handle_color_mode_changed(mode),
             Message::NamedColorSelected(option) => self.handle_named_color_selected(option),
             Message::EraserModeChanged(option) => self.handle_eraser_mode_changed(option),
@@ -41,7 +51,31 @@ impl ConfiguratorApp {
             Message::ToolbarOverrideChanged(field, option) => {
                 self.handle_toolbar_override_changed(field, option)
             }
-            Message::BoardModeChanged(option) => self.handle_board_mode_changed(option),
+            Message::BoardsAddItem => self.handle_boards_add_item(),
+            Message::BoardsRemoveItem(index) => self.handle_boards_remove_item(index),
+            Message::BoardsMoveItemUp(index) => self.handle_boards_move_item(index, true),
+            Message::BoardsMoveItemDown(index) => self.handle_boards_move_item(index, false),
+            Message::BoardsDuplicateItem(index) => self.handle_boards_duplicate_item(index),
+            Message::BoardsCollapseToggled(index) => self.handle_boards_collapse_toggled(index),
+            Message::BoardsDefaultChanged(value) => self.handle_boards_default_changed(value),
+            Message::BoardsItemTextChanged(index, field, value) => {
+                self.handle_boards_item_text_changed(index, field, value)
+            }
+            Message::BoardsBackgroundKindChanged(index, value) => {
+                self.handle_boards_background_kind_changed(index, value)
+            }
+            Message::BoardsBackgroundColorChanged(index, component, value) => {
+                self.handle_boards_background_color_changed(index, component, value)
+            }
+            Message::BoardsDefaultPenEnabledChanged(index, value) => {
+                self.handle_boards_default_pen_enabled_changed(index, value)
+            }
+            Message::BoardsDefaultPenColorChanged(index, component, value) => {
+                self.handle_boards_default_pen_color_changed(index, component, value)
+            }
+            Message::BoardsItemToggleChanged(index, field, value) => {
+                self.handle_boards_item_toggle_changed(index, field, value)
+            }
             Message::SessionStorageModeChanged(option) => {
                 self.handle_session_storage_mode_changed(option)
             }
@@ -60,6 +94,14 @@ impl ConfiguratorApp {
             }
             Message::FontWeightOptionSelected(option) => {
                 self.handle_font_weight_option_selected(option)
+            }
+            #[cfg(feature = "tablet-input")]
+            Message::TabletPressureEditModeChanged(option) => {
+                self.handle_tablet_pressure_edit_mode_changed(option)
+            }
+            #[cfg(feature = "tablet-input")]
+            Message::TabletPressureEntryModeChanged(option) => {
+                self.handle_tablet_pressure_entry_mode_changed(option)
             }
             Message::PresetSlotCountChanged(count) => self.handle_preset_slot_count_changed(count),
             Message::PresetSlotEnabledChanged(slot_index, enabled) => {

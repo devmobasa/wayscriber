@@ -1,72 +1,10 @@
 use iced::border::Radius;
 use iced::theme::{self, Theme};
 use iced::widget::container::Appearance;
-use iced::widget::{Space, column, container, row, text, text_input};
+use iced::widget::{Space, column, container, text};
 use iced::{Background, Border, Element, Length};
 
 use crate::messages::Message;
-use crate::models::{ColorQuadInput, ColorTripletInput, QuadField, TripletField};
-
-use super::constants::DEFAULT_LABEL_GAP;
-use super::labels::default_value_text;
-
-pub(in crate::app::view) fn color_triplet_editor<'a>(
-    label: &'static str,
-    colors: &'a ColorTripletInput,
-    default: &'a ColorTripletInput,
-    field: TripletField,
-) -> Element<'a, Message> {
-    let changed = colors != default;
-    column![
-        row![
-            text(label).size(14),
-            default_value_text(default.summary(), changed),
-        ]
-        .spacing(DEFAULT_LABEL_GAP)
-        .align_items(iced::Alignment::Center),
-        row![
-            text_input("Red", &colors.components[0])
-                .on_input(move |val| Message::TripletChanged(field, 0, val)),
-            text_input("Green", &colors.components[1])
-                .on_input(move |val| Message::TripletChanged(field, 1, val)),
-            text_input("Blue", &colors.components[2])
-                .on_input(move |val| Message::TripletChanged(field, 2, val)),
-        ]
-        .spacing(8)
-    ]
-    .spacing(4)
-    .into()
-}
-
-pub(in crate::app::view) fn color_quad_editor<'a>(
-    label: &'static str,
-    colors: &'a ColorQuadInput,
-    default: &'a ColorQuadInput,
-    field: QuadField,
-) -> Element<'a, Message> {
-    let changed = colors != default;
-    column![
-        row![
-            text(label).size(14),
-            default_value_text(default.summary(), changed),
-        ]
-        .spacing(DEFAULT_LABEL_GAP)
-        .align_items(iced::Alignment::Center),
-        row![
-            text_input("Red", &colors.components[0])
-                .on_input(move |val| Message::QuadChanged(field, 0, val)),
-            text_input("Green", &colors.components[1])
-                .on_input(move |val| Message::QuadChanged(field, 1, val)),
-            text_input("Blue", &colors.components[2])
-                .on_input(move |val| Message::QuadChanged(field, 2, val)),
-            text_input("Alpha", &colors.components[3])
-                .on_input(move |val| Message::QuadChanged(field, 3, val)),
-        ]
-        .spacing(8)
-    ]
-    .spacing(4)
-    .into()
-}
 
 pub(in crate::app::view) fn color_preview_badge<'a>(
     color: Option<iced::Color>,

@@ -3,9 +3,11 @@ use iced::{Element, Length};
 
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
-use crate::models::{QuadField, StatusPositionOption, TextField, ToggleField};
+use crate::models::{ColorPickerId, QuadField, StatusPositionOption, TextField, ToggleField};
 
-use super::super::widgets::{color_quad_editor, labeled_control, labeled_input, toggle_row};
+use super::super::widgets::{
+    ColorPickerUi, color_quad_picker, labeled_control, labeled_input, toggle_row,
+};
 
 impl ConfiguratorApp {
     pub(super) fn ui_status_bar_tab(&self) -> Element<'_, Message> {
@@ -54,14 +56,38 @@ impl ConfiguratorApp {
                 self.draft.ui_status_position != self.defaults.ui_status_position,
             ),
             text("Status Bar Style").size(18),
-            color_quad_editor(
+            color_quad_picker(
                 "Background RGBA (0-1)",
+                ColorPickerUi {
+                    id: ColorPickerId::StatusBarBg,
+                    is_open: self.color_picker_open == Some(ColorPickerId::StatusBarBg),
+                    show_advanced: self
+                        .color_picker_advanced
+                        .contains(&ColorPickerId::StatusBarBg),
+                    hex_value: self
+                        .color_picker_hex
+                        .get(&ColorPickerId::StatusBarBg)
+                        .map(String::as_str)
+                        .unwrap_or(""),
+                },
                 &self.draft.status_bar_bg_color,
                 &self.defaults.status_bar_bg_color,
                 QuadField::StatusBarBg,
             ),
-            color_quad_editor(
+            color_quad_picker(
                 "Text RGBA (0-1)",
+                ColorPickerUi {
+                    id: ColorPickerId::StatusBarText,
+                    is_open: self.color_picker_open == Some(ColorPickerId::StatusBarText),
+                    show_advanced: self
+                        .color_picker_advanced
+                        .contains(&ColorPickerId::StatusBarText),
+                    hex_value: self
+                        .color_picker_hex
+                        .get(&ColorPickerId::StatusBarText)
+                        .map(String::as_str)
+                        .unwrap_or(""),
+                },
                 &self.draft.status_bar_text_color,
                 &self.defaults.status_bar_text_color,
                 QuadField::StatusBarText,

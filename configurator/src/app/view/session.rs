@@ -56,6 +56,12 @@ impl ConfiguratorApp {
                 ToggleField::SessionRestoreToolState,
             ),
             toggle_row(
+                "Enable autosave",
+                self.draft.session_autosave_enabled,
+                self.defaults.session_autosave_enabled,
+                ToggleField::SessionAutosaveEnabled,
+            ),
+            toggle_row(
                 "Per-output persistence",
                 self.draft.session_per_output,
                 self.defaults.session_per_output,
@@ -85,6 +91,30 @@ impl ConfiguratorApp {
                 compression_pick.width(Length::Fill).into(),
                 self.defaults.session_compression.label().to_string(),
                 self.draft.session_compression != self.defaults.session_compression,
+            ))
+            .push(labeled_input_with_feedback(
+                "Autosave idle (ms)",
+                &self.draft.session_autosave_idle_ms,
+                &self.defaults.session_autosave_idle_ms,
+                TextField::SessionAutosaveIdleMs,
+                Some("Minimum: 1000 ms"),
+                validate_u64_min(&self.draft.session_autosave_idle_ms, 1000),
+            ))
+            .push(labeled_input_with_feedback(
+                "Autosave interval (ms)",
+                &self.draft.session_autosave_interval_ms,
+                &self.defaults.session_autosave_interval_ms,
+                TextField::SessionAutosaveIntervalMs,
+                Some("Minimum: 1000 ms"),
+                validate_u64_min(&self.draft.session_autosave_interval_ms, 1000),
+            ))
+            .push(labeled_input_with_feedback(
+                "Autosave failure backoff (ms)",
+                &self.draft.session_autosave_failure_backoff_ms,
+                &self.defaults.session_autosave_failure_backoff_ms,
+                TextField::SessionAutosaveFailureBackoffMs,
+                Some("Minimum: 1000 ms"),
+                validate_u64_min(&self.draft.session_autosave_failure_backoff_ms, 1000),
             ))
             .push(labeled_input_with_feedback(
                 "Max shapes per frame",

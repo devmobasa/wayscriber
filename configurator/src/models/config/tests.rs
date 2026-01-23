@@ -53,15 +53,15 @@ fn setters_update_draft_state() {
     assert_eq!(draft.drawing_color.name, "green");
     assert_eq!(draft.drawing_color.selected_named, NamedColorOption::Green);
 
-    draft.set_triplet(TripletField::BoardWhiteboard, 1, "0.5".to_string());
-    assert_eq!(draft.board_whiteboard_color.components[1], "0.5");
+    draft.set_triplet(TripletField::DrawingColorRgb, 1, "0.5".to_string());
+    assert_eq!(draft.drawing_color.rgb[1], "0.5");
 
     draft.set_quad(QuadField::StatusBarBg, 2, "0.75".to_string());
     assert_eq!(draft.status_bar_bg_color.components[2], "0.75");
 
-    draft.set_toggle(ToggleField::BoardEnabled, true);
+    draft.set_toggle(ToggleField::BoardsAutoCreate, true);
     draft.set_toggle(ToggleField::ArrowHeadAtEnd, true);
-    assert!(draft.board_enabled);
+    assert!(draft.boards.auto_create);
     assert!(draft.arrow_head_at_end);
 }
 

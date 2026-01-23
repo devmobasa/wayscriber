@@ -19,22 +19,20 @@ impl ColorTripletInput {
         }
     }
 
-    pub fn to_array(&self, field: &'static str) -> Result<[f64; 3], FormError> {
+    pub fn to_array(&self, field: &str) -> Result<[f64; 3], FormError> {
         let mut out = [0.0f64; 3];
         for (index, value) in self.components.iter().enumerate() {
-            let parsed = parse_f64(value.trim())
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                return Err(FormError::new(
+                    format!("{field}[{index}]"),
+                    "Value is required",
+                ));
+            }
+            let parsed = parse_f64(trimmed)
                 .map_err(|err| FormError::new(format!("{field}[{index}]"), err))?;
             out[index] = parsed;
         }
         Ok(out)
-    }
-
-    pub fn summary(&self) -> String {
-        [
-            self.components[0].trim(),
-            self.components[1].trim(),
-            self.components[2].trim(),
-        ]
-        .join(", ")
     }
 }

@@ -3,10 +3,10 @@ use iced::widget::{column, row, scrollable, text};
 
 use crate::app::state::ConfiguratorApp;
 use crate::messages::Message;
-use crate::models::{QuadField, TextField, ToggleField};
+use crate::models::{ColorPickerId, QuadField, TextField, ToggleField};
 
 use super::super::widgets::{
-    color_quad_editor, labeled_input_with_feedback, toggle_row, validate_f64_range,
+    ColorPickerUi, color_quad_picker, labeled_input_with_feedback, toggle_row, validate_f64_range,
     validate_u64_range,
 };
 
@@ -53,14 +53,38 @@ impl ConfiguratorApp {
                 )
             ]
             .spacing(12),
-            color_quad_editor(
+            color_quad_picker(
                 "Fill RGBA (0-1)",
+                ColorPickerUi {
+                    id: ColorPickerId::HighlightFill,
+                    is_open: self.color_picker_open == Some(ColorPickerId::HighlightFill),
+                    show_advanced: self
+                        .color_picker_advanced
+                        .contains(&ColorPickerId::HighlightFill),
+                    hex_value: self
+                        .color_picker_hex
+                        .get(&ColorPickerId::HighlightFill)
+                        .map(String::as_str)
+                        .unwrap_or(""),
+                },
                 &self.draft.click_highlight_fill_color,
                 &self.defaults.click_highlight_fill_color,
                 QuadField::HighlightFill,
             ),
-            color_quad_editor(
+            color_quad_picker(
                 "Outline RGBA (0-1)",
+                ColorPickerUi {
+                    id: ColorPickerId::HighlightOutline,
+                    is_open: self.color_picker_open == Some(ColorPickerId::HighlightOutline),
+                    show_advanced: self
+                        .color_picker_advanced
+                        .contains(&ColorPickerId::HighlightOutline),
+                    hex_value: self
+                        .color_picker_hex
+                        .get(&ColorPickerId::HighlightOutline)
+                        .map(String::as_str)
+                        .unwrap_or(""),
+                },
                 &self.draft.click_highlight_outline_color,
                 &self.defaults.click_highlight_outline_color,
                 QuadField::HighlightOutline,
