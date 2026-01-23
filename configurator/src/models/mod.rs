@@ -7,13 +7,15 @@ pub mod tab;
 pub mod util;
 
 pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
-pub use config::ConfigDraft;
+pub use config::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft};
 pub use fields::{
-    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
     PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
     PresetToggleField, QuadField, SessionCompressionOption, SessionStorageModeOption,
     StatusPositionOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
     ToolbarOverrideField, TripletField,
 };
+#[cfg(feature = "tablet-input")]
+pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 pub use keybindings::KeybindingField;
 pub use tab::{KeybindingsTabId, TabId, UiTabId};

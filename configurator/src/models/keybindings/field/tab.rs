@@ -33,7 +33,8 @@ impl KeybindingField {
             | Self::SelectEllipseTool
             | Self::SelectArrowTool
             | Self::SelectHighlightTool
-            | Self::ToggleHighlightTool => KeybindingsTabId::Tools,
+            | Self::ToggleHighlightTool
+            | Self::ResetArrowLabels => KeybindingsTabId::Tools,
             Self::DuplicateSelection
             | Self::CopySelection
             | Self::PasteSelection
@@ -65,11 +66,30 @@ impl KeybindingField {
             | Self::PageNew
             | Self::PageDuplicate
             | Self::PageDelete
-            | Self::ToggleHelp
+            | Self::Board1
+            | Self::Board2
+            | Self::Board3
+            | Self::Board4
+            | Self::Board5
+            | Self::Board6
+            | Self::Board7
+            | Self::Board8
+            | Self::Board9
+            | Self::BoardNext
+            | Self::BoardPrev
+            | Self::BoardNew
+            | Self::BoardDuplicate
+            | Self::BoardDelete
+            | Self::BoardPicker => KeybindingsTabId::Boards,
+            Self::ToggleHelp
+            | Self::ToggleQuickHelp
             | Self::ToggleStatusBar
             | Self::ToggleClickHighlight
             | Self::ToggleToolbar
-            | Self::OpenContextMenu => KeybindingsTabId::UiModes,
+            | Self::TogglePresenterMode
+            | Self::ToggleSelectionProperties
+            | Self::OpenContextMenu
+            | Self::ToggleCommandPalette => KeybindingsTabId::UiModes,
             Self::CaptureFullScreen
             | Self::CaptureActiveWindow
             | Self::CaptureSelection

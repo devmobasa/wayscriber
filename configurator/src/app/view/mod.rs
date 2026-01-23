@@ -1,5 +1,5 @@
 mod arrow;
-mod board;
+mod boards;
 mod capture;
 mod drawing;
 mod history;
@@ -117,7 +117,7 @@ impl ConfiguratorApp {
             TabId::History => self.history_tab(),
             TabId::Performance => self.performance_tab(),
             TabId::Ui => self.ui_tab(),
-            TabId::Board => self.board_tab(),
+            TabId::Boards => self.boards_tab(),
             TabId::Capture => self.capture_tab(),
             TabId::Session => self.session_tab(),
             TabId::Keybindings => self.keybindings_tab(),

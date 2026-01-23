@@ -1,12 +1,15 @@
 mod from_config;
 
-use super::super::color::{ColorInput, ColorQuadInput, ColorTripletInput};
+use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::{
-    BoardModeOption, EraserModeOption, FontStyleOption, FontWeightOption,
-    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, ToolbarLayoutModeOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, PresenterToolBehaviorOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    ToolbarLayoutModeOption,
 };
+#[cfg(feature = "tablet-input")]
+use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 use super::super::keybindings::KeybindingsDraft;
+use super::boards::BoardsDraft;
 use super::presets::PresetsDraft;
 use super::toolbar_overrides::ToolbarModeOverridesDraft;
 
@@ -111,13 +114,7 @@ pub struct ConfigDraft {
     pub help_text_color: ColorQuadInput,
     pub help_context_filter: bool,
 
-    pub board_enabled: bool,
-    pub board_default_mode: BoardModeOption,
-    pub board_whiteboard_color: ColorTripletInput,
-    pub board_blackboard_color: ColorTripletInput,
-    pub board_whiteboard_pen: ColorTripletInput,
-    pub board_blackboard_pen: ColorTripletInput,
-    pub board_auto_adjust_pen: bool,
+    pub boards: BoardsDraft,
 
     pub capture_enabled: bool,
     pub capture_save_directory: String,
@@ -140,6 +137,10 @@ pub struct ConfigDraft {
     pub session_auto_compress_threshold_kb: String,
     pub session_max_persisted_undo_depth: String,
     pub session_backup_retention: String,
+    pub session_autosave_enabled: bool,
+    pub session_autosave_idle_ms: String,
+    pub session_autosave_interval_ms: String,
+    pub session_autosave_failure_backoff_ms: String,
 
     #[cfg(feature = "tablet-input")]
     pub tablet_enabled: bool,
@@ -149,6 +150,16 @@ pub struct ConfigDraft {
     pub tablet_min_thickness: String,
     #[cfg(feature = "tablet-input")]
     pub tablet_max_thickness: String,
+    #[cfg(feature = "tablet-input")]
+    pub tablet_auto_eraser_switch: bool,
+    #[cfg(feature = "tablet-input")]
+    pub tablet_pressure_variation_threshold: String,
+    #[cfg(feature = "tablet-input")]
+    pub tablet_pressure_thickness_edit_mode: PressureThicknessEditModeOption,
+    #[cfg(feature = "tablet-input")]
+    pub tablet_pressure_thickness_entry_mode: PressureThicknessEntryModeOption,
+    #[cfg(feature = "tablet-input")]
+    pub tablet_pressure_thickness_scale_step: String,
 
     pub presets: PresetsDraft,
 

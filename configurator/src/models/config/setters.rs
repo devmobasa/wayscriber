@@ -97,8 +97,11 @@ impl ConfigDraft {
                 self.presenter_enable_click_highlight = value;
             }
             ToggleField::PresenterShowToast => self.presenter_show_toast = value,
-            ToggleField::BoardEnabled => self.board_enabled = value,
-            ToggleField::BoardAutoAdjust => self.board_auto_adjust_pen = value,
+            ToggleField::BoardsAutoCreate => self.boards.auto_create = value,
+            ToggleField::BoardsShowBadge => self.boards.show_board_badge = value,
+            ToggleField::BoardsPersistCustomizations => {
+                self.boards.persist_customizations = value;
+            }
             ToggleField::CaptureEnabled => self.capture_enabled = value,
             ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
             ToggleField::CaptureExitAfter => self.capture_exit_after = value,
@@ -120,6 +123,9 @@ impl ConfigDraft {
             ToggleField::SessionPerOutput => {
                 self.session_per_output = value;
             }
+            ToggleField::SessionAutosaveEnabled => {
+                self.session_autosave_enabled = value;
+            }
             ToggleField::HistoryCustomSectionEnabled => {
                 self.history_custom_section_enabled = value;
             }
@@ -130,6 +136,8 @@ impl ConfigDraft {
             ToggleField::TabletEnabled => self.tablet_enabled = value,
             #[cfg(feature = "tablet-input")]
             ToggleField::TabletPressureEnabled => self.tablet_pressure_enabled = value,
+            #[cfg(feature = "tablet-input")]
+            ToggleField::TabletAutoEraserSwitch => self.tablet_auto_eraser_switch = value,
         }
     }
 
@@ -184,6 +192,7 @@ impl ConfigDraft {
             TextField::ToolbarTopOffsetY => self.ui_toolbar_top_offset_y = value,
             TextField::ToolbarSideOffset => self.ui_toolbar_side_offset = value,
             TextField::ToolbarSideOffsetX => self.ui_toolbar_side_offset_x = value,
+            TextField::BoardsMaxCount => self.boards.max_count = value,
             TextField::SessionCustomDirectory => self.session_custom_directory = value,
             TextField::SessionMaxShapesPerFrame => self.session_max_shapes_per_frame = value,
             TextField::SessionMaxFileSizeMb => self.session_max_file_size_mb = value,
@@ -194,10 +203,21 @@ impl ConfigDraft {
                 self.session_max_persisted_undo_depth = value
             }
             TextField::SessionBackupRetention => self.session_backup_retention = value,
+            TextField::SessionAutosaveIdleMs => self.session_autosave_idle_ms = value,
+            TextField::SessionAutosaveIntervalMs => self.session_autosave_interval_ms = value,
+            TextField::SessionAutosaveFailureBackoffMs => {
+                self.session_autosave_failure_backoff_ms = value
+            }
             #[cfg(feature = "tablet-input")]
             TextField::TabletMinThickness => self.tablet_min_thickness = value,
             #[cfg(feature = "tablet-input")]
             TextField::TabletMaxThickness => self.tablet_max_thickness = value,
+            #[cfg(feature = "tablet-input")]
+            TextField::TabletPressureVariationThreshold => {
+                self.tablet_pressure_variation_threshold = value
+            }
+            #[cfg(feature = "tablet-input")]
+            TextField::TabletPressureScaleStep => self.tablet_pressure_thickness_scale_step = value,
         }
     }
 
@@ -207,18 +227,6 @@ impl ConfigDraft {
                 if let Some(slot) = self.drawing_color.rgb.get_mut(index) {
                     *slot = value;
                 }
-            }
-            TripletField::BoardWhiteboard => {
-                self.board_whiteboard_color.set_component(index, value)
-            }
-            TripletField::BoardBlackboard => {
-                self.board_blackboard_color.set_component(index, value)
-            }
-            TripletField::BoardWhiteboardPen => {
-                self.board_whiteboard_pen.set_component(index, value)
-            }
-            TripletField::BoardBlackboardPen => {
-                self.board_blackboard_pen.set_component(index, value)
             }
         }
     }

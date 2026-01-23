@@ -37,8 +37,9 @@ pub enum ToggleField {
     PresenterCloseHelpOverlay,
     PresenterEnableClickHighlight,
     PresenterShowToast,
-    BoardEnabled,
-    BoardAutoAdjust,
+    BoardsAutoCreate,
+    BoardsShowBadge,
+    BoardsPersistCustomizations,
     CaptureEnabled,
     CaptureCopyToClipboard,
     CaptureExitAfter,
@@ -48,12 +49,15 @@ pub enum ToggleField {
     SessionPersistHistory,
     SessionRestoreToolState,
     SessionPerOutput,
+    SessionAutosaveEnabled,
     HistoryCustomSectionEnabled,
     ArrowHeadAtEnd,
     #[cfg(feature = "tablet-input")]
     TabletEnabled,
     #[cfg(feature = "tablet-input")]
     TabletPressureEnabled,
+    #[cfg(feature = "tablet-input")]
+    TabletAutoEraserSwitch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,16 +111,24 @@ pub enum TextField {
     ToolbarTopOffsetY,
     ToolbarSideOffset,
     ToolbarSideOffsetX,
+    BoardsMaxCount,
     SessionCustomDirectory,
     SessionMaxShapesPerFrame,
     SessionMaxFileSizeMb,
     SessionAutoCompressThresholdKb,
     SessionMaxPersistedUndoDepth,
     SessionBackupRetention,
+    SessionAutosaveIdleMs,
+    SessionAutosaveIntervalMs,
+    SessionAutosaveFailureBackoffMs,
     #[cfg(feature = "tablet-input")]
     TabletMinThickness,
     #[cfg(feature = "tablet-input")]
     TabletMaxThickness,
+    #[cfg(feature = "tablet-input")]
+    TabletPressureVariationThreshold,
+    #[cfg(feature = "tablet-input")]
+    TabletPressureScaleStep,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,10 +146,6 @@ pub enum PresetTextField {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TripletField {
     DrawingColorRgb,
-    BoardWhiteboard,
-    BoardBlackboard,
-    BoardWhiteboardPen,
-    BoardBlackboardPen,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

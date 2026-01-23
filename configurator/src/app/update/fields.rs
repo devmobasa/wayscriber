@@ -2,11 +2,13 @@ use iced::Command;
 
 use crate::messages::Message;
 use crate::models::{
-    BoardModeOption, ColorMode, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
+    ColorMode, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
+    NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
     ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
+#[cfg(feature = "tablet-input")]
+use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
@@ -140,16 +142,6 @@ impl ConfiguratorApp {
         Command::none()
     }
 
-    pub(super) fn handle_board_mode_changed(
-        &mut self,
-        option: BoardModeOption,
-    ) -> Command<Message> {
-        self.status = StatusMessage::idle();
-        self.draft.board_default_mode = option;
-        self.refresh_dirty_flag();
-        Command::none()
-    }
-
     pub(super) fn handle_session_storage_mode_changed(
         &mut self,
         option: SessionStorageModeOption,
@@ -220,6 +212,28 @@ impl ConfiguratorApp {
         if option != FontWeightOption::Custom {
             self.draft.drawing_font_weight = option.canonical_value().to_string();
         }
+        self.refresh_dirty_flag();
+        Command::none()
+    }
+
+    #[cfg(feature = "tablet-input")]
+    pub(super) fn handle_tablet_pressure_edit_mode_changed(
+        &mut self,
+        option: PressureThicknessEditModeOption,
+    ) -> Command<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.tablet_pressure_thickness_edit_mode = option;
+        self.refresh_dirty_flag();
+        Command::none()
+    }
+
+    #[cfg(feature = "tablet-input")]
+    pub(super) fn handle_tablet_pressure_entry_mode_changed(
+        &mut self,
+        option: PressureThicknessEntryModeOption,
+    ) -> Command<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.tablet_pressure_thickness_entry_mode = option;
         self.refresh_dirty_flag();
         Command::none()
     }

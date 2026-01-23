@@ -24,19 +24,6 @@ fn font_weight_option_handles_custom_values() {
 }
 
 #[test]
-fn board_mode_option_parses_known_values() {
-    assert_eq!(
-        BoardModeOption::from_str("whiteboard"),
-        Some(BoardModeOption::Whiteboard)
-    );
-    assert_eq!(
-        BoardModeOption::from_str("blackboard"),
-        Some(BoardModeOption::Blackboard)
-    );
-    assert_eq!(BoardModeOption::from_str("invalid"), None);
-}
-
-#[test]
 fn status_position_option_round_trips() {
     let option = StatusPositionOption::from_status_position(StatusPosition::BottomRight);
     assert_eq!(option, StatusPositionOption::BottomRight);
