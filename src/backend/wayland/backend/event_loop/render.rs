@@ -60,8 +60,14 @@ pub(super) fn maybe_render(
             "Main loop: needs_redraw=true, frame_callback_pending={}, triggering render",
             state.surface.frame_callback_pending()
         );
+        let render_start = Instant::now();
         match state.render(qh) {
             Ok(keep_rendering) => {
+                let render_duration = render_start.elapsed();
+                if render_duration > Duration::from_millis(5) {
+                    debug!("Render took {:?}", render_duration);
+                }
+
                 // Reset failure counter and record render time.
                 *consecutive_render_failures = 0;
                 *last_render_time = Some(Instant::now());

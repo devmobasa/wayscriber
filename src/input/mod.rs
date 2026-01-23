@@ -4,7 +4,7 @@
 //! It maintains the current tool state, drawing parameters (color, thickness),
 //! and manages the state machine for different drawing modes (idle, drawing, text input).
 
-pub mod board_mode;
+pub mod boards;
 pub mod events;
 pub mod hit_test;
 pub mod modifiers;
@@ -14,7 +14,11 @@ pub mod tablet;
 pub mod tool;
 
 // Re-export commonly used types at module level
-pub use board_mode::BoardMode;
+#[allow(unused_imports)]
+pub use boards::{
+    BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardManager,
+    BoardSpec,
+};
 pub use events::{Key, MouseButton};
 pub use state::{
     ClickHighlightSettings, DrawingState, InputState, TextInputMode, ToolbarDrawerTab, ZoomAction,

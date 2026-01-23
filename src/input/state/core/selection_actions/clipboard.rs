@@ -15,7 +15,7 @@ impl InputState {
         for idx in 0..ids_len {
             let id = self.selected_shape_ids()[idx];
             let original = {
-                let frame = self.canvas_set.active_frame();
+                let frame = self.boards.active_frame();
                 frame.shape(id).cloned()
             };
             let Some(shape) = original else {
@@ -28,12 +28,12 @@ impl InputState {
             let mut cloned_shape = shape.shape.clone();
             Self::translate_shape(&mut cloned_shape, COPY_PASTE_OFFSET, COPY_PASTE_OFFSET);
             let new_id = {
-                let frame = self.canvas_set.active_frame_mut();
+                let frame = self.boards.active_frame_mut();
                 frame.add_shape(cloned_shape)
             };
 
             if let Some((index, stored)) = {
-                let frame = self.canvas_set.active_frame();
+                let frame = self.boards.active_frame();
                 frame
                     .find_index(new_id)
                     .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
@@ -49,10 +49,11 @@ impl InputState {
             return false;
         }
 
-        self.canvas_set.active_frame_mut().push_undo_action(
+        self.boards.active_frame_mut().push_undo_action(
             UndoAction::Create { shapes: created },
             self.undo_stack_limit,
         );
+        self.mark_session_dirty();
         self.needs_redraw = true;
         self.set_selection(new_ids);
         true
@@ -65,7 +66,7 @@ impl InputState {
                 return 0;
             }
 
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             let mut copied = Vec::new();
             for id in ids {
                 if let Some(shape) = frame.shape(*id) {
@@ -114,7 +115,7 @@ impl InputState {
             let mut cloned_shape = shape;
             Self::translate_shape(&mut cloned_shape, offset, offset);
             let new_id = {
-                let frame = self.canvas_set.active_frame_mut();
+                let frame = self.boards.active_frame_mut();
                 frame.try_add_shape_with_id(cloned_shape, self.max_shapes_per_frame)
             };
 
@@ -124,7 +125,7 @@ impl InputState {
             };
 
             if let Some((index, stored)) = {
-                let frame = self.canvas_set.active_frame();
+                let frame = self.boards.active_frame();
                 frame
                     .find_index(new_id)
                     .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
@@ -144,10 +145,11 @@ impl InputState {
         }
 
         let created_len = created.len();
-        self.canvas_set.active_frame_mut().push_undo_action(
+        self.boards.active_frame_mut().push_undo_action(
             UndoAction::Create { shapes: created },
             self.undo_stack_limit,
         );
+        self.mark_session_dirty();
         self.needs_redraw = true;
         self.set_selection(new_ids);
         self.clipboard_paste_offset = offset;

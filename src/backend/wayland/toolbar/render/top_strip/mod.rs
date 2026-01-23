@@ -78,9 +78,6 @@ pub fn render_top_strip(
 ) -> Result<()> {
     draw_panel_background(ctx, width, height);
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(TOP_LABEL_FONT_SIZE);
-
     let mut layout = TopStripLayout::new(ctx, height, snapshot, hits, hover);
 
     let mut x = ToolbarLayoutSpec::TOP_START_X;
@@ -171,6 +168,6 @@ pub fn render_top_strip(
         tooltip: Some("Close".to_string()),
     });
 
-    draw_tooltip(ctx, layout.hits, layout.hover, width, false);
+    draw_tooltip(ctx, layout.hits, layout.hover, width, height, false);
     Ok(())
 }

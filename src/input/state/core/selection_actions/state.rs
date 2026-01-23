@@ -15,7 +15,7 @@ impl InputState {
         for idx in 0..ids_len {
             let id = self.selected_shape_ids()[idx];
             let result = {
-                let frame = self.canvas_set.active_frame_mut();
+                let frame = self.boards.active_frame_mut();
                 if let Some(shape) = frame.shape_mut(id) {
                     if shape.locked == locked {
                         None
@@ -51,15 +51,16 @@ impl InputState {
             return false;
         }
 
-        self.canvas_set
+        self.boards
             .active_frame_mut()
             .push_undo_action(UndoAction::Compound(actions), self.undo_stack_limit);
+        self.mark_session_dirty();
         true
     }
 
     pub(crate) fn clear_all(&mut self) -> bool {
         let removed = {
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             if frame.shapes.is_empty() {
                 return false;
             }
@@ -76,7 +77,7 @@ impl InputState {
         }
 
         {
-            let frame = self.canvas_set.active_frame_mut();
+            let frame = self.boards.active_frame_mut();
             for (index, _) in removed.iter().rev() {
                 frame.shapes.remove(*index);
             }
@@ -89,6 +90,7 @@ impl InputState {
         self.clear_selection();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 

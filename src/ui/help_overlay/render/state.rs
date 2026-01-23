@@ -46,6 +46,7 @@ pub(super) fn build_overlay_layout(
     version_line: &str,
     note_text_base: &str,
     close_hint_text: &str,
+    quick_mode: bool,
 ) -> OverlayLayout {
     let search_query = search_query.trim();
     let search_active = !search_query.is_empty();
@@ -59,11 +60,17 @@ pub(super) fn build_overlay_layout(
         board_enabled,
         capture_enabled,
     );
-    let page_count = if section_sets.page2.is_empty() { 1 } else { 2 };
+    let page_count = if quick_mode || section_sets.page2.is_empty() {
+        1
+    } else {
+        2
+    };
     let page_index = page_index.min(page_count - 1);
-    let nav_title = "Controls";
+    let nav_title = if quick_mode { "Quick Ref" } else { "Controls" };
 
-    let sections = if search_active {
+    let sections = if quick_mode {
+        section_sets.quick
+    } else if search_active {
         filter_sections_for_search(section_sets.all, &search_lower)
     } else if page_index == 0 {
         section_sets.page1

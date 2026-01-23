@@ -29,6 +29,9 @@ pub(super) fn handle_pending_actions(state: &mut WaylandState) {
     if let Some(action) = state.input_state.take_pending_zoom_action() {
         state.handle_zoom_action(action);
     }
+    if let Some(boards) = state.input_state.take_pending_board_config() {
+        state.apply_board_config_update(boards);
+    }
     state.sync_zoom_board_mode();
 
     handle_capture_results(state);

@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn undo_all_and_redo_all_process_entire_stack() {
     let mut state = create_test_input_state();
-    let frame = state.canvas_set.active_frame_mut();
+    let frame = state.boards.active_frame_mut();
 
     // Seed history with two creates
     let first = frame.add_shape(Shape::Rect {
@@ -42,21 +42,21 @@ fn undo_all_and_redo_all_process_entire_stack() {
         state.undo_stack_limit,
     );
 
-    assert_eq!(state.canvas_set.active_frame().undo_stack_len(), 2);
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 2);
 
     state.undo_all_immediate();
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
-    assert_eq!(state.canvas_set.active_frame().redo_stack_len(), 2);
+    assert_eq!(state.boards.active_frame().shapes.len(), 0);
+    assert_eq!(state.boards.active_frame().redo_stack_len(), 2);
 
     state.redo_all_immediate();
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 2);
-    assert_eq!(state.canvas_set.active_frame().undo_stack_len(), 2);
+    assert_eq!(state.boards.active_frame().shapes.len(), 2);
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 2);
 }
 
 #[test]
 fn undo_all_with_delay_respects_history() {
     let mut state = create_test_input_state();
-    let frame = state.canvas_set.active_frame_mut();
+    let frame = state.boards.active_frame_mut();
 
     let id = frame.add_shape(Shape::Line {
         x1: 0,
@@ -77,14 +77,14 @@ fn undo_all_with_delay_respects_history() {
 
     state.start_undo_all_delayed(0);
     state.tick_delayed_history(std::time::Instant::now());
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 0);
-    assert_eq!(state.canvas_set.active_frame().redo_stack_len(), 1);
+    assert_eq!(state.boards.active_frame().shapes.len(), 0);
+    assert_eq!(state.boards.active_frame().redo_stack_len(), 1);
 }
 
 #[test]
 fn redo_all_with_delay_replays_history() {
     let mut state = create_test_input_state();
-    let frame = state.canvas_set.active_frame_mut();
+    let frame = state.boards.active_frame_mut();
 
     let id = frame.add_shape(Shape::Line {
         x1: 0,
@@ -104,10 +104,10 @@ fn redo_all_with_delay_replays_history() {
     );
 
     state.undo_all_immediate();
-    assert_eq!(state.canvas_set.active_frame().redo_stack_len(), 1);
+    assert_eq!(state.boards.active_frame().redo_stack_len(), 1);
 
     state.start_redo_all_delayed(0);
     state.tick_delayed_history(std::time::Instant::now());
-    assert_eq!(state.canvas_set.active_frame().shapes.len(), 1);
-    assert_eq!(state.canvas_set.active_frame().undo_stack_len(), 1);
+    assert_eq!(state.boards.active_frame().shapes.len(), 1);
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 1);
 }

@@ -35,6 +35,7 @@ impl InputState {
 
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
@@ -47,6 +48,7 @@ impl InputState {
         self.marker_opacity = clamped;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
@@ -82,6 +84,7 @@ impl InputState {
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.sync_highlight_color();
+        self.mark_session_dirty();
         true
     }
 
@@ -96,6 +99,7 @@ impl InputState {
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
@@ -109,6 +113,7 @@ impl InputState {
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
@@ -120,6 +125,7 @@ impl InputState {
         self.eraser_mode = mode;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
@@ -146,6 +152,7 @@ impl InputState {
         self.font_descriptor = descriptor;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
@@ -160,6 +167,7 @@ impl InputState {
         self.current_font_size = clamped;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
@@ -170,6 +178,7 @@ impl InputState {
         }
         self.fill_enabled = enabled;
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 }

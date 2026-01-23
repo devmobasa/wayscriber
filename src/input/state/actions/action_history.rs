@@ -6,7 +6,7 @@ impl InputState {
     pub(super) fn handle_history_action(&mut self, action: Action) -> bool {
         match action {
             Action::Undo => {
-                if let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
+                if let Some(action) = self.boards.active_frame_mut().undo_last() {
                     self.apply_action_side_effects(&action);
                 } else {
                     // Nothing to undo - show blocked feedback
@@ -15,7 +15,7 @@ impl InputState {
                 true
             }
             Action::Redo => {
-                if let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
+                if let Some(action) = self.boards.active_frame_mut().redo_last() {
                     self.apply_action_side_effects(&action);
                 } else {
                     // Nothing to redo - show blocked feedback
@@ -44,13 +44,13 @@ impl InputState {
     }
 
     pub(crate) fn undo_all_immediate(&mut self) {
-        while let Some(action) = self.canvas_set.active_frame_mut().undo_last() {
+        while let Some(action) = self.boards.active_frame_mut().undo_last() {
             self.apply_action_side_effects(&action);
         }
     }
 
     pub(crate) fn redo_all_immediate(&mut self) {
-        while let Some(action) = self.canvas_set.active_frame_mut().redo_last() {
+        while let Some(action) = self.boards.active_frame_mut().redo_last() {
             self.apply_action_side_effects(&action);
         }
     }

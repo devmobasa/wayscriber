@@ -6,6 +6,9 @@ use wayscriber::config::Config;
 impl ConfigDraft {
     pub(super) fn apply_ui(&self, config: &mut Config, errors: &mut Vec<FormError>) {
         config.ui.show_status_bar = self.ui_show_status_bar;
+        config.ui.show_status_board_badge = self.ui_show_status_board_badge;
+        config.ui.show_status_page_badge = self.ui_show_status_page_badge;
+        config.ui.show_floating_badge_always = self.ui_show_page_badge_with_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
         config.ui.context_menu.enabled = self.ui_context_menu_enabled;
         let preferred_output = self.ui_preferred_output.trim();
@@ -27,6 +30,7 @@ impl ConfigDraft {
         config.ui.toolbar.show_actions_advanced = self.ui_toolbar_show_actions_advanced;
         config.ui.toolbar.show_zoom_actions = self.ui_toolbar_show_zoom_actions;
         config.ui.toolbar.show_pages_section = self.ui_toolbar_show_pages_section;
+        config.ui.toolbar.show_boards_section = self.ui_toolbar_show_boards_section;
         config.ui.toolbar.show_step_section = self.ui_toolbar_show_step_section;
         config.ui.toolbar.show_text_controls = self.ui_toolbar_show_text_controls;
         config.ui.toolbar.show_settings_section = self.ui_toolbar_show_settings_section;

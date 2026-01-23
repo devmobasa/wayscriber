@@ -41,7 +41,7 @@ impl InputState {
 
         let panel = (|| {
             let ids = self.selected_shape_ids();
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             let anchor_rect = self.selection_bounding_box(ids);
             let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
             let entries = self.build_selection_property_entries(ids);
@@ -123,7 +123,7 @@ impl InputState {
             }
 
             let entries = self.build_selection_property_entries(ids);
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             let anchor_rect = self.selection_bounding_box(ids);
             let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
 

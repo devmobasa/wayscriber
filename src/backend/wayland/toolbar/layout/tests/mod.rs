@@ -1,6 +1,6 @@
 use super::super::events::HitKind;
 use super::*;
-use crate::config::{BoardConfig, KeybindingsConfig, PresenterModeConfig};
+use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{ClickHighlightSettings, EraserMode, InputState};
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
@@ -33,7 +33,7 @@ fn create_test_input_state() -> InputState {
         30.0,
         false,
         true,
-        BoardConfig::default(),
+        BoardsConfig::default(),
         action_map,
         usize::MAX,
         ClickHighlightSettings::disabled(),
@@ -59,11 +59,11 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (810, 80));
+    assert_eq!(top_size(&snapshot), (824, 80));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (934, 56));
+    assert_eq!(top_size(&snapshot), (948, 56));
 }
 
 #[test]

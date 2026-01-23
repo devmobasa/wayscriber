@@ -1,6 +1,5 @@
 use super::super::base::InputState;
 use crate::draw::{ArrowLabel, Shape};
-use crate::input::BoardMode;
 
 const ARROW_LABEL_FONT_SCALE: f64 = 0.6;
 const ARROW_LABEL_MIN_SIZE: f64 = 10.0;
@@ -42,20 +41,14 @@ impl InputState {
         }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+        self.mark_session_dirty();
         true
     }
 
     pub(crate) fn sync_arrow_label_counter(&mut self) {
         let mut max_label = 0;
-        for mode in [
-            BoardMode::Transparent,
-            BoardMode::Whiteboard,
-            BoardMode::Blackboard,
-        ] {
-            let Some(pages) = self.canvas_set.pages(mode) else {
-                continue;
-            };
-            for frame in pages.pages() {
+        for board in self.boards.board_states() {
+            for frame in board.pages.pages() {
                 for drawn in &frame.shapes {
                     if let Shape::Arrow {
                         label: Some(label), ..

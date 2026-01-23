@@ -1,17 +1,21 @@
 use crate::draw::{Color, EraserKind, Frame};
-use crate::input::{EraserMode, InputState, Tool, board_mode::BoardMode};
+use crate::input::{EraserMode, InputState, Tool};
 use serde::{Deserialize, Serialize};
 
-pub(super) const CURRENT_VERSION: u32 = 4;
+pub(super) const CURRENT_VERSION: u32 = 5;
 
 /// Captured state suitable for serialisation or restoration.
 #[derive(Debug, Clone)]
 pub struct SessionSnapshot {
-    pub active_mode: BoardMode,
-    pub transparent: Option<BoardPagesSnapshot>,
-    pub whiteboard: Option<BoardPagesSnapshot>,
-    pub blackboard: Option<BoardPagesSnapshot>,
+    pub active_board_id: String,
+    pub boards: Vec<BoardSnapshot>,
     pub tool_state: Option<ToolStateSnapshot>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoardSnapshot {
+    pub id: String,
+    pub pages: BoardPagesSnapshot,
 }
 
 #[derive(Debug, Clone)]
@@ -31,14 +35,9 @@ impl BoardPagesSnapshot {
 
 impl SessionSnapshot {
     pub(super) fn is_empty(&self) -> bool {
-        let empty_pages = |pages: &Option<BoardPagesSnapshot>| {
-            pages
-                .as_ref()
-                .is_none_or(|data| !data.has_persistable_data())
-        };
-        empty_pages(&self.transparent)
-            && empty_pages(&self.whiteboard)
-            && empty_pages(&self.blackboard)
+        self.boards
+            .iter()
+            .all(|board| !board.pages.has_persistable_data())
     }
 }
 
@@ -111,7 +110,12 @@ pub(super) struct SessionFile {
     #[serde(default = "default_file_version")]
     pub version: u32,
     pub last_modified: String,
-    pub active_mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_board_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub boards: Vec<BoardFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transparent: Option<Frame>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -132,6 +136,13 @@ pub(super) struct SessionFile {
     pub blackboard_active_page: Option<usize>,
     #[serde(default)]
     pub tool_state: Option<ToolStateSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(super) struct BoardFile {
+    pub id: String,
+    pub pages: Vec<Frame>,
+    pub active_page: usize,
 }
 
 fn default_file_version() -> u32 {

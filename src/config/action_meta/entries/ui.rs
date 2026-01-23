@@ -12,6 +12,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ToggleQuickHelp,
+        "Quick Reference",
+        None,
+        "Show quick reference shortcuts",
+        UI,
+        true,
+        true,
+        false
+    ),
+    meta!(
         ToggleToolbar,
         "Toggle Toolbar",
         None,

@@ -11,6 +11,10 @@ impl InputState {
                 self.toggle_help_overlay();
                 true
             }
+            Action::ToggleQuickHelp => {
+                self.toggle_quick_help();
+                true
+            }
             Action::ToggleStatusBar => {
                 if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
                     return true;
@@ -18,6 +22,7 @@ impl InputState {
                 self.show_status_bar = !self.show_status_bar;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
+                self.mark_session_dirty();
                 true
             }
             Action::ToggleClickHighlight => {

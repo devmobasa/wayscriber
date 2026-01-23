@@ -48,6 +48,7 @@ impl InputState {
         show_actions_advanced: bool,
         show_zoom_actions: bool,
         show_pages_section: bool,
+        show_boards_section: bool,
         show_presets: bool,
         show_step_section: bool,
         show_text_controls: bool,
@@ -70,6 +71,7 @@ impl InputState {
         self.show_actions_advanced = show_actions_advanced;
         self.show_zoom_actions = show_zoom_actions;
         self.show_pages_section = show_pages_section;
+        self.show_boards_section = show_boards_section;
         self.show_presets = show_presets;
         self.show_step_section = show_step_section;
         self.show_text_controls = show_text_controls;
@@ -94,6 +96,9 @@ impl InputState {
         }
         if let Some(value) = overrides.show_pages_section {
             self.show_pages_section = value;
+        }
+        if let Some(value) = overrides.show_boards_section {
+            self.show_boards_section = value;
         }
         if let Some(value) = overrides.show_presets {
             self.show_presets = value;
@@ -124,6 +129,9 @@ impl InputState {
         self.show_pages_section = overrides
             .show_pages_section
             .unwrap_or(defaults.show_pages_section);
+        self.show_boards_section = overrides
+            .show_boards_section
+            .unwrap_or(defaults.show_boards_section);
         self.show_presets = overrides.show_presets.unwrap_or(defaults.show_presets);
         self.show_step_section = overrides
             .show_step_section

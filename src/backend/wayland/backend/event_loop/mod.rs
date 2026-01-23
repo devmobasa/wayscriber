@@ -1,6 +1,6 @@
 use log::{info, warn};
 use std::sync::atomic::Ordering;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use wayland_client::{Connection, EventQueue};
 
 use super::super::state::WaylandState;
@@ -14,6 +14,15 @@ mod session_save;
 
 pub(super) struct EventLoopOutcome {
     pub(super) loop_error: Option<anyhow::Error>,
+}
+
+fn min_timeout(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
 }
 
 pub(super) fn run_event_loop(
@@ -72,9 +81,11 @@ pub(super) fn run_event_loop(
         let should_block = capture_active
             || !state.surface.is_configured()
             || (vsync_enabled && frame_callback_pending);
-        let animation_timeout = state.ui_animation_timeout(Instant::now());
+        let now = Instant::now();
+        let animation_timeout = state.ui_animation_timeout(now);
+        let autosave_timeout = session_save::autosave_timeout(state, now);
         let timeout = if should_block {
-            None
+            autosave_timeout
         } else if !vsync_enabled && state.input_state.needs_redraw {
             // When VSync is off and we need to redraw, wake up when frame budget allows
             let frame_cap_timeout = render::frame_rate_cap_timeout(
@@ -83,13 +94,14 @@ pub(super) fn run_event_loop(
             );
             // Use the shorter of frame cap timeout and animation timeout.
             // If unlimited FPS (None) and no animation, use zero to avoid blocking.
-            match (frame_cap_timeout, animation_timeout) {
+            let merged = match (frame_cap_timeout, animation_timeout) {
                 (Some(fc), Some(anim)) => Some(fc.min(anim)),
                 (Some(fc), None) => Some(fc),
-                (None, _) => Some(std::time::Duration::ZERO),
-            }
+                (None, _) => Some(Duration::ZERO),
+            };
+            min_timeout(merged, autosave_timeout)
         } else {
-            animation_timeout
+            min_timeout(animation_timeout, autosave_timeout)
         };
 
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
@@ -126,6 +138,10 @@ pub(super) fn run_event_loop(
         capture::flush_if_capture_active(conn, capture_active);
         capture::handle_pending_actions(state);
         state.apply_onboarding_hints();
+
+        if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
+            warn!("Failed to autosave session state: {}", err);
+        }
 
         if let Some(err) = render::maybe_render(
             state,

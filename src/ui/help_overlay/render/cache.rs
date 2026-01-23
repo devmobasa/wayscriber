@@ -57,6 +57,7 @@ struct LayoutCacheKey {
     context_filter: bool,
     board_enabled: bool,
     capture_enabled: bool,
+    quick_mode: bool,
 }
 
 struct CachedLayout {
@@ -90,6 +91,7 @@ pub(super) fn get_or_build_overlay_layout(
     version_line: &str,
     note_text_base: &str,
     close_hint_text: &str,
+    quick_mode: bool,
 ) -> OverlayLayout {
     let key = LayoutCacheKey {
         style: StyleKey::from_style(style),
@@ -102,6 +104,7 @@ pub(super) fn get_or_build_overlay_layout(
         context_filter,
         board_enabled,
         capture_enabled,
+        quick_mode,
     };
 
     LAYOUT_CACHE.with(|cache| {
@@ -133,6 +136,7 @@ pub(super) fn get_or_build_overlay_layout(
             version_line,
             note_text_base,
             close_hint_text,
+            quick_mode,
         );
 
         // Store in cache

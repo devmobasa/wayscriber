@@ -4,7 +4,7 @@ use crate::draw::Shape;
 use crate::input::events::Key;
 use crate::input::state::{DrawingState, InputState, TextInputMode};
 
-use super::bindings::key_to_action_label;
+use super::bindings::{fallback_unshifted_label, key_to_action_label};
 
 const MAX_TEXT_LENGTH: usize = 10_000;
 
@@ -36,18 +36,28 @@ impl InputState {
             _ => self.modifiers.ctrl || self.modifiers.alt,
         };
 
-        if should_check_actions
-            && let Some(key_str) = key_to_action_label(key)
-            && let Some(action) = self.find_action(&key_str)
-        {
-            if action == crate::config::Action::HoldToDraw {
-                self.add_hold_to_draw_key(&key_str);
+        if should_check_actions && let Some(key_str) = key_to_action_label(key) {
+            if let Some(action) = self.find_action(&key_str) {
+                // Actions work in text mode.
+                // Exit action has special logic in handle_action.
+                if action == crate::config::Action::HoldToDraw {
+                    self.add_hold_to_draw_key(&key_str);
+                    return;
+                }
+                self.handle_action(action);
                 return;
             }
-            // Actions work in text mode.
-            // Exit action has special logic in handle_action.
-            self.handle_action(action);
-            return;
+            if self.modifiers.shift
+                && let Some(fallback) = fallback_unshifted_label(&key_str)
+                && let Some(action) = self.find_action(fallback)
+            {
+                if action == crate::config::Action::HoldToDraw {
+                    self.add_hold_to_draw_key(fallback);
+                    return;
+                }
+                self.handle_action(action);
+                return;
+            }
         }
 
         // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
@@ -104,12 +114,13 @@ impl InputState {
             }
 
             let added = self
-                .canvas_set
+                .boards
                 .active_frame_mut()
                 .try_add_shape(shape, self.max_shapes_per_frame);
             if added {
                 self.dirty_tracker.mark_optional_rect(bounds);
                 self.needs_redraw = true;
+                self.mark_session_dirty();
             } else {
                 warn!(
                     "Shape limit ({}) reached; new text not added",

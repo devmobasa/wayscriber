@@ -2,8 +2,6 @@ mod env;
 mod session;
 mod usage;
 
-use clap::Parser;
-
 use crate::backend::ExitAfterCaptureMode;
 use crate::cli::Cli;
 use crate::session_override::set_runtime_session_override;
@@ -11,8 +9,7 @@ use env::env_flag_enabled;
 use session::run_session_cli_commands;
 use usage::{log_overlay_controls, print_usage};
 
-pub fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+pub fn run(cli: Cli) -> anyhow::Result<()> {
     let session_override = if cli.resume_session {
         Some(true)
     } else if cli.no_resume_session {

@@ -1,5 +1,6 @@
-use super::super::primitives::{draw_rounded_rect, fallback_text_extents, text_extents_for};
+use super::super::primitives::draw_rounded_rect;
 use crate::input::InputState;
+use crate::ui_text::{UiTextStyle, text_layout};
 
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
@@ -7,13 +8,18 @@ pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_heig
     let padding = 12.0;
     let radius = 8.0;
     let font_size = 16.0;
-
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(font_size);
-
-    let extents = ctx
-        .text_extents(label)
-        .unwrap_or_else(|_| fallback_text_extents(font_size, label));
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        label,
+        None,
+    );
+    let extents = layout.ink_extents();
 
     let width = extents.width() + padding * 1.4;
     let height = extents.height() + padding;
@@ -28,8 +34,7 @@ pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_heig
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
-    let _ = ctx.show_text(label);
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
 
 /// Render a small badge indicating zoom mode (visible even when status bar is hidden).
@@ -49,13 +54,18 @@ pub fn render_zoom_badge(
     let padding = 12.0;
     let radius = 8.0;
     let font_size = 15.0;
-
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(font_size);
-
-    let extents = ctx
-        .text_extents(&label)
-        .unwrap_or_else(|_| fallback_text_extents(font_size, &label));
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        &label,
+        None,
+    );
+    let extents = layout.ink_extents();
 
     let width = extents.width() + padding * 1.4;
     let height = extents.height() + padding;
@@ -70,35 +80,71 @@ pub fn render_zoom_badge(
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
-    let _ = ctx.show_text(&label);
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
 
 /// Render a small badge indicating the current page (visible even when status bar is hidden).
+#[allow(clippy::too_many_arguments)]
 pub fn render_page_badge(
     ctx: &cairo::Context,
     _screen_width: u32,
     _screen_height: u32,
+    board_index: usize,
+    board_count: usize,
+    board_name: &str,
     page_index: usize,
     page_count: usize,
 ) {
-    let label = format!("Page {}/{}", page_index + 1, page_count.max(1));
+    let truncated_name = crate::util::truncate_with_ellipsis(board_name, 20);
+    let board_label = if !truncated_name.trim().is_empty() {
+        if board_count > 1 {
+            Some(format!(
+                "Board {}/{}: {}",
+                board_index + 1,
+                board_count.max(1),
+                truncated_name
+            ))
+        } else {
+            Some(format!("Board: {}", truncated_name))
+        }
+    } else if board_count > 1 {
+        Some(format!("Board {}/{}", board_index + 1, board_count.max(1)))
+    } else {
+        None
+    };
+    let page_label = if page_count > 1 {
+        Some(format!("Page {}/{}", page_index + 1, page_count.max(1)))
+    } else {
+        None
+    };
+    let label = match (board_label, page_label) {
+        (Some(board), Some(page)) => format!("{board} | {page}"),
+        (Some(board), None) => board,
+        (None, Some(page)) => page,
+        (None, None) => return,
+    };
     let padding = 12.0;
+    let edge_padding = 4.0;
     let radius = 8.0;
     let font_size = 15.0;
-
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(font_size);
-
-    let extents = ctx
-        .text_extents(&label)
-        .unwrap_or_else(|_| fallback_text_extents(font_size, &label));
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        &label,
+        None,
+    );
+    let extents = layout.ink_extents();
 
     let width = extents.width() + padding * 1.4;
     let height = extents.height() + padding;
 
     let x = padding;
-    let y = padding + height;
+    let y = edge_padding + height;
 
     // Background with a neutral cool tone.
     ctx.set_source_rgba(0.2, 0.32, 0.45, 0.92);
@@ -107,8 +153,7 @@ pub fn render_page_badge(
 
     // Text
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    ctx.move_to(x + (padding * 0.7), y - (padding * 0.35));
-    let _ = ctx.show_text(&label);
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.5));
 }
 
 /// Render the click-through escape hatch indicator.
@@ -145,17 +190,20 @@ pub fn render_clickthrough_hotspot(ctx: &cairo::Context, input_state: &InputStat
 
     let label = "CT";
     let font_size = (height * 0.45).clamp(10.0, 14.0);
-    let extents = text_extents_for(
+    let layout = text_layout(
         ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        font_size,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
         label,
+        None,
     );
+    let extents = layout.ink_extents();
     let text_x = x + (width - extents.width()) / 2.0 - extents.x_bearing();
     let text_y = y + (height - extents.height()) / 2.0 - extents.y_bearing();
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(label);
+    layout.show_at_baseline(ctx, text_x, text_y);
 }

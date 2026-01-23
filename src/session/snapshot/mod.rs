@@ -14,4 +14,6 @@ pub use capture::snapshot_from_input;
 pub use load::load_snapshot;
 pub(crate) use load::load_snapshot_inner;
 pub use save::save_snapshot;
+#[allow(unused_imports)]
+pub use types::BoardSnapshot;
 pub use types::{BoardPagesSnapshot, SessionSnapshot, ToolStateSnapshot};

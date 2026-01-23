@@ -60,7 +60,7 @@ impl InputState {
             let selection = self.selected_shape_ids().to_vec();
             focus_edit = selection.len() == 1
                 && self
-                    .canvas_set
+                    .boards
                     .active_frame()
                     .shape(selection[0])
                     .map(|shape| {
@@ -105,6 +105,30 @@ impl InputState {
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
+        if self.is_board_picker_open() {
+            self.update_pointer_position(x, y);
+            match button {
+                MouseButton::Left => {
+                    if self.board_picker_contains_point(x, y) {
+                        if let Some(row) = self.board_picker_handle_index_at(x, y) {
+                            self.board_picker_start_drag(row);
+                            return;
+                        }
+                        if self.board_picker_index_at(x, y).is_some() {
+                            self.update_board_picker_hover_from_pointer(x, y);
+                        }
+                    } else {
+                        self.close_board_picker();
+                    }
+                }
+                MouseButton::Right => {
+                    self.close_board_picker();
+                }
+                MouseButton::Middle => {}
+            }
+            return;
+        }
+
         if self.is_properties_panel_open() {
             self.update_pointer_position(x, y);
             if self.properties_panel_layout().is_none() {
@@ -156,7 +180,7 @@ impl InputState {
                             self.modifiers.alt || self.active_tool() == Tool::Select;
                         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
                             let snapshot = {
-                                let frame = self.canvas_set.active_frame();
+                                let frame = self.boards.active_frame();
                                 frame.shape(shape_id).map(|shape| ShapeSnapshot {
                                     shape: shape.shape.clone(),
                                     locked: shape.locked,
@@ -181,7 +205,7 @@ impl InputState {
 
                         if !selection_click && let Some(hit_id) = self.hit_test_at(x, y) {
                             let is_text = self
-                                .canvas_set
+                                .boards
                                 .active_frame()
                                 .shape(hit_id)
                                 .map(|shape| {
@@ -243,6 +267,7 @@ impl InputState {
                                 start_x: x,
                                 start_y: y,
                                 points: vec![(x, y)],
+                                point_thicknesses: vec![self.current_thickness as f32],
                             };
                             self.last_provisional_bounds = None;
                             self.update_provisional_dirty(x, y);

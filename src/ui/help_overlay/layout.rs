@@ -11,26 +11,6 @@ pub(crate) struct GridLayout {
     pub(crate) grid_height: f64,
 }
 
-fn grid_width_for_columns(sections: &[MeasuredSection], columns: usize, column_gap: f64) -> f64 {
-    if columns == 0 || sections.is_empty() {
-        return 0.0;
-    }
-
-    let mut max_width: f64 = 0.0;
-    for chunk in sections.chunks(columns) {
-        let mut width = 0.0;
-        for (index, section) in chunk.iter().enumerate() {
-            if index > 0 {
-                width += column_gap;
-            }
-            width += section.width;
-        }
-        max_width = max_width.max(width);
-    }
-
-    max_width
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn measure_sections(
     ctx: &cairo::Context,
@@ -156,34 +136,40 @@ pub(crate) fn build_grid(
     column_gap: f64,
     row_gap: f64,
 ) -> GridLayout {
-    let max_columns = measured_sections.len().clamp(1, 3);
-    let base_columns = if screen_width < 1200 {
+    let max_columns = if screen_width < 1200 {
         1
     } else if screen_width > 1920 {
         3
     } else {
         2
     };
-    let mut columns = base_columns.min(max_columns).max(1);
-    while columns > 1 {
-        let grid_width = grid_width_for_columns(&measured_sections, columns, column_gap);
-        if grid_width <= max_content_width {
-            break;
-        }
-        columns -= 1;
-    }
+    let max_columns = max_columns.min(measured_sections.len().max(1));
 
     let mut rows: Vec<Vec<MeasuredSection>> = Vec::new();
     if measured_sections.is_empty() {
         rows.push(Vec::new());
     } else {
         let mut current_row = Vec::new();
+        let mut current_width = 0.0;
         for section in measured_sections {
-            current_row.push(section);
-            if current_row.len() == columns {
+            let next_width = if current_row.is_empty() {
+                section.width
+            } else {
+                current_width + column_gap + section.width
+            };
+            if (!current_row.is_empty() && next_width > max_content_width)
+                || current_row.len() >= max_columns
+            {
                 rows.push(current_row);
                 current_row = Vec::new();
+                current_width = 0.0;
             }
+            if current_row.is_empty() {
+                current_width = section.width;
+            } else {
+                current_width += column_gap + section.width;
+            }
+            current_row.push(section);
         }
         if !current_row.is_empty() {
             rows.push(current_row);

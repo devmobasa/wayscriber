@@ -1,9 +1,6 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
-pub(crate) fn fallback_text_extents(font_size: f64, text: &str) -> cairo::TextExtents {
-    let width = text.len() as f64 * font_size * 0.5;
-    cairo::TextExtents::new(0.0, -font_size, width, font_size, width, 0.0)
-}
+use crate::ui_text::{UiTextStyle, text_layout};
 
 pub(crate) fn text_extents_for(
     ctx: &cairo::Context,
@@ -13,19 +10,18 @@ pub(crate) fn text_extents_for(
     size: f64,
     text: &str,
 ) -> cairo::TextExtents {
-    ctx.select_font_face(family, slant, weight);
-    ctx.set_font_size(size);
-    match ctx.text_extents(text) {
-        Ok(extents) => extents,
-        Err(err) => {
-            log::warn!(
-                "Failed to measure text '{}': {}, using fallback metrics",
-                text,
-                err
-            );
-            fallback_text_extents(size, text)
-        }
-    }
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family,
+            slant,
+            weight,
+            size,
+        },
+        text,
+        None,
+    );
+    layout.ink_extents().to_cairo()
 }
 
 pub(crate) fn draw_rounded_rect(

@@ -1,4 +1,10 @@
 use crate::input::InputState;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
+
+use super::constants::{
+    self, BG_HOVER, BORDER_FOCUS, BORDER_PROPERTIES, DIVIDER, EMPTY_PROPERTIES, FOCUS_RING_WIDTH,
+    PANEL_BG_PROPERTIES, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
+};
 
 pub fn render_properties_panel(
     ctx: &cairo::Context,
@@ -18,9 +24,21 @@ pub fn render_properties_panel(
     let title_font_size = 15.0;
     let body_font_size = 13.0;
     let line_height = 18.0;
+    let title_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: title_font_size,
+    };
+    let body_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: body_font_size,
+    };
 
     let _ = ctx.save();
-    ctx.set_source_rgba(0.08, 0.11, 0.17, 0.92);
+    constants::set_color(ctx, PANEL_BG_PROPERTIES);
     ctx.rectangle(
         layout.origin_x,
         layout.origin_y,
@@ -29,7 +47,7 @@ pub fn render_properties_panel(
     );
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(0.18, 0.22, 0.3, 0.95);
+    constants::set_color(ctx, BORDER_PROPERTIES);
     ctx.set_line_width(1.0);
     ctx.rectangle(
         layout.origin_x,
@@ -39,17 +57,21 @@ pub fn render_properties_panel(
     );
     let _ = ctx.stroke();
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(title_font_size);
     if panel.multiple_selection {
-        ctx.set_source_rgba(0.88, 0.91, 0.97, 1.0);
+        constants::set_color(ctx, TEXT_SECONDARY);
     } else {
-        ctx.set_source_rgba(0.93, 0.95, 0.99, 1.0);
+        constants::set_color(ctx, TEXT_PRIMARY);
     }
-    ctx.move_to(layout.label_x, layout.title_baseline_y);
-    let _ = ctx.show_text(&panel.title);
+    draw_text_baseline(
+        ctx,
+        title_style,
+        &panel.title,
+        layout.label_x,
+        layout.title_baseline_y,
+        None,
+    );
 
-    ctx.set_source_rgba(0.35, 0.4, 0.5, 0.9);
+    constants::set_color(ctx, DIVIDER);
     ctx.move_to(layout.label_x, layout.title_baseline_y + 4.0);
     ctx.line_to(
         layout.origin_x + layout.width - layout.padding_x,
@@ -57,24 +79,46 @@ pub fn render_properties_panel(
     );
     let _ = ctx.stroke();
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(body_font_size);
-    ctx.set_source_rgba(0.86, 0.89, 0.95, 1.0);
+    // Show empty state if no content
+    if panel.lines.is_empty() && panel.entries.is_empty() {
+        let empty_style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Italic,
+            weight: cairo::FontWeight::Normal,
+            size: body_font_size,
+        };
+        constants::set_color(ctx, TEXT_TERTIARY);
+        let empty_y = layout.info_start_y + line_height;
+        draw_text_baseline(
+            ctx,
+            empty_style,
+            EMPTY_PROPERTIES,
+            layout.label_x,
+            empty_y,
+            None,
+        );
+        let _ = ctx.restore();
+        return;
+    }
+
+    constants::set_color(ctx, TEXT_SECONDARY);
     let mut text_y = layout.info_start_y;
     for line in &panel.lines {
-        ctx.move_to(layout.label_x, text_y);
-        let _ = ctx.show_text(line);
+        draw_text_baseline(ctx, body_style, line, layout.label_x, text_y, None);
         text_y += line_height;
     }
 
     if !panel.entries.is_empty() {
-        let active_index = panel.hover_index.or(panel.keyboard_focus);
         for (index, entry) in panel.entries.iter().enumerate() {
             let row_top = layout.entry_start_y + layout.entry_row_height * index as f64;
             let row_center = row_top + layout.entry_row_height * 0.5;
 
-            if active_index == Some(index) && !entry.disabled {
-                ctx.set_source_rgba(0.25, 0.32, 0.45, 0.9);
+            // Distinguish hover from keyboard focus
+            let is_hovered = panel.hover_index == Some(index) && !entry.disabled;
+            let is_focused = panel.keyboard_focus == Some(index) && !entry.disabled;
+
+            if is_hovered {
+                constants::set_color(ctx, BG_HOVER);
                 ctx.rectangle(
                     layout.origin_x,
                     row_top,
@@ -84,18 +128,44 @@ pub fn render_properties_panel(
                 let _ = ctx.fill();
             }
 
+            if is_focused && !is_hovered {
+                // Draw focus ring for keyboard navigation
+                constants::set_color(ctx, BORDER_FOCUS);
+                ctx.set_line_width(FOCUS_RING_WIDTH);
+                ctx.rectangle(
+                    layout.origin_x + 2.0,
+                    row_top + 1.0,
+                    layout.width - 4.0,
+                    layout.entry_row_height - 2.0,
+                );
+                let _ = ctx.stroke();
+            }
+
             let (text_r, text_g, text_b, text_a) = if entry.disabled {
-                (0.6, 0.64, 0.68, 0.5)
+                TEXT_DISABLED
             } else {
-                (0.9, 0.92, 0.97, 1.0)
+                TEXT_PRIMARY
             };
             ctx.set_source_rgba(text_r, text_g, text_b, text_a);
-            ctx.move_to(layout.label_x, row_center + body_font_size * 0.35);
-            let _ = ctx.show_text(&entry.label);
+            draw_text_baseline(
+                ctx,
+                body_style,
+                &entry.label,
+                layout.label_x,
+                row_center + body_font_size * 0.35,
+                None,
+            );
 
-            ctx.set_source_rgba(0.7, 0.73, 0.78, text_a);
-            ctx.move_to(layout.value_x, row_center + body_font_size * 0.35);
-            let _ = ctx.show_text(&entry.value);
+            let value_color = constants::with_alpha(TEXT_HINT, text_a);
+            constants::set_color(ctx, value_color);
+            draw_text_baseline(
+                ctx,
+                body_style,
+                &entry.value,
+                layout.value_x,
+                row_center + body_font_size * 0.35,
+                None,
+            );
         }
     }
 

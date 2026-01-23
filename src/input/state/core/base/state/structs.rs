@@ -1,4 +1,5 @@
 use super::super::super::{
+    board_picker::{BoardPickerDrag, BoardPickerLayout, BoardPickerState},
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
@@ -6,12 +7,16 @@ use super::super::super::{
 };
 use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
-    PendingClipboardFallback, PresetAction, PresetFeedbackState, SelectionAxis, TextClickState,
-    TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
+    PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
+    PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
+    StatusChangeHighlight, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState,
+    ZoomAction,
 };
-use crate::config::{Action, BoardConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
+use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{CanvasSet, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
+use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
+use crate::input::BoardManager;
+use crate::input::boards::BoardState;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     modifiers::Modifiers,
@@ -20,6 +25,7 @@ use crate::input::{
 use crate::util::Rect;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PresenterRestore {
@@ -33,12 +39,20 @@ pub(crate) struct PresenterRestore {
 }
 
 pub struct InputState {
-    /// Multi-frame canvas management (transparent, whiteboard, blackboard)
-    pub canvas_set: CanvasSet,
+    /// Multi-board canvas management
+    pub boards: BoardManager,
     /// Current drawing color (changed with color keys: R, G, B, etc.)
     pub current_color: Color,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
+    /// Threshold (in pixels) before storing pressure-sensitive strokes.
+    pub(crate) pressure_variation_threshold: f64,
+    /// How selection thickness edits apply to pressure-sensitive strokes.
+    pub(crate) pressure_thickness_edit_mode: PressureThicknessEditMode,
+    /// When to show a thickness entry for pressure-sensitive selections.
+    pub(crate) pressure_thickness_entry_mode: PressureThicknessEntryMode,
+    /// Per-step scale factor when using scale mode for pressure thickness edits.
+    pub(crate) pressure_thickness_scale_step: f64,
     /// Current eraser size in pixels
     pub eraser_size: f64,
     /// Current eraser brush shape
@@ -75,6 +89,8 @@ pub struct InputState {
     pub should_exit: bool,
     /// Whether the display needs to be redrawn
     pub needs_redraw: bool,
+    /// Whether session persistence should capture changes (cleared after autosave check)
+    pub(crate) session_dirty: bool,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
     /// Active help overlay page index
@@ -85,6 +101,10 @@ pub struct InputState {
     pub help_overlay_scroll: f64,
     /// Max scrollable height for help overlay (pixels)
     pub help_overlay_scroll_max: f64,
+    /// Board picker quick search query
+    pub board_picker_search: String,
+    /// Time of last board picker search input
+    pub board_picker_search_last_input: Option<Instant>,
     /// Whether the command palette is currently visible
     pub command_palette_open: bool,
     /// Current command palette search query
@@ -95,6 +115,12 @@ pub struct InputState {
     pub command_palette_scroll: usize,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
+    /// Whether to show the board label in the status bar
+    pub show_status_board_badge: bool,
+    /// Whether to show the page counter in the status bar
+    pub show_status_page_badge: bool,
+    /// Whether to show the board/page badge when the status bar is visible
+    pub show_floating_badge_always: bool,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration
@@ -131,8 +157,14 @@ pub struct InputState {
     pub screen_height: u32,
     /// Previous color before entering board mode (for restoration)
     pub board_previous_color: Option<Color>,
-    /// Board mode configuration
-    pub board_config: BoardConfig,
+    /// Most recently used board ids (most recent first)
+    pub board_recent: Vec<String>,
+    /// Pending confirmation for deleting a board
+    pub(in crate::input::state::core) pending_board_delete: Option<PendingBoardDelete>,
+    /// Pending confirmation for deleting a page
+    pub(in crate::input::state::core) pending_page_delete: Option<PendingPageDelete>,
+    /// Recently deleted pages (for undo), with expiration timestamps
+    pub(in crate::input::state::core) deleted_pages: Vec<(String, crate::draw::Frame, Instant)>,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)
@@ -167,6 +199,10 @@ pub struct InputState {
     pub context_menu_state: ContextMenuState,
     /// Whether context menu interactions are enabled
     pub(in crate::input::state::core) context_menu_enabled: bool,
+    /// Current board picker state
+    pub board_picker_state: BoardPickerState,
+    /// Active board picker drag state (full mode reorder)
+    pub board_picker_drag: Option<BoardPickerDrag>,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Hit test tolerance in pixels
@@ -215,6 +251,8 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
     pub context_menu_layout: Option<ContextMenuLayout>,
+    /// Cached layout details for the board picker overlay
+    pub board_picker_layout: Option<BoardPickerLayout>,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
     pub(in crate::input::state::core) spatial_index: Option<SpatialGrid>,
     /// Last known pointer position (for keyboard anchors and hover refresh)
@@ -249,6 +287,8 @@ pub struct InputState {
     pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
+    /// Whether to show the Boards section
+    pub show_boards_section: bool,
     /// Whether to show the presets section
     pub show_presets: bool,
     /// Whether to show the Step Undo/Redo section
@@ -267,6 +307,8 @@ pub struct InputState {
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Pending preset save/clear action for backend persistence
     pub(in crate::input::state::core) pending_preset_action: Option<PresetAction>,
+    /// Pending boards config update (persisted by backend)
+    pub(in crate::input::state::core) pending_board_config: Option<BoardsConfig>,
     /// Whether the guided tour is currently active
     pub tour_active: bool,
     /// Current step in the guided tour (0-indexed)
@@ -280,4 +322,14 @@ pub struct InputState {
     pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
     /// Pending clipboard fallback for failed copy operations
     pub(crate) pending_clipboard_fallback: Option<PendingClipboardFallback>,
+    /// Recently deleted boards available for undo (with deletion timestamp)
+    pub(in crate::input::state::core) deleted_boards: Vec<(BoardState, Instant)>,
+    /// Status bar change highlight animation state
+    #[allow(dead_code)]
+    pub(crate) status_change_highlight: Option<StatusChangeHighlight>,
+    /// Whether the help overlay is in quick-reference mode
+    pub help_overlay_quick_mode: bool,
+    /// Cursor position within the help overlay search input
+    #[allow(dead_code)]
+    pub help_overlay_search_cursor: usize,
 }

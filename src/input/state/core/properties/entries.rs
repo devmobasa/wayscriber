@@ -5,14 +5,15 @@ use super::summary::{
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind};
 use super::utils::{approx_eq, color_eq, color_label};
-use crate::draw::ShapeId;
+use crate::draw::{Shape, ShapeId};
+use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
 impl InputState {
     pub(super) fn build_selection_property_entries(
         &self,
         ids: &[ShapeId],
     ) -> Vec<SelectionPropertyEntry> {
-        let frame = self.canvas_set.active_frame();
+        let frame = self.boards.active_frame();
         let mut entries = Vec::new();
 
         let color_summary = summarize_property(frame, ids, shape_color, color_eq);
@@ -53,6 +54,45 @@ impl InputState {
                 kind: SelectionPropertyKind::Thickness,
                 disabled: !thickness_summary.editable,
             });
+        } else {
+            let mut any_pressure = false;
+            let mut all_pressure = !ids.is_empty();
+            let mut any_pressure_editable = false;
+            for id in ids {
+                let Some(drawn) = frame.shape(*id) else {
+                    all_pressure = false;
+                    continue;
+                };
+                if matches!(&drawn.shape, Shape::FreehandPressure { .. }) {
+                    any_pressure = true;
+                    if !drawn.locked {
+                        any_pressure_editable = true;
+                    }
+                } else {
+                    all_pressure = false;
+                }
+            }
+            let show_pressure_thickness = match self.pressure_thickness_entry_mode {
+                PressureThicknessEntryMode::Never => false,
+                PressureThicknessEntryMode::PressureOnly => all_pressure,
+                PressureThicknessEntryMode::AnyPressure => any_pressure,
+            };
+
+            if show_pressure_thickness {
+                let pressure_editable = self.pressure_thickness_edit_mode
+                    != PressureThicknessEditMode::Disabled
+                    && any_pressure_editable;
+                entries.push(SelectionPropertyEntry {
+                    label: "Thickness".to_string(),
+                    value: if any_pressure_editable {
+                        "Varies (pressure)".to_string()
+                    } else {
+                        "Locked".to_string()
+                    },
+                    kind: SelectionPropertyKind::Thickness,
+                    disabled: !pressure_editable,
+                });
+            }
         }
 
         let fill_summary = summarize_property(frame, ids, shape_fill, |a, b| a == b);

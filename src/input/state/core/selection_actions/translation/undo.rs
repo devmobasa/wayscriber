@@ -10,7 +10,7 @@ impl InputState {
 
         let mut actions = Vec::new();
         {
-            let frame = self.canvas_set.active_frame();
+            let frame = self.boards.active_frame();
             for (shape_id, before_snapshot) in &before {
                 if let Some(shape) = frame.shape(*shape_id) {
                     let after_snapshot = ShapeSnapshot {
@@ -36,9 +36,10 @@ impl InputState {
             UndoAction::Compound(actions)
         };
 
-        self.canvas_set
+        self.boards
             .active_frame_mut()
             .push_undo_action(undo_action, self.undo_stack_limit);
+        self.mark_session_dirty();
         true
     }
 }

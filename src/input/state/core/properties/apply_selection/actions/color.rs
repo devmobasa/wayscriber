@@ -20,6 +20,7 @@ impl InputState {
                 matches!(
                     shape,
                     Shape::Freehand { .. }
+                        | Shape::FreehandPressure { .. }
                         | Shape::Line { .. }
                         | Shape::Rect { .. }
                         | Shape::Ellipse { .. }
@@ -31,6 +32,7 @@ impl InputState {
             },
             |shape| match shape {
                 Shape::Freehand { color, .. }
+                | Shape::FreehandPressure { color, .. }
                 | Shape::Line { color, .. }
                 | Shape::Rect { color, .. }
                 | Shape::Ellipse { color, .. }

@@ -1,5 +1,11 @@
 use crate::input::InputState;
 use crate::input::state::ContextMenuState;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
+
+use super::constants::{
+    self, BG_HOVER, BORDER_CONTEXT_MENU, BORDER_FOCUS, FOCUS_RING_WIDTH, NAV_HINT_MENU,
+    PANEL_BG_CONTEXT_MENU, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
+};
 
 /// Renders a floating context menu for shape or canvas actions.
 pub fn render_context_menu(
@@ -28,11 +34,15 @@ pub fn render_context_menu(
     };
 
     let _ = ctx.save();
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(layout.font_size);
+    let text_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: layout.font_size,
+    };
 
     // Background and border
-    ctx.set_source_rgba(0.1, 0.13, 0.17, 0.95);
+    constants::set_color(ctx, PANEL_BG_CONTEXT_MENU);
     ctx.rectangle(
         layout.origin_x,
         layout.origin_y,
@@ -41,7 +51,7 @@ pub fn render_context_menu(
     );
     let _ = ctx.fill();
 
-    ctx.set_source_rgba(0.18, 0.22, 0.28, 0.9);
+    constants::set_color(ctx, BORDER_CONTEXT_MENU);
     ctx.set_line_width(1.0);
     ctx.rectangle(
         layout.origin_x,
@@ -51,52 +61,104 @@ pub fn render_context_menu(
     );
     let _ = ctx.stroke();
 
-    let active_index = hover_index.or(focus_index);
-
     for (index, entry) in entries.iter().enumerate() {
         let row_top = layout.origin_y + layout.padding_y + layout.row_height * index as f64;
         let row_center = row_top + layout.row_height * 0.5;
 
-        if active_index == Some(index) && !entry.disabled {
-            ctx.set_source_rgba(0.25, 0.32, 0.45, 0.9);
+        // Distinguish hover (filled background) from keyboard focus (border ring)
+        let is_hovered = hover_index == Some(index) && !entry.disabled;
+        let is_focused = focus_index == Some(index) && !entry.disabled;
+
+        if is_hovered {
+            constants::set_color(ctx, BG_HOVER);
             ctx.rectangle(layout.origin_x, row_top, layout.width, layout.row_height);
             let _ = ctx.fill();
         }
 
+        if is_focused && !is_hovered {
+            // Draw focus ring (outline) when keyboard navigating
+            constants::set_color(ctx, BORDER_FOCUS);
+            ctx.set_line_width(FOCUS_RING_WIDTH);
+            ctx.rectangle(
+                layout.origin_x + 2.0,
+                row_top + 1.0,
+                layout.width - 4.0,
+                layout.row_height - 2.0,
+            );
+            let _ = ctx.stroke();
+        }
+
         let (text_r, text_g, text_b, text_a) = if entry.disabled {
-            (0.6, 0.64, 0.68, 0.5)
+            TEXT_DISABLED
         } else {
-            (0.9, 0.92, 0.97, 1.0)
+            TEXT_PRIMARY
         };
 
         ctx.set_source_rgba(text_r, text_g, text_b, text_a);
-        ctx.move_to(
+        draw_text_baseline(
+            ctx,
+            text_style,
+            &entry.label,
             layout.origin_x + layout.padding_x,
             row_center + layout.font_size * 0.35,
+            None,
         );
-        let _ = ctx.show_text(&entry.label);
 
         if let Some(shortcut) = &entry.shortcut {
-            ctx.set_source_rgba(0.7, 0.73, 0.78, text_a);
+            let shortcut_color = constants::with_alpha(TEXT_HINT, text_a);
+            constants::set_color(ctx, shortcut_color);
             let shortcut_x = layout.origin_x + layout.width
                 - layout.padding_x
                 - layout.arrow_width
                 - layout.shortcut_width;
-            ctx.move_to(shortcut_x, row_center + layout.font_size * 0.35);
-            let _ = ctx.show_text(shortcut);
+            draw_text_baseline(
+                ctx,
+                text_style,
+                shortcut,
+                shortcut_x,
+                row_center + layout.font_size * 0.35,
+                None,
+            );
         }
 
         if entry.has_submenu {
             let arrow_x =
                 layout.origin_x + layout.width - layout.padding_x - layout.arrow_width * 0.6;
             let arrow_y = row_center;
-            ctx.set_source_rgba(0.75, 0.78, 0.84, text_a);
+            let arrow_color = constants::with_alpha(
+                (
+                    super::constants::ICON_SUBMENU_ARROW.0,
+                    super::constants::ICON_SUBMENU_ARROW.1,
+                    super::constants::ICON_SUBMENU_ARROW.2,
+                    super::constants::ICON_SUBMENU_ARROW.3,
+                ),
+                text_a,
+            );
+            constants::set_color(ctx, arrow_color);
             ctx.move_to(arrow_x, arrow_y - 5.0);
             ctx.line_to(arrow_x + 6.0, arrow_y);
             ctx.line_to(arrow_x, arrow_y + 5.0);
             let _ = ctx.fill();
         }
     }
+
+    // Navigation hint footer
+    let hint_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: layout.font_size * 0.85,
+    };
+    let hint_y = layout.origin_y + layout.height + layout.font_size * 0.3;
+    ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.7);
+    draw_text_baseline(
+        ctx,
+        hint_style,
+        NAV_HINT_MENU,
+        layout.origin_x + layout.padding_x,
+        hint_y,
+        None,
+    );
 
     let _ = ctx.restore();
 }

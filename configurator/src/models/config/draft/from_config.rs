@@ -54,6 +54,9 @@ impl ConfigDraft {
             performance_ui_animation_fps: config.performance.ui_animation_fps.to_string(),
 
             ui_show_status_bar: config.ui.show_status_bar,
+            ui_show_status_board_badge: config.ui.show_status_board_badge,
+            ui_show_status_page_badge: config.ui.show_status_page_badge,
+            ui_show_page_badge_with_status_bar: config.ui.show_floating_badge_always,
             ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_context_menu_enabled: config.ui.context_menu.enabled,
             ui_preferred_output: config.ui.preferred_output.clone().unwrap_or_default(),
@@ -71,6 +74,7 @@ impl ConfigDraft {
             ui_toolbar_show_actions_advanced: config.ui.toolbar.show_actions_advanced,
             ui_toolbar_show_zoom_actions: config.ui.toolbar.show_zoom_actions,
             ui_toolbar_show_pages_section: config.ui.toolbar.show_pages_section,
+            ui_toolbar_show_boards_section: config.ui.toolbar.show_boards_section,
             ui_toolbar_show_step_section: config.ui.toolbar.show_step_section,
             ui_toolbar_show_text_controls: config.ui.toolbar.show_text_controls,
             ui_toolbar_show_settings_section: config.ui.toolbar.show_settings_section,

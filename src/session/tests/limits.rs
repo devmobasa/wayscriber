@@ -2,7 +2,6 @@ use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::{Color, Shape};
 use crate::input::EraserMode;
-use crate::input::board_mode::BoardMode;
 use std::fs;
 
 #[test]
@@ -18,10 +17,8 @@ fn save_snapshot_skips_when_payload_exceeds_max_file_size() {
     options.backup_retention = 0;
 
     let snapshot = SessionSnapshot {
-        active_mode: BoardMode::Transparent,
-        transparent: None,
-        whiteboard: None,
-        blackboard: None,
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
         tool_state: Some(ToolStateSnapshot {
             current_color: Color {
                 r: 1.0,
@@ -86,7 +83,7 @@ fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
 
     let mut input = dummy_input_state();
     {
-        let frame = input.canvas_set.active_frame_mut();
+        let frame = input.boards.active_frame_mut();
         for i in 0..5 {
             frame.add_shape(Shape::Rect {
                 x: i * 10,
@@ -118,10 +115,12 @@ fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
         .expect("snapshot should be present after load");
 
     let transparent = loaded
-        .transparent
-        .expect("transparent frame should be present");
+        .boards
+        .iter()
+        .find(|board| board.id == "transparent")
+        .expect("transparent board should be present");
     assert_eq!(
-        transparent.pages[0].shapes.len(),
+        transparent.pages.pages[0].shapes.len(),
         2,
         "frame should be truncated to max_shapes_per_frame"
     );

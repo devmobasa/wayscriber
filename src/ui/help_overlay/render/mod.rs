@@ -11,6 +11,7 @@ mod state;
 
 use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 use cache::get_or_build_overlay_layout;
 use frame::draw_overlay_frame;
 
@@ -34,25 +35,42 @@ pub fn render_help_overlay(
     board_enabled: bool,
     capture_enabled: bool,
     scroll_offset: f64,
+    quick_mode: bool,
 ) -> f64 {
-    let title_text = "Wayscriber Controls";
+    let title_text = if quick_mode {
+        "Quick Reference"
+    } else {
+        "Wayscriber Controls"
+    };
     let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
     let config_binding = bindings
         .labels_for(Action::OpenConfigurator)
         .and_then(|labels| labels.first())
         .map(|label| label.as_str())
         .unwrap_or(NOT_BOUND_LABEL);
-    let version_line = format!(
-        "Wayscriber {} ({})  {}  {} {} {}",
-        env!("CARGO_PKG_VERSION"),
-        commit_hash,
-        BULLET,
-        config_binding,
-        ARROW,
-        action_label(Action::OpenConfigurator)
-    );
-    let note_text_base = "Note: Each board mode has independent pages";
-    let close_hint_text = "F1 / Esc to close";
+    let version_line = if quick_mode {
+        "Essential shortcuts at a glance".to_string()
+    } else {
+        format!(
+            "Wayscriber {} ({})  {}  {} {} {}",
+            env!("CARGO_PKG_VERSION"),
+            commit_hash,
+            BULLET,
+            config_binding,
+            ARROW,
+            action_label(Action::OpenConfigurator)
+        )
+    };
+    let note_text_base = if quick_mode {
+        "F1 for full help"
+    } else {
+        "Note: Each board has independent pages"
+    };
+    let close_hint_text = if quick_mode {
+        "Shift+F1 / Esc to close"
+    } else {
+        "F1 / Esc to close"
+    };
 
     let layout = get_or_build_overlay_layout(
         ctx,
@@ -71,6 +89,7 @@ pub fn render_help_overlay(
         &version_line,
         note_text_base,
         close_hint_text,
+        quick_mode,
     );
     let help_font_family = layout.help_font_family.as_str();
     let metrics = layout.metrics;
@@ -111,12 +130,12 @@ pub fn render_help_overlay(
     cursor_y += metrics.accent_line_height + metrics.accent_line_bottom_spacing;
 
     // Title
-    ctx.select_font_face(
-        help_font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    ctx.set_font_size(metrics.title_font_size);
+    let title_style = UiTextStyle {
+        family: help_font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: metrics.title_font_size,
+    };
     ctx.set_source_rgba(
         palette.body_text[0],
         palette.body_text[1],
@@ -124,17 +143,16 @@ pub fn render_help_overlay(
         palette.body_text[3],
     );
     let title_baseline = cursor_y + metrics.title_font_size;
-    ctx.move_to(inner_x, title_baseline);
-    let _ = ctx.show_text(title_text);
+    draw_text_baseline(ctx, title_style, title_text, inner_x, title_baseline, None);
     cursor_y += metrics.title_font_size + metrics.title_bottom_spacing;
 
     // Subtitle / version line
-    ctx.select_font_face(
-        help_font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    );
-    ctx.set_font_size(metrics.subtitle_font_size);
+    let subtitle_style = UiTextStyle {
+        family: help_font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: metrics.subtitle_font_size,
+    };
     ctx.set_source_rgba(
         palette.subtitle[0],
         palette.subtitle[1],
@@ -142,8 +160,14 @@ pub fn render_help_overlay(
         palette.subtitle[3],
     );
     let subtitle_baseline = cursor_y + metrics.subtitle_font_size;
-    ctx.move_to(inner_x, subtitle_baseline);
-    let _ = ctx.show_text(&version_line);
+    draw_text_baseline(
+        ctx,
+        subtitle_style,
+        &version_line,
+        inner_x,
+        subtitle_baseline,
+        None,
+    );
     cursor_y += metrics.subtitle_font_size + metrics.subtitle_bottom_spacing;
 
     let nav_draw_style = NavDrawStyle {
@@ -214,12 +238,12 @@ pub fn render_help_overlay(
     cursor_y = grid_start_y + layout.grid_view_height + metrics.columns_bottom_spacing;
 
     // Note
-    ctx.select_font_face(
-        help_font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    );
-    ctx.set_font_size(metrics.note_font_size);
+    let note_style = UiTextStyle {
+        family: help_font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: metrics.note_font_size,
+    };
     ctx.set_source_rgba(
         palette.note[0],
         palette.note[1],
@@ -228,11 +252,23 @@ pub fn render_help_overlay(
     );
     let note_x = inner_x + (inner_width - layout.note_width) / 2.0;
     let note_baseline = cursor_y + metrics.note_font_size;
-    ctx.move_to(note_x, note_baseline);
-    let _ = ctx.show_text(layout.note_text.as_str());
+    draw_text_baseline(
+        ctx,
+        note_style,
+        layout.note_text.as_str(),
+        note_x,
+        note_baseline,
+        None,
+    );
     cursor_y += metrics.note_font_size + metrics.note_to_close_gap;
 
     // Close hint
+    let close_style = UiTextStyle {
+        family: help_font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: metrics.note_font_size,
+    };
     ctx.set_source_rgba(
         palette.subtitle[0],
         palette.subtitle[1],
@@ -241,8 +277,14 @@ pub fn render_help_overlay(
     );
     let close_x = inner_x + (inner_width - layout.close_hint_width) / 2.0;
     let close_baseline = cursor_y + metrics.note_font_size;
-    ctx.move_to(close_x, close_baseline);
-    let _ = ctx.show_text(close_hint_text);
+    draw_text_baseline(
+        ctx,
+        close_style,
+        close_hint_text,
+        close_x,
+        close_baseline,
+        None,
+    );
 
     layout.scroll_max
 }

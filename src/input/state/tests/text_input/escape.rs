@@ -8,6 +8,7 @@ fn test_escape_cancels_active_drawing_only() {
         start_x: 0,
         start_y: 0,
         points: vec![(0, 0), (5, 5)],
+        point_thicknesses: vec![2.0, 2.0],
     };
 
     state.on_key_press(Key::Escape);

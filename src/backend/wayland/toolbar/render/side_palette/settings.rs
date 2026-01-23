@@ -8,7 +8,9 @@ use crate::config::{Action, action_label, action_short_label};
 use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextStyle;
 
+use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
 
 pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -22,6 +24,18 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     let content_width = layout.content_width;
     let section_gap = layout.section_gap;
     let use_icons = snapshot.use_icons;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
+    let toggle_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: 12.0,
+    };
 
     if !snapshot.show_settings_section
         || !snapshot.drawer_open
@@ -34,6 +48,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     draw_group_card(ctx, card_x, *y, card_w, settings_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
         "Settings",
@@ -53,6 +68,24 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             snapshot.show_status_bar,
             ToolbarEvent::ToggleStatusBar(!snapshot.show_status_bar),
             Some("Status bar: color/tool readout."),
+        ),
+        (
+            "Status board",
+            snapshot.show_status_board_badge,
+            ToolbarEvent::ToggleStatusBoardBadge(!snapshot.show_status_board_badge),
+            Some("Status bar: board label."),
+        ),
+        (
+            "Status page",
+            snapshot.show_status_page_badge,
+            ToolbarEvent::ToggleStatusPageBadge(!snapshot.show_status_page_badge),
+            Some("Status bar: page counter."),
+        ),
+        (
+            "Overlay badge",
+            snapshot.show_floating_badge_always,
+            ToolbarEvent::ToggleFloatingBadgeAlways(!snapshot.show_floating_badge_always),
+            Some("Board/page badge when status bar is visible."),
         ),
         (
             "Preset toasts",
@@ -88,6 +121,12 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 Some("Advanced: undo-all/delay/freeze."),
             ),
             (
+                "Boards",
+                snapshot.show_boards_section,
+                ToolbarEvent::ToggleBoardsSection(!snapshot.show_boards_section),
+                Some("Boards: prev/next/new/del."),
+            ),
+            (
                 "Pages",
                 snapshot.show_pages_section,
                 ToolbarEvent::TogglePagesSection(!snapshot.show_pages_section),
@@ -115,7 +154,6 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         2,
         toggles.len(),
     );
-    ctx.set_font_size(12.0);
     for (item, (label, value, event, tooltip)) in toggle_layout.items.iter().zip(toggles.iter()) {
         let toggle_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
@@ -128,6 +166,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             item.h,
             *value,
             toggle_hover,
+            toggle_style,
             label,
         );
         hits.push(HitRegion {
@@ -137,7 +176,6 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             tooltip: tooltip.map(|text| text.to_string()),
         });
     }
-    ctx.set_font_size(13.0);
 
     let mut buttons_y = toggle_y;
     if toggle_layout.rows > 0 {
@@ -166,6 +204,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         } else {
             draw_label_center(
                 ctx,
+                label_style,
                 item.x,
                 item.y,
                 item.w,
@@ -200,7 +239,15 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 icon_size,
             );
         } else {
-            draw_label_center(ctx, item.x, item.y, item.w, item.h, "Config file");
+            draw_label_center(
+                ctx,
+                label_style,
+                item.x,
+                item.y,
+                item.w,
+                item.h,
+                "Config file",
+            );
         }
         hits.push(HitRegion {
             rect: (item.x, item.y, item.w, item.h),

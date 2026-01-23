@@ -2,7 +2,9 @@ use crate::backend::wayland::toolbar::events::{HitKind, delay_secs_from_t, delay
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
+use super::super::super::widgets::constants::FONT_FAMILY_DEFAULT;
 use super::super::super::widgets::draw_round_rect;
 
 pub(super) fn draw_delay_sliders(
@@ -15,15 +17,26 @@ pub(super) fn draw_delay_sliders(
 ) {
     let slider_h = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_HEIGHT;
     let slider_knob_r = ToolbarLayoutSpec::SIDE_DELAY_SLIDER_KNOB_RADIUS;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: 11.0,
+    };
 
     let undo_label = format!(
         "Undo delay: {:.1}s",
         snapshot.undo_all_delay_ms as f64 / 1000.0
     );
     ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
-    ctx.set_font_size(11.0);
-    ctx.move_to(x, slider_start_y + 10.0);
-    let _ = ctx.show_text(&undo_label);
+    draw_text_baseline(
+        ctx,
+        label_style,
+        &undo_label,
+        x,
+        slider_start_y + 10.0,
+        None,
+    );
 
     let undo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_UNDO_OFFSET_Y;
     ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);
@@ -61,8 +74,14 @@ pub(super) fn draw_delay_sliders(
         snapshot.redo_all_delay_ms as f64 / 1000.0
     );
     ctx.set_source_rgba(0.7, 0.7, 0.75, 0.9);
-    ctx.move_to(x + sliders_w / 2.0 + 10.0, slider_start_y + 10.0);
-    let _ = ctx.show_text(&redo_label);
+    draw_text_baseline(
+        ctx,
+        label_style,
+        &redo_label,
+        x + sliders_w / 2.0 + 10.0,
+        slider_start_y + 10.0,
+        None,
+    );
 
     let redo_slider_y = slider_start_y + ToolbarLayoutSpec::SIDE_DELAY_SLIDER_REDO_OFFSET_Y;
     ctx.set_source_rgba(0.4, 0.4, 0.45, 0.7);

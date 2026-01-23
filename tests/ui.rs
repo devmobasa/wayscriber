@@ -3,7 +3,9 @@ use wayscriber::config::{
     HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle, StatusPosition,
 };
 use wayscriber::draw::Color;
-use wayscriber::input::{ClickHighlightSettings, EraserMode, InputState};
+use wayscriber::input::{
+    BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD, ClickHighlightSettings, EraserMode, InputState,
+};
 
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
@@ -28,7 +30,7 @@ fn make_input_state() -> InputState {
         30.0,
         false,
         true,
-        wayscriber::config::BoardConfig::default(),
+        wayscriber::config::BoardsConfig::default(),
         action_map,
         usize::MAX,
         ClickHighlightSettings::disabled(),
@@ -89,7 +91,7 @@ fn render_help_overlay_draws_content() {
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0,
+        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0, false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -101,13 +103,10 @@ fn render_status_bar_draws_in_board_modes() {
     input.update_screen_dimensions(800, 480);
     let style = StatusBarStyle::default();
 
-    let modes = [
-        wayscriber::input::BoardMode::Whiteboard,
-        wayscriber::input::BoardMode::Blackboard,
-    ];
+    let board_ids = [BOARD_ID_WHITEBOARD, BOARD_ID_BLACKBOARD];
 
-    for mode in modes {
-        input.switch_board_mode(mode);
+    for board_id in board_ids {
+        input.switch_board(board_id);
         let (mut surface, ctx) = surface_with_context(400, 200);
         wayscriber::ui::render_status_bar(
             &ctx,
@@ -120,8 +119,8 @@ fn render_status_bar_draws_in_board_modes() {
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
-            "status bar should render pixels for mode {:?}",
-            mode
+            "status bar should render pixels for board {}",
+            board_id
         );
     }
 }
@@ -133,7 +132,7 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0,
+        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0, false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));

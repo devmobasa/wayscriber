@@ -1,4 +1,5 @@
 mod actions;
+mod boards;
 mod delays;
 mod layout;
 mod pages;
@@ -58,6 +59,13 @@ impl InputState {
             ToolbarEvent::PageNew => self.apply_toolbar_page_new(),
             ToolbarEvent::PageDuplicate => self.apply_toolbar_page_duplicate(),
             ToolbarEvent::PageDelete => self.apply_toolbar_page_delete(),
+            ToolbarEvent::BoardPrev => self.apply_toolbar_board_prev(),
+            ToolbarEvent::BoardNext => self.apply_toolbar_board_next(),
+            ToolbarEvent::BoardNew => self.apply_toolbar_board_new(),
+            ToolbarEvent::BoardDelete => self.apply_toolbar_board_delete(),
+            ToolbarEvent::BoardDuplicate => self.apply_toolbar_board_duplicate(),
+            ToolbarEvent::BoardRename => self.apply_toolbar_board_rename(),
+            ToolbarEvent::ToggleBoardPicker => self.apply_toolbar_toggle_board_picker(),
             ToolbarEvent::EnterTextMode => self.apply_toolbar_enter_text_mode(),
             ToolbarEvent::EnterStickyNoteMode => self.apply_toolbar_enter_sticky_note_mode(),
             ToolbarEvent::ToggleAllHighlight(enable) => {
@@ -91,12 +99,24 @@ impl InputState {
             }
             ToolbarEvent::ToggleZoomActions(show) => self.apply_toolbar_toggle_zoom_actions(show),
             ToolbarEvent::TogglePagesSection(show) => self.apply_toolbar_toggle_pages_section(show),
+            ToolbarEvent::ToggleBoardsSection(show) => {
+                self.apply_toolbar_toggle_boards_section(show)
+            }
             ToolbarEvent::TogglePresets(show) => self.apply_toolbar_toggle_presets(show),
             ToolbarEvent::ToggleStepSection(show) => self.apply_toolbar_toggle_step_section(show),
             ToolbarEvent::ToggleTextControls(show) => self.apply_toolbar_toggle_text_controls(show),
             ToolbarEvent::TogglePresetToasts(show) => self.apply_toolbar_toggle_preset_toasts(show),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
             ToolbarEvent::ToggleStatusBar(show) => self.apply_toolbar_toggle_status_bar(show),
+            ToolbarEvent::ToggleStatusBoardBadge(show) => {
+                self.apply_toolbar_toggle_status_board_badge(show)
+            }
+            ToolbarEvent::ToggleStatusPageBadge(show) => {
+                self.apply_toolbar_toggle_status_page_badge(show)
+            }
+            ToolbarEvent::ToggleFloatingBadgeAlways(show) => {
+                self.apply_toolbar_toggle_floating_badge_always(show)
+            }
             ToolbarEvent::ToggleDrawer(open) => self.apply_toolbar_toggle_drawer(open),
             ToolbarEvent::SetDrawerTab(tab) => self.apply_toolbar_set_drawer_tab(tab),
             ToolbarEvent::SetToolbarLayoutMode(mode) => self.apply_toolbar_set_layout_mode(mode),

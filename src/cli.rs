@@ -12,7 +12,7 @@ pub struct Cli {
     #[arg(long, short = 'a', action = ArgAction::SetTrue)]
     pub active: bool,
 
-    /// Initial board mode (transparent, whiteboard, or blackboard)
+    /// Initial board id (transparent, whiteboard, blackboard, or a custom id)
     #[arg(long, short = 'm', value_name = "MODE")]
     pub mode: Option<String>,
 
@@ -92,7 +92,7 @@ mod tests {
     use clap::Parser;
 
     #[test]
-    fn active_mode_with_explicit_board_mode() {
+    fn active_mode_with_explicit_board_id() {
         let cli = Cli::try_parse_from(["wayscriber", "--active", "--mode", "whiteboard"]).unwrap();
         assert!(cli.active);
         assert_eq!(cli.mode.as_deref(), Some("whiteboard"));

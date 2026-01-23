@@ -1,6 +1,7 @@
 use super::super::{GITHUB_URL, LinkAction, LinkRegion, WEBSITE_URL};
 use super::text::draw_text;
 use super::widgets::{draw_close_button, draw_copy_button};
+use crate::ui_text::UiTextStyle;
 
 pub(super) fn draw_about(
     ctx: &cairo::Context,
@@ -21,14 +22,28 @@ pub(super) fn draw_about(
     ctx.rectangle(0.5, 0.5, width - 1.0, height - 1.0);
     let _ = ctx.stroke();
 
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(18.0);
+    let title_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: 18.0,
+    };
+    let body_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 13.0,
+    };
+    let hint_style = UiTextStyle {
+        family: "Sans",
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 11.0,
+    };
     let title = format!("Wayscriber version {}", version());
-    draw_text(ctx, margin, y, &title);
+    draw_text(ctx, title_style, margin, y, &title);
 
     y += 28.0;
-    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(13.0);
 
     let mut link_index = 0usize;
     let close_size = 16.0;
@@ -50,6 +65,7 @@ pub(super) fn draw_about(
 
     y = add_link_line(
         ctx,
+        body_style,
         margin,
         y,
         &format!("Website: {}", WEBSITE_URL.trim_start_matches("https://")),
@@ -61,6 +77,7 @@ pub(super) fn draw_about(
 
     y = add_link_line(
         ctx,
+        body_style,
         margin,
         y,
         "GitHub: github.com/devmobasa/wayscriber",
@@ -73,7 +90,7 @@ pub(super) fn draw_about(
     let commit = commit_hash();
     let commit_line = format!("Commit: {}", commit);
     ctx.set_source_rgb(0.25, 0.25, 0.25);
-    let commit_rect = draw_text(ctx, margin, y, &commit_line);
+    let commit_rect = draw_text(ctx, body_style, margin, y, &commit_line);
     if commit != "unknown" {
         let button_size = 14.0;
         let text_right = commit_rect.0 + commit_rect.2;
@@ -93,8 +110,13 @@ pub(super) fn draw_about(
     }
 
     ctx.set_source_rgb(0.4, 0.4, 0.4);
-    ctx.set_font_size(11.0);
-    draw_text(ctx, margin, height - 16.0, "Press Esc or click X to close");
+    draw_text(
+        ctx,
+        hint_style,
+        margin,
+        height - 16.0,
+        "Press Esc or click X to close",
+    );
 }
 
 struct LinkRenderState<'a> {
@@ -102,8 +124,10 @@ struct LinkRenderState<'a> {
     links: &'a mut Vec<LinkRegion>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn add_link_line(
     ctx: &cairo::Context,
+    style: UiTextStyle<'_>,
     x: f64,
     y: f64,
     text: &str,
@@ -117,7 +141,7 @@ fn add_link_line(
     } else {
         ctx.set_source_rgb(0.12, 0.45, 0.84);
     }
-    let rect = draw_text(ctx, x, y, text);
+    let rect = draw_text(ctx, style, x, y, text);
     ctx.set_line_width(1.0);
     ctx.move_to(rect.0, rect.1 + rect.3 + 2.0);
     ctx.line_to(rect.0 + rect.2, rect.1 + rect.3 + 2.0);

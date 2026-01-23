@@ -1,5 +1,6 @@
 use super::super::widgets::constants::{
-    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, SPACING_STD, set_color,
+    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
+    FONT_SIZE_LABEL, SPACING_STD, set_color,
 };
 use super::super::widgets::*;
 use super::SidePaletteLayout;
@@ -8,6 +9,7 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextStyle;
 
 pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -18,6 +20,12 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     let card_w = layout.card_w;
     let section_gap = layout.section_gap;
     let width = layout.width;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     let show_marker_opacity =
         snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
@@ -36,6 +44,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
         "Marker opacity",
@@ -124,6 +133,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     let value_x = width - x - value_w;
     draw_label_center(
         ctx,
+        label_style,
         value_x,
         marker_slider_row_y,
         value_w,

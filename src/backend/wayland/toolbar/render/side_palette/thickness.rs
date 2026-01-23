@@ -1,5 +1,6 @@
 use super::super::widgets::constants::{
-    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, SPACING_STD, set_color,
+    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
+    FONT_SIZE_LABEL, SPACING_STD, set_color,
 };
 use super::super::widgets::*;
 use super::SidePaletteLayout;
@@ -11,6 +12,7 @@ use crate::config::Action;
 use crate::input::EraserMode;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextStyle;
 
 pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -23,6 +25,12 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     let content_width = layout.content_width;
     let section_gap = layout.section_gap;
     let width = layout.width;
+    let label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Bold,
+        size: FONT_SIZE_LABEL,
+    };
 
     let slider_card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
     draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
@@ -33,6 +41,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     };
     draw_section_label(
         ctx,
+        label_style,
         x,
         *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
         thickness_label,
@@ -127,6 +136,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     let value_x = width - x - value_w;
     draw_label_center(
         ctx,
+        label_style,
         value_x,
         thickness_slider_row_y,
         value_w,
@@ -142,6 +152,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         draw_group_card(ctx, card_x, *y, card_w, eraser_card_h);
         draw_section_label(
             ctx,
+            label_style,
             x,
             *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
             "Eraser mode",
@@ -160,6 +171,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
             toggle_h,
             stroke_active,
             toggle_hover,
+            label_style,
             "Erase by stroke",
         );
         let toggle_tooltip = format_binding_label(

@@ -9,8 +9,12 @@ pub struct BoardPages {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PageDeleteOutcome {
+    /// Page was removed from the board
     Removed,
+    /// Last page was cleared (can't delete)
     Cleared,
+    /// Deletion pending confirmation (first press)
+    Pending,
 }
 
 impl Default for BoardPages {
@@ -78,6 +82,13 @@ impl BoardPages {
         let cloned = self.active_frame().clone_without_history();
         self.pages.push(cloned);
         self.active = self.pages.len() - 1;
+    }
+
+    /// Insert a page after the current position.
+    pub fn insert_page(&mut self, page: Frame) {
+        let insert_at = (self.active + 1).min(self.pages.len());
+        self.pages.insert(insert_at, page);
+        self.active = insert_at;
     }
 
     pub fn delete_page(&mut self) -> PageDeleteOutcome {

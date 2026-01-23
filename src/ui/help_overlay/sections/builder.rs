@@ -5,14 +5,15 @@ use crate::toolbar_icons;
 use super::super::search::{find_match_range, row_matches};
 use super::super::types::{Badge, Section, row};
 use super::bindings::{
-    HelpOverlayBindings, binding_or_fallback, bindings_or_fallback, joined_labels,
-    primary_or_fallback,
+    HelpOverlayBindings, binding_or_fallback, bindings_compact_or_fallback, bindings_or_fallback,
+    joined_labels, primary_or_fallback,
 };
 
 pub(crate) struct SectionSets {
     pub(crate) all: Vec<Section>,
     pub(crate) page1: Vec<Section>,
     pub(crate) page2: Vec<Section>,
+    pub(crate) quick: Vec<Section>,
 }
 
 fn color_badge(
@@ -35,7 +36,7 @@ pub(crate) fn build_section_sets(
     capture_enabled: bool,
 ) -> SectionSets {
     let board_modes_section = (!context_filter || board_enabled).then(|| Section {
-        title: "Board Modes",
+        title: "Boards",
         rows: vec![
             row(
                 binding_or_fallback(bindings, Action::ToggleWhiteboard, NOT_BOUND_LABEL),
@@ -48,6 +49,44 @@ pub(crate) fn build_section_sets(
             row(
                 binding_or_fallback(bindings, Action::ReturnToTransparent, NOT_BOUND_LABEL),
                 action_label(Action::ReturnToTransparent),
+            ),
+            row(
+                bindings_compact_or_fallback(
+                    bindings,
+                    &[
+                        Action::Board1,
+                        Action::Board2,
+                        Action::Board3,
+                        Action::Board4,
+                        Action::Board5,
+                        Action::Board6,
+                        Action::Board7,
+                        Action::Board8,
+                        Action::Board9,
+                    ],
+                    "Ctrl+Shift+1..9",
+                ),
+                "Switch board slot",
+            ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::BoardPrev, Action::BoardNext],
+                    "Ctrl+Shift+Left/Right",
+                ),
+                "Previous/next board",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::BoardNew, NOT_BOUND_LABEL),
+                action_label(Action::BoardNew),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::BoardDelete, NOT_BOUND_LABEL),
+                action_label(Action::BoardDelete),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::BoardPicker, NOT_BOUND_LABEL),
+                action_label(Action::BoardPicker),
             ),
         ],
         badges: Vec::new(),
@@ -174,12 +213,12 @@ pub(crate) fn build_section_sets(
                 action_label(Action::ToggleSelectionProperties),
             ),
             row(
-                bindings_or_fallback(
-                    bindings,
-                    &[Action::IncreaseFontSize, Action::DecreaseFontSize],
-                    NOT_BOUND_LABEL,
-                ),
-                "Adjust font size",
+                binding_or_fallback(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::IncreaseFontSize),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::DecreaseFontSize),
             ),
         ],
         badges: color_badges.clone(),
@@ -198,12 +237,12 @@ pub(crate) fn build_section_sets(
                 action_label(Action::EnterStickyNoteMode),
             ),
             row(
-                bindings_or_fallback(
-                    bindings,
-                    &[Action::IncreaseFontSize, Action::DecreaseFontSize],
-                    NOT_BOUND_LABEL,
-                ),
-                "Adjust font size",
+                binding_or_fallback(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::IncreaseFontSize),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
+                action_label(Action::DecreaseFontSize),
             ),
             row(
                 binding_or_fallback(bindings, Action::ToggleFill, NOT_BOUND_LABEL),
@@ -219,12 +258,12 @@ pub(crate) fn build_section_sets(
         title: "Zoom",
         rows: vec![
             row(
-                bindings_or_fallback(
-                    bindings,
-                    &[Action::ZoomIn, Action::ZoomOut],
-                    NOT_BOUND_LABEL,
-                ),
-                "Zoom in/out",
+                binding_or_fallback(bindings, Action::ZoomIn, NOT_BOUND_LABEL),
+                action_label(Action::ZoomIn),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ZoomOut, NOT_BOUND_LABEL),
+                action_label(Action::ZoomOut),
             ),
             row(
                 binding_or_fallback(bindings, Action::ResetZoom, NOT_BOUND_LABEL),
@@ -280,6 +319,10 @@ pub(crate) fn build_section_sets(
         row(
             binding_or_fallback(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
             action_label(Action::ToggleHelp),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ToggleCommandPalette, NOT_BOUND_LABEL),
+            action_label(Action::ToggleCommandPalette),
         ),
         row(
             binding_or_fallback(bindings, Action::ToggleToolbar, NOT_BOUND_LABEL),
@@ -374,10 +417,87 @@ pub(crate) fn build_section_sets(
         page2_sections.push(section);
     }
 
+    // Quick reference: essential shortcuts at a glance
+    let quick_drawing = Section {
+        title: "Drawing",
+        rows: vec![
+            row(
+                binding_or_fallback(bindings, Action::SelectPenTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectPenTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectEraserTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectLineTool, "Shift+Drag"),
+                action_label(Action::SelectLineTool),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::SelectRectTool, "Ctrl+Drag"),
+                action_label(Action::SelectRectTool),
+            ),
+        ],
+        badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_pen),
+    };
+    let quick_actions = Section {
+        title: "Actions",
+        rows: vec![
+            row(
+                binding_or_fallback(bindings, Action::Undo, NOT_BOUND_LABEL),
+                action_label(Action::Undo),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ClearCanvas, NOT_BOUND_LABEL),
+                action_label(Action::ClearCanvas),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
+                action_label(Action::EnterTextMode),
+            ),
+            row(
+                binding_or_fallback(bindings, Action::Exit, NOT_BOUND_LABEL),
+                action_label(Action::Exit),
+            ),
+        ],
+        badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_undo),
+    };
+    let quick_navigation = Section {
+        title: "Navigation",
+        rows: vec![
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::BoardPrev, Action::BoardNext],
+                    NOT_BOUND_LABEL,
+                ),
+                "Previous/next board",
+            ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::PagePrev, Action::PageNext],
+                    NOT_BOUND_LABEL,
+                ),
+                "Previous/next page",
+            ),
+            row(
+                binding_or_fallback(bindings, Action::ToggleHelp, NOT_BOUND_LABEL),
+                "Full help",
+            ),
+        ],
+        badges: Vec::new(),
+        icon: Some(toolbar_icons::draw_icon_file),
+    };
+    let quick_sections = vec![quick_drawing, quick_actions, quick_navigation];
+
     SectionSets {
         all: all_sections,
         page1: page1_sections,
         page2: page2_sections,
+        quick: quick_sections,
     }
 }
 

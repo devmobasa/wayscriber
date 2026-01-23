@@ -23,6 +23,9 @@ impl InputState {
     pub fn on_mouse_release(&mut self, button: MouseButton, x: i32, y: i32) {
         self.update_pointer_position(x, y);
         if button == MouseButton::Left {
+            if panels::handle_board_picker_release(self, x, y) {
+                return;
+            }
             if panels::handle_properties_panel_release(self, x, y) {
                 return;
             }
@@ -59,8 +62,18 @@ impl InputState {
                 start_x,
                 start_y,
                 points,
+                point_thicknesses,
             } => {
-                drawing::finish_drawing(self, tool, start_x, start_y, points, x, y);
+                drawing::finish_drawing(
+                    self,
+                    tool,
+                    drawing::DrawingRelease {
+                        start: (start_x, start_y),
+                        end: (x, y),
+                        points,
+                        point_thicknesses,
+                    },
+                );
             }
             DrawingState::PendingTextClick { x, y, shape_id, .. } => {
                 text::handle_pending_text_click(self, x, y, shape_id);

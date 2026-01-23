@@ -77,6 +77,27 @@ pub(super) fn bindings_or_fallback(
     format_binding_labels_or(&collect_labels(bindings, actions), fallback)
 }
 
+pub(super) fn bindings_compact_or_fallback(
+    bindings: &HelpOverlayBindings,
+    actions: &[Action],
+    fallback: &str,
+) -> String {
+    let labels = collect_labels(bindings, actions);
+    if labels.is_empty() {
+        return fallback.to_string();
+    }
+    if let Some(compact) = compact_numeric_range(&labels) {
+        return compact;
+    }
+    const MAX_LABELS: usize = 3;
+    if labels.len() > MAX_LABELS {
+        let mut compact = labels[..MAX_LABELS].join(" / ");
+        compact.push_str(" / ...");
+        return compact;
+    }
+    join_binding_labels(&labels).unwrap_or_else(|| fallback.to_string())
+}
+
 pub(super) fn primary_or_fallback(
     bindings: &HelpOverlayBindings,
     action: Action,
@@ -87,4 +108,52 @@ pub(super) fn primary_or_fallback(
         .and_then(|values| values.first())
         .cloned()
         .unwrap_or_else(|| fallback.to_string())
+}
+
+fn compact_numeric_range(labels: &[String]) -> Option<String> {
+    if labels.len() <= 1 {
+        return None;
+    }
+    let mut prefix: Option<String> = None;
+    let mut numbers: Vec<u32> = Vec::with_capacity(labels.len());
+    for label in labels {
+        let (label_prefix, number) = split_numeric_suffix(label)?;
+        if let Some(existing) = prefix.as_ref() {
+            if existing != &label_prefix {
+                return None;
+            }
+        } else {
+            prefix = Some(label_prefix);
+        }
+        numbers.push(number);
+    }
+    numbers.sort_unstable();
+    numbers.dedup();
+    if numbers.len() <= 1 {
+        return None;
+    }
+    let min = *numbers.first()?;
+    let max = *numbers.last()?;
+    if max - min + 1 != numbers.len() as u32 {
+        return None;
+    }
+    let prefix = prefix.unwrap_or_default();
+    Some(format!("{prefix}{min}..{max}"))
+}
+
+fn split_numeric_suffix(label: &str) -> Option<(String, u32)> {
+    let mut split_index = label.len();
+    for (idx, ch) in label.char_indices().rev() {
+        if ch.is_ascii_digit() {
+            split_index = idx;
+        } else {
+            break;
+        }
+    }
+    if split_index == label.len() {
+        return None;
+    }
+    let (prefix, digits) = label.split_at(split_index);
+    let number = digits.parse::<u32>().ok()?;
+    Some((prefix.to_string(), number))
 }

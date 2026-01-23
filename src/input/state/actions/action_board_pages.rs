@@ -1,6 +1,6 @@
 use crate::config::Action;
 use crate::draw::PageDeleteOutcome;
-use crate::input::board_mode::BoardMode;
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use log::info;
 
 use super::super::{InputState, UiToastKind};
@@ -9,23 +9,23 @@ impl InputState {
     pub(super) fn handle_board_pages_action(&mut self, action: Action) -> bool {
         match action {
             Action::ToggleWhiteboard => {
-                if self.board_config.enabled {
-                    log::info!("Toggling whiteboard mode");
-                    self.switch_board_mode(BoardMode::Whiteboard);
+                if self.boards.has_board(BOARD_ID_WHITEBOARD) {
+                    log::info!("Toggling whiteboard board");
+                    self.switch_board(BOARD_ID_WHITEBOARD);
                 }
                 true
             }
             Action::ToggleBlackboard => {
-                if self.board_config.enabled {
-                    log::info!("Toggling blackboard mode");
-                    self.switch_board_mode(BoardMode::Blackboard);
+                if self.boards.has_board(BOARD_ID_BLACKBOARD) {
+                    log::info!("Toggling blackboard board");
+                    self.switch_board(BOARD_ID_BLACKBOARD);
                 }
                 true
             }
             Action::ReturnToTransparent => {
-                if self.board_config.enabled {
-                    log::info!("Returning to transparent mode");
-                    self.switch_board_mode(BoardMode::Transparent);
+                if self.boards.has_board(BOARD_ID_TRANSPARENT) {
+                    log::info!("Returning to transparent board");
+                    self.switch_board(BOARD_ID_TRANSPARENT);
                 }
                 true
             }
@@ -56,14 +56,84 @@ impl InputState {
                 true
             }
             Action::PageDelete => {
-                match self.page_delete() {
-                    PageDeleteOutcome::Removed => {
-                        info!("Deleted page");
-                    }
-                    PageDeleteOutcome::Cleared => {
-                        self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
-                    }
+                let outcome = self.page_delete();
+                if matches!(outcome, PageDeleteOutcome::Removed) {
+                    info!("Deleted page");
                 }
+                true
+            }
+            Action::PageRestoreDeleted => {
+                self.restore_deleted_page();
+                true
+            }
+            Action::Board1 => {
+                self.switch_board_slot(0);
+                true
+            }
+            Action::Board2 => {
+                self.switch_board_slot(1);
+                true
+            }
+            Action::Board3 => {
+                self.switch_board_slot(2);
+                true
+            }
+            Action::Board4 => {
+                self.switch_board_slot(3);
+                true
+            }
+            Action::Board5 => {
+                self.switch_board_slot(4);
+                true
+            }
+            Action::Board6 => {
+                self.switch_board_slot(5);
+                true
+            }
+            Action::Board7 => {
+                self.switch_board_slot(6);
+                true
+            }
+            Action::Board8 => {
+                self.switch_board_slot(7);
+                true
+            }
+            Action::Board9 => {
+                self.switch_board_slot(8);
+                true
+            }
+            Action::BoardNext => {
+                self.switch_board_next();
+                true
+            }
+            Action::BoardPrev => {
+                self.switch_board_prev();
+                true
+            }
+            Action::BoardNew => {
+                if !self.create_board() {
+                    self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
+                }
+                true
+            }
+            Action::BoardDelete => {
+                self.delete_active_board();
+                true
+            }
+            Action::BoardPicker => {
+                self.toggle_board_picker();
+                true
+            }
+            Action::BoardRestoreDeleted => {
+                self.restore_deleted_board();
+                true
+            }
+            Action::BoardDuplicate => {
+                self.duplicate_board();
+                true
+            }
+            Action::BoardSwitchRecent => {
+                self.switch_board_recent();
                 true
             }
             _ => false,

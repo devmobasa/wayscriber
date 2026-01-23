@@ -12,6 +12,7 @@ impl ConfigDraft {
         self.ui_toolbar_show_actions_advanced = defaults.show_actions_advanced;
         self.ui_toolbar_show_zoom_actions = defaults.show_zoom_actions;
         self.ui_toolbar_show_pages_section = defaults.show_pages_section;
+        self.ui_toolbar_show_boards_section = defaults.show_boards_section;
         self.ui_toolbar_show_presets = defaults.show_presets;
         self.ui_toolbar_show_step_section = defaults.show_step_section;
         self.ui_toolbar_show_text_controls = defaults.show_text_controls;
@@ -40,6 +41,11 @@ impl ConfigDraft {
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
+            ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,
+            ToggleField::UiShowStatusPageBadge => self.ui_show_status_page_badge = value,
+            ToggleField::UiShowPageBadgeWithStatusBar => {
+                self.ui_show_page_badge_with_status_bar = value;
+            }
             ToggleField::UiHelpOverlayContextFilter => self.help_context_filter = value,
             ToggleField::UiContextMenuEnabled => self.ui_context_menu_enabled = value,
             ToggleField::UiXdgFullscreen => self.ui_xdg_fullscreen = value,
@@ -60,6 +66,9 @@ impl ConfigDraft {
             }
             ToggleField::UiToolbarShowPagesSection => {
                 self.ui_toolbar_show_pages_section = value;
+            }
+            ToggleField::UiToolbarShowBoardsSection => {
+                self.ui_toolbar_show_boards_section = value;
             }
             ToggleField::UiToolbarShowStepSection => self.ui_toolbar_show_step_section = value,
             ToggleField::UiToolbarShowTextControls => self.ui_toolbar_show_text_controls = value,

@@ -2,6 +2,7 @@
 
 mod arrow;
 mod board;
+mod boards;
 mod capture;
 mod click_highlight;
 mod context_menu;
@@ -20,6 +21,7 @@ mod ui;
 
 pub use arrow::ArrowConfig;
 pub use board::BoardConfig;
+pub use boards::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, BoardsConfig};
 pub use capture::CaptureConfig;
 pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;

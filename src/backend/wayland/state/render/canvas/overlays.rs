@@ -5,7 +5,7 @@ impl WaylandState {
     pub(super) fn render_selection_overlays(&mut self, ctx: &cairo::Context) {
         // Use cached HashSet from selection state to avoid allocation every render
         if let Some(selected) = self.input_state.selected_shape_ids_set() {
-            let frame = self.input_state.canvas_set.active_frame();
+            let frame = self.input_state.boards.active_frame();
             for drawn in &frame.shapes {
                 if selected.contains(&drawn.id) {
                     crate::draw::render_selection_halo(ctx, drawn);
@@ -72,7 +72,7 @@ impl WaylandState {
                     .hit_test_all_for_points_cached(&point, self.input_state.eraser_hit_radius())
             };
             if !ids.is_empty() {
-                let frame = self.input_state.canvas_set.active_frame();
+                let frame = self.input_state.boards.active_frame();
                 match ids.len() {
                     1 => {
                         if let Some(drawn) = frame.shape(ids[0]) {

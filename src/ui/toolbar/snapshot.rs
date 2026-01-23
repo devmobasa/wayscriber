@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::config::ToolbarLayoutMode;
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::{PRESET_FEEDBACK_DURATION_MS, PresetFeedbackKind};
-use crate::input::{EraserMode, InputState, Tool, ToolbarDrawerTab};
+use crate::input::{BoardBackground, EraserMode, InputState, Tool, ToolbarDrawerTab};
 
 use super::bindings::ToolbarBindingHints;
 
@@ -58,6 +58,10 @@ pub struct ToolbarSnapshot {
     pub arrow_label_next: u32,
     pub undo_available: bool,
     pub redo_available: bool,
+    pub board_index: usize,
+    pub board_count: usize,
+    pub board_name: String,
+    pub board_color: Option<Color>,
     pub page_index: usize,
     pub page_count: usize,
     pub click_highlight_enabled: bool,
@@ -92,6 +96,8 @@ pub struct ToolbarSnapshot {
     pub show_zoom_actions: bool,
     /// Whether to show the Pages section
     pub show_pages_section: bool,
+    /// Whether to show the Boards section
+    pub show_boards_section: bool,
     /// Whether to show the marker opacity slider section
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
@@ -106,6 +112,9 @@ pub struct ToolbarSnapshot {
     pub show_settings_section: bool,
     pub show_tool_preview: bool,
     pub show_status_bar: bool,
+    pub show_status_board_badge: bool,
+    pub show_status_page_badge: bool,
+    pub show_floating_badge_always: bool,
     /// Whether the simple-mode shape picker is expanded
     pub shape_picker_open: bool,
     /// Whether the drawer is open
@@ -124,6 +133,8 @@ pub struct ToolbarSnapshot {
     pub binding_hints: ToolbarBindingHints,
     /// Whether to show the drawer onboarding hint (first-time users)
     pub show_drawer_hint: bool,
+    /// Whether the current board is the transparent overlay
+    pub is_transparent: bool,
 }
 
 impl ToolbarSnapshot {
@@ -145,11 +156,17 @@ impl ToolbarSnapshot {
         binding_hints: ToolbarBindingHints,
         show_drawer_hint: bool,
     ) -> Self {
-        let frame = state.canvas_set.active_frame();
+        let frame = state.boards.active_frame();
         let active_tool = state.active_tool();
-        let active_mode = state.board_mode();
-        let page_count = state.canvas_set.page_count(active_mode);
-        let page_index = state.canvas_set.active_page_index(active_mode);
+        let board_count = state.boards.board_count();
+        let board_index = state.boards.active_index();
+        let board_name = state.board_name().to_string();
+        let board_color = match state.boards.active_background() {
+            BoardBackground::Solid(color) => Some(*color),
+            BoardBackground::Transparent => None,
+        };
+        let page_count = state.boards.page_count();
+        let page_index = state.boards.active_page_index();
         let text_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
             && state.text_input_mode == crate::input::TextInputMode::Plain;
         let note_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
@@ -212,6 +229,7 @@ impl ToolbarSnapshot {
         let show_actions_advanced = state.show_actions_advanced;
         let show_zoom_actions = state.show_zoom_actions;
         let show_pages_section = state.show_pages_section;
+        let show_boards_section = state.show_boards_section;
         let show_step_section = state.show_step_section;
         let show_settings_section = state.show_settings_section;
         let delay_actions_enabled = state.show_step_section && state.show_delay_sliders;
@@ -239,6 +257,10 @@ impl ToolbarSnapshot {
             arrow_label_next: state.arrow_label_counter.max(1),
             undo_available: frame.undo_stack_len() > 0,
             redo_available: frame.redo_stack_len() > 0,
+            board_index,
+            board_count,
+            board_name,
+            board_color,
             page_index,
             page_count,
             click_highlight_enabled: state.click_highlight_enabled(),
@@ -262,6 +284,7 @@ impl ToolbarSnapshot {
             show_actions_advanced,
             show_zoom_actions,
             show_pages_section,
+            show_boards_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
             show_preset_toasts: state.show_preset_toasts,
             show_presets: state.show_presets,
@@ -270,6 +293,9 @@ impl ToolbarSnapshot {
             show_settings_section,
             show_tool_preview: state.show_tool_preview,
             show_status_bar: state.show_status_bar,
+            show_status_board_badge: state.show_status_board_badge,
+            show_status_page_badge: state.show_status_page_badge,
+            show_floating_badge_always: state.show_floating_badge_always,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,
@@ -279,6 +305,7 @@ impl ToolbarSnapshot {
             drawer_tab,
             binding_hints,
             show_drawer_hint,
+            is_transparent: state.board_is_transparent(),
         }
     }
 }

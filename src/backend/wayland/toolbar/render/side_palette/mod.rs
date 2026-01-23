@@ -1,5 +1,6 @@
 mod actions;
 mod arrow;
+mod boards;
 mod colors;
 mod drawer;
 mod header;
@@ -17,7 +18,6 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::ToolbarSnapshot;
 
-use super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::widgets::{draw_panel_background, draw_tooltip};
 
 pub(super) struct SidePaletteLayout<'a> {
@@ -81,13 +81,6 @@ pub fn render_side_palette(
 ) -> Result<()> {
     draw_panel_background(ctx, width, height);
 
-    ctx.select_font_face(
-        FONT_FAMILY_DEFAULT,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    ctx.set_font_size(FONT_SIZE_LABEL);
-
     let mut layout = SidePaletteLayout::new(ctx, width, snapshot, hits, hover);
 
     let mut y = header::draw_header(&mut layout);
@@ -104,10 +97,11 @@ pub fn render_side_palette(
     text::draw_text_controls_section(&mut layout, &mut y);
     drawer::draw_drawer_tabs(&mut layout, &mut y);
     actions::draw_actions_section(&mut layout, &mut y);
+    boards::draw_boards_section(&mut layout, &mut y);
     pages::draw_pages_section(&mut layout, &mut y);
     step::draw_step_section(&mut layout, &mut y);
     settings::draw_settings_section(&mut layout, &mut y);
 
-    draw_tooltip(ctx, layout.hits, layout.hover, width, false);
+    draw_tooltip(ctx, layout.hits, layout.hover, width, height, false);
     Ok(())
 }

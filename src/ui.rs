@@ -1,6 +1,8 @@
 pub mod toolbar;
 
+mod board_picker;
 mod command_palette;
+pub mod constants;
 mod context_menu;
 mod help_overlay;
 mod primitives;
@@ -9,6 +11,7 @@ mod status;
 mod toasts;
 mod tour;
 
+pub use board_picker::render_board_picker;
 pub use command_palette::render_command_palette;
 pub use context_menu::render_context_menu;
 #[allow(unused_imports)]

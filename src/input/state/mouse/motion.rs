@@ -16,6 +16,15 @@ impl InputState {
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
 
+        if self.is_board_picker_open() {
+            if self.board_picker_is_dragging() {
+                self.board_picker_update_drag_from_pointer(x, y);
+            } else {
+                self.update_board_picker_hover_from_pointer(x, y);
+            }
+            return;
+        }
+
         if self.is_properties_panel_open() {
             if self.properties_panel_layout().is_none() {
                 return;
@@ -49,14 +58,17 @@ impl InputState {
                 let tool = *tool;
                 if tool != Tool::Highlight && tool != Tool::Select {
                     let mut points = vec![(*start_x, *start_y)];
+                    let mut point_thicknesses = vec![self.current_thickness as f32];
                     if tool == Tool::Pen || tool == Tool::Marker || tool == Tool::Eraser {
                         points.push((x, y));
+                        point_thicknesses.push(self.current_thickness as f32);
                     }
                     self.state = DrawingState::Drawing {
                         tool,
                         start_x: *start_x,
                         start_y: *start_y,
                         points,
+                        point_thicknesses,
                     };
                     self.last_text_click = None;
                     self.last_provisional_bounds = None;
@@ -98,9 +110,16 @@ impl InputState {
         }
 
         let mut drawing = false;
-        if let DrawingState::Drawing { tool, points, .. } = &mut self.state {
+        if let DrawingState::Drawing {
+            tool,
+            points,
+            point_thicknesses,
+            ..
+        } = &mut self.state
+        {
             if *tool == Tool::Pen || *tool == Tool::Marker || *tool == Tool::Eraser {
                 points.push((x, y));
+                point_thicknesses.push(self.current_thickness as f32);
             }
             drawing = true;
         }

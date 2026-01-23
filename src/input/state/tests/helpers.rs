@@ -25,13 +25,13 @@ pub(super) fn create_test_input_state() -> InputState {
             weight: "bold".to_string(),
             style: "normal".to_string(),
         },
-        false,                  // text_background_enabled
-        20.0,                   // arrow_length
-        30.0,                   // arrow_angle
-        false,                  // arrow_head_at_end
-        true,                   // show_status_bar
-        BoardConfig::default(), // board_config
-        action_map,             // action_map
+        false,                   // text_background_enabled
+        20.0,                    // arrow_length
+        30.0,                    // arrow_angle
+        false,                   // arrow_head_at_end
+        true,                    // show_status_bar
+        BoardsConfig::default(), // boards_config
+        action_map,              // action_map
         usize::MAX,
         ClickHighlightSettings::disabled(),
         0,

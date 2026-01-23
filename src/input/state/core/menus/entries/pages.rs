@@ -3,9 +3,8 @@ use super::super::types::{ContextMenuEntry, MenuCommand};
 
 impl InputState {
     pub(super) fn pages_menu_entries(&self) -> Vec<ContextMenuEntry> {
-        let mode = self.canvas_set.active_mode();
-        let page_count = self.canvas_set.page_count(mode);
-        let page_index = self.canvas_set.active_page_index(mode);
+        let page_count = self.boards.page_count();
+        let page_index = self.boards.active_page_index();
         let can_prev = page_index > 0;
         let can_next = page_index + 1 < page_count;
 

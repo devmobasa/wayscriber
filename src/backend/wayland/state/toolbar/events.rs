@@ -72,6 +72,7 @@ impl WaylandState {
                 | ToolbarEvent::ToggleActionsAdvanced(_)
                 | ToolbarEvent::ToggleZoomActions(_)
                 | ToolbarEvent::TogglePagesSection(_)
+                | ToolbarEvent::ToggleBoardsSection(_)
                 | ToolbarEvent::TogglePresets(_)
                 | ToolbarEvent::ToggleStepSection(_)
                 | ToolbarEvent::ToggleTextControls(_)
@@ -156,6 +157,7 @@ impl WaylandState {
         self.config.ui.toolbar.show_actions_advanced = self.input_state.show_actions_advanced;
         self.config.ui.toolbar.show_zoom_actions = self.input_state.show_zoom_actions;
         self.config.ui.toolbar.show_pages_section = self.input_state.show_pages_section;
+        self.config.ui.toolbar.show_boards_section = self.input_state.show_boards_section;
         self.config.ui.toolbar.show_presets = self.input_state.show_presets;
         self.config.ui.toolbar.show_step_section = self.input_state.show_step_section;
         self.config.ui.toolbar.show_text_controls = self.input_state.show_text_controls;

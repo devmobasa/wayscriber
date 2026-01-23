@@ -50,7 +50,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, ColorSpec, Config},
-    input::{BoardMode, DrawingState, EraserMode, InputState, Tool, ZoomAction},
+    input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
@@ -74,6 +74,7 @@ use super::{
 };
 
 mod activation;
+mod boards;
 mod buffer_damage;
 mod capture;
 mod core;
@@ -211,6 +212,18 @@ pub(super) struct WaylandState {
     pub(super) stylus_last_pos: Option<(f64, f64)>,
     #[cfg(tablet)]
     pub(super) stylus_peak_thickness: Option<f64>,
+    /// Map of tool object IDs to their physical types (pen, eraser, etc.)
+    #[cfg(tablet)]
+    pub(super) stylus_tool_types: std::collections::HashMap<
+        wayland_client::backend::ObjectId,
+        crate::backend::wayland::TabletToolType,
+    >,
+    /// Whether we auto-switched to eraser (if true, restore previous tool on proximity out)
+    #[cfg(tablet)]
+    pub(super) stylus_auto_switched_to_eraser: bool,
+    /// Tool override that was active before auto-switching to eraser
+    #[cfg(tablet)]
+    pub(super) stylus_pre_eraser_tool_override: Option<crate::input::Tool>,
 
     // Session persistence
     pub(super) session: SessionState,

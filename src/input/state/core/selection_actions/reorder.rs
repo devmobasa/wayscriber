@@ -17,11 +17,11 @@ impl InputState {
         }
 
         let mut actions = Vec::new();
-        let len = self.canvas_set.active_frame().shapes.len();
+        let len = self.boards.active_frame().shapes.len();
         for idx in 0..ids_len {
             let id = self.selected_shape_ids()[idx];
             let movement = {
-                let frame = self.canvas_set.active_frame_mut();
+                let frame = self.boards.active_frame_mut();
                 if let Some(from) = frame.find_index(id) {
                     let target = if to_front { len.saturating_sub(1) } else { 0 };
                     if from == target {
@@ -42,7 +42,7 @@ impl InputState {
                     from,
                     to: target,
                 });
-                if let Some(shape) = self.canvas_set.active_frame().shape(id) {
+                if let Some(shape) = self.boards.active_frame().shape(id) {
                     self.dirty_tracker.mark_shape(&shape.shape);
                     self.invalidate_hit_cache_for(id);
                 }
@@ -53,9 +53,10 @@ impl InputState {
             return false;
         }
 
-        self.canvas_set
+        self.boards
             .active_frame_mut()
             .push_undo_action(UndoAction::Compound(actions), self.undo_stack_limit);
+        self.mark_session_dirty();
         true
     }
 }

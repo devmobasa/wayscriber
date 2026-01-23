@@ -6,7 +6,7 @@ fn erase_stroke_samples_sparse_path() {
     state.eraser_size = 4.0;
     state.eraser_mode = EraserMode::Stroke;
 
-    let line_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -22,7 +22,7 @@ fn erase_stroke_samples_sparse_path() {
 
     let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
     assert!(erased, "stroke eraser should remove intersected line");
-    assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+    assert!(state.boards.active_frame().shape(line_id).is_none());
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn erase_stroke_includes_release_segment() {
     state.eraser_mode = EraserMode::Stroke;
     state.set_tool_override(Some(Tool::Eraser));
 
-    let line_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -49,7 +49,7 @@ fn erase_stroke_includes_release_segment() {
     state.on_mouse_press(MouseButton::Left, 0, -10);
     state.on_mouse_release(MouseButton::Left, 100, 10);
 
-    assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+    assert!(state.boards.active_frame().shape(line_id).is_none());
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn erase_stroke_skips_locked_shapes() {
     state.eraser_size = 4.0;
     state.eraser_mode = EraserMode::Stroke;
 
-    let locked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let locked_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -71,7 +71,7 @@ fn erase_stroke_skips_locked_shapes() {
         },
         thick: 1.0,
     });
-    let unlocked_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+    let unlocked_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
         x2: 100,
@@ -85,14 +85,14 @@ fn erase_stroke_skips_locked_shapes() {
         thick: 1.0,
     });
 
-    if let Some(index) = state.canvas_set.active_frame().find_index(locked_id) {
-        state.canvas_set.active_frame_mut().shapes[index].locked = true;
+    if let Some(index) = state.boards.active_frame().find_index(locked_id) {
+        state.boards.active_frame_mut().shapes[index].locked = true;
     }
 
     let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
     assert!(erased, "eraser should remove unlocked shapes");
-    assert!(state.canvas_set.active_frame().shape(unlocked_id).is_none());
-    assert!(state.canvas_set.active_frame().shape(locked_id).is_some());
+    assert!(state.boards.active_frame().shape(unlocked_id).is_none());
+    assert!(state.boards.active_frame().shape(locked_id).is_some());
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn erase_stroke_samples_randomized_crossings() {
         state.eraser_size = 4.0;
         state.eraser_mode = EraserMode::Stroke;
 
-        let line_id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
             x1: 0,
             y1: 0,
             x2: 100,
@@ -143,7 +143,7 @@ fn erase_stroke_samples_randomized_crossings() {
             "stroke eraser should remove line at angle {}",
             angle
         );
-        assert!(state.canvas_set.active_frame().shape(line_id).is_none());
+        assert!(state.boards.active_frame().shape(line_id).is_none());
     }
 }
 
@@ -210,11 +210,11 @@ fn erase_stroke_hits_various_shapes() {
         let mut state = create_test_input_state();
         state.eraser_size = 4.0;
         state.eraser_mode = EraserMode::Stroke;
-        let shape_id = state.canvas_set.active_frame_mut().add_shape(shape);
+        let shape_id = state.boards.active_frame_mut().add_shape(shape);
 
         let erased = state.erase_strokes_by_points(&path);
         assert!(erased, "stroke eraser should remove intersected shape");
-        assert!(state.canvas_set.active_frame().shape(shape_id).is_none());
+        assert!(state.boards.active_frame().shape(shape_id).is_none());
     }
 }
 
@@ -231,7 +231,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
     // Add enough shapes to trigger spatial grid (> threshold)
     let mut shape_ids = Vec::new();
     for i in 0..5 {
-        let id = state.canvas_set.active_frame_mut().add_shape(Shape::Line {
+        let id = state.boards.active_frame_mut().add_shape(Shape::Line {
             x1: i * 100,
             y1: 0,
             x2: i * 100 + 50,
@@ -261,7 +261,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
 
     // Delete a shape and verify grid updates correctly
     state
-        .canvas_set
+        .boards
         .active_frame_mut()
         .remove_shape_by_id(shape_ids[2]);
     state.invalidate_hit_cache_for(shape_ids[2]);
@@ -275,7 +275,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
     );
 
     // Modify a shape's position and verify grid updates
-    if let Some(drawn) = state.canvas_set.active_frame_mut().shape_mut(shape_ids[4])
+    if let Some(drawn) = state.boards.active_frame_mut().shape_mut(shape_ids[4])
         && let Shape::Line {
             ref mut x1,
             ref mut y1,
@@ -299,13 +299,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
     state.set_hit_test_tolerance(20.0);
     let erased = state.erase_strokes_by_points(&[(25, 25)]);
     assert!(erased, "eraser should hit first shape with large tolerance");
-    assert!(
-        state
-            .canvas_set
-            .active_frame()
-            .shape(shape_ids[0])
-            .is_none()
-    );
+    assert!(state.boards.active_frame().shape(shape_ids[0]).is_none());
 }
 
 /// Tests that tolerance larger than cell size still finds shapes.
@@ -317,7 +311,7 @@ fn spatial_grid_large_tolerance_finds_distant_shapes() {
 
     // Add shapes spread apart
     for i in 0..5 {
-        state.canvas_set.active_frame_mut().add_shape(Shape::Rect {
+        state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: i * 200,
             y: 0,
             w: 10,

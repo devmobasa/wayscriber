@@ -1,6 +1,5 @@
 use super::compression::{compress_bytes, temp_path};
-use super::types::{CURRENT_VERSION, SessionFile, SessionSnapshot};
-use crate::input::board_mode::BoardMode;
+use super::types::{BoardFile, CURRENT_VERSION, SessionFile, SessionSnapshot};
 use crate::session::lock::{lock_exclusive, unlock};
 use crate::session::options::{CompressionMode, SessionOptions};
 use crate::time_utils::now_rfc3339;
@@ -11,7 +10,7 @@ use std::io::Write;
 
 /// Persist the provided snapshot to disk according to the configured options.
 pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
-    if !options.any_enabled() && snapshot.tool_state.is_none() {
+    if !options.any_enabled() && !options.persist_history && snapshot.tool_state.is_none() {
         debug!("Session persistence disabled for all boards; skipping save");
         return Ok(());
     }
@@ -67,23 +66,29 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
         return Ok(());
     }
 
-    let transparent = snapshot.transparent.clone();
-    let whiteboard = snapshot.whiteboard.clone();
-    let blackboard = snapshot.blackboard.clone();
-
     let file_payload = SessionFile {
         version: CURRENT_VERSION,
         last_modified: now_rfc3339(),
-        active_mode: board_mode_to_str(snapshot.active_mode).to_string(),
+        active_board_id: Some(snapshot.active_board_id.clone()),
+        active_mode: None,
+        boards: snapshot
+            .boards
+            .iter()
+            .map(|board| BoardFile {
+                id: board.id.clone(),
+                pages: board.pages.pages.clone(),
+                active_page: board.pages.active,
+            })
+            .collect(),
         transparent: None,
         whiteboard: None,
         blackboard: None,
-        transparent_pages: transparent.as_ref().map(|pages| pages.pages.clone()),
-        whiteboard_pages: whiteboard.as_ref().map(|pages| pages.pages.clone()),
-        blackboard_pages: blackboard.as_ref().map(|pages| pages.pages.clone()),
-        transparent_active_page: transparent.as_ref().map(|pages| pages.active),
-        whiteboard_active_page: whiteboard.as_ref().map(|pages| pages.active),
-        blackboard_active_page: blackboard.as_ref().map(|pages| pages.active),
+        transparent_pages: None,
+        whiteboard_pages: None,
+        blackboard_pages: None,
+        transparent_active_page: None,
+        whiteboard_active_page: None,
+        blackboard_active_page: None,
         tool_state: snapshot.tool_state.clone(),
     };
 
@@ -162,12 +167,4 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
     );
 
     Ok(())
-}
-
-fn board_mode_to_str(mode: BoardMode) -> &'static str {
-    match mode {
-        BoardMode::Transparent => "transparent",
-        BoardMode::Whiteboard => "whiteboard",
-        BoardMode::Blackboard => "blackboard",
-    }
 }

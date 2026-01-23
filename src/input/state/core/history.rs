@@ -8,6 +8,7 @@ impl InputState {
         self.mark_dirty_from_action(action);
         self.clear_selection();
         self.needs_redraw = true;
+        self.mark_session_dirty();
     }
 
     fn mark_dirty_from_action(&mut self, action: &UndoAction) {
@@ -31,7 +32,7 @@ impl InputState {
                 self.invalidate_hit_cache_for(*shape_id);
             }
             UndoAction::Reorder { shape_id, .. } => {
-                if let Some(shape) = self.canvas_set.active_frame().shape(*shape_id) {
+                if let Some(shape) = self.boards.active_frame().shape(*shape_id) {
                     self.dirty_tracker.mark_shape(&shape.shape);
                     self.invalidate_hit_cache_for(*shape_id);
                 }

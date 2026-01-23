@@ -2,6 +2,10 @@ pub(crate) fn default_toggle_help() -> Vec<String> {
     vec!["F10".to_string(), "F1".to_string()]
 }
 
+pub(crate) fn default_toggle_quick_help() -> Vec<String> {
+    vec!["Shift+F1".to_string()]
+}
+
 pub(crate) fn default_toggle_status_bar() -> Vec<String> {
     vec!["F12".to_string(), "F4".to_string()]
 }

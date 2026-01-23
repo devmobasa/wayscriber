@@ -51,7 +51,7 @@ pub(super) fn finish_text_resize(
     shape_id: ShapeId,
     snapshot: ShapeSnapshot,
 ) {
-    let frame = state.canvas_set.active_frame_mut();
+    let frame = state.boards.active_frame_mut();
     if let Some(shape) = frame.shape(shape_id) {
         let after_snapshot = ShapeSnapshot {
             shape: shape.shape.clone(),
@@ -74,6 +74,7 @@ pub(super) fn finish_text_resize(
                 },
                 state.undo_stack_limit,
             );
+            state.mark_session_dirty();
         }
     }
 }

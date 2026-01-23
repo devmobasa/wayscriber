@@ -31,6 +31,14 @@ pub enum ToolbarEvent {
     PageNew,
     PageDuplicate,
     PageDelete,
+    BoardPrev,
+    BoardNext,
+    BoardNew,
+    BoardDelete,
+    BoardDuplicate,
+    #[allow(dead_code)]
+    BoardRename,
+    ToggleBoardPicker,
     EnterTextMode,
     EnterStickyNoteMode,
     /// Toggle both highlight tool and click highlight together
@@ -75,6 +83,8 @@ pub enum ToolbarEvent {
     ToggleZoomActions(bool),
     /// Toggle Pages section visibility
     TogglePagesSection(bool),
+    /// Toggle Boards section visibility
+    ToggleBoardsSection(bool),
     /// Toggle presets section visibility
     TogglePresets(bool),
     /// Toggle Step Undo/Redo section visibility
@@ -88,6 +98,13 @@ pub enum ToolbarEvent {
     ToggleToolPreview(bool),
     /// Toggle status bar visibility
     ToggleStatusBar(bool),
+    /// Toggle board label in the status bar
+    ToggleStatusBoardBadge(bool),
+    /// Toggle page counter in the status bar
+    ToggleStatusPageBadge(bool),
+    /// Toggle the board/page badge when the status bar is visible
+    /// (renamed from TogglePageBadgeWithStatusBar for clarity)
+    ToggleFloatingBadgeAlways(bool),
     /// Toggle the side drawer (Canvas/Settings)
     ToggleDrawer(bool),
     /// Switch the active drawer tab

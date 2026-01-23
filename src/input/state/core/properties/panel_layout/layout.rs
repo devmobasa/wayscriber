@@ -7,6 +7,7 @@ use super::{
     PANEL_MARGIN, PANEL_PADDING_X, PANEL_PADDING_Y, PANEL_ROW_HEIGHT, PANEL_SECTION_GAP,
     PANEL_TITLE_FONT,
 };
+use crate::ui_text::{UiTextStyle, text_layout};
 use crate::util::Rect;
 
 impl InputState {
@@ -34,26 +35,30 @@ impl InputState {
         let mut max_value_width: f64 = 0.0;
 
         let _ = ctx.save();
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-        ctx.set_font_size(PANEL_TITLE_FONT);
-        if let Ok(extents) = ctx.text_extents(&panel.title) {
+        let title_style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: PANEL_TITLE_FONT,
+        };
+        let body_style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: PANEL_BODY_FONT,
+        };
+        let extents = text_layout(ctx, title_style, &panel.title, None).ink_extents();
+        max_line_width = max_line_width.max(extents.width());
+
+        for line in &panel.lines {
+            let extents = text_layout(ctx, body_style, line, None).ink_extents();
             max_line_width = max_line_width.max(extents.width());
         }
-
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(PANEL_BODY_FONT);
-        for line in &panel.lines {
-            if let Ok(extents) = ctx.text_extents(line) {
-                max_line_width = max_line_width.max(extents.width());
-            }
-        }
         for entry in &panel.entries {
-            if let Ok(extents) = ctx.text_extents(&entry.label) {
-                max_label_width = max_label_width.max(extents.width());
-            }
-            if let Ok(extents) = ctx.text_extents(&entry.value) {
-                max_value_width = max_value_width.max(extents.width());
-            }
+            let extents = text_layout(ctx, body_style, &entry.label, None).ink_extents();
+            max_label_width = max_label_width.max(extents.width());
+            let extents = text_layout(ctx, body_style, &entry.value, None).ink_extents();
+            max_value_width = max_value_width.max(extents.width());
         }
         let _ = ctx.restore();
 

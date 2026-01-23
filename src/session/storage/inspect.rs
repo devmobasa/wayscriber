@@ -76,14 +76,14 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         if let Some(loaded) = loaded? {
             let snapshot = loaded.snapshot;
             frame_counts = Some(FrameCounts {
-                transparent: page_shape_count(snapshot.transparent.as_ref()),
-                whiteboard: page_shape_count(snapshot.whiteboard.as_ref()),
-                blackboard: page_shape_count(snapshot.blackboard.as_ref()),
+                transparent: page_shape_count(board_pages(&snapshot, "transparent")),
+                whiteboard: page_shape_count(board_pages(&snapshot, "whiteboard")),
+                blackboard: page_shape_count(board_pages(&snapshot, "blackboard")),
             });
             let counts = HistoryCounts {
-                transparent: history_depth_from_pages(snapshot.transparent.as_ref()),
-                whiteboard: history_depth_from_pages(snapshot.whiteboard.as_ref()),
-                blackboard: history_depth_from_pages(snapshot.blackboard.as_ref()),
+                transparent: history_depth_from_pages(board_pages(&snapshot, "transparent")),
+                whiteboard: history_depth_from_pages(board_pages(&snapshot, "whiteboard")),
+                blackboard: history_depth_from_pages(board_pages(&snapshot, "blackboard")),
             };
             history_present = counts.has_history();
             history_counts = Some(counts);
@@ -116,6 +116,17 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         compressed,
         file_version,
     })
+}
+
+fn board_pages<'a>(
+    snapshot: &'a crate::session::snapshot::SessionSnapshot,
+    id: &str,
+) -> Option<&'a BoardPagesSnapshot> {
+    snapshot
+        .boards
+        .iter()
+        .find(|board| board.id == id)
+        .map(|board| &board.pages)
 }
 
 fn history_depth_from_pages(pages: Option<&BoardPagesSnapshot>) -> HistoryDepth {

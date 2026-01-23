@@ -25,6 +25,18 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
             Some("Status bar: color/tool readout."),
         ),
         (
+            ToolbarEvent::ToggleStatusBoardBadge(!ctx.snapshot.show_status_board_badge),
+            Some("Status bar: board label."),
+        ),
+        (
+            ToolbarEvent::ToggleStatusPageBadge(!ctx.snapshot.show_status_page_badge),
+            Some("Status bar: page counter."),
+        ),
+        (
+            ToolbarEvent::ToggleFloatingBadgeAlways(!ctx.snapshot.show_floating_badge_always),
+            Some("Board/page badge when status bar is visible."),
+        ),
+        (
             ToolbarEvent::TogglePresetToasts(!ctx.snapshot.show_preset_toasts),
             Some("Preset toasts: apply/save/clear."),
         ),
@@ -46,6 +58,10 @@ pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut
             (
                 ToolbarEvent::ToggleActionsAdvanced(!ctx.snapshot.show_actions_advanced),
                 Some("Advanced: undo-all/delay/freeze."),
+            ),
+            (
+                ToolbarEvent::ToggleBoardsSection(!ctx.snapshot.show_boards_section),
+                Some("Boards: prev/next/new/del."),
             ),
             (
                 ToolbarEvent::TogglePagesSection(!ctx.snapshot.show_pages_section),

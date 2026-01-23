@@ -5,6 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_ui_bindings(&self, inserter: &mut BindingInserter) -> Result<(), String> {
         inserter.insert_all(&self.ui.toggle_help, Action::ToggleHelp)?;
+        inserter.insert_all(&self.ui.toggle_quick_help, Action::ToggleQuickHelp)?;
         inserter.insert_all(&self.ui.toggle_status_bar, Action::ToggleStatusBar)?;
         inserter.insert_all(
             &self.ui.toggle_click_highlight,
