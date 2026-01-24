@@ -1,6 +1,6 @@
 use super::EraserBrush;
 use super::types::Shape;
-use crate::draw::{EraserKind, FontDescriptor, color::WHITE};
+use crate::draw::{EraserKind, FontDescriptor, StepMarkerLabel, color::WHITE};
 use crate::util;
 
 #[test]
@@ -145,6 +145,31 @@ fn sticky_note_bounding_box_is_non_zero() {
     assert!(rect.height > 0);
     assert!(rect.x <= 10);
     assert!(rect.y <= 20);
+}
+
+#[test]
+fn step_marker_bounding_box_is_square_and_contains_center() {
+    let font = FontDescriptor::default();
+    let shape = Shape::StepMarker {
+        x: 120,
+        y: 80,
+        color: WHITE,
+        label: StepMarkerLabel {
+            value: 7,
+            size: 18.0,
+            font_descriptor: font,
+        },
+    };
+
+    let rect = shape
+        .bounding_box()
+        .expect("step marker should have bounds");
+    assert!(rect.width > 0);
+    assert_eq!(rect.width, rect.height);
+    assert!(
+        rect.contains(120, 80),
+        "step marker bounds should include center point"
+    );
 }
 
 #[test]

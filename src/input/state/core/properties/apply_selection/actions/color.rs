@@ -27,6 +27,7 @@ impl InputState {
                         | Shape::Arrow { .. }
                         | Shape::MarkerStroke { .. }
                         | Shape::Text { .. }
+                        | Shape::StepMarker { .. }
                         | Shape::StickyNote { .. }
                 )
             },
@@ -37,7 +38,8 @@ impl InputState {
                 | Shape::Rect { color, .. }
                 | Shape::Ellipse { color, .. }
                 | Shape::Arrow { color, .. }
-                | Shape::Text { color, .. } => {
+                | Shape::Text { color, .. }
+                | Shape::StepMarker { color, .. } => {
                     if *color != target {
                         *color = target;
                         true

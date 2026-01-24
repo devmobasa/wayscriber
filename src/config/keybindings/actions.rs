@@ -43,6 +43,7 @@ pub enum Action {
     DecreaseMarkerOpacity,
     SelectSelectionTool,
     SelectMarkerTool,
+    SelectStepMarkerTool,
     SelectEraserTool,
     ToggleEraserMode,
     SelectPenTool,
@@ -54,6 +55,7 @@ pub enum Action {
     IncreaseFontSize,
     DecreaseFontSize,
     ResetArrowLabelCounter,
+    ResetStepMarkerCounter,
 
     // Board mode toggles
     ToggleWhiteboard,

@@ -27,6 +27,12 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         None
     };
     let used_arrow_label = label.is_some();
+    let step_label = if matches!(tool, Tool::StepMarker) {
+        Some(state.next_step_marker_label())
+    } else {
+        None
+    };
+    let used_step_marker = step_label.is_some();
     let shape = match tool {
         Tool::Pen => {
             // Check if we have pressure data and if it varies enough to matter
@@ -119,6 +125,12 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             color: state.marker_color(),
             thick: state.current_thickness,
         },
+        Tool::StepMarker => Shape::StepMarker {
+            x: end_x,
+            y: end_y,
+            color: state.current_color,
+            label: step_label.expect("step label required"),
+        },
         Tool::Eraser => {
             if state.eraser_mode == EraserMode::Stroke {
                 state.clear_provisional_dirty();
@@ -189,6 +201,9 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         state.mark_session_dirty();
         if used_arrow_label {
             state.bump_arrow_label();
+        }
+        if used_step_marker {
+            state.bump_step_marker();
         }
     } else if limit_reached {
         warn!(

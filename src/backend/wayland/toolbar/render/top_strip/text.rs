@@ -41,12 +41,19 @@ pub(super) fn draw_text_strip(
     };
 
     let tool_buttons: &[Tool] = if is_simple {
-        &[Tool::Select, Tool::Pen, Tool::Marker, Tool::Eraser]
+        &[
+            Tool::Select,
+            Tool::Pen,
+            Tool::Marker,
+            Tool::StepMarker,
+            Tool::Eraser,
+        ]
     } else {
         &[
             Tool::Select,
             Tool::Pen,
             Tool::Marker,
+            Tool::StepMarker,
             Tool::Eraser,
             Tool::Line,
             Tool::Rect,

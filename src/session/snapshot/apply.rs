@@ -82,6 +82,7 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
         }
     }
 
+    input.sync_step_marker_counter();
     input.needs_redraw = true;
 }
 

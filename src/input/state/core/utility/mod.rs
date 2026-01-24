@@ -7,4 +7,5 @@ mod interaction;
 mod launcher;
 mod pending;
 mod presenter_mode;
+mod step_markers;
 mod toasts;

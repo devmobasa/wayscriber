@@ -112,6 +112,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        SelectStepMarkerTool,
+        "Step Marker Tool",
+        Some("Steps"),
+        "Place numbered step markers",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         SelectEraserTool,
         "Eraser Tool",
         Some("Eraser"),

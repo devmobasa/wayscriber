@@ -72,6 +72,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ResetStepMarkerCounter,
+        "Reset Step Markers",
+        None,
+        "Reset step marker counter",
+        Drawing,
+        false,
+        false,
+        false
+    ),
+    meta!(
         ToggleFill,
         "Toggle Fill",
         Some("Fill"),

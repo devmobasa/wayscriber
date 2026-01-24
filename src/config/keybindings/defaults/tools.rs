@@ -22,6 +22,10 @@ pub(crate) fn default_select_marker_tool() -> Vec<String> {
     vec!["H".to_string()]
 }
 
+pub(crate) fn default_select_step_marker_tool() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_select_eraser_tool() -> Vec<String> {
     vec!["D".to_string()]
 }
@@ -68,4 +72,8 @@ pub(crate) fn default_decrease_font_size() -> Vec<String> {
 
 pub(crate) fn default_reset_arrow_labels() -> Vec<String> {
     vec!["Ctrl+Shift+R".to_string()]
+}
+
+pub(crate) fn default_reset_step_markers() -> Vec<String> {
+    Vec::new()
 }

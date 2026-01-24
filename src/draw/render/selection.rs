@@ -1,6 +1,8 @@
+use super::highlight::render_click_highlight;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_rect};
 use super::strokes::render_freehand_borrowed;
 use crate::draw::frame::DrawnShape;
+use crate::draw::shape::{step_marker_outline_thickness, step_marker_radius};
 use crate::draw::{Color, Shape};
 
 /// Renders a selection halo overlay for a drawn shape.
@@ -89,6 +91,25 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
         }
         Shape::MarkerStroke { points, thick, .. } => {
             render_freehand_borrowed(ctx, points, glow, thick + outline_width);
+        }
+        Shape::StepMarker { x, y, label, .. } => {
+            let radius = step_marker_radius(label.value, label.size, &label.font_descriptor);
+            let outline = step_marker_outline_thickness(label.size);
+            let halo_radius = radius + outline_width;
+            let fill = Color {
+                a: glow.a * 0.4,
+                ..glow
+            };
+            render_click_highlight(
+                ctx,
+                *x as f64,
+                *y as f64,
+                halo_radius,
+                outline + outline_width,
+                fill,
+                glow,
+                1.0,
+            );
         }
         Shape::EraserStroke { points, brush } => {
             let outline = brush.size + outline_width;

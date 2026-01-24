@@ -1,5 +1,7 @@
 use super::*;
-use crate::draw::{ArrowLabel, BLACK, DrawnShape, EraserBrush, EraserKind, FontDescriptor, Shape};
+use crate::draw::{
+    ArrowLabel, BLACK, DrawnShape, EraserBrush, EraserKind, FontDescriptor, Shape, StepMarkerLabel,
+};
 
 #[test]
 fn compute_hit_bounds_inflates_bounds_for_tolerance() {
@@ -152,6 +154,44 @@ fn arrow_label_hit_detects_label_bounds() {
     assert!(
         !hit_test(&drawn, (hit_point.0, hit_point.1 + 200), 0.1),
         "distant point should not hit label"
+    );
+}
+
+#[test]
+fn step_marker_hit_detects_center_and_rejects_outside_point() {
+    let font = FontDescriptor::default();
+    let label = StepMarkerLabel {
+        value: 7,
+        size: 16.0,
+        font_descriptor: font,
+    };
+    let drawn = DrawnShape {
+        id: 4,
+        shape: Shape::StepMarker {
+            x: 50,
+            y: 60,
+            color: BLACK,
+            label,
+        },
+        created_at: 0,
+        locked: false,
+    };
+
+    assert!(
+        hit_test(&drawn, (50, 60), 0.1),
+        "center point should hit step marker"
+    );
+
+    let Shape::StepMarker { label, .. } = &drawn.shape else {
+        panic!("expected step marker shape");
+    };
+    let radius =
+        crate::draw::shape::step_marker_radius(label.value, label.size, &label.font_descriptor);
+    let outline = crate::draw::shape::step_marker_outline_thickness(label.size);
+    let outside_x = 50 + (radius + outline / 2.0).ceil() as i32 + 2;
+    assert!(
+        !hit_test(&drawn, (outside_x, 60), 0.1),
+        "point outside radius should miss step marker"
     );
 }
 

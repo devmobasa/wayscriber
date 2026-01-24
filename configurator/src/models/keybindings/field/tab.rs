@@ -28,13 +28,15 @@ impl KeybindingField {
             | Self::SelectEraserTool
             | Self::ToggleEraserMode
             | Self::SelectMarkerTool
+            | Self::SelectStepMarkerTool
             | Self::SelectLineTool
             | Self::SelectRectTool
             | Self::SelectEllipseTool
             | Self::SelectArrowTool
             | Self::SelectHighlightTool
             | Self::ToggleHighlightTool
-            | Self::ResetArrowLabels => KeybindingsTabId::Tools,
+            | Self::ResetArrowLabels
+            | Self::ResetStepMarkers => KeybindingsTabId::Tools,
             Self::DuplicateSelection
             | Self::CopySelection
             | Self::PasteSelection

@@ -6,7 +6,7 @@ mod shapes;
 #[cfg(test)]
 mod tests;
 
-use crate::draw::shape::arrow_label_layout;
+use crate::draw::shape::{arrow_label_layout, step_marker_outline_thickness, step_marker_radius};
 use crate::draw::{DrawnShape, Shape};
 use crate::util::Rect;
 
@@ -130,6 +130,11 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
         Shape::MarkerStroke { points, thick, .. } => {
             let effective_thick = (*thick * 1.35).max(*thick + 1.0);
             shapes::freehand_hit(points, point, effective_thick, tolerance)
+        }
+        Shape::StepMarker { x, y, label, .. } => {
+            let radius = step_marker_radius(label.value, label.size, &label.font_descriptor);
+            let outline = step_marker_outline_thickness(label.size);
+            shapes::circle_hit(*x, *y, radius + outline / 2.0, point, tolerance)
         }
         Shape::EraserStroke { .. } => false,
     }

@@ -80,6 +80,12 @@ impl InputState {
                     head_at_end: self.arrow_head_at_end,
                     label: self.next_arrow_label(),
                 }),
+                Tool::StepMarker => Some(Shape::StepMarker {
+                    x: current_x,
+                    y: current_y,
+                    color: self.current_color,
+                    label: self.next_step_marker_label(),
+                }),
             }
         } else {
             None

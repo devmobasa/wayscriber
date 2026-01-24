@@ -59,11 +59,11 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (824, 80));
+    assert_eq!(top_size(&snapshot), (822, 80));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (948, 56));
+    assert_eq!(top_size(&snapshot), (966, 56));
 }
 
 #[test]

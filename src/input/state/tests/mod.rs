@@ -17,6 +17,7 @@ mod menus;
 mod presenter_mode;
 mod pressure_modes;
 mod selection;
+mod step_markers;
 mod text_edit;
 mod text_input;
 mod transform;
