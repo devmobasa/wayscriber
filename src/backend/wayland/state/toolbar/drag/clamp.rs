@@ -84,6 +84,13 @@ impl WaylandState {
             return (false, false);
         }
         let _ = self.clamp_toolbar_offsets(snapshot);
+        // During inline drag preview we keep the layer-shell toolbars suppressed
+        // and only move the inline-rendered preview. Applying layer-surface margins
+        // while receiving pointer motion in toolbar-local coordinates can drift.
+        if self.toolbar_drag_preview_active() {
+            drag_log("skip apply_toolbar_offsets: drag preview active");
+            return (false, false);
+        }
         if self.layer_shell.is_none() {
             return (false, false);
         }
