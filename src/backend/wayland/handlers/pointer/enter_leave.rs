@@ -23,12 +23,21 @@ impl WaylandState {
         );
         self.set_pointer_focus(true);
         self.set_pointer_over_toolbar(on_toolbar);
-        self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
         if on_toolbar {
+            if let Some((sx, sy)) =
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            {
+                self.set_current_mouse(sx as i32, sy as i32);
+                let (wx, wy) = self.zoomed_world_coords(sx, sy);
+                self.input_state.update_pointer_position(wx, wy);
+            } else {
+                self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+            }
             // Ensure pointer-driven visuals (e.g. eraser hover) update once on enter.
             self.input_state.needs_redraw = true;
         }
         if !on_toolbar {
+            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
             self.input_state.update_pointer_position(wx, wy);
             if self.input_state.eraser_mode == EraserMode::Stroke

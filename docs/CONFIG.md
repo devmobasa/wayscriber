@@ -267,6 +267,7 @@ text_color = [0.95, 0.96, 0.98, 1.0] # Near-white
 # Click highlight styling (visual feedback for mouse clicks)
 [ui.click_highlight]
 enabled = false
+show_on_highlight_tool = false
 radius = 24.0
 outline_thickness = 4.0
 duration_ms = 750
@@ -295,6 +296,7 @@ enabled = true
 - **Colors**: All RGBA values (0.0-1.0 range) with transparency control
 - **Layout**: Padding, line height, dot size, border width all configurable
 - **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; by default the halo follows your current pen color (set `use_pen_color = false` to keep a fixed color)
+- **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized
 

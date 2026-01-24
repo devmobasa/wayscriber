@@ -53,7 +53,11 @@ impl WaylandState {
             self.data.drag_top_base_y = None;
             if self.toolbar_drag_preview_active() {
                 drag_log("disable inline drag preview (restore layer-shell toolbars)");
+                // Turn off preview first so apply_toolbar_offsets can update layer-surface margins.
                 self.set_toolbar_drag_preview_active(false);
+                // Apply final offsets to the (still suppressed) layer-shell toolbars.
+                let snapshot = self.toolbar_snapshot();
+                let _ = self.apply_toolbar_offsets(&snapshot);
                 self.toolbar.set_suppressed(&self.compositor_state, false);
                 self.clear_inline_toolbar_hits();
                 self.clear_inline_toolbar_hover();

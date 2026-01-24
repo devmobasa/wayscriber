@@ -104,6 +104,10 @@ impl ConfigDraft {
             status_dot_radius: format_float(config.ui.status_bar_style.dot_radius),
 
             click_highlight_enabled: config.ui.click_highlight.enabled,
+            click_highlight_show_on_highlight_tool: config
+                .ui
+                .click_highlight
+                .show_on_highlight_tool,
             click_highlight_use_pen_color: config.ui.click_highlight.use_pen_color,
             click_highlight_radius: format_float(config.ui.click_highlight.radius),
             click_highlight_outline_thickness: format_float(

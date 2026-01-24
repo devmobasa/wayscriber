@@ -56,7 +56,7 @@ impl InputState {
         let selection = self.selected_shape_ids().to_vec();
         if selection.is_empty() {
             let anchor = self.keyboard_canvas_menu_anchor();
-            self.update_pointer_position(anchor.0, anchor.1);
+            self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Canvas, None);
             self.pending_menu_hover_recalc = false;
             self.set_context_menu_focus(None);
@@ -75,7 +75,7 @@ impl InputState {
                     })
                     .unwrap_or(false);
             let anchor = self.keyboard_shape_menu_anchor(&selection);
-            self.update_pointer_position(anchor.0, anchor.1);
+            self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
             self.pending_menu_hover_recalc = false;
             if !focus_edit || !self.focus_context_menu_command(MenuCommand::EditText) {

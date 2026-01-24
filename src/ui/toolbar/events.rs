@@ -44,6 +44,8 @@ pub enum ToolbarEvent {
     EnterStickyNoteMode,
     /// Toggle both highlight tool and click highlight together
     ToggleAllHighlight(bool),
+    /// Toggle highlight tool ring visibility while the highlight tool is active
+    ToggleHighlightToolRing(bool),
     ToggleFreeze,
     ZoomIn,
     ZoomOut,

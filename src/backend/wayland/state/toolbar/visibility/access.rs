@@ -1,4 +1,6 @@
 use super::*;
+use crate::backend::wayland::toolbar::ToolbarFocusTarget;
+use wayland_client::protocol::wl_surface;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {
@@ -55,5 +57,18 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn inline_toolbars_render_active(&self) -> bool {
         self.inline_toolbars_active() || self.toolbar_drag_preview_active()
+    }
+
+    pub(in crate::backend::wayland) fn toolbar_surface_screen_coords(
+        &self,
+        surface: &wl_surface::WlSurface,
+        position: (f64, f64),
+    ) -> Option<(f64, f64)> {
+        let target = self.toolbar.focus_target_for_surface(surface)?;
+        let kind = match target {
+            ToolbarFocusTarget::Top => MoveDragKind::Top,
+            ToolbarFocusTarget::Side => MoveDragKind::Side,
+        };
+        Some(self.local_to_screen_coords(kind, position))
     }
 }

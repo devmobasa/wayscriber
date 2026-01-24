@@ -98,6 +98,7 @@ impl WaylandState {
                 | ToolbarEvent::ToggleFill(_)
                 | ToolbarEvent::ApplyPreset(_)
         );
+        let persist_click_highlight = matches!(event, ToolbarEvent::ToggleHighlightToolRing(_));
 
         if self.input_state.apply_toolbar_event(event) {
             self.toolbar.mark_dirty();
@@ -120,6 +121,10 @@ impl WaylandState {
 
             if persist_drawing {
                 self.save_drawing_preferences();
+            }
+
+            if persist_click_highlight {
+                self.save_click_highlight_preferences();
             }
         }
         if let Some(action) = self.input_state.take_pending_preset_action() {
@@ -197,6 +202,14 @@ impl WaylandState {
 
         if let Err(err) = self.config.save() {
             log::warn!("Failed to persist drawing preferences: {}", err);
+        }
+    }
+
+    pub(in crate::backend::wayland) fn save_click_highlight_preferences(&mut self) {
+        self.config.ui.click_highlight.show_on_highlight_tool =
+            self.input_state.highlight_tool_ring_enabled();
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to persist click highlight preferences: {}", err);
         }
     }
 
