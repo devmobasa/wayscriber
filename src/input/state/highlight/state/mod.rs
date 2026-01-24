@@ -11,6 +11,7 @@ pub struct ClickHighlightState {
     settings: ClickHighlightSettings,
     enabled: bool,
     highlights: Vec<ActiveHighlight>,
+    tool_ring_bounds: Option<Rect>,
 }
 
 struct ActiveHighlight {
@@ -38,6 +39,7 @@ impl ClickHighlightState {
             settings,
             enabled,
             highlights: Vec::new(),
+            tool_ring_bounds: None,
         }
     }
 
@@ -47,6 +49,26 @@ impl ClickHighlightState {
 
     pub fn uses_pen_color(&self) -> bool {
         self.settings.use_pen_color
+    }
+
+    pub fn show_on_highlight_tool(&self) -> bool {
+        self.settings.show_on_highlight_tool
+    }
+
+    pub fn set_show_on_highlight_tool(
+        &mut self,
+        enabled: bool,
+        tool_active: bool,
+        x: i32,
+        y: i32,
+        tracker: &mut DirtyTracker,
+    ) -> bool {
+        if self.settings.show_on_highlight_tool == enabled {
+            return false;
+        }
+        self.settings.show_on_highlight_tool = enabled;
+        let _ = self.update_tool_ring(tool_active, x, y, tracker);
+        true
     }
 
     pub fn toggle(&mut self, tracker: &mut DirtyTracker) -> bool {
@@ -92,6 +114,34 @@ impl ClickHighlightState {
 
     pub fn has_active(&self) -> bool {
         !self.highlights.is_empty()
+    }
+
+    pub fn update_tool_ring(
+        &mut self,
+        active: bool,
+        x: i32,
+        y: i32,
+        tracker: &mut DirtyTracker,
+    ) -> bool {
+        let should_show = active && self.settings.show_on_highlight_tool;
+        let new_bounds = if should_show {
+            Self::bounds_for(&self.settings, x, y)
+        } else {
+            None
+        };
+
+        if new_bounds == self.tool_ring_bounds {
+            return false;
+        }
+
+        if let Some(bounds) = self.tool_ring_bounds {
+            tracker.mark_rect(bounds);
+        }
+        if let Some(bounds) = new_bounds {
+            tracker.mark_rect(bounds);
+        }
+        self.tool_ring_bounds = new_bounds;
+        true
     }
 
     pub fn advance(&mut self, now: Instant, tracker: &mut DirtyTracker) -> bool {
@@ -147,6 +197,23 @@ impl ClickHighlightState {
                 fade,
             );
         }
+    }
+
+    pub fn render_tool_ring(&self, ctx: &cairo::Context, x: i32, y: i32) {
+        if !self.settings.show_on_highlight_tool {
+            return;
+        }
+
+        crate::draw::render_click_highlight(
+            ctx,
+            x as f64,
+            y as f64,
+            self.settings.radius,
+            self.settings.outline_thickness,
+            self.settings.fill_color,
+            self.settings.outline_color,
+            1.0,
+        );
     }
 
     fn bounds_for(settings: &ClickHighlightSettings, x: i32, y: i32) -> Option<Rect> {

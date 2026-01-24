@@ -5,6 +5,19 @@ impl InputState {
     /// Updates the cached pointer location.
     pub fn update_pointer_position(&mut self, x: i32, y: i32) {
         self.last_pointer_position = (x, y);
+        if self.click_highlight.update_tool_ring(
+            self.highlight_tool_active(),
+            x,
+            y,
+            &mut self.dirty_tracker,
+        ) {
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Updates the cached pointer location without triggering pointer-driven visuals.
+    pub fn update_pointer_position_synthetic(&mut self, x: i32, y: i32) {
+        self.last_pointer_position = (x, y);
     }
 
     /// Updates the undo stack limit for subsequent actions.

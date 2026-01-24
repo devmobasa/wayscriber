@@ -8,6 +8,10 @@ pub struct ClickHighlightConfig {
     #[serde(default = "default_click_highlight_enabled")]
     pub enabled: bool,
 
+    /// Show a persistent ring while the highlight tool is active
+    #[serde(default = "default_click_highlight_show_on_highlight_tool")]
+    pub show_on_highlight_tool: bool,
+
     /// Radius of the highlight circle in pixels
     #[serde(default = "default_click_highlight_radius")]
     pub radius: f64,
@@ -37,6 +41,7 @@ impl Default for ClickHighlightConfig {
     fn default() -> Self {
         Self {
             enabled: default_click_highlight_enabled(),
+            show_on_highlight_tool: default_click_highlight_show_on_highlight_tool(),
             radius: default_click_highlight_radius(),
             outline_thickness: default_click_highlight_outline(),
             duration_ms: default_click_highlight_duration_ms(),
@@ -48,6 +53,10 @@ impl Default for ClickHighlightConfig {
 }
 
 fn default_click_highlight_enabled() -> bool {
+    false
+}
+
+fn default_click_highlight_show_on_highlight_tool() -> bool {
     false
 }
 

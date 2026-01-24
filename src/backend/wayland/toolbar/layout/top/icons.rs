@@ -124,6 +124,7 @@ pub(super) fn build_hits(
         });
         x += btn_size + gap;
 
+        let highlight_x = x;
         hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active),
@@ -135,6 +136,20 @@ pub(super) fn build_hits(
                     .binding_for_action(Action::ToggleHighlightTool),
             )),
         });
+        if snapshot.highlight_tool_active {
+            let ring_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
+            hits.push(HitRegion {
+                rect: (
+                    highlight_x,
+                    ring_y,
+                    btn_size,
+                    ToolbarLayoutSpec::TOP_ICON_FILL_HEIGHT,
+                ),
+                event: ToolbarEvent::ToggleHighlightToolRing(!snapshot.highlight_tool_ring_enabled),
+                kind: HitKind::Click,
+                tooltip: Some("Highlight ring".to_string()),
+            });
+        }
         x += btn_size + gap;
     }
 

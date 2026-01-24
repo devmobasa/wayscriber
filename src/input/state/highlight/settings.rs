@@ -7,6 +7,7 @@ use crate::draw::Color;
 #[derive(Clone)]
 pub struct ClickHighlightSettings {
     pub enabled: bool,
+    pub show_on_highlight_tool: bool,
     pub radius: f64,
     pub outline_thickness: f64,
     pub duration: Duration,
@@ -34,6 +35,7 @@ impl ClickHighlightSettings {
         };
         Self {
             enabled: false,
+            show_on_highlight_tool: false,
             radius: 24.0,
             outline_thickness: 4.0,
             duration: Duration::from_millis(750),
@@ -62,6 +64,7 @@ impl From<&ClickHighlightConfig> for ClickHighlightSettings {
         };
         ClickHighlightSettings {
             enabled: cfg.enabled,
+            show_on_highlight_tool: cfg.show_on_highlight_tool,
             radius: cfg.radius,
             outline_thickness: cfg.outline_thickness,
             duration: Duration::from_millis(cfg.duration_ms),

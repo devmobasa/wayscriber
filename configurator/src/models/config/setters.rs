@@ -88,6 +88,9 @@ impl ConfigDraft {
                 self.ui_toolbar_force_inline = value;
             }
             ToggleField::UiClickHighlightEnabled => self.click_highlight_enabled = value,
+            ToggleField::UiClickHighlightShowOnHighlightTool => {
+                self.click_highlight_show_on_highlight_tool = value;
+            }
             ToggleField::UiClickHighlightUsePenColor => self.click_highlight_use_pen_color = value,
             ToggleField::PresenterHideStatusBar => self.presenter_hide_status_bar = value,
             ToggleField::PresenterHideToolbars => self.presenter_hide_toolbars = value,

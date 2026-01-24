@@ -83,6 +83,10 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_highlight_tool_ring(&mut self, enable: bool) -> bool {
+        self.set_highlight_tool_ring_enabled(enable)
+    }
+
     pub(super) fn apply_toolbar_apply_preset(&mut self, slot: usize) -> bool {
         self.apply_preset(slot)
     }

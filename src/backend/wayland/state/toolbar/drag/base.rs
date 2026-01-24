@@ -43,7 +43,7 @@ impl WaylandState {
 
     /// Convert a toolbar-local coordinate into a screen-relative coordinate so that
     /// dragging continues to work even after the surface has moved.
-    pub(super) fn local_to_screen_coords(
+    pub(in crate::backend::wayland) fn local_to_screen_coords(
         &self,
         kind: MoveDragKind,
         local_coord: (f64, f64),
