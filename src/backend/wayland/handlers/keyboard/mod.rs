@@ -245,6 +245,11 @@ impl WaylandState {
             self.input_state.font_descriptor.clone(),
             self.input_state.fill_enabled,
         );
+        let highlight_before = (
+            self.input_state.click_highlight_enabled(),
+            self.input_state.highlight_tool_ring_enabled(),
+            self.input_state.presenter_mode,
+        );
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
         let prefs_changed = prefs_before.0 != self.input_state.current_color
@@ -256,6 +261,17 @@ impl WaylandState {
             || prefs_before.6 != self.input_state.fill_enabled;
         if prefs_changed {
             self.save_drawing_preferences();
+        }
+        let highlight_after = (
+            self.input_state.click_highlight_enabled(),
+            self.input_state.highlight_tool_ring_enabled(),
+            self.input_state.presenter_mode,
+        );
+        if highlight_before.2 == highlight_after.2
+            && (highlight_before.0 != highlight_after.0
+                || highlight_before.1 != highlight_after.1)
+        {
+            self.save_click_highlight_preferences();
         }
 
         #[cfg(tablet)]

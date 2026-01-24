@@ -146,24 +146,25 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             let label_text = label.value.to_string();
             let radius = step_marker_radius(label.value, label.size, &label.font_descriptor);
             let outline_thickness = step_marker_outline_thickness(label.size);
+            let alpha = color.a.clamp(0.0, 1.0);
             let fill_color = Color {
-                a: (color.a * 0.9).clamp(0.65, 1.0),
+                a: (alpha * 0.9).clamp(0.0, 1.0),
                 ..*color
             };
-            let brightness = fill_color.r * 0.299 + fill_color.g * 0.587 + fill_color.b * 0.114;
+            let brightness = color.r * 0.299 + color.g * 0.587 + color.b * 0.114;
             let (outline_color, text_color) = if brightness > 0.6 {
                 (
                     Color {
                         r: 0.05,
                         g: 0.05,
                         b: 0.05,
-                        a: 0.85,
+                        a: 0.85 * alpha,
                     },
                     Color {
                         r: 0.12,
                         g: 0.12,
                         b: 0.12,
-                        a: 1.0,
+                        a: alpha,
                     },
                 )
             } else {
@@ -172,13 +173,13 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                         r: 0.98,
                         g: 0.98,
                         b: 0.98,
-                        a: 0.9,
+                        a: 0.9 * alpha,
                     },
                     Color {
                         r: 0.98,
                         g: 0.98,
                         b: 0.98,
-                        a: 1.0,
+                        a: alpha,
                     },
                 )
             };
