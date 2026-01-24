@@ -119,13 +119,7 @@ pub(super) fn ellipse_outline_hit(
     outer && !inner
 }
 
-pub(super) fn circle_hit(
-    cx: i32,
-    cy: i32,
-    radius: f64,
-    point: (i32, i32),
-    tolerance: f64,
-) -> bool {
+pub(super) fn circle_hit(cx: i32, cy: i32, radius: f64, point: (i32, i32), tolerance: f64) -> bool {
     let dx = point.0 as f64 - cx as f64;
     let dy = point.1 as f64 - cy as f64;
     let r = radius + tolerance.max(0.5);

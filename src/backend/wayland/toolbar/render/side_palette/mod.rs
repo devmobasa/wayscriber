@@ -8,8 +8,8 @@ mod marker;
 mod pages;
 mod presets;
 mod settings;
-mod step_marker;
 mod step;
+mod step_marker;
 mod text;
 mod thickness;
 

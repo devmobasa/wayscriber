@@ -210,7 +210,10 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn save_click_highlight_preferences(&mut self) {
         if !(self.input_state.presenter_mode
-            && self.input_state.presenter_mode_config.enable_click_highlight)
+            && self
+                .input_state
+                .presenter_mode_config
+                .enable_click_highlight)
         {
             self.config.ui.click_highlight.enabled = self.input_state.click_highlight_enabled();
         }

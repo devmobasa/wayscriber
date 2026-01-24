@@ -1,4 +1,6 @@
-use super::super::widgets::constants::{COLOR_LABEL_HINT, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, FONT_SIZE_SMALL, set_color};
+use super::super::widgets::constants::{
+    COLOR_LABEL_HINT, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, FONT_SIZE_SMALL, set_color,
+};
 use super::super::widgets::*;
 use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
@@ -58,7 +60,15 @@ pub(super) fn draw_step_marker_section(layout: &mut SidePaletteLayout, y: &mut f
         .map(|(hx, hy)| point_in_rect(hx, hy, x, reset_y, content_width, reset_h))
         .unwrap_or(false);
     draw_button(ctx, x, reset_y, content_width, reset_h, false, reset_hover);
-    draw_label_center(ctx, label_style, x, reset_y, content_width, reset_h, "Reset");
+    draw_label_center(
+        ctx,
+        label_style,
+        x,
+        reset_y,
+        content_width,
+        reset_h,
+        "Reset",
+    );
     hits.push(HitRegion {
         rect: (x, reset_y, content_width, reset_h),
         event: ToolbarEvent::ResetStepMarkerCounter,

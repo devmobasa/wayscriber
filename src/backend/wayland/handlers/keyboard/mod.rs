@@ -268,8 +268,7 @@ impl WaylandState {
             self.input_state.presenter_mode,
         );
         if highlight_before.2 == highlight_after.2
-            && (highlight_before.0 != highlight_after.0
-                || highlight_before.1 != highlight_after.1)
+            && (highlight_before.0 != highlight_after.0 || highlight_before.1 != highlight_after.1)
         {
             self.save_click_highlight_preferences();
         }

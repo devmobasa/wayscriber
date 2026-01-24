@@ -4,12 +4,12 @@ use super::strokes::{
     render_freehand_borrowed, render_freehand_pressure_borrowed, render_marker_stroke_borrowed,
 };
 use super::text::{render_sticky_note, render_text};
+use crate::draw::Color;
 use crate::draw::shape::Shape;
 use crate::draw::shape::{
     ARROW_LABEL_BACKGROUND, arrow_label_layout, measure_text_with_context,
     step_marker_outline_thickness, step_marker_radius,
 };
-use crate::draw::Color;
 
 /// Renders a single shape to a Cairo context.
 ///

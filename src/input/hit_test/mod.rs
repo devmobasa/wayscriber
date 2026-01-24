@@ -6,9 +6,7 @@ mod shapes;
 #[cfg(test)]
 mod tests;
 
-use crate::draw::shape::{
-    arrow_label_layout, step_marker_outline_thickness, step_marker_radius,
-};
+use crate::draw::shape::{arrow_label_layout, step_marker_outline_thickness, step_marker_radius};
 use crate::draw::{DrawnShape, Shape};
 use crate::util::Rect;
 

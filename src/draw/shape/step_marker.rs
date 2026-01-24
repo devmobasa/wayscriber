@@ -7,11 +7,7 @@ const STEP_MARKER_PADDING_RATIO: f64 = 0.45;
 const STEP_MARKER_PADDING_MIN: f64 = 6.0;
 const STEP_MARKER_MIN_RADIUS: f64 = 10.0;
 
-pub(crate) fn step_marker_radius(
-    value: u32,
-    size: f64,
-    font_descriptor: &FontDescriptor,
-) -> f64 {
+pub(crate) fn step_marker_radius(value: u32, size: f64, font_descriptor: &FontDescriptor) -> f64 {
     let text = value.to_string();
     let font_desc_str = font_descriptor.to_pango_string(size);
     let max_dim = measure_text_cached(&text, &font_desc_str, size, None)
