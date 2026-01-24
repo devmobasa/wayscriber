@@ -81,6 +81,8 @@ pub struct InputState {
     pub arrow_label_enabled: bool,
     /// Next label value for auto-numbered arrows
     pub arrow_label_counter: u32,
+    /// Next label value for step markers
+    pub step_marker_counter: u32,
     /// Current modifier key state
     pub modifiers: Modifiers,
     /// Current drawing mode state machine

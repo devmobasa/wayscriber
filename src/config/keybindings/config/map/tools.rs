@@ -22,6 +22,10 @@ impl KeybindingsConfig {
             Action::SelectSelectionTool,
         )?;
         inserter.insert_all(&self.tools.select_marker_tool, Action::SelectMarkerTool)?;
+        inserter.insert_all(
+            &self.tools.select_step_marker_tool,
+            Action::SelectStepMarkerTool,
+        )?;
         inserter.insert_all(&self.tools.select_eraser_tool, Action::SelectEraserTool)?;
         inserter.insert_all(&self.tools.toggle_eraser_mode, Action::ToggleEraserMode)?;
         inserter.insert_all(&self.tools.select_pen_tool, Action::SelectPenTool)?;
@@ -42,6 +46,10 @@ impl KeybindingsConfig {
         inserter.insert_all(
             &self.tools.reset_arrow_labels,
             Action::ResetArrowLabelCounter,
+        )?;
+        inserter.insert_all(
+            &self.tools.reset_step_markers,
+            Action::ResetStepMarkerCounter,
         )?;
         Ok(())
     }

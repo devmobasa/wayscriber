@@ -8,6 +8,7 @@ mod marker;
 mod pages;
 mod presets;
 mod settings;
+mod step_marker;
 mod step;
 mod text;
 mod thickness;
@@ -93,6 +94,7 @@ pub fn render_side_palette(
 
     thickness::draw_thickness_section(&mut layout, &mut y);
     arrow::draw_arrow_section(&mut layout, &mut y);
+    step_marker::draw_step_marker_section(&mut layout, &mut y);
     marker::draw_marker_opacity_section(&mut layout, &mut y);
     text::draw_text_controls_section(&mut layout, &mut y);
     drawer::draw_drawer_tabs(&mut layout, &mut y);

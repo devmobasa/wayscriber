@@ -23,6 +23,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_select_marker_tool")]
     pub select_marker_tool: Vec<String>,
 
+    #[serde(default = "default_select_step_marker_tool")]
+    pub select_step_marker_tool: Vec<String>,
+
     #[serde(default = "default_select_eraser_tool")]
     pub select_eraser_tool: Vec<String>,
 
@@ -58,6 +61,9 @@ pub struct ToolKeybindingsConfig {
 
     #[serde(default = "default_reset_arrow_labels")]
     pub reset_arrow_labels: Vec<String>,
+
+    #[serde(default = "default_reset_step_markers")]
+    pub reset_step_markers: Vec<String>,
 }
 
 impl Default for ToolKeybindingsConfig {
@@ -69,6 +75,7 @@ impl Default for ToolKeybindingsConfig {
             decrease_marker_opacity: default_decrease_marker_opacity(),
             select_selection_tool: default_select_selection_tool(),
             select_marker_tool: default_select_marker_tool(),
+            select_step_marker_tool: default_select_step_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
             toggle_eraser_mode: default_toggle_eraser_mode(),
             select_pen_tool: default_select_pen_tool(),
@@ -81,6 +88,7 @@ impl Default for ToolKeybindingsConfig {
             increase_font_size: default_increase_font_size(),
             decrease_font_size: default_decrease_font_size(),
             reset_arrow_labels: default_reset_arrow_labels(),
+            reset_step_markers: default_reset_step_markers(),
         }
     }
 }

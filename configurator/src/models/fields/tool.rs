@@ -9,6 +9,7 @@ pub enum ToolOption {
     Ellipse,
     Arrow,
     Marker,
+    StepMarker,
     Highlight,
     Eraser,
 }
@@ -23,6 +24,7 @@ impl ToolOption {
             Self::Ellipse,
             Self::Arrow,
             Self::Marker,
+            Self::StepMarker,
             Self::Highlight,
             Self::Eraser,
         ]
@@ -37,6 +39,7 @@ impl ToolOption {
             Self::Ellipse => "Ellipse",
             Self::Arrow => "Arrow",
             Self::Marker => "Marker",
+            Self::StepMarker => "Step",
             Self::Highlight => "Highlight",
             Self::Eraser => "Eraser",
         }
@@ -51,6 +54,7 @@ impl ToolOption {
             Self::Ellipse => Tool::Ellipse,
             Self::Arrow => Tool::Arrow,
             Self::Marker => Tool::Marker,
+            Self::StepMarker => Tool::StepMarker,
             Self::Highlight => Tool::Highlight,
             Self::Eraser => Tool::Eraser,
         }
@@ -65,6 +69,7 @@ impl ToolOption {
             Tool::Ellipse => Self::Ellipse,
             Tool::Arrow => Self::Arrow,
             Tool::Marker => Self::Marker,
+            Tool::StepMarker => Self::StepMarker,
             Tool::Highlight => Self::Highlight,
             Tool::Eraser => Self::Eraser,
         }

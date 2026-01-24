@@ -706,6 +706,7 @@ decrease_marker_opacity = ["Ctrl+Alt+ArrowDown"]
 select_selection_tool = ["V"]
 select_pen_tool = ["F"]
 select_marker_tool = ["H"]
+select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
 select_line_tool = []
@@ -714,6 +715,10 @@ select_ellipse_tool = []
 select_arrow_tool = []
 select_highlight_tool = []
 toggle_highlight_tool = ["Ctrl+Alt+H"]
+
+# Reset label counters
+reset_arrow_labels = ["Ctrl+Shift+R"]
+reset_step_markers = []
 
 # Adjust font size
 increase_font_size = ["Ctrl+Shift++", "Ctrl+Shift+="]

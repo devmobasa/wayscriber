@@ -72,7 +72,8 @@ pub(super) fn shape_color(shape: &Shape) -> Option<Color> {
         | Shape::Rect { color, .. }
         | Shape::Ellipse { color, .. }
         | Shape::Arrow { color, .. }
-        | Shape::Text { color, .. } => Some(*color),
+        | Shape::Text { color, .. }
+        | Shape::StepMarker { color, .. } => Some(*color),
         Shape::MarkerStroke { color, .. } => Some(Color { a: 1.0, ..*color }),
         Shape::StickyNote { background, .. } => Some(*background),
         _ => None,

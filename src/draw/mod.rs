@@ -30,7 +30,9 @@ pub use render::{
     render_text,
 };
 #[allow(unused_imports)]
-pub use shape::{ArrowLabel, EraserBrush, EraserKind, Shape, invalidate_text_cache};
+pub use shape::{
+    ArrowLabel, EraserBrush, EraserKind, Shape, StepMarkerLabel, invalidate_text_cache,
+};
 
 // Re-export color constants for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

@@ -122,6 +122,7 @@ fn draw_preset_icon(ctx: &cairo::Context, tool: Tool, x: f64, y: f64, size: f64)
         Tool::Ellipse => toolbar_icons::draw_icon_circle(ctx, x, y, size),
         Tool::Arrow => toolbar_icons::draw_icon_arrow(ctx, x, y, size),
         Tool::Marker => toolbar_icons::draw_icon_marker(ctx, x, y, size),
+        Tool::StepMarker => toolbar_icons::draw_icon_step_marker(ctx, x, y, size),
         Tool::Highlight => toolbar_icons::draw_icon_highlight(ctx, x, y, size),
         Tool::Eraser => toolbar_icons::draw_icon_eraser(ctx, x, y, size),
     }

@@ -13,6 +13,7 @@ mod basics;
 mod board_picker;
 mod drawing;
 mod erase;
+mod step_markers;
 mod menus;
 mod presenter_mode;
 mod pressure_modes;

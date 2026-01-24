@@ -51,6 +51,10 @@ impl InputState {
         self.reset_arrow_label_counter()
     }
 
+    pub(super) fn apply_toolbar_reset_step_marker_counter(&mut self) -> bool {
+        self.reset_step_marker_counter()
+    }
+
     pub(super) fn apply_toolbar_nudge_thickness(&mut self, delta: f64) -> bool {
         self.nudge_thickness_for_active_tool(delta)
     }

@@ -49,6 +49,9 @@ impl InputState {
             Action::SelectMarkerTool => {
                 self.set_tool_override(Some(Tool::Marker));
             }
+            Action::SelectStepMarkerTool => {
+                self.set_tool_override(Some(Tool::StepMarker));
+            }
             Action::SelectEraserTool => {
                 self.set_tool_override(Some(Tool::Eraser));
             }
@@ -85,6 +88,11 @@ impl InputState {
             Action::ResetArrowLabelCounter => {
                 if self.reset_arrow_label_counter() {
                     info!("Arrow label counter reset");
+                }
+            }
+            Action::ResetStepMarkerCounter => {
+                if self.reset_step_marker_counter() {
+                    info!("Step marker counter reset");
                 }
             }
             Action::ToggleFill => {

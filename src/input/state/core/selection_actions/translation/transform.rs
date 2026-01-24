@@ -75,6 +75,10 @@ impl InputState {
                 *x += dx;
                 *y += dy;
             }
+            Shape::StepMarker { x, y, .. } => {
+                *x += dx;
+                *y += dy;
+            }
             Shape::StickyNote { x, y, .. } => {
                 *x += dx;
                 *y += dy;

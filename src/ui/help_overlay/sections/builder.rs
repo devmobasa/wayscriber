@@ -164,6 +164,10 @@ pub(crate) fn build_section_sets(
                 action_label(Action::SelectMarkerTool),
             ),
             row(
+                binding_or_fallback(bindings, Action::SelectStepMarkerTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectStepMarkerTool),
+            ),
+            row(
                 binding_or_fallback(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
                 action_label(Action::SelectEraserTool),
             ),

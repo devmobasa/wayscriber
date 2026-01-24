@@ -1,5 +1,6 @@
 mod actions;
 mod arrow_labels;
+mod step_markers;
 mod font;
 mod frozen_zoom;
 mod help_overlay;

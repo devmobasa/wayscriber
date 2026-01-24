@@ -2,6 +2,7 @@ use super::bounds::{
     bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_eraser,
     bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
 };
+use super::step_marker::step_marker_bounds;
 use super::text::{bounding_box_for_sticky_note, bounding_box_for_text};
 use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
@@ -28,6 +29,17 @@ pub enum EraserKind {
 /// Label metadata for numbered arrows.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ArrowLabel {
+    /// Numeric label value.
+    pub value: u32,
+    /// Font size in points.
+    pub size: f64,
+    /// Font descriptor (family, weight, style).
+    pub font_descriptor: FontDescriptor,
+}
+
+/// Label metadata for numbered step markers.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StepMarkerLabel {
     /// Numeric label value.
     pub value: u32,
     /// Font size in points.
@@ -131,6 +143,17 @@ pub enum Shape {
         /// Optional label rendered near the arrow.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<ArrowLabel>,
+    },
+    /// Numbered step marker bubble.
+    StepMarker {
+        /// Center X coordinate
+        x: i32,
+        /// Center Y coordinate
+        y: i32,
+        /// Fill color for the marker bubble
+        color: Color,
+        /// Label metadata (number + font)
+        label: StepMarkerLabel,
     },
     /// Text annotation (activated with 'T' key)
     Text {
@@ -281,6 +304,9 @@ impl Shape {
                 *background_enabled,
                 *wrap_width,
             ),
+            Shape::StepMarker { x, y, label, .. } => {
+                step_marker_bounds(*x, *y, label.value, label.size, &label.font_descriptor)
+            }
             Shape::StickyNote {
                 x,
                 y,
@@ -309,6 +335,7 @@ impl Shape {
             Shape::Text { .. } => "Text",
             Shape::StickyNote { .. } => "Sticky Note",
             Shape::MarkerStroke { .. } => "Marker",
+            Shape::StepMarker { .. } => "Step Marker",
             Shape::EraserStroke { .. } => "Eraser",
         }
     }

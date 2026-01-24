@@ -17,6 +17,7 @@ pub enum ToolbarEvent {
     ToggleFill(bool),
     ToggleArrowLabels(bool),
     ResetArrowLabelCounter,
+    ResetStepMarkerCounter,
     SetUndoDelay(f64),
     SetRedoDelay(f64),
     UndoAll,

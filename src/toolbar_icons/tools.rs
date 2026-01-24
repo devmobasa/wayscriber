@@ -264,3 +264,36 @@ pub fn draw_icon_marker(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.fill();
     ctx.restore().ok();
 }
+
+/// Draw a step marker icon (numbered circle)
+pub fn draw_icon_step_marker(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.6);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    let cx = x + s * 0.5;
+    let cy = y + s * 0.5;
+    let r = s * 0.32;
+    // Offset bubble to hint at a sequence
+    ctx.arc(cx - r * 0.45, cy - r * 0.45, r * 0.55, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+    ctx.arc(cx, cy, r, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+
+    // Stylized "1" glyph
+    let one_h = r * 1.15;
+    let one_w = r * 0.35;
+    ctx.set_line_width((s * 0.12).max(1.8));
+    ctx.move_to(cx - one_w * 0.3, cy - one_h * 0.45);
+    ctx.line_to(cx, cy - one_h * 0.6);
+    ctx.line_to(cx + one_w * 0.25, cy - one_h * 0.35);
+    let _ = ctx.stroke();
+    ctx.move_to(cx, cy - one_h * 0.45);
+    ctx.line_to(cx, cy + one_h * 0.5);
+    let _ = ctx.stroke();
+    ctx.move_to(cx - one_w, cy + one_h * 0.5);
+    ctx.line_to(cx + one_w, cy + one_h * 0.5);
+    let _ = ctx.stroke();
+}

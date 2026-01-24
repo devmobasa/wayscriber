@@ -57,6 +57,7 @@ pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
         Tool::Ellipse => Some(Action::SelectEllipseTool),
         Tool::Arrow => Some(Action::SelectArrowTool),
         Tool::Marker => Some(Action::SelectMarkerTool),
+        Tool::StepMarker => Some(Action::SelectStepMarkerTool),
         Tool::Highlight => Some(Action::SelectHighlightTool),
         Tool::Eraser => Some(Action::SelectEraserTool),
     }
@@ -104,6 +105,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::ZoomIn => Some(Action::ZoomIn),
         ToolbarEvent::ZoomOut => Some(Action::ZoomOut),
         ToolbarEvent::ResetZoom => Some(Action::ResetZoom),
+        ToolbarEvent::ResetStepMarkerCounter => Some(Action::ResetStepMarkerCounter),
         ToolbarEvent::ToggleZoomLock => Some(Action::ToggleZoomLock),
         ToolbarEvent::ApplyPreset(slot) => action_for_apply_preset(*slot),
         ToolbarEvent::SavePreset(slot) => action_for_save_preset(*slot),

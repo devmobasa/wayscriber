@@ -27,6 +27,9 @@ impl InputState {
                 self.apply_toolbar_toggle_arrow_labels(enable)
             }
             ToolbarEvent::ResetArrowLabelCounter => self.apply_toolbar_reset_arrow_label_counter(),
+            ToolbarEvent::ResetStepMarkerCounter => {
+                self.apply_toolbar_reset_step_marker_counter()
+            }
             ToolbarEvent::SetUndoDelay(delay_secs) => self.apply_toolbar_set_undo_delay(delay_secs),
             ToolbarEvent::SetRedoDelay(delay_secs) => self.apply_toolbar_set_redo_delay(delay_secs),
             ToolbarEvent::SetCustomUndoDelay(delay_secs) => {
