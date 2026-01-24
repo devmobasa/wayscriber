@@ -79,6 +79,58 @@ impl WaylandState {
             .cloned()
             .unwrap_or_else(|| self.toolbar_snapshot());
 
+        // When inline drag preview is active we keep the layer-shell toolbars
+        // suppressed and only move the inline-rendered preview.
+        if self.toolbar_drag_preview_active() {
+            let last_local = match &self.data.toolbar_move_drag {
+                Some(d) if d.kind == kind && !d.coord_is_screen => d.last_coord,
+                _ => local_coord,
+            };
+
+            self.data.active_drag_kind = Some(kind);
+
+            let delta = (local_coord.0 - last_local.0, local_coord.1 - last_local.1);
+            if delta.0 == 0.0 && delta.1 == 0.0 {
+                self.data.toolbar_move_drag = Some(MoveDrag {
+                    kind,
+                    last_coord: local_coord,
+                    coord_is_screen: false,
+                });
+                return;
+            }
+
+            match kind {
+                MoveDragKind::Top => {
+                    self.data.toolbar_top_offset += delta.0;
+                    self.data.toolbar_top_offset_y += delta.1;
+                }
+                MoveDragKind::Side => {
+                    self.data.toolbar_side_offset_x += delta.0;
+                    self.data.toolbar_side_offset += delta.1;
+                }
+            }
+
+            self.data.toolbar_move_drag = Some(MoveDrag {
+                kind,
+                last_coord: local_coord,
+                coord_is_screen: false,
+            });
+
+            // Clamp offsets; applying layer-surface margins is skipped while preview is active.
+            let _ = self.apply_toolbar_offsets(&snapshot);
+
+            let inline_render_active = self.inline_toolbars_render_active();
+            if inline_render_active {
+                self.toolbar.mark_dirty();
+                self.input_state.dirty_tracker.mark_full();
+                self.input_state.needs_redraw = true;
+            }
+            if self.layer_shell.is_none() || inline_render_active {
+                self.clear_inline_toolbar_hits();
+            }
+            return;
+        }
+
         // Check if we need to transition coordinate systems
         let (last_coord, coord_is_screen) = match &self.data.toolbar_move_drag {
             Some(d) if d.kind == kind => (d.last_coord, d.coord_is_screen),
