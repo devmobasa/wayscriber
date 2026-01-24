@@ -265,7 +265,7 @@ pub fn draw_icon_marker(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.restore().ok();
 }
 
-/// Draw a step marker icon (numbered circle)
+/// Draw a step marker icon (numbered list: 1, 2, 3)
 pub fn draw_icon_step_marker(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;
     let stroke = (s * 0.1).max(1.6);
@@ -273,27 +273,60 @@ pub fn draw_icon_step_marker(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.set_line_cap(cairo::LineCap::Round);
     ctx.set_line_join(cairo::LineJoin::Round);
 
-    let cx = x + s * 0.5;
-    let cy = y + s * 0.5;
-    let r = s * 0.32;
-    // Offset bubble to hint at a sequence
-    ctx.arc(cx - r * 0.45, cy - r * 0.45, r * 0.55, 0.0, PI * 2.0);
+    // Draw "1" - top left
+    let one_x = x + s * 0.22;
+    let one_top = y + s * 0.12;
+    let one_bot = y + s * 0.38;
+    let one_w = s * 0.12;
+    // Serif at top
+    ctx.move_to(one_x - one_w * 0.6, one_top + s * 0.06);
+    ctx.line_to(one_x, one_top);
     let _ = ctx.stroke();
-    ctx.arc(cx, cy, r, 0.0, PI * 2.0);
+    // Vertical stroke
+    ctx.move_to(one_x, one_top);
+    ctx.line_to(one_x, one_bot);
+    let _ = ctx.stroke();
+    // Base
+    ctx.move_to(one_x - one_w, one_bot);
+    ctx.line_to(one_x + one_w, one_bot);
     let _ = ctx.stroke();
 
-    // Stylized "1" glyph
-    let one_h = r * 1.15;
-    let one_w = r * 0.35;
-    ctx.set_line_width((s * 0.12).max(1.8));
-    ctx.move_to(cx - one_w * 0.3, cy - one_h * 0.45);
-    ctx.line_to(cx, cy - one_h * 0.6);
-    ctx.line_to(cx + one_w * 0.25, cy - one_h * 0.35);
+    // Draw "2" - top right
+    let two_x = x + s * 0.62;
+    let two_top = y + s * 0.12;
+    let two_bot = y + s * 0.38;
+    let two_w = s * 0.14;
+    // Top curve of 2
+    ctx.arc(two_x, two_top + s * 0.08, two_w, -PI * 0.9, PI * 0.15);
     let _ = ctx.stroke();
-    ctx.move_to(cx, cy - one_h * 0.45);
-    ctx.line_to(cx, cy + one_h * 0.5);
+    // Diagonal and base
+    ctx.move_to(two_x + two_w * 0.9, two_top + s * 0.14);
+    ctx.line_to(two_x - two_w, two_bot);
+    ctx.line_to(two_x + two_w, two_bot);
     let _ = ctx.stroke();
-    ctx.move_to(cx - one_w, cy + one_h * 0.5);
-    ctx.line_to(cx + one_w, cy + one_h * 0.5);
+
+    // Draw "3" - bottom center
+    let three_x = x + s * 0.5;
+    let three_top = y + s * 0.54;
+    let three_bot = y + s * 0.88;
+    let three_w = s * 0.16;
+    let three_h = (three_bot - three_top) / 2.0;
+    // Top arc of 3
+    ctx.arc(
+        three_x,
+        three_top + three_h * 0.45,
+        three_w * 0.85,
+        -PI * 0.85,
+        PI * 0.35,
+    );
+    let _ = ctx.stroke();
+    // Bottom arc of 3
+    ctx.arc(
+        three_x,
+        three_bot - three_h * 0.45,
+        three_w * 0.85,
+        -PI * 0.35,
+        PI * 0.85,
+    );
     let _ = ctx.stroke();
 }
