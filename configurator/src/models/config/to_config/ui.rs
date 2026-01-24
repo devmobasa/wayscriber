@@ -97,6 +97,8 @@ impl ConfigDraft {
         );
 
         config.ui.click_highlight.enabled = self.click_highlight_enabled;
+        config.ui.click_highlight.show_on_highlight_tool =
+            self.click_highlight_show_on_highlight_tool;
         config.ui.click_highlight.use_pen_color = self.click_highlight_use_pen_color;
         parse_field(
             &self.click_highlight_radius,

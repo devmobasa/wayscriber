@@ -385,6 +385,9 @@ dot_radius = 6.0
 # Start with the highlight effect enabled when the overlay launches
 enabled = false
 
+# Show a persistent ring while the highlight tool is active
+show_on_highlight_tool = false
+
 # Radius of the highlight circle in pixels (16 - 160)
 radius = 24.0
 

@@ -10,6 +10,28 @@ impl InputState {
         self.click_highlight.enabled()
     }
 
+    /// Returns whether the persistent highlight ring is enabled.
+    pub fn highlight_tool_ring_enabled(&self) -> bool {
+        self.click_highlight.show_on_highlight_tool()
+    }
+
+    /// Enables or disables the persistent highlight ring.
+    pub fn set_highlight_tool_ring_enabled(&mut self, enabled: bool) -> bool {
+        let (x, y) = self.last_pointer_position;
+        if self.click_highlight.set_show_on_highlight_tool(
+            enabled,
+            self.highlight_tool_active(),
+            x,
+            y,
+            &mut self.dirty_tracker,
+        ) {
+            self.needs_redraw = true;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Toggle the click highlight feature and mark the frame for redraw.
     pub fn toggle_click_highlight(&mut self) -> bool {
         let enabled = self.click_highlight.toggle(&mut self.dirty_tracker);
@@ -47,6 +69,13 @@ impl InputState {
     /// Render active highlights to the cairo context.
     pub fn render_click_highlights(&self, ctx: &CairoContext, now: Instant) {
         self.click_highlight.render(ctx, now);
+    }
+
+    /// Render a persistent highlight ring while the highlight tool is active.
+    pub fn render_highlight_tool_ring(&self, ctx: &CairoContext, x: i32, y: i32) {
+        if self.highlight_tool_active() {
+            self.click_highlight.render_tool_ring(ctx, x, y);
+        }
     }
 
     /// Returns the active tool considering overrides and drawing state.

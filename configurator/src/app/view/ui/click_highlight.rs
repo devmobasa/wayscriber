@@ -21,6 +21,12 @@ impl ConfiguratorApp {
                 ToggleField::UiClickHighlightEnabled,
             ),
             toggle_row(
+                "Show ring while highlight tool is active",
+                self.draft.click_highlight_show_on_highlight_tool,
+                self.defaults.click_highlight_show_on_highlight_tool,
+                ToggleField::UiClickHighlightShowOnHighlightTool,
+            ),
+            toggle_row(
                 "Link highlight color to current pen",
                 self.draft.click_highlight_use_pen_color,
                 self.defaults.click_highlight_use_pen_color,

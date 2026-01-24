@@ -89,6 +89,7 @@ pub struct ConfigDraft {
     pub status_dot_radius: String,
 
     pub click_highlight_enabled: bool,
+    pub click_highlight_show_on_highlight_tool: bool,
     pub click_highlight_use_pen_color: bool,
     pub click_highlight_radius: String,
     pub click_highlight_outline_thickness: String,

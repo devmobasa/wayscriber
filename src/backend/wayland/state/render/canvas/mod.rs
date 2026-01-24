@@ -153,6 +153,8 @@ impl WaylandState {
         // Render text cursor/buffer if in text mode
         self.render_text_input_preview(ctx);
 
+        self.input_state.render_highlight_tool_ring(ctx, mx, my);
+
         // Render click highlight overlays before UI so status/help remain legible
         self.input_state.render_click_highlights(ctx, now);
 

@@ -66,6 +66,7 @@ pub struct ToolbarSnapshot {
     pub page_count: usize,
     pub click_highlight_enabled: bool,
     pub highlight_tool_active: bool,
+    pub highlight_tool_ring_enabled: bool,
     /// Whether any highlight feature is active (tool or click)
     pub any_highlight_active: bool,
     pub undo_all_delay_ms: u64,
@@ -265,6 +266,7 @@ impl ToolbarSnapshot {
             page_count,
             click_highlight_enabled: state.click_highlight_enabled(),
             highlight_tool_active: state.highlight_tool_active(),
+            highlight_tool_ring_enabled: state.highlight_tool_ring_enabled(),
             any_highlight_active: state.click_highlight_enabled() || state.highlight_tool_active(),
             undo_all_delay_ms: state.undo_all_delay_ms,
             redo_all_delay_ms: state.redo_all_delay_ms,

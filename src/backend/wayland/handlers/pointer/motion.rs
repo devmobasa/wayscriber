@@ -41,6 +41,13 @@ impl WaylandState {
         }
         if on_toolbar {
             self.set_pointer_over_toolbar(true);
+            if let Some((sx, sy)) =
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            {
+                self.set_current_mouse(sx as i32, sy as i32);
+                let (wx, wy) = self.zoomed_world_coords(sx, sy);
+                self.input_state.update_pointer_position(wx, wy);
+            }
             let evt = self.toolbar.pointer_motion(&event.surface, event.position);
             if self.toolbar_dragging() {
                 // Use move_drag_intent if pointer_motion didn't return an intent
@@ -63,6 +70,9 @@ impl WaylandState {
             return;
         }
         if self.pointer_over_toolbar() {
+            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+            let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+            self.input_state.update_pointer_position(wx, wy);
             let evt = self.toolbar.pointer_motion(&event.surface, event.position);
             if self.toolbar_dragging() {
                 // Use move_drag_intent if pointer_motion didn't return an intent
