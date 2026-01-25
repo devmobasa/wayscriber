@@ -1,6 +1,7 @@
 use crate::config::Action;
+use log::warn;
 
-use super::super::InputState;
+use super::super::{InputState, UiToastKind};
 
 impl InputState {
     /// Handle an action triggered by a keybinding.
@@ -10,6 +11,15 @@ impl InputState {
             Action::OpenContextMenu | Action::ToggleSelectionProperties
         ) {
             self.close_properties_panel();
+        }
+
+        if matches!(action, Action::PickScreenColorDeprecated) {
+            warn!("Deprecated action pick_screen_color triggered; ignoring.");
+            self.set_ui_toast(
+                UiToastKind::Warning,
+                "Pick screen color was removed. Use the palette or paste a hex value.",
+            );
+            return;
         }
 
         if self.handle_core_action(action) {

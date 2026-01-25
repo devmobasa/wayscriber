@@ -231,23 +231,6 @@ pub(super) struct WaylandState {
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,
-
-    // Pending color pick result
-    pub(super) pending_color_pick_result: Option<std::sync::mpsc::Receiver<ColorPickOutcome>>,
-}
-
-/// Outcome of a color pick operation.
-#[derive(Debug)]
-#[allow(dead_code)] // Variants are for completeness
-pub(super) enum ColorPickOutcome {
-    /// Successfully picked a color (r, g, b in 0.0-1.0 range)
-    Success(f64, f64, f64),
-    /// User cancelled the picker
-    Cancelled,
-    /// Picker not available (with helpful message)
-    NotAvailable(String),
-    /// Picker failed (with error message)
-    Failed(String),
 }
 
 impl WaylandState {

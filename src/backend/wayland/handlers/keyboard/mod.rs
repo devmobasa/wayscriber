@@ -140,9 +140,6 @@ impl KeyboardHandler for WaylandState {
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
         }
-        if self.input_state.take_pending_color_pick() {
-            self.handle_color_pick();
-        }
     }
 
     fn release_key(

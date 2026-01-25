@@ -1,20 +1,11 @@
+use super::super::{DrawingState, InputState, TextInputMode, UiToastKind};
 use crate::config::Action;
 use log::info;
-use std::time::Instant;
-
-use super::super::{DrawingState, InputState, TextInputMode, UiToastKind};
 
 impl InputState {
     pub(super) fn handle_core_action(&mut self, action: Action) -> bool {
         match action {
             Action::Exit => {
-                if let Some(until) = self.ignore_exit_until {
-                    if Instant::now() <= until {
-                        self.ignore_exit_until = None;
-                        return true;
-                    }
-                    self.ignore_exit_until = None;
-                }
                 // Exit drawing mode or cancel current action
                 match &self.state {
                     DrawingState::TextInput { .. } => {

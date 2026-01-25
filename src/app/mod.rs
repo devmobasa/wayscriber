@@ -7,9 +7,50 @@ use crate::cli::Cli;
 use crate::session_override::set_runtime_session_override;
 use env::env_flag_enabled;
 use session::run_session_cli_commands;
+use std::process::{Command, Stdio};
 use usage::{log_overlay_controls, print_usage};
 
+fn maybe_detach_active(cli: &Cli) -> anyhow::Result<bool> {
+    if !(cli.active || cli.freeze) {
+        return Ok(false);
+    }
+    if env_flag_enabled("WAYSCRIBER_NO_DETACH") || std::env::var_os("WAYSCRIBER_DETACHED").is_some()
+    {
+        return Ok(false);
+    }
+    let exe = std::env::current_exe()?;
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    let mut cmd = Command::new(exe);
+    cmd.args(args)
+        .env("WAYSCRIBER_DETACHED", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    cmd.spawn()?;
+    Ok(true)
+}
+
+#[cfg(unix)]
+fn detach_from_tty() {
+    // Start a new session to drop the controlling terminal (prevents stuck shells).
+    unsafe {
+        let _ = libc::setsid();
+    }
+    // Best-effort close of stdio if they still point to a TTY.
+    for fd in [libc::STDIN_FILENO, libc::STDOUT_FILENO, libc::STDERR_FILENO] {
+        let is_tty = unsafe { libc::isatty(fd) } == 1;
+        if is_tty {
+            let _ = unsafe { libc::close(fd) };
+        }
+    }
+}
+
 pub fn run(cli: Cli) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    if std::env::var_os("WAYSCRIBER_DETACHED").is_some() {
+        detach_from_tty();
+    }
+
     let session_override = if cli.resume_session {
         Some(true)
     } else if cli.no_resume_session {
@@ -45,6 +86,9 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         let mut daemon = crate::daemon::Daemon::new(cli.mode, !tray_disabled, session_override);
         daemon.run()?;
     } else if cli.active || cli.freeze {
+        if maybe_detach_active(&cli)? {
+            return Ok(());
+        }
         // One-shot mode: show overlay immediately and exit when done
         log_overlay_controls(cli.freeze);
 

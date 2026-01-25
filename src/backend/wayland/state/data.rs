@@ -13,7 +13,6 @@ pub enum OverlaySuppression {
     Capture,
     Frozen,
     Zoom,
-    ColorPick,
 }
 
 #[derive(Debug, Clone, Copy)]

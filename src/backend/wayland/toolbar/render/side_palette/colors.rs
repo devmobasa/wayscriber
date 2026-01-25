@@ -220,33 +220,6 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
         cx += swatch + swatch_gap;
     }
 
-    // Add eyedropper button
-    let eyedropper_btn_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, cx, row_y, swatch, swatch))
-        .unwrap_or(false);
-    draw_button(ctx, cx, row_y, swatch, swatch, false, eyedropper_btn_hover);
-    set_icon_color(ctx, eyedropper_btn_hover);
-    toolbar_icons::draw_icon_eyedropper(
-        ctx,
-        cx + (swatch - 14.0) / 2.0,
-        row_y + (swatch - 14.0) / 2.0,
-        14.0,
-    );
-    let eyedropper_binding = snapshot
-        .binding_hints
-        .binding_for_action(Action::PickScreenColor);
-    let eyedropper_tooltip = crate::backend::wayland::toolbar::format_binding_label(
-        "Pick from screen",
-        eyedropper_binding,
-    );
-    hits.push(HitRegion {
-        rect: (cx, row_y, swatch, swatch),
-        event: ToolbarEvent::PickScreenColor,
-        kind: HitKind::Click,
-        tooltip: Some(eyedropper_tooltip),
-    });
-    cx += swatch + swatch_gap;
-
     if !snapshot.show_more_colors {
         let plus_btn_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, cx, row_y, swatch, swatch))

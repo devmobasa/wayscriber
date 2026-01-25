@@ -34,9 +34,6 @@ pub(super) fn handle_pending_actions(state: &mut WaylandState) {
     }
     state.sync_zoom_board_mode();
 
-    // Check for pending color pick result
-    state.check_pending_color_pick();
-
     handle_capture_results(state);
 }
 

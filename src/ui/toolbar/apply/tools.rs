@@ -103,11 +103,6 @@ impl InputState {
         self.clear_preset(slot)
     }
 
-    pub(super) fn apply_toolbar_pick_screen_color(&mut self) -> bool {
-        self.pending_color_pick = true;
-        true
-    }
-
     pub(super) fn apply_toolbar_copy_hex_color(&mut self) -> bool {
         self.pending_copy_hex = true;
         true

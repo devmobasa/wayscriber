@@ -89,8 +89,6 @@ pub struct InputState {
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
     pub should_exit: bool,
-    /// Ignore exit actions until this instant (used to swallow picker cancel keys)
-    pub(crate) ignore_exit_until: Option<Instant>,
     /// Whether the display needs to be redrawn
     pub needs_redraw: bool,
     /// Whether session persistence should capture changes (cleared after autosave check)
@@ -183,8 +181,6 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_capture_action: Option<Action>,
     /// Pending zoom action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_zoom_action: Option<ZoomAction>,
-    /// Pending screen color pick request (to be handled by WaylandState via portal)
-    pub(crate) pending_color_pick: bool,
     /// Pending copy hex color to clipboard request
     pub(crate) pending_copy_hex: bool,
     /// Pending paste hex color from clipboard request

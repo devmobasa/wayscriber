@@ -32,9 +32,6 @@ impl InputState {
             Action::SetColorBlack => {
                 let _ = self.apply_color_from_ui(util::key_to_color('k').unwrap());
             }
-            Action::PickScreenColor => {
-                self.pending_color_pick = true;
-            }
             _ => return false,
         }
 
@@ -50,11 +47,6 @@ impl InputState {
         changed
     }
 
-    /// Take and clear the pending color pick request.
-    pub fn take_pending_color_pick(&mut self) -> bool {
-        std::mem::take(&mut self.pending_color_pick)
-    }
-
     /// Take and clear the pending copy hex color request.
     pub fn take_pending_copy_hex(&mut self) -> bool {
         std::mem::take(&mut self.pending_copy_hex)
@@ -63,11 +55,5 @@ impl InputState {
     /// Take and clear the pending paste hex color request.
     pub fn take_pending_paste_hex(&mut self) -> bool {
         std::mem::take(&mut self.pending_paste_hex)
-    }
-
-    /// Apply a picked color from the screen.
-    pub fn apply_picked_color(&mut self, r: f64, g: f64, b: f64) {
-        let color = crate::draw::Color { r, g, b, a: 1.0 };
-        let _ = self.apply_color_from_ui(color);
     }
 }
