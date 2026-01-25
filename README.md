@@ -7,10 +7,6 @@ A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rus
 
 Docs: https://wayscriber.com/docs/
 
-Contribution principles: wayscriber is shared as a gift exchange, not a contract. Requests
-are welcome, but there is no guaranteed timeline or support obligation. For the full
-principles, see https://wayscriber.com/docs/ethos/gift-exchange.html
-
 <details>
 <summary>Screenshots</summary>
 
@@ -39,27 +35,32 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Getting Help](#getting-help)
 - [Controls Reference](#controls-reference)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
+- [Roadmap](#roadmap)
 - [Additional Information](#additional-information)
-- [Docs](https://wayscriber.com/docs/)
+- [License & Credits](#license--credits)
 
 ---
 
 ## Why wayscriber?
 
-- **Annotate live** over any app/window on any monitor without rearranging your workspace
-- **Draw shapes, arrows, and text** (with fill toggle) to explain steps, give demos, or build quick guides
-- **Redact screen regions** and capture screenshots with one keypress
-- **Toggle instantly** from a lightweight background daemon
-- **Persist your work** — canvases and tool state restore after restarts (CLI override + tray config toggle)
-- **Presenter helpers** — click highlights and screen freeze while apps keep running
+- **Annotate live** over any app without disrupting your workflow
+- **Professional presentation tools** — presenter mode, numbered callouts, click highlights, screen freeze, zoom
+- **Persistent sessions** that survive restarts
+- **Native Wayland performance** with ZoomIt-like controls
+- **Lightweight daemon** with instant toggle via keybind
 
-### Supported Compositors
+### Platform Support
 
-Works on layer-shell compositors (wlroots, Smithay-based like Niri/Cosmic, Plasma KDE/KWin, Hyprland, Sway, Wayfire, River) with an xdg fallback for GNOME.
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Wayland (layer-shell) | ✅ Supported | Hyprland, Sway, River, Wayfire, Niri/Cosmic, Plasma/KWin |
+| GNOME | ⚠️ Partial | Portal fallback; overlay windowed |
+| X11 | ❌ | Not supported |
 
 <details>
 <summary>Tested environments</summary>
@@ -80,32 +81,59 @@ Works on layer-shell compositors (wlroots, Smithay-based like Niri/Cosmic, Plasm
 ## Features
 
 ### Drawing & Editing
-Freehand pen, translucent highlighter, eraser (circle/rect), straight lines, rectangles/ellipses with fill toggle, arrows, multiline text + sticky notes with smoothing; selection editing + properties panel; undo/redo; quick size/color changes via hotkeys or scroll; color picker + palettes.
+- Freehand pen, highlighter, eraser (circle/rect)
+- Shapes: lines, rectangles, ellipses (with fill toggle)
+- Arrows with optional auto-numbered labels
+- Step markers for walkthroughs
+- Multiline text & sticky notes with smoothing
+- Selection: Alt-drag, <kbd>V</kbd> tool, properties panel
+- Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
+- Color picker, palettes, size via hotkeys or scroll
 
 ### Boards
-Named boards (transparent overlay + custom backgrounds) with isolated pages per board and auto-contrast pens. Jump slots with <kbd>Ctrl+Shift+1..9</kbd>, toggle whiteboard/blackboard, or open the board picker with <kbd>Ctrl+Shift+B</kbd>.
+- Named boards with transparent overlay or custom backgrounds
+- Isolated pages per board with auto-contrast pens
+- Jump slots: <kbd>Ctrl+Shift+1..9</kbd>
+- Toggle whiteboard/blackboard
+- Board picker: <kbd>Ctrl+Shift+B</kbd>
 
 ### Capture & Screenshots
-Full-screen saves, active-window grabs, and region capture to file or clipboard using `grim`, `slurp`, and `wl-clipboard`. Falls back to xdg-desktop-portal if missing.
+- Full-screen saves, active-window grabs, region capture
+- Copy to clipboard or save to file
+- Uses `grim`, `slurp`, `wl-clipboard` (fallback: xdg-desktop-portal)
 
 ### Session Persistence
-Opt-in per board/monitor storage that restores your canvas plus pen color & thickness. One-off overrides via `--resume-session` / `--no-resume-session`; the tray checkmark flips the config on disk.
+- Opt-in per board/monitor canvas + tool state restore
+- CLI overrides: `--resume-session` / `--no-resume-session`
+- Tray checkmark flips config on disk
 
 ### Toolbars & UI
-Floating toolbars (pin/unpin with <kbd>F2</kbd>/<kbd>F9</kbd>), preset slots, icon or text modes, color picker, extended palettes, status bar, board/page controls, and in-app help overlay (<kbd>F1</kbd>/<kbd>F10</kbd>).
+- Floating toolbars (pin/unpin: <kbd>F2</kbd>/<kbd>F9</kbd>)
+- Preset slots, icon or text modes
+- Color picker with extended palettes
+- Status bar, board/page controls
+- Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
+- Command palette (<kbd>Ctrl+K</kbd>)
 
 ### Presets
-Save tool + color + size (plus optional fill/opacity/text settings) into 3-5 slots for fast recall. Apply with <kbd>1</kbd>-<kbd>5</kbd>, save with <kbd>Shift+1</kbd>-<kbd>Shift+5</kbd>.
+- Save tool + color + size (plus fill/opacity/text) into 3-5 slots
+- Apply: <kbd>1</kbd>-<kbd>5</kbd>
+- Save: <kbd>Shift+1</kbd>-<kbd>Shift+5</kbd>
 
 ### Presenter Helpers
-Click highlights with configurable colors/radius/duration. Presenter mode (<kbd>Ctrl+Shift+M</kbd>) hides UI chrome and forces click highlights for clean demos. Screen freeze (<kbd>Ctrl+Shift+F</kbd>) to pause what viewers see while apps keep running. Screen zoom (<kbd>Ctrl+Alt</kbd> + scroll) with lock/pan for callouts.
+- Click highlights with configurable colors/radius/duration
+- Persistent ring while click highlight tool is active
+- Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
+- Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause display while apps run
 
-### Zoom & Callouts
-Zoom is built-in for spotlighting details during demos, with controls that match ZoomIt muscle memory:
-- Zoom in/out: <kbd>Ctrl+Alt</kbd> + scroll or <kbd>Ctrl+Alt++</kbd>/<kbd>Ctrl+Alt+-</kbd>
-- Reset zoom: <kbd>Ctrl+Alt+0</kbd>
-- Lock zoom view: <kbd>Ctrl+Alt+L</kbd>
-- Pan zoom view: middle drag or arrow keys
+### Callouts & Zoom
+- **Numbered callouts:** auto-numbered arrow labels, step markers
+- Reset shortcuts (<kbd>Ctrl+Shift+R</kbd> for arrow labels): see Controls Reference
+- **Zoom:** spotlight details with ZoomIt-style controls
+  - Zoom in/out: <kbd>Ctrl+Alt</kbd> + scroll or <kbd>Ctrl+Alt++</kbd>/<kbd>Ctrl+Alt+-</kbd>
+  - Reset: <kbd>Ctrl+Alt+0</kbd>
+  - Lock view: <kbd>Ctrl+Alt+L</kbd>
+  - Pan: middle drag or arrow keys
 
 ---
 
@@ -117,15 +145,17 @@ sudo install -d /usr/share/keyrings
 curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | sudo gpg --dearmor -o /usr/share/keyrings/wayscriber.gpg
 echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
 sudo apt update
-sudo apt install wayscriber  # optional GUI: sudo apt install wayscriber-configurator
+sudo apt install wayscriber
+# Optional GUI configurator
+sudo apt install wayscriber-configurator
 ```
 
-**2. Run**:
+**2. Run:**
 ```bash
 wayscriber --active
 ```
 
-**3. Draw** — use your mouse. Press <kbd>F1</kbd> or <kbd>F10</kbd> for help, <kbd>Escape</kbd> to exit.
+**3. Draw** — use your mouse. Press <kbd>F1</kbd> or <kbd>F10</kbd> for help; <kbd>Shift+F1</kbd> for quick reference; <kbd>Ctrl+K</kbd> for the command palette; <kbd>Escape</kbd> to exit.
 
 For other distros or running as a daemon, see [Installation](#installation) and [Usage](#usage).
 
@@ -289,7 +319,7 @@ Bind to a key (Hyprland example):
 bind = SUPER, D, exec, wayscriber --active
 ```
 
-Press <kbd>F1</kbd>/<kbd>F10</kbd> for help, <kbd>F11</kbd> for configurator, <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd> to exit.
+Press <kbd>F1</kbd>/<kbd>F10</kbd> for help or <kbd>Shift+F1</kbd> for quick reference. <kbd>Ctrl+K</kbd> opens the command palette; <kbd>F11</kbd> opens the configurator; <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd> exits.
 
 ### Daemon Mode
 
@@ -352,11 +382,36 @@ Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the o
 
 ---
 
+## Getting Help
+
+- **Help overlay:** <kbd>F1</kbd> or <kbd>F10</kbd>
+- **Quick reference:** <kbd>Shift+F1</kbd>
+- **Command palette:** <kbd>Ctrl+K</kbd>
+- **Full docs:** https://wayscriber.com/docs/
+
+---
+
 ## Controls Reference
 
-Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
+Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 
-### Drawing Tools
+### Essential Shortcuts
+
+| Action | Key |
+|--------|-----|
+| Freehand pen | Drag |
+| Arrow | <kbd>Ctrl+Shift</kbd> + drag |
+| Rectangle | <kbd>Ctrl</kbd> + drag |
+| Text mode | <kbd>T</kbd> |
+| Select/move | <kbd>Alt</kbd> + drag or <kbd>V</kbd> |
+| Undo / Redo | <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> |
+| Color keys | <kbd>R</kbd> <kbd>G</kbd> <kbd>B</kbd> <kbd>Y</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>W</kbd> <kbd>K</kbd> |
+| Size | <kbd>+</kbd> / <kbd>-</kbd> or scroll |
+| Help | <kbd>F1</kbd> |
+| Exit | <kbd>Escape</kbd> |
+
+<details>
+<summary>All Drawing Tools</summary>
 
 | Action | Key/Mouse |
 |--------|-----------|
@@ -365,11 +420,15 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Rectangle | <kbd>Ctrl</kbd> + drag |
 | Ellipse/Circle | <kbd>Tab</kbd> + drag |
 | Arrow | <kbd>Ctrl+Shift</kbd> + drag |
+| Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-### Boards
+</details>
+
+<details>
+<summary>Boards</summary>
 
 | Action | Key |
 |--------|-----|
@@ -382,7 +441,10 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Delete board | <kbd>Ctrl+Shift+Delete</kbd> |
 | Board picker | <kbd>Ctrl+Shift+B</kbd> |
 
-### Colors
+</details>
+
+<details>
+<summary>Colors & Sizes</summary>
 
 | Color | Key |
 |-------|-----|
@@ -395,8 +457,6 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | White | <kbd>W</kbd> |
 | Black | <kbd>K</kbd> |
 
-### Size Adjustments
-
 | Action | Key |
 |--------|-----|
 | Increase thickness | <kbd>+</kbd> / <kbd>=</kbd> / scroll down |
@@ -406,7 +466,10 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Increase marker opacity | <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd> |
 | Decrease marker opacity | <kbd>Ctrl+Alt</kbd> + <kbd>↓</kbd> |
 
-### Selection & Arrange
+</details>
+
+<details>
+<summary>Selection & Arrange</summary>
 
 | Action | Key |
 |--------|-----|
@@ -417,9 +480,15 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Bring to front/back | <kbd>]</kbd> / <kbd>[</kbd> |
 | Nudge selection | Arrow keys (large: <kbd>PageUp</kbd>/<kbd>PageDown</kbd>) |
 | Move to edges | <kbd>Home</kbd>/<kbd>End</kbd> / <kbd>Ctrl+Home</kbd>/<kbd>Ctrl+End</kbd> |
+| Select/move shapes | Hold <kbd>Alt</kbd> + drag |
+| Select tool | <kbd>V</kbd> |
+| Add to selection | <kbd>Shift</kbd> + click |
 | Selection properties | <kbd>Ctrl+Alt+P</kbd> |
 
-### Pages
+</details>
+
+<details>
+<summary>Pages</summary>
 
 | Action | Key |
 |--------|-----|
@@ -428,7 +497,10 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Duplicate page | <kbd>Ctrl+Alt+D</kbd> |
 | Delete page | <kbd>Ctrl+Alt+Delete</kbd> |
 
-### Editing & UI
+</details>
+
+<details>
+<summary>Editing & UI</summary>
 
 | Action | Key |
 |--------|-----|
@@ -443,11 +515,14 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Edit selected text/note | <kbd>Enter</kbd> (single selection) |
 | Toggle toolbars | <kbd>F2</kbd> / <kbd>F9</kbd> |
 | Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
+| Quick reference | <kbd>Shift+F1</kbd> |
 | Configurator | <kbd>F11</kbd> |
+| Command palette | <kbd>Ctrl+K</kbd> |
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
 | Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
+| Reset arrow labels | <kbd>Ctrl+Shift+R</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
 | Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt++</kbd> / <kbd>Ctrl+Alt+-</kbd> |
 | Reset zoom | <kbd>Ctrl+Alt+0</kbd> |
@@ -455,7 +530,9 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> at any time for the in-app cheat sheet.
 | Pan zoom view | <kbd>Middle drag</kbd> / <kbd>Arrow keys</kbd> |
 | Exit | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd> |
 
-Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`.
+</details>
+
+Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>. Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`). Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`.
 
 ---
 
@@ -601,19 +678,34 @@ principles, see https://wayscriber.com/docs/ethos/gift-exchange.html
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure, and workflow notes.
 
+### Roadmap
+
+- [x] Native Wayland layer-shell
+- [x] Daemon mode with system tray
+- [x] Multiple customizable boards/backgrounds
+- [x] Session persistence (with CLI override + tray config toggle)
+- [x] Highlighter & eraser tools
+- [x] Additional shapes (filled shapes)
+- [x] Color picker
+- [x] Zoom (ZoomIt-style controls)
+- [x] Presets (tool/color/size slots)
+- [x] Sticky notes
+- [x] Board pages (multi-page boards)
+- [x] Presenter mode
+- [x] Command palette
+- [x] Numbered callouts (incrementing arrow labels)
+- [ ] Multi-monitor support
+- [ ] Save annotations to image
+- [ ] Color picker integration with captures/export
+
+See [Satty](https://github.com/gabm/Satty) for capture → annotate → save workflows. wayscriber is designed as an always-available drawing layer.
+
 ---
 
 ## Additional Information
 
-### Platform Support
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Wayland (layer-shell) | ✅ Supported | Hyprland, Sway, River, Wayfire, Niri/Cosmic, Plasma/KWin |
-| GNOME | ⚠️ Partial | Portal fallback; overlay windowed |
-| X11 | ❌ | Not supported |
-
-### Comparison with ZoomIt
+<details>
+<summary>Comparison with ZoomIt</summary>
 
 | Feature | ZoomIt (Windows) | wayscriber |
 |---------|------------------|------------|
@@ -626,20 +718,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 | Zoom | ✅ | ✅ |
 | Break timer | ✅ | ❌ |
 
-### Roadmap
-
-- [x] Native Wayland layer-shell
-- [x] Daemon mode with system tray
-- [x] Boards/backgrounds
-- [x] Session persistence (with CLI override + tray config toggle)
-- [x] Highlighter & eraser tools
-- [x] Additional shapes (filled shapes)
-- [x] Color picker
-- [ ] Multi-monitor support
-- [ ] Save annotations to image
-- [ ] Color picker integration with captures/export
-
-See [Satty](https://github.com/gabm/Satty) for capture → annotate → save workflows. wayscriber is designed as an always-available drawing layer.
+</details>
 
 ---
 
