@@ -167,7 +167,7 @@ fn tool_display_name(input_state: &InputState, tool: Tool) -> &'static str {
         DrawingState::Drawing { tool, .. } => tool_action_label(*tool),
         DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Selecting { .. } => "Select",
-        DrawingState::ResizingText { .. } => "Resize",
+        DrawingState::ResizingText { .. } | DrawingState::ResizingSelection { .. } => "Resize",
         DrawingState::PendingTextClick { .. } | DrawingState::Idle => tool_action_label(tool),
     }
 }

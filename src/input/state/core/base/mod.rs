@@ -8,7 +8,7 @@ pub use types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS, PRESET_FEEDBACK_DURATION_MS,
     PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
-    PressureThicknessEntryMode, SelectionAxis, TextInputMode, ToolbarDrawerTab,
+    PressureThicknessEntryMode, SelectionAxis, SelectionHandle, TextInputMode, ToolbarDrawerTab,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use types::{

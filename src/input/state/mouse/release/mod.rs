@@ -57,6 +57,9 @@ impl InputState {
             } => {
                 selection::finish_text_resize(self, shape_id, snapshot);
             }
+            DrawingState::ResizingSelection { snapshots, .. } => {
+                selection::finish_selection_resize(self, snapshots.as_ref());
+            }
             DrawingState::Drawing {
                 tool,
                 start_x,

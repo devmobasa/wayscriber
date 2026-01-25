@@ -34,6 +34,9 @@ pub const COLOR_ICON_HOVER: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 1.0);
 /// Icon color default state
 pub const COLOR_ICON_DEFAULT: (f64, f64, f64, f64) = (0.95, 0.95, 0.95, 0.9);
 
+/// Icon hover background glow (subtle highlight behind icons on hover)
+pub const COLOR_ICON_HOVER_BG: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.08);
+
 // Button states
 /// Active/selected button background (blue accent)
 pub const COLOR_BUTTON_ACTIVE: (f64, f64, f64, f64) = (0.25, 0.5, 0.95, 0.95);

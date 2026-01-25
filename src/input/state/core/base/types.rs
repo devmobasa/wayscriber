@@ -20,6 +20,7 @@ use crate::draw::frame::ShapeSnapshot;
 use crate::input::tool::Tool;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::Instant;
 
 /// Current drawing mode state machine.
@@ -94,6 +95,31 @@ pub enum DrawingState {
         /// Font size used to set minimum width
         size: f64,
     },
+    /// Resize selection by dragging a handle
+    ResizingSelection {
+        /// Which handle is being dragged
+        handle: SelectionHandle,
+        /// Original bounding box of selection
+        original_bounds: crate::util::Rect,
+        /// Starting mouse position
+        start_x: i32,
+        start_y: i32,
+        /// Snapshots of shapes prior to resizing (for undo/cancel)
+        snapshots: Arc<Vec<(ShapeId, ShapeSnapshot)>>,
+    },
+}
+
+/// Which selection handle is being interacted with
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionHandle {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Top,
+    Bottom,
+    Left,
+    Right,
 }
 
 /// Describes which kind of text input is active.

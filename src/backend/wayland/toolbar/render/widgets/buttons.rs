@@ -1,7 +1,7 @@
 use super::constants::{
-    ALPHA_DEFAULT, ALPHA_HOVER, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER,
-    COLOR_CLOSE_DEFAULT, COLOR_CLOSE_HOVER, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
-    COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
+    COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
+    COLOR_CLOSE_HOVER, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER, COLOR_TEXT_PRIMARY,
+    LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
 };
 use super::draw_round_rect;
 use std::f64::consts::PI;
@@ -15,12 +15,21 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
     hover: bool,
 ) {
     draw_round_rect(ctx, x, y, w, h, RADIUS_STD);
-    let alpha = if hover { ALPHA_HOVER } else { ALPHA_DEFAULT };
-    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha * 0.5);
+    // Improved visibility: higher fill alpha
+    let fill_alpha = if hover { 0.75 } else { 0.45 };
+    ctx.set_source_rgba(1.0, 1.0, 1.0, fill_alpha);
     let _ = ctx.fill();
 
+    // Add subtle glow on hover
+    if hover {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.15);
+        draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_STD + 1.0);
+        let _ = ctx.stroke();
+    }
+
     ctx.set_line_width(1.1);
-    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha);
+    let bar_alpha = if hover { 1.0 } else { 0.85 };
+    ctx.set_source_rgba(1.0, 1.0, 1.0, bar_alpha);
     let bar_w = w * 0.55;
     let bar_h = SPACING_XS;
     let bar_x = x + (w - bar_w) / 2.0;
@@ -73,6 +82,11 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     pinned: bool,
     hover: bool,
 ) {
+    let r = size / 2.0;
+    let cx = x + r;
+    let cy = y + r;
+
+    // Use circle shape for visual consistency with close button
     let color = if pinned {
         COLOR_PIN_ACTIVE
     } else if hover {
@@ -81,12 +95,10 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
         COLOR_PIN_DEFAULT
     };
     set_color(ctx, color);
-    draw_round_rect(ctx, x, y, size, size, RADIUS_STD);
+    ctx.arc(cx, cy, r, 0.0, PI * 2.0);
     let _ = ctx.fill();
 
     set_color(ctx, COLOR_TEXT_PRIMARY);
-    let cx = x + size / 2.0;
-    let cy = y + size / 2.0;
     let pin_r = size * 0.2;
 
     ctx.arc(cx, cy - pin_r * 0.5, pin_r, 0.0, PI * 2.0);

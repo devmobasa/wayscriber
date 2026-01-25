@@ -2,6 +2,7 @@ use crate::input::{EraserMode, Tool};
 
 use super::super::{DrawingState, InputState};
 use super::TEXT_CLICK_DRAG_THRESHOLD;
+use std::sync::Arc;
 
 impl InputState {
     /// Processes mouse motion (dragging) events.
@@ -95,6 +96,24 @@ impl InputState {
                 *last_y = y;
                 *moved = true;
             }
+            return;
+        }
+
+        if let DrawingState::ResizingSelection {
+            handle,
+            original_bounds,
+            start_x,
+            start_y,
+            snapshots,
+        } = &self.state
+        {
+            let dx = x - *start_x;
+            let dy = y - *start_y;
+            let handle = *handle;
+            let original_bounds = *original_bounds;
+            let snapshots = Arc::clone(snapshots);
+            self.apply_selection_resize(handle, &original_bounds, dx, dy, snapshots.as_ref());
+            self.needs_redraw = true;
             return;
         }
 

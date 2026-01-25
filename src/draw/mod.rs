@@ -26,8 +26,8 @@ pub(crate) use render::render_eraser_stroke;
 #[allow(unused_imports)]
 pub use render::{
     EraserReplayContext, render_board_background, render_click_highlight, render_freehand_borrowed,
-    render_marker_stroke_borrowed, render_selection_halo, render_shape, render_sticky_note,
-    render_text,
+    render_marker_stroke_borrowed, render_selection_halo, render_selection_handles, render_shape,
+    render_sticky_note, render_text, selection_handle_rects,
 };
 #[allow(unused_imports)]
 pub use shape::{

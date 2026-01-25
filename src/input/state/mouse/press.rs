@@ -1,6 +1,7 @@
 use crate::draw::Shape;
 use crate::draw::frame::ShapeSnapshot;
 use crate::input::{Tool, events::MouseButton};
+use std::sync::Arc;
 
 use super::super::core::MenuCommand;
 use super::super::{ContextMenuKind, DrawingState, InputState};
@@ -28,6 +29,11 @@ impl InputState {
                     shape_id, snapshot, ..
                 } => {
                     self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                    self.state = DrawingState::Idle;
+                }
+                DrawingState::ResizingSelection { snapshots, .. } => {
+                    let snapshots = snapshots.clone();
+                    self.restore_resize_from_snapshots(snapshots.as_ref());
                     self.state = DrawingState::Idle;
                 }
                 DrawingState::PendingTextClick { .. } => {
@@ -174,6 +180,25 @@ impl InputState {
                     DrawingState::Idle => {
                         let selection_click =
                             self.modifiers.alt || self.active_tool() == Tool::Select;
+
+                        // Check for selection handle resize first
+                        if let Some(handle) = self.hit_selection_handle(x, y)
+                            && let Some(original_bounds) = self.selection_bounds()
+                        {
+                            let snapshots = self.capture_resize_selection_snapshots();
+                            if !snapshots.is_empty() {
+                                self.last_text_click = None;
+                                self.state = DrawingState::ResizingSelection {
+                                    handle,
+                                    original_bounds,
+                                    start_x: x,
+                                    start_y: y,
+                                    snapshots: Arc::new(snapshots),
+                                };
+                                return;
+                            }
+                        }
+
                         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
                             let snapshot = {
                                 let frame = self.boards.active_frame();
@@ -280,7 +305,8 @@ impl InputState {
                     | DrawingState::MovingSelection { .. }
                     | DrawingState::Selecting { .. }
                     | DrawingState::PendingTextClick { .. }
-                    | DrawingState::ResizingText { .. } => {}
+                    | DrawingState::ResizingText { .. }
+                    | DrawingState::ResizingSelection { .. } => {}
                 }
             }
             MouseButton::Middle => {}

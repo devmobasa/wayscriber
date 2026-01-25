@@ -4,13 +4,27 @@ use std::collections::HashSet;
 impl WaylandState {
     pub(super) fn render_selection_overlays(&mut self, ctx: &cairo::Context) {
         // Use cached HashSet from selection state to avoid allocation every render
-        if let Some(selected) = self.input_state.selected_shape_ids_set() {
+        let has_selection = if let Some(selected) = self.input_state.selected_shape_ids_set() {
             let frame = self.input_state.boards.active_frame();
             for drawn in &frame.shapes {
                 if selected.contains(&drawn.id) {
                     crate::draw::render_selection_halo(ctx, drawn);
                 }
             }
+            !selected.is_empty()
+        } else {
+            false
+        };
+
+        // Draw selection handles when idle and shapes are selected
+        if has_selection
+            && matches!(
+                self.input_state.state,
+                DrawingState::Idle | DrawingState::ResizingText { .. }
+            )
+            && let Some(bounds) = self.input_state.selection_bounds()
+        {
+            crate::draw::render_selection_handles(ctx, &bounds);
         }
 
         if matches!(

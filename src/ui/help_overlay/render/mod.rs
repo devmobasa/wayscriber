@@ -42,19 +42,30 @@ pub fn render_help_overlay(
     } else {
         "Wayscriber Controls"
     };
-    let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
+    let _commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
+    let palette_binding = bindings
+        .labels_for(Action::ToggleCommandPalette)
+        .and_then(|labels| labels.first())
+        .map(|label| label.as_str())
+        .unwrap_or(NOT_BOUND_LABEL);
     let config_binding = bindings
         .labels_for(Action::OpenConfigurator)
         .and_then(|labels| labels.first())
         .map(|label| label.as_str())
         .unwrap_or(NOT_BOUND_LABEL);
     let version_line = if quick_mode {
-        "Essential shortcuts at a glance".to_string()
+        format!(
+            "Essential shortcuts  {}  {} {} {}",
+            BULLET, palette_binding, ARROW, "Command Palette (search all)"
+        )
     } else {
         format!(
-            "Wayscriber {} ({})  {}  {} {} {}",
+            "{}  {}  {} {} {}  {}  {} {} {}",
             env!("CARGO_PKG_VERSION"),
-            commit_hash,
+            BULLET,
+            palette_binding,
+            ARROW,
+            "Command Palette",
             BULLET,
             config_binding,
             ARROW,

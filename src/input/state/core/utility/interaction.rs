@@ -75,6 +75,11 @@ impl InputState {
                 self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                 self.state = DrawingState::Idle;
             }
+            DrawingState::ResizingSelection { snapshots, .. } => {
+                let snapshots = snapshots.clone();
+                self.restore_resize_from_snapshots(snapshots.as_ref());
+                self.state = DrawingState::Idle;
+            }
             DrawingState::Idle => {}
         }
     }

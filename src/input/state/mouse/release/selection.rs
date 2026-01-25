@@ -78,3 +78,38 @@ pub(super) fn finish_text_resize(
         }
     }
 }
+
+pub(super) fn finish_selection_resize(
+    state: &mut InputState,
+    snapshots: &[(ShapeId, ShapeSnapshot)],
+) {
+    // Capture after-snapshots and push undo actions
+    let mut has_changes = false;
+    let frame = state.boards.active_frame_mut();
+    for (shape_id, before_snapshot) in snapshots {
+        if let Some(shape) = frame.shape(*shape_id) {
+            let after_snapshot = ShapeSnapshot {
+                shape: shape.shape.clone(),
+                locked: shape.locked,
+            };
+            // Check if shape bounds changed (simpler than full PartialEq on Shape)
+            let before_bounds = before_snapshot.shape.bounding_box();
+            let after_bounds = after_snapshot.shape.bounding_box();
+            if before_bounds != after_bounds {
+                frame.push_undo_action(
+                    UndoAction::Modify {
+                        shape_id: *shape_id,
+                        before: before_snapshot.clone(),
+                        after: after_snapshot,
+                    },
+                    state.undo_stack_limit,
+                );
+                has_changes = true;
+            }
+        }
+    }
+    if has_changes {
+        state.mark_session_dirty();
+    }
+    state.needs_redraw = true;
+}
