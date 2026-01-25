@@ -316,3 +316,12 @@ pub(crate) struct PendingPageDelete {
 pub(crate) struct StatusChangeHighlight {
     pub started: Instant,
 }
+
+/// Duration for text edit entry animation in milliseconds.
+pub const TEXT_EDIT_ENTRY_DURATION_MS: u64 = 200;
+
+/// State for text edit entry animation (teal glow pulse).
+#[derive(Debug, Clone)]
+pub(crate) struct TextEditEntryFeedback {
+    pub started: Instant,
+}

@@ -82,6 +82,77 @@ pub fn render_zoom_badge(
     layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
 
+/// Render a small badge indicating text edit mode is active.
+pub fn render_editing_badge(
+    ctx: &cairo::Context,
+    screen_width: u32,
+    _screen_height: u32,
+    offset_y: f64,
+) {
+    let label = "EDITING";
+    let hint = "Return=save  Esc=cancel";
+    let padding = 12.0;
+    let radius = 8.0;
+    let font_size = 15.0;
+    let hint_font_size = 11.0;
+
+    // Measure label
+    let label_layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        label,
+        None,
+    );
+    let label_extents = label_layout.ink_extents();
+
+    // Measure hint
+    let hint_layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: hint_font_size,
+        },
+        hint,
+        None,
+    );
+    let hint_extents = hint_layout.ink_extents();
+
+    let content_width = label_extents.width().max(hint_extents.width());
+    let width = content_width + padding * 1.6;
+    let height = label_extents.height() + hint_extents.height() + padding * 1.2;
+
+    let x = screen_width as f64 - width - padding;
+    let y = padding + offset_y;
+
+    // Background with teal accent
+    ctx.set_source_rgba(0.2, 0.55, 0.65, 0.9);
+    draw_rounded_rect(ctx, x, y, width, height, radius);
+    let _ = ctx.fill();
+
+    // Label text
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    label_layout.show_at_baseline(
+        ctx,
+        x + (padding * 0.8),
+        y + label_extents.height() + padding * 0.3,
+    );
+
+    // Hint text (dimmer)
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7);
+    hint_layout.show_at_baseline(
+        ctx,
+        x + (padding * 0.8),
+        y + label_extents.height() + hint_extents.height() + padding * 0.6,
+    );
+}
+
 /// Render a small badge indicating the current page (visible even when status bar is hidden).
 #[allow(clippy::too_many_arguments)]
 pub fn render_page_badge(

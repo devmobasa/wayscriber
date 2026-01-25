@@ -165,6 +165,7 @@ impl InputState {
             last_capture_path: None,
             last_text_click: None,
             text_edit_target: None,
+            text_edit_entry_feedback: None,
             pending_history: None,
             context_menu_layout: None,
             board_picker_layout: None,

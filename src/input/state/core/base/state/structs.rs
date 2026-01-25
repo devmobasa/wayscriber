@@ -9,8 +9,8 @@ use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
     PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
     PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
-    StatusChangeHighlight, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState,
-    ZoomAction,
+    StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab,
+    UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -243,6 +243,8 @@ pub struct InputState {
     pub(crate) last_text_click: Option<TextClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
+    /// Animation state for text edit mode entry (teal glow pulse)
+    pub(crate) text_edit_entry_feedback: Option<TextEditEntryFeedback>,
     /// Pending delayed history playback state
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu

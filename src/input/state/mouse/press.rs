@@ -181,24 +181,6 @@ impl InputState {
                         let selection_click =
                             self.modifiers.alt || self.active_tool() == Tool::Select;
 
-                        // Check for selection handle resize first
-                        if let Some(handle) = self.hit_selection_handle(x, y)
-                            && let Some(original_bounds) = self.selection_bounds()
-                        {
-                            let snapshots = self.capture_resize_selection_snapshots();
-                            if !snapshots.is_empty() {
-                                self.last_text_click = None;
-                                self.state = DrawingState::ResizingSelection {
-                                    handle,
-                                    original_bounds,
-                                    start_x: x,
-                                    start_y: y,
-                                    snapshots: Arc::new(snapshots),
-                                };
-                                return;
-                            }
-                        }
-
                         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
                             let snapshot = {
                                 let frame = self.boards.active_frame();
@@ -219,6 +201,24 @@ impl InputState {
                                     snapshot,
                                     base_x,
                                     size,
+                                };
+                                return;
+                            }
+                        }
+
+                        // Check for selection handle resize after text resize handle
+                        if let Some(handle) = self.hit_selection_handle(x, y)
+                            && let Some(original_bounds) = self.selection_bounds()
+                        {
+                            let snapshots = self.capture_resize_selection_snapshots();
+                            if !snapshots.is_empty() {
+                                self.last_text_click = None;
+                                self.state = DrawingState::ResizingSelection {
+                                    handle,
+                                    original_bounds,
+                                    start_x: x,
+                                    start_y: y,
+                                    snapshots: Arc::new(snapshots),
                                 };
                                 return;
                             }

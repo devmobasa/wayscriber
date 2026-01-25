@@ -32,10 +32,12 @@ impl WaylandState {
         let preset_feedback_active = self.input_state.advance_preset_feedback(now);
         let ui_toast_active = self.input_state.advance_ui_toast(now);
         let blocked_feedback_active = self.input_state.advance_blocked_feedback(now);
+        let text_edit_entry_active = self.input_state.advance_text_edit_entry_feedback(now);
         let ui_animation_active = highlight_active
             || preset_feedback_active
             || ui_toast_active
-            || blocked_feedback_active;
+            || blocked_feedback_active
+            || text_edit_entry_active;
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 
@@ -48,7 +50,8 @@ impl WaylandState {
         let force_full_damage = self.zoom.active
             || ui_toast_active
             || preset_feedback_active
-            || blocked_feedback_active;
+            || blocked_feedback_active
+            || text_edit_entry_active;
         if force_full_damage {
             // Zoom uses a world transform and some UI effects don't emit damage; full damage avoids
             // mismatched coordinate spaces and empty damage frames.
