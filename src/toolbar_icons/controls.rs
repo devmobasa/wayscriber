@@ -42,3 +42,89 @@ pub fn draw_icon_more(ctx: &Context, x: f64, y: f64, size: f64) {
         let _ = ctx.fill();
     }
 }
+
+/// Draw an eyedropper/color picker icon
+pub fn draw_icon_eyedropper(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.12).max(1.5);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Draw the pipette body (diagonal tube)
+    // Tip at bottom-left, bulb at top-right
+    let tip_x = x + s * 0.2;
+    let tip_y = y + s * 0.8;
+    let bulb_x = x + s * 0.75;
+    let bulb_y = y + s * 0.25;
+
+    // Draw the main body line
+    ctx.move_to(tip_x + s * 0.1, tip_y - s * 0.1);
+    ctx.line_to(bulb_x - s * 0.1, bulb_y + s * 0.1);
+    let _ = ctx.stroke();
+
+    // Draw the tip (small triangle/point)
+    ctx.move_to(tip_x, tip_y);
+    ctx.line_to(tip_x + s * 0.15, tip_y - s * 0.05);
+    ctx.line_to(tip_x + s * 0.05, tip_y - s * 0.15);
+    ctx.close_path();
+    let _ = ctx.fill();
+
+    // Draw the bulb (small circle at top)
+    let bulb_r = s * 0.12;
+    ctx.arc(bulb_x, bulb_y, bulb_r, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw a paste/clipboard icon
+pub fn draw_icon_paste(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.2);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    // Draw clipboard outline (rounded rectangle)
+    let clip_x = x + s * 0.2;
+    let clip_y = y + s * 0.15;
+    let clip_w = s * 0.6;
+    let clip_h = s * 0.7;
+    let r = s * 0.08;
+
+    // Clipboard body
+    ctx.new_path();
+    ctx.arc(clip_x + clip_w - r, clip_y + r, r, -PI * 0.5, 0.0);
+    ctx.arc(clip_x + clip_w - r, clip_y + clip_h - r, r, 0.0, PI * 0.5);
+    ctx.arc(clip_x + r, clip_y + clip_h - r, r, PI * 0.5, PI);
+    ctx.arc(clip_x + r, clip_y + r, r, PI, PI * 1.5);
+    ctx.close_path();
+    let _ = ctx.stroke();
+
+    // Draw clip at top (small rectangle)
+    let tab_w = s * 0.25;
+    let tab_h = s * 0.12;
+    let tab_x = x + (s - tab_w) / 2.0;
+    let tab_y = y + s * 0.08;
+    ctx.rectangle(tab_x, tab_y, tab_w, tab_h);
+    let _ = ctx.fill();
+
+    // Draw lines on clipboard (content)
+    ctx.set_line_width(stroke * 0.8);
+    let line_y1 = clip_y + clip_h * 0.35;
+    let line_y2 = clip_y + clip_h * 0.55;
+    let line_y3 = clip_y + clip_h * 0.75;
+    let line_x1 = clip_x + s * 0.1;
+    let line_x2 = clip_x + clip_w - s * 0.1;
+
+    ctx.move_to(line_x1, line_y1);
+    ctx.line_to(line_x2, line_y1);
+    let _ = ctx.stroke();
+
+    ctx.move_to(line_x1, line_y2);
+    ctx.line_to(line_x2 - s * 0.1, line_y2);
+    let _ = ctx.stroke();
+
+    ctx.move_to(line_x1, line_y3);
+    ctx.line_to(line_x2 - s * 0.2, line_y3);
+    let _ = ctx.stroke();
+}

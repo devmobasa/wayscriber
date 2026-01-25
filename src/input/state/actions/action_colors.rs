@@ -1,4 +1,6 @@
 use crate::config::Action;
+use crate::draw::Color;
+use crate::input::Tool;
 use crate::util;
 
 use super::super::InputState;
@@ -7,32 +9,65 @@ impl InputState {
     pub(super) fn handle_color_action(&mut self, action: Action) -> bool {
         match action {
             Action::SetColorRed => {
-                let _ = self.set_color(util::key_to_color('r').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('r').unwrap());
             }
             Action::SetColorGreen => {
-                let _ = self.set_color(util::key_to_color('g').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('g').unwrap());
             }
             Action::SetColorBlue => {
-                let _ = self.set_color(util::key_to_color('b').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('b').unwrap());
             }
             Action::SetColorYellow => {
-                let _ = self.set_color(util::key_to_color('y').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('y').unwrap());
             }
             Action::SetColorOrange => {
-                let _ = self.set_color(util::key_to_color('o').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('o').unwrap());
             }
             Action::SetColorPink => {
-                let _ = self.set_color(util::key_to_color('p').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('p').unwrap());
             }
             Action::SetColorWhite => {
-                let _ = self.set_color(util::key_to_color('w').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('w').unwrap());
             }
             Action::SetColorBlack => {
-                let _ = self.set_color(util::key_to_color('k').unwrap());
+                let _ = self.apply_color_from_ui(util::key_to_color('k').unwrap());
+            }
+            Action::PickScreenColor => {
+                self.pending_color_pick = true;
             }
             _ => return false,
         }
 
         true
+    }
+
+    pub(crate) fn apply_color_from_ui(&mut self, color: Color) -> bool {
+        let mut changed = self.set_color(color);
+        if self.active_tool() == Tool::Select && !self.selected_shape_ids().is_empty() {
+            let selection_changed = self.apply_selection_color_value(color);
+            changed = selection_changed || changed;
+        }
+        changed
+    }
+
+    /// Take and clear the pending color pick request.
+    pub fn take_pending_color_pick(&mut self) -> bool {
+        std::mem::take(&mut self.pending_color_pick)
+    }
+
+    /// Take and clear the pending copy hex color request.
+    pub fn take_pending_copy_hex(&mut self) -> bool {
+        std::mem::take(&mut self.pending_copy_hex)
+    }
+
+    /// Take and clear the pending paste hex color request.
+    pub fn take_pending_paste_hex(&mut self) -> bool {
+        std::mem::take(&mut self.pending_paste_hex)
+    }
+
+    /// Apply a picked color from the screen.
+    pub fn apply_picked_color(&mut self, r: f64, g: f64, b: f64) {
+        let color = crate::draw::Color { r, g, b, a: 1.0 };
+        let _ = self.apply_color_from_ui(color);
     }
 }

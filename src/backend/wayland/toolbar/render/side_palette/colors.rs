@@ -87,21 +87,126 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     let picker_y = *y + ToolbarLayoutSpec::SIDE_COLOR_PICKER_OFFSET_Y;
     let picker_w = content_width;
-    draw_color_picker(ctx, x, picker_y, picker_w, picker_h);
+    // Visual height is fixed, but hit region extends further for easier dragging
+    let picker_visual_h = picker_h;
+    let picker_hit_h = layout.spec.side_color_picker_height(snapshot);
+    draw_color_picker(ctx, x, picker_y, picker_w, picker_visual_h);
     hits.push(HitRegion {
-        rect: (x, picker_y, picker_w, picker_h),
+        rect: (x, picker_y, picker_w, picker_hit_h),
         event: ToolbarEvent::SetColor(snapshot.color),
         kind: HitKind::PickColor {
             x,
             y: picker_y,
             w: picker_w,
-            h: picker_h + if snapshot.show_more_colors { 30.0 } else { 0.0 },
+            h: picker_visual_h, // Use visual height for color calculation
         },
         tooltip: None,
     });
 
+    // Draw indicator dot on gradient for current color position
+    let (hue, _, value) = rgb_to_hsv(snapshot.color.r, snapshot.color.g, snapshot.color.b);
+    let indicator_x = x + hue * picker_w;
+    let indicator_y = picker_y + (1.0 - value) * picker_visual_h;
+    draw_color_indicator(ctx, indicator_x, indicator_y, snapshot.color);
+
+    // Draw current color preview row (between gradient and swatches)
+    let preview_row_y = picker_y + picker_h + 10.0;
+    let preview_size = 22.0;
+
+    // Draw preview swatch on the left
+    draw_swatch(ctx, x, preview_row_y, preview_size, snapshot.color, false);
+
+    // Draw hex value next to preview (clickable for copy/paste)
+    let hex = format!(
+        "#{:02X}{:02X}{:02X}",
+        (snapshot.color.r * 255.0).round() as u8,
+        (snapshot.color.g * 255.0).round() as u8,
+        (snapshot.color.b * 255.0).round() as u8
+    );
+    let hex_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 11.0,
+    };
+
+    // Hex input background (subtle rounded rect)
+    let hex_input_x = x + preview_size + 8.0;
+    let hex_input_y = preview_row_y + 1.0;
+    let hex_input_w = 70.0;
+    let hex_input_h = preview_size - 2.0;
+
+    let hex_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, hex_input_x, hex_input_y, hex_input_w, hex_input_h))
+        .unwrap_or(false);
+
+    // Draw hex input background
+    if hex_hover {
+        ctx.set_source_rgba(0.3, 0.3, 0.3, 0.8);
+    } else {
+        ctx.set_source_rgba(0.2, 0.2, 0.2, 0.6);
+    }
+    draw_round_rect(ctx, hex_input_x, hex_input_y, hex_input_w, hex_input_h, 4.0);
+    let _ = ctx.fill();
+
+    // Draw hex text
+    ctx.set_source_rgba(0.85, 0.85, 0.85, 1.0);
+    let hex_layout = crate::ui_text::text_layout(ctx, hex_style, &hex, None);
+    let hex_extents = hex_layout.ink_extents();
+    hex_layout.show_at_baseline(
+        ctx,
+        hex_input_x + (hex_input_w - hex_extents.width()) / 2.0,
+        hex_input_y + hex_input_h / 2.0 + hex_extents.height() / 2.0,
+    );
+
+    // Hit region for hex input (click to copy, or paste from clipboard)
+    hits.push(HitRegion {
+        rect: (hex_input_x, hex_input_y, hex_input_w, hex_input_h),
+        event: ToolbarEvent::CopyHexColor,
+        kind: HitKind::Click,
+        tooltip: Some("Click to copy hex (Ctrl+V to paste)".to_string()),
+    });
+
+    // Add paste button
+    let paste_btn_x = hex_input_x + hex_input_w + 4.0;
+    let paste_btn_size = preview_size - 2.0;
+    let paste_btn_hover = hover
+        .map(|(hx, hy)| {
+            point_in_rect(
+                hx,
+                hy,
+                paste_btn_x,
+                hex_input_y,
+                paste_btn_size,
+                paste_btn_size,
+            )
+        })
+        .unwrap_or(false);
+    draw_button(
+        ctx,
+        paste_btn_x,
+        hex_input_y,
+        paste_btn_size,
+        paste_btn_size,
+        false,
+        paste_btn_hover,
+    );
+    set_icon_color(ctx, paste_btn_hover);
+    toolbar_icons::draw_icon_paste(
+        ctx,
+        paste_btn_x + (paste_btn_size - 12.0) / 2.0,
+        hex_input_y + (paste_btn_size - 12.0) / 2.0,
+        12.0,
+    );
+    hits.push(HitRegion {
+        rect: (paste_btn_x, hex_input_y, paste_btn_size, paste_btn_size),
+        event: ToolbarEvent::PasteHexColor,
+        kind: HitKind::Click,
+        tooltip: Some("Paste hex color from clipboard".to_string()),
+    });
+
     let mut cx = x;
-    let mut row_y = picker_y + picker_h + 8.0;
+    let mut row_y = preview_row_y + preview_size + 8.0;
     for (color, name, action) in basic_colors {
         draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
         let binding = action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
@@ -114,6 +219,33 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
         });
         cx += swatch + swatch_gap;
     }
+
+    // Add eyedropper button
+    let eyedropper_btn_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, cx, row_y, swatch, swatch))
+        .unwrap_or(false);
+    draw_button(ctx, cx, row_y, swatch, swatch, false, eyedropper_btn_hover);
+    set_icon_color(ctx, eyedropper_btn_hover);
+    toolbar_icons::draw_icon_eyedropper(
+        ctx,
+        cx + (swatch - 14.0) / 2.0,
+        row_y + (swatch - 14.0) / 2.0,
+        14.0,
+    );
+    let eyedropper_binding = snapshot
+        .binding_hints
+        .binding_for_action(Action::PickScreenColor);
+    let eyedropper_tooltip = crate::backend::wayland::toolbar::format_binding_label(
+        "Pick from screen",
+        eyedropper_binding,
+    );
+    hits.push(HitRegion {
+        rect: (cx, row_y, swatch, swatch),
+        event: ToolbarEvent::PickScreenColor,
+        kind: HitKind::Click,
+        tooltip: Some(eyedropper_tooltip),
+    });
+    cx += swatch + swatch_gap;
 
     if !snapshot.show_more_colors {
         let plus_btn_hover = hover

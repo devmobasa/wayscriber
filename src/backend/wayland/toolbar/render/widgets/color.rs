@@ -1,6 +1,29 @@
 use super::draw_round_rect;
 use crate::draw::Color;
 
+/// Convert RGB to HSV color space.
+/// Returns (hue, saturation, value) all in 0.0-1.0 range.
+pub fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let delta = max - min;
+
+    let value = max;
+    let saturation = if max == 0.0 { 0.0 } else { delta / max };
+
+    let hue = if delta == 0.0 {
+        0.0
+    } else if max == r {
+        ((g - b) / delta).rem_euclid(6.0) / 6.0
+    } else if max == g {
+        ((b - r) / delta + 2.0) / 6.0
+    } else {
+        ((r - g) / delta + 4.0) / 6.0
+    };
+
+    (hue, saturation, value)
+}
+
 pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     ctx: &cairo::Context,
     x: f64,
@@ -59,5 +82,31 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_color_picker(
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.4);
     ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
     ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+/// Draw a color indicator dot on the gradient picker.
+pub(in crate::backend::wayland::toolbar::render) fn draw_color_indicator(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    color: Color,
+) {
+    let radius = 5.0;
+
+    // Draw outer white ring
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    ctx.arc(x, y, radius + 1.5, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+
+    // Draw inner color circle
+    ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
+    ctx.arc(x, y, radius, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+
+    // Draw dark outline for visibility
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+    ctx.set_line_width(1.0);
+    ctx.arc(x, y, radius + 1.5, 0.0, std::f64::consts::PI * 2.0);
     let _ = ctx.stroke();
 }

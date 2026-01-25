@@ -5,6 +5,13 @@ impl WaylandState {
         self.data.overlay_suppression != OverlaySuppression::None
     }
 
+    pub(in crate::backend::wayland) fn overlay_blocks_event_loop(&self) -> bool {
+        matches!(
+            self.data.overlay_suppression,
+            OverlaySuppression::Capture | OverlaySuppression::Frozen | OverlaySuppression::Zoom
+        )
+    }
+
     pub(in crate::backend::wayland) fn capture_suppressed(&self) -> bool {
         self.data.overlay_suppression == OverlaySuppression::Capture
     }

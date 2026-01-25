@@ -70,7 +70,7 @@ pub(super) fn run_event_loop(
         let capture_active = state.capture.is_in_progress()
             || state.frozen.is_in_progress()
             || state.zoom.is_in_progress()
-            || state.overlay_suppressed();
+            || state.overlay_blocks_event_loop();
         let frame_callback_pending = state.surface.frame_callback_pending();
         let vsync_enabled = state.config.performance.enable_vsync;
 
@@ -84,6 +84,10 @@ pub(super) fn run_event_loop(
         let now = Instant::now();
         let animation_timeout = state.ui_animation_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
+        let color_pick_timeout = state
+            .pending_color_pick_result
+            .is_some()
+            .then_some(Duration::from_millis(50));
         let timeout = if should_block {
             autosave_timeout
         } else if !vsync_enabled && state.input_state.needs_redraw {
@@ -103,6 +107,7 @@ pub(super) fn run_event_loop(
         } else {
             min_timeout(animation_timeout, autosave_timeout)
         };
+        let timeout = min_timeout(timeout, color_pick_timeout);
 
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
             warn!("Event queue error: {}", e);

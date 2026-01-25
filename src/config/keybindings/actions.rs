@@ -122,6 +122,7 @@ pub enum Action {
     SetColorPink,
     SetColorWhite,
     SetColorBlack,
+    PickScreenColor,
 
     // Screenshot capture actions
     CaptureFullScreen,

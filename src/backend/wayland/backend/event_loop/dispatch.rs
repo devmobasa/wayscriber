@@ -10,6 +10,10 @@ pub(super) fn dispatch_events(
     animation_timeout: Option<std::time::Duration>,
 ) -> Result<(), anyhow::Error> {
     if capture_active {
+        if state.pending_color_pick_result.is_some() {
+            return dispatch_with_timeout(event_queue, state, animation_timeout)
+                .map_err(|e| anyhow::anyhow!("Wayland event queue error: {}", e));
+        }
         if let Err(e) = event_queue.dispatch_pending(state) {
             return Err(anyhow::anyhow!("Wayland event queue error: {}", e));
         }

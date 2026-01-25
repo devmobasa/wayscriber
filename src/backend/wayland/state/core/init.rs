@@ -144,6 +144,7 @@ impl WaylandState {
             stylus_pre_eraser_tool_override: None,
             session: SessionState::new(session_options),
             tokio_handle,
+            pending_color_pick_result: None,
         }
     }
 }
