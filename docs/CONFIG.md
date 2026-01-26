@@ -128,7 +128,7 @@ font_size = 32.0
 text_background_enabled = false
 arrow_length = 20.0
 arrow_angle = 30.0
-arrow_head_at_end = false
+arrow_head_at_end = true
 show_status_bar = true
 ```
 

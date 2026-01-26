@@ -342,5 +342,5 @@ impl Shape {
 }
 
 const fn default_arrow_head_at_end() -> bool {
-    false
+    true
 }
