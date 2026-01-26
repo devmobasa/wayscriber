@@ -75,6 +75,8 @@ pub struct StateData {
     pub(super) overlay_suppression: OverlaySuppression,
     /// True when surface is configured and has keyboard focus; keys are blocked until ready.
     pub(super) overlay_ready: bool,
+    /// Suppress the next pointer release after a modal click (e.g., command palette).
+    pub(super) suppress_next_release: bool,
 }
 
 impl StateData {
@@ -124,6 +126,7 @@ impl StateData {
             xdg_fullscreen: false,
             overlay_suppression: OverlaySuppression::None,
             overlay_ready: false,
+            suppress_next_release: false,
         }
     }
 }
