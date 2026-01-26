@@ -9,3 +9,5 @@ mod pending;
 mod presenter_mode;
 mod step_markers;
 mod toasts;
+
+pub use help_overlay::HelpOverlayCursorHint;

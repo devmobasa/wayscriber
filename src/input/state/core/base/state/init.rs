@@ -1,5 +1,6 @@
 use super::super::super::{
-    board_picker::BoardPickerState, menus::ContextMenuState, selection::SelectionState,
+    board_picker::BoardPickerState, color_picker_popup::ColorPickerPopupState,
+    menus::ContextMenuState, selection::SelectionState,
 };
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
@@ -134,6 +135,8 @@ impl InputState {
             action_bindings: HashMap::new(),
             pending_capture_action: None,
             pending_zoom_action: None,
+            pending_copy_hex: false,
+            pending_paste_hex: false,
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             tool_override: None,
@@ -143,6 +146,8 @@ impl InputState {
             context_menu_enabled: true,
             board_picker_state: BoardPickerState::Hidden,
             board_picker_drag: None,
+            color_picker_popup_state: ColorPickerPopupState::Hidden,
+            color_picker_popup_layout: None,
             hit_test_cache: HashMap::new(),
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,
@@ -165,6 +170,7 @@ impl InputState {
             last_capture_path: None,
             last_text_click: None,
             text_edit_target: None,
+            text_edit_entry_feedback: None,
             pending_history: None,
             context_menu_layout: None,
             board_picker_layout: None,

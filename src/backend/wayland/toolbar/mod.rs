@@ -7,7 +7,7 @@ mod rows;
 pub mod surfaces;
 
 #[allow(unused_imports)]
-pub use events::{HitKind, delay_secs_from_t, delay_t_from_ms, hsv_to_rgb};
+pub use events::{HitKind, ToolbarCursorHint, delay_secs_from_t, delay_t_from_ms, hsv_to_rgb};
 #[allow(unused_imports)]
 pub use layout::{build_side_hits, build_top_hits, side_size, top_size};
 pub use main::*;

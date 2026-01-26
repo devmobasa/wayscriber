@@ -37,6 +37,7 @@ impl WaylandState {
                 crate::ui::render_frozen_badge(ctx, width, height);
             }
             // Render a zoom badge when the status bar is hidden or zoom is locked.
+            let mut top_badge_offset = 0.0;
             if self.input_state.zoom_active()
                 && (!self.input_state.show_status_bar || self.input_state.zoom_locked())
             {
@@ -47,6 +48,13 @@ impl WaylandState {
                     self.input_state.zoom_scale(),
                     self.input_state.zoom_locked(),
                 );
+                top_badge_offset += 42.0; // Space below zoom badge
+            }
+            // Render editing badge when in text edit mode
+            if matches!(self.input_state.state, DrawingState::TextInput { .. })
+                && self.input_state.text_edit_target.is_some()
+            {
+                crate::ui::render_editing_badge(ctx, width, height, top_badge_offset);
             }
             if !self.input_state.show_status_bar || self.input_state.show_floating_badge_always {
                 let board_count = self.input_state.boards.board_count();
@@ -109,6 +117,14 @@ impl WaylandState {
                 crate::ui::render_board_picker(ctx, &self.input_state, width, height);
             } else {
                 self.input_state.clear_board_picker_layout();
+            }
+
+            if self.input_state.is_color_picker_popup_open() {
+                self.input_state
+                    .update_color_picker_popup_layout(width, height);
+                crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
+            } else {
+                self.input_state.clear_color_picker_popup_layout();
             }
 
             self.input_state.ui_toast_bounds =

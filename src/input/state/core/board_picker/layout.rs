@@ -7,11 +7,11 @@ use crate::util::Rect;
 use super::super::base::InputState;
 use super::{
     BOARD_PICKER_RECENT_LINE_HEIGHT, BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT, BODY_FONT_SIZE,
-    BoardPickerEditMode, BoardPickerLayout, BoardPickerState, COLUMN_GAP, COMPACT_BODY_FONT_SIZE,
-    COMPACT_FOOTER_FONT_SIZE, COMPACT_FOOTER_HEIGHT, COMPACT_HEADER_HEIGHT, COMPACT_PADDING_X,
-    COMPACT_PADDING_Y, COMPACT_ROW_HEIGHT, COMPACT_SWATCH_PADDING, COMPACT_SWATCH_SIZE,
-    COMPACT_TITLE_FONT_SIZE, FOOTER_FONT_SIZE, FOOTER_HEIGHT, HANDLE_GAP, HANDLE_WIDTH,
-    HEADER_HEIGHT, PADDING_X, PADDING_Y, PALETTE_BOTTOM_GAP, PALETTE_SWATCH_GAP,
+    BoardPickerCursorHint, BoardPickerEditMode, BoardPickerLayout, BoardPickerState, COLUMN_GAP,
+    COMPACT_BODY_FONT_SIZE, COMPACT_FOOTER_FONT_SIZE, COMPACT_FOOTER_HEIGHT, COMPACT_HEADER_HEIGHT,
+    COMPACT_PADDING_X, COMPACT_PADDING_Y, COMPACT_ROW_HEIGHT, COMPACT_SWATCH_PADDING,
+    COMPACT_SWATCH_SIZE, COMPACT_TITLE_FONT_SIZE, FOOTER_FONT_SIZE, FOOTER_HEIGHT, HANDLE_GAP,
+    HANDLE_WIDTH, HEADER_HEIGHT, PADDING_X, PADDING_Y, PALETTE_BOTTOM_GAP, PALETTE_SWATCH_GAP,
     PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, PIN_OFFSET_FACTOR, ROW_HEIGHT, SWATCH_PADDING,
     SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
 };
@@ -394,6 +394,77 @@ impl InputState {
             *hover_index = hover;
             self.needs_redraw = true;
         }
+    }
+
+    /// Determine the cursor type for a given point within the board picker.
+    /// Returns `None` if the board picker is not open or the point is outside.
+    pub(crate) fn board_picker_cursor_hint_at(
+        &self,
+        x: i32,
+        y: i32,
+    ) -> Option<BoardPickerCursorHint> {
+        if !self.is_board_picker_open() {
+            return None;
+        }
+        let layout = self.board_picker_layout?;
+
+        // Check if point is within the panel
+        if !self.board_picker_contains_point(x, y) {
+            return None;
+        }
+
+        // Check if currently dragging a board (grabbing)
+        if self.board_picker_drag.is_some() {
+            return Some(BoardPickerCursorHint::Grabbing);
+        }
+
+        // Check drag handles first (grab cursor)
+        if self.board_picker_handle_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Grab);
+        }
+
+        // Check if in edit mode and hovering over the edit row
+        if let Some((edit_mode, edit_index, _)) = self.board_picker_edit_state()
+            && let Some(row_index) = self.board_picker_index_at(x, y)
+            && row_index == edit_index
+        {
+            // If editing name or hex, show text cursor over the row
+            match edit_mode {
+                BoardPickerEditMode::Name => return Some(BoardPickerCursorHint::Text),
+                BoardPickerEditMode::Color => {
+                    // Check palette first
+                    if layout.palette_rows > 0 && self.board_picker_palette_color_at(x, y).is_some()
+                    {
+                        return Some(BoardPickerCursorHint::Pointer);
+                    }
+                    // In color edit mode, text cursor for hex input
+                    return Some(BoardPickerCursorHint::Text);
+                }
+            }
+        }
+
+        // Check palette swatches (pointer)
+        if layout.palette_rows > 0 && self.board_picker_palette_color_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+
+        // Check color swatches (pointer for color edit)
+        if self.board_picker_swatch_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+
+        // Check pin icons (pointer)
+        if self.board_picker_pin_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+
+        // Check board rows (pointer for selection)
+        if self.board_picker_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+
+        // Default within the picker panel
+        Some(BoardPickerCursorHint::Default)
     }
 
     pub(super) fn mark_board_picker_region(&mut self, layout: BoardPickerLayout) {

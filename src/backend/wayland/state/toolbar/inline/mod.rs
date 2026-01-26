@@ -1,5 +1,5 @@
 use super::*;
-use crate::backend::wayland::toolbar::ToolbarFocusTarget;
+use crate::backend::wayland::toolbar::{ToolbarCursorHint, ToolbarFocusTarget};
 
 mod drag;
 mod focus;
@@ -36,5 +36,30 @@ impl WaylandState {
             ToolbarFocusTarget::Top => &mut self.data.inline_top_focus_index,
             ToolbarFocusTarget::Side => &mut self.data.inline_side_focus_index,
         }
+    }
+
+    /// Get cursor hint for inline toolbar hover position.
+    pub(in crate::backend::wayland) fn inline_toolbar_cursor_hint(
+        &self,
+    ) -> Option<ToolbarCursorHint> {
+        // Check top toolbar hover
+        if let Some((hx, hy)) = self.data.inline_top_hover {
+            for hit in &self.data.inline_top_hits {
+                if hit.contains(hx, hy) {
+                    return Some(hit.kind.cursor_hint());
+                }
+            }
+            return Some(ToolbarCursorHint::Default);
+        }
+        // Check side toolbar hover
+        if let Some((hx, hy)) = self.data.inline_side_hover {
+            for hit in &self.data.inline_side_hits {
+                if hit.contains(hx, hy) {
+                    return Some(hit.kind.cursor_hint());
+                }
+            }
+            return Some(ToolbarCursorHint::Default);
+        }
+        None
     }
 }

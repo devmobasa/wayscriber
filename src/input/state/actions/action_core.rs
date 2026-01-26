@@ -1,7 +1,6 @@
+use super::super::{DrawingState, InputState, TextInputMode, UiToastKind};
 use crate::config::Action;
 use log::info;
-
-use super::super::{DrawingState, InputState, TextInputMode, UiToastKind};
 
 impl InputState {
     pub(super) fn handle_core_action(&mut self, action: Action) -> bool {
@@ -35,6 +34,11 @@ impl InputState {
                         shape_id, snapshot, ..
                     } => {
                         self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                        self.state = DrawingState::Idle;
+                    }
+                    DrawingState::ResizingSelection { snapshots, .. } => {
+                        let snapshots = snapshots.clone();
+                        self.restore_resize_from_snapshots(snapshots.as_ref());
                         self.state = DrawingState::Idle;
                     }
                     DrawingState::Idle => {

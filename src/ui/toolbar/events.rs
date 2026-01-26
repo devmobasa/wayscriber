@@ -78,6 +78,12 @@ pub enum ToolbarEvent {
     ToggleIconMode(bool),
     /// Toggle extended color palette
     ToggleMoreColors(bool),
+    /// Copy current color as hex to clipboard
+    CopyHexColor,
+    /// Paste hex color from clipboard
+    PasteHexColor,
+    /// Open the color picker popup
+    OpenColorPickerPopup,
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
     /// Toggle advanced action buttons

@@ -10,6 +10,8 @@ pub enum TourStep {
     Welcome,
     DrawingBasics,
     ToolbarIntro,
+    CommandPalette,
+    ContextMenu,
     HelpOverlay,
     Presets,
     Complete,
@@ -17,7 +19,7 @@ pub enum TourStep {
 
 impl TourStep {
     /// Total number of tour steps.
-    pub const COUNT: usize = 6;
+    pub const COUNT: usize = 8;
 
     /// Get step from index.
     pub fn from_index(index: usize) -> Option<Self> {
@@ -25,9 +27,11 @@ impl TourStep {
             0 => Some(Self::Welcome),
             1 => Some(Self::DrawingBasics),
             2 => Some(Self::ToolbarIntro),
-            3 => Some(Self::HelpOverlay),
-            4 => Some(Self::Presets),
-            5 => Some(Self::Complete),
+            3 => Some(Self::CommandPalette),
+            4 => Some(Self::ContextMenu),
+            5 => Some(Self::HelpOverlay),
+            6 => Some(Self::Presets),
+            7 => Some(Self::Complete),
             _ => None,
         }
     }
@@ -38,6 +42,8 @@ impl TourStep {
             Self::Welcome => "Welcome to Wayscriber",
             Self::DrawingBasics => "Drawing Basics",
             Self::ToolbarIntro => "Toolbar Access",
+            Self::CommandPalette => "Command Palette",
+            Self::ContextMenu => "Context Menu",
             Self::HelpOverlay => "Help & Shortcuts",
             Self::Presets => "Quick Presets",
             Self::Complete => "Tour Complete",
@@ -55,6 +61,12 @@ impl TourStep {
             }
             Self::ToolbarIntro => {
                 "Press F2 to toggle the toolbar.\nThe toolbar provides quick access to all tools and settings."
+            }
+            Self::CommandPalette => {
+                "Press Ctrl+K to open the command palette.\nQuickly search and run any action by typing.\nAccess all features without memorizing shortcuts."
+            }
+            Self::ContextMenu => {
+                "Right-click anywhere for quick actions.\nAccess boards, pages, and common commands.\nShape-specific options when clicking on shapes."
             }
             Self::HelpOverlay => {
                 "Press F1 to see all keyboard shortcuts.\nType to search for specific commands."

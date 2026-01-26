@@ -1,6 +1,6 @@
 use super::super::widgets::constants::{
-    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
-    FONT_SIZE_LABEL, SPACING_STD, set_color,
+    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, SPACING_STD,
+    set_color,
 };
 use super::super::widgets::*;
 use super::SidePaletteLayout;
@@ -57,6 +57,9 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
     let fs_slider_row_y = *y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
 
     let fs_minus_x = x;
+    let fs_minus_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, fs_minus_x, fs_slider_row_y, btn_size, btn_size))
+        .unwrap_or(false);
     draw_button(
         ctx,
         fs_minus_x,
@@ -64,9 +67,9 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         btn_size,
         btn_size,
         false,
-        false,
+        fs_minus_hover,
     );
-    set_color(ctx, COLOR_TEXT_PRIMARY);
+    set_icon_color(ctx, fs_minus_hover);
     toolbar_icons::draw_icon_minus(
         ctx,
         fs_minus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -77,10 +80,13 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         rect: (fs_minus_x, fs_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::SetFontSize((snapshot.font_size - 2.0).max(fs_min)),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Decrease font size".to_string()),
     });
 
     let fs_plus_x = width - x - btn_size - value_w - 4.0;
+    let fs_plus_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, fs_plus_x, fs_slider_row_y, btn_size, btn_size))
+        .unwrap_or(false);
     draw_button(
         ctx,
         fs_plus_x,
@@ -88,9 +94,9 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         btn_size,
         btn_size,
         false,
-        false,
+        fs_plus_hover,
     );
-    set_color(ctx, COLOR_TEXT_PRIMARY);
+    set_icon_color(ctx, fs_plus_hover);
     toolbar_icons::draw_icon_plus(
         ctx,
         fs_plus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -101,7 +107,7 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
         rect: (fs_plus_x, fs_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::SetFontSize((snapshot.font_size + 2.0).min(fs_max)),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Increase font size".to_string()),
     });
 
     let fs_track_x = fs_minus_x + btn_size + SPACING_STD;

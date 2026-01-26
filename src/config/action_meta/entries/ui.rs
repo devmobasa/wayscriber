@@ -95,10 +95,10 @@ pub const ENTRIES: &[ActionMeta] = &[
         ToggleCommandPalette,
         "Command Palette",
         None,
-        "Toggle the command palette",
+        "Search all commands",
         UI,
-        false,
-        false,
+        true,
+        true,
         false
     ),
     meta!(

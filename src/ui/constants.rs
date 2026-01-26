@@ -271,7 +271,7 @@ pub const FOCUS_RING_OFFSET: f64 = 2.0;
 // ============================================================================
 
 /// Context menu navigation hint
-pub const NAV_HINT_MENU: &str = "↑↓ Navigate • Enter Select • Esc Close";
+pub const NAV_HINT_MENU: &str = "↑↓ to navigate • Enter to select • Esc to close";
 
 /// Board picker navigation hint
 pub const NAV_HINT_BOARD_PICKER: &str = "↑↓ Navigate • Enter Switch • Esc Close";

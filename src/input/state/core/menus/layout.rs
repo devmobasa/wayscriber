@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use super::types::{ContextMenuLayout, ContextMenuState};
+use super::types::{ContextMenuCursorHint, ContextMenuLayout, ContextMenuState};
 use crate::ui_text::{UiTextStyle, text_layout};
 use crate::util::Rect;
 use cairo::Context as CairoContext;
@@ -148,11 +148,45 @@ impl InputState {
         }
     }
 
+    /// Determine the cursor type for a given point within the context menu.
+    /// Returns `None` if the context menu is not open or the point is outside.
+    pub fn context_menu_cursor_hint_at(&self, x: i32, y: i32) -> Option<ContextMenuCursorHint> {
+        if !self.is_context_menu_open() {
+            return None;
+        }
+        let layout = self.context_menu_layout()?;
+
+        let local_x = x as f64 - layout.origin_x;
+        let local_y = y as f64 - layout.origin_y;
+
+        // Check if within panel bounds
+        if local_x < 0.0 || local_y < 0.0 || local_x > layout.width || local_y > layout.height {
+            return None;
+        }
+
+        // Check if hovering over a menu item (not disabled)
+        if let Some(index) = self.context_menu_index_at(x, y) {
+            let entries = self.context_menu_entries();
+            if let Some(entry) = entries.get(index)
+                && !entry.disabled
+            {
+                return Some(ContextMenuCursorHint::Pointer);
+            }
+        }
+
+        Some(ContextMenuCursorHint::Default)
+    }
+
     pub(super) fn mark_context_menu_region(&mut self, layout: ContextMenuLayout) {
-        let x = layout.origin_x.floor() as i32;
-        let y = layout.origin_y.floor() as i32;
-        let width = layout.width.ceil() as i32 + 2;
-        let height = layout.height.ceil() as i32 + 2;
+        // Add margin for border stroke and anti-aliasing
+        let margin = 4;
+        let x = layout.origin_x.floor() as i32 - margin;
+        let y = layout.origin_y.floor() as i32 - margin;
+        let width = layout.width.ceil() as i32 + margin * 2;
+        // Include navigation hint area below the menu:
+        // hint_y = layout.height + 4.0, hint_height = font_size * 0.8 + 6.0 * 2.0
+        let hint_extra = 4.0 + layout.font_size * 0.8 + 12.0 + 4.0; // gap + hint + padding
+        let height = (layout.height + hint_extra).ceil() as i32 + margin * 2;
         let width = width.max(1);
         let height = height.max(1);
 

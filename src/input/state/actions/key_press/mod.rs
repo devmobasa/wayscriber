@@ -34,6 +34,10 @@ impl InputState {
             return;
         }
 
+        if self.is_color_picker_popup_open() && self.handle_color_picker_popup_key(key) {
+            return;
+        }
+
         if self.is_board_picker_open() && self.handle_board_picker_key(key) {
             return;
         }

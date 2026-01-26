@@ -42,35 +42,59 @@ pub fn render_help_overlay(
     } else {
         "Wayscriber Controls"
     };
-    let commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
+    let _commit_hash = option_env!("WAYSCRIBER_GIT_HASH").unwrap_or("unknown");
+    let palette_binding = bindings
+        .labels_for(Action::ToggleCommandPalette)
+        .and_then(|labels| labels.first())
+        .map(|label| label.as_str())
+        .unwrap_or(NOT_BOUND_LABEL);
     let config_binding = bindings
         .labels_for(Action::OpenConfigurator)
         .and_then(|labels| labels.first())
         .map(|label| label.as_str())
         .unwrap_or(NOT_BOUND_LABEL);
     let version_line = if quick_mode {
-        "Essential shortcuts at a glance".to_string()
+        format!(
+            "Essential shortcuts  {}  {} {} {}",
+            BULLET, palette_binding, ARROW, "Command Palette (search all)"
+        )
     } else {
         format!(
-            "Wayscriber {} ({})  {}  {} {} {}",
+            "{}  {}  {} {} {}  {}  {} {} {}",
             env!("CARGO_PKG_VERSION"),
-            commit_hash,
+            BULLET,
+            palette_binding,
+            ARROW,
+            "Command Palette",
             BULLET,
             config_binding,
             ARROW,
             action_label(Action::OpenConfigurator)
         )
     };
-    let note_text_base = if quick_mode {
-        "F1 for full help"
+    let help_binding = bindings
+        .labels_for(Action::ToggleHelp)
+        .and_then(|labels| labels.first())
+        .map(|label| label.as_str())
+        .unwrap_or("F1");
+    let quick_help_binding = bindings
+        .labels_for(Action::ToggleQuickHelp)
+        .and_then(|labels| labels.first())
+        .map(|label| label.as_str())
+        .unwrap_or("Shift+F1");
+    let note_text_base_owned;
+    let note_text_base: &str = if quick_mode {
+        note_text_base_owned = format!("{} for full help", help_binding);
+        &note_text_base_owned
     } else {
         "Note: Each board has independent pages"
     };
-    let close_hint_text = if quick_mode {
-        "Shift+F1 / Esc to close"
+    let close_hint_owned = if quick_mode {
+        format!("{} / Esc to close", quick_help_binding)
     } else {
-        "F1 / Esc to close"
+        format!("{} / Esc to close", help_binding)
     };
+    let close_hint_text: &str = &close_hint_owned;
 
     let layout = get_or_build_overlay_layout(
         ctx,

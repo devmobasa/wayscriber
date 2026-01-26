@@ -438,6 +438,15 @@ impl InputState {
         }
     }
 
+    pub fn switch_to_page(&mut self, index: usize) -> bool {
+        if self.boards.active_pages_mut().switch_to_page(index) {
+            self.prepare_page_switch();
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn page_new(&mut self) {
         self.boards.new_page();
         self.prepare_page_switch();

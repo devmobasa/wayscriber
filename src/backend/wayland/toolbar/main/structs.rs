@@ -1,5 +1,8 @@
+use std::time::Instant;
+
 use smithay_client_toolkit::shell::wlr_layer::Anchor;
 
+use crate::backend::wayland::toolbar::events::ToolbarCursorHint;
 use crate::backend::wayland::toolbar::surfaces::ToolbarSurface;
 use crate::ui::toolbar::ToolbarSnapshot;
 
@@ -17,6 +20,10 @@ pub struct ToolbarSurfaceManager {
     pub(super) side: ToolbarSurface,
     pub(super) top_hover: Option<(f64, f64)>,
     pub(super) side_hover: Option<(f64, f64)>,
+    /// Timestamp when top hover started (for tooltip delay).
+    pub(super) top_hover_start: Option<Instant>,
+    /// Timestamp when side hover started (for tooltip delay).
+    pub(super) side_hover_start: Option<Instant>,
     pub(super) last_snapshot: Option<ToolbarSnapshot>,
 }
 
@@ -40,6 +47,8 @@ impl Default for ToolbarSurfaceManager {
             ),
             top_hover: None,
             side_hover: None,
+            top_hover_start: None,
+            side_hover_start: None,
             last_snapshot: None,
         }
     }
@@ -48,5 +57,16 @@ impl Default for ToolbarSurfaceManager {
 impl ToolbarSurfaceManager {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Get cursor hint for the currently hovered toolbar, if any.
+    pub fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
+        if self.top_hover.is_some() {
+            return self.top.cursor_hint();
+        }
+        if self.side_hover.is_some() {
+            return self.side.cursor_hint();
+        }
+        None
     }
 }

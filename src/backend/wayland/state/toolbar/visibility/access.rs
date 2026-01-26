@@ -71,4 +71,14 @@ impl WaylandState {
         };
         Some(self.local_to_screen_coords(kind, position))
     }
+
+    pub(in crate::backend::wayland) fn set_suppress_next_release(&mut self, value: bool) {
+        self.data.suppress_next_release = value;
+    }
+
+    pub(in crate::backend::wayland) fn take_suppress_next_release(&mut self) -> bool {
+        let value = self.data.suppress_next_release;
+        self.data.suppress_next_release = false;
+        value
+    }
 }

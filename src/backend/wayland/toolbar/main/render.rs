@@ -8,14 +8,18 @@ impl ToolbarSurfaceManager {
         // Render top toolbar if visible
         if self.is_top_visible() {
             let top_hover = hover.or(self.top_hover).or(self.top.focused_hover());
-            if let Err(err) =
-                self.top
-                    .render(shm, snapshot, top_hover, |ctx, w, h, snap, hits, hov| {
-                        crate::backend::wayland::toolbar::render_top_strip(
-                            ctx, w, h, snap, hits, hov,
-                        )
-                    })
-            {
+            let top_hover_start = self.top_hover_start;
+            if let Err(err) = self.top.render(
+                shm,
+                snapshot,
+                top_hover,
+                top_hover_start,
+                |ctx, w, h, snap, hits, hov, hov_start| {
+                    crate::backend::wayland::toolbar::render_top_strip(
+                        ctx, w, h, snap, hits, hov, hov_start,
+                    )
+                },
+            ) {
                 log::warn!("Failed to render top toolbar: {}", err);
             }
         }
@@ -23,14 +27,18 @@ impl ToolbarSurfaceManager {
         // Render side toolbar if visible
         if self.is_side_visible() {
             let side_hover = hover.or(self.side_hover).or(self.side.focused_hover());
-            if let Err(err) =
-                self.side
-                    .render(shm, snapshot, side_hover, |ctx, w, h, snap, hits, hov| {
-                        crate::backend::wayland::toolbar::render_side_palette(
-                            ctx, w, h, snap, hits, hov,
-                        )
-                    })
-            {
+            let side_hover_start = self.side_hover_start;
+            if let Err(err) = self.side.render(
+                shm,
+                snapshot,
+                side_hover,
+                side_hover_start,
+                |ctx, w, h, snap, hits, hov, hov_start| {
+                    crate::backend::wayland::toolbar::render_side_palette(
+                        ctx, w, h, snap, hits, hov, hov_start,
+                    )
+                },
+            ) {
                 log::warn!("Failed to render side toolbar: {}", err);
             }
         }

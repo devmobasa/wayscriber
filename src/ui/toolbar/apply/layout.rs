@@ -45,6 +45,13 @@ impl InputState {
     pub(super) fn apply_toolbar_pin_top_toolbar(&mut self, pin: bool) -> bool {
         if self.toolbar_top_pinned != pin {
             self.toolbar_top_pinned = pin;
+            // Show toast explaining what pinning does
+            use crate::input::state::UiToastKind;
+            if pin {
+                self.set_ui_toast(UiToastKind::Info, "Top toolbar will open at startup");
+            } else {
+                self.set_ui_toast(UiToastKind::Info, "Top toolbar will be hidden at startup");
+            }
             true
         } else {
             false
@@ -54,6 +61,13 @@ impl InputState {
     pub(super) fn apply_toolbar_pin_side_toolbar(&mut self, pin: bool) -> bool {
         if self.toolbar_side_pinned != pin {
             self.toolbar_side_pinned = pin;
+            // Show toast explaining what pinning does
+            use crate::input::state::UiToastKind;
+            if pin {
+                self.set_ui_toast(UiToastKind::Info, "Side toolbar will open at startup");
+            } else {
+                self.set_ui_toast(UiToastKind::Info, "Side toolbar will be hidden at startup");
+            }
             true
         } else {
             false

@@ -16,7 +16,7 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_set_color(&mut self, color: Color) -> bool {
-        self.set_color(color)
+        self.apply_color_from_ui(color)
     }
 
     pub(super) fn apply_toolbar_set_thickness(&mut self, value: f64) -> bool {
@@ -101,5 +101,20 @@ impl InputState {
 
     pub(super) fn apply_toolbar_clear_preset(&mut self, slot: usize) -> bool {
         self.clear_preset(slot)
+    }
+
+    pub(super) fn apply_toolbar_copy_hex_color(&mut self) -> bool {
+        self.pending_copy_hex = true;
+        true
+    }
+
+    pub(super) fn apply_toolbar_paste_hex_color(&mut self) -> bool {
+        self.pending_paste_hex = true;
+        true
+    }
+
+    pub(super) fn apply_toolbar_open_color_picker_popup(&mut self) -> bool {
+        self.open_color_picker_popup();
+        true
     }
 }

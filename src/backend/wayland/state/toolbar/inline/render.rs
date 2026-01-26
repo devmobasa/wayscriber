@@ -72,6 +72,7 @@ impl WaylandState {
                 snapshot,
                 &mut self.data.inline_top_hits,
                 top_hover_local,
+                self.data.inline_top_hover_start,
             ) {
                 log::warn!("Failed to render inline top toolbar: {}", err);
             }
@@ -107,6 +108,7 @@ impl WaylandState {
                 snapshot,
                 &mut self.data.inline_side_hits,
                 side_hover_local,
+                self.data.inline_side_hover_start,
             ) {
                 log::warn!("Failed to render inline side toolbar: {}", err);
             }

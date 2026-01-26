@@ -133,6 +133,14 @@ impl WaylandState {
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
         }
+        // Check if hex color copy was requested
+        if self.input_state.take_pending_copy_hex() {
+            self.handle_copy_hex_color();
+        }
+        // Check if hex color paste was requested
+        if self.input_state.take_pending_paste_hex() {
+            self.handle_paste_hex_color();
+        }
         self.refresh_keyboard_interactivity();
     }
 

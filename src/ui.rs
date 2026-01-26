@@ -1,6 +1,7 @@
 pub mod toolbar;
 
 mod board_picker;
+mod color_picker_popup;
 mod command_palette;
 pub mod constants;
 mod context_menu;
@@ -12,6 +13,7 @@ mod toasts;
 mod tour;
 
 pub use board_picker::render_board_picker;
+pub use color_picker_popup::render_color_picker_popup;
 pub use command_palette::render_command_palette;
 pub use context_menu::render_context_menu;
 #[allow(unused_imports)]
@@ -19,6 +21,9 @@ pub use help_overlay::HelpOverlayBindings;
 #[allow(unused_imports)]
 pub use help_overlay::{invalidate_help_overlay_cache, render_help_overlay};
 pub use properties_panel::render_properties_panel;
-pub use status::{render_frozen_badge, render_page_badge, render_status_bar, render_zoom_badge};
+pub use status::{
+    render_editing_badge, render_frozen_badge, render_page_badge, render_status_bar,
+    render_zoom_badge,
+};
 pub use toasts::{render_blocked_feedback, render_preset_toast, render_ui_toast};
 pub use tour::render_tour;

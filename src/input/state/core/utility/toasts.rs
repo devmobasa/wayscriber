@@ -1,6 +1,6 @@
 use super::super::base::{
     BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback,
-    ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
+    TEXT_EDIT_ENTRY_DURATION_MS, ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
 };
 use crate::capture::file::{FileSaveConfig, save_screenshot};
 use crate::config::keybindings::Action;
@@ -228,5 +228,28 @@ impl InputState {
                 self.trigger_blocked_feedback();
             }
         }
+    }
+
+    /// Advance the text edit entry feedback animation. Returns true if still active.
+    pub fn advance_text_edit_entry_feedback(&mut self, now: Instant) -> bool {
+        let Some(feedback) = &self.text_edit_entry_feedback else {
+            return false;
+        };
+        let duration = Duration::from_millis(TEXT_EDIT_ENTRY_DURATION_MS);
+        if now.saturating_duration_since(feedback.started) >= duration {
+            self.text_edit_entry_feedback = None;
+            return false;
+        }
+        true
+    }
+
+    /// Get the progress (0.0 to 1.0) of the text edit entry animation.
+    pub fn text_edit_entry_progress(&self) -> Option<f64> {
+        let feedback = self.text_edit_entry_feedback.as_ref()?;
+        let elapsed = Instant::now()
+            .saturating_duration_since(feedback.started)
+            .as_millis() as f64;
+        let total = TEXT_EDIT_ENTRY_DURATION_MS as f64;
+        Some((elapsed / total).min(1.0))
     }
 }

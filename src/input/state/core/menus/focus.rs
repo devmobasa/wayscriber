@@ -94,7 +94,7 @@ impl InputState {
             if entry.disabled {
                 return false;
             }
-            if let Some(command) = entry.command {
+            if let Some(command) = entry.command.clone() {
                 self.execute_menu_command(command);
             } else {
                 self.close_context_menu();

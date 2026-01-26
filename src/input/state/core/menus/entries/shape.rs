@@ -1,5 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
+use crate::config::Action;
 use crate::draw::{Shape, ShapeId};
 
 impl InputState {
@@ -21,7 +22,7 @@ impl InputState {
         if hovered_shape_id.is_some() {
             entries.push(ContextMenuEntry::new(
                 "Select This Shape",
-                Some("Alt+Click"),
+                Some("Alt+Click"), // Mouse action, not configurable
                 false,
                 false,
                 Some(MenuCommand::SelectHoveredShape),
@@ -30,35 +31,35 @@ impl InputState {
 
         entries.push(ContextMenuEntry::new(
             "Delete",
-            Some("Del"),
+            self.shortcut_for_action(Action::DeleteSelection),
             false,
             all_locked,
             Some(MenuCommand::Delete),
         ));
         entries.push(ContextMenuEntry::new(
             "Duplicate",
-            Some("Ctrl+D"),
+            self.shortcut_for_action(Action::DuplicateSelection),
             false,
             false,
             Some(MenuCommand::Duplicate),
         ));
         entries.push(ContextMenuEntry::new(
             "Move to Front",
-            Some("]"),
+            self.shortcut_for_action(Action::MoveSelectionToFront),
             false,
             false,
             Some(MenuCommand::MoveToFront),
         ));
         entries.push(ContextMenuEntry::new(
             "Move to Back",
-            Some("["),
+            self.shortcut_for_action(Action::MoveSelectionToBack),
             false,
             false,
             Some(MenuCommand::MoveToBack),
         ));
         entries.push(ContextMenuEntry::new(
             if locked { "Unlock" } else { "Lock" },
-            Some("Ctrl+L"),
+            None::<String>, // Lock/unlock not a configurable keybinding
             false,
             false,
             Some(if locked {
@@ -69,7 +70,7 @@ impl InputState {
         ));
         entries.push(ContextMenuEntry::new(
             "Properties",
-            Some("Ctrl+Enter"),
+            self.shortcut_for_action(Action::ToggleSelectionProperties),
             false,
             false,
             Some(MenuCommand::Properties),
@@ -86,7 +87,7 @@ impl InputState {
                 if let Some(label) = label {
                     entries.push(ContextMenuEntry::new(
                         label,
-                        Some("Enter"),
+                        None::<String>, // Edit text not a configurable keybinding
                         false,
                         drawn.locked,
                         Some(MenuCommand::EditText),

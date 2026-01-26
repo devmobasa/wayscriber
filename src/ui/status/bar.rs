@@ -86,10 +86,22 @@ pub fn render_status_bar(
         String::new()
     };
 
+    let selection_badge = if let Some(bounds) = input_state.selection_bounds() {
+        let count = input_state.selected_shape_ids().len();
+        if count == 1 {
+            format!("[{}×{}px] ", bounds.width, bounds.height)
+        } else {
+            format!("[{} items: {}×{}px] ", count, bounds.width, bounds.height)
+        }
+    } else {
+        String::new()
+    };
+
     let status_text = format!(
-        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
+        "{}{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
         frozen_badge,
         zoom_badge,
+        selection_badge,
         board_badge,
         page_badge,
         color_name,
@@ -103,6 +115,10 @@ pub fn render_status_bar(
     );
 
     log::debug!("Status bar font_size from config: {}", style.font_size);
+
+    // Limit status bar to 80% of screen width to prevent overflow
+    let max_width = (screen_width as f64 * 0.8) - style.padding * 2.0;
+
     let layout = text_layout(
         ctx,
         UiTextStyle {
@@ -112,10 +128,10 @@ pub fn render_status_bar(
             size: style.font_size,
         },
         &status_text,
-        None,
+        Some(max_width),
     );
     let extents = layout.ink_extents();
-    let text_width = extents.width();
+    let text_width = extents.width().min(max_width);
     let text_height = extents.height();
 
     let padding = style.padding;
@@ -167,7 +183,7 @@ fn tool_display_name(input_state: &InputState, tool: Tool) -> &'static str {
         DrawingState::Drawing { tool, .. } => tool_action_label(*tool),
         DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Selecting { .. } => "Select",
-        DrawingState::ResizingText { .. } => "Resize",
+        DrawingState::ResizingText { .. } | DrawingState::ResizingSelection { .. } => "Resize",
         DrawingState::PendingTextClick { .. } | DrawingState::Idle => tool_action_label(tool),
     }
 }

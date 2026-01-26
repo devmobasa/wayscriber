@@ -19,7 +19,9 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::ToolbarSnapshot;
 
-use super::widgets::{draw_panel_background, draw_tooltip};
+use std::time::Instant;
+
+use super::widgets::{draw_panel_background, draw_tooltip_with_delay};
 
 pub(super) struct SidePaletteLayout<'a> {
     pub(super) ctx: &'a cairo::Context,
@@ -79,6 +81,7 @@ pub fn render_side_palette(
     snapshot: &ToolbarSnapshot,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
+    hover_start: Option<Instant>,
 ) -> Result<()> {
     draw_panel_background(ctx, width, height);
 
@@ -104,6 +107,14 @@ pub fn render_side_palette(
     step::draw_step_section(&mut layout, &mut y);
     settings::draw_settings_section(&mut layout, &mut y);
 
-    draw_tooltip(ctx, layout.hits, layout.hover, width, height, false);
+    draw_tooltip_with_delay(
+        ctx,
+        layout.hits,
+        layout.hover,
+        width,
+        height,
+        false,
+        hover_start,
+    );
     Ok(())
 }

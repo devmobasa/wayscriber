@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::backend::wayland::toolbar::{ToolbarFocusTarget, hit::HitRegion};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +49,8 @@ pub struct StateData {
     pub(super) inline_side_rect: Option<(f64, f64, f64, f64)>,
     pub(super) inline_top_hover: Option<(f64, f64)>,
     pub(super) inline_side_hover: Option<(f64, f64)>,
+    pub(super) inline_top_hover_start: Option<Instant>,
+    pub(super) inline_side_hover_start: Option<Instant>,
     pub(super) inline_top_focus_index: Option<usize>,
     pub(super) inline_side_focus_index: Option<usize>,
     pub(super) toolbar_focus_target: Option<ToolbarFocusTarget>,
@@ -71,6 +75,8 @@ pub struct StateData {
     pub(super) overlay_suppression: OverlaySuppression,
     /// True when surface is configured and has keyboard focus; keys are blocked until ready.
     pub(super) overlay_ready: bool,
+    /// Suppress the next pointer release after a modal click (e.g., command palette).
+    pub(super) suppress_next_release: bool,
 }
 
 impl StateData {
@@ -95,6 +101,8 @@ impl StateData {
             inline_side_rect: None,
             inline_top_hover: None,
             inline_side_hover: None,
+            inline_top_hover_start: None,
+            inline_side_hover_start: None,
             inline_top_focus_index: None,
             inline_side_focus_index: None,
             toolbar_focus_target: None,
@@ -118,6 +126,7 @@ impl StateData {
             xdg_fullscreen: false,
             overlay_suppression: OverlaySuppression::None,
             overlay_ready: false,
+            suppress_next_release: false,
         }
     }
 }

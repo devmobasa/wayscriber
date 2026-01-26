@@ -6,6 +6,7 @@ pub enum ContextMenuKind {
     Shape,
     Canvas,
     Pages,
+    Boards,
 }
 
 /// Tracks the context menu lifecycle.
@@ -23,7 +24,7 @@ pub enum ContextMenuState {
 }
 
 /// Commands triggered by context menu selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuCommand {
     Delete,
     Duplicate,
@@ -42,10 +43,20 @@ pub enum MenuCommand {
     PageNew,
     PageDuplicate,
     PageDelete,
+    SwitchToPage(usize),
+    OpenBoardsMenu,
+    OpenBoardPicker,
+    BoardPrev,
+    BoardNext,
+    BoardNew,
+    BoardDuplicate,
+    BoardDelete,
+    SwitchToBoard { id: String },
     SwitchToWhiteboard,
     SwitchToBlackboard,
     ReturnToTransparent,
     ToggleHelp,
+    OpenCommandPalette,
     OpenConfigFile,
 }
 
@@ -90,4 +101,13 @@ pub struct ContextMenuLayout {
     pub padding_y: f64,
     pub shortcut_width: f64,
     pub arrow_width: f64,
+}
+
+/// Cursor hint for different regions of the context menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextMenuCursorHint {
+    /// Default arrow cursor.
+    Default,
+    /// Pointer/hand cursor for clickable menu items.
+    Pointer,
 }

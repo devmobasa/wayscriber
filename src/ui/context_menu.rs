@@ -142,21 +142,30 @@ pub fn render_context_menu(
         }
     }
 
-    // Navigation hint footer
+    // Navigation hint footer with background for visibility
     let hint_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Normal,
-        size: layout.font_size * 0.85,
+        size: layout.font_size * 0.8,
     };
-    let hint_y = layout.origin_y + layout.height + layout.font_size * 0.3;
-    ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.7);
+    let hint_padding = 6.0;
+    let hint_height = layout.font_size * 0.8 + hint_padding * 2.0;
+    let hint_y = layout.origin_y + layout.height + 4.0;
+
+    // Draw hint background
+    ctx.set_source_rgba(0.08, 0.10, 0.14, 0.9);
+    ctx.rectangle(layout.origin_x, hint_y, layout.width, hint_height);
+    let _ = ctx.fill();
+
+    // Draw hint text
+    ctx.set_source_rgba(0.65, 0.68, 0.75, 1.0);
     draw_text_baseline(
         ctx,
         hint_style,
         NAV_HINT_MENU,
         layout.origin_x + layout.padding_x,
-        hint_y,
+        hint_y + hint_padding + layout.font_size * 0.65,
         None,
     );
 

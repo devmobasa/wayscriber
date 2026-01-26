@@ -1,6 +1,7 @@
 use crate::draw::Shape;
 use crate::draw::frame::ShapeSnapshot;
 use crate::input::{Tool, events::MouseButton};
+use std::sync::Arc;
 
 use super::super::core::MenuCommand;
 use super::super::{ContextMenuKind, DrawingState, InputState};
@@ -28,6 +29,11 @@ impl InputState {
                     shape_id, snapshot, ..
                 } => {
                     self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                    self.state = DrawingState::Idle;
+                }
+                DrawingState::ResizingSelection { snapshots, .. } => {
+                    let snapshots = snapshots.clone();
+                    self.restore_resize_from_snapshots(snapshots.as_ref());
                     self.state = DrawingState::Idle;
                 }
                 DrawingState::PendingTextClick { .. } => {
@@ -105,6 +111,31 @@ impl InputState {
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
+        if self.is_color_picker_popup_open() {
+            self.update_pointer_position(x, y);
+            match button {
+                MouseButton::Left => {
+                    if let Some(layout) = self.color_picker_popup_layout() {
+                        let fx = x as f64;
+                        let fy = y as f64;
+                        // Start dragging if clicking on gradient
+                        if layout.point_in_gradient(fx, fy) {
+                            self.color_picker_popup_set_dragging(true);
+                            let norm_x = (fx - layout.gradient_x) / layout.gradient_w;
+                            let norm_y = (fy - layout.gradient_y) / layout.gradient_h;
+                            self.color_picker_popup_set_from_gradient(norm_x, norm_y);
+                            self.color_picker_popup_set_hex_editing(false);
+                        }
+                    }
+                }
+                MouseButton::Right => {
+                    self.close_color_picker_popup(true);
+                }
+                MouseButton::Middle => {}
+            }
+            return;
+        }
+
         if self.is_board_picker_open() {
             self.update_pointer_position(x, y);
             match button {
@@ -174,6 +205,7 @@ impl InputState {
                     DrawingState::Idle => {
                         let selection_click =
                             self.modifiers.alt || self.active_tool() == Tool::Select;
+
                         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
                             let snapshot = {
                                 let frame = self.boards.active_frame();
@@ -194,6 +226,24 @@ impl InputState {
                                     snapshot,
                                     base_x,
                                     size,
+                                };
+                                return;
+                            }
+                        }
+
+                        // Check for selection handle resize after text resize handle
+                        if let Some(handle) = self.hit_selection_handle(x, y)
+                            && let Some(original_bounds) = self.selection_bounds()
+                        {
+                            let snapshots = self.capture_resize_selection_snapshots();
+                            if !snapshots.is_empty() {
+                                self.last_text_click = None;
+                                self.state = DrawingState::ResizingSelection {
+                                    handle,
+                                    original_bounds,
+                                    start_x: x,
+                                    start_y: y,
+                                    snapshots: Arc::new(snapshots),
                                 };
                                 return;
                             }
@@ -280,7 +330,8 @@ impl InputState {
                     | DrawingState::MovingSelection { .. }
                     | DrawingState::Selecting { .. }
                     | DrawingState::PendingTextClick { .. }
-                    | DrawingState::ResizingText { .. } => {}
+                    | DrawingState::ResizingText { .. }
+                    | DrawingState::ResizingSelection { .. } => {}
                 }
             }
             MouseButton::Middle => {}

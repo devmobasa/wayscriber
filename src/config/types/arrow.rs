@@ -39,5 +39,5 @@ fn default_arrow_angle() -> f64 {
 }
 
 fn default_arrow_head_at_end() -> bool {
-    false
+    true
 }

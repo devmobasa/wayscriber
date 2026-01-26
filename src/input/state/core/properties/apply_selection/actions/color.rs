@@ -5,6 +5,66 @@ use crate::input::state::core::properties::utils::{
 };
 
 impl InputState {
+    pub(crate) fn apply_selection_color_value(&mut self, target: Color) -> bool {
+        let result = self.apply_selection_change(
+            |shape| {
+                matches!(
+                    shape,
+                    Shape::Freehand { .. }
+                        | Shape::FreehandPressure { .. }
+                        | Shape::Line { .. }
+                        | Shape::Rect { .. }
+                        | Shape::Ellipse { .. }
+                        | Shape::Arrow { .. }
+                        | Shape::MarkerStroke { .. }
+                        | Shape::Text { .. }
+                        | Shape::StepMarker { .. }
+                        | Shape::StickyNote { .. }
+                )
+            },
+            |shape| match shape {
+                Shape::Freehand { color, .. }
+                | Shape::FreehandPressure { color, .. }
+                | Shape::Line { color, .. }
+                | Shape::Rect { color, .. }
+                | Shape::Ellipse { color, .. }
+                | Shape::Arrow { color, .. }
+                | Shape::Text { color, .. }
+                | Shape::StepMarker { color, .. } => {
+                    if *color != target {
+                        *color = target;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                Shape::MarkerStroke { color, .. } => {
+                    let new_color = Color {
+                        a: color.a,
+                        ..target
+                    };
+                    if *color != new_color {
+                        *color = new_color;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                Shape::StickyNote { background, .. } => {
+                    if *background != target {
+                        *background = target;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            },
+        );
+
+        self.report_selection_apply_result(result, "color")
+    }
+
     pub(in crate::input::state::core::properties) fn apply_selection_color(
         &mut self,
         direction: i32,

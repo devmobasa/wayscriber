@@ -1,5 +1,6 @@
 use super::super::super::{
     board_picker::{BoardPickerDrag, BoardPickerLayout, BoardPickerState},
+    color_picker_popup::{ColorPickerPopupLayout, ColorPickerPopupState},
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
@@ -9,8 +10,8 @@ use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
     PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
     PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
-    StatusChangeHighlight, TextClickState, TextInputMode, ToolbarDrawerTab, UiToastState,
-    ZoomAction,
+    StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab,
+    UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -181,6 +182,10 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_capture_action: Option<Action>,
     /// Pending zoom action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_zoom_action: Option<ZoomAction>,
+    /// Pending copy hex color to clipboard request
+    pub(crate) pending_copy_hex: bool,
+    /// Pending paste hex color from clipboard request
+    pub(crate) pending_paste_hex: bool,
     /// Maximum number of shapes allowed per frame (0 = unlimited)
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
@@ -199,6 +204,10 @@ pub struct InputState {
     pub board_picker_state: BoardPickerState,
     /// Active board picker drag state (full mode reorder)
     pub board_picker_drag: Option<BoardPickerDrag>,
+    /// Current color picker popup state
+    pub color_picker_popup_state: ColorPickerPopupState,
+    /// Cached layout details for the color picker popup
+    pub color_picker_popup_layout: Option<ColorPickerPopupLayout>,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Hit test tolerance in pixels
@@ -243,6 +252,8 @@ pub struct InputState {
     pub(crate) last_text_click: Option<TextClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
+    /// Animation state for text edit mode entry (teal glow pulse)
+    pub(crate) text_edit_entry_feedback: Option<TextEditEntryFeedback>,
     /// Pending delayed history playback state
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu

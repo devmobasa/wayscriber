@@ -2,6 +2,7 @@ use crate::input::{EraserMode, Tool};
 
 use super::super::{DrawingState, InputState};
 use super::TEXT_CLICK_DRAG_THRESHOLD;
+use std::sync::Arc;
 
 impl InputState {
     /// Processes mouse motion (dragging) events.
@@ -15,6 +16,19 @@ impl InputState {
     /// - When drawing with other tools: Triggers redraw for live preview
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
+
+        if self.is_color_picker_popup_open() {
+            if self.color_picker_popup_is_dragging()
+                && let Some(layout) = self.color_picker_popup_layout()
+            {
+                let fx = x as f64;
+                let fy = y as f64;
+                let norm_x = ((fx - layout.gradient_x) / layout.gradient_w).clamp(0.0, 1.0);
+                let norm_y = ((fy - layout.gradient_y) / layout.gradient_h).clamp(0.0, 1.0);
+                self.color_picker_popup_set_from_gradient(norm_x, norm_y);
+            }
+            return;
+        }
 
         if self.is_board_picker_open() {
             if self.board_picker_is_dragging() {
@@ -95,6 +109,24 @@ impl InputState {
                 *last_y = y;
                 *moved = true;
             }
+            return;
+        }
+
+        if let DrawingState::ResizingSelection {
+            handle,
+            original_bounds,
+            start_x,
+            start_y,
+            snapshots,
+        } = &self.state
+        {
+            let dx = x - *start_x;
+            let dy = y - *start_y;
+            let handle = *handle;
+            let original_bounds = *original_bounds;
+            let snapshots = Arc::clone(snapshots);
+            self.apply_selection_resize(handle, &original_bounds, dx, dy, snapshots.as_ref());
+            self.needs_redraw = true;
             return;
         }
 

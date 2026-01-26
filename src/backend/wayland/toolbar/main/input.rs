@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use wayland_client::protocol::wl_surface;
 
 use super::structs::ToolbarSurfaceManager;
@@ -27,15 +29,23 @@ impl ToolbarSurfaceManager {
     ) -> Option<ToolbarIntent> {
         if self.top.is_surface(surface) {
             if self.top_hover != Some(position) {
+                // Reset hover start time when position changes
+                if self.top_hover.is_none() {
+                    self.top_hover_start = Some(Instant::now());
+                }
                 self.top_hover = Some(position);
-                self.top.mark_dirty();
+                self.top.set_hover(Some(position));
             }
             return self.top.drag_at(position.0, position.1);
         }
         if self.side.is_surface(surface) {
             if self.side_hover != Some(position) {
+                // Reset hover start time when position changes
+                if self.side_hover.is_none() {
+                    self.side_hover_start = Some(Instant::now());
+                }
                 self.side_hover = Some(position);
-                self.side.mark_dirty();
+                self.side.set_hover(Some(position));
             }
             return self.side.drag_at(position.0, position.1);
         }
@@ -45,10 +55,12 @@ impl ToolbarSurfaceManager {
     pub fn pointer_leave(&mut self, surface: &wl_surface::WlSurface) {
         if self.top.is_surface(surface) {
             self.top_hover = None;
-            self.top.mark_dirty();
+            self.top_hover_start = None;
+            self.top.set_hover(None);
         } else if self.side.is_surface(surface) {
             self.side_hover = None;
-            self.side.mark_dirty();
+            self.side_hover_start = None;
+            self.side.set_hover(None);
         }
     }
 

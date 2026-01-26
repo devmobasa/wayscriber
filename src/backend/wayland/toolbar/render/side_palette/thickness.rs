@@ -1,6 +1,6 @@
 use super::super::widgets::constants::{
-    COLOR_TEXT_PRIMARY, COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT,
-    FONT_SIZE_LABEL, SPACING_STD, set_color,
+    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, SPACING_STD,
+    set_color,
 };
 use super::super::widgets::*;
 use super::SidePaletteLayout;
@@ -56,6 +56,9 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     let (min_thick, max_thick, nudge_step) = (1.0, 50.0, 1.0);
 
     let minus_x = x;
+    let minus_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, minus_x, thickness_slider_row_y, btn_size, btn_size))
+        .unwrap_or(false);
     draw_button(
         ctx,
         minus_x,
@@ -63,9 +66,9 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         btn_size,
         btn_size,
         false,
-        false,
+        minus_hover,
     );
-    set_color(ctx, COLOR_TEXT_PRIMARY);
+    set_icon_color(ctx, minus_hover);
     toolbar_icons::draw_icon_minus(
         ctx,
         minus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -76,10 +79,13 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         rect: (minus_x, thickness_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgeThickness(-nudge_step),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Decrease thickness".to_string()),
     });
 
     let plus_x = width - x - btn_size - value_w - 4.0;
+    let plus_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, plus_x, thickness_slider_row_y, btn_size, btn_size))
+        .unwrap_or(false);
     draw_button(
         ctx,
         plus_x,
@@ -87,9 +93,9 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         btn_size,
         btn_size,
         false,
-        false,
+        plus_hover,
     );
-    set_color(ctx, COLOR_TEXT_PRIMARY);
+    set_icon_color(ctx, plus_hover);
     toolbar_icons::draw_icon_plus(
         ctx,
         plus_x + (btn_size - nudge_icon_size) / 2.0,
@@ -100,7 +106,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         rect: (plus_x, thickness_slider_row_y, btn_size, btn_size),
         event: ToolbarEvent::NudgeThickness(nudge_step),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Increase thickness".to_string()),
     });
 
     let track_x = minus_x + btn_size + SPACING_STD;

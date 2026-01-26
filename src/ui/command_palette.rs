@@ -151,6 +151,48 @@ pub fn render_command_palette(
         ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, text_alpha);
         draw_text_baseline(ctx, input_style, cmd.label, inner_x + 10.0, label_y, None);
 
+        // Keyboard shortcut badge (right-aligned)
+        let shortcut_labels = input_state.action_binding_labels(cmd.action);
+        let shortcut_x_end = inner_x + inner_width - 8.0;
+        if let Some(shortcut) = shortcut_labels.first() {
+            let shortcut_style = UiTextStyle {
+                family: "Sans",
+                slant: cairo::FontSlant::Normal,
+                weight: cairo::FontWeight::Normal,
+                size: 10.0,
+            };
+            let shortcut_extents = text_extents_for(
+                ctx,
+                "Sans",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+                10.0,
+                shortcut,
+            );
+            let badge_w = shortcut_extents.width() + 10.0;
+            let badge_h = 18.0;
+            let badge_x = shortcut_x_end - badge_w;
+            let badge_y = item_y + (ITEM_HEIGHT - badge_h) / 2.0 - 1.0;
+
+            // Badge background - increased visibility
+            let badge_alpha = if is_selected { 0.35 } else { 0.25 };
+            ctx.set_source_rgba(1.0, 1.0, 1.0, badge_alpha);
+            draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
+            let _ = ctx.fill();
+
+            // Badge text - increased visibility
+            let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
+            ctx.set_source_rgba(1.0, 1.0, 1.0, shortcut_alpha);
+            draw_text_baseline(
+                ctx,
+                shortcut_style,
+                shortcut,
+                badge_x + 5.0,
+                badge_y + badge_h / 2.0 + 3.0,
+                None,
+            );
+        }
+
         // Description (dimmer but improved contrast)
         let label_extents = text_extents_for(
             ctx,
@@ -160,6 +202,12 @@ pub fn render_command_palette(
             font_size,
             cmd.label,
         );
+        // Limit description width to avoid overlapping with shortcut badge
+        let max_desc_width = if !shortcut_labels.is_empty() {
+            inner_width - label_extents.width() - 100.0
+        } else {
+            inner_width - label_extents.width() - 30.0
+        };
         let desc_x = inner_x + 10.0 + label_extents.width() + 12.0;
         let desc_alpha = if is_selected { 0.9 } else { 0.75 };
         ctx.set_source_rgba(
@@ -168,7 +216,14 @@ pub fn render_command_palette(
             TEXT_DESCRIPTION.2,
             desc_alpha,
         );
-        draw_text_baseline(ctx, desc_style, cmd.description, desc_x, label_y, None);
+        draw_text_baseline(
+            ctx,
+            desc_style,
+            cmd.description,
+            desc_x,
+            label_y,
+            Some(max_desc_width.max(50.0)),
+        );
     }
 
     // Enhanced empty state
@@ -230,6 +285,43 @@ pub fn render_command_palette(
             empty_y + 20.0,
             None,
         );
+    }
+
+    // Scroll indicator (when there are more items than visible)
+    let total_items = filtered.len();
+    if total_items > MAX_VISIBLE_ITEMS {
+        let scroll_track_x = x + PALETTE_WIDTH - 8.0;
+        let scroll_track_y = cursor_y;
+        let scroll_track_h = (MAX_VISIBLE_ITEMS as f64) * ITEM_HEIGHT - 4.0;
+        let scroll_track_w = 4.0;
+
+        // Track background
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.1);
+        draw_rounded_rect(
+            ctx,
+            scroll_track_x,
+            scroll_track_y,
+            scroll_track_w,
+            scroll_track_h,
+            2.0,
+        );
+        let _ = ctx.fill();
+
+        // Thumb position and size
+        let thumb_ratio = MAX_VISIBLE_ITEMS as f64 / total_items as f64;
+        let thumb_h = (scroll_track_h * thumb_ratio).max(20.0);
+        let scroll_range = total_items - MAX_VISIBLE_ITEMS;
+        let scroll_progress = if scroll_range > 0 {
+            scroll as f64 / scroll_range as f64
+        } else {
+            0.0
+        };
+        let thumb_y = scroll_track_y + scroll_progress * (scroll_track_h - thumb_h);
+
+        // Thumb
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+        draw_rounded_rect(ctx, scroll_track_x, thumb_y, scroll_track_w, thumb_h, 2.0);
+        let _ = ctx.fill();
     }
 
     // Escape hint at bottom

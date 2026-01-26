@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use super::*;
 
 impl WaylandState {
@@ -85,7 +87,12 @@ impl WaylandState {
             && geometry::point_in_rect(position.0, position.1, x, y, w, h)
         {
             over_toolbar = true;
+            if was_top_hover.is_none() {
+                self.data.inline_top_hover_start = Some(Instant::now());
+            }
             self.data.inline_top_hover = Some(position);
+        } else {
+            self.data.inline_top_hover_start = None;
         }
 
         if side_visible
@@ -93,7 +100,12 @@ impl WaylandState {
             && geometry::point_in_rect(position.0, position.1, x, y, w, h)
         {
             over_toolbar = true;
+            if was_side_hover.is_none() {
+                self.data.inline_side_hover_start = Some(Instant::now());
+            }
             self.data.inline_side_hover = Some(position);
+        } else {
+            self.data.inline_side_hover_start = None;
         }
 
         if self.toolbar_dragging()
@@ -162,6 +174,8 @@ impl WaylandState {
             || self.data.inline_side_focus_index.is_some();
         self.data.inline_top_hover = None;
         self.data.inline_side_hover = None;
+        self.data.inline_top_hover_start = None;
+        self.data.inline_side_hover_start = None;
         self.data.toolbar_focus_target = None;
         self.clear_inline_toolbar_focus();
         self.set_pointer_over_toolbar(false);

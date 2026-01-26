@@ -77,6 +77,7 @@ mod activation;
 mod boards;
 mod buffer_damage;
 mod capture;
+mod color_picker;
 mod core;
 mod data;
 mod helpers;

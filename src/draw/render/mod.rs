@@ -11,7 +11,7 @@ mod types;
 
 pub use background::{fill_transparent, render_board_background};
 pub use highlight::render_click_highlight;
-pub use selection::render_selection_halo;
+pub use selection::{render_selection_halo, render_selection_handles, selection_handle_rects};
 pub use shapes::render_shape;
 pub(crate) use strokes::render_eraser_stroke;
 pub use strokes::{

@@ -11,10 +11,11 @@ pub(super) fn draw_keycap(
     label: &str,
     active: bool,
 ) {
+    // Consistent alpha progressions: active is +0.35 from inactive
     let (bg_alpha, border_alpha, text_alpha) = if active {
-        (0.75, 0.55, 0.95)
+        (0.65, 0.50, 0.95)
     } else {
-        (0.4, 0.35, 0.6)
+        (0.30, 0.25, 0.55)
     };
     ctx.set_source_rgba(0.12, 0.12, 0.18, bg_alpha);
     draw_round_rect(ctx, key_x, key_y, size, size, radius);

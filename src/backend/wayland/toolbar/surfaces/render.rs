@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyhow::Result;
 use log::{debug, warn};
 use smithay_client_toolkit::{
@@ -16,6 +18,7 @@ impl ToolbarSurface {
         shm: &Shm,
         snapshot: &ToolbarSnapshot,
         hover: Option<(f64, f64)>,
+        hover_start: Option<Instant>,
         render_fn: F,
     ) -> Result<()>
     where
@@ -26,6 +29,7 @@ impl ToolbarSurface {
             &ToolbarSnapshot,
             &mut Vec<HitRegion>,
             Option<(f64, f64)>,
+            Option<Instant>,
         ) -> Result<()>,
     {
         if !self.configured || !self.dirty || self.width == 0 || self.height == 0 {
@@ -97,6 +101,7 @@ impl ToolbarSurface {
                 snapshot,
                 &mut self.hit_regions,
                 hover,
+                hover_start,
             )?;
         }
 

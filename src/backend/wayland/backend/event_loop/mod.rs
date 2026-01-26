@@ -70,7 +70,7 @@ pub(super) fn run_event_loop(
         let capture_active = state.capture.is_in_progress()
             || state.frozen.is_in_progress()
             || state.zoom.is_in_progress()
-            || state.overlay_suppressed();
+            || state.overlay_blocks_event_loop();
         let frame_callback_pending = state.surface.frame_callback_pending();
         let vsync_enabled = state.config.performance.enable_vsync;
 
@@ -103,7 +103,6 @@ pub(super) fn run_event_loop(
         } else {
             min_timeout(animation_timeout, autosave_timeout)
         };
-
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
             warn!("Event queue error: {}", e);
             loop_error = Some(e);

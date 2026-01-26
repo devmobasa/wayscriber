@@ -13,8 +13,14 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        // Swallow releases after modal clicks (e.g., palette dismiss)
+        if self.take_suppress_next_release() {
+            return;
+        }
+
         // Block pointer input when modal overlays are active
         if self.input_state.command_palette_open || self.input_state.tour_active {
+            // For command palette, press handles the click - release is a no-op
             return;
         }
 

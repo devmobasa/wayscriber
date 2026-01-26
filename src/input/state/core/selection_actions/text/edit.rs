@@ -1,6 +1,8 @@
 use crate::draw::Shape;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
+use crate::input::state::core::base::TextEditEntryFeedback;
 use crate::input::{DrawingState, InputState, TextInputMode};
+use std::time::Instant;
 
 impl InputState {
     pub(crate) fn edit_selected_text(&mut self) -> bool {
@@ -106,6 +108,9 @@ impl InputState {
         self.text_wrap_width = wrap_width;
 
         self.text_edit_target = Some((shape_id, snapshot));
+        self.text_edit_entry_feedback = Some(TextEditEntryFeedback {
+            started: Instant::now(),
+        });
         self.state = DrawingState::TextInput { x, y, buffer: text };
         self.last_text_preview_bounds = None;
         self.update_text_preview_dirty();
