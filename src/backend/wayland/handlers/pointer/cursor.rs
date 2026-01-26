@@ -3,7 +3,7 @@ use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
 use super::*;
-use crate::input::{DrawingState, SelectionHandle};
+use crate::input::{ColorPickerCursorHint, DrawingState, SelectionHandle};
 
 impl WaylandState {
     pub(super) fn update_pointer_cursor(&mut self, toolbar_hover: bool, conn: &Connection) {
@@ -21,6 +21,23 @@ impl WaylandState {
 
     /// Computes the appropriate cursor icon based on current context.
     fn compute_cursor_icon(&mut self, toolbar_hover: bool) -> CursorIcon {
+        // Check color picker popup first (takes priority)
+        if self.input_state.is_color_picker_popup_open() {
+            let (mx, my) = self.current_mouse();
+            if let Some(layout) = self.input_state.color_picker_popup_layout() {
+                // When dragging on gradient, always show crosshair
+                if self.input_state.color_picker_popup_is_dragging() {
+                    return CursorIcon::Crosshair;
+                }
+                return match layout.cursor_hint_at(mx as f64, my as f64) {
+                    ColorPickerCursorHint::Text => CursorIcon::Text,
+                    ColorPickerCursorHint::Crosshair => CursorIcon::Crosshair,
+                    ColorPickerCursorHint::Pointer => CursorIcon::Pointer,
+                    ColorPickerCursorHint::Default => CursorIcon::Default,
+                };
+            }
+        }
+
         // Toolbar always gets default cursor
         if toolbar_hover {
             return CursorIcon::Default;

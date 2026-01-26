@@ -10,11 +10,12 @@ pub(crate) use core::board_picker::BoardPickerEditMode;
 #[allow(unused_imports)]
 pub use core::{
     BLOCKED_ACTION_DURATION_MS, COLOR_PICKER_PREVIEW_SIZE, COMMAND_PALETTE_MAX_VISIBLE,
-    ColorPickerPopupLayout, ColorPickerPopupState, CompositorCapabilities, ContextMenuEntry,
-    ContextMenuKind, ContextMenuState, DrawingState, InputState, MAX_STROKE_THICKNESS,
-    MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction,
-    PresetFeedbackKind, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
-    SelectionHandle, SelectionState, TextInputMode, ToolbarDrawerTab, TourStep,
-    UI_TOAST_DURATION_MS, UiToastKind, ZoomAction, color_picker_rgb_to_hsv,
+    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState, CompositorCapabilities,
+    ContextMenuEntry, ContextMenuKind, ContextMenuState, DrawingState, InputState,
+    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS,
+    PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
+    PressureThicknessEntryMode, SelectionAxis, SelectionHandle, SelectionState, TextInputMode,
+    ToolbarDrawerTab, TourStep, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    color_picker_rgb_to_hsv,
 };
 pub use highlight::ClickHighlightSettings;

@@ -195,6 +195,33 @@ impl ColorPickerPopupLayout {
             && y >= self.origin_y
             && y <= self.origin_y + self.height
     }
+
+    /// Determine the cursor type for a given point within the popup.
+    /// Returns the cursor hint for different UI regions.
+    pub fn cursor_hint_at(&self, x: f64, y: f64) -> ColorPickerCursorHint {
+        if self.point_in_hex_input(x, y) {
+            ColorPickerCursorHint::Text
+        } else if self.point_in_gradient(x, y) {
+            ColorPickerCursorHint::Crosshair
+        } else if self.point_in_ok_button(x, y) || self.point_in_cancel_button(x, y) {
+            ColorPickerCursorHint::Pointer
+        } else {
+            ColorPickerCursorHint::Default
+        }
+    }
+}
+
+/// Cursor hint for different regions of the color picker popup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorPickerCursorHint {
+    /// Default arrow cursor.
+    Default,
+    /// Text editing cursor (I-beam).
+    Text,
+    /// Crosshair for color selection.
+    Crosshair,
+    /// Pointer/hand cursor for buttons.
+    Pointer,
 }
 
 /// Convert HSV to RGB color.
