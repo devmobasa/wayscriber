@@ -152,9 +152,9 @@ pub fn render_top_strip(
         event: ToolbarEvent::PinTopToolbar(!snapshot.top_pinned),
         kind: HitKind::Click,
         tooltip: Some(if snapshot.top_pinned {
-            "Unpin".to_string()
+            "Pinned: opens at startup (click to disable)".to_string()
         } else {
-            "Pin".to_string()
+            "Pin: click to open at startup".to_string()
         }),
     });
 

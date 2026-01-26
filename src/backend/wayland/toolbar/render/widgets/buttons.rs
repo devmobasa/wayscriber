@@ -86,6 +86,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     let cx = x + r;
     let cy = y + r;
 
+    // Draw outer glow when pinned for visual feedback
+    if pinned {
+        ctx.set_source_rgba(0.4, 0.65, 1.0, 0.3);
+        ctx.arc(cx, cy, r + 2.0, 0.0, PI * 2.0);
+        let _ = ctx.fill();
+    }
+
     // Use circle shape for visual consistency with close button
     let color = if pinned {
         COLOR_PIN_ACTIVE
@@ -98,16 +105,41 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     ctx.arc(cx, cy, r, 0.0, PI * 2.0);
     let _ = ctx.fill();
 
-    set_color(ctx, COLOR_TEXT_PRIMARY);
-    let pin_r = size * 0.2;
+    // Draw star icon instead of pin
+    let star_size = size * 0.45;
+    draw_star(ctx, cx, cy, star_size, pinned);
+}
 
-    ctx.arc(cx, cy - pin_r * 0.5, pin_r, 0.0, PI * 2.0);
-    let _ = ctx.fill();
+/// Draw a 5-pointed star centered at (cx, cy)
+fn draw_star(ctx: &cairo::Context, cx: f64, cy: f64, size: f64, filled: bool) {
+    let outer_r = size;
+    let inner_r = size * 0.4;
+    let points = 5;
 
-    ctx.set_line_width(LINE_WIDTH_THICK);
-    ctx.move_to(cx, cy + pin_r * 0.5);
-    ctx.line_to(cx, cy + pin_r * 2.0);
-    let _ = ctx.stroke();
+    ctx.new_path();
+    for i in 0..(points * 2) {
+        let angle = (i as f64) * PI / (points as f64) - PI / 2.0;
+        let r = if i % 2 == 0 { outer_r } else { inner_r };
+        let px = cx + r * angle.cos();
+        let py = cy + r * angle.sin();
+        if i == 0 {
+            ctx.move_to(px, py);
+        } else {
+            ctx.line_to(px, py);
+        }
+    }
+    ctx.close_path();
+
+    if filled {
+        // Filled star uses primary text color for theme consistency.
+        set_color(ctx, COLOR_TEXT_PRIMARY);
+        let _ = ctx.fill();
+    } else {
+        // Outline star when not pinned
+        set_color(ctx, COLOR_TEXT_PRIMARY);
+        ctx.set_line_width(1.5);
+        let _ = ctx.stroke();
+    }
 }
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_button(

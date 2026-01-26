@@ -145,9 +145,9 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
         kind: HitKind::Click,
         tooltip: Some(if snapshot.side_pinned {
-            "Unpin".to_string()
+            "Pinned: opens at startup (click to disable)".to_string()
         } else {
-            "Pin".to_string()
+            "Pin: click to open at startup".to_string()
         }),
     });
 
