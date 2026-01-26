@@ -86,10 +86,22 @@ pub fn render_status_bar(
         String::new()
     };
 
+    let selection_badge = if let Some(bounds) = input_state.selection_bounds() {
+        let count = input_state.selected_shape_ids().len();
+        if count == 1 {
+            format!("[{}×{}px] ", bounds.width, bounds.height)
+        } else {
+            format!("[{} items: {}×{}px] ", count, bounds.width, bounds.height)
+        }
+    } else {
+        String::new()
+    };
+
     let status_text = format!(
-        "{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
+        "{}{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
         frozen_badge,
         zoom_badge,
+        selection_badge,
         board_badge,
         page_badge,
         color_name,

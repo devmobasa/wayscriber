@@ -14,7 +14,10 @@ use crate::ui_text::UiTextStyle;
 use super::super::widgets::constants::{
     COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color,
 };
-use super::super::widgets::*;
+use super::super::widgets::{
+    draw_button, draw_destructive_button, draw_group_card, draw_label_center, draw_section_label,
+    point_in_rect, set_icon_color,
+};
 
 pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
@@ -159,8 +162,20 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let is_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
                     .unwrap_or(false);
+                let is_destructive = matches!(evt, ToolbarEvent::ClearCanvas);
                 if *enabled {
-                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                    if is_destructive {
+                        draw_destructive_button(
+                            ctx,
+                            bx,
+                            by,
+                            icon_btn_size,
+                            icon_btn_size,
+                            is_hover,
+                        );
+                    } else {
+                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                    }
                     set_icon_color(ctx, is_hover);
                 } else {
                     draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
@@ -250,8 +265,21 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let is_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, icon_btn_size, icon_btn_size))
                     .unwrap_or(false);
+                let is_destructive =
+                    matches!(evt, ToolbarEvent::UndoAll | ToolbarEvent::UndoAllDelayed);
                 if *enabled {
-                    draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                    if is_destructive {
+                        draw_destructive_button(
+                            ctx,
+                            bx,
+                            by,
+                            icon_btn_size,
+                            icon_btn_size,
+                            is_hover,
+                        );
+                    } else {
+                        draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, is_hover);
+                    }
                     set_icon_color(ctx, is_hover);
                 } else {
                     draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
@@ -296,7 +324,12 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let is_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
-                draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
+                let is_destructive = matches!(evt, ToolbarEvent::ClearCanvas);
+                if is_destructive && *enabled {
+                    draw_destructive_button(ctx, item.x, item.y, item.w, item.h, is_hover);
+                } else {
+                    draw_button(ctx, item.x, item.y, item.w, item.h, false, is_hover);
+                }
                 draw_label_center(ctx, label_style, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {
@@ -374,7 +407,13 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                 let is_hover = hover
                     .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
                     .unwrap_or(false);
-                draw_button(ctx, item.x, item.y, item.w, item.h, *enabled, is_hover);
+                let is_destructive =
+                    matches!(evt, ToolbarEvent::UndoAll | ToolbarEvent::UndoAllDelayed);
+                if is_destructive && *enabled {
+                    draw_destructive_button(ctx, item.x, item.y, item.w, item.h, is_hover);
+                } else {
+                    draw_button(ctx, item.x, item.y, item.w, item.h, false, is_hover);
+                }
                 draw_label_center(ctx, label_style, item.x, item.y, item.w, item.h, label);
                 if *enabled {
                     hits.push(HitRegion {

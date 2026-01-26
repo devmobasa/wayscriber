@@ -5,13 +5,13 @@ use crate::ui::toolbar::ToolbarSnapshot;
 use super::ToolbarLayoutSpec;
 
 impl ToolbarLayoutSpec {
-    pub(in crate::backend::wayland::toolbar) const TOP_SIZE_ICONS: (u32, u32) = (735, 84);
+    pub(in crate::backend::wayland::toolbar) const TOP_SIZE_ICONS: (u32, u32) = (735, 72);
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_TEXT: (u32, u32) = (875, 60);
 
     pub(in crate::backend::wayland::toolbar) const TOP_GAP: f64 = 5.0;
     pub(in crate::backend::wayland::toolbar) const TOP_START_X: f64 = 19.0;
     pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_SIZE: f64 = 18.0;
-    pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_Y: f64 = 12.0;
+    pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_Y: f64 = 27.0;
     pub(in crate::backend::wayland::toolbar) const TOP_ICON_BUTTON: f64 = 46.0;
     pub(in crate::backend::wayland::toolbar) const TOP_ICON_BUTTON_Y: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const TOP_ICON_SIZE: f64 = 28.0;
@@ -24,7 +24,7 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_SIZE: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_GAP: f64 = 6.0;
     pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_MARGIN_RIGHT: f64 = 15.0;
-    pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_Y_ICON: f64 = 17.0;
+    pub(in crate::backend::wayland::toolbar) const TOP_PIN_BUTTON_Y_ICON: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const TOP_SHAPE_ROW_GAP: f64 = 6.0;
 
     pub(in crate::backend::wayland::toolbar) fn top_size(
