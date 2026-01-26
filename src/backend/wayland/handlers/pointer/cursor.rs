@@ -3,7 +3,7 @@ use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
 use super::*;
-use crate::input::{ColorPickerCursorHint, DrawingState, SelectionHandle};
+use crate::input::{BoardPickerCursorHint, ColorPickerCursorHint, DrawingState, SelectionHandle};
 
 impl WaylandState {
     pub(super) fn update_pointer_cursor(&mut self, toolbar_hover: bool, conn: &Connection) {
@@ -34,6 +34,20 @@ impl WaylandState {
                     ColorPickerCursorHint::Crosshair => CursorIcon::Crosshair,
                     ColorPickerCursorHint::Pointer => CursorIcon::Pointer,
                     ColorPickerCursorHint::Default => CursorIcon::Default,
+                };
+            }
+        }
+
+        // Check board picker popup
+        if self.input_state.is_board_picker_open() {
+            let (mx, my) = self.current_mouse();
+            if let Some(hint) = self.input_state.board_picker_cursor_hint_at(mx, my) {
+                return match hint {
+                    BoardPickerCursorHint::Text => CursorIcon::Text,
+                    BoardPickerCursorHint::Pointer => CursorIcon::Pointer,
+                    BoardPickerCursorHint::Grab => CursorIcon::Grab,
+                    BoardPickerCursorHint::Grabbing => CursorIcon::Grabbing,
+                    BoardPickerCursorHint::Default => CursorIcon::Default,
                 };
             }
         }

@@ -50,6 +50,8 @@ pub enum ColorPickerPopupState {
         dragging: bool,
         /// Whether the hex text is selected (first keystroke replaces all).
         hex_selected: bool,
+        /// Current hover position (for button hover states).
+        hover_pos: Option<(f64, f64)>,
     },
 }
 

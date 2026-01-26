@@ -174,14 +174,14 @@ pub fn render_command_palette(
             let badge_x = shortcut_x_end - badge_w;
             let badge_y = item_y + (ITEM_HEIGHT - badge_h) / 2.0 - 1.0;
 
-            // Badge background
-            let badge_alpha = if is_selected { 0.25 } else { 0.15 };
+            // Badge background - increased visibility
+            let badge_alpha = if is_selected { 0.35 } else { 0.25 };
             ctx.set_source_rgba(1.0, 1.0, 1.0, badge_alpha);
             draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
             let _ = ctx.fill();
 
-            // Badge text
-            let shortcut_alpha = if is_selected { 0.9 } else { 0.7 };
+            // Badge text - increased visibility
+            let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
             ctx.set_source_rgba(1.0, 1.0, 1.0, shortcut_alpha);
             draw_text_baseline(
                 ctx,
@@ -285,6 +285,43 @@ pub fn render_command_palette(
             empty_y + 20.0,
             None,
         );
+    }
+
+    // Scroll indicator (when there are more items than visible)
+    let total_items = filtered.len();
+    if total_items > MAX_VISIBLE_ITEMS {
+        let scroll_track_x = x + PALETTE_WIDTH - 8.0;
+        let scroll_track_y = cursor_y;
+        let scroll_track_h = (MAX_VISIBLE_ITEMS as f64) * ITEM_HEIGHT - 4.0;
+        let scroll_track_w = 4.0;
+
+        // Track background
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.1);
+        draw_rounded_rect(
+            ctx,
+            scroll_track_x,
+            scroll_track_y,
+            scroll_track_w,
+            scroll_track_h,
+            2.0,
+        );
+        let _ = ctx.fill();
+
+        // Thumb position and size
+        let thumb_ratio = MAX_VISIBLE_ITEMS as f64 / total_items as f64;
+        let thumb_h = (scroll_track_h * thumb_ratio).max(20.0);
+        let scroll_range = total_items - MAX_VISIBLE_ITEMS;
+        let scroll_progress = if scroll_range > 0 {
+            scroll as f64 / scroll_range as f64
+        } else {
+            0.0
+        };
+        let thumb_y = scroll_track_y + scroll_progress * (scroll_track_h - thumb_h);
+
+        // Thumb
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+        draw_rounded_rect(ctx, scroll_track_x, thumb_y, scroll_track_w, thumb_h, 2.0);
+        let _ = ctx.fill();
     }
 
     // Escape hint at bottom

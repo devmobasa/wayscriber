@@ -35,7 +35,10 @@ pub const COLOR_ICON_HOVER: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 1.0);
 pub const COLOR_ICON_DEFAULT: (f64, f64, f64, f64) = (0.95, 0.95, 0.95, 0.9);
 
 /// Icon hover background glow (subtle highlight behind icons on hover)
-pub const COLOR_ICON_HOVER_BG: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.08);
+pub const COLOR_ICON_HOVER_BG: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.15);
+
+/// Keyboard focus ring color (blue accent)
+pub const COLOR_FOCUS_RING: (f64, f64, f64, f64) = (0.4, 0.6, 0.95, 0.9);
 
 // Button states
 /// Active/selected button background (brighter blue accent for better visibility)
@@ -64,8 +67,8 @@ pub const COLOR_MINI_CHECKBOX_HOVER: (f64, f64, f64, f64) = (0.32, 0.34, 0.4, 0.
 pub const COLOR_MINI_CHECKBOX_DEFAULT: (f64, f64, f64, f64) = (0.2, 0.22, 0.26, 0.7);
 
 // Pin button states
-/// Pinned state (green)
-pub const COLOR_PIN_ACTIVE: (f64, f64, f64, f64) = (0.25, 0.6, 0.35, 0.95);
+/// Pinned state (blue accent - unified with other active states)
+pub const COLOR_PIN_ACTIVE: (f64, f64, f64, f64) = (0.3, 0.55, 0.95, 0.95);
 
 /// Pin button hover
 pub const COLOR_PIN_HOVER: (f64, f64, f64, f64) = (0.35, 0.35, 0.45, 0.85);

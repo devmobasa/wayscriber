@@ -37,6 +37,7 @@ impl InputState {
             hex_buffer: hex,
             dragging: false,
             hex_selected: false,
+            hover_pos: None,
         };
 
         self.dirty_tracker.mark_full();
@@ -303,6 +304,14 @@ impl InputState {
         }
     }
 
+    /// Returns true if the current hex buffer is valid (or empty/in-progress).
+    pub fn color_picker_popup_hex_valid(&self) -> bool {
+        let Some(hex_buffer) = self.color_picker_popup_hex_buffer() else {
+            return true;
+        };
+        parse_hex_color(hex_buffer).is_some() || hex_buffer.is_empty() || hex_buffer == "#"
+    }
+
     /// Gets the gradient position for the current color.
     pub fn color_picker_popup_gradient_position(&self) -> Option<(f64, f64)> {
         match &self.color_picker_popup_state {
@@ -310,6 +319,22 @@ impl InputState {
                 let (hue, _, value) = rgb_to_hsv(current_color.r, current_color.g, current_color.b);
                 Some((hue, 1.0 - value))
             }
+            ColorPickerPopupState::Hidden => None,
+        }
+    }
+
+    /// Sets the hover position within the popup.
+    #[allow(dead_code)]
+    pub fn color_picker_popup_set_hover(&mut self, pos: Option<(f64, f64)>) {
+        if let ColorPickerPopupState::Open { hover_pos, .. } = &mut self.color_picker_popup_state {
+            *hover_pos = pos;
+        }
+    }
+
+    /// Gets the current hover position within the popup.
+    pub fn color_picker_popup_hover(&self) -> Option<(f64, f64)> {
+        match &self.color_picker_popup_state {
+            ColorPickerPopupState::Open { hover_pos, .. } => *hover_pos,
             ColorPickerPopupState::Hidden => None,
         }
     }

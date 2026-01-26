@@ -95,6 +95,9 @@ pub fn render_color_picker_popup(
         current_color,
     );
 
+    // Check if hex value is valid (for validation feedback)
+    let hex_valid = input_state.color_picker_popup_hex_valid();
+
     // Hex input field
     draw_hex_input(
         ctx,
@@ -105,7 +108,17 @@ pub fn render_color_picker_popup(
         hex_buffer,
         is_hex_editing,
         is_hex_selected,
+        hex_valid,
     );
+
+    // Determine button hover states
+    let hover_pos = input_state.color_picker_popup_hover();
+    let ok_hover = hover_pos
+        .map(|(hx, hy)| layout.point_in_ok_button(hx, hy))
+        .unwrap_or(false);
+    let cancel_hover = hover_pos
+        .map(|(hx, hy)| layout.point_in_cancel_button(hx, hy))
+        .unwrap_or(false);
 
     // OK button
     draw_button(
@@ -116,6 +129,7 @@ pub fn render_color_picker_popup(
         layout.btn_height,
         "OK",
         true, // primary
+        ok_hover,
     );
 
     // Cancel button
@@ -127,6 +141,7 @@ pub fn render_color_picker_popup(
         layout.btn_height,
         "Cancel",
         false, // secondary
+        cancel_hover,
     );
 
     // Keyboard shortcut hint
@@ -244,7 +259,7 @@ fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: C
     let _ = ctx.stroke();
 }
 
-/// Draw the hex input field.
+/// Draw the hex input field with validation feedback.
 #[allow(clippy::too_many_arguments)]
 fn draw_hex_input(
     ctx: &cairo::Context,
@@ -255,10 +270,15 @@ fn draw_hex_input(
     value: &str,
     focused: bool,
     selected: bool,
+    valid: bool,
 ) {
-    // Outer glow when focused
+    // Outer glow when focused - red if invalid, blue if valid
     if focused {
-        ctx.set_source_rgba(0.3, 0.5, 0.9, 0.2);
+        if valid {
+            ctx.set_source_rgba(0.3, 0.5, 0.9, 0.2);
+        } else {
+            ctx.set_source_rgba(0.9, 0.3, 0.3, 0.25);
+        }
         draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 6.0);
         let _ = ctx.fill();
     }
@@ -268,8 +288,11 @@ fn draw_hex_input(
     draw_rounded_rect(ctx, x, y, w, h, 4.0);
     let _ = ctx.fill();
 
-    // Border - stronger when focused
-    if focused {
+    // Border - red if invalid, blue if focused, gray otherwise
+    if !valid && focused {
+        ctx.set_source_rgba(0.9, 0.35, 0.3, 0.9);
+        ctx.set_line_width(2.0);
+    } else if focused {
         constants::set_color(ctx, INPUT_BORDER_FOCUSED);
         ctx.set_line_width(2.0);
     } else {
@@ -323,20 +346,54 @@ fn draw_hex_input(
     }
 }
 
-/// Draw a button.
-fn draw_button(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, label: &str, primary: bool) {
-    // Background
+/// Draw a button with hover state.
+#[allow(clippy::too_many_arguments)]
+fn draw_button(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: &str,
+    primary: bool,
+    hover: bool,
+) {
+    // Hover glow effect
+    if hover {
+        let glow_color = if primary {
+            (0.3, 0.5, 0.9, 0.25)
+        } else {
+            (1.0, 1.0, 1.0, 0.1)
+        };
+        ctx.set_source_rgba(glow_color.0, glow_color.1, glow_color.2, glow_color.3);
+        draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, RADIUS_MD + 2.0);
+        let _ = ctx.fill();
+    }
+
+    // Background - brighter on hover
     if primary {
-        ctx.set_source_rgba(0.25, 0.45, 0.75, 0.95);
+        if hover {
+            ctx.set_source_rgba(0.30, 0.50, 0.80, 0.98);
+        } else {
+            ctx.set_source_rgba(0.25, 0.45, 0.75, 0.95);
+        }
+    } else if hover {
+        ctx.set_source_rgba(0.30, 0.30, 0.38, 0.98);
     } else {
         ctx.set_source_rgba(0.25, 0.25, 0.30, 0.95);
     }
     draw_rounded_rect(ctx, x, y, w, h, RADIUS_MD);
     let _ = ctx.fill();
 
-    // Border
+    // Border - stronger on hover
     if primary {
-        ctx.set_source_rgba(0.35, 0.55, 0.85, 0.9);
+        if hover {
+            ctx.set_source_rgba(0.45, 0.65, 0.95, 0.95);
+        } else {
+            ctx.set_source_rgba(0.35, 0.55, 0.85, 0.9);
+        }
+    } else if hover {
+        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.9);
     } else {
         ctx.set_source_rgba(0.4, 0.4, 0.45, 0.8);
     }

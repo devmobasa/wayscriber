@@ -1,7 +1,7 @@
 use super::constants::{
     COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
-    COLOR_CLOSE_HOVER, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER, COLOR_TEXT_PRIMARY,
-    LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
+    COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
+    COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
 };
 use super::draw_round_rect;
 use std::f64::consts::PI;
@@ -154,6 +154,23 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
         draw_round_rect(ctx, indicator_x, indicator_y, indicator_w, indicator_h, 1.5);
         let _ = ctx.fill();
     }
+}
+
+/// Draw a keyboard focus ring around an element.
+/// Call this after drawing the element to show focus indication.
+#[allow(dead_code)]
+pub(in crate::backend::wayland::toolbar::render) fn draw_focus_ring(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    radius: f64,
+) {
+    set_color(ctx, COLOR_FOCUS_RING);
+    ctx.set_line_width(2.0);
+    draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, radius + 2.0);
+    let _ = ctx.stroke();
 }
 
 /// Draw a button with a subtle warning accent for destructive actions (e.g., Clear, UndoAll).

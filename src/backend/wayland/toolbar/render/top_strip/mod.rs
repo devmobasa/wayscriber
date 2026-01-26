@@ -1,6 +1,8 @@
 mod icons;
 mod text;
 
+use std::time::Instant;
+
 use anyhow::Result;
 
 use crate::backend::wayland::toolbar::format_binding_label;
@@ -11,8 +13,8 @@ use crate::ui::toolbar::ToolbarSnapshot;
 
 use super::super::events::HitKind;
 use super::widgets::{
-    draw_close_button, draw_drag_handle, draw_panel_background, draw_pin_button, draw_tooltip,
-    point_in_rect,
+    draw_close_button, draw_drag_handle, draw_panel_background, draw_pin_button,
+    draw_tooltip_with_delay, point_in_rect,
 };
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -75,6 +77,7 @@ pub fn render_top_strip(
     snapshot: &ToolbarSnapshot,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
+    hover_start: Option<Instant>,
 ) -> Result<()> {
     draw_panel_background(ctx, width, height);
 
@@ -168,6 +171,14 @@ pub fn render_top_strip(
         tooltip: Some("Close".to_string()),
     });
 
-    draw_tooltip(ctx, layout.hits, layout.hover, width, height, false);
+    draw_tooltip_with_delay(
+        ctx,
+        layout.hits,
+        layout.hover,
+        width,
+        height,
+        false,
+        hover_start,
+    );
     Ok(())
 }

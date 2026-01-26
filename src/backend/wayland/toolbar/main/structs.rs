@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use smithay_client_toolkit::shell::wlr_layer::Anchor;
 
 use crate::backend::wayland::toolbar::surfaces::ToolbarSurface;
@@ -17,6 +19,10 @@ pub struct ToolbarSurfaceManager {
     pub(super) side: ToolbarSurface,
     pub(super) top_hover: Option<(f64, f64)>,
     pub(super) side_hover: Option<(f64, f64)>,
+    /// Timestamp when top hover started (for tooltip delay).
+    pub(super) top_hover_start: Option<Instant>,
+    /// Timestamp when side hover started (for tooltip delay).
+    pub(super) side_hover_start: Option<Instant>,
     pub(super) last_snapshot: Option<ToolbarSnapshot>,
 }
 
@@ -40,6 +46,8 @@ impl Default for ToolbarSurfaceManager {
             ),
             top_hover: None,
             side_hover: None,
+            top_hover_start: None,
+            side_hover_start: None,
             last_snapshot: None,
         }
     }

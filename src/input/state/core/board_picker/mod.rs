@@ -208,3 +208,18 @@ const BOARD_PALETTE: [Color; 11] = [
 fn board_palette_colors() -> &'static [Color] {
     &BOARD_PALETTE
 }
+
+/// Cursor hint for different regions of the board picker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardPickerCursorHint {
+    /// Default arrow cursor.
+    Default,
+    /// Pointer/hand cursor for clickable items.
+    Pointer,
+    /// Grab cursor for drag handles.
+    Grab,
+    /// Grabbing cursor when actively dragging.
+    Grabbing,
+    /// Text editing cursor (I-beam) for name/hex editing.
+    Text,
+}

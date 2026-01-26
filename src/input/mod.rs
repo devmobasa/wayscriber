@@ -21,8 +21,8 @@ pub use boards::{
 };
 pub use events::{Key, MouseButton};
 pub use state::{
-    ClickHighlightSettings, ColorPickerCursorHint, DrawingState, InputState, SelectionHandle,
-    TextInputMode, ToolbarDrawerTab, ZoomAction,
+    BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, DrawingState, InputState,
+    SelectionHandle, TextInputMode, ToolbarDrawerTab, ZoomAction,
 };
 #[cfg(tablet)]
 #[allow(unused_imports)]

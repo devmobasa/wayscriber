@@ -115,6 +115,10 @@ pub fn render_status_bar(
     );
 
     log::debug!("Status bar font_size from config: {}", style.font_size);
+
+    // Limit status bar to 80% of screen width to prevent overflow
+    let max_width = (screen_width as f64 * 0.8) - style.padding * 2.0;
+
     let layout = text_layout(
         ctx,
         UiTextStyle {
@@ -124,10 +128,10 @@ pub fn render_status_bar(
             size: style.font_size,
         },
         &status_text,
-        None,
+        Some(max_width),
     );
     let extents = layout.ink_extents();
-    let text_width = extents.width();
+    let text_width = extents.width().min(max_width);
     let text_height = extents.height();
 
     let padding = style.padding;

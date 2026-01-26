@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use super::constants::{
     COLOR_TEXT_PRIMARY, COLOR_TOOLTIP_BACKGROUND, COLOR_TOOLTIP_BORDER, COLOR_TOOLTIP_SHADOW,
     FONT_FAMILY_DEFAULT, FONT_SIZE_TOOLTIP, LINE_WIDTH_THIN, RADIUS_STD, SPACING_LG, SPACING_MD,
@@ -7,6 +9,10 @@ use super::draw_round_rect;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::ui_text::{UiTextStyle, text_layout};
 
+/// Delay before showing tooltips.
+const TOOLTIP_DELAY: Duration = Duration::from_millis(250);
+
+#[allow(dead_code)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
     ctx: &cairo::Context,
     hits: &[HitRegion],
@@ -15,7 +21,26 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip(
     panel_height: f64,
     above: bool,
 ) {
+    draw_tooltip_with_delay(ctx, hits, hover, panel_width, panel_height, above, None);
+}
+
+pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip_with_delay(
+    ctx: &cairo::Context,
+    hits: &[HitRegion],
+    hover: Option<(f64, f64)>,
+    panel_width: f64,
+    panel_height: f64,
+    above: bool,
+    hover_start: Option<Instant>,
+) {
     let Some((hx, hy)) = hover else { return };
+
+    // Check tooltip delay - only show if hover has been active long enough
+    if let Some(start) = hover_start
+        && start.elapsed() < TOOLTIP_DELAY
+    {
+        return;
+    }
 
     for hit in hits {
         if hit.contains(hx, hy)
