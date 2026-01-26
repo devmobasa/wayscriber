@@ -119,6 +119,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
     active: bool,
     hover: bool,
 ) {
+    // Add subtle glow on hover for better visibility
+    if hover && !active {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+        draw_round_rect(ctx, x - 1.0, y - 1.0, w + 2.0, h + 2.0, RADIUS_LG + 1.0);
+        let _ = ctx.fill();
+    }
+
     let color = if active {
         COLOR_BUTTON_ACTIVE
     } else if hover {

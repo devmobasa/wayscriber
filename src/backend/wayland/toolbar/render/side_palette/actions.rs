@@ -11,7 +11,9 @@ use crate::ui::toolbar::bindings::action_for_event;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui_text::UiTextStyle;
 
-use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
+use super::super::widgets::constants::{
+    COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color,
+};
 use super::super::widgets::*;
 
 pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -162,7 +164,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     set_icon_color(ctx, is_hover);
                 } else {
                     draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
-                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
+                    set_color(ctx, COLOR_TEXT_DISABLED);
                 }
                 let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
                 let icon_y = by + (icon_btn_size - icon_size) / 2.0;
@@ -206,7 +208,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     set_icon_color(ctx, is_hover);
                 } else {
                     draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
-                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
+                    set_color(ctx, COLOR_TEXT_DISABLED);
                 }
                 let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
                 let icon_y = by + (icon_btn_size - icon_size) / 2.0;
@@ -253,7 +255,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
                     set_icon_color(ctx, is_hover);
                 } else {
                     draw_button(ctx, bx, by, icon_btn_size, icon_btn_size, false, false);
-                    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
+                    set_color(ctx, COLOR_TEXT_DISABLED);
                 }
                 let icon_x = bx + (icon_btn_size - icon_size) / 2.0;
                 let icon_y = by + (icon_btn_size - icon_size) / 2.0;

@@ -24,8 +24,8 @@ pub const COLOR_LABEL_SECTION: (f64, f64, f64, f64) = (0.8, 0.8, 0.85, 0.9);
 /// Hint/secondary label color
 pub const COLOR_LABEL_HINT: (f64, f64, f64, f64) = (0.7, 0.7, 0.75, 0.8);
 
-/// Disabled text color
-pub const COLOR_TEXT_DISABLED: (f64, f64, f64, f64) = (0.5, 0.5, 0.55, 0.5);
+/// Disabled text color (lower opacity for clearer distinction from enabled)
+pub const COLOR_TEXT_DISABLED: (f64, f64, f64, f64) = (0.4, 0.4, 0.45, 0.35);
 
 // Icon colors
 /// Icon color when hovered (fully opaque white)
@@ -38,8 +38,8 @@ pub const COLOR_ICON_DEFAULT: (f64, f64, f64, f64) = (0.95, 0.95, 0.95, 0.9);
 pub const COLOR_ICON_HOVER_BG: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.08);
 
 // Button states
-/// Active/selected button background (blue accent)
-pub const COLOR_BUTTON_ACTIVE: (f64, f64, f64, f64) = (0.25, 0.5, 0.95, 0.95);
+/// Active/selected button background (brighter blue accent for better visibility)
+pub const COLOR_BUTTON_ACTIVE: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 1.0);
 
 /// Hovered button background
 pub const COLOR_BUTTON_HOVER: (f64, f64, f64, f64) = (0.35, 0.35, 0.45, 0.85);

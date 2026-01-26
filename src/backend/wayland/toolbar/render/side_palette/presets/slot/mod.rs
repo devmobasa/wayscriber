@@ -164,6 +164,15 @@ pub(super) fn draw_preset_slot(
         slot_x,
         preset_exists,
     );
+
+    // Draw subtle separator line between slot and action buttons
+    let sep_y = layout_spec.action_row_y - 3.0;
+    ctx.set_source_rgba(0.5, 0.5, 0.55, 0.25);
+    ctx.set_line_width(0.5);
+    ctx.move_to(slot_x + 2.0, sep_y);
+    ctx.line_to(slot_x + layout_spec.slot_size - 2.0, sep_y);
+    let _ = ctx.stroke();
+
     actions::draw_preset_actions(
         ctx,
         snapshot,
