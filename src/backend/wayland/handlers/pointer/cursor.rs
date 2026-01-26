@@ -3,7 +3,11 @@ use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
 use super::*;
-use crate::input::{BoardPickerCursorHint, ColorPickerCursorHint, DrawingState, SelectionHandle};
+use crate::backend::wayland::toolbar::ToolbarCursorHint;
+use crate::input::{
+    BoardPickerCursorHint, ColorPickerCursorHint, CommandPaletteCursorHint, ContextMenuCursorHint,
+    DrawingState, HelpOverlayCursorHint, SelectionHandle,
+};
 
 impl WaylandState {
     pub(super) fn update_pointer_cursor(&mut self, toolbar_hover: bool, conn: &Connection) {
@@ -52,8 +56,73 @@ impl WaylandState {
             }
         }
 
-        // Toolbar always gets default cursor
+        // Check context menu
+        if self.input_state.is_context_menu_open() {
+            let (mx, my) = self.current_mouse();
+            if let Some(hint) = self.input_state.context_menu_cursor_hint_at(mx, my) {
+                return match hint {
+                    ContextMenuCursorHint::Pointer => CursorIcon::Pointer,
+                    ContextMenuCursorHint::Default => CursorIcon::Default,
+                };
+            }
+        }
+
+        // Check command palette
+        if self.input_state.command_palette_open {
+            let (mx, my) = self.current_mouse();
+            let screen_width = self.surface.width();
+            let screen_height = self.surface.height();
+            if let Some(hint) =
+                self.input_state
+                    .command_palette_cursor_hint_at(mx, my, screen_width, screen_height)
+            {
+                return match hint {
+                    CommandPaletteCursorHint::Text => CursorIcon::Text,
+                    CommandPaletteCursorHint::Pointer => CursorIcon::Pointer,
+                    CommandPaletteCursorHint::Default => CursorIcon::Default,
+                };
+            }
+        }
+
+        // Check help overlay
+        if self.input_state.show_help {
+            let (mx, my) = self.current_mouse();
+            let screen_width = self.surface.width();
+            let screen_height = self.surface.height();
+            if let Some(hint) =
+                self.input_state
+                    .help_overlay_cursor_hint_at(mx, my, screen_width, screen_height)
+            {
+                return match hint {
+                    HelpOverlayCursorHint::Text => CursorIcon::Text,
+                    HelpOverlayCursorHint::Default => CursorIcon::Default,
+                };
+            }
+        }
+
+        // Inline toolbar cursor hints (when using inline mode)
+        if self.inline_toolbars_active()
+            && self.pointer_over_toolbar()
+            && let Some(hint) = self.inline_toolbar_cursor_hint()
+        {
+            return match hint {
+                ToolbarCursorHint::Pointer => CursorIcon::Pointer,
+                ToolbarCursorHint::Grab => CursorIcon::Grab,
+                ToolbarCursorHint::Crosshair => CursorIcon::Crosshair,
+                ToolbarCursorHint::Default => CursorIcon::Default,
+            };
+        }
+
+        // Layer-shell toolbar cursor hints (sliders get grab, buttons get pointer, etc.)
         if toolbar_hover {
+            if let Some(hint) = self.toolbar.cursor_hint() {
+                return match hint {
+                    ToolbarCursorHint::Pointer => CursorIcon::Pointer,
+                    ToolbarCursorHint::Grab => CursorIcon::Grab,
+                    ToolbarCursorHint::Crosshair => CursorIcon::Crosshair,
+                    ToolbarCursorHint::Default => CursorIcon::Default,
+                };
+            }
             return CursorIcon::Default;
         }
 

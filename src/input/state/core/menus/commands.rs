@@ -108,6 +108,8 @@ impl InputState {
                 self.pending_menu_hover_recalc = false;
                 self.set_context_menu_focus(None);
                 self.focus_first_context_menu_entry();
+                // Mark full screen dirty to ensure submenu renders completely
+                self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
             MenuCommand::PagePrev => {

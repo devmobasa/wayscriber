@@ -98,7 +98,7 @@ impl InputState {
 
         entries.push(ContextMenuEntry::new(
             "Help",
-            Some("F10"),
+            Some("F1"),
             false,
             false,
             Some(MenuCommand::ToggleHelp),

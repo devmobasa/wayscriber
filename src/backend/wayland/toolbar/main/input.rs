@@ -34,7 +34,7 @@ impl ToolbarSurfaceManager {
                     self.top_hover_start = Some(Instant::now());
                 }
                 self.top_hover = Some(position);
-                self.top.mark_dirty();
+                self.top.set_hover(Some(position));
             }
             return self.top.drag_at(position.0, position.1);
         }
@@ -45,7 +45,7 @@ impl ToolbarSurfaceManager {
                     self.side_hover_start = Some(Instant::now());
                 }
                 self.side_hover = Some(position);
-                self.side.mark_dirty();
+                self.side.set_hover(Some(position));
             }
             return self.side.drag_at(position.0, position.1);
         }
@@ -56,11 +56,11 @@ impl ToolbarSurfaceManager {
         if self.top.is_surface(surface) {
             self.top_hover = None;
             self.top_hover_start = None;
-            self.top.mark_dirty();
+            self.top.set_hover(None);
         } else if self.side.is_surface(surface) {
             self.side_hover = None;
             self.side_hover_start = None;
-            self.side.mark_dirty();
+            self.side.set_hover(None);
         }
     }
 

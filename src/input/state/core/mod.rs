@@ -29,8 +29,11 @@ pub use color_picker_popup::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
     PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE, rgb_to_hsv as color_picker_rgb_to_hsv,
 };
-pub use command_palette::COMMAND_PALETTE_MAX_VISIBLE;
+pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint};
 #[allow(unused_imports)]
-pub use menus::{ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand};
+pub use menus::{
+    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
+};
 pub use selection::SelectionState;
 pub use tour::TourStep;
+pub use utility::HelpOverlayCursorHint;

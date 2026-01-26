@@ -7,5 +7,6 @@ mod lifecycle;
 mod types;
 
 pub use types::{
-    ContextMenuEntry, ContextMenuKind, ContextMenuLayout, ContextMenuState, MenuCommand,
+    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuLayout, ContextMenuState,
+    MenuCommand,
 };

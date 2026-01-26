@@ -91,3 +91,12 @@ pub struct ContextMenuLayout {
     pub shortcut_width: f64,
     pub arrow_width: f64,
 }
+
+/// Cursor hint for different regions of the context menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextMenuCursorHint {
+    /// Default arrow cursor.
+    Default,
+    /// Pointer/hand cursor for clickable menu items.
+    Pointer,
+}

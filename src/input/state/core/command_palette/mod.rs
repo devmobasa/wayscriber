@@ -11,6 +11,23 @@ use crate::input::events::Key;
 /// Maximum number of visible items in the command palette.
 pub const COMMAND_PALETTE_MAX_VISIBLE: usize = 10;
 
+// Layout constants (must match ui/command_palette.rs)
+const PALETTE_WIDTH: f64 = 400.0;
+const ITEM_HEIGHT: f64 = 32.0;
+const PADDING: f64 = 12.0;
+const INPUT_HEIGHT: f64 = 36.0;
+
+/// Cursor hint for different regions of the command palette.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandPaletteCursorHint {
+    /// Default arrow cursor.
+    Default,
+    /// Text editing cursor (I-beam) for input field.
+    Text,
+    /// Pointer/hand cursor for command items.
+    Pointer,
+}
+
 impl InputState {
     /// Toggle the command palette visibility.
     pub(crate) fn toggle_command_palette(&mut self) {
@@ -107,6 +124,64 @@ impl InputState {
             }
             _ => true, // Consume all other keys while palette is open
         }
+    }
+
+    /// Determine the cursor type for a given point within the command palette.
+    /// Returns `None` if the command palette is not open or the point is outside.
+    pub fn command_palette_cursor_hint_at(
+        &self,
+        x: i32,
+        y: i32,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> Option<CommandPaletteCursorHint> {
+        if !self.command_palette_open {
+            return None;
+        }
+
+        let palette_x = (screen_width as f64 - PALETTE_WIDTH) / 2.0;
+        let palette_y = screen_height as f64 * 0.2;
+
+        let local_x = x as f64 - palette_x;
+        let local_y = y as f64 - palette_y;
+
+        // Check if outside palette bounds (rough check)
+        if !(0.0..=PALETTE_WIDTH).contains(&local_x) || local_y < 0.0 {
+            return None;
+        }
+
+        let inner_x = PADDING;
+        let inner_width = PALETTE_WIDTH - PADDING * 2.0;
+
+        // Check input field region
+        let input_top = PADDING;
+        let input_bottom = input_top + INPUT_HEIGHT;
+        if local_y >= input_top
+            && local_y <= input_bottom
+            && local_x >= inner_x
+            && local_x <= inner_x + inner_width
+        {
+            return Some(CommandPaletteCursorHint::Text);
+        }
+
+        // Check command items region
+        let items_top = input_bottom + 8.0;
+        let filtered = self.filtered_commands();
+        let visible_count = filtered.len().min(COMMAND_PALETTE_MAX_VISIBLE);
+
+        for i in 0..visible_count {
+            let item_top = items_top + (i as f64 * ITEM_HEIGHT);
+            let item_bottom = item_top + ITEM_HEIGHT;
+            if local_y >= item_top
+                && local_y <= item_bottom
+                && local_x >= inner_x
+                && local_x <= inner_x + inner_width
+            {
+                return Some(CommandPaletteCursorHint::Pointer);
+            }
+        }
+
+        Some(CommandPaletteCursorHint::Default)
     }
 
     /// Get the filtered list of commands matching the current query.

@@ -7,6 +7,13 @@ use crate::backend::wayland::toolbar::hit::{focus_hover_point, focused_event, ne
 use crate::ui::toolbar::ToolbarEvent;
 
 impl ToolbarSurface {
+    pub fn set_hover(&mut self, hover: Option<(f64, f64)>) {
+        if self.hover != hover {
+            self.hover = hover;
+            self.dirty = true;
+        }
+    }
+
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
     }

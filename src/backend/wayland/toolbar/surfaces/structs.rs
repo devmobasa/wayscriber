@@ -7,6 +7,7 @@ use smithay_client_toolkit::{
 };
 use wayland_client::{Proxy, protocol::wl_surface};
 
+use crate::backend::wayland::toolbar::events::ToolbarCursorHint;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 
 #[derive(Debug)]
@@ -63,5 +64,16 @@ impl ToolbarSurface {
             .as_ref()
             .map(|s| s.id() == surface.id())
             .unwrap_or(false)
+    }
+
+    /// Get cursor hint for the current hover position.
+    pub fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
+        let (hx, hy) = self.hover?;
+        for hit in &self.hit_regions {
+            if hit.contains(hx, hy) {
+                return Some(hit.kind.cursor_hint());
+            }
+        }
+        Some(ToolbarCursorHint::Default)
     }
 }

@@ -16,6 +16,38 @@ pub enum HitKind {
     DragMoveSide,
 }
 
+/// Cursor hint for toolbar regions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarCursorHint {
+    /// Default arrow cursor.
+    Default,
+    /// Pointer/hand cursor for clickable buttons.
+    Pointer,
+    /// Grab cursor for sliders and drag handles.
+    Grab,
+    /// Crosshair for color pickers.
+    Crosshair,
+}
+
+impl HitKind {
+    /// Get the appropriate cursor hint for this hit kind.
+    pub fn cursor_hint(&self) -> ToolbarCursorHint {
+        match self {
+            HitKind::Click => ToolbarCursorHint::Pointer,
+            HitKind::DragSetThickness { .. }
+            | HitKind::DragSetMarkerOpacity { .. }
+            | HitKind::DragSetFontSize
+            | HitKind::DragUndoDelay
+            | HitKind::DragRedoDelay
+            | HitKind::DragCustomUndoDelay
+            | HitKind::DragCustomRedoDelay
+            | HitKind::DragMoveTop
+            | HitKind::DragMoveSide => ToolbarCursorHint::Grab,
+            HitKind::PickColor { .. } => ToolbarCursorHint::Crosshair,
+        }
+    }
+}
+
 /// Convert normalized drag position [0,1] to a delay in seconds.
 pub fn delay_secs_from_t(t: f64) -> f64 {
     const MIN_DELAY_S: f64 = 0.05;

@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use smithay_client_toolkit::shell::wlr_layer::Anchor;
 
+use crate::backend::wayland::toolbar::events::ToolbarCursorHint;
 use crate::backend::wayland::toolbar::surfaces::ToolbarSurface;
 use crate::ui::toolbar::ToolbarSnapshot;
 
@@ -56,5 +57,16 @@ impl Default for ToolbarSurfaceManager {
 impl ToolbarSurfaceManager {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Get cursor hint for the currently hovered toolbar, if any.
+    pub fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
+        if self.top_hover.is_some() {
+            return self.top.cursor_hint();
+        }
+        if self.side_hover.is_some() {
+            return self.side.cursor_hint();
+        }
+        None
     }
 }

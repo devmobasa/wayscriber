@@ -4,6 +4,15 @@ use super::super::base::InputState;
 /// dynamically by the render state. Navigation clamps to the actual count.
 const HELP_OVERLAY_MAX_PAGES: usize = 10;
 
+/// Cursor hint for the help overlay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HelpOverlayCursorHint {
+    /// Default arrow cursor.
+    Default,
+    /// Text editing cursor (I-beam) for search input.
+    Text,
+}
+
 impl InputState {
     pub(crate) fn toggle_help_overlay(&mut self) {
         let now_visible = !self.show_help;
@@ -137,5 +146,46 @@ impl InputState {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
+    }
+
+    /// Determine the cursor type for the help overlay.
+    /// Returns `None` if the help overlay is not open.
+    /// The help overlay search accepts keyboard input, so we show Text cursor
+    /// in the top navigation/search area.
+    pub fn help_overlay_cursor_hint_at(
+        &self,
+        x: i32,
+        y: i32,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> Option<HelpOverlayCursorHint> {
+        if !self.show_help {
+            return None;
+        }
+
+        // Calculate approximate overlay bounds (centered, ~80% of screen)
+        let margin_x = screen_width as f64 * 0.1;
+        let margin_y = screen_height as f64 * 0.05;
+        let box_x = margin_x;
+        let box_y = margin_y;
+        let box_width = screen_width as f64 - margin_x * 2.0;
+        let box_height = screen_height as f64 - margin_y * 2.0;
+
+        let local_x = x as f64 - box_x;
+        let local_y = y as f64 - box_y;
+
+        // Check if outside overlay bounds
+        if local_x < 0.0 || local_x > box_width || local_y < 0.0 || local_y > box_height {
+            return None;
+        }
+
+        // The search box is in the top ~80px of the overlay (nav area)
+        // Show text cursor there since typing goes to search
+        let nav_height = 80.0;
+        if local_y <= nav_height {
+            return Some(HelpOverlayCursorHint::Text);
+        }
+
+        Some(HelpOverlayCursorHint::Default)
     }
 }
