@@ -1,3 +1,5 @@
+use std::f64::consts::PI;
+
 use super::{ColorSectionInfo, SidePaletteLayout};
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
@@ -111,7 +113,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     // Draw current color preview row (between gradient and swatches)
     let preview_row_y = picker_y + picker_h + 10.0;
-    let preview_size = 22.0;
+    let preview_size = 28.0;
 
     // Draw preview swatch on the left (clickable to open color picker popup)
     let preview_hover = hover
@@ -125,8 +127,59 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
         snapshot.color,
         preview_hover,
     );
+
+    // Draw expand icon overlay in bottom-right corner of swatch
+    let icon_size = 8.0;
+    let icon_x = x + preview_size - icon_size - 2.0;
+    let icon_y = preview_row_y + preview_size - icon_size - 2.0;
+    // Dark background circle for visibility on any color
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.4);
+    ctx.arc(
+        icon_x + icon_size / 2.0,
+        icon_y + icon_size / 2.0,
+        icon_size / 2.0 + 1.0,
+        0.0,
+        PI * 2.0,
+    );
+    let _ = ctx.fill();
+    // Draw white expand arrow (↗)
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    ctx.set_line_width(1.2);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    let arrow_margin = icon_size * 0.2;
+    let arrow_x1 = icon_x + arrow_margin;
+    let arrow_y1 = icon_y + icon_size - arrow_margin;
+    let arrow_x2 = icon_x + icon_size - arrow_margin;
+    let arrow_y2 = icon_y + arrow_margin;
+    ctx.move_to(arrow_x1, arrow_y1);
+    ctx.line_to(arrow_x2, arrow_y2);
+    let _ = ctx.stroke();
+    // Arrow head
+    let head_len = icon_size * 0.3;
+    ctx.move_to(arrow_x2 - head_len, arrow_y2);
+    ctx.line_to(arrow_x2, arrow_y2);
+    ctx.line_to(arrow_x2, arrow_y2 + head_len);
+    let _ = ctx.stroke();
+
+    // Draw "Pick" label below the swatch
+    let pick_label_style = UiTextStyle {
+        family: FONT_FAMILY_DEFAULT,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: 9.0,
+    };
+    ctx.set_source_rgba(0.7, 0.7, 0.7, 0.8);
+    let pick_label = "Pick";
+    let pick_layout = crate::ui_text::text_layout(ctx, pick_label_style, pick_label, None);
+    let pick_extents = pick_layout.ink_extents();
+    let pick_label_x = x + (preview_size - pick_extents.width()) / 2.0;
+    let pick_label_y = preview_row_y + preview_size + 2.0 + pick_extents.height();
+    pick_layout.show_at_baseline(ctx, pick_label_x, pick_label_y);
+
+    // Hit region includes both swatch and "Pick" label
+    let hit_height = preview_size + 2.0 + pick_extents.height() + 2.0;
     hits.push(HitRegion {
-        rect: (x, preview_row_y, preview_size, preview_size),
+        rect: (x, preview_row_y, preview_size, hit_height),
         event: ToolbarEvent::OpenColorPickerPopup,
         kind: HitKind::Click,
         tooltip: Some("Open color picker".to_string()),
@@ -148,9 +201,9 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     // Hex input background (subtle rounded rect)
     let hex_input_x = x + preview_size + 8.0;
-    let hex_input_y = preview_row_y + 1.0;
+    let hex_input_h = 20.0; // Fixed height for hex input
+    let hex_input_y = preview_row_y + (preview_size - hex_input_h) / 2.0; // Center vertically with swatch
     let hex_input_w = 70.0;
-    let hex_input_h = preview_size - 2.0;
 
     let hex_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, hex_input_x, hex_input_y, hex_input_w, hex_input_h))
@@ -185,7 +238,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     // Add paste button
     let paste_btn_x = hex_input_x + hex_input_w + 4.0;
-    let paste_btn_size = preview_size - 2.0;
+    let paste_btn_size = 20.0; // Fixed size to match hex input
     let paste_btn_hover = hover
         .map(|(hx, hy)| {
             point_in_rect(
@@ -222,7 +275,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     });
 
     let mut cx = x;
-    let mut row_y = preview_row_y + preview_size + 8.0;
+    let mut row_y = preview_row_y + preview_size + 17.0; // Extra space for "Pick" label
     for (color, name, action) in basic_colors {
         draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
         let binding = action.and_then(|action| snapshot.binding_hints.binding_for_action(action));
