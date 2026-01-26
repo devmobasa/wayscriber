@@ -1,5 +1,6 @@
 use super::super::super::{
-    board_picker::BoardPickerState, menus::ContextMenuState, selection::SelectionState,
+    board_picker::BoardPickerState, color_picker_popup::ColorPickerPopupState,
+    menus::ContextMenuState, selection::SelectionState,
 };
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
@@ -145,6 +146,8 @@ impl InputState {
             context_menu_enabled: true,
             board_picker_state: BoardPickerState::Hidden,
             board_picker_drag: None,
+            color_picker_popup_state: ColorPickerPopupState::Hidden,
+            color_picker_popup_layout: None,
             hit_test_cache: HashMap::new(),
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,

@@ -119,6 +119,14 @@ impl WaylandState {
                 self.input_state.clear_board_picker_layout();
             }
 
+            if self.input_state.is_color_picker_popup_open() {
+                self.input_state
+                    .update_color_picker_popup_layout(width, height);
+                crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
+            } else {
+                self.input_state.clear_color_picker_popup_layout();
+            }
+
             self.input_state.ui_toast_bounds =
                 crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
             crate::ui::render_preset_toast(ctx, &self.input_state, width, height);

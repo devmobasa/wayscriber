@@ -82,6 +82,8 @@ pub enum ToolbarEvent {
     CopyHexColor,
     /// Paste hex color from clipboard
     PasteHexColor,
+    /// Open the color picker popup
+    OpenColorPickerPopup,
     /// Toggle Actions section visibility (undo all, redo all, etc.)
     ToggleActionsSection(bool),
     /// Toggle advanced action buttons

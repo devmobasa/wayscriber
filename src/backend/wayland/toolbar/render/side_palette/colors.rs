@@ -113,8 +113,24 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     let preview_row_y = picker_y + picker_h + 10.0;
     let preview_size = 22.0;
 
-    // Draw preview swatch on the left
-    draw_swatch(ctx, x, preview_row_y, preview_size, snapshot.color, false);
+    // Draw preview swatch on the left (clickable to open color picker popup)
+    let preview_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, preview_row_y, preview_size, preview_size))
+        .unwrap_or(false);
+    draw_swatch(
+        ctx,
+        x,
+        preview_row_y,
+        preview_size,
+        snapshot.color,
+        preview_hover,
+    );
+    hits.push(HitRegion {
+        rect: (x, preview_row_y, preview_size, preview_size),
+        event: ToolbarEvent::OpenColorPickerPopup,
+        kind: HitKind::Click,
+        tooltip: Some("Open color picker".to_string()),
+    });
 
     // Draw hex value next to preview (clickable for copy/paste)
     let hex = format!(

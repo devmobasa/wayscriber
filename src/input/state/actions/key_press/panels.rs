@@ -4,6 +4,50 @@ use crate::input::state::InputState;
 const PROPERTIES_PANEL_COARSE_STEP: i32 = 5;
 
 impl InputState {
+    pub(super) fn handle_color_picker_popup_key(&mut self, key: Key) -> bool {
+        if !self.is_color_picker_popup_open() {
+            return false;
+        }
+
+        if self.color_picker_popup_is_hex_editing() {
+            match key {
+                Key::Escape => {
+                    // Unfocus hex input
+                    self.color_picker_popup_set_hex_editing(false);
+                    true
+                }
+                Key::Return => {
+                    // Commit hex value
+                    self.color_picker_popup_commit_hex();
+                    true
+                }
+                Key::Backspace | Key::Delete => {
+                    self.color_picker_popup_hex_backspace();
+                    true
+                }
+                Key::Char(ch) => {
+                    self.color_picker_popup_hex_append(ch);
+                    true
+                }
+                _ => true,
+            }
+        } else {
+            match key {
+                Key::Escape => {
+                    // Cancel and close popup
+                    self.close_color_picker_popup(true);
+                    true
+                }
+                Key::Return => {
+                    // Apply and close popup
+                    self.apply_color_picker_popup();
+                    true
+                }
+                _ => true,
+            }
+        }
+    }
+
     pub(super) fn handle_board_picker_key(&mut self, key: Key) -> bool {
         if !self.is_board_picker_open() {
             return false;

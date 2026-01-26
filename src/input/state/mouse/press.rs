@@ -111,6 +111,31 @@ impl InputState {
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
+        if self.is_color_picker_popup_open() {
+            self.update_pointer_position(x, y);
+            match button {
+                MouseButton::Left => {
+                    if let Some(layout) = self.color_picker_popup_layout() {
+                        let fx = x as f64;
+                        let fy = y as f64;
+                        // Start dragging if clicking on gradient
+                        if layout.point_in_gradient(fx, fy) {
+                            self.color_picker_popup_set_dragging(true);
+                            let norm_x = (fx - layout.gradient_x) / layout.gradient_w;
+                            let norm_y = (fy - layout.gradient_y) / layout.gradient_h;
+                            self.color_picker_popup_set_from_gradient(norm_x, norm_y);
+                            self.color_picker_popup_set_hex_editing(false);
+                        }
+                    }
+                }
+                MouseButton::Right => {
+                    self.close_color_picker_popup(true);
+                }
+                MouseButton::Middle => {}
+            }
+            return;
+        }
+
         if self.is_board_picker_open() {
             self.update_pointer_position(x, y);
             match button {

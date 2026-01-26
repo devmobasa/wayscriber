@@ -1,6 +1,7 @@
 pub mod toolbar;
 
 mod board_picker;
+mod color_picker_popup;
 mod command_palette;
 pub mod constants;
 mod context_menu;
@@ -12,6 +13,7 @@ mod toasts;
 mod tour;
 
 pub use board_picker::render_board_picker;
+pub use color_picker_popup::render_color_picker_popup;
 pub use command_palette::render_command_palette;
 pub use context_menu::render_context_menu;
 #[allow(unused_imports)]
