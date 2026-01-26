@@ -118,7 +118,7 @@ pub(super) fn handle_context_menu_release(state: &mut InputState, x: i32, y: i32
         let entries = state.context_menu_entries();
         if let Some(entry) = entries.get(index) {
             if !entry.disabled {
-                if let Some(command) = entry.command {
+                if let Some(command) = entry.command.clone() {
                     state.execute_menu_command(command);
                 } else {
                     state.close_context_menu();

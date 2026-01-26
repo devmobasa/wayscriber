@@ -112,6 +112,25 @@ impl InputState {
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
+            MenuCommand::OpenBoardsMenu => {
+                let anchor = if let Some(layout) = self.context_menu_layout {
+                    (
+                        (layout.origin_x + layout.width + 8.0).round() as i32,
+                        layout.origin_y.round() as i32,
+                    )
+                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
+                    *anchor
+                } else {
+                    self.last_pointer_position
+                };
+                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Boards, None);
+                self.pending_menu_hover_recalc = false;
+                self.set_context_menu_focus(None);
+                self.focus_first_context_menu_entry();
+                // Mark full screen dirty to ensure submenu renders completely
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+            }
             MenuCommand::PagePrev => {
                 self.page_prev();
                 self.close_context_menu();
@@ -132,6 +151,30 @@ impl InputState {
                 if matches!(self.page_delete(), crate::draw::PageDeleteOutcome::Cleared) {
                     self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
                 }
+                self.close_context_menu();
+            }
+            MenuCommand::BoardPrev => {
+                self.switch_board_prev();
+                self.close_context_menu();
+            }
+            MenuCommand::BoardNext => {
+                self.switch_board_next();
+                self.close_context_menu();
+            }
+            MenuCommand::BoardNew => {
+                self.create_board();
+                self.close_context_menu();
+            }
+            MenuCommand::BoardDuplicate => {
+                self.duplicate_board();
+                self.close_context_menu();
+            }
+            MenuCommand::BoardDelete => {
+                self.delete_active_board();
+                self.close_context_menu();
+            }
+            MenuCommand::SwitchToBoard { id } => {
+                self.switch_board(&id);
                 self.close_context_menu();
             }
             MenuCommand::SwitchToWhiteboard => {

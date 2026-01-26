@@ -45,7 +45,15 @@ impl InputState {
             false,
             Some(MenuCommand::OpenPagesMenu),
         ));
+        entries.push(ContextMenuEntry::new(
+            "Boards",
+            None::<String>,
+            true,
+            false,
+            Some(MenuCommand::OpenBoardsMenu),
+        ));
 
+        // Quick board switching options
         let current_id = self.board_id();
         let has_whiteboard = self.boards.has_board(BOARD_ID_WHITEBOARD);
         let has_blackboard = self.boards.has_board(BOARD_ID_BLACKBOARD);

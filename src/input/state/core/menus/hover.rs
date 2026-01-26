@@ -63,7 +63,7 @@ impl InputState {
             if entry.disabled {
                 continue;
             }
-            if entry.command == Some(command) {
+            if entry.command.as_ref() == Some(&command) {
                 self.set_context_menu_focus(Some(index));
                 return true;
             }

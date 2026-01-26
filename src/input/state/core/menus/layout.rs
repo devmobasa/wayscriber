@@ -178,10 +178,15 @@ impl InputState {
     }
 
     pub(super) fn mark_context_menu_region(&mut self, layout: ContextMenuLayout) {
-        let x = layout.origin_x.floor() as i32;
-        let y = layout.origin_y.floor() as i32;
-        let width = layout.width.ceil() as i32 + 2;
-        let height = layout.height.ceil() as i32 + 2;
+        // Add margin for border stroke and anti-aliasing
+        let margin = 4;
+        let x = layout.origin_x.floor() as i32 - margin;
+        let y = layout.origin_y.floor() as i32 - margin;
+        let width = layout.width.ceil() as i32 + margin * 2;
+        // Include navigation hint area below the menu:
+        // hint_y = layout.height + 4.0, hint_height = font_size * 0.8 + 6.0 * 2.0
+        let hint_extra = 4.0 + layout.font_size * 0.8 + 12.0 + 4.0; // gap + hint + padding
+        let height = (layout.height + hint_extra).ceil() as i32 + margin * 2;
         let width = width.max(1);
         let height = height.max(1);
 
