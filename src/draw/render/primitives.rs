@@ -159,6 +159,7 @@ pub(super) fn render_arrow(
     let right_y = base_y - py * half_base;
 
     // Draw the shaft line, stopping at the arrowhead base to avoid overlap
+    ctx.save().ok();
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
     ctx.set_line_width(thick);
     ctx.set_line_cap(cairo::LineCap::Butt);
@@ -178,4 +179,5 @@ pub(super) fn render_arrow(
     ctx.line_to(right_x, right_y);
     ctx.close_path();
     let _ = ctx.fill();
+    ctx.restore().ok();
 }
