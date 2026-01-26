@@ -17,7 +17,7 @@ impl WaylandState {
         let top_size = top_size(snapshot);
         let side_start_y = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
         let top_bottom_y = Self::INLINE_TOP_Y + self.data.toolbar_top_offset_y + top_size.1 as f64;
-        let base = Self::INLINE_SIDE_X + self.data.toolbar_side_offset_x;
+        let base = Self::INLINE_SIDE_X;
         // When dragging the side toolbar, don't push the top bar; keep its base stable so it
         // doesn't shift while moving the side bar.
         let allow_push = self.active_move_drag_kind() != Some(MoveDragKind::Side);
