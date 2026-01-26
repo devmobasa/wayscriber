@@ -10,7 +10,7 @@ use crate::draw::Color;
 /// Width of the popup panel.
 pub const POPUP_WIDTH: f64 = 300.0;
 /// Height of the popup panel.
-pub const POPUP_HEIGHT: f64 = 320.0;
+pub const POPUP_HEIGHT: f64 = 340.0;
 /// Width of the gradient picker.
 pub const GRADIENT_WIDTH: f64 = 260.0;
 /// Height of the gradient picker.
@@ -48,6 +48,8 @@ pub enum ColorPickerPopupState {
         hex_buffer: String,
         /// Whether we're currently dragging on the gradient.
         dragging: bool,
+        /// Whether the hex text is selected (first keystroke replaces all).
+        hex_selected: bool,
     },
 }
 

@@ -38,6 +38,7 @@ pub fn render_color_picker_popup(
         .color_picker_popup_hex_buffer()
         .unwrap_or("#000000");
     let is_hex_editing = input_state.color_picker_popup_is_hex_editing();
+    let is_hex_selected = input_state.color_picker_popup_hex_selected();
 
     let _ = ctx.save();
 
@@ -103,6 +104,7 @@ pub fn render_color_picker_popup(
         layout.hex_input_h,
         hex_buffer,
         is_hex_editing,
+        is_hex_selected,
     );
 
     // OK button
@@ -126,6 +128,24 @@ pub fn render_color_picker_popup(
         "Cancel",
         false, // secondary
     );
+
+    // Keyboard shortcut hint
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(10.0);
+    ctx.set_source_rgba(0.6, 0.6, 0.65, 0.7);
+    let hint = "Enter = OK  •  Esc = Cancel";
+    let hint_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        10.0,
+        hint,
+    );
+    let hint_x = layout.origin_x + (layout.width - hint_extents.width()) / 2.0;
+    let hint_y = layout.ok_btn_y + layout.btn_height + 12.0;
+    ctx.move_to(hint_x, hint_y);
+    let _ = ctx.show_text(hint);
 
     let _ = ctx.restore();
 }
@@ -225,6 +245,7 @@ fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: C
 }
 
 /// Draw the hex input field.
+#[allow(clippy::too_many_arguments)]
 fn draw_hex_input(
     ctx: &cairo::Context,
     x: f64,
@@ -233,13 +254,21 @@ fn draw_hex_input(
     h: f64,
     value: &str,
     focused: bool,
+    selected: bool,
 ) {
+    // Outer glow when focused
+    if focused {
+        ctx.set_source_rgba(0.3, 0.5, 0.9, 0.2);
+        draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 6.0);
+        let _ = ctx.fill();
+    }
+
     // Background
     constants::set_color(ctx, INPUT_BG);
     draw_rounded_rect(ctx, x, y, w, h, 4.0);
     let _ = ctx.fill();
 
-    // Border
+    // Border - stronger when focused
     if focused {
         constants::set_color(ctx, INPUT_BORDER_FOCUSED);
         ctx.set_line_width(2.0);
@@ -253,7 +282,6 @@ fn draw_hex_input(
     // Text
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     ctx.set_font_size(13.0);
-    constants::set_color(ctx, TEXT_PRIMARY);
 
     let extents = text_extents_for(
         ctx,
@@ -265,10 +293,26 @@ fn draw_hex_input(
     );
     let text_x = x + 8.0;
     let text_y = y + h / 2.0 + extents.height() / 2.0;
+
+    // Draw selection highlight when selected (full text selected)
+    if selected {
+        ctx.set_source_rgba(0.3, 0.5, 0.9, 0.4);
+        draw_rounded_rect(
+            ctx,
+            text_x - 2.0,
+            y + 3.0,
+            extents.width() + 4.0,
+            h - 6.0,
+            2.0,
+        );
+        let _ = ctx.fill();
+    }
+
+    constants::set_color(ctx, TEXT_PRIMARY);
     ctx.move_to(text_x, text_y);
     let _ = ctx.show_text(value);
 
-    // Cursor when focused
+    // Cursor when focused (at end of text)
     if focused {
         constants::set_color(ctx, INPUT_CARET);
         let cursor_x = text_x + extents.width() + 2.0;

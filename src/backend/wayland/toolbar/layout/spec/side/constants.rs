@@ -35,6 +35,13 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SECTION_BOTTOM_PADDING: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SWATCH: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_SWATCH_GAP: f64 = 6.0;
+    // Preview row constants (between gradient picker and swatches)
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PREVIEW_SIZE: f64 = 28.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PREVIEW_GAP_TOP: f64 = 10.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_PREVIEW_GAP_BOTTOM: f64 = 8.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HEX_INPUT_HEIGHT: f64 = 20.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_HEX_INPUT_WIDTH: f64 = 70.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLOR_EXPAND_ICON_SIZE: f64 = 8.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_BOARD_COLOR_DOT_SIZE: f64 = 14.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_LABEL_OFFSET_Y: f64 = 12.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SECTION_LABEL_OFFSET_TALL: f64 = 14.0;

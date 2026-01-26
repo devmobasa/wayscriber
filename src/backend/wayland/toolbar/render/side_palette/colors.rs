@@ -112,8 +112,8 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     draw_color_indicator(ctx, indicator_x, indicator_y, snapshot.color);
 
     // Draw current color preview row (between gradient and swatches)
-    let preview_row_y = picker_y + picker_h + 10.0;
-    let preview_size = 28.0;
+    let preview_row_y = picker_y + picker_h + ToolbarLayoutSpec::SIDE_COLOR_PREVIEW_GAP_TOP;
+    let preview_size = ToolbarLayoutSpec::SIDE_COLOR_PREVIEW_SIZE;
 
     // Draw preview swatch on the left (clickable to open color picker popup)
     let preview_hover = hover
@@ -156,7 +156,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     );
 
     // Draw expand icon overlay in bottom-right corner of swatch
-    let icon_size = 8.0;
+    let icon_size = ToolbarLayoutSpec::SIDE_COLOR_EXPAND_ICON_SIZE;
     let icon_x = x + preview_size - icon_size - 2.0;
     let icon_y = preview_row_y + preview_size - icon_size - 2.0;
     // Dark background circle for visibility on any color
@@ -212,9 +212,9 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     // Hex input background (subtle rounded rect)
     let hex_input_x = x + preview_size + 8.0;
-    let hex_input_h = 20.0; // Fixed height for hex input
+    let hex_input_h = ToolbarLayoutSpec::SIDE_COLOR_HEX_INPUT_HEIGHT;
     let hex_input_y = preview_row_y + (preview_size - hex_input_h) / 2.0; // Center vertically with swatch
-    let hex_input_w = 70.0;
+    let hex_input_w = ToolbarLayoutSpec::SIDE_COLOR_HEX_INPUT_WIDTH;
     let hex_icon_size = 10.0; // Small clipboard icon inside
     let hex_icon_pad = 4.0;
 
@@ -222,20 +222,39 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
         .map(|(hx, hy)| point_in_rect(hx, hy, hex_input_x, hex_input_y, hex_input_w, hex_input_h))
         .unwrap_or(false);
 
-    // Draw hex input background
+    // Draw hex input background with stronger hover state
     if hex_hover {
-        ctx.set_source_rgba(0.3, 0.3, 0.3, 0.8);
+        // Subtle glow on hover
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.06);
+        draw_round_rect(
+            ctx,
+            hex_input_x - 1.0,
+            hex_input_y - 1.0,
+            hex_input_w + 2.0,
+            hex_input_h + 2.0,
+            5.0,
+        );
+        let _ = ctx.fill();
+        ctx.set_source_rgba(0.35, 0.35, 0.4, 0.9);
     } else {
         ctx.set_source_rgba(0.2, 0.2, 0.2, 0.6);
     }
     draw_round_rect(ctx, hex_input_x, hex_input_y, hex_input_w, hex_input_h, 4.0);
     let _ = ctx.fill();
 
+    // Border on hover for clearer affordance
+    if hex_hover {
+        ctx.set_source_rgba(0.5, 0.5, 0.55, 0.6);
+        ctx.set_line_width(1.0);
+        draw_round_rect(ctx, hex_input_x, hex_input_y, hex_input_w, hex_input_h, 4.0);
+        let _ = ctx.stroke();
+    }
+
     // Draw small clipboard icon on the right side (indicates copy)
     let clip_icon_x = hex_input_x + hex_input_w - hex_icon_size - hex_icon_pad;
     let clip_icon_y = hex_input_y + (hex_input_h - hex_icon_size) / 2.0;
     if hex_hover {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.85);
     } else {
         ctx.set_source_rgba(0.6, 0.6, 0.6, 0.5);
     }
@@ -299,7 +318,7 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     });
 
     let mut cx = x;
-    let mut row_y = preview_row_y + preview_size + 8.0;
+    let mut row_y = preview_row_y + preview_size + ToolbarLayoutSpec::SIDE_COLOR_PREVIEW_GAP_BOTTOM;
     for (color, name, action) in basic_colors {
         draw_swatch(ctx, cx, row_y, swatch, *color, *color == snapshot.color);
         let binding = action.and_then(|action| snapshot.binding_hints.binding_for_action(action));

@@ -139,8 +139,9 @@ impl ToolbarLayoutSpec {
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
         let rows = 1.0 + if snapshot.show_more_colors { 1.0 } else { 0.0 };
-        // Preview row height: preview_size (28) + gap to swatches (8) + top gap (10)
-        let preview_row_h = 28.0 + 8.0 + 10.0;
+        let preview_row_h = Self::SIDE_COLOR_PREVIEW_SIZE
+            + Self::SIDE_COLOR_PREVIEW_GAP_TOP
+            + Self::SIDE_COLOR_PREVIEW_GAP_BOTTOM;
         Self::SIDE_COLOR_SECTION_LABEL_HEIGHT
             + Self::SIDE_COLOR_PICKER_INPUT_HEIGHT
             + preview_row_h

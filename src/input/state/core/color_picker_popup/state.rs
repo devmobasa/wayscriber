@@ -36,6 +36,7 @@ impl InputState {
             hex_editing: false,
             hex_buffer: hex,
             dragging: false,
+            hex_selected: false,
         };
 
         self.dirty_tracker.mark_full();
@@ -141,14 +142,18 @@ impl InputState {
         if let ColorPickerPopupState::Open {
             hex_editing,
             hex_buffer,
+            hex_selected,
             current_color,
             ..
         } = &mut self.color_picker_popup_state
         {
             *hex_editing = editing;
-            // When starting to edit, ensure buffer matches current color
+            // When starting to edit, ensure buffer matches current color and select all
             if editing {
                 *hex_buffer = color_to_hex(*current_color);
+                *hex_selected = true; // Auto-select so first keystroke replaces
+            } else {
+                *hex_selected = false;
             }
         }
         self.needs_redraw = true;
@@ -165,11 +170,23 @@ impl InputState {
         )
     }
 
+    /// Returns true if the hex input text is currently selected (replace-on-type).
+    pub fn color_picker_popup_hex_selected(&self) -> bool {
+        matches!(
+            &self.color_picker_popup_state,
+            ColorPickerPopupState::Open {
+                hex_selected: true,
+                ..
+            }
+        )
+    }
+
     /// Appends a character to the hex input buffer.
     pub fn color_picker_popup_hex_append(&mut self, ch: char) {
         let ColorPickerPopupState::Open {
             hex_buffer,
             hex_editing,
+            hex_selected,
             current_color,
             ..
         } = &mut self.color_picker_popup_state
@@ -179,6 +196,12 @@ impl InputState {
 
         if !*hex_editing {
             return;
+        }
+
+        // If text is selected, first keystroke clears the buffer (replaces all)
+        if *hex_selected {
+            hex_buffer.clear();
+            *hex_selected = false;
         }
 
         // Handle # prefix
@@ -214,13 +237,19 @@ impl InputState {
         if let ColorPickerPopupState::Open {
             hex_buffer,
             hex_editing,
+            hex_selected,
             current_color,
             ..
         } = &mut self.color_picker_popup_state
             && *hex_editing
-            && !hex_buffer.is_empty()
         {
-            hex_buffer.pop();
+            // If text is selected, backspace clears all
+            if *hex_selected {
+                hex_buffer.clear();
+                *hex_selected = false;
+            } else if !hex_buffer.is_empty() {
+                hex_buffer.pop();
+            }
             self.needs_redraw = true;
 
             // Try to parse and update color live
