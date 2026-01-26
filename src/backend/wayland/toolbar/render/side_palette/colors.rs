@@ -87,9 +87,9 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     let picker_y = *y + ToolbarLayoutSpec::SIDE_COLOR_PICKER_OFFSET_Y;
     let picker_w = content_width;
-    // Visual height is fixed, but hit region extends further for easier dragging
+    // Visual height is fixed - use it for hit region to avoid overlap with hex input below
     let picker_visual_h = picker_h;
-    let picker_hit_h = layout.spec.side_color_picker_height(snapshot);
+    let picker_hit_h = picker_visual_h;
     draw_color_picker(ctx, x, picker_y, picker_w, picker_visual_h);
     hits.push(HitRegion {
         rect: (x, picker_y, picker_w, picker_hit_h),
