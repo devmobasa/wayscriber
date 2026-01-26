@@ -116,6 +116,7 @@ impl InputState {
             toolbar_top_pinned: true,
             toolbar_side_pinned: true,
             toolbar_use_icons: true, // Default to icon mode
+            toolbar_scale: 1.0,
             toolbar_layout_mode: crate::config::ToolbarLayoutMode::Regular,
             toolbar_mode_overrides: crate::config::ToolbarModeOverrides::default(),
             toolbar_shapes_expanded: false,

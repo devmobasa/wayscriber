@@ -65,6 +65,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.top_pinned,
         config.ui.toolbar.side_pinned,
         config.ui.toolbar.use_icons,
+        config.ui.toolbar.scale,
         config.ui.toolbar.show_more_colors,
         config.ui.toolbar.show_actions_section,
         config.ui.toolbar.show_actions_advanced,

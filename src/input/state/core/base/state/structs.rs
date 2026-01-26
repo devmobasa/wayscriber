@@ -144,6 +144,8 @@ pub struct InputState {
     pub toolbar_side_pinned: bool,
     /// Whether to use icons instead of text labels in toolbars
     pub toolbar_use_icons: bool,
+    /// Scale factor for toolbar UI (icons + layout)
+    pub toolbar_scale: f64,
     /// Current toolbar layout complexity
     pub toolbar_layout_mode: crate::config::ToolbarLayoutMode,
     /// Optional per-mode overrides for toolbar sections

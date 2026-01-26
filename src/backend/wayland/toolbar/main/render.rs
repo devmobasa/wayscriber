@@ -7,6 +7,7 @@ impl ToolbarSurfaceManager {
     pub fn render(&mut self, shm: &Shm, snapshot: &ToolbarSnapshot, hover: Option<(f64, f64)>) {
         // Render top toolbar if visible
         if self.is_top_visible() {
+            self.top.set_ui_scale(snapshot.toolbar_scale);
             let top_hover = hover.or(self.top_hover).or(self.top.focused_hover());
             let top_hover_start = self.top_hover_start;
             if let Err(err) = self.top.render(
@@ -26,6 +27,7 @@ impl ToolbarSurfaceManager {
 
         // Render side toolbar if visible
         if self.is_side_visible() {
+            self.side.set_ui_scale(snapshot.toolbar_scale);
             let side_hover = hover.or(self.side_hover).or(self.side.focused_hover());
             let side_hover_start = self.side_hover_start;
             if let Err(err) = self.side.render(

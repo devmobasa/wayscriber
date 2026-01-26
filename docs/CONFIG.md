@@ -383,6 +383,9 @@ side_pinned = true
 # Use icons instead of text labels in toolbars
 use_icons = true
 
+# Scale factor for toolbar UI (icons + layout)
+scale = 1.0
+
 # Show extended color palette in the top toolbar
 show_more_colors = false
 
@@ -437,6 +440,7 @@ force_inline = false
 
 **Behavior:**
 - **Icon/text mode**: `use_icons` switches between compact icons and labeled buttons.
+- **Scale**: `scale` multiplies toolbar UI sizing (useful for HiDPI when output scale=1).
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
 - **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.

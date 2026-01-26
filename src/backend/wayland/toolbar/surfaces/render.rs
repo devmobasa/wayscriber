@@ -91,18 +91,39 @@ impl ToolbarSurface {
 
         self.hit_regions.clear();
         if !self.suppressed {
+            // Sanitize ui_scale: handle NaN/Inf and enforce bounds
+            let ui_scale = if self.ui_scale.is_finite() {
+                self.ui_scale.clamp(0.5, 3.0)
+            } else {
+                1.0
+            };
+            let (logical_w, logical_h) =
+                (self.width as f64 / ui_scale, self.height as f64 / ui_scale);
+            let hover_scaled = hover.map(|(x, y)| (x / ui_scale, y / ui_scale));
             if self.scale > 1 {
                 ctx.scale(self.scale as f64, self.scale as f64);
             }
+            if (ui_scale - 1.0).abs() > f64::EPSILON {
+                ctx.scale(ui_scale, ui_scale);
+            }
             render_fn(
                 &ctx,
-                self.width as f64,
-                self.height as f64,
+                logical_w,
+                logical_h,
                 snapshot,
                 &mut self.hit_regions,
-                hover,
+                hover_scaled,
                 hover_start,
             )?;
+
+            if (ui_scale - 1.0).abs() > f64::EPSILON {
+                for hit in &mut self.hit_regions {
+                    hit.rect.0 *= ui_scale;
+                    hit.rect.1 *= ui_scale;
+                    hit.rect.2 *= ui_scale;
+                    hit.rect.3 *= ui_scale;
+                }
+            }
         }
 
         surface.flush();

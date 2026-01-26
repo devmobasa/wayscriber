@@ -43,6 +43,7 @@ impl InputState {
         top_pinned: bool,
         side_pinned: bool,
         use_icons: bool,
+        scale: f64,
         show_more_colors: bool,
         show_actions_section: bool,
         show_actions_advanced: bool,
@@ -64,6 +65,7 @@ impl InputState {
         self.toolbar_side_visible = side_pinned;
         self.toolbar_visible = top_pinned || side_pinned;
         self.toolbar_use_icons = use_icons;
+        self.toolbar_scale = scale;
         self.toolbar_layout_mode = layout_mode;
         self.toolbar_mode_overrides = mode_overrides;
         self.show_more_colors = show_more_colors;

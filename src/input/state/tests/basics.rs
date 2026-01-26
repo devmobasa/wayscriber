@@ -143,6 +143,7 @@ fn toolbar_toggle_handles_partial_visibility() {
         true,  // top_pinned
         false, // side_pinned
         true,  // use_icons
+        1.0,   // scale
         false, // show_more_colors
         true,  // show_actions_section
         false, // show_actions_advanced

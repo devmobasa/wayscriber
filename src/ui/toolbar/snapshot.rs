@@ -86,6 +86,8 @@ pub struct ToolbarSnapshot {
     pub side_pinned: bool,
     /// Whether to use icons instead of text labels
     pub use_icons: bool,
+    /// Scale factor for toolbar UI (icons + layout)
+    pub toolbar_scale: f64,
     /// Current toolbar layout mode
     pub layout_mode: ToolbarLayoutMode,
     /// Whether to show extended color palette
@@ -282,6 +284,7 @@ impl ToolbarSnapshot {
             top_pinned: state.toolbar_top_pinned,
             side_pinned: state.toolbar_side_pinned,
             use_icons: state.toolbar_use_icons,
+            toolbar_scale: state.toolbar_scale,
             layout_mode: state.toolbar_layout_mode,
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,

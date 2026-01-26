@@ -29,6 +29,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_toolbar_use_icons")]
     pub use_icons: bool,
 
+    /// Scale factor for toolbar UI (icons + layout). 1.0 = default.
+    #[serde(default = "default_toolbar_scale")]
+    pub scale: f64,
+
     /// Show extended color palette
     #[serde(default = "default_show_more_colors")]
     pub show_more_colors: bool,
@@ -114,6 +118,7 @@ impl Default for ToolbarConfig {
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
             use_icons: default_toolbar_use_icons(),
+            scale: default_toolbar_scale(),
             show_more_colors: default_show_more_colors(),
             show_actions_section: default_show_actions_section(),
             show_actions_advanced: default_show_actions_advanced(),
@@ -147,6 +152,10 @@ fn default_toolbar_side_pinned() -> bool {
 
 fn default_toolbar_use_icons() -> bool {
     true
+}
+
+fn default_toolbar_scale() -> f64 {
+    1.0
 }
 
 fn default_toolbar_layout_mode() -> ToolbarLayoutMode {
