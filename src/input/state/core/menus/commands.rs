@@ -153,6 +153,14 @@ impl InputState {
                 }
                 self.close_context_menu();
             }
+            MenuCommand::SwitchToPage(index) => {
+                self.switch_to_page(index);
+                self.close_context_menu();
+            }
+            MenuCommand::OpenBoardPicker => {
+                self.close_context_menu();
+                self.toggle_board_picker();
+            }
             MenuCommand::BoardPrev => {
                 self.switch_board_prev();
                 self.close_context_menu();
@@ -192,6 +200,10 @@ impl InputState {
             MenuCommand::ToggleHelp => {
                 self.toggle_help_overlay();
                 self.close_context_menu();
+            }
+            MenuCommand::OpenCommandPalette => {
+                self.close_context_menu();
+                self.toggle_command_palette();
             }
             MenuCommand::OpenConfigFile => {
                 self.open_config_file_default();

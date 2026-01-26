@@ -4,6 +4,7 @@ mod focus;
 mod hover;
 mod layout;
 mod lifecycle;
+mod shortcuts;
 mod types;
 
 pub use types::{

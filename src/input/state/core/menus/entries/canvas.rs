@@ -1,5 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::types::{ContextMenuEntry, MenuCommand};
+use crate::config::Action;
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
 impl InputState {
@@ -26,24 +27,17 @@ impl InputState {
         let clear_disabled = !has_unlocked;
         entries.push(ContextMenuEntry::new(
             clear_label,
-            Some("E"),
+            self.shortcut_for_action(Action::ClearCanvas),
             false,
             clear_disabled,
             Some(MenuCommand::ClearAll),
         ));
         entries.push(ContextMenuEntry::new(
             "Toggle Highlight (tool + click)",
-            Some("Ctrl+Alt+H"),
+            self.shortcut_for_action(Action::ToggleHighlightTool),
             false,
             false,
             Some(MenuCommand::ToggleHighlightTool),
-        ));
-        entries.push(ContextMenuEntry::new(
-            "Pages",
-            None::<String>,
-            true,
-            false,
-            Some(MenuCommand::OpenPagesMenu),
         ));
         entries.push(ContextMenuEntry::new(
             "Boards",
@@ -51,6 +45,13 @@ impl InputState {
             true,
             false,
             Some(MenuCommand::OpenBoardsMenu),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Pages",
+            None::<String>,
+            true,
+            false,
+            Some(MenuCommand::OpenPagesMenu),
         ));
 
         // Quick board switching options
@@ -62,7 +63,7 @@ impl InputState {
             if has_whiteboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Whiteboard",
-                    Some("Ctrl+W"),
+                    self.shortcut_for_action(Action::ToggleWhiteboard),
                     false,
                     false,
                     Some(MenuCommand::SwitchToWhiteboard),
@@ -71,7 +72,7 @@ impl InputState {
             if has_blackboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Blackboard",
-                    Some("Ctrl+B"),
+                    self.shortcut_for_action(Action::ToggleBlackboard),
                     false,
                     false,
                     Some(MenuCommand::SwitchToBlackboard),
@@ -80,7 +81,7 @@ impl InputState {
         } else {
             entries.push(ContextMenuEntry::new(
                 "Return to Transparent",
-                Some("Ctrl+Shift+T"),
+                self.shortcut_for_action(Action::ReturnToTransparent),
                 false,
                 false,
                 Some(MenuCommand::ReturnToTransparent),
@@ -88,7 +89,7 @@ impl InputState {
             if current_id == BOARD_ID_WHITEBOARD && has_blackboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Blackboard",
-                    Some("Ctrl+B"),
+                    self.shortcut_for_action(Action::ToggleBlackboard),
                     false,
                     false,
                     Some(MenuCommand::SwitchToBlackboard),
@@ -96,7 +97,7 @@ impl InputState {
             } else if current_id == BOARD_ID_BLACKBOARD && has_whiteboard {
                 entries.push(ContextMenuEntry::new(
                     "Switch to Whiteboard",
-                    Some("Ctrl+W"),
+                    self.shortcut_for_action(Action::ToggleWhiteboard),
                     false,
                     false,
                     Some(MenuCommand::SwitchToWhiteboard),
@@ -105,8 +106,15 @@ impl InputState {
         }
 
         entries.push(ContextMenuEntry::new(
+            "Command Palette",
+            self.shortcut_for_action(Action::ToggleCommandPalette),
+            false,
+            false,
+            Some(MenuCommand::OpenCommandPalette),
+        ));
+        entries.push(ContextMenuEntry::new(
             "Help",
-            Some("F1"),
+            self.shortcut_for_action(Action::ToggleHelp),
             false,
             false,
             Some(MenuCommand::ToggleHelp),

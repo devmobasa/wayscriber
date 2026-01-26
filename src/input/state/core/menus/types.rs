@@ -43,7 +43,9 @@ pub enum MenuCommand {
     PageNew,
     PageDuplicate,
     PageDelete,
+    SwitchToPage(usize),
     OpenBoardsMenu,
+    OpenBoardPicker,
     BoardPrev,
     BoardNext,
     BoardNew,
@@ -54,6 +56,7 @@ pub enum MenuCommand {
     SwitchToBlackboard,
     ReturnToTransparent,
     ToggleHelp,
+    OpenCommandPalette,
     OpenConfigFile,
 }
 

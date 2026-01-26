@@ -73,6 +73,15 @@ impl BoardPages {
         }
     }
 
+    pub fn switch_to_page(&mut self, index: usize) -> bool {
+        if index < self.pages.len() && index != self.active {
+            self.active = index;
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn new_page(&mut self) {
         self.pages.push(Frame::new());
         self.active = self.pages.len() - 1;
