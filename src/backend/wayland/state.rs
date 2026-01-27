@@ -94,7 +94,7 @@ type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_scr
 pub(super) use helpers::{
     damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
     force_inline_toolbars_requested, scale_damage_regions, surface_id,
-    toolbar_drag_preview_enabled, toolbar_pointer_lock_enabled,
+    toolbar_drag_preview_enabled, toolbar_drag_throttle_interval, toolbar_pointer_lock_enabled,
 };
 
 pub(in crate::backend::wayland) struct WaylandGlobals {
@@ -175,6 +175,7 @@ pub(super) struct WaylandState {
     pub(super) locked_pointer: Option<ZwpLockedPointerV1>,
     pub(super) current_pointer_shape: Option<CursorIcon>,
     pub(super) relative_pointer: Option<ZwpRelativePointerV1>,
+    pub(super) cursor_hidden: bool,
 
     // Tablet / stylus (feature-gated)
     #[cfg(tablet)]

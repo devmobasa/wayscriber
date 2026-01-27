@@ -100,6 +100,7 @@ impl WaylandState {
             current_pointer_shape: None,
             locked_pointer: None,
             relative_pointer: None,
+            cursor_hidden: false,
             #[cfg(tablet)]
             tablet_manager,
             #[cfg(tablet)]

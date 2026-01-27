@@ -1,4 +1,5 @@
 use super::*;
+use wayland_client::Proxy;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn pointer_lock_active(&self) -> bool {
@@ -11,16 +12,18 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
         surface: &wl_surface::WlSurface,
     ) {
+        drag_log(format!(
+            "lock_pointer_for_drag: inline_active={}, locked={}, surface={}",
+            self.inline_toolbars_active(),
+            self.pointer_lock_active(),
+            surface_id(surface)
+        ));
         if !toolbar_pointer_lock_enabled() {
             log::info!("skip pointer lock: disabled via WAYSCRIBER_TOOLBAR_POINTER_LOCK");
             return;
         }
-        if self.inline_toolbars_active() || self.pointer_lock_active() {
-            log::info!(
-                "skip pointer lock: inline_active={}, already_locked={}",
-                self.inline_toolbars_active(),
-                self.pointer_lock_active()
-            );
+        if self.pointer_lock_active() {
+            log::info!("skip pointer lock: already_locked");
             return;
         }
         if self.pointer_constraints_state.bound_global().is_err() {
@@ -41,17 +44,26 @@ impl WaylandState {
         ) {
             Ok(lp) => {
                 self.locked_pointer = Some(lp);
-                log::info!(
+                drag_log(format!(
                     "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
                     self.current_seat_id(),
                     surface_id(surface),
                     pointer.id().protocol_id()
-                );
+                ));
             }
             Err(err) => {
                 warn!("Failed to lock pointer for toolbar drag: {}", err);
                 return;
             }
+        }
+
+        // Hide the cursor while dragging with pointer lock to avoid visual jitter.
+        if pointer
+            .data::<PointerData>()
+            .and_then(|data| data.latest_button_serial().or(data.latest_enter_serial()))
+            .is_some()
+        {
+            self.hide_pointer_cursor();
         }
 
         match self
@@ -60,7 +72,7 @@ impl WaylandState {
         {
             Ok(rp) => {
                 self.relative_pointer = Some(rp);
-                log::info!("relative pointer bound for drag");
+                drag_log("relative pointer bound for drag");
             }
             Err(err) => {
                 warn!("Failed to obtain relative pointer for drag: {}", err);
@@ -71,6 +83,13 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn unlock_pointer(&mut self) {
+        if self.locked_pointer.is_some() || self.relative_pointer.is_some() {
+            drag_log(format!(
+                "unlock pointer: locked={}, relative={}",
+                self.locked_pointer.is_some(),
+                self.relative_pointer.is_some()
+            ));
+        }
         if let Some(lp) = self.locked_pointer.take() {
             lp.destroy();
         }

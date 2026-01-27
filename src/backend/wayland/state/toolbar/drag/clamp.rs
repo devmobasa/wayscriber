@@ -1,6 +1,43 @@
+use std::time::Instant;
+
 use super::*;
 
 impl WaylandState {
+    fn toolbar_drag_should_apply(&mut self) -> bool {
+        let Some(interval) = toolbar_drag_throttle_interval() else {
+            return true;
+        };
+        let now = Instant::now();
+        let should_apply = match self.data.last_toolbar_drag_apply {
+            Some(last) => now.duration_since(last) >= interval,
+            None => true,
+        };
+        if should_apply {
+            self.data.last_toolbar_drag_apply = Some(now);
+        }
+        should_apply
+    }
+
+    pub(in crate::backend::wayland::state::toolbar) fn apply_toolbar_offsets_throttled(
+        &mut self,
+        snapshot: &ToolbarSnapshot,
+    ) {
+        if self.toolbar_drag_preview_active() || toolbar_drag_throttle_interval().is_none() {
+            let _ = self.apply_toolbar_offsets(snapshot);
+            self.data.toolbar_drag_pending_apply = false;
+            self.data.last_toolbar_drag_apply = Some(Instant::now());
+            return;
+        }
+
+        if self.toolbar_drag_should_apply() {
+            let _ = self.apply_toolbar_offsets(snapshot);
+            self.data.toolbar_drag_pending_apply = false;
+        } else {
+            let _ = self.clamp_toolbar_offsets(snapshot);
+            self.data.toolbar_drag_pending_apply = true;
+        }
+    }
+
     pub(in crate::backend::wayland::state::toolbar) fn clamp_toolbar_offsets(
         &mut self,
         snapshot: &ToolbarSnapshot,

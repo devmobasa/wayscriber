@@ -153,6 +153,12 @@ impl WaylandState {
             return false;
         }
         if let Some((intent, drag)) = self.inline_toolbar_hit_at(position) {
+            if drag {
+                drag_log(format!(
+                    "inline press: drag_start pos=({:.3}, {:.3})",
+                    position.0, position.1
+                ));
+            }
             self.set_toolbar_dragging(drag);
             let evt = intent_to_event(intent, self.toolbar.last_snapshot());
             self.handle_toolbar_event(evt);
@@ -206,6 +212,13 @@ impl WaylandState {
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
             }
+            drag_log(format!(
+                "inline release: pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
+                position.0,
+                position.1,
+                self.toolbar_dragging(),
+                self.pointer_over_toolbar()
+            ));
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);
             self.end_toolbar_move_drag();
