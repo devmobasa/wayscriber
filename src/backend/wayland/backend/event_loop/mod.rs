@@ -1,3 +1,4 @@
+use crate::notification;
 use log::{info, warn};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -84,8 +85,9 @@ pub(super) fn run_event_loop(
         let now = Instant::now();
         let animation_timeout = state.ui_animation_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
+        let focus_exit_timeout = state.focus_exit_timeout(now);
         let timeout = if should_block {
-            autosave_timeout
+            min_timeout(autosave_timeout, focus_exit_timeout)
         } else if !vsync_enabled && state.input_state.needs_redraw {
             // When VSync is off and we need to redraw, wake up when frame budget allows
             let frame_cap_timeout = render::frame_rate_cap_timeout(
@@ -99,9 +101,12 @@ pub(super) fn run_event_loop(
                 (Some(fc), None) => Some(fc),
                 (None, _) => Some(Duration::ZERO),
             };
-            min_timeout(merged, autosave_timeout)
+            min_timeout(merged, min_timeout(autosave_timeout, focus_exit_timeout))
         } else {
-            min_timeout(animation_timeout, autosave_timeout)
+            min_timeout(
+                animation_timeout,
+                min_timeout(autosave_timeout, focus_exit_timeout),
+            )
         };
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
             warn!("Event queue error: {}", e);
@@ -113,6 +118,20 @@ pub(super) fn run_event_loop(
         if state.input_state.should_exit {
             info!("Exit requested after dispatch, breaking event loop");
             break;
+        }
+        if state.surface.is_xdg_window()
+            && !state.has_keyboard_focus()
+            && state.focus_exit_suppression_expired(Instant::now())
+        {
+            warn!("Keyboard focus not restored after clipboard action; exiting overlay");
+            state.clear_focus_exit_suppression();
+            notification::send_notification_async(
+                &state.tokio_handle,
+                "Wayscriber lost focus".to_string(),
+                "GNOME could not keep the overlay focused; closing fallback window.".to_string(),
+                Some("dialog-warning".to_string()),
+            );
+            state.input_state.should_exit = true;
         }
         // Adjust keyboard interactivity if toolbar visibility changed.
         state.sync_toolbar_visibility(qh);

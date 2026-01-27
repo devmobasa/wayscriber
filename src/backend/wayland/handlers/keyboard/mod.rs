@@ -26,6 +26,7 @@ impl KeyboardHandler for WaylandState {
     ) {
         debug!("Keyboard focus entered");
         self.set_keyboard_focus(true);
+        self.clear_focus_exit_suppression();
         self.set_last_activation_serial(Some(serial));
         self.maybe_retry_activation(qh);
         if let Some(target) = self.toolbar.focus_target_for_surface(surface) {
@@ -43,7 +44,7 @@ impl KeyboardHandler for WaylandState {
     fn leave(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _surface: &wl_surface::WlSurface,
         _serial: u32,
@@ -59,6 +60,12 @@ impl KeyboardHandler for WaylandState {
         // and breaking shortcuts/tools, aggressively reset our modifier state on
         // focus loss.
         self.input_state.reset_modifiers();
+
+        if self.surface.is_xdg_window() && self.focus_exit_suppressed() {
+            warn!("Keyboard focus lost in xdg fallback; suppressing exit after clipboard action");
+            self.request_xdg_activation(qh);
+            return;
+        }
 
         if self.surface.is_xdg_window() {
             warn!("Keyboard focus lost in xdg fallback; exiting overlay");

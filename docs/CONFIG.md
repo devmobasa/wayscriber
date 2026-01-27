@@ -944,8 +944,10 @@ These override behavior at runtime. Bool-ish values treat anything except `0`, `
 - `WAYSCRIBER_CONFIGURATOR=/path/to/wayscriber-configurator` overrides the configurator executable path
 - `WAYSCRIBER_FORCE_INLINE_TOOLBARS=1` forces inline toolbars on Wayland (default: off)
 - `WAYSCRIBER_TOOLBAR_DRAG_PREVIEW=0` disables inline toolbar drag preview (default: on)
-- `WAYSCRIBER_TOOLBAR_POINTER_LOCK=1` enables pointer-lock drag path (experimental; default: off)
+- `WAYSCRIBER_TOOLBAR_POINTER_LOCK=1` enables pointer-lock drag path (experimental; default: on)
+- `WAYSCRIBER_TOOLBAR_DRAG_THROTTLE_MS=12` throttles toolbar drag updates (default: 12; set 0 to disable)
 - `WAYSCRIBER_DEBUG_TOOLBAR_DRAG=1` enables toolbar drag logging (default: off)
+- `WAYSCRIBER_DEBUG_TOOLBAR_COLOR=1` enables toolbar color picker logging (default: off)
 - `WAYSCRIBER_DEBUG_DAMAGE=1` enables damage region logging (default: off)
 - `WAYSCRIBER_XDG_OUTPUT=...` forces GNOME fallback overlays onto a specific output (overrides `ui.preferred_output`)
 - `WAYSCRIBER_XDG_FULLSCREEN=1` requests fullscreen GNOME fallback overlays (overrides `ui.xdg_fullscreen`)
