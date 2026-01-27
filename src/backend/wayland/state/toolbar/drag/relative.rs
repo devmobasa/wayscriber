@@ -24,7 +24,7 @@ impl WaylandState {
             }
         }
 
-        let _ = self.apply_toolbar_offsets(&snapshot);
+        self.apply_toolbar_offsets_throttled(&snapshot);
 
         drag_log(format!(
             "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
@@ -51,6 +51,12 @@ impl WaylandState {
             self.data.active_drag_kind = None;
             self.data.drag_top_base_x = None;
             self.data.drag_top_base_y = None;
+            self.data.last_toolbar_drag_apply = None;
+            if self.data.toolbar_drag_pending_apply {
+                let snapshot = self.toolbar_snapshot();
+                let _ = self.apply_toolbar_offsets(&snapshot);
+                self.data.toolbar_drag_pending_apply = false;
+            }
             if self.toolbar_drag_preview_active() {
                 drag_log("disable inline drag preview (restore layer-shell toolbars)");
                 // Turn off preview first so apply_toolbar_offsets can update layer-surface margins.

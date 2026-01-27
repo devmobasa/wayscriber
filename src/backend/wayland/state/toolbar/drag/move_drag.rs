@@ -41,6 +41,8 @@ impl WaylandState {
                 last_coord: coord,
                 coord_is_screen,
             });
+            self.data.toolbar_drag_pending_apply = false;
+            self.data.last_toolbar_drag_apply = None;
             // Freeze base positions so the other toolbar doesn't push while dragging.
             let snapshot = self.toolbar_snapshot();
             self.data.drag_top_base_x = Some(self.inline_top_base_x(&snapshot));
@@ -117,7 +119,7 @@ impl WaylandState {
             });
 
             // Clamp offsets; applying layer-surface margins is skipped while preview is active.
-            let _ = self.apply_toolbar_offsets(&snapshot);
+            self.apply_toolbar_offsets_throttled(&snapshot);
 
             let inline_render_active = self.inline_toolbars_render_active();
             if inline_render_active {
@@ -199,7 +201,7 @@ impl WaylandState {
             last_coord: effective_coord,
             coord_is_screen: true,
         });
-        let _ = self.apply_toolbar_offsets(&snapshot);
+        self.apply_toolbar_offsets_throttled(&snapshot);
         let inline_render_active = self.inline_toolbars_render_active();
         if inline_render_active {
             self.toolbar.mark_dirty();
@@ -287,7 +289,7 @@ impl WaylandState {
             last_coord: screen_coord,
             coord_is_screen: true,
         });
-        let _ = self.apply_toolbar_offsets(&snapshot);
+        self.apply_toolbar_offsets_throttled(&snapshot);
         let inline_render_active = self.inline_toolbars_render_active();
         if inline_render_active {
             self.toolbar.mark_dirty();
