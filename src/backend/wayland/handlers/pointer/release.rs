@@ -81,8 +81,7 @@ impl WaylandState {
             self.set_toolbar_dragging(false);
             drag_log(format!(
                 "pointer release: main surface end drag, pos=({:.3}, {:.3})",
-                event.position.0,
-                event.position.1
+                event.position.0, event.position.1
             ));
             self.end_toolbar_move_drag();
             self.unlock_pointer();

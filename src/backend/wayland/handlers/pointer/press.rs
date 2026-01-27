@@ -2,8 +2,8 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 use wayland_client::QueueHandle;
 
-use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::backend::wayland::state::drag_log;
+use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::ui::toolbar::ToolbarEvent;
 
