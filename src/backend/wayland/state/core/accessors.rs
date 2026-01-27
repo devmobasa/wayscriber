@@ -1,4 +1,5 @@
 use super::super::*;
+use std::time::{Duration, Instant};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn current_mouse(&self) -> (i32, i32) {
@@ -67,6 +68,32 @@ impl WaylandState {
         interactivity: Option<KeyboardInteractivity>,
     ) {
         self.data.current_keyboard_interactivity = interactivity;
+    }
+
+    pub(in crate::backend::wayland) fn suppress_focus_exit_for(&mut self, duration: Duration) {
+        self.data.suppress_focus_exit_until = Some(Instant::now() + duration);
+    }
+
+    pub(in crate::backend::wayland) fn focus_exit_suppressed(&self) -> bool {
+        self.data
+            .suppress_focus_exit_until
+            .is_some_and(|until| Instant::now() <= until)
+    }
+
+    pub(in crate::backend::wayland) fn focus_exit_timeout(&self, now: Instant) -> Option<Duration> {
+        self.data
+            .suppress_focus_exit_until
+            .and_then(|until| (until > now).then(|| until.saturating_duration_since(now)))
+    }
+
+    pub(in crate::backend::wayland) fn focus_exit_suppression_expired(&self, now: Instant) -> bool {
+        self.data
+            .suppress_focus_exit_until
+            .is_some_and(|until| now >= until)
+    }
+
+    pub(in crate::backend::wayland) fn clear_focus_exit_suppression(&mut self) {
+        self.data.suppress_focus_exit_until = None;
     }
 
     pub(in crate::backend::wayland) fn frozen_enabled(&self) -> bool {

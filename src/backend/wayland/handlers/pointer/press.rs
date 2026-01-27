@@ -59,7 +59,7 @@ impl WaylandState {
                     event.position.1,
                     surface_id(&event.surface)
                 ));
-                if self.toolbar_dragging() {
+                if self.is_move_dragging() {
                     self.lock_pointer_for_drag(qh, &event.surface);
                 }
                 return;

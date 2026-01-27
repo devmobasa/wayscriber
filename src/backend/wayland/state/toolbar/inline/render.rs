@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::wayland::toolbar::events::HitKind;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn render_inline_toolbars(
@@ -80,6 +81,10 @@ impl WaylandState {
             for hit in &mut self.data.inline_top_hits {
                 hit.rect.0 += top_offset.0;
                 hit.rect.1 += top_offset.1;
+                if let HitKind::PickColor { x, y, .. } = &mut hit.kind {
+                    *x += top_offset.0;
+                    *y += top_offset.1;
+                }
             }
             self.data.inline_top_rect = Some((
                 top_offset.0,
@@ -116,6 +121,10 @@ impl WaylandState {
             for hit in &mut self.data.inline_side_hits {
                 hit.rect.0 += side_offset.0;
                 hit.rect.1 += side_offset.1;
+                if let HitKind::PickColor { x, y, .. } = &mut hit.kind {
+                    *x += side_offset.0;
+                    *y += side_offset.1;
+                }
             }
             self.data.inline_side_rect = Some((
                 side_offset.0,

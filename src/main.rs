@@ -93,15 +93,22 @@ fn resolve_log_target() -> LogFileTarget {
         if !treat_as_dir && let Ok(metadata) = fs::metadata(&expanded) {
             treat_as_dir = metadata.is_dir();
         }
+        let append_date = if treat_as_dir {
+            true
+        } else {
+            expanded.extension().is_none()
+        };
         return LogFileTarget {
             base: expanded,
             treat_as_dir,
+            append_date,
         };
     }
 
     LogFileTarget {
         base: paths::log_dir(),
         treat_as_dir: true,
+        append_date: true,
     }
 }
 
@@ -112,12 +119,16 @@ fn current_log_date() -> String {
 struct LogFileTarget {
     base: PathBuf,
     treat_as_dir: bool,
+    append_date: bool,
 }
 
 impl LogFileTarget {
     fn path_for_date(&self, date: &str) -> PathBuf {
         if self.treat_as_dir {
             return self.base.join(format!("wayscriber-{}.log", date));
+        }
+        if !self.append_date {
+            return self.base.clone();
         }
 
         let file_name = dated_log_file_name(&self.base, date);
