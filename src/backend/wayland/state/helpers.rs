@@ -110,13 +110,13 @@ pub(in crate::backend::wayland) fn toolbar_drag_throttle_interval() -> Option<Du
     static VALUE: OnceLock<Option<Duration>> = OnceLock::new();
     *VALUE.get_or_init(|| {
         let raw =
-            std::env::var("WAYSCRIBER_TOOLBAR_DRAG_THROTTLE_MS").unwrap_or_else(|_| "16".into());
+            std::env::var("WAYSCRIBER_TOOLBAR_DRAG_THROTTLE_MS").unwrap_or_else(|_| "12".into());
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return Some(Duration::from_millis(16));
+            return Some(Duration::from_millis(12));
         }
         let Ok(ms) = trimmed.parse::<u64>() else {
-            return Some(Duration::from_millis(16));
+            return Some(Duration::from_millis(12));
         };
         if ms == 0 {
             None
