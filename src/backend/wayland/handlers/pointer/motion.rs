@@ -3,6 +3,7 @@ use smithay_client_toolkit::seat::pointer::PointerEvent;
 use wayland_client::Connection;
 
 use crate::backend::wayland::toolbar_intent::intent_to_event;
+use crate::backend::wayland::state::drag_log;
 
 use super::*;
 
@@ -17,6 +18,14 @@ impl WaylandState {
         if self.is_move_dragging()
             && let Some(kind) = self.active_move_drag_kind()
         {
+            drag_log(format!(
+                "pointer motion: drag_active kind={:?}, pos=({:.3}, {:.3}), on_toolbar={}, inline_active={}",
+                kind,
+                event.position.0,
+                event.position.1,
+                on_toolbar,
+                inline_active
+            ));
             debug!(
                 "Move drag motion: kind={:?}, pos=({}, {}), on_toolbar={}",
                 kind, event.position.0, event.position.1, on_toolbar

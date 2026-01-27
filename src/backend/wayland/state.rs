@@ -175,6 +175,7 @@ pub(super) struct WaylandState {
     pub(super) locked_pointer: Option<ZwpLockedPointerV1>,
     pub(super) current_pointer_shape: Option<CursorIcon>,
     pub(super) relative_pointer: Option<ZwpRelativePointerV1>,
+    pub(super) cursor_hidden: bool,
 
     // Tablet / stylus (feature-gated)
     #[cfg(tablet)]

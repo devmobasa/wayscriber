@@ -13,11 +13,15 @@ impl WaylandState {
                 && !self.inline_toolbars_active()
                 && !self.toolbar_drag_preview_active()
             {
-                drag_log("enable inline drag preview (layer-shell toolbars hidden)");
-                self.set_toolbar_drag_preview_active(true);
-                self.toolbar.set_suppressed(&self.compositor_state, true);
-                self.input_state.dirty_tracker.mark_full();
-                self.input_state.needs_redraw = true;
+                if self.pointer_lock_active() {
+                    drag_log("skip inline drag preview (pointer locked)");
+                } else {
+                    drag_log("enable inline drag preview (layer-shell toolbars hidden)");
+                    self.set_toolbar_drag_preview_active(true);
+                    self.toolbar.set_suppressed(&self.compositor_state, true);
+                    self.input_state.dirty_tracker.mark_full();
+                    self.input_state.needs_redraw = true;
+                }
             }
             log::debug!(
                 "Begin toolbar move drag: kind={:?}, coord=({:.3}, {:.3}), coord_is_screen={}",
@@ -45,8 +49,27 @@ impl WaylandState {
             self.data.last_toolbar_drag_apply = None;
             // Freeze base positions so the other toolbar doesn't push while dragging.
             let snapshot = self.toolbar_snapshot();
-            self.data.drag_top_base_x = Some(self.inline_top_base_x(&snapshot));
-            self.data.drag_top_base_y = Some(self.inline_top_base_y());
+            let top_base_x = self.inline_top_base_x(&snapshot);
+            let top_base_y = self.inline_top_base_y();
+            let side_base_x = Self::SIDE_BASE_MARGIN_LEFT + self.data.toolbar_side_offset_x;
+            let side_base_y = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
+            drag_log(format!(
+                "begin move drag snapshot: kind={:?}, top_base=({:.3}, {:.3}), side_base=({:.3}, {:.3}), offsets=({}, {})/({}, {}), size=({}, {}), scale={}",
+                kind,
+                top_base_x,
+                top_base_y,
+                side_base_x,
+                side_base_y,
+                self.data.toolbar_top_offset,
+                self.data.toolbar_top_offset_y,
+                self.data.toolbar_side_offset_x,
+                self.data.toolbar_side_offset,
+                self.surface.width(),
+                self.surface.height(),
+                self.surface.scale()
+            ));
+            self.data.drag_top_base_x = Some(top_base_x);
+            self.data.drag_top_base_y = Some(top_base_y);
         }
         self.data.active_drag_kind = Some(kind);
         self.set_toolbar_dragging(true);
@@ -67,6 +90,16 @@ impl WaylandState {
             ));
             return;
         }
+        drag_log(format!(
+            "handle_toolbar_move_local: kind={:?}, local_coord=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
+            kind,
+            local_coord.0,
+            local_coord.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
+        ));
         // For layer-shell surfaces, use local coordinates directly since they're
         // consistent within the toolbar surface. Only convert to screen coords
         // when transitioning to/from main surface.
@@ -153,6 +186,22 @@ impl WaylandState {
             effective_coord.0 - last_screen.0,
             effective_coord.1 - last_screen.1,
         );
+        drag_log(format!(
+            "move_local delta: kind={:?}, local=({:.3}, {:.3}), effective=({:.3}, {:.3}), last_screen=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets_before=({}, {})/({}, {})",
+            kind,
+            local_coord.0,
+            local_coord.1,
+            effective_coord.0,
+            effective_coord.1,
+            last_screen.0,
+            last_screen.1,
+            delta.0,
+            delta.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
+        ));
         log::debug!(
             "handle_toolbar_move_local: kind={:?}, local_coord=({:.3}, {:.3}), effective_coord=({:.3}, {:.3}), last_coord=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
             kind,
@@ -188,6 +237,14 @@ impl WaylandState {
                 self.data.toolbar_side_offset += delta.1;
             }
         }
+        drag_log(format!(
+            "move_local applied: kind={:?}, offsets_after=({}, {})/({}, {})",
+            kind,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
+        ));
         log::debug!(
             "After update offsets: top=({}, {}), side=({}, {})",
             self.data.toolbar_top_offset,
@@ -227,6 +284,16 @@ impl WaylandState {
             ));
             return;
         }
+        drag_log(format!(
+            "handle_toolbar_move_screen: kind={:?}, screen_coord=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
+            kind,
+            screen_coord.0,
+            screen_coord.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
+        ));
         let snapshot = self
             .toolbar
             .last_snapshot()
@@ -251,6 +318,20 @@ impl WaylandState {
             screen_coord.0 - last_screen_coord.0,
             screen_coord.1 - last_screen_coord.1,
         );
+        drag_log(format!(
+            "move_screen delta: kind={:?}, screen=({:.3}, {:.3}), last_screen=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets_before=({}, {})/({}, {})",
+            kind,
+            screen_coord.0,
+            screen_coord.1,
+            last_screen_coord.0,
+            last_screen_coord.1,
+            delta.0,
+            delta.1,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
+        ));
         log::debug!(
             "handle_toolbar_move_screen: kind={:?}, screen_coord=({:.3}, {:.3}), last_screen_coord=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
             kind,
@@ -283,6 +364,14 @@ impl WaylandState {
                 self.data.toolbar_side_offset += delta.1;
             }
         }
+        drag_log(format!(
+            "move_screen applied: kind={:?}, offsets_after=({}, {})/({}, {})",
+            kind,
+            self.data.toolbar_top_offset,
+            self.data.toolbar_top_offset_y,
+            self.data.toolbar_side_offset_x,
+            self.data.toolbar_side_offset
+        ));
 
         self.data.toolbar_move_drag = Some(MoveDrag {
             kind,

@@ -21,7 +21,7 @@ impl WaylandState {
         // When dragging the side toolbar, don't push the top bar; keep its base stable so it
         // doesn't shift while moving the side bar.
         let allow_push = self.active_move_drag_kind() != Some(MoveDragKind::Side);
-        geometry::compute_inline_top_base_x(
+        let result = geometry::compute_inline_top_base_x(
             base,
             side_visible,
             side_size.0 as f64,
@@ -29,7 +29,20 @@ impl WaylandState {
             top_bottom_y,
             Self::INLINE_TOP_PUSH,
             allow_push,
-        )
+        );
+        if self.is_move_dragging() || self.toolbar_dragging() {
+            drag_log(format!(
+                "inline_top_base_x: base={:.3}, side_visible={}, side_width={:.3}, side_start_y={:.3}, top_bottom_y={:.3}, allow_push={}, result={:.3}",
+                base,
+                side_visible,
+                side_size.0 as f64,
+                side_start_y,
+                top_bottom_y,
+                allow_push,
+                result
+            ));
+        }
+        result
     }
 
     pub(in crate::backend::wayland::state::toolbar) fn inline_top_base_y(&self) -> f64 {
