@@ -288,6 +288,9 @@ pub fn parse_hex_color(value: &str) -> Option<Color> {
     if hex.len() != 6 && hex.len() != 3 {
         return None;
     }
+    if !hex.as_bytes().iter().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
     let expanded = if hex.len() == 3 {
         let mut out = String::new();
         for ch in hex.chars() {

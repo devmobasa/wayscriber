@@ -2,40 +2,96 @@
 
 use super::WaylandState;
 use crate::input::state::UiToastKind;
+use crate::input::state::{color_to_hex, parse_hex_color};
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
 impl WaylandState {
     /// Copies the current color as hex to the clipboard.
     pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self) {
         let color = self.input_state.current_color;
-        let hex = format!(
-            "#{:02X}{:02X}{:02X}",
-            (color.r * 255.0).round() as u8,
-            (color.g * 255.0).round() as u8,
-            (color.b * 255.0).round() as u8
-        );
+        let hex = color_to_hex(color);
 
-        // Use wl-copy for Wayland clipboard
-        match Command::new("wl-copy")
-            .arg(&hex)
+        let mut child = match Command::new("wl-copy")
+            .arg("--type")
+            .arg("text/plain;charset=utf-8")
+            .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
         {
-            Ok(mut child) => {
-                // Don't wait for wl-copy to finish (it may stay running)
-                std::thread::spawn(move || {
-                    let _ = child.wait();
-                });
-                self.input_state
-                    .set_ui_toast(UiToastKind::Info, format!("Copied {}", hex));
-            }
+            Ok(child) => child,
             Err(e) => {
                 log::warn!("Failed to copy hex color: {}", e);
                 self.input_state
                     .set_ui_toast(UiToastKind::Warning, "Failed to copy (install wl-copy)");
+                return;
+            }
+        };
+
+        if let Some(mut stdin) = child.stdin.take() {
+            if let Err(err) = stdin.write_all(hex.as_bytes()) {
+                log::warn!("Failed to write to wl-copy stdin: {}", err);
+                let _ = child.kill();
+                let _ = child.wait();
+                self.input_state
+                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+                return;
+            }
+        } else {
+            log::warn!("wl-copy stdin unavailable for hex copy");
+            let _ = child.kill();
+            let _ = child.wait();
+            self.input_state
+                .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+            return;
+        }
+
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    let stderr = child
+                        .stderr
+                        .take()
+                        .and_then(|mut err| {
+                            let mut buf = Vec::new();
+                            let _ = err.read_to_end(&mut buf);
+                            if buf.is_empty() {
+                                None
+                            } else {
+                                Some(String::from_utf8_lossy(&buf).trim().to_string())
+                            }
+                        })
+                        .unwrap_or_default();
+                    log::warn!("wl-copy exited unsuccessfully: {}", stderr);
+                    self.input_state
+                        .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+                    return;
+                }
+            }
+            Ok(None) => {
+                std::thread::spawn(move || match child.wait_with_output() {
+                    Ok(output) => {
+                        if !output.status.success() {
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            log::warn!("wl-copy failed: {}", stderr.trim());
+                        }
+                    }
+                    Err(err) => {
+                        log::warn!("Failed to wait for wl-copy: {}", err);
+                    }
+                });
+            }
+            Err(err) => {
+                log::warn!("Failed to poll wl-copy status: {}", err);
+                self.input_state
+                    .set_ui_toast(UiToastKind::Warning, "Failed to copy to clipboard");
+                return;
             }
         }
+
+        self.input_state
+            .set_ui_toast(UiToastKind::Info, format!("Copied {}", hex));
     }
 
     /// Pastes a hex color from the clipboard.
@@ -51,18 +107,8 @@ impl WaylandState {
                 if output.status.success() {
                     let clipboard = String::from_utf8_lossy(&output.stdout);
                     if let Some(color) = parse_hex_color(clipboard.trim()) {
-                        let _ = self.input_state.apply_color_from_ui(crate::draw::Color {
-                            r: color.0,
-                            g: color.1,
-                            b: color.2,
-                            a: 1.0,
-                        });
-                        let hex = format!(
-                            "#{:02X}{:02X}{:02X}",
-                            (color.0 * 255.0).round() as u8,
-                            (color.1 * 255.0).round() as u8,
-                            (color.2 * 255.0).round() as u8
-                        );
+                        let _ = self.input_state.apply_color_from_ui(color);
+                        let hex = color_to_hex(color);
                         self.input_state
                             .set_ui_toast(UiToastKind::Info, format!("Pasted {}", hex));
                         self.save_drawing_preferences();
@@ -87,26 +133,4 @@ impl WaylandState {
             }
         }
     }
-}
-
-/// Parse a hex color string like "#FF8040" or "FF8040" to RGB values.
-fn parse_hex_color(input: &str) -> Option<(f64, f64, f64)> {
-    let hex = input.trim().trim_start_matches('#');
-
-    // Support both 3-char (#RGB) and 6-char (#RRGGBB) formats
-    let (r, g, b) = if hex.len() == 6 {
-        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-        (r, g, b)
-    } else if hex.len() == 3 {
-        let r = u8::from_str_radix(&hex[0..1], 16).ok()? * 17;
-        let g = u8::from_str_radix(&hex[1..2], 16).ok()? * 17;
-        let b = u8::from_str_radix(&hex[2..3], 16).ok()? * 17;
-        (r, g, b)
-    } else {
-        return None;
-    };
-
-    Some((r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0))
 }

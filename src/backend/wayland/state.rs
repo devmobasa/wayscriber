@@ -92,9 +92,10 @@ mod tests;
 type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 pub(super) use helpers::{
-    damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
-    force_inline_toolbars_requested, scale_damage_regions, surface_id,
-    toolbar_drag_preview_enabled, toolbar_drag_throttle_interval, toolbar_pointer_lock_enabled,
+    color_log, damage_summary, debug_damage_logging_enabled, debug_toolbar_color_logging_enabled,
+    debug_toolbar_drag_logging_enabled, drag_log, force_inline_toolbars_requested,
+    scale_damage_regions, surface_id, toolbar_drag_preview_enabled, toolbar_drag_throttle_interval,
+    toolbar_pointer_lock_enabled,
 };
 
 pub(in crate::backend::wayland) struct WaylandGlobals {
