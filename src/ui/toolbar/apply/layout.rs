@@ -164,6 +164,15 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_context_aware_ui(&mut self, enabled: bool) -> bool {
+        if self.context_aware_ui != enabled {
+            self.context_aware_ui = enabled;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn apply_toolbar_toggle_preset_toasts(&mut self, show: bool) -> bool {
         if self.show_preset_toasts != show {
             self.show_preset_toasts = show;

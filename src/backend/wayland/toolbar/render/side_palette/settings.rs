@@ -58,6 +58,12 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![
         (
+            "Context UI",
+            snapshot.context_aware_ui,
+            ToolbarEvent::ToggleContextAwareUi(!snapshot.context_aware_ui),
+            Some("Show/hide controls based on active tool."),
+        ),
+        (
             "Text controls",
             snapshot.show_text_controls,
             ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),

@@ -59,6 +59,11 @@ pub struct ToolContext {
 impl ToolContext {
     /// Compute the tool context from the current toolbar state.
     pub fn from_snapshot(snapshot: &ToolbarSnapshot) -> Self {
+        // If context-aware UI is disabled, show all sections (classic behavior)
+        if !snapshot.context_aware_ui {
+            return Self::all_visible(snapshot);
+        }
+
         let effective_tool = snapshot.tool_override.unwrap_or(snapshot.active_tool);
         let text_or_note_active = snapshot.text_active || snapshot.note_active;
 
@@ -179,6 +184,34 @@ impl ToolContext {
 
         ctx
     }
+
+    /// Returns a context where all sections are visible (classic/non-contextual behavior).
+    fn all_visible(snapshot: &ToolbarSnapshot) -> Self {
+        let effective_tool = snapshot.tool_override.unwrap_or(snapshot.active_tool);
+        let text_or_note_active = snapshot.text_active || snapshot.note_active;
+        let show_arrow_labels = effective_tool == Tool::Arrow || snapshot.arrow_label_enabled;
+        let show_step_counter = effective_tool == Tool::StepMarker;
+        let show_marker_opacity =
+            snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
+        let show_font_controls = text_or_note_active || snapshot.show_text_controls;
+
+        Self {
+            needs_color: true,
+            needs_thickness: true,
+            tool_options_kind: ToolOptionsKind::Stroke, // Generic
+            thickness_label: if snapshot.thickness_targets_eraser {
+                "Eraser size"
+            } else {
+                "Thickness"
+            },
+            show_fill_toggle: false, // Only shown contextually for shapes
+            show_arrow_labels,
+            show_step_counter,
+            show_eraser_mode: snapshot.thickness_targets_eraser,
+            show_marker_opacity,
+            show_font_controls,
+        }
+    }
 }
 
 /// Snapshot of a single preset slot for toolbar display.
@@ -286,6 +319,8 @@ pub struct ToolbarSnapshot {
     pub show_step_section: bool,
     /// Whether to keep text controls visible when text is inactive
     pub show_text_controls: bool,
+    /// Whether to enable context-aware UI that shows/hides controls based on active tool
+    pub context_aware_ui: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
     pub show_tool_preview: bool,
@@ -471,6 +506,7 @@ impl ToolbarSnapshot {
             show_presets: state.show_presets,
             show_step_section,
             show_text_controls: state.show_text_controls,
+            context_aware_ui: state.context_aware_ui,
             show_settings_section,
             show_tool_preview: state.show_tool_preview,
             show_status_bar: state.show_status_bar,

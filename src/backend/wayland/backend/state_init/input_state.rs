@@ -75,6 +75,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.show_presets,
         config.ui.toolbar.show_step_section,
         config.ui.toolbar.show_text_controls,
+        config.ui.toolbar.context_aware_ui,
         config.ui.toolbar.show_settings_section,
         config.ui.toolbar.show_delay_sliders,
         config.ui.toolbar.show_marker_opacity_section,

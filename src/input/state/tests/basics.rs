@@ -153,6 +153,7 @@ fn toolbar_toggle_handles_partial_visibility() {
         true,  // show_presets
         false, // show_step_section
         false, // show_text_controls
+        true,  // context_aware_ui
         true,  // show_settings_section
         false, // show_delay_sliders
         false, // show_marker_opacity_section

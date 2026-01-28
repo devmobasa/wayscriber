@@ -305,7 +305,7 @@ impl ToolbarLayoutSpec {
     ) -> f64 {
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
-        let mut toggle_count = 6; // Text controls + status bar + status badges + preset toasts
+        let mut toggle_count = 7; // Context UI + text controls + status bar + status badges + preset toasts
         if snapshot.layout_mode != ToolbarLayoutMode::Simple {
             toggle_count += 7; // presets, actions, zoom actions, advanced actions, pages, boards, step section
         }

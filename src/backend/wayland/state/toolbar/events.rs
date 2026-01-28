@@ -80,6 +80,7 @@ impl WaylandState {
                 | ToolbarEvent::TogglePresets(_)
                 | ToolbarEvent::ToggleStepSection(_)
                 | ToolbarEvent::ToggleTextControls(_)
+                | ToolbarEvent::ToggleContextAwareUi(_)
                 | ToolbarEvent::TogglePresetToasts(_)
                 | ToolbarEvent::ToggleToolPreview(_)
                 | ToolbarEvent::ToggleDelaySliders(_)
@@ -181,6 +182,7 @@ impl WaylandState {
         self.config.ui.toolbar.show_presets = self.input_state.show_presets;
         self.config.ui.toolbar.show_step_section = self.input_state.show_step_section;
         self.config.ui.toolbar.show_text_controls = self.input_state.show_text_controls;
+        self.config.ui.toolbar.context_aware_ui = self.input_state.context_aware_ui;
         self.config.ui.toolbar.show_settings_section = self.input_state.show_settings_section;
         self.config.ui.toolbar.show_delay_sliders = self.input_state.show_delay_sliders;
         self.config.ui.toolbar.show_marker_opacity_section =

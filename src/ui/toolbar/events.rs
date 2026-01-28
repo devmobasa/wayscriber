@@ -100,6 +100,8 @@ pub enum ToolbarEvent {
     ToggleStepSection(bool),
     /// Toggle persistent text controls visibility
     ToggleTextControls(bool),
+    /// Toggle context-aware UI (show/hide controls based on active tool)
+    ToggleContextAwareUi(bool),
     /// Toggle preset action toast notifications
     TogglePresetToasts(bool),
     /// Toggle cursor tool preview bubble

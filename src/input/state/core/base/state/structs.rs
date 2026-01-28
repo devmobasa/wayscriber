@@ -304,6 +304,8 @@ pub struct InputState {
     pub show_step_section: bool,
     /// Whether to keep text controls visible when text is inactive
     pub show_text_controls: bool,
+    /// Whether to enable context-aware UI that shows/hides controls based on active tool
+    pub context_aware_ui: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
     /// Number of preset slots to display

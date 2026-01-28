@@ -81,6 +81,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_marker_opacity_section")]
     pub show_marker_opacity_section: bool,
 
+    /// Enable context-aware UI that shows/hides controls based on the active tool
+    #[serde(default = "default_context_aware_ui")]
+    pub context_aware_ui: bool,
+
     /// Show preset action toast notifications
     #[serde(default = "default_show_preset_toasts")]
     pub show_preset_toasts: bool,
@@ -131,6 +135,7 @@ impl Default for ToolbarConfig {
             show_settings_section: default_show_settings_section(),
             show_delay_sliders: default_show_delay_sliders(),
             show_marker_opacity_section: default_show_marker_opacity_section(),
+            context_aware_ui: default_context_aware_ui(),
             show_preset_toasts: default_show_preset_toasts(),
             show_tool_preview: default_show_tool_preview(),
             top_offset: 0.0,
@@ -208,6 +213,10 @@ fn default_show_delay_sliders() -> bool {
 
 fn default_show_marker_opacity_section() -> bool {
     false
+}
+
+fn default_context_aware_ui() -> bool {
+    true
 }
 
 fn default_show_preset_toasts() -> bool {

@@ -53,6 +53,7 @@ impl InputState {
         show_presets: bool,
         show_step_section: bool,
         show_text_controls: bool,
+        context_aware_ui: bool,
         show_settings_section: bool,
         show_delay_sliders: bool,
         show_marker_opacity_section: bool,
@@ -77,6 +78,7 @@ impl InputState {
         self.show_presets = show_presets;
         self.show_step_section = show_step_section;
         self.show_text_controls = show_text_controls;
+        self.context_aware_ui = context_aware_ui;
         self.show_settings_section = show_settings_section;
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
