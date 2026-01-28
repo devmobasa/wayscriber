@@ -108,16 +108,6 @@ impl ToolbarLayoutSpec {
         (Self::SIDE_WIDTH, height.ceil() as u32)
     }
 
-    pub(in crate::backend::wayland::toolbar) fn side_header_button_positions(
-        &self,
-        width: f64,
-    ) -> (f64, f64, f64, f64) {
-        let close_x = width - Self::SIDE_HEADER_BUTTON_MARGIN_RIGHT - Self::SIDE_HEADER_BUTTON_SIZE;
-        let pin_x = close_x - Self::SIDE_HEADER_BUTTON_SIZE - Self::SIDE_HEADER_BUTTON_GAP;
-        let more_x = pin_x - Self::SIDE_HEADER_BUTTON_SIZE - Self::SIDE_HEADER_BUTTON_GAP;
-        (more_x, pin_x, close_x, self.side_header_y())
-    }
-
     pub(in crate::backend::wayland::toolbar) fn side_content_width(&self, width: f64) -> f64 {
         width - Self::SIDE_CONTENT_PADDING_X
     }
@@ -319,17 +309,24 @@ impl ToolbarLayoutSpec {
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
     }
 
-    pub(in crate::backend::wayland::toolbar) fn side_header_y(&self) -> f64 {
-        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_HANDLE_SIZE + Self::SIDE_HEADER_HANDLE_GAP
+    /// Y position where Row 2 (mode controls row) starts
+    pub(in crate::backend::wayland::toolbar) fn side_header_row2_y(&self) -> f64 {
+        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_ROW1_HEIGHT
     }
 
-    pub(in crate::backend::wayland::toolbar) fn side_header_board_y(&self) -> f64 {
-        self.side_header_y() + Self::SIDE_HEADER_ROW_HEIGHT + Self::SIDE_HEADER_BOARD_GAP
+    /// Y position where Row 3 (board row) starts
+    pub(in crate::backend::wayland::toolbar) fn side_header_row3_y(&self) -> f64 {
+        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_ROW1_HEIGHT + Self::SIDE_HEADER_ROW2_HEIGHT
     }
 
+    /// Y position where content starts (after all header rows)
     pub(in crate::backend::wayland::toolbar) fn side_content_start_y(&self) -> f64 {
-        self.side_header_board_y()
-            + Self::SIDE_HEADER_BOARD_ROW_HEIGHT
+        // After header rows + bottom gap
+        // = 12 + 30 + 28 + 24 + 8 = 102px
+        Self::SIDE_TOP_PADDING
+            + Self::SIDE_HEADER_ROW1_HEIGHT
+            + Self::SIDE_HEADER_ROW2_HEIGHT
+            + Self::SIDE_HEADER_ROW3_HEIGHT
             + Self::SIDE_HEADER_BOTTOM_GAP
     }
 

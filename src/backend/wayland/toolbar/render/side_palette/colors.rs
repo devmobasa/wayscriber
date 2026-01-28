@@ -120,8 +120,9 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
         .map(|(hx, hy)| point_in_rect(hx, hy, x, preview_row_y, preview_size, preview_size))
         .unwrap_or(false);
 
-    // Draw hover ring highlight when hovered
+    // Always draw a border to indicate it's clickable
     if preview_hover {
+        // Brighter glow on hover
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.3);
         draw_round_rect(
             ctx,
@@ -132,19 +133,22 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
             6.0,
         );
         let _ = ctx.fill();
-        // Brighter border ring
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.6);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.7);
         ctx.set_line_width(1.5);
-        draw_round_rect(
-            ctx,
-            x - 2.0,
-            preview_row_y - 2.0,
-            preview_size + 4.0,
-            preview_size + 4.0,
-            6.0,
-        );
-        let _ = ctx.stroke();
+    } else {
+        // Subtle border when not hovered
+        ctx.set_source_rgba(0.5, 0.55, 0.6, 0.6);
+        ctx.set_line_width(1.0);
     }
+    draw_round_rect(
+        ctx,
+        x - 1.0,
+        preview_row_y - 1.0,
+        preview_size + 2.0,
+        preview_size + 2.0,
+        5.0,
+    );
+    let _ = ctx.stroke();
 
     draw_swatch(
         ctx,
@@ -188,12 +192,12 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     ctx.line_to(arrow_x2, arrow_y2 + head_len);
     let _ = ctx.stroke();
 
-    // Hit region for swatch only (no label)
+    // Hit region for swatch only
     hits.push(HitRegion {
         rect: (x, preview_row_y, preview_size, preview_size),
         event: ToolbarEvent::OpenColorPickerPopup,
         kind: HitKind::Click,
-        tooltip: Some("Pick color".to_string()),
+        tooltip: Some("Click to pick color".to_string()),
     });
 
     // Draw hex value next to preview (clickable for copy/paste)

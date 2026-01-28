@@ -60,6 +60,8 @@ pub(super) fn draw_icon_strip(
         current_shape_tool,
         shape_icon_tool,
     );
+    let divider_x = tool_row.next_x - gap * 0.5;
+    draw_divider_vertical(ctx, divider_x, y + 6.0, btn_size - 12.0);
     x = tool_row.next_x;
 
     if fill_tool_active
@@ -97,25 +99,37 @@ pub(super) fn draw_icon_strip(
     x = draw_utility_row(layout, x, y, btn_size, icon_size, gap, is_simple);
 
     let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
-    let icons_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_size))
-        .unwrap_or(false);
-    draw_checkbox(
+    let icons_hover = hover.and_then(|(hx, hy)| {
+        if point_in_rect(hx, hy, x, y, icons_w, btn_size) {
+            Some(if hx < x + icons_w / 2.0 { 0 } else { 1 })
+        } else {
+            None
+        }
+    });
+    let icons_active = if snapshot.use_icons { 0 } else { 1 };
+    draw_segmented_control(
         ctx,
         x,
         y,
         icons_w,
         btn_size,
-        true,
+        ("Ico", "Txt"),
+        icons_active,
         icons_hover,
         icon_toggle_style,
-        "Icons",
     );
+    let half_w = icons_w / 2.0;
     layout.hits.push(HitRegion {
-        rect: (x, y, icons_w, btn_size),
+        rect: (x, y, half_w, btn_size),
+        event: ToolbarEvent::ToggleIconMode(true),
+        kind: HitKind::Click,
+        tooltip: Some("Icons mode".to_string()),
+    });
+    layout.hits.push(HitRegion {
+        rect: (x + half_w, y, half_w, btn_size),
         event: ToolbarEvent::ToggleIconMode(false),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Text mode".to_string()),
     });
 
     if is_simple && snapshot.shape_picker_open {

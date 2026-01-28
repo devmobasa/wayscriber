@@ -83,6 +83,25 @@ pub const COLOR_CLOSE_HOVER: (f64, f64, f64, f64) = (0.8, 0.3, 0.3, 0.9);
 /// Close button default
 pub const COLOR_CLOSE_DEFAULT: (f64, f64, f64, f64) = (0.5, 0.5, 0.55, 0.7);
 
+// Segmented control
+/// Segmented control outer background
+pub const COLOR_SEGMENT_BG: (f64, f64, f64, f64) = (0.15, 0.17, 0.22, 0.85);
+
+/// Active segment background (blue accent)
+pub const COLOR_SEGMENT_ACTIVE: (f64, f64, f64, f64) = (0.3, 0.55, 1.0, 1.0);
+
+/// Active segment text color
+pub const COLOR_SEGMENT_TEXT_ACTIVE: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 1.0);
+
+/// Inactive segment text color
+pub const COLOR_SEGMENT_TEXT_INACTIVE: (f64, f64, f64, f64) = (0.65, 0.68, 0.75, 0.9);
+
+/// Hovered (inactive) segment background
+pub const COLOR_SEGMENT_HOVER: (f64, f64, f64, f64) = (0.22, 0.25, 0.32, 0.9);
+
+/// Center divider between segments
+pub const COLOR_SEGMENT_DIVIDER: (f64, f64, f64, f64) = (0.35, 0.38, 0.45, 0.5);
+
 // Slider/track elements
 /// Slider track background
 pub const COLOR_TRACK_BACKGROUND: (f64, f64, f64, f64) = (0.5, 0.5, 0.6, 0.6);
@@ -116,6 +135,13 @@ pub const COLOR_TOOLTIP_BORDER: (f64, f64, f64, f64) = (0.4, 0.4, 0.5, 0.8);
 
 /// Tooltip shadow
 pub const COLOR_TOOLTIP_SHADOW: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.3);
+
+// Dividers / header accents
+/// Subtle divider color for grouping
+pub const COLOR_DIVIDER: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.08);
+
+/// Header band background to add hierarchy
+pub const COLOR_HEADER_BAND: (f64, f64, f64, f64) = (0.12, 0.13, 0.18, 0.45);
 
 // ============================================================================
 // FONT SIZES

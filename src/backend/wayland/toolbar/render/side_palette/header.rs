@@ -2,11 +2,14 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::config::ToolbarLayoutMode;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui_text::{UiTextStyle, text_layout};
 
-use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
+use super::super::widgets::constants::{
+    COLOR_HEADER_BAND, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, RADIUS_CARD, set_color,
+};
 use super::super::widgets::*;
 
 pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
@@ -16,8 +19,8 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let hover = layout.hover;
     let spec = &layout.spec;
     let x = layout.x;
-    let y = ToolbarLayoutSpec::SIDE_TOP_PADDING;
     let width = layout.width;
+    let content_width = layout.content_width;
     let label_style = UiTextStyle {
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
@@ -25,85 +28,154 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         size: FONT_SIZE_LABEL,
     };
 
-    let btn_size = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
-    let handle_w = ToolbarLayoutSpec::SIDE_HEADER_HANDLE_SIZE;
-    let handle_h = ToolbarLayoutSpec::SIDE_HEADER_HANDLE_SIZE;
+    let band_y = ToolbarLayoutSpec::SIDE_TOP_PADDING - 2.0;
+    let band_h = ToolbarLayoutSpec::SIDE_HEADER_ROW1_HEIGHT
+        + ToolbarLayoutSpec::SIDE_HEADER_ROW2_HEIGHT
+        + 4.0;
+    let band_x = spec.side_card_x();
+    let band_w = spec.side_card_width(width);
+    draw_round_rect(ctx, band_x, band_y, band_w, band_h, RADIUS_CARD);
+    set_color(ctx, COLOR_HEADER_BAND);
+    let _ = ctx.fill();
 
-    // Place handle above the header row to avoid widening the palette.
-    let handle_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, handle_w, handle_h))
+    let btn_size = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
+    let btn_gap = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_GAP;
+    let btn_margin = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_MARGIN_RIGHT;
+
+    // ========== ROW 1: Drag + Ico/Txt (center) + Pin/Close ==========
+    let row1_y = ToolbarLayoutSpec::SIDE_TOP_PADDING;
+    let row1_h = ToolbarLayoutSpec::SIDE_HEADER_ROW1_HEIGHT;
+
+    // Drag handle on left (compact 18x18)
+    let drag_size = ToolbarLayoutSpec::SIDE_HEADER_DRAG_SIZE;
+    let drag_y = row1_y + (row1_h - drag_size) / 2.0;
+    let drag_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, x, drag_y, drag_size, drag_size))
         .unwrap_or(false);
-    draw_drag_handle(ctx, x, y, handle_w, handle_h, handle_hover);
+    draw_drag_handle(ctx, x, drag_y, drag_size, drag_size, drag_hover);
     hits.push(HitRegion {
-        rect: (x, y, handle_w, handle_h),
+        rect: (x, drag_y, drag_size, drag_size),
         event: ToolbarEvent::MoveSideToolbar { x: 0.0, y: 0.0 },
         kind: HitKind::DragMoveSide,
         tooltip: Some("Drag toolbar".to_string()),
     });
 
-    let header_y = spec.side_header_y();
-    let icons_w = ToolbarLayoutSpec::SIDE_HEADER_TOGGLE_WIDTH;
-    let icons_h = btn_size;
-    let icons_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, header_y, icons_w, icons_h))
-        .unwrap_or(false);
-    draw_checkbox(
+    // Utility buttons on right: [Pin] [Close]
+    let btn_y = row1_y + (row1_h - btn_size) / 2.0;
+    let close_x = width - btn_margin - btn_size;
+    let pin_x = close_x - btn_size - btn_gap;
+
+    // Ico/Txt toggle in center of row 1
+    let icons_w = ToolbarLayoutSpec::SIDE_MODE_ICONS_WIDTH;
+    let segment_h = ToolbarLayoutSpec::SIDE_SEGMENT_HEIGHT;
+    let center_start = x + drag_size + 8.0;
+    let center_end = pin_x - 8.0;
+    let icons_x = center_start + (center_end - center_start - icons_w) / 2.0;
+    let icons_y = row1_y + (row1_h - segment_h) / 2.0;
+    let icons_active = if snapshot.use_icons { 0 } else { 1 };
+    let icons_hover = hover.and_then(|(hx, hy)| {
+        if point_in_rect(hx, hy, icons_x, icons_y, icons_w, segment_h) {
+            Some(if hx < icons_x + icons_w / 2.0 { 0 } else { 1 })
+        } else {
+            None
+        }
+    });
+    draw_segmented_control(
         ctx,
-        x,
-        header_y,
+        icons_x,
+        icons_y,
         icons_w,
-        icons_h,
-        snapshot.use_icons,
+        segment_h,
+        ("Ico", "Txt"),
+        icons_active,
         icons_hover,
         label_style,
-        "Icons",
     );
-    hits.push(HitRegion {
-        rect: (x, header_y, icons_w, icons_h),
-        event: ToolbarEvent::ToggleIconMode(!snapshot.use_icons),
-        kind: HitKind::Click,
-        tooltip: None,
-    });
 
-    let mode_w = ToolbarLayoutSpec::SIDE_HEADER_MODE_WIDTH;
-    let mode_x = x + icons_w + ToolbarLayoutSpec::SIDE_HEADER_MODE_GAP;
-    let mode_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, mode_x, header_y, mode_w, icons_h))
+    // Pin button
+    let pin_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_button(ctx, mode_x, header_y, mode_w, icons_h, false, mode_hover);
-    let (mode_label, next_mode) = match snapshot.layout_mode {
-        crate::config::ToolbarLayoutMode::Simple => {
-            ("Mode: S", crate::config::ToolbarLayoutMode::Regular)
-        }
-        crate::config::ToolbarLayoutMode::Regular | crate::config::ToolbarLayoutMode::Advanced => {
-            ("Mode: F", crate::config::ToolbarLayoutMode::Simple)
-        }
-    };
-    draw_label_center(
-        ctx,
-        label_style,
-        mode_x,
-        header_y,
-        mode_w,
-        icons_h,
-        mode_label,
-    );
-    let mode_tooltip = "Mode: Simple/Full".to_string();
+    draw_pin_button(ctx, pin_x, btn_y, btn_size, snapshot.side_pinned, pin_hover);
     hits.push(HitRegion {
-        rect: (mode_x, header_y, mode_w, icons_h),
-        event: ToolbarEvent::SetToolbarLayoutMode(next_mode),
+        rect: (pin_x, btn_y, btn_size, btn_size),
+        event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
         kind: HitKind::Click,
-        tooltip: Some(mode_tooltip),
+        tooltip: Some(if snapshot.side_pinned {
+            "Pinned (click to unpin)".to_string()
+        } else {
+            "Pin toolbar".to_string()
+        }),
     });
 
-    let (more_x, pin_x, close_x, header_btn_y) = spec.side_header_button_positions(width);
+    // Close button
+    let close_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, btn_y, btn_size, btn_size))
+        .unwrap_or(false);
+    draw_close_button(ctx, close_x, btn_y, btn_size, close_hover);
+    hits.push(HitRegion {
+        rect: (close_x, btn_y, btn_size, btn_size),
+        event: ToolbarEvent::CloseSideToolbar,
+        kind: HitKind::Click,
+        tooltip: Some("Close".to_string()),
+    });
+
+    let icons_half_w = icons_w / 2.0;
+    hits.push(HitRegion {
+        rect: (icons_x, icons_y, icons_half_w, segment_h),
+        event: ToolbarEvent::ToggleIconMode(true),
+        kind: HitKind::Click,
+        tooltip: Some("Icons mode".to_string()),
+    });
+    hits.push(HitRegion {
+        rect: (icons_x + icons_half_w, icons_y, icons_half_w, segment_h),
+        event: ToolbarEvent::ToggleIconMode(false),
+        kind: HitKind::Click,
+        tooltip: Some("Text mode".to_string()),
+    });
+
+    // ========== ROW 2: Simple/Full + More ==========
+    let row2_y = spec.side_header_row2_y();
+    let row2_h = ToolbarLayoutSpec::SIDE_HEADER_ROW2_HEIGHT;
+
+    let segment_h = ToolbarLayoutSpec::SIDE_SEGMENT_HEIGHT;
+    let segment_y = row2_y + (row2_h - segment_h) / 2.0;
+
+    // Segmented control: [Simple | Full]
+    let layout_w = ToolbarLayoutSpec::SIDE_MODE_LAYOUT_WIDTH;
+    let layout_x = x;
+    let layout_active = match snapshot.layout_mode {
+        ToolbarLayoutMode::Simple => 0,
+        _ => 1,
+    };
+    let layout_hover = hover.and_then(|(hx, hy)| {
+        if point_in_rect(hx, hy, layout_x, segment_y, layout_w, segment_h) {
+            Some(if hx < layout_x + layout_w / 2.0 { 0 } else { 1 })
+        } else {
+            None
+        }
+    });
+    draw_segmented_control(
+        ctx,
+        layout_x,
+        segment_y,
+        layout_w,
+        segment_h,
+        ("Simple", "Full"),
+        layout_active,
+        layout_hover,
+        label_style,
+    );
+
+    let more_x = x + content_width - btn_size;
+    let more_y = row2_y + (row2_h - btn_size) / 2.0;
     let more_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, more_x, header_btn_y, btn_size, btn_size))
+        .map(|(hx, hy)| point_in_rect(hx, hy, more_x, more_y, btn_size, btn_size))
         .unwrap_or(false);
     draw_button(
         ctx,
         more_x,
-        header_btn_y,
+        more_y,
         btn_size,
         btn_size,
         snapshot.drawer_open,
@@ -112,89 +184,93 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     set_icon_color(ctx, more_hover);
     let icon_size = ToolbarLayoutSpec::SIDE_ACTION_ICON_SIZE;
     let icon_x = more_x + (btn_size - icon_size) / 2.0;
-    let icon_y = header_btn_y + (btn_size - icon_size) / 2.0;
+    let icon_y = more_y + (btn_size - icon_size) / 2.0;
     toolbar_icons::draw_icon_more(ctx, icon_x, icon_y, icon_size);
-    // Draw attention dot only for the onboarding hint
     if snapshot.show_drawer_hint {
         let dot_radius = 4.0;
         let dot_x = more_x + btn_size - dot_radius - 2.0;
-        let dot_y = header_btn_y + dot_radius + 2.0;
+        let dot_y = more_y + dot_radius + 2.0;
         ctx.arc(dot_x, dot_y, dot_radius, 0.0, std::f64::consts::TAU);
-        ctx.set_source_rgba(0.95, 0.45, 0.15, 0.95); // Orange attention color
+        ctx.set_source_rgba(0.95, 0.45, 0.15, 0.95);
         let _ = ctx.fill();
     }
+
+    let half_w = layout_w / 2.0;
+    let full_mode = if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
+        ToolbarLayoutMode::Advanced
+    } else {
+        ToolbarLayoutMode::Regular
+    };
     hits.push(HitRegion {
-        rect: (more_x, header_btn_y, btn_size, btn_size),
+        rect: (layout_x, segment_y, half_w, segment_h),
+        event: ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Simple),
+        kind: HitKind::Click,
+        tooltip: Some("Simple mode".to_string()),
+    });
+    hits.push(HitRegion {
+        rect: (layout_x + half_w, segment_y, half_w, segment_h),
+        event: ToolbarEvent::SetToolbarLayoutMode(full_mode),
+        kind: HitKind::Click,
+        tooltip: Some("Full mode".to_string()),
+    });
+    hits.push(HitRegion {
+        rect: (more_x, more_y, btn_size, btn_size),
         event: ToolbarEvent::ToggleDrawer(!snapshot.drawer_open),
         kind: HitKind::Click,
-        tooltip: Some("More (Canvas/Settings)".to_string()),
-    });
-    let pin_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, header_btn_y, btn_size, btn_size))
-        .unwrap_or(false);
-    draw_pin_button(
-        ctx,
-        pin_x,
-        header_btn_y,
-        btn_size,
-        snapshot.side_pinned,
-        pin_hover,
-    );
-    hits.push(HitRegion {
-        rect: (pin_x, header_btn_y, btn_size, btn_size),
-        event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
-        kind: HitKind::Click,
-        tooltip: Some(if snapshot.side_pinned {
-            "Pinned: opens at startup (click to disable)".to_string()
-        } else {
-            "Pin: click to open at startup".to_string()
-        }),
+        tooltip: Some("More options".to_string()),
     });
 
-    let close_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, close_x, header_btn_y, btn_size, btn_size))
-        .unwrap_or(false);
-    draw_close_button(ctx, close_x, header_btn_y, btn_size, close_hover);
-    hits.push(HitRegion {
-        rect: (close_x, header_btn_y, btn_size, btn_size),
-        event: ToolbarEvent::CloseSideToolbar,
-        kind: HitKind::Click,
-        tooltip: Some("Close".to_string()),
-    });
+    // ========== ROW 3: Board chip ==========
+    let row3_y = spec.side_header_row3_y();
+    let row3_h = ToolbarLayoutSpec::SIDE_HEADER_ROW3_HEIGHT;
 
-    let chip_y = spec.side_header_board_y();
-    let chip_h = ToolbarLayoutSpec::SIDE_HEADER_BOARD_ROW_HEIGHT;
-    let chip_w = layout.content_width;
     let chip_x = x;
+    let chip_w = content_width;
+    let chip_h = ToolbarLayoutSpec::SIDE_BOARD_CHIP_HEIGHT;
+    let chip_y = row3_y + (row3_h - chip_h) / 2.0;
+
     let chip_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, chip_x, chip_y, chip_w, chip_h))
         .unwrap_or(false);
     let chip_bg = if chip_hover { 0.28 } else { 0.22 };
-    draw_round_rect(ctx, chip_x, chip_y, chip_w, chip_h, 8.0);
+    draw_round_rect(ctx, chip_x, chip_y, chip_w, chip_h, 6.0);
     ctx.set_source_rgba(chip_bg, chip_bg + 0.02, chip_bg + 0.06, 0.95);
     let _ = ctx.fill();
-    ctx.set_source_rgba(0.08, 0.1, 0.13, 0.7);
+    let border_alpha = if chip_hover { 0.7 } else { 0.45 };
+    ctx.set_source_rgba(0.65, 0.7, 0.8, border_alpha);
     ctx.set_line_width(1.0);
+    draw_round_rect(ctx, chip_x, chip_y, chip_w, chip_h, 6.0);
     let _ = ctx.stroke();
 
+    // Color dot
     let dot_size = ToolbarLayoutSpec::SIDE_BOARD_COLOR_DOT_SIZE;
-    let dot_x = chip_x + 8.0;
+    let dot_x = chip_x + 6.0;
     let dot_y = chip_y + (chip_h - dot_size) * 0.5;
     if let Some(color) = snapshot.board_color {
         draw_swatch(ctx, dot_x, dot_y, dot_size, color, false);
     } else {
         ctx.set_source_rgba(0.62, 0.68, 0.76, 0.7);
+        ctx.set_line_width(1.0);
         draw_round_rect(ctx, dot_x, dot_y, dot_size, dot_size, 3.0);
-        let _ = ctx.stroke();
-        ctx.move_to(dot_x, dot_y);
-        ctx.line_to(dot_x + dot_size, dot_y + dot_size);
-        ctx.move_to(dot_x + dot_size, dot_y);
-        ctx.line_to(dot_x, dot_y + dot_size);
         let _ = ctx.stroke();
     }
 
-    let label_x = dot_x + dot_size + 8.0;
-    let label_w = chip_x + chip_w - 8.0 - label_x;
+    // Board icon before label
+    let icon_size = 10.0;
+    let icon_x = dot_x + dot_size + 4.0;
+    let icon_y = chip_y + (chip_h - icon_size) * 0.5;
+    set_icon_color(ctx, chip_hover);
+    toolbar_icons::draw_icon_board(ctx, icon_x, icon_y, icon_size);
+
+    // Chevron on the right
+    let chevron_size = ToolbarLayoutSpec::SIDE_BOARD_CHEVRON_SIZE;
+    let chevron_x = chip_x + chip_w - chevron_size - 2.0;
+    let chevron_y = chip_y + (chip_h - chevron_size) / 2.0;
+    draw_chevron_right(ctx, chevron_x, chevron_y, chevron_size, chip_hover);
+
+    // Board label (truncated)
+    let label_x = icon_x + icon_size + 5.0;
+    let label_w = chevron_x - label_x - 4.0;
     let label = board_chip_label(snapshot);
     let display_label = ellipsize_to_width(ctx, label_style, &label, label_w);
     draw_label_left(
@@ -206,19 +282,29 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         chip_h,
         &display_label,
     );
+
     hits.push(HitRegion {
         rect: (chip_x, chip_y, chip_w, chip_h),
         event: ToolbarEvent::ToggleBoardPicker,
         kind: HitKind::Click,
-        tooltip: Some("Boards".to_string()),
+        tooltip: Some("Board settings".to_string()),
     });
 
-    // Draw onboarding hint for the "More" button (first-time users)
-    if snapshot.show_drawer_hint {
-        draw_onboarding_hint(ctx, more_x, header_btn_y, btn_size);
-    }
-
     spec.side_content_start_y()
+}
+
+/// Draw a right-pointing chevron
+fn draw_chevron_right(ctx: &cairo::Context, x: f64, y: f64, size: f64, hover: bool) {
+    let alpha = if hover { 0.95 } else { 0.7 };
+    ctx.set_source_rgba(0.7, 0.72, 0.78, alpha);
+    ctx.set_line_width(1.5);
+
+    let margin = size * 0.3;
+    let mid_y = y + size / 2.0;
+    ctx.move_to(x + margin, y + margin);
+    ctx.line_to(x + size - margin, mid_y);
+    ctx.line_to(x + margin, y + size - margin);
+    let _ = ctx.stroke();
 }
 
 fn board_chip_label(snapshot: &crate::ui::toolbar::ToolbarSnapshot) -> String {
@@ -227,18 +313,18 @@ fn board_chip_label(snapshot: &crate::ui::toolbar::ToolbarSnapshot) -> String {
     let name = snapshot.board_name.trim();
     let board_label = if board_count > 1 {
         if name.is_empty() {
-            format!("B{}/{}", board_index, board_count)
+            format!("Boards · B{}/{}", board_index, board_count)
         } else {
-            format!("B{}/{} {}", board_index, board_count, name)
+            format!("Boards · B{}/{} {}", board_index, board_count, name)
         }
     } else if name.is_empty() {
-        "Board".to_string()
+        "Boards".to_string()
     } else {
-        format!("Board {}", name)
+        format!("Boards · {}", name)
     };
     let pages = snapshot.page_count.max(1);
     if pages > 1 {
-        format!("{board_label} - {pages}p")
+        format!("{board_label} · {pages}p")
     } else {
         board_label
     }
@@ -270,71 +356,4 @@ fn ellipsize_to_width(
         }
     }
     "...".to_string()
-}
-
-/// Draws a floating onboarding hint pointing to the More button.
-fn draw_onboarding_hint(ctx: &cairo::Context, more_x: f64, more_y: f64, btn_size: f64) {
-    let hint_text = "More options here!";
-    let padding_h = 8.0;
-    let padding_v = 6.0;
-    let arrow_size = 6.0;
-    let corner_radius = 4.0;
-    let hint_style = UiTextStyle {
-        family: FONT_FAMILY_DEFAULT,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: 12.0,
-    };
-
-    let layout = text_layout(ctx, hint_style, hint_text, None);
-    let extents = layout.ink_extents();
-    let box_w = extents.width() + padding_h * 2.0;
-    let box_h = extents.height() + padding_v * 2.0;
-
-    // Position: below and to the left of the More button
-    let box_x = more_x + btn_size / 2.0 - box_w / 2.0;
-    let box_y = more_y + btn_size + arrow_size + 4.0;
-
-    // Draw arrow pointing up
-    let arrow_x = more_x + btn_size / 2.0;
-    let arrow_y = box_y - arrow_size;
-    ctx.move_to(arrow_x, arrow_y);
-    ctx.line_to(arrow_x - arrow_size, box_y);
-    ctx.line_to(arrow_x + arrow_size, box_y);
-    ctx.close_path();
-    ctx.set_source_rgba(0.95, 0.45, 0.15, 0.95);
-    let _ = ctx.fill();
-
-    // Draw rounded rectangle background
-    let x = box_x;
-    let y = box_y;
-    let w = box_w;
-    let h = box_h;
-    let r = corner_radius;
-    ctx.new_path();
-    ctx.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
-    ctx.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
-    ctx.arc(
-        x + r,
-        y + h - r,
-        r,
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::PI,
-    );
-    ctx.arc(
-        x + r,
-        y + r,
-        r,
-        std::f64::consts::PI,
-        3.0 * std::f64::consts::FRAC_PI_2,
-    );
-    ctx.close_path();
-    ctx.set_source_rgba(0.95, 0.45, 0.15, 0.95);
-    let _ = ctx.fill();
-
-    // Draw text
-    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    let text_x = box_x + padding_h - extents.x_bearing();
-    let text_y = box_y + padding_v - extents.y_bearing();
-    layout.show_at_baseline(ctx, text_x, text_y);
 }
