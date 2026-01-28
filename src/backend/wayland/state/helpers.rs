@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{sync::OnceLock, time::Duration};
 
 use wayland_client::{Proxy, protocol::wl_surface};
 
@@ -87,6 +87,13 @@ pub(in crate::backend::wayland) fn debug_toolbar_drag_logging_enabled() -> bool 
     })
 }
 
+pub(in crate::backend::wayland) fn debug_toolbar_color_logging_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        parse_boolish_env(&std::env::var("WAYSCRIBER_DEBUG_TOOLBAR_COLOR").unwrap_or_default())
+    })
+}
+
 pub(in crate::backend::wayland) fn toolbar_pointer_lock_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
@@ -106,8 +113,34 @@ pub(in crate::backend::wayland) fn toolbar_drag_preview_enabled() -> bool {
     })
 }
 
+pub(in crate::backend::wayland) fn toolbar_drag_throttle_interval() -> Option<Duration> {
+    static VALUE: OnceLock<Option<Duration>> = OnceLock::new();
+    *VALUE.get_or_init(|| {
+        let raw =
+            std::env::var("WAYSCRIBER_TOOLBAR_DRAG_THROTTLE_MS").unwrap_or_else(|_| "12".into());
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Some(Duration::from_millis(12));
+        }
+        let Ok(ms) = trimmed.parse::<u64>() else {
+            return Some(Duration::from_millis(12));
+        };
+        if ms == 0 {
+            None
+        } else {
+            Some(Duration::from_millis(ms))
+        }
+    })
+}
+
 pub(in crate::backend::wayland) fn drag_log(message: impl AsRef<str>) {
     if debug_toolbar_drag_logging_enabled() {
+        log::info!("{}", message.as_ref());
+    }
+}
+
+pub(in crate::backend::wayland) fn color_log(message: impl AsRef<str>) {
+    if debug_toolbar_color_logging_enabled() {
         log::info!("{}", message.as_ref());
     }
 }

@@ -2,6 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 use wayland_client::QueueHandle;
 
+use crate::backend::wayland::state::drag_log;
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::ui::toolbar::ToolbarEvent;
@@ -49,11 +50,23 @@ impl WaylandState {
                 self.is_move_dragging()
             );
         }
-        if inline_active
-            && ((button == BTN_LEFT && self.inline_toolbar_press(event.position))
-                || self.pointer_over_toolbar())
-        {
-            return;
+        if inline_active {
+            if button == BTN_LEFT && self.inline_toolbar_press(event.position) {
+                drag_log(format!(
+                    "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
+                    self.toolbar_dragging(),
+                    event.position.0,
+                    event.position.1,
+                    surface_id(&event.surface)
+                ));
+                if self.is_move_dragging() {
+                    self.lock_pointer_for_drag(qh, &event.surface);
+                }
+                return;
+            }
+            if self.pointer_over_toolbar() {
+                return;
+            }
         }
         if on_toolbar {
             if button == BTN_LEFT

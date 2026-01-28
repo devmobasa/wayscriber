@@ -7,6 +7,7 @@ mod render;
 mod tests;
 
 pub(crate) use core::board_picker::BoardPickerEditMode;
+pub use core::color_picker_popup::{color_to_hex, parse_hex_color};
 #[allow(unused_imports)]
 pub use core::{
     BLOCKED_ACTION_DURATION_MS, BoardPickerCursorHint, COLOR_PICKER_PREVIEW_SIZE,

@@ -1,6 +1,6 @@
 use log::warn;
-use smithay_client_toolkit::seat::pointer::CursorIcon;
-use wayland_client::Connection;
+use smithay_client_toolkit::seat::pointer::{CursorIcon, PointerData};
+use wayland_client::{Connection, Proxy};
 
 use super::*;
 use crate::backend::wayland::toolbar::ToolbarCursorHint;
@@ -11,6 +11,15 @@ use crate::input::{
 
 impl WaylandState {
     pub(super) fn update_pointer_cursor(&mut self, toolbar_hover: bool, conn: &Connection) {
+        if self.toolbar_dragging() && self.pointer_lock_active() {
+            self.hide_pointer_cursor();
+            return;
+        }
+
+        if self.cursor_hidden {
+            self.cursor_hidden = false;
+            self.current_pointer_shape = None;
+        }
         let icon = self.compute_cursor_icon(toolbar_hover);
         if let Some(pointer) = self.themed_pointer.as_ref()
             && self.current_pointer_shape != Some(icon)
@@ -98,6 +107,10 @@ impl WaylandState {
                     HelpOverlayCursorHint::Default => CursorIcon::Default,
                 };
             }
+        }
+
+        if self.toolbar_dragging() {
+            return CursorIcon::Grabbing;
         }
 
         // Inline toolbar cursor hints (when using inline mode)
@@ -197,5 +210,23 @@ impl WaylandState {
 
         // Default: crosshair for drawing
         CursorIcon::Crosshair
+    }
+
+    pub(in crate::backend::wayland) fn hide_pointer_cursor(&mut self) {
+        if self.cursor_hidden {
+            return;
+        }
+        let Some(pointer) = self.current_pointer() else {
+            return;
+        };
+        let serial = pointer
+            .data::<PointerData>()
+            .and_then(|data| data.latest_button_serial().or(data.latest_enter_serial()));
+        let Some(serial) = serial else {
+            return;
+        };
+        pointer.set_cursor(serial, None, 0, 0);
+        self.cursor_hidden = true;
+        self.current_pointer_shape = None;
     }
 }

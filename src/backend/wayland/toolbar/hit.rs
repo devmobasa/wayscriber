@@ -1,3 +1,4 @@
+use crate::backend::wayland::state::{color_log, debug_toolbar_color_logging_enabled};
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
@@ -59,9 +60,14 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
         PickColor { x: px, y: py, w, h } => {
             let hue = ((x - px) / w).clamp(0.0, 1.0);
             let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-            ToolbarEvent::SetColor(crate::backend::wayland::toolbar::events::hsv_to_rgb(
-                hue, 1.0, value,
-            ))
+            let color = crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value);
+            if debug_toolbar_color_logging_enabled() {
+                color_log(format!(
+                    "toolbar pick color: pos=({:.1},{:.1}) picker=({:.1},{:.1},{:.1},{:.1}) hue={:.3} value={:.3} rgb=({:.3},{:.3},{:.3})",
+                    x, y, px, py, w, h, hue, value, color.r, color.g, color.b
+                ));
+            }
+            ToolbarEvent::SetColor(color)
         }
         DragUndoDelay => {
             let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
@@ -121,9 +127,14 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
         PickColor { x: px, y: py, w, h } => {
             let hue = ((x - px) / w).clamp(0.0, 1.0);
             let value = (1.0 - (y - py) / h).clamp(0.0, 1.0);
-            Some(ToolbarIntent(ToolbarEvent::SetColor(
-                crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value),
-            )))
+            let color = crate::backend::wayland::toolbar::events::hsv_to_rgb(hue, 1.0, value);
+            if debug_toolbar_color_logging_enabled() {
+                color_log(format!(
+                    "toolbar drag color: pos=({:.1},{:.1}) picker=({:.1},{:.1},{:.1},{:.1}) hue={:.3} value={:.3} rgb=({:.3},{:.3},{:.3})",
+                    x, y, px, py, w, h, hue, value, color.r, color.g, color.b
+                ));
+            }
+            Some(ToolbarIntent(ToolbarEvent::SetColor(color)))
         }
         DragUndoDelay => {
             let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);

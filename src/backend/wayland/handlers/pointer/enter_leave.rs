@@ -94,5 +94,6 @@ impl WaylandState {
             self.end_toolbar_move_drag();
         }
         self.current_pointer_shape = None;
+        self.cursor_hidden = false;
     }
 }
