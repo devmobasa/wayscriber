@@ -1,6 +1,6 @@
 use crate::config::ToolbarLayoutMode;
-use crate::input::Tool;
 use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui::toolbar::snapshot::ToolContext;
 
 use super::super::ToolbarLayoutSpec;
 
@@ -10,14 +10,8 @@ impl ToolbarLayoutSpec {
         snapshot: &ToolbarSnapshot,
     ) -> (u32, u32) {
         let base_height = self.side_content_start_y();
-        let colors_h = self.side_colors_height(snapshot);
-        let show_marker_opacity =
-            snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
-        let show_text_controls =
-            snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
-        let show_arrow_controls =
-            snapshot.active_tool == Tool::Arrow || snapshot.arrow_label_enabled;
-        let show_step_marker_controls = snapshot.active_tool == Tool::StepMarker;
+        let tool_context = ToolContext::from_snapshot(snapshot);
+
         let show_drawer_view =
             snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
         let show_advanced = snapshot.show_actions_advanced && show_drawer_view;
@@ -44,15 +38,26 @@ impl ToolbarLayoutSpec {
             }
         };
 
-        add_section(colors_h, &mut height);
+        // Color section: only when tool needs color
+        if tool_context.needs_color {
+            let colors_h = self.side_colors_height(snapshot);
+            add_section(colors_h, &mut height);
+        }
+
         if show_presets {
             add_section(Self::SIDE_PRESET_CARD_HEIGHT, &mut height);
         }
-        add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Thickness
-        if snapshot.thickness_targets_eraser {
-            add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
+
+        // Thickness/size slider: only when tool needs it
+        if tool_context.needs_thickness {
+            add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
+            if snapshot.thickness_targets_eraser {
+                add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
+            }
         }
-        if show_arrow_controls {
+
+        // Arrow controls: only when arrow tool is active
+        if tool_context.show_arrow_labels {
             let arrow_height = if snapshot.arrow_label_enabled {
                 Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET
             } else {
@@ -60,13 +65,19 @@ impl ToolbarLayoutSpec {
             };
             add_section(arrow_height, &mut height);
         }
-        if show_step_marker_controls {
+
+        // Step marker controls: only when step marker is active
+        if tool_context.show_step_counter {
             add_section(Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET, &mut height);
         }
-        if show_marker_opacity {
+
+        // Marker opacity: only when marker tool is active
+        if tool_context.show_marker_opacity {
             add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
         }
-        if show_text_controls {
+
+        // Text controls: only when text/note mode is active
+        if tool_context.show_font_controls {
             add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Text size
             add_section(Self::SIDE_FONT_CARD_HEIGHT, &mut height);
         }

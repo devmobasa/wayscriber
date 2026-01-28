@@ -15,6 +15,7 @@ pub(super) use super::super::format_binding_label;
 pub(super) use super::super::hit::HitRegion;
 pub(super) use super::spec::ToolbarLayoutSpec;
 pub(super) use crate::config::ToolbarLayoutMode;
+pub(super) use crate::ui::toolbar::snapshot::ToolContext;
 pub(super) use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 /// Populate hit regions for the side toolbar.
@@ -26,28 +27,43 @@ pub fn build_side_hits(
     hits: &mut Vec<HitRegion>,
 ) {
     let ctx = SideLayoutContext::new(width, snapshot);
+    let tool_context = ToolContext::from_snapshot(snapshot);
 
     header::push_header_hits(&ctx, hits);
 
     let mut y = ctx.spec.side_content_start_y();
 
-    y = colors::push_color_picker_hits(&ctx, y, hits);
-    y = presets::push_preset_hits(&ctx, y, hits);
-    y = sliders::push_thickness_hits(&ctx, y, hits);
-
-    if snapshot.thickness_targets_eraser {
-        y += ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT + ctx.section_gap;
+    // Color section: only when tool needs color
+    if tool_context.needs_color {
+        y = colors::push_color_picker_hits(&ctx, y, hits);
     }
 
-    y = arrow::advance_arrow_section(&ctx, y);
+    y = presets::push_preset_hits(&ctx, y, hits);
 
-    let show_marker_opacity =
-        snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
-    if show_marker_opacity {
+    // Thickness/size: only when tool needs it
+    if tool_context.needs_thickness {
+        y = sliders::push_thickness_hits(&ctx, y, hits);
+
+        if snapshot.thickness_targets_eraser {
+            y += ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT + ctx.section_gap;
+        }
+    }
+
+    // Arrow section: only for arrow tool
+    if tool_context.show_arrow_labels {
+        y = arrow::advance_arrow_section(&ctx, y);
+    }
+
+    // Marker opacity: only for marker tool
+    if tool_context.show_marker_opacity {
         y += ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + ctx.section_gap;
     }
 
-    y = sliders::push_text_hits(&ctx, y, hits);
+    // Text controls: only when text/note is active
+    if tool_context.show_font_controls {
+        y = sliders::push_text_hits(&ctx, y, hits);
+    }
+
     y = drawer::push_drawer_tabs_hits(&ctx, y, hits);
     y = actions::push_actions_hits(&ctx, y, hits);
     y = boards::push_boards_hits(&ctx, y, hits);

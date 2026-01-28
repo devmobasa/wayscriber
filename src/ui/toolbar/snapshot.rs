@@ -7,6 +7,180 @@ use crate::input::{BoardBackground, EraserMode, InputState, Tool, ToolbarDrawerT
 
 use super::bindings::ToolbarBindingHints;
 
+/// The kind of tool-specific options to display in the side panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolOptionsKind {
+    /// No tool-specific options (e.g., Select tool)
+    None,
+    /// Pen/Line tools: thickness only
+    Stroke,
+    /// Marker tool: thickness + opacity
+    Marker,
+    /// Eraser tool: eraser size + mode toggle
+    Eraser,
+    /// Shape tools (Rect/Ellipse): thickness + fill toggle
+    Shape,
+    /// Arrow tool: thickness + labels toggle + counter
+    Arrow,
+    /// StepMarker tool: size + counter
+    StepMarker,
+    /// Text mode: font size + font family
+    Text,
+}
+
+/// Context that determines which UI sections to show based on the active tool.
+///
+/// This enables contextual/adaptive UI - showing only relevant controls for the
+/// current tool rather than all options at once.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolContext {
+    /// Whether to show the color section (compact swatch + popover)
+    pub needs_color: bool,
+    /// Whether to show a thickness/size slider
+    pub needs_thickness: bool,
+    /// The kind of tool-specific options to display
+    pub tool_options_kind: ToolOptionsKind,
+    /// Label for the thickness/size slider
+    pub thickness_label: &'static str,
+    /// Whether the fill toggle should be shown (for shapes)
+    pub show_fill_toggle: bool,
+    /// Whether the arrow labels section should be shown
+    pub show_arrow_labels: bool,
+    /// Whether the step marker counter should be shown
+    pub show_step_counter: bool,
+    /// Whether the eraser mode toggle should be shown
+    pub show_eraser_mode: bool,
+    /// Whether the marker opacity slider should be shown
+    pub show_marker_opacity: bool,
+    /// Whether font controls should be shown
+    pub show_font_controls: bool,
+}
+
+impl ToolContext {
+    /// Compute the tool context from the current toolbar state.
+    pub fn from_snapshot(snapshot: &ToolbarSnapshot) -> Self {
+        let effective_tool = snapshot.tool_override.unwrap_or(snapshot.active_tool);
+        let text_or_note_active = snapshot.text_active || snapshot.note_active;
+
+        // If text/note mode is active, show text controls
+        if text_or_note_active {
+            return Self {
+                needs_color: true,
+                needs_thickness: false,
+                tool_options_kind: ToolOptionsKind::Text,
+                thickness_label: "",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                // Honor show_marker_opacity_section setting
+                show_marker_opacity: snapshot.show_marker_opacity_section,
+                show_font_controls: true,
+            };
+        }
+
+        // Compute base context from tool, then apply snapshot settings
+        let mut ctx = match effective_tool {
+            Tool::Select | Tool::Highlight => Self {
+                needs_color: false,
+                needs_thickness: false,
+                tool_options_kind: ToolOptionsKind::None,
+                thickness_label: "",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Pen | Tool::Line => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Stroke,
+                thickness_label: "Thickness",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Marker => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Marker,
+                thickness_label: "Thickness",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: true,
+                show_font_controls: false,
+            },
+            Tool::Eraser => Self {
+                needs_color: false,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Eraser,
+                thickness_label: "Eraser Size",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: true,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Rect | Tool::Ellipse => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Shape,
+                thickness_label: "Thickness",
+                show_fill_toggle: true,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Arrow => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Arrow,
+                thickness_label: "Thickness",
+                show_fill_toggle: false,
+                show_arrow_labels: true,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::StepMarker => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::StepMarker,
+                thickness_label: "Size",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: true,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+        };
+
+        // Honor snapshot settings that override tool-based visibility
+        // show_text_controls: keep font controls visible even when text mode is inactive
+        if snapshot.show_text_controls {
+            ctx.show_font_controls = true;
+        }
+        // show_marker_opacity_section: keep opacity slider visible for all tools
+        if snapshot.show_marker_opacity_section {
+            ctx.show_marker_opacity = true;
+        }
+
+        ctx
+    }
+}
+
 /// Snapshot of a single preset slot for toolbar display.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PresetSlotSnapshot {
