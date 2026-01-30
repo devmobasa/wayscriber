@@ -571,7 +571,7 @@ exit_after_capture = false
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
-- Install `wl-clipboard`, `grim`, and `slurp` for the best Wayland experience; otherwise wayscriber falls back to `xdg-desktop-portal`.
+- `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.
 - Use `--exit-after-capture` / `--no-exit-after-capture` to override exit behavior per run.
 
 ### `[tablet]` - Tablet/Stylus Input
