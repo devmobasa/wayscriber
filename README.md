@@ -100,7 +100,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 ### Capture & Screenshots
 - Full-screen saves, active-window grabs, region capture
 - Copy to clipboard or save to file
-- Uses `grim`, `slurp`, `wl-clipboard` (fallback: xdg-desktop-portal)
+- Uses `grim`, `slurp`, `wl-clipboard` (installed automatically by deb/rpm/AUR packages; fallback: xdg-desktop-portal)
 
 ### Session Persistence
 - Opt-in per board/monitor canvas + tool state restore
@@ -289,9 +289,10 @@ cargo build --release
 ./tools/install.sh
 ```
 
-### Optional Dependencies
+### Screenshot Tools
 
-For the best screenshot workflow, install:
+`wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages.
+If you build from source or use the tarball, install them manually:
 ```bash
 sudo apt-get install wl-clipboard grim slurp   # Debian/Ubuntu
 sudo dnf install wl-clipboard grim slurp       # Fedora
@@ -377,7 +378,7 @@ journalctl --user -u wayscriber.service -f
 | <kbd>Ctrl+Alt+6</kbd> | Region → save PNG (explicit) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
-Requires `wl-clipboard`, `grim`, `slurp`. Falls back to xdg-desktop-portal if missing.
+Requires `wl-clipboard`, `grim`, `slurp` (installed automatically by deb/rpm/AUR packages). Falls back to xdg-desktop-portal if missing.
 Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the overlay closes after a capture. `--about` opens the About window.
 
 ---

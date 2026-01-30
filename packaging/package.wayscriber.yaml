@@ -57,6 +57,9 @@ overrides:
       - libpangocairo-1.0-0
       - libxkbcommon0
       - libstdc++6
+      - wl-clipboard
+      - grim
+      - slurp
   rpm:
     depends:
       - glibc
@@ -65,5 +68,8 @@ overrides:
       - pango
       - libxkbcommon
       - libstdc++
+      - wl-clipboard
+      - grim
+      - slurp
     rpm:
       arch: x86_64
