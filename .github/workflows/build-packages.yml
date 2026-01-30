@@ -53,10 +53,15 @@ jobs:
             .
             configurator
 
-      - name: Read crate version
+      - name: Read release version
         id: meta
         run: |
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wayscriber") | .version')
+          if [[ "${GITHUB_REF_NAME:-}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ -z "${VERSION:-}" ]]; then
+            VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wayscriber") | .version')
+          fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Pre-fetch Cargo dependencies (locked)

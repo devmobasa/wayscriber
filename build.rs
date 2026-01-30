@@ -10,6 +10,14 @@ fn main() {
         tablet: { feature = "tablet-input" },
     }
 
+    println!("cargo:rerun-if-env-changed=WAYSCRIBER_RELEASE_VERSION");
+    match env::var("WAYSCRIBER_RELEASE_VERSION") {
+        Ok(release_version) if !release_version.is_empty() => {
+            println!("cargo:rustc-env=WAYSCRIBER_RELEASE_VERSION={release_version}");
+        }
+        _ => {}
+    }
+
     let hash = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()

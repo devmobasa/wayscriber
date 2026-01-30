@@ -41,17 +41,18 @@ Helper scripts for development, installation, packaging, and release workflows.
 - **bump-version.sh** - Bump version numbers
   - Updates Cargo.toml, configurator/Cargo.toml, Cargo.lock, PKGBUILD, .SRCINFO
   - Auto-increments patch version if no version specified
+  - Supports MAJOR.MINOR.PATCH.HOTFIX for packaging-only hotfix releases
   - Usage: `./tools/bump-version.sh [--dry-run] [new_version]`
 
 - **create-release-tag.sh** - Create git tag (local only)
   - Creates annotated tag `v<version>` without pushing
   - Requires clean working tree
-  - Usage: `./tools/create-release-tag.sh <version>`
+  - Usage: `./tools/create-release-tag.sh <version>` (X.Y.Z or X.Y.Z.N)
 
 - **publish-release-tag.sh** - Create and push git tag
   - Creates annotated tag and pushes to origin
   - Auto-detects version from Cargo.toml if not specified
-  - Usage: `./tools/publish-release-tag.sh [--version X.Y.Z] [--dry-run]`
+  - Usage: `./tools/publish-release-tag.sh [--version X.Y.Z[.N]] [--dry-run]`
 
 - **release.sh** - Full release workflow
   - Bumps version, commits changes, creates tag, and pushes

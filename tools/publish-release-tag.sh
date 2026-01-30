@@ -11,7 +11,7 @@ DRY_RUN=0
 
 usage() {
     cat <<'EOF'
-publish-release-tag.sh [--version X.Y.Z] [--dry-run]
+publish-release-tag.sh [--version X.Y.Z[.N]] [--dry-run]
 
 Creates an annotated git tag "v<version>" and pushes it to origin.
 If --version is omitted, uses the wayscriber crate version from Cargo metadata.
@@ -31,6 +31,11 @@ cd "$REPO_ROOT"
 
 if [[ -z "$VERSION" ]]; then
     VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wayscriber") | .version')"
+fi
+
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "error: invalid version format: $VERSION (expected MAJOR.MINOR.PATCH[.HOTFIX])" >&2
+    exit 1
 fi
 
 TAG="v${VERSION}"

@@ -63,7 +63,7 @@ impl ksni::Tray for WayscriberTray {
         ksni::ToolTip {
             icon_name: "wayscriber".into(),
             icon_pixmap: vec![],
-            title: format!("Wayscriber {}", env!("CARGO_PKG_VERSION")),
+            title: format!("Wayscriber {}", crate::build_info::version()),
             description,
         }
     }

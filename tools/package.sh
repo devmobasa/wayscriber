@@ -69,6 +69,10 @@ if [[ -z "$VERSION" ]]; then
         | head -n1)"
 fi
 
+if [[ -n "$VERSION" ]]; then
+    export WAYSCRIBER_RELEASE_VERSION="$VERSION"
+fi
+
 mkdir -p "${ARTIFACT_ROOT}"
 
 info() { printf '\033[0;32m[INFO]\033[0m %s\n' "$*" >&2; }
