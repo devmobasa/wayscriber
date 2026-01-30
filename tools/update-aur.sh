@@ -18,6 +18,23 @@ AUR_REPO="wayscriber"
 PACKAGE_URL="https://aur.archlinux.org/packages/wayscriber"
 AUR_DIR="$HOME/aur-packages/wayscriber"
 
+usage() {
+    cat <<'EOF'
+update-aur.sh [--version X.Y.Z[.N]]
+
+Updates the AUR package metadata. By default, uses the Cargo.toml version.
+EOF
+}
+
+VERSION_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version) VERSION_OVERRIDE="$2"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
+    esac
+done
+
 echo "═══════════════════════════════════════════════════════════════"
 echo "  WAYSCRIBER - AUR UPDATE AUTOMATION"
 echo "═══════════════════════════════════════════════════════════════"
@@ -34,16 +51,26 @@ CARGO_VERSION=$(grep '^version = ' "$PROJECT_ROOT/Cargo.toml" | head -1 | sed 's
 echo -e "${GREEN}📦 Current version in Cargo.toml: $CARGO_VERSION${NC}"
 echo ""
 
+RELEASE_VERSION="${VERSION_OVERRIDE:-$CARGO_VERSION}"
+if ! [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo -e "${RED}❌ Invalid version format: $RELEASE_VERSION (expected MAJOR.MINOR.PATCH[.HOTFIX])${NC}"
+    exit 1
+fi
+if [[ "$RELEASE_VERSION" != "$CARGO_VERSION" ]]; then
+    echo -e "${YELLOW}📦 Using release version override: $RELEASE_VERSION${NC}"
+    echo ""
+fi
+
 # Check if version tag exists on GitHub
 cd "$PROJECT_ROOT"
-if ! git tag | grep -q "^v$CARGO_VERSION\$"; then
-    echo -e "${YELLOW}⚠️  Git tag v$CARGO_VERSION does not exist${NC}"
+if ! git tag | grep -q "^v$RELEASE_VERSION\$"; then
+    echo -e "${YELLOW}⚠️  Git tag v$RELEASE_VERSION does not exist${NC}"
     echo ""
-    read -p "Create and push tag v$CARGO_VERSION? (y/n) " -n 1 -r
+    read -p "Create and push tag v$RELEASE_VERSION? (y/n) " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        git tag -a "v$CARGO_VERSION" -m "Release v$CARGO_VERSION"
-        git push origin "v$CARGO_VERSION"
+        git tag -a "v$RELEASE_VERSION" -m "Release v$RELEASE_VERSION"
+        git push origin "v$RELEASE_VERSION"
         echo -e "${GREEN}✅ Tag created and pushed${NC}"
     else
         echo -e "${RED}❌ Aborted - tag required for AUR${NC}"
@@ -85,13 +112,13 @@ echo -e "${GREEN}Copied $SOURCE_FILE to $AUR_DIR/PKGBUILD${NC}"
 # Update version in PKGBUILD
 cd "$AUR_DIR"
 if grep -q '^pkgver=' PKGBUILD; then
-    sed -i "s/^pkgver=.*/pkgver=$CARGO_VERSION/" PKGBUILD
+    sed -i "s/^pkgver=.*/pkgver=$RELEASE_VERSION/" PKGBUILD
 fi
 if grep -q '^pkgrel=' PKGBUILD; then
     sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
 fi
 
-echo -e "${GREEN}✅ Updated PKGBUILD: pkgver=$CARGO_VERSION, pkgrel=1${NC}"
+echo -e "${GREEN}✅ Updated PKGBUILD: pkgver=$RELEASE_VERSION, pkgrel=1${NC}"
 echo ""
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -144,7 +171,7 @@ echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Add and commit
     git add PKGBUILD .SRCINFO .gitignore 2>/dev/null || git add PKGBUILD .SRCINFO
-    git commit -m "Update to v$CARGO_VERSION"
+    git commit -m "Update to v$RELEASE_VERSION"
 
     # Push
     if git push origin master 2>/dev/null; then
@@ -163,7 +190,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "═══════════════════════════════════════════════════════════════"
     echo ""
     echo "Package URL: $PACKAGE_URL"
-    echo "Version: $CARGO_VERSION"
+    echo "Version: $RELEASE_VERSION"
     echo ""
     echo "Users can update with:"
     echo "  yay -Syu wayscriber"
@@ -175,6 +202,6 @@ else
     echo "To push manually later:"
     echo "  cd $AUR_DIR"
     echo "  git add PKGBUILD .SRCINFO"
-    echo "  git commit -m 'Update to v$CARGO_VERSION'"
+    echo "  git commit -m 'Update to v$RELEASE_VERSION'"
     echo "  git push origin master"
 fi
