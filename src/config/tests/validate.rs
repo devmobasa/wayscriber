@@ -131,6 +131,7 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     config.ui.click_highlight.radius = 5.0;
     config.ui.click_highlight.outline_thickness = 50.0;
     config.ui.click_highlight.duration_ms = 10;
+    config.ui.command_palette_toast_duration_ms = 50;
     config.ui.click_highlight.fill_color = [2.0, -1.0, 0.5, 0.5];
     config.ui.click_highlight.outline_color = [-0.2, 2.0, 0.5, 1.2];
     config.ui.toolbar.scale = 5.0;
@@ -153,6 +154,7 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     assert_eq!(config.ui.click_highlight.radius, 16.0);
     assert_eq!(config.ui.click_highlight.outline_thickness, 12.0);
     assert_eq!(config.ui.click_highlight.duration_ms, 150);
+    assert_eq!(config.ui.command_palette_toast_duration_ms, 300);
     assert!(
         config
             .ui

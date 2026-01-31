@@ -235,6 +235,9 @@ show_frozen_badge = false
 # Filter help overlay sections based on enabled features
 help_overlay_context_filter = true
 
+# Command palette action toast duration (ms)
+command_palette_toast_duration_ms = 1500
+
 # Status bar position
 # Options: "top-left", "top-right", "bottom-left", "bottom-right"
 status_bar_position = "bottom-left"

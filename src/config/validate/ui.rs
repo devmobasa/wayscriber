@@ -29,6 +29,15 @@ impl Config {
                 self.ui.click_highlight.duration_ms.clamp(150, 1500);
         }
 
+        if !(300..=5000).contains(&self.ui.command_palette_toast_duration_ms) {
+            log::warn!(
+                "Invalid command palette toast duration {}ms, clamping to 300-5000ms range",
+                self.ui.command_palette_toast_duration_ms
+            );
+            self.ui.command_palette_toast_duration_ms =
+                self.ui.command_palette_toast_duration_ms.clamp(300, 5000);
+        }
+
         // Sanitize NaN/Inf before clamping (clamp doesn't fix non-finite values)
         if !self.ui.toolbar.scale.is_finite() {
             log::warn!(

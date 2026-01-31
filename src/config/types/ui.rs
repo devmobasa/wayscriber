@@ -56,6 +56,10 @@ pub struct UiConfig {
     #[serde(default)]
     pub preferred_output: Option<String>,
 
+    /// Duration for command palette action toasts (ms)
+    #[serde(default = "default_command_palette_toast_duration_ms")]
+    pub command_palette_toast_duration_ms: u64,
+
     /// Use fullscreen for the xdg-shell fallback (GNOME). Disable if fullscreen
     /// produces an opaque background; maximized is used when false.
     #[serde(default = "default_xdg_fullscreen")]
@@ -87,6 +91,7 @@ impl Default for UiConfig {
             help_overlay_style: HelpOverlayStyle::default(),
             help_overlay_context_filter: default_help_overlay_context_filter(),
             preferred_output: None,
+            command_palette_toast_duration_ms: default_command_palette_toast_duration_ms(),
             xdg_fullscreen: default_xdg_fullscreen(),
             click_highlight: ClickHighlightConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
@@ -121,6 +126,10 @@ fn default_xdg_fullscreen() -> bool {
 
 fn default_help_overlay_context_filter() -> bool {
     true
+}
+
+fn default_command_palette_toast_duration_ms() -> u64 {
+    1500
 }
 
 fn default_status_position() -> StatusPosition {

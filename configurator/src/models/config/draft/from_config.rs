@@ -66,6 +66,10 @@ impl ConfigDraft {
             ui_context_menu_enabled: config.ui.context_menu.enabled,
             ui_preferred_output: config.ui.preferred_output.clone().unwrap_or_default(),
             ui_xdg_fullscreen: config.ui.xdg_fullscreen,
+            ui_command_palette_toast_duration_ms: config
+                .ui
+                .command_palette_toast_duration_ms
+                .to_string(),
             ui_toolbar_top_pinned: config.ui.toolbar.top_pinned,
             ui_toolbar_side_pinned: config.ui.toolbar.side_pinned,
             ui_toolbar_use_icons: config.ui.toolbar.use_icons,

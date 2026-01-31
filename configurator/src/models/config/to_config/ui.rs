@@ -18,6 +18,12 @@ impl ConfigDraft {
             Some(preferred_output.to_string())
         };
         config.ui.xdg_fullscreen = self.ui_xdg_fullscreen;
+        parse_u64_field(
+            &self.ui_command_palette_toast_duration_ms,
+            "ui.command_palette_toast_duration_ms",
+            errors,
+            |value| config.ui.command_palette_toast_duration_ms = value,
+        );
         config.ui.toolbar.top_pinned = self.ui_toolbar_top_pinned;
         config.ui.toolbar.side_pinned = self.ui_toolbar_side_pinned;
         config.ui.toolbar.use_icons = self.ui_toolbar_use_icons;

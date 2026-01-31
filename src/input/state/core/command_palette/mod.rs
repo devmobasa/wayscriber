@@ -8,9 +8,6 @@ use super::base::{InputState, UiToastKind};
 use crate::config::keybindings::Action;
 use crate::input::events::Key;
 
-/// Duration for command palette action toast (ms).
-const COMMAND_TOAST_DURATION_MS: u64 = 1200;
-
 /// Maximum number of visible items in the command palette.
 pub const COMMAND_PALETTE_MAX_VISIBLE: usize = 10;
 
@@ -195,7 +192,7 @@ impl InputState {
                     self.set_ui_toast_with_duration(
                         UiToastKind::Info,
                         label,
-                        COMMAND_TOAST_DURATION_MS,
+                        self.command_palette_toast_duration_ms,
                     );
 
                     self.handle_action(action);

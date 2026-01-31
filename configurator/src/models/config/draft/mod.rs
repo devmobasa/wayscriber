@@ -57,6 +57,7 @@ pub struct ConfigDraft {
     pub ui_context_menu_enabled: bool,
     pub ui_preferred_output: String,
     pub ui_xdg_fullscreen: bool,
+    pub ui_command_palette_toast_duration_ms: String,
     pub ui_toolbar_top_pinned: bool,
     pub ui_toolbar_side_pinned: bool,
     pub ui_toolbar_use_icons: bool,
