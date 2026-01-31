@@ -10,15 +10,36 @@ use crate::{RESUME_SESSION_ENV, runtime_session_override};
 pub(super) fn friendly_capture_error(error: &str) -> String {
     let lower = error.to_lowercase();
 
+    if is_missing_tool(&lower, "slurp") {
+        return "Missing screenshot tool: slurp. Install slurp + grim and try again.".to_string();
+    }
+    if is_missing_tool(&lower, "grim") {
+        return "Missing screenshot tool: grim. Install grim and try again.".to_string();
+    }
+    if is_missing_tool(&lower, "wl-copy") {
+        return "Missing clipboard tool: wl-clipboard (wl-copy). Install it and try again."
+            .to_string();
+    }
     if lower.contains("requestcancelled") || lower.contains("cancelled") {
         "Screen capture cancelled by user".to_string()
     } else if lower.contains("permission") {
         "Permission denied. Enable screen sharing in system settings.".to_string()
+    } else if lower.contains("portal returned error code") {
+        "Portal screenshot failed. If you use wlroots/Hyprland/Niri, install grim + slurp. Otherwise check xdg-desktop-portal."
+            .to_string()
     } else if lower.contains("busy") {
         "Screen capture in progress. Try again in a moment.".to_string()
     } else {
         "Screen capture failed. Please try again.".to_string()
     }
+}
+
+fn is_missing_tool(lower: &str, tool: &str) -> bool {
+    lower.contains(tool)
+        && (lower.contains("no such file")
+            || lower.contains("not found")
+            || lower.contains("failed to run")
+            || lower.contains("failed to spawn"))
 }
 
 pub(super) fn read_events_with_timeout(

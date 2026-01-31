@@ -175,6 +175,9 @@ fn handle_capture_results(state: &mut WaylandState) {
 
             warn!("Screenshot capture failed: {}", error);
 
+            state
+                .input_state
+                .set_ui_toast(UiToastKind::Error, friendly_error.clone());
             notification::send_notification_async(
                 &state.tokio_handle,
                 "Screenshot Failed".to_string(),
