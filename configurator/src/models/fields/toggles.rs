@@ -105,6 +105,7 @@ pub enum TextField {
     HelpLineHeight,
     HelpPadding,
     HelpBorderWidth,
+    UiCommandPaletteToastDurationMs,
     CaptureSaveDirectory,
     CaptureFilename,
     CaptureFormat,

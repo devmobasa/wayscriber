@@ -112,6 +112,9 @@ impl InputState {
             ToolbarEvent::TogglePresets(show) => self.apply_toolbar_toggle_presets(show),
             ToolbarEvent::ToggleStepSection(show) => self.apply_toolbar_toggle_step_section(show),
             ToolbarEvent::ToggleTextControls(show) => self.apply_toolbar_toggle_text_controls(show),
+            ToolbarEvent::ToggleContextAwareUi(enabled) => {
+                self.apply_toolbar_toggle_context_aware_ui(enabled)
+            }
             ToolbarEvent::TogglePresetToasts(show) => self.apply_toolbar_toggle_preset_toasts(show),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
             ToolbarEvent::ToggleStatusBar(show) => self.apply_toolbar_toggle_status_bar(show),

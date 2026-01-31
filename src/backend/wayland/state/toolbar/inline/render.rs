@@ -43,6 +43,11 @@ impl WaylandState {
         };
         self.clear_inline_toolbar_hits();
         self.clamp_toolbar_offsets(snapshot);
+        let ui_scale = if snapshot.toolbar_scale.is_finite() {
+            snapshot.toolbar_scale.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
 
         // Position inline toolbars with padding and keep top bar to the right of the side bar.
         let side_offset = (
@@ -59,17 +64,23 @@ impl WaylandState {
         // Top toolbar
         if top_visible {
             let top_size = top_size(snapshot);
+            let top_base_w = top_size.0 as f64 / ui_scale;
+            let top_base_h = top_size.1 as f64 / ui_scale;
             let top_hover_local = self
                 .data
                 .inline_top_hover
                 .or(top_focus_hover)
-                .map(|(x, y)| (x - top_offset.0, y - top_offset.1));
+                .map(|(x, y)| (x - top_offset.0, y - top_offset.1))
+                .map(|(x, y)| (x / ui_scale, y / ui_scale));
             let _ = ctx.save();
             ctx.translate(top_offset.0, top_offset.1);
+            if (ui_scale - 1.0).abs() > f64::EPSILON {
+                ctx.scale(ui_scale, ui_scale);
+            }
             if let Err(err) = render_top_strip(
                 ctx,
-                top_size.0 as f64,
-                top_size.1 as f64,
+                top_base_w,
+                top_base_h,
                 snapshot,
                 &mut self.data.inline_top_hits,
                 top_hover_local,
@@ -79,11 +90,15 @@ impl WaylandState {
             }
             let _ = ctx.restore();
             for hit in &mut self.data.inline_top_hits {
-                hit.rect.0 += top_offset.0;
-                hit.rect.1 += top_offset.1;
-                if let HitKind::PickColor { x, y, .. } = &mut hit.kind {
-                    *x += top_offset.0;
-                    *y += top_offset.1;
+                hit.rect.0 = hit.rect.0 * ui_scale + top_offset.0;
+                hit.rect.1 = hit.rect.1 * ui_scale + top_offset.1;
+                hit.rect.2 *= ui_scale;
+                hit.rect.3 *= ui_scale;
+                if let HitKind::PickColor { x, y, w, h } = &mut hit.kind {
+                    *x = *x * ui_scale + top_offset.0;
+                    *y = *y * ui_scale + top_offset.1;
+                    *w *= ui_scale;
+                    *h *= ui_scale;
                 }
             }
             self.data.inline_top_rect = Some((
@@ -99,17 +114,23 @@ impl WaylandState {
         // Side toolbar
         if side_visible {
             let side_size = side_size(snapshot);
+            let side_base_w = side_size.0 as f64 / ui_scale;
+            let side_base_h = side_size.1 as f64 / ui_scale;
             let side_hover_local = self
                 .data
                 .inline_side_hover
                 .or(side_focus_hover)
-                .map(|(x, y)| (x - side_offset.0, y - side_offset.1));
+                .map(|(x, y)| (x - side_offset.0, y - side_offset.1))
+                .map(|(x, y)| (x / ui_scale, y / ui_scale));
             let _ = ctx.save();
             ctx.translate(side_offset.0, side_offset.1);
+            if (ui_scale - 1.0).abs() > f64::EPSILON {
+                ctx.scale(ui_scale, ui_scale);
+            }
             if let Err(err) = render_side_palette(
                 ctx,
-                side_size.0 as f64,
-                side_size.1 as f64,
+                side_base_w,
+                side_base_h,
                 snapshot,
                 &mut self.data.inline_side_hits,
                 side_hover_local,
@@ -119,11 +140,15 @@ impl WaylandState {
             }
             let _ = ctx.restore();
             for hit in &mut self.data.inline_side_hits {
-                hit.rect.0 += side_offset.0;
-                hit.rect.1 += side_offset.1;
-                if let HitKind::PickColor { x, y, .. } = &mut hit.kind {
-                    *x += side_offset.0;
-                    *y += side_offset.1;
+                hit.rect.0 = hit.rect.0 * ui_scale + side_offset.0;
+                hit.rect.1 = hit.rect.1 * ui_scale + side_offset.1;
+                hit.rect.2 *= ui_scale;
+                hit.rect.3 *= ui_scale;
+                if let HitKind::PickColor { x, y, w, h } = &mut hit.kind {
+                    *x = *x * ui_scale + side_offset.0;
+                    *y = *y * ui_scale + side_offset.1;
+                    *w *= ui_scale;
+                    *h *= ui_scale;
                 }
             }
             self.data.inline_side_rect = Some((

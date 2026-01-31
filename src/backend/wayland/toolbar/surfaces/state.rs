@@ -90,6 +90,19 @@ impl ToolbarSurface {
         }
     }
 
+    pub fn set_ui_scale(&mut self, scale: f64) {
+        // Sanitize scale: handle NaN/Inf and enforce bounds
+        let scale = if scale.is_finite() {
+            scale.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
+        if (self.ui_scale - scale).abs() > f64::EPSILON {
+            self.ui_scale = scale;
+            self.dirty = true;
+        }
+    }
+
     pub fn maybe_update_scale(&mut self, output: Option<&wl_output::WlOutput>, scale: i32) {
         if output.is_some() {
             self.set_scale(scale);

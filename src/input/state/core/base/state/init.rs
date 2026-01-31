@@ -102,6 +102,7 @@ impl InputState {
             command_palette_query: String::new(),
             command_palette_selected: 0,
             command_palette_scroll: 0,
+            command_palette_toast_duration_ms: 1500,
             show_status_bar,
             show_status_board_badge: true,
             show_status_page_badge: true,
@@ -116,6 +117,7 @@ impl InputState {
             toolbar_top_pinned: true,
             toolbar_side_pinned: true,
             toolbar_use_icons: true, // Default to icon mode
+            toolbar_scale: 1.0,
             toolbar_layout_mode: crate::config::ToolbarLayoutMode::Regular,
             toolbar_mode_overrides: crate::config::ToolbarModeOverrides::default(),
             toolbar_shapes_expanded: false,
@@ -195,6 +197,7 @@ impl InputState {
             show_presets: true,
             show_step_section: false,
             show_text_controls: true,
+            context_aware_ui: true,
             show_settings_section: true,
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],

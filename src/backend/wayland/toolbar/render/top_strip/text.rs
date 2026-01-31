@@ -209,25 +209,37 @@ pub(super) fn draw_text_strip(
     }
 
     let icons_w = ToolbarLayoutSpec::TOP_TOGGLE_WIDTH;
-    let icons_hover = hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, x, y, icons_w, btn_h))
-        .unwrap_or(false);
-    draw_checkbox(
+    let icons_hover = hover.and_then(|(hx, hy)| {
+        if point_in_rect(hx, hy, x, y, icons_w, btn_h) {
+            Some(if hx < x + icons_w / 2.0 { 0 } else { 1 })
+        } else {
+            None
+        }
+    });
+    let icons_active = if snapshot.use_icons { 0 } else { 1 };
+    draw_segmented_control(
         ctx,
         x,
         y,
         icons_w,
         btn_h,
-        false,
+        ("Ico", "Txt"),
+        icons_active,
         icons_hover,
         icon_toggle_style,
-        "Icons",
     );
+    let half_w = icons_w / 2.0;
     layout.hits.push(HitRegion {
-        rect: (x, y, icons_w, btn_h),
+        rect: (x, y, half_w, btn_h),
         event: ToolbarEvent::ToggleIconMode(true),
         kind: HitKind::Click,
-        tooltip: None,
+        tooltip: Some("Icons mode".to_string()),
+    });
+    layout.hits.push(HitRegion {
+        rect: (x + half_w, y, half_w, btn_h),
+        event: ToolbarEvent::ToggleIconMode(false),
+        kind: HitKind::Click,
+        tooltip: Some("Text mode".to_string()),
     });
 
     if is_simple && snapshot.shape_picker_open {

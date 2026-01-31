@@ -188,6 +188,9 @@ impl ConfigDraft {
             TextField::HelpLineHeight => self.help_line_height = value,
             TextField::HelpPadding => self.help_padding = value,
             TextField::HelpBorderWidth => self.help_border_width = value,
+            TextField::UiCommandPaletteToastDurationMs => {
+                self.ui_command_palette_toast_duration_ms = value
+            }
             TextField::CaptureSaveDirectory => self.capture_save_directory = value,
             TextField::CaptureFilename => self.capture_filename_template = value,
             TextField::CaptureFormat => self.capture_format = value,

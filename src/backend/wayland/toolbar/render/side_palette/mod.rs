@@ -18,6 +18,7 @@ use anyhow::Result;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui::toolbar::snapshot::ToolContext;
 
 use std::time::Instant;
 
@@ -86,20 +87,49 @@ pub fn render_side_palette(
     draw_panel_background(ctx, width, height);
 
     let mut layout = SidePaletteLayout::new(ctx, width, snapshot, hits, hover);
+    let tool_context = ToolContext::from_snapshot(snapshot);
 
     let mut y = header::draw_header(&mut layout);
 
-    let colors_info = colors::draw_colors_section(&mut layout, &mut y);
+    // Color section: only show when the tool needs color
+    let colors_info = if tool_context.needs_color {
+        Some(colors::draw_colors_section(&mut layout, &mut y))
+    } else {
+        None
+    };
+
+    // Presets section (always shown when enabled)
     let hover_preset_color = presets::draw_presets_section(&mut layout, &mut y);
-    if let Some(color) = hover_preset_color {
-        colors::draw_preset_hover_highlight(&layout, &colors_info, color);
+    if let (Some(color), Some(info)) = (hover_preset_color, &colors_info) {
+        colors::draw_preset_hover_highlight(&layout, info, color);
     }
 
-    thickness::draw_thickness_section(&mut layout, &mut y);
-    arrow::draw_arrow_section(&mut layout, &mut y);
-    step_marker::draw_step_marker_section(&mut layout, &mut y);
-    marker::draw_marker_opacity_section(&mut layout, &mut y);
-    text::draw_text_controls_section(&mut layout, &mut y);
+    // Thickness/size slider: show when tool needs thickness
+    if tool_context.needs_thickness {
+        thickness::draw_thickness_section(&mut layout, &mut y);
+    }
+
+    // Arrow labels: show when arrow tool is active
+    if tool_context.show_arrow_labels {
+        arrow::draw_arrow_section(&mut layout, &mut y);
+    }
+
+    // Step marker counter: show when step marker tool is active
+    if tool_context.show_step_counter {
+        step_marker::draw_step_marker_section(&mut layout, &mut y);
+    }
+
+    // Marker opacity: show when marker tool is active
+    if tool_context.show_marker_opacity {
+        marker::draw_marker_opacity_section(&mut layout, &mut y);
+    }
+
+    // Text controls: show when text/note mode is active
+    if tool_context.show_font_controls {
+        text::draw_text_controls_section(&mut layout, &mut y);
+    }
+
+    // Drawer, actions, and other sections (always available based on settings)
     drawer::draw_drawer_tabs(&mut layout, &mut y);
     actions::draw_actions_section(&mut layout, &mut y);
     boards::draw_boards_section(&mut layout, &mut y);

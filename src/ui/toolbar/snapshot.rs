@@ -7,6 +7,213 @@ use crate::input::{BoardBackground, EraserMode, InputState, Tool, ToolbarDrawerT
 
 use super::bindings::ToolbarBindingHints;
 
+/// The kind of tool-specific options to display in the side panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolOptionsKind {
+    /// No tool-specific options (e.g., Select tool)
+    None,
+    /// Pen/Line tools: thickness only
+    Stroke,
+    /// Marker tool: thickness + opacity
+    Marker,
+    /// Eraser tool: eraser size + mode toggle
+    Eraser,
+    /// Shape tools (Rect/Ellipse): thickness + fill toggle
+    Shape,
+    /// Arrow tool: thickness + labels toggle + counter
+    Arrow,
+    /// StepMarker tool: size + counter
+    StepMarker,
+    /// Text mode: font size + font family
+    Text,
+}
+
+/// Context that determines which UI sections to show based on the active tool.
+///
+/// This enables contextual/adaptive UI - showing only relevant controls for the
+/// current tool rather than all options at once.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolContext {
+    /// Whether to show the color section (compact swatch + popover)
+    pub needs_color: bool,
+    /// Whether to show a thickness/size slider
+    pub needs_thickness: bool,
+    /// The kind of tool-specific options to display
+    pub tool_options_kind: ToolOptionsKind,
+    /// Label for the thickness/size slider
+    pub thickness_label: &'static str,
+    /// Whether the fill toggle should be shown (for shapes)
+    pub show_fill_toggle: bool,
+    /// Whether the arrow labels section should be shown
+    pub show_arrow_labels: bool,
+    /// Whether the step marker counter should be shown
+    pub show_step_counter: bool,
+    /// Whether the eraser mode toggle should be shown
+    pub show_eraser_mode: bool,
+    /// Whether the marker opacity slider should be shown
+    pub show_marker_opacity: bool,
+    /// Whether font controls should be shown
+    pub show_font_controls: bool,
+}
+
+impl ToolContext {
+    /// Compute the tool context from the current toolbar state.
+    pub fn from_snapshot(snapshot: &ToolbarSnapshot) -> Self {
+        // If context-aware UI is disabled, show all sections (classic behavior)
+        if !snapshot.context_aware_ui {
+            return Self::all_visible(snapshot);
+        }
+
+        let effective_tool = snapshot.tool_override.unwrap_or(snapshot.active_tool);
+        let text_or_note_active = snapshot.text_active || snapshot.note_active;
+
+        // If text/note mode is active, show text controls
+        if text_or_note_active {
+            return Self {
+                needs_color: true,
+                needs_thickness: false,
+                tool_options_kind: ToolOptionsKind::Text,
+                thickness_label: "",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                // Honor show_marker_opacity_section setting
+                show_marker_opacity: snapshot.show_marker_opacity_section,
+                show_font_controls: true,
+            };
+        }
+
+        // Compute base context from tool, then apply snapshot settings
+        let mut ctx = match effective_tool {
+            Tool::Select | Tool::Highlight => Self {
+                needs_color: false,
+                needs_thickness: false,
+                tool_options_kind: ToolOptionsKind::None,
+                thickness_label: "",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Pen | Tool::Line => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Stroke,
+                thickness_label: "Thickness",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Marker => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Marker,
+                thickness_label: "Thickness",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: true,
+                show_font_controls: false,
+            },
+            Tool::Eraser => Self {
+                needs_color: false,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Eraser,
+                thickness_label: "Eraser Size",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: true,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Rect | Tool::Ellipse => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Shape,
+                thickness_label: "Thickness",
+                show_fill_toggle: true,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::Arrow => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Arrow,
+                thickness_label: "Thickness",
+                show_fill_toggle: false,
+                show_arrow_labels: true,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+            Tool::StepMarker => Self {
+                needs_color: true,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::StepMarker,
+                thickness_label: "Size",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: true,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
+        };
+
+        // Honor snapshot settings that override tool-based visibility
+        // show_text_controls: keep font controls visible even when text mode is inactive
+        if snapshot.show_text_controls {
+            ctx.show_font_controls = true;
+        }
+        // show_marker_opacity_section: keep opacity slider visible for all tools
+        if snapshot.show_marker_opacity_section {
+            ctx.show_marker_opacity = true;
+        }
+
+        ctx
+    }
+
+    /// Returns a context where all sections are visible (classic/non-contextual behavior).
+    fn all_visible(snapshot: &ToolbarSnapshot) -> Self {
+        let effective_tool = snapshot.tool_override.unwrap_or(snapshot.active_tool);
+        let text_or_note_active = snapshot.text_active || snapshot.note_active;
+        let show_arrow_labels = effective_tool == Tool::Arrow || snapshot.arrow_label_enabled;
+        let show_step_counter = effective_tool == Tool::StepMarker;
+        let show_marker_opacity =
+            snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
+        let show_font_controls = text_or_note_active || snapshot.show_text_controls;
+
+        Self {
+            needs_color: true,
+            needs_thickness: true,
+            tool_options_kind: ToolOptionsKind::Stroke, // Generic
+            thickness_label: if snapshot.thickness_targets_eraser {
+                "Eraser size"
+            } else {
+                "Thickness"
+            },
+            show_fill_toggle: false, // Only shown contextually for shapes
+            show_arrow_labels,
+            show_step_counter,
+            show_eraser_mode: snapshot.thickness_targets_eraser,
+            show_marker_opacity,
+            show_font_controls,
+        }
+    }
+}
+
 /// Snapshot of a single preset slot for toolbar display.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PresetSlotSnapshot {
@@ -86,6 +293,8 @@ pub struct ToolbarSnapshot {
     pub side_pinned: bool,
     /// Whether to use icons instead of text labels
     pub use_icons: bool,
+    /// Scale factor for toolbar UI (icons + layout)
+    pub toolbar_scale: f64,
     /// Current toolbar layout mode
     pub layout_mode: ToolbarLayoutMode,
     /// Whether to show extended color palette
@@ -110,6 +319,8 @@ pub struct ToolbarSnapshot {
     pub show_step_section: bool,
     /// Whether to keep text controls visible when text is inactive
     pub show_text_controls: bool,
+    /// Whether to enable context-aware UI that shows/hides controls based on active tool
+    pub context_aware_ui: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
     pub show_tool_preview: bool,
@@ -282,6 +493,7 @@ impl ToolbarSnapshot {
             top_pinned: state.toolbar_top_pinned,
             side_pinned: state.toolbar_side_pinned,
             use_icons: state.toolbar_use_icons,
+            toolbar_scale: state.toolbar_scale,
             layout_mode: state.toolbar_layout_mode,
             show_more_colors: state.show_more_colors,
             show_actions_section: state.show_actions_section,
@@ -294,6 +506,7 @@ impl ToolbarSnapshot {
             show_presets: state.show_presets,
             show_step_section,
             show_text_controls: state.show_text_controls,
+            context_aware_ui: state.context_aware_ui,
             show_settings_section,
             show_tool_preview: state.show_tool_preview,
             show_status_bar: state.show_status_bar,

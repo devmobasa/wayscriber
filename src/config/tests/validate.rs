@@ -131,8 +131,10 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     config.ui.click_highlight.radius = 5.0;
     config.ui.click_highlight.outline_thickness = 50.0;
     config.ui.click_highlight.duration_ms = 10;
+    config.ui.command_palette_toast_duration_ms = 50;
     config.ui.click_highlight.fill_color = [2.0, -1.0, 0.5, 0.5];
     config.ui.click_highlight.outline_color = [-0.2, 2.0, 0.5, 1.2];
+    config.ui.toolbar.scale = 5.0;
     config.session.max_shapes_per_frame = 0;
     config.session.max_file_size_mb = 2048;
     config.session.auto_compress_threshold_kb = 0;
@@ -152,6 +154,7 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     assert_eq!(config.ui.click_highlight.radius, 16.0);
     assert_eq!(config.ui.click_highlight.outline_thickness, 12.0);
     assert_eq!(config.ui.click_highlight.duration_ms, 150);
+    assert_eq!(config.ui.command_palette_toast_duration_ms, 300);
     assert!(
         config
             .ui
@@ -168,6 +171,7 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
             .iter()
             .all(|c| (0.0..=1.0).contains(c))
     );
+    assert_eq!(config.ui.toolbar.scale, 3.0);
     assert_eq!(config.session.max_shapes_per_frame, 1);
     assert_eq!(config.session.max_file_size_mb, 1024);
     assert_eq!(config.session.auto_compress_threshold_kb, 1);
@@ -180,6 +184,24 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
         config.keybindings.core.exit,
         KeybindingsConfig::default().core.exit
     );
+}
+
+#[test]
+fn validate_and_clamp_resets_non_finite_toolbar_scale() {
+    let mut config = Config::default();
+    config.ui.toolbar.scale = f64::NAN;
+    config.validate_and_clamp();
+    assert_eq!(config.ui.toolbar.scale, 1.0);
+
+    let mut config = Config::default();
+    config.ui.toolbar.scale = f64::INFINITY;
+    config.validate_and_clamp();
+    assert_eq!(config.ui.toolbar.scale, 1.0);
+
+    let mut config = Config::default();
+    config.ui.toolbar.scale = f64::NEG_INFINITY;
+    config.validate_and_clamp();
+    assert_eq!(config.ui.toolbar.scale, 1.0);
 }
 
 #[cfg(tablet)]

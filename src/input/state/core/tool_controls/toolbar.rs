@@ -43,6 +43,7 @@ impl InputState {
         top_pinned: bool,
         side_pinned: bool,
         use_icons: bool,
+        scale: f64,
         show_more_colors: bool,
         show_actions_section: bool,
         show_actions_advanced: bool,
@@ -52,6 +53,7 @@ impl InputState {
         show_presets: bool,
         show_step_section: bool,
         show_text_controls: bool,
+        context_aware_ui: bool,
         show_settings_section: bool,
         show_delay_sliders: bool,
         show_marker_opacity_section: bool,
@@ -64,6 +66,7 @@ impl InputState {
         self.toolbar_side_visible = side_pinned;
         self.toolbar_visible = top_pinned || side_pinned;
         self.toolbar_use_icons = use_icons;
+        self.toolbar_scale = scale;
         self.toolbar_layout_mode = layout_mode;
         self.toolbar_mode_overrides = mode_overrides;
         self.show_more_colors = show_more_colors;
@@ -75,6 +78,7 @@ impl InputState {
         self.show_presets = show_presets;
         self.show_step_section = show_step_section;
         self.show_text_controls = show_text_controls;
+        self.context_aware_ui = context_aware_ui;
         self.show_settings_section = show_settings_section;
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;

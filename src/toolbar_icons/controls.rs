@@ -95,3 +95,29 @@ pub fn draw_icon_paste(ctx: &Context, x: f64, y: f64, size: f64) {
     ctx.line_to(line_x2 - s * 0.2, line_y3);
     let _ = ctx.stroke();
 }
+
+/// Draw a simple board/grid icon
+pub fn draw_icon_board(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.2);
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+
+    let inset = s * 0.18;
+    let x0 = x + inset;
+    let y0 = y + inset;
+    let w = s - inset * 2.0;
+    let h = s - inset * 2.0;
+
+    ctx.rectangle(x0, y0, w, h);
+    let _ = ctx.stroke();
+
+    ctx.move_to(x0 + w * 0.5, y0);
+    ctx.line_to(x0 + w * 0.5, y0 + h);
+    let _ = ctx.stroke();
+
+    ctx.move_to(x0, y0 + h * 0.5);
+    ctx.line_to(x0 + w, y0 + h * 0.5);
+    let _ = ctx.stroke();
+}

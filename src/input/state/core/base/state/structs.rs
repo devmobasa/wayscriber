@@ -116,6 +116,8 @@ pub struct InputState {
     pub command_palette_selected: usize,
     /// Scroll offset for command palette (first visible item index)
     pub command_palette_scroll: usize,
+    /// Duration for command palette action toasts (ms)
+    pub command_palette_toast_duration_ms: u64,
     /// Whether the status bar is currently visible (toggled via keybinding)
     pub show_status_bar: bool,
     /// Whether to show the board label in the status bar
@@ -144,6 +146,8 @@ pub struct InputState {
     pub toolbar_side_pinned: bool,
     /// Whether to use icons instead of text labels in toolbars
     pub toolbar_use_icons: bool,
+    /// Scale factor for toolbar UI (icons + layout)
+    pub toolbar_scale: f64,
     /// Current toolbar layout complexity
     pub toolbar_layout_mode: crate::config::ToolbarLayoutMode,
     /// Optional per-mode overrides for toolbar sections
@@ -302,6 +306,8 @@ pub struct InputState {
     pub show_step_section: bool,
     /// Whether to keep text controls visible when text is inactive
     pub show_text_controls: bool,
+    /// Whether to enable context-aware UI that shows/hides controls based on active tool
+    pub context_aware_ui: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
     /// Number of preset slots to display

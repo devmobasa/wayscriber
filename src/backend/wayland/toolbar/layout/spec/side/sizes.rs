@@ -1,6 +1,6 @@
 use crate::config::ToolbarLayoutMode;
-use crate::input::Tool;
 use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui::toolbar::snapshot::ToolContext;
 
 use super::super::ToolbarLayoutSpec;
 
@@ -10,14 +10,8 @@ impl ToolbarLayoutSpec {
         snapshot: &ToolbarSnapshot,
     ) -> (u32, u32) {
         let base_height = self.side_content_start_y();
-        let colors_h = self.side_colors_height(snapshot);
-        let show_marker_opacity =
-            snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
-        let show_text_controls =
-            snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
-        let show_arrow_controls =
-            snapshot.active_tool == Tool::Arrow || snapshot.arrow_label_enabled;
-        let show_step_marker_controls = snapshot.active_tool == Tool::StepMarker;
+        let tool_context = ToolContext::from_snapshot(snapshot);
+
         let show_drawer_view =
             snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
         let show_advanced = snapshot.show_actions_advanced && show_drawer_view;
@@ -44,15 +38,26 @@ impl ToolbarLayoutSpec {
             }
         };
 
-        add_section(colors_h, &mut height);
+        // Color section: only when tool needs color
+        if tool_context.needs_color {
+            let colors_h = self.side_colors_height(snapshot);
+            add_section(colors_h, &mut height);
+        }
+
         if show_presets {
             add_section(Self::SIDE_PRESET_CARD_HEIGHT, &mut height);
         }
-        add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Thickness
-        if snapshot.thickness_targets_eraser {
-            add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
+
+        // Thickness/size slider: only when tool needs it
+        if tool_context.needs_thickness {
+            add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
+            if snapshot.thickness_targets_eraser {
+                add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
+            }
         }
-        if show_arrow_controls {
+
+        // Arrow controls: only when arrow tool is active
+        if tool_context.show_arrow_labels {
             let arrow_height = if snapshot.arrow_label_enabled {
                 Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET
             } else {
@@ -60,13 +65,19 @@ impl ToolbarLayoutSpec {
             };
             add_section(arrow_height, &mut height);
         }
-        if show_step_marker_controls {
+
+        // Step marker controls: only when step marker is active
+        if tool_context.show_step_counter {
             add_section(Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET, &mut height);
         }
-        if show_marker_opacity {
+
+        // Marker opacity: only when marker tool is active
+        if tool_context.show_marker_opacity {
             add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
         }
-        if show_text_controls {
+
+        // Text controls: only when text/note mode is active
+        if tool_context.show_font_controls {
             add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Text size
             add_section(Self::SIDE_FONT_CARD_HEIGHT, &mut height);
         }
@@ -106,16 +117,6 @@ impl ToolbarLayoutSpec {
         height += Self::SIDE_FOOTER_PADDING;
 
         (Self::SIDE_WIDTH, height.ceil() as u32)
-    }
-
-    pub(in crate::backend::wayland::toolbar) fn side_header_button_positions(
-        &self,
-        width: f64,
-    ) -> (f64, f64, f64, f64) {
-        let close_x = width - Self::SIDE_HEADER_BUTTON_MARGIN_RIGHT - Self::SIDE_HEADER_BUTTON_SIZE;
-        let pin_x = close_x - Self::SIDE_HEADER_BUTTON_SIZE - Self::SIDE_HEADER_BUTTON_GAP;
-        let more_x = pin_x - Self::SIDE_HEADER_BUTTON_SIZE - Self::SIDE_HEADER_BUTTON_GAP;
-        (more_x, pin_x, close_x, self.side_header_y())
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_content_width(&self, width: f64) -> f64 {
@@ -304,7 +305,7 @@ impl ToolbarLayoutSpec {
     ) -> f64 {
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
-        let mut toggle_count = 6; // Text controls + status bar + status badges + preset toasts
+        let mut toggle_count = 7; // Context UI + text controls + status bar + status badges + preset toasts
         if snapshot.layout_mode != ToolbarLayoutMode::Simple {
             toggle_count += 7; // presets, actions, zoom actions, advanced actions, pages, boards, step section
         }
@@ -319,17 +320,24 @@ impl ToolbarLayoutSpec {
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
     }
 
-    pub(in crate::backend::wayland::toolbar) fn side_header_y(&self) -> f64 {
-        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_HANDLE_SIZE + Self::SIDE_HEADER_HANDLE_GAP
+    /// Y position where Row 2 (mode controls row) starts
+    pub(in crate::backend::wayland::toolbar) fn side_header_row2_y(&self) -> f64 {
+        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_ROW1_HEIGHT
     }
 
-    pub(in crate::backend::wayland::toolbar) fn side_header_board_y(&self) -> f64 {
-        self.side_header_y() + Self::SIDE_HEADER_ROW_HEIGHT + Self::SIDE_HEADER_BOARD_GAP
+    /// Y position where Row 3 (board row) starts
+    pub(in crate::backend::wayland::toolbar) fn side_header_row3_y(&self) -> f64 {
+        Self::SIDE_TOP_PADDING + Self::SIDE_HEADER_ROW1_HEIGHT + Self::SIDE_HEADER_ROW2_HEIGHT
     }
 
+    /// Y position where content starts (after all header rows)
     pub(in crate::backend::wayland::toolbar) fn side_content_start_y(&self) -> f64 {
-        self.side_header_board_y()
-            + Self::SIDE_HEADER_BOARD_ROW_HEIGHT
+        // After header rows + bottom gap
+        // = 12 + 30 + 28 + 24 + 8 = 102px
+        Self::SIDE_TOP_PADDING
+            + Self::SIDE_HEADER_ROW1_HEIGHT
+            + Self::SIDE_HEADER_ROW2_HEIGHT
+            + Self::SIDE_HEADER_ROW3_HEIGHT
             + Self::SIDE_HEADER_BOTTOM_GAP
     }
 

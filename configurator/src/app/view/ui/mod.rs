@@ -62,6 +62,12 @@ impl ConfiguratorApp {
                 self.draft.ui_context_menu_enabled,
                 self.defaults.ui_context_menu_enabled,
                 ToggleField::UiContextMenuEnabled,
+            ),
+            labeled_input(
+                "Command palette toast (ms)",
+                &self.draft.ui_command_palette_toast_duration_ms,
+                &self.defaults.ui_command_palette_toast_duration_ms,
+                TextField::UiCommandPaletteToastDurationMs,
             )
         ]
         .spacing(12);

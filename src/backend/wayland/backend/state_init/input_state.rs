@@ -51,6 +51,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
     input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
+    input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
     #[cfg(tablet)]
     {
         input_state.pressure_variation_threshold = config.tablet.pressure_variation_threshold;
@@ -65,6 +66,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.top_pinned,
         config.ui.toolbar.side_pinned,
         config.ui.toolbar.use_icons,
+        config.ui.toolbar.scale,
         config.ui.toolbar.show_more_colors,
         config.ui.toolbar.show_actions_section,
         config.ui.toolbar.show_actions_advanced,
@@ -74,6 +76,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.show_presets,
         config.ui.toolbar.show_step_section,
         config.ui.toolbar.show_text_controls,
+        config.ui.toolbar.context_aware_ui,
         config.ui.toolbar.show_settings_section,
         config.ui.toolbar.show_delay_sliders,
         config.ui.toolbar.show_marker_opacity_section,

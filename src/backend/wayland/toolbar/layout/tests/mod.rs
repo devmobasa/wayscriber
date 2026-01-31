@@ -118,3 +118,99 @@ fn build_side_hits_color_picker_height_tracks_palette_mode() {
     });
     assert_eq!(picker_height, Some(54.0));
 }
+
+#[test]
+fn top_size_scales_with_toolbar_scale() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state.toolbar_scale = 1.0;
+    let snapshot = snapshot_from_state(&state);
+    let base_size = top_size(&snapshot);
+
+    // Scale 1.5x should increase size proportionally
+    state.toolbar_scale = 1.5;
+    let snapshot = snapshot_from_state(&state);
+    let scaled_size = top_size(&snapshot);
+    assert_eq!(
+        scaled_size.0,
+        (base_size.0 as f64 * 1.5).ceil() as u32,
+        "Width should scale by 1.5x"
+    );
+    assert_eq!(
+        scaled_size.1,
+        (base_size.1 as f64 * 1.5).ceil() as u32,
+        "Height should scale by 1.5x"
+    );
+
+    // Scale 0.75x should decrease size
+    state.toolbar_scale = 0.75;
+    let snapshot = snapshot_from_state(&state);
+    let small_size = top_size(&snapshot);
+    assert!(
+        small_size.0 < base_size.0,
+        "Scaled down width should be smaller"
+    );
+    assert!(
+        small_size.1 < base_size.1,
+        "Scaled down height should be smaller"
+    );
+}
+
+#[test]
+fn scale_size_handles_non_finite_values() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+    state.toolbar_scale = 1.0;
+    let snapshot = snapshot_from_state(&state);
+    let base_size = top_size(&snapshot);
+
+    // NaN should fall back to 1.0
+    state.toolbar_scale = f64::NAN;
+    let snapshot = snapshot_from_state(&state);
+    let nan_size = top_size(&snapshot);
+    assert_eq!(nan_size, base_size, "NaN scale should fall back to 1.0");
+
+    // Infinity should fall back to 1.0
+    state.toolbar_scale = f64::INFINITY;
+    let snapshot = snapshot_from_state(&state);
+    let inf_size = top_size(&snapshot);
+    assert_eq!(
+        inf_size, base_size,
+        "Infinity scale should fall back to 1.0"
+    );
+
+    // Negative infinity should fall back to 1.0
+    state.toolbar_scale = f64::NEG_INFINITY;
+    let snapshot = snapshot_from_state(&state);
+    let neg_inf_size = top_size(&snapshot);
+    assert_eq!(
+        neg_inf_size, base_size,
+        "Neg infinity scale should fall back to 1.0"
+    );
+}
+
+#[test]
+fn scale_size_clamps_extreme_values() {
+    let mut state = create_test_input_state();
+    state.toolbar_use_icons = true;
+
+    // Test upper bound clamping (max 3.0)
+    state.toolbar_scale = 10.0;
+    let snapshot = snapshot_from_state(&state);
+    let huge_size = top_size(&snapshot);
+
+    state.toolbar_scale = 3.0;
+    let snapshot = snapshot_from_state(&state);
+    let max_size = top_size(&snapshot);
+    assert_eq!(huge_size, max_size, "Scale > 3.0 should clamp to 3.0");
+
+    // Test lower bound clamping (min 0.5)
+    state.toolbar_scale = 0.1;
+    let snapshot = snapshot_from_state(&state);
+    let tiny_size = top_size(&snapshot);
+
+    state.toolbar_scale = 0.5;
+    let snapshot = snapshot_from_state(&state);
+    let min_size = top_size(&snapshot);
+    assert_eq!(tiny_size, min_size, "Scale < 0.5 should clamp to 0.5");
+}

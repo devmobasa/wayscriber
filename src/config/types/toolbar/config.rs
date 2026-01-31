@@ -29,6 +29,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_toolbar_use_icons")]
     pub use_icons: bool,
 
+    /// Scale factor for toolbar UI (icons + layout). 1.0 = default.
+    #[serde(default = "default_toolbar_scale")]
+    pub scale: f64,
+
     /// Show extended color palette
     #[serde(default = "default_show_more_colors")]
     pub show_more_colors: bool,
@@ -77,6 +81,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_marker_opacity_section")]
     pub show_marker_opacity_section: bool,
 
+    /// Enable context-aware UI that shows/hides controls based on the active tool
+    #[serde(default = "default_context_aware_ui")]
+    pub context_aware_ui: bool,
+
     /// Show preset action toast notifications
     #[serde(default = "default_show_preset_toasts")]
     pub show_preset_toasts: bool,
@@ -114,6 +122,7 @@ impl Default for ToolbarConfig {
             top_pinned: default_toolbar_top_pinned(),
             side_pinned: default_toolbar_side_pinned(),
             use_icons: default_toolbar_use_icons(),
+            scale: default_toolbar_scale(),
             show_more_colors: default_show_more_colors(),
             show_actions_section: default_show_actions_section(),
             show_actions_advanced: default_show_actions_advanced(),
@@ -126,6 +135,7 @@ impl Default for ToolbarConfig {
             show_settings_section: default_show_settings_section(),
             show_delay_sliders: default_show_delay_sliders(),
             show_marker_opacity_section: default_show_marker_opacity_section(),
+            context_aware_ui: default_context_aware_ui(),
             show_preset_toasts: default_show_preset_toasts(),
             show_tool_preview: default_show_tool_preview(),
             top_offset: 0.0,
@@ -147,6 +157,10 @@ fn default_toolbar_side_pinned() -> bool {
 
 fn default_toolbar_use_icons() -> bool {
     true
+}
+
+fn default_toolbar_scale() -> f64 {
+    1.0
 }
 
 fn default_toolbar_layout_mode() -> ToolbarLayoutMode {
@@ -199,6 +213,10 @@ fn default_show_delay_sliders() -> bool {
 
 fn default_show_marker_opacity_section() -> bool {
     false
+}
+
+fn default_context_aware_ui() -> bool {
+    true
 }
 
 fn default_show_preset_toasts() -> bool {

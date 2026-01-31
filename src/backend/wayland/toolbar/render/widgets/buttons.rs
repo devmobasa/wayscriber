@@ -1,9 +1,12 @@
 use super::constants::{
     COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
     COLOR_CLOSE_HOVER, COLOR_FOCUS_RING, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
-    COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK, RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
+    COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
+    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, LINE_WIDTH_THICK,
+    RADIUS_LG, RADIUS_STD, SPACING_XS, set_color,
 };
 use super::draw_round_rect;
+use crate::ui_text::{UiTextStyle, text_layout};
 use std::f64::consts::PI;
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
@@ -238,4 +241,92 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     let accent_y = y + 2.0;
     draw_round_rect(ctx, accent_x, accent_y, accent_w, accent_h, 1.0);
     let _ = ctx.fill();
+}
+
+/// Draw a segmented control with two options.
+/// Returns nothing but renders the control with proper active/hover states.
+#[allow(clippy::too_many_arguments)]
+pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    labels: (&str, &str),
+    active_segment: usize, // 0=left active, 1=right active
+    hover: Option<usize>,  // Which segment is hovered
+    label_style: UiTextStyle<'_>,
+) {
+    let segment_w = w / 2.0;
+    let radius = 6.0;
+    let inner_radius = 4.0;
+    let padding = 2.0;
+
+    // Draw outer container
+    draw_round_rect(ctx, x, y, w, h, radius);
+    set_color(ctx, COLOR_SEGMENT_BG);
+    let _ = ctx.fill();
+
+    // Draw active segment background
+    let active_x = if active_segment == 0 {
+        x + padding
+    } else {
+        x + segment_w + padding / 2.0
+    };
+    draw_round_rect(
+        ctx,
+        active_x,
+        y + padding,
+        segment_w - padding * 1.5,
+        h - padding * 2.0,
+        inner_radius,
+    );
+    set_color(ctx, COLOR_SEGMENT_ACTIVE);
+    let _ = ctx.fill();
+
+    // Draw hover effect on inactive segment
+    if let Some(hover_idx) = hover
+        && hover_idx != active_segment
+    {
+        let hover_x = if hover_idx == 0 {
+            x + padding
+        } else {
+            x + segment_w + padding / 2.0
+        };
+        draw_round_rect(
+            ctx,
+            hover_x,
+            y + padding,
+            segment_w - padding * 1.5,
+            h - padding * 2.0,
+            inner_radius,
+        );
+        set_color(ctx, COLOR_SEGMENT_HOVER);
+        let _ = ctx.fill();
+    }
+
+    // Draw center divider (only when not hovering on the divider area)
+    ctx.set_line_width(1.0);
+    set_color(ctx, COLOR_SEGMENT_DIVIDER);
+    ctx.move_to(x + segment_w, y + 4.0);
+    ctx.line_to(x + segment_w, y + h - 4.0);
+    let _ = ctx.stroke();
+
+    // Draw labels
+    for (i, label) in [labels.0, labels.1].iter().enumerate() {
+        let text_color = if i == active_segment {
+            COLOR_SEGMENT_TEXT_ACTIVE
+        } else {
+            COLOR_SEGMENT_TEXT_INACTIVE
+        };
+        set_color(ctx, text_color);
+        let label_x = if i == 0 { x } else { x + segment_w };
+
+        // Center the label in the segment
+        let layout = text_layout(ctx, label_style, label, None);
+        let ext = layout.ink_extents();
+        let tx = label_x + (segment_w - ext.width()) / 2.0 - ext.x_bearing();
+        let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
+        layout.show_at_baseline(ctx, tx, ty);
+    }
 }

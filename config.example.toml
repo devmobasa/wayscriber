@@ -240,6 +240,9 @@ status_bar_position = "bottom-left"
 # Filter help overlay sections based on enabled features
 help_overlay_context_filter = true
 
+# Command palette action toast duration (ms)
+command_palette_toast_duration_ms = 1500
+
 # Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
 # against monitor identity; leave empty to use the current/first monitor.
 #preferred_output = "eDP-1"
@@ -301,6 +304,9 @@ side_pinned = true
 # Use icons instead of text labels in toolbars
 # Icons are more compact; text labels are more explicit
 use_icons = true
+
+# Scale factor for toolbar UI (icons + layout)
+scale = 1.0
 
 # Show extended color palette in top toolbar
 # When enabled, displays additional color options beyond the basic 8
