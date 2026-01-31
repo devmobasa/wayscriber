@@ -13,6 +13,7 @@ Requirements:
 
 Examples:
   tools/create-release-tag.sh 0.9.2
+  tools/create-release-tag.sh 0.9.9.1
 EOF
 }
 
@@ -33,8 +34,8 @@ require_bin git
 version="$1"
 tag="v${version}"
 
-if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "error: invalid version format: $version (expected MAJOR.MINOR.PATCH)" >&2
+if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "error: invalid version format: $version (expected MAJOR.MINOR.PATCH[.HOTFIX])" >&2
     exit 1
 fi
 

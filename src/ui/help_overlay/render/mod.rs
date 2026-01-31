@@ -61,7 +61,7 @@ pub fn render_help_overlay(
     } else {
         format!(
             "{}  {}  {} {} {}  {}  {} {} {}",
-            env!("CARGO_PKG_VERSION"),
+            crate::build_info::version(),
             BULLET,
             palette_binding,
             ARROW,

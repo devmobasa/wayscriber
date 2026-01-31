@@ -2,7 +2,10 @@ use clap::{ArgAction, Parser};
 
 #[derive(Parser, Debug)]
 #[command(name = "wayscriber")]
-#[command(version, about = "Screen annotation tool for Wayland compositors")]
+#[command(
+    version = crate::build_info::version(),
+    about = "Screen annotation tool for Wayland compositors"
+)]
 pub struct Cli {
     /// Run as daemon (background service; bind a toggle like Super+D)
     #[arg(long, short = 'd', action = ArgAction::SetTrue)]

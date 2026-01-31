@@ -6,6 +6,7 @@ usage() {
 Usage: tools/bump-version.sh [--dry-run] [new_version]
 
 - If new_version is omitted, bumps the patch version (e.g., 0.9.2 -> 0.9.3).
+- new_version can be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH.HOTFIX.
 - Updates:
   * Cargo.toml (wayscriber)
   * configurator/Cargo.toml
@@ -82,13 +83,28 @@ else
     next_version="${major}.${minor}.${patch}"
 fi
 
-if ! [[ "$next_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "error: invalid version format: $next_version (expected MAJOR.MINOR.PATCH digits)" >&2
+if ! [[ "$next_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "error: invalid version format: $next_version (expected MAJOR.MINOR.PATCH[.HOTFIX])" >&2
     exit 1
+fi
+
+IFS='.' read -r major minor patch hotfix extra <<<"$next_version"
+if [[ -n "${extra:-}" ]]; then
+    echo "error: invalid version format: $next_version (too many segments)" >&2
+    exit 1
+fi
+
+cargo_version="${major}.${minor}.${patch}"
+package_version="${next_version}"
+if [[ -z "${hotfix:-}" ]]; then
+    cargo_version="${next_version}"
 fi
 
 echo "Current version: $current_version"
 echo "Bumping to:      $next_version"
+if [[ "$cargo_version" != "$next_version" ]]; then
+    echo "Cargo version:   $cargo_version (release version has hotfix)"
+fi
 
 update_version_field() {
     local file="$1"
@@ -99,7 +115,7 @@ update_version_field() {
     if $DRY_RUN; then
         echo "dry-run: would update version in $file"
     else
-        NEXT_VERSION="$next_version" perl -0777 -pi -e 's/(\[package\][^\[]*?\nversion\s*=\s*")\K[^"]+/$ENV{NEXT_VERSION}/s' "$file"
+        NEXT_VERSION="$cargo_version" perl -0777 -pi -e 's/(\[package\][^\[]*?\nversion\s*=\s*")\K[^"]+/$ENV{NEXT_VERSION}/s' "$file"
     fi
 }
 
@@ -118,9 +134,9 @@ fi
 
 if [[ -f packaging/PKGBUILD ]]; then
     if $DRY_RUN; then
-        echo "dry-run: would set pkgver=${next_version} in packaging/PKGBUILD and regenerate .SRCINFO"
+        echo "dry-run: would set pkgver=${package_version} in packaging/PKGBUILD and regenerate .SRCINFO"
     else
-        sed -i "s/^pkgver=.*/pkgver=${next_version}/" packaging/PKGBUILD
+        sed -i "s/^pkgver=.*/pkgver=${package_version}/" packaging/PKGBUILD
         (cd packaging && makepkg --printsrcinfo > .SRCINFO)
     fi
 else

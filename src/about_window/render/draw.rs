@@ -151,7 +151,7 @@ fn add_link_line(
 }
 
 fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    crate::build_info::version()
 }
 
 fn commit_hash() -> &'static str {
