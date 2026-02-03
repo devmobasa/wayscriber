@@ -113,6 +113,30 @@ impl BoardPages {
         }
     }
 
+    /// Move a page from one index to another.
+    pub fn move_page(&mut self, from: usize, to: usize) -> bool {
+        let len = self.pages.len();
+        if from >= len || to >= len {
+            return false;
+        }
+        if from == to {
+            return true;
+        }
+        let page = self.pages.remove(from);
+        let insert_index = to.min(self.pages.len());
+        self.pages.insert(insert_index, page);
+
+        if self.active == from {
+            self.active = insert_index;
+        } else if from < self.active && insert_index >= self.active {
+            self.active = self.active.saturating_sub(1);
+        } else if from > self.active && insert_index <= self.active {
+            self.active = (self.active + 1).min(self.pages.len().saturating_sub(1));
+        }
+
+        true
+    }
+
     #[allow(dead_code)]
     pub fn trim_trailing_empty_pages(&mut self) {
         while self.pages.len() > 1

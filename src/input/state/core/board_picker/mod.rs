@@ -31,6 +31,8 @@ const COMPACT_SWATCH_SIZE: f64 = 12.0;
 const COMPACT_SWATCH_PADDING: f64 = 8.0;
 const HANDLE_WIDTH: f64 = 10.0;
 const HANDLE_GAP: f64 = 18.0;
+const OPEN_ICON_SIZE: f64 = 11.0;
+const OPEN_ICON_GAP: f64 = 10.0;
 const PIN_OFFSET_FACTOR: f64 = 0.6;
 const COLUMN_GAP: f64 = 12.0;
 const MAX_BOARD_NAME_LEN: usize = 40;
@@ -44,6 +46,14 @@ const BOARD_PICKER_RECENT_LINE_HEIGHT: f64 = 16.0;
 const BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT: f64 = 14.0;
 const BOARD_PICKER_RECENT_MAX_NAMES: usize = 3;
 const BOARD_PICKER_RECENT_LABEL_MAX_CHARS: usize = BOARD_PICKER_SEARCH_MAX_LEN + 6;
+const PAGE_PANEL_GAP: f64 = 24.0;
+const PAGE_PANEL_PADDING_X: f64 = 12.0;
+const PAGE_THUMB_HEIGHT: f64 = 54.0;
+const PAGE_THUMB_GAP: f64 = 10.0;
+const PAGE_THUMB_MIN_WIDTH: f64 = 72.0;
+const PAGE_THUMB_MAX_WIDTH: f64 = 150.0;
+const PAGE_PANEL_MAX_COLS: usize = 3;
+const PAGE_PANEL_MAX_ROWS: usize = 4;
 
 #[derive(Debug, Clone)]
 pub enum BoardPickerState {
@@ -82,11 +92,19 @@ pub struct BoardPickerDrag {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct BoardPickerPageDrag {
+    pub source_index: usize,
+    pub current_index: usize,
+    pub board_index: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct BoardPickerLayout {
     pub origin_x: f64,
     pub origin_y: f64,
     pub width: f64,
     pub height: f64,
+    pub list_width: f64,
     pub title_font_size: f64,
     pub body_font_size: f64,
     pub footer_font_size: f64,
@@ -105,6 +123,22 @@ pub struct BoardPickerLayout {
     pub recent_height: f64,
     pub handle_width: f64,
     pub handle_gap: f64,
+    pub open_icon_size: f64,
+    pub open_icon_gap: f64,
+    pub page_panel_enabled: bool,
+    pub page_panel_x: f64,
+    pub page_panel_y: f64,
+    pub page_panel_width: f64,
+    pub page_panel_height: f64,
+    pub page_thumb_width: f64,
+    pub page_thumb_height: f64,
+    pub page_thumb_gap: f64,
+    pub page_cols: usize,
+    pub page_rows: usize,
+    pub page_max_rows: usize,
+    pub page_count: usize,
+    pub page_visible_count: usize,
+    pub page_board_index: Option<usize>,
 }
 
 fn truncate_search_label(value: &str, max_chars: usize) -> String {

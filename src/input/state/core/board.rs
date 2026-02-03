@@ -327,6 +327,28 @@ impl InputState {
         true
     }
 
+    pub(crate) fn reorder_page_in_board(
+        &mut self,
+        board_index: usize,
+        from: usize,
+        to: usize,
+    ) -> bool {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return false;
+        };
+        if !board.pages.move_page(from, to) {
+            return false;
+        }
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        true
+    }
+
     fn switch_board_with(
         &mut self,
         switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,

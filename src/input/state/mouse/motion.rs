@@ -31,7 +31,9 @@ impl InputState {
         }
 
         if self.is_board_picker_open() {
-            if self.board_picker_is_dragging() {
+            if self.board_picker_is_page_dragging() {
+                self.board_picker_update_page_drag_from_pointer(x, y);
+            } else if self.board_picker_is_dragging() {
                 self.board_picker_update_drag_from_pointer(x, y);
             } else {
                 self.update_board_picker_hover_from_pointer(x, y);

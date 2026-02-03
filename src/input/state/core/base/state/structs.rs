@@ -1,5 +1,5 @@
 use super::super::super::{
-    board_picker::{BoardPickerDrag, BoardPickerLayout, BoardPickerState},
+    board_picker::{BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerState},
     color_picker_popup::{ColorPickerPopupLayout, ColorPickerPopupState},
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
@@ -7,8 +7,8 @@ use super::super::super::{
     selection::SelectionState,
 };
 use super::super::types::{
-    BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
-    PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
+    BlockedActionFeedback, BoardPickerClickState, CompositorCapabilities, DelayedHistory,
+    DrawingState, PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
     PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
     StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab,
     UiToastState, ZoomAction,
@@ -208,6 +208,8 @@ pub struct InputState {
     pub board_picker_state: BoardPickerState,
     /// Active board picker drag state (full mode reorder)
     pub board_picker_drag: Option<BoardPickerDrag>,
+    /// Active board picker page drag state (thumbnail reorder)
+    pub board_picker_page_drag: Option<BoardPickerPageDrag>,
     /// Current color picker popup state
     pub color_picker_popup_state: ColorPickerPopupState,
     /// Cached layout details for the color picker popup
@@ -254,6 +256,8 @@ pub struct InputState {
     pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
     /// Last text/note click used for double-click detection
     pub(crate) last_text_click: Option<TextClickState>,
+    /// Last board picker row click used for double-click detection
+    pub(crate) last_board_picker_click: Option<BoardPickerClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     /// Animation state for text edit mode entry (teal glow pulse)

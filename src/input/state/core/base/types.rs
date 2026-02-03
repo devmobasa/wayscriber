@@ -234,6 +234,14 @@ pub(crate) struct TextClickState {
     pub at: Instant,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BoardPickerClickState {
+    pub row: usize,
+    pub x: i32,
+    pub y: i32,
+    pub at: Instant,
+}
+
 /// Tracks in-progress delayed undo/redo playback.
 pub(crate) struct DelayedHistory {
     pub mode: HistoryMode,

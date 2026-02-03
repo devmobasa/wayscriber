@@ -16,7 +16,6 @@ mod tool_controls;
 mod tour;
 mod utility;
 
-pub(crate) use base::TextClickState;
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DrawingState, InputState,
     MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS,
@@ -24,7 +23,8 @@ pub use base::{
     PressureThicknessEntryMode, SelectionAxis, SelectionHandle, TextInputMode, ToolbarDrawerTab,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
-pub use board_picker::BoardPickerCursorHint;
+pub(crate) use base::{BoardPickerClickState, TextClickState};
+pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub use color_picker_popup::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
     PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE, rgb_to_hsv as color_picker_rgb_to_hsv,
