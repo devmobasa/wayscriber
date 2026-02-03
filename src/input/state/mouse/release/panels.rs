@@ -92,6 +92,16 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
         state.needs_redraw = true;
         return true;
     }
+    if state.board_picker_page_add_button_at(x, y) {
+        state.board_picker_add_page();
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_delete_index_at(x, y) {
+        state.board_picker_delete_page(index);
+        state.needs_redraw = true;
+        return true;
+    }
     if let Some(index) = state.board_picker_page_index_at(x, y) {
         state.board_picker_activate_page(index);
         state.needs_redraw = true;

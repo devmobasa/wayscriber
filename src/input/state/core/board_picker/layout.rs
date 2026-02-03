@@ -12,7 +12,8 @@ use super::{
     COMPACT_PADDING_X, COMPACT_PADDING_Y, COMPACT_ROW_HEIGHT, COMPACT_SWATCH_PADDING,
     COMPACT_SWATCH_SIZE, COMPACT_TITLE_FONT_SIZE, FOOTER_FONT_SIZE, FOOTER_HEIGHT, HANDLE_GAP,
     HANDLE_WIDTH, HEADER_HEIGHT, OPEN_ICON_GAP, OPEN_ICON_SIZE, PADDING_X, PADDING_Y,
-    PAGE_PANEL_GAP, PAGE_PANEL_MAX_COLS, PAGE_PANEL_MAX_ROWS, PAGE_PANEL_PADDING_X, PAGE_THUMB_GAP,
+    PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_HEADER_ICON_SIZE, PAGE_PANEL_GAP,
+    PAGE_PANEL_MAX_COLS, PAGE_PANEL_MAX_ROWS, PAGE_PANEL_PADDING_X, PAGE_THUMB_GAP,
     PAGE_THUMB_HEIGHT, PAGE_THUMB_MAX_WIDTH, PAGE_THUMB_MIN_WIDTH, PALETTE_BOTTOM_GAP,
     PALETTE_SWATCH_GAP, PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, PIN_OFFSET_FACTOR, ROW_HEIGHT,
     SWATCH_PADDING, SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
@@ -479,6 +480,71 @@ impl InputState {
         if index < visible { Some(index) } else { None }
     }
 
+    pub(crate) fn board_picker_page_add_button_at(&self, x: i32, y: i32) -> bool {
+        let layout = match self.board_picker_layout {
+            Some(layout) => layout,
+            None => return false,
+        };
+        if !layout.page_panel_enabled {
+            return false;
+        }
+        let size = PAGE_HEADER_ICON_SIZE;
+        let add_x = layout.page_panel_x + layout.page_panel_width - PAGE_PANEL_PADDING_X - size;
+        let label_y = layout.origin_y + layout.padding_y + layout.title_font_size;
+        let center_y = label_y - layout.footer_font_size * 0.35;
+        let add_y = center_y - size * 0.5;
+        (x as f64) >= add_x
+            && (x as f64) <= add_x + size
+            && (y as f64) >= add_y
+            && (y as f64) <= add_y + size
+    }
+
+    pub(crate) fn board_picker_page_delete_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if !layout.page_panel_enabled {
+            return None;
+        }
+        let board_index = layout.page_board_index?;
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+        if page_count == 0 {
+            return None;
+        }
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+        if visible == 0 {
+            return None;
+        }
+        let icon_size = PAGE_DELETE_ICON_SIZE;
+        let margin = PAGE_DELETE_ICON_MARGIN;
+        for index in 0..visible {
+            let col = index % cols;
+            let row = index / cols;
+            if row >= rows {
+                continue;
+            }
+            let thumb_x = layout.page_panel_x
+                + PAGE_PANEL_PADDING_X
+                + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+            let thumb_y = layout.page_panel_y
+                + row as f64 * (layout.page_thumb_height + layout.page_thumb_gap);
+            let icon_x = thumb_x + layout.page_thumb_width - icon_size - margin;
+            let icon_y = thumb_y + layout.page_thumb_height - icon_size - margin;
+            let within_x = (x as f64) >= icon_x && (x as f64) <= icon_x + icon_size;
+            let within_y = (y as f64) >= icon_y && (y as f64) <= icon_y + icon_size;
+            if within_x && within_y {
+                return Some(index);
+            }
+        }
+        None
+    }
+
     pub(crate) fn board_picker_page_handle_index_at(&self, x: i32, y: i32) -> Option<usize> {
         let layout = self.board_picker_layout?;
         if !layout.page_panel_enabled {
@@ -639,6 +705,9 @@ impl InputState {
         }
         if self.board_picker_page_handle_index_at(x, y).is_some() {
             return Some(BoardPickerCursorHint::Grab);
+        }
+        if self.board_picker_page_add_button_at(x, y) {
+            return Some(BoardPickerCursorHint::Pointer);
         }
         if self.board_picker_open_icon_index_at(x, y).is_some() {
             return Some(BoardPickerCursorHint::Pointer);

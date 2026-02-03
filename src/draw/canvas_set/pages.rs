@@ -113,6 +113,28 @@ impl BoardPages {
         }
     }
 
+    /// Delete a specific page by index.
+    pub fn delete_page_at(&mut self, index: usize) -> PageDeleteOutcome {
+        let len = self.pages.len();
+        if index >= len {
+            return PageDeleteOutcome::Pending;
+        }
+        if len == 1 {
+            self.pages[0].clear();
+            self.active = 0;
+            return PageDeleteOutcome::Cleared;
+        }
+        self.pages.remove(index);
+        if self.active == index {
+            if self.active >= self.pages.len() {
+                self.active = self.pages.len() - 1;
+            }
+        } else if self.active > index {
+            self.active = self.active.saturating_sub(1);
+        }
+        PageDeleteOutcome::Removed
+    }
+
     /// Move a page from one index to another.
     pub fn move_page(&mut self, from: usize, to: usize) -> bool {
         let len = self.pages.len();

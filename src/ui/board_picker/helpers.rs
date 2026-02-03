@@ -6,6 +6,7 @@ use crate::draw::{
     render_eraser_stroke, render_shape,
 };
 use crate::input::state::BoardPickerLayout;
+use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_HEADER_ICON_SIZE};
 use crate::input::{BoardBackground, InputState};
 use crate::ui::constants::{
     self, BG_SELECTION, BORDER_BOARD_PICKER, ICON_DRAG_HANDLE, ICON_SUBMENU_ARROW,
@@ -116,6 +117,30 @@ pub(super) fn draw_open_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, al
     let _ = ctx.fill();
 }
 
+pub(super) fn draw_plus_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, alpha: f64) {
+    let half = size * 0.5;
+    constants::set_color(ctx, constants::with_alpha(TEXT_TERTIARY, alpha));
+    ctx.set_line_width(1.6);
+    ctx.move_to(x - half, y);
+    ctx.line_to(x + half, y);
+    let _ = ctx.stroke();
+    ctx.move_to(x, y - half);
+    ctx.line_to(x, y + half);
+    let _ = ctx.stroke();
+}
+
+pub(super) fn draw_delete_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, alpha: f64) {
+    let half = size * 0.5;
+    constants::set_color(ctx, constants::with_alpha(TEXT_TERTIARY, alpha));
+    ctx.set_line_width(1.6);
+    ctx.move_to(x - half, y - half);
+    ctx.line_to(x + half, y + half);
+    let _ = ctx.stroke();
+    ctx.move_to(x + half, y - half);
+    ctx.line_to(x - half, y + half);
+    let _ = ctx.stroke();
+}
+
 pub(super) fn render_page_panel(
     ctx: &cairo::Context,
     input_state: &InputState,
@@ -150,10 +175,27 @@ pub(super) fn render_page_panel(
     ctx.move_to(layout.page_panel_x + 2.0, label_y);
     let _ = ctx.show_text(&label);
 
+    let (pointer_x, pointer_y) = input_state.pointer_position();
+    let add_hover = input_state.board_picker_page_add_button_at(pointer_x, pointer_y);
+    let add_center_x = layout.page_panel_x + layout.page_panel_width
+        - PAGE_PANEL_PADDING_X
+        - PAGE_HEADER_ICON_SIZE * 0.5;
+    let add_center_y = label_y - layout.footer_font_size * 0.35;
+    let add_alpha = if add_hover { 0.95 } else { 0.65 };
+    draw_plus_icon(
+        ctx,
+        add_center_x,
+        add_center_y,
+        PAGE_HEADER_ICON_SIZE,
+        add_alpha,
+    );
+
     let start_x = layout.page_panel_x + PAGE_PANEL_PADDING_X;
     let start_y = layout.page_panel_y;
     let active_page = board.pages.active_index();
     let drag = input_state.board_picker_page_drag;
+    let hover_index = input_state.board_picker_page_index_at(pointer_x, pointer_y);
+    let hover_delete = input_state.board_picker_page_delete_index_at(pointer_x, pointer_y);
     let cols = layout.page_cols.max(1);
     let max_rows = layout.page_max_rows.max(1);
     let rows = page_count.div_ceil(cols).min(max_rows);
@@ -183,6 +225,8 @@ pub(super) fn render_page_panel(
             page_number: index + 1,
             is_active,
             is_drop_target,
+            show_delete: hover_index == Some(index),
+            delete_hovered: hover_delete == Some(index),
         });
     }
 
@@ -211,6 +255,8 @@ struct PageThumbnailArgs<'a> {
     page_number: usize,
     is_active: bool,
     is_drop_target: bool,
+    show_delete: bool,
+    delete_hovered: bool,
 }
 
 fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
@@ -227,6 +273,8 @@ fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
         page_number,
         is_active,
         is_drop_target,
+        show_delete,
+        delete_hovered,
     } = args;
     let radius = 6.0;
     draw_rounded_rect(ctx, x, y, width, height, radius);
@@ -312,6 +360,15 @@ fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
     let handle_x = x + width - handle_size - 4.0;
     let handle_y = y + 4.0 + handle_size * 0.5;
     draw_drag_handle(ctx, handle_x, handle_y, handle_size);
+
+    if show_delete {
+        let icon_size = PAGE_DELETE_ICON_SIZE;
+        let margin = PAGE_DELETE_ICON_MARGIN;
+        let icon_x = x + width - icon_size - margin + icon_size * 0.5;
+        let icon_y = y + height - icon_size - margin + icon_size * 0.5;
+        let alpha = if delete_hovered { 0.95 } else { 0.6 };
+        draw_delete_icon(ctx, icon_x, icon_y, icon_size, alpha);
+    }
 
     let badge = page_number.to_string();
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);

@@ -481,6 +481,20 @@ impl InputState {
         self.close_board_picker();
     }
 
+    pub(crate) fn board_picker_add_page(&mut self) {
+        let Some(board_index) = self.board_picker_page_panel_board_index() else {
+            return;
+        };
+        self.add_page_in_board(board_index);
+    }
+
+    pub(crate) fn board_picker_delete_page(&mut self, page_index: usize) {
+        let Some(board_index) = self.board_picker_page_panel_board_index() else {
+            return;
+        };
+        self.delete_page_in_board(board_index, page_index);
+    }
+
     pub(crate) fn board_picker_create_new(&mut self) {
         if self.board_picker_is_quick() {
             self.board_picker_promote_to_full();

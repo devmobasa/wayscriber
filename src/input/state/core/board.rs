@@ -349,6 +349,113 @@ impl InputState {
         true
     }
 
+    pub(crate) fn add_page_in_board(&mut self, board_index: usize) -> bool {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return false;
+        };
+        board.pages.new_page();
+        let page_num = board.pages.active_index() + 1;
+        let page_count = board.pages.page_count();
+        let board_name = board.spec.name.clone();
+        let board_id = board.spec.id.clone();
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        self.set_ui_toast(
+            UiToastKind::Info,
+            format!("Page added on '{board_name}' ({board_id}) ({page_num}/{page_count})"),
+        );
+        true
+    }
+
+    pub(crate) fn delete_page_in_board(
+        &mut self,
+        board_index: usize,
+        page_index: usize,
+    ) -> crate::draw::PageDeleteOutcome {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return crate::draw::PageDeleteOutcome::Pending;
+        };
+        let page_count = board.pages.page_count();
+        if page_index >= page_count {
+            return crate::draw::PageDeleteOutcome::Pending;
+        }
+        let board_name = board.spec.name.clone();
+        let board_id = board.spec.id.clone();
+
+        if page_count <= 1 {
+            let outcome = board.pages.delete_page_at(page_index);
+            if self.boards.active_index() == board_index {
+                self.prepare_page_switch();
+            } else {
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                self.mark_session_dirty();
+            }
+            self.set_ui_toast(
+                UiToastKind::Info,
+                format!("Page cleared on '{board_name}' ({board_id})"),
+            );
+            return outcome;
+        }
+
+        let now = Instant::now();
+        if self
+            .pending_page_delete
+            .as_ref()
+            .is_some_and(|pending| now > pending.expires_at)
+        {
+            self.pending_page_delete = None;
+        }
+        let confirmed = self.pending_page_delete.as_ref().is_some_and(|pending| {
+            pending.board_id == board_id
+                && pending.page_index == page_index
+                && now <= pending.expires_at
+        });
+        if !confirmed {
+            self.pending_page_delete = Some(PendingPageDelete {
+                board_id: board_id.clone(),
+                page_index,
+                expires_at: now + Duration::from_millis(PAGE_DELETE_CONFIRM_MS),
+            });
+            self.set_ui_toast_with_duration(
+                UiToastKind::Warning,
+                format!(
+                    "Delete page {}/{} on '{board_name}' ({board_id})? Click delete again to confirm.",
+                    page_index + 1,
+                    page_count
+                ),
+                PAGE_DELETE_CONFIRM_MS,
+            );
+            return crate::draw::PageDeleteOutcome::Pending;
+        }
+
+        self.pending_page_delete = None;
+        let outcome = board.pages.delete_page_at(page_index);
+        let new_page_num = board.pages.active_index() + 1;
+        let new_page_count = board.pages.page_count();
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        if matches!(outcome, crate::draw::PageDeleteOutcome::Removed) {
+            self.set_ui_toast(
+                UiToastKind::Info,
+                format!(
+                    "Page deleted on '{board_name}' ({board_id}) ({new_page_num}/{new_page_count})"
+                ),
+            );
+        }
+        outcome
+    }
+
     fn switch_board_with(
         &mut self,
         switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,

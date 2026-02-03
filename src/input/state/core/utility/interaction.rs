@@ -2,6 +2,10 @@ use super::super::base::{DrawingState, InputState};
 use crate::util::Rect;
 
 impl InputState {
+    /// Returns the last known pointer position.
+    pub(crate) fn pointer_position(&self) -> (i32, i32) {
+        self.last_pointer_position
+    }
     /// Updates the cached pointer location.
     pub fn update_pointer_position(&mut self, x: i32, y: i32) {
         self.last_pointer_position = (x, y);

@@ -54,6 +54,9 @@ const PAGE_THUMB_MIN_WIDTH: f64 = 72.0;
 const PAGE_THUMB_MAX_WIDTH: f64 = 150.0;
 const PAGE_PANEL_MAX_COLS: usize = 3;
 const PAGE_PANEL_MAX_ROWS: usize = 4;
+pub(crate) const PAGE_HEADER_ICON_SIZE: f64 = 12.0;
+pub(crate) const PAGE_DELETE_ICON_SIZE: f64 = 10.0;
+pub(crate) const PAGE_DELETE_ICON_MARGIN: f64 = 4.0;
 
 #[derive(Debug, Clone)]
 pub enum BoardPickerState {
