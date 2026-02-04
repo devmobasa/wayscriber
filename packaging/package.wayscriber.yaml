@@ -22,8 +22,24 @@ contents:
     dst: /usr/share/applications/wayscriber.desktop
     file_info:
       mode: 0644
+  - src: packaging/icons/wayscriber-16.png
+    dst: /usr/share/icons/hicolor/16x16/apps/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-19.png
+    dst: /usr/share/icons/hicolor/19x19/apps/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-22.png
+    dst: /usr/share/icons/hicolor/22x22/apps/wayscriber.png
+    file_info:
+      mode: 0644
   - src: packaging/icons/wayscriber-24.png
     dst: /usr/share/icons/hicolor/24x24/apps/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-38.png
+    dst: /usr/share/icons/hicolor/38x38/apps/wayscriber.png
     file_info:
       mode: 0644
   - src: packaging/icons/wayscriber-64.png
@@ -32,6 +48,30 @@ contents:
       mode: 0644
   - src: packaging/icons/wayscriber-128.png
     dst: /usr/share/icons/hicolor/128x128/apps/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-16.png
+    dst: /usr/share/icons/hicolor/16x16/status/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-19.png
+    dst: /usr/share/icons/hicolor/19x19/status/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-22.png
+    dst: /usr/share/icons/hicolor/22x22/status/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-24.png
+    dst: /usr/share/icons/hicolor/24x24/status/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-38.png
+    dst: /usr/share/icons/hicolor/38x38/status/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-64.png
+    dst: /usr/share/icons/hicolor/64x64/status/wayscriber.png
     file_info:
       mode: 0644
   - src: config.example.toml

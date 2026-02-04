@@ -18,8 +18,24 @@ contents:
     dst: /usr/share/applications/wayscriber-configurator.desktop
     file_info:
       mode: 0644
+  - src: packaging/icons/wayscriber-configurator-16.png
+    dst: /usr/share/icons/hicolor/16x16/apps/wayscriber-configurator.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-configurator-19.png
+    dst: /usr/share/icons/hicolor/19x19/apps/wayscriber-configurator.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-configurator-22.png
+    dst: /usr/share/icons/hicolor/22x22/apps/wayscriber-configurator.png
+    file_info:
+      mode: 0644
   - src: packaging/icons/wayscriber-configurator-24.png
     dst: /usr/share/icons/hicolor/24x24/apps/wayscriber-configurator.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-configurator-38.png
+    dst: /usr/share/icons/hicolor/38x38/apps/wayscriber-configurator.png
     file_info:
       mode: 0644
   - src: packaging/icons/wayscriber-configurator-64.png
