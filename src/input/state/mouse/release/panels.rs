@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use crate::input::InputState;
-use crate::input::state::core::BoardPickerClickState;
+use crate::input::state::core::{BoardPickerClickState, MenuCommand};
 
 use super::super::{BOARD_PICKER_DOUBLE_CLICK_DISTANCE, BOARD_PICKER_DOUBLE_CLICK_MS};
 
@@ -105,6 +105,11 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
     if let Some(index) = state.board_picker_page_index_at(x, y) {
         state.board_picker_activate_page(index);
         state.needs_redraw = true;
+        return true;
+    }
+    if state.board_picker_page_overflow_at(x, y) {
+        state.update_pointer_position_synthetic(x, y);
+        state.execute_menu_command(MenuCommand::OpenPagesMenu);
         return true;
     }
     if let Some(index) = state.board_picker_open_icon_index_at(x, y)

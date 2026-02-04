@@ -347,6 +347,11 @@ show_delay_sliders = false
 # Enable to keep marker transparency control visible at all times
 show_marker_opacity_section = false
 
+# Enable context-aware UI that shows/hides controls based on the active tool
+# When enabled, only relevant controls appear (e.g., no color picker for eraser)
+# Disable to always show all controls regardless of the active tool
+context_aware_ui = true
+
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
 

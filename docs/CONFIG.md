@@ -425,6 +425,9 @@ show_delay_sliders = false
 # Show the marker opacity slider at the bottom of the side toolbar even when the marker tool isn't selected
 show_marker_opacity_section = false
 
+# Enable context-aware UI that shows/hides controls based on the active tool
+context_aware_ui = true
+
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
 
@@ -456,6 +459,7 @@ force_inline = false
 - **Settings**: `show_settings_section` hides/shows the settings footer (config buttons and toggles).
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
+- **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` store toolbar positions.

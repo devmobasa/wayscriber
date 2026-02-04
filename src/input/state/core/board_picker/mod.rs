@@ -48,15 +48,15 @@ const BOARD_PICKER_RECENT_MAX_NAMES: usize = 3;
 const BOARD_PICKER_RECENT_LABEL_MAX_CHARS: usize = BOARD_PICKER_SEARCH_MAX_LEN + 6;
 const PAGE_PANEL_GAP: f64 = 24.0;
 const PAGE_PANEL_PADDING_X: f64 = 12.0;
-const PAGE_THUMB_HEIGHT: f64 = 54.0;
+const PAGE_THUMB_HEIGHT: f64 = 68.0;
 const PAGE_THUMB_GAP: f64 = 10.0;
 const PAGE_THUMB_MIN_WIDTH: f64 = 72.0;
 const PAGE_THUMB_MAX_WIDTH: f64 = 150.0;
 const PAGE_PANEL_MAX_COLS: usize = 3;
 const PAGE_PANEL_MAX_ROWS: usize = 4;
 pub(crate) const PAGE_HEADER_ICON_SIZE: f64 = 12.0;
-pub(crate) const PAGE_DELETE_ICON_SIZE: f64 = 10.0;
-pub(crate) const PAGE_DELETE_ICON_MARGIN: f64 = 4.0;
+pub(crate) const PAGE_DELETE_ICON_SIZE: f64 = 14.0;
+pub(crate) const PAGE_DELETE_ICON_MARGIN: f64 = 5.0;
 
 #[derive(Debug, Clone)]
 pub enum BoardPickerState {

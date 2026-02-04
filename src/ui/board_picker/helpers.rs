@@ -6,7 +6,7 @@ use crate::draw::{
     render_eraser_stroke, render_shape,
 };
 use crate::input::state::BoardPickerLayout;
-use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_HEADER_ICON_SIZE};
+use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 use crate::input::{BoardBackground, InputState};
 use crate::ui::constants::{
     self, BG_SELECTION, BORDER_BOARD_PICKER, ICON_DRAG_HANDLE, ICON_SUBMENU_ARROW,
@@ -130,14 +130,23 @@ pub(super) fn draw_plus_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, al
 }
 
 pub(super) fn draw_delete_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, alpha: f64) {
-    let half = size * 0.5;
-    constants::set_color(ctx, constants::with_alpha(TEXT_TERTIARY, alpha));
-    ctx.set_line_width(1.6);
-    ctx.move_to(x - half, y - half);
-    ctx.line_to(x + half, y + half);
+    let radius = size * 0.5;
+
+    // Red background circle
+    ctx.arc(x, y, radius, 0.0, PI * 2.0);
+    ctx.set_source_rgba(0.85, 0.2, 0.2, alpha);
+    let _ = ctx.fill();
+
+    // White X icon (smaller than the circle)
+    let x_size = size * 0.28;
+    ctx.set_source_rgba(1.0, 1.0, 1.0, alpha.min(0.95));
+    ctx.set_line_width(1.8);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.move_to(x - x_size, y - x_size);
+    ctx.line_to(x + x_size, y + x_size);
     let _ = ctx.stroke();
-    ctx.move_to(x + half, y - half);
-    ctx.line_to(x - half, y + half);
+    ctx.move_to(x + x_size, y - x_size);
+    ctx.line_to(x - x_size, y + x_size);
     let _ = ctx.stroke();
 }
 
@@ -148,7 +157,7 @@ pub(super) fn render_page_panel(
     screen_width: u32,
     screen_height: u32,
 ) {
-    if !layout.page_panel_enabled || layout.page_visible_count == 0 {
+    if !layout.page_panel_enabled {
         return;
     }
     let Some(board_index) = layout.page_board_index else {
@@ -159,11 +168,11 @@ pub(super) fn render_page_panel(
     };
     let pages = board.pages.pages();
     let page_count = board.pages.page_count();
-    if page_count == 0 {
-        return;
-    }
+    let drag = input_state.board_picker_page_drag;
+    let is_dragging = drag.is_some_and(|d| d.board_index == board_index);
 
-    let label = if page_count > 1 {
+    // Header: show "drag to reorder" hint only during drag
+    let label = if is_dragging && page_count > 1 {
         format!("Pages — {}  • drag to reorder", board.spec.name)
     } else {
         format!("Pages — {}", board.spec.name)
@@ -176,28 +185,29 @@ pub(super) fn render_page_panel(
     let _ = ctx.show_text(&label);
 
     let (pointer_x, pointer_y) = input_state.pointer_position();
-    let add_hover = input_state.board_picker_page_add_button_at(pointer_x, pointer_y);
-    let add_center_x = layout.page_panel_x + layout.page_panel_width
-        - PAGE_PANEL_PADDING_X
-        - PAGE_HEADER_ICON_SIZE * 0.5;
-    let add_center_y = label_y - layout.footer_font_size * 0.35;
-    let add_alpha = if add_hover { 0.95 } else { 0.65 };
-    draw_plus_icon(
-        ctx,
-        add_center_x,
-        add_center_y,
-        PAGE_HEADER_ICON_SIZE,
-        add_alpha,
-    );
-
     let start_x = layout.page_panel_x + PAGE_PANEL_PADDING_X;
     let start_y = layout.page_panel_y;
-    let active_page = board.pages.active_index();
-    let drag = input_state.board_picker_page_drag;
-    let hover_index = input_state.board_picker_page_index_at(pointer_x, pointer_y);
-    let hover_delete = input_state.board_picker_page_delete_index_at(pointer_x, pointer_y);
     let cols = layout.page_cols.max(1);
     let max_rows = layout.page_max_rows.max(1);
+
+    // Handle empty state - show "Add your first page" CTA
+    if page_count == 0 {
+        let add_hover = input_state.board_picker_page_add_card_at(pointer_x, pointer_y);
+        render_add_page_card(
+            ctx,
+            start_x,
+            start_y,
+            layout.page_thumb_width,
+            layout.page_thumb_height,
+            add_hover,
+            true, // is_empty_state
+        );
+        return;
+    }
+
+    let active_page = board.pages.active_index();
+    let hover_index = input_state.board_picker_page_index_at(pointer_x, pointer_y);
+    let hover_delete = input_state.board_picker_page_delete_index_at(pointer_x, pointer_y);
     let rows = page_count.div_ceil(cols).min(max_rows);
     let visible = page_count.min(rows.saturating_mul(cols));
 
@@ -225,20 +235,109 @@ pub(super) fn render_page_panel(
             page_number: index + 1,
             is_active,
             is_drop_target,
-            show_delete: hover_index == Some(index),
+            is_hovered: hover_index == Some(index),
             delete_hovered: hover_delete == Some(index),
         });
     }
 
+    // Render "Add page" card at the end of thumbnails (if space available)
+    let add_card_index = visible;
+    let add_col = add_card_index % cols;
+    let add_row = add_card_index / cols;
+    if add_row < max_rows {
+        let add_x = start_x + add_col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+        let add_y = start_y + add_row as f64 * (layout.page_thumb_height + layout.page_thumb_gap);
+        let add_hover = input_state.board_picker_page_add_card_at(pointer_x, pointer_y);
+        render_add_page_card(
+            ctx,
+            add_x,
+            add_y,
+            layout.page_thumb_width,
+            layout.page_thumb_height,
+            add_hover,
+            false, // not empty state
+        );
+    }
+
+    // Overflow indicator - styled as clickable
     if page_count > visible {
         let overflow = page_count - visible;
         let hint = format!("+{overflow} more");
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
         ctx.set_font_size(layout.footer_font_size);
-        constants::set_color(ctx, TEXT_HINT);
+        let overflow_hover = input_state.board_picker_page_overflow_at(pointer_x, pointer_y);
+        if overflow_hover {
+            constants::set_color(ctx, TEXT_TERTIARY);
+        } else {
+            constants::set_color(ctx, TEXT_HINT);
+        }
         let hint_y = start_y + layout.page_panel_height + layout.footer_font_size + 6.0;
         ctx.move_to(start_x, hint_y);
         let _ = ctx.show_text(&hint);
+        // Underline when hovered to indicate clickable
+        if overflow_hover && let Ok(extents) = ctx.text_extents(&hint) {
+            ctx.set_line_width(1.0);
+            ctx.move_to(start_x, hint_y + 2.0);
+            ctx.line_to(start_x + extents.width(), hint_y + 2.0);
+            let _ = ctx.stroke();
+        }
+    }
+}
+
+fn render_add_page_card(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    is_hovered: bool,
+    is_empty_state: bool,
+) {
+    let radius = 6.0;
+
+    // Background
+    draw_rounded_rect(ctx, x, y, width, height, radius);
+    if is_hovered {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+    } else {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.03);
+    }
+    let _ = ctx.fill_preserve();
+
+    // Dashed border
+    constants::set_color(ctx, BORDER_BOARD_PICKER);
+    ctx.set_line_width(1.0);
+    ctx.set_dash(&[4.0, 3.0], 0.0);
+    let _ = ctx.stroke();
+    ctx.set_dash(&[], 0.0);
+
+    // Plus icon
+    let icon_size = 16.0;
+    let icon_alpha = if is_hovered { 0.8 } else { 0.45 };
+    draw_plus_icon(
+        ctx,
+        x + width * 0.5,
+        y + height * 0.4,
+        icon_size,
+        icon_alpha,
+    );
+
+    // Label
+    let label = if is_empty_state {
+        "Add first page"
+    } else {
+        "Add page"
+    };
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(10.0);
+    let text_alpha = if is_hovered { 0.7 } else { 0.4 };
+    ctx.set_source_rgba(1.0, 1.0, 1.0, text_alpha);
+    if let Ok(extents) = ctx.text_extents(label) {
+        ctx.move_to(
+            x + (width - extents.width()) * 0.5,
+            y + height * 0.65 + extents.height() * 0.5,
+        );
+        let _ = ctx.show_text(label);
     }
 }
 
@@ -255,7 +354,7 @@ struct PageThumbnailArgs<'a> {
     page_number: usize,
     is_active: bool,
     is_drop_target: bool,
-    show_delete: bool,
+    is_hovered: bool,
     delete_hovered: bool,
 }
 
@@ -273,7 +372,7 @@ fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
         page_number,
         is_active,
         is_drop_target,
-        show_delete,
+        is_hovered,
         delete_hovered,
     } = args;
     let radius = 6.0;
@@ -361,14 +460,19 @@ fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
     let handle_y = y + 4.0 + handle_size * 0.5;
     draw_drag_handle(ctx, handle_x, handle_y, handle_size);
 
-    if show_delete {
-        let icon_size = PAGE_DELETE_ICON_SIZE;
-        let margin = PAGE_DELETE_ICON_MARGIN;
-        let icon_x = x + width - icon_size - margin + icon_size * 0.5;
-        let icon_y = y + height - icon_size - margin + icon_size * 0.5;
-        let alpha = if delete_hovered { 0.95 } else { 0.6 };
-        draw_delete_icon(ctx, icon_x, icon_y, icon_size, alpha);
-    }
+    // Always show delete icon - brighter on hover, visible otherwise
+    let icon_size = PAGE_DELETE_ICON_SIZE;
+    let margin = PAGE_DELETE_ICON_MARGIN;
+    let icon_x = x + width - icon_size * 0.5 - margin;
+    let icon_y = y + height - icon_size * 0.5 - margin;
+    let alpha = if delete_hovered {
+        1.0
+    } else if is_hovered {
+        0.85
+    } else {
+        0.55
+    };
+    draw_delete_icon(ctx, icon_x, icon_y, icon_size, alpha);
 
     let badge = page_number.to_string();
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
@@ -391,4 +495,7 @@ fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
     ctx.move_to(badge_x + 4.0, badge_y + badge_h - 4.0);
     let _ = ctx.show_text(&badge);
+
+    // Active page is indicated by the gold border (drawn earlier)
+    // No additional checkmark needed - it would conflict with the delete icon
 }

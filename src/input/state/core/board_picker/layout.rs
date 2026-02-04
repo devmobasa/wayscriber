@@ -12,11 +12,11 @@ use super::{
     COMPACT_PADDING_X, COMPACT_PADDING_Y, COMPACT_ROW_HEIGHT, COMPACT_SWATCH_PADDING,
     COMPACT_SWATCH_SIZE, COMPACT_TITLE_FONT_SIZE, FOOTER_FONT_SIZE, FOOTER_HEIGHT, HANDLE_GAP,
     HANDLE_WIDTH, HEADER_HEIGHT, OPEN_ICON_GAP, OPEN_ICON_SIZE, PADDING_X, PADDING_Y,
-    PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_HEADER_ICON_SIZE, PAGE_PANEL_GAP,
-    PAGE_PANEL_MAX_COLS, PAGE_PANEL_MAX_ROWS, PAGE_PANEL_PADDING_X, PAGE_THUMB_GAP,
-    PAGE_THUMB_HEIGHT, PAGE_THUMB_MAX_WIDTH, PAGE_THUMB_MIN_WIDTH, PALETTE_BOTTOM_GAP,
-    PALETTE_SWATCH_GAP, PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, PIN_OFFSET_FACTOR, ROW_HEIGHT,
-    SWATCH_PADDING, SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
+    PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_PANEL_GAP, PAGE_PANEL_MAX_COLS,
+    PAGE_PANEL_MAX_ROWS, PAGE_PANEL_PADDING_X, PAGE_THUMB_GAP, PAGE_THUMB_HEIGHT,
+    PAGE_THUMB_MAX_WIDTH, PAGE_THUMB_MIN_WIDTH, PALETTE_BOTTOM_GAP, PALETTE_SWATCH_GAP,
+    PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, PIN_OFFSET_FACTOR, ROW_HEIGHT, SWATCH_PADDING,
+    SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
 };
 
 impl InputState {
@@ -244,30 +244,45 @@ impl InputState {
             && let Some(board) = self.boards.board_states().get(board_index)
         {
             page_count = board.pages.page_count();
-            if page_count > 0 {
-                let aspect = screen_width as f64 / screen_height as f64;
-                page_thumb_width =
-                    (page_thumb_height * aspect).clamp(PAGE_THUMB_MIN_WIDTH, PAGE_THUMB_MAX_WIDTH);
-                let max_panel_width = (screen_width as f64 - 32.0).max(list_width);
-                for cols in (1..=PAGE_PANEL_MAX_COLS).rev() {
-                    let candidate_width = PAGE_PANEL_PADDING_X * 2.0
-                        + page_thumb_width * cols as f64
-                        + page_thumb_gap * (cols.saturating_sub(1) as f64);
-                    let total_width = list_width + PAGE_PANEL_GAP + candidate_width;
-                    if total_width <= max_panel_width || cols == 1 {
-                        page_cols = cols;
-                        page_panel_width = candidate_width;
-                        break;
-                    }
+            // Always show page panel (even empty state with 0 pages for "Add first page" CTA)
+            let aspect = screen_width as f64 / screen_height as f64;
+            page_thumb_width =
+                (page_thumb_height * aspect).clamp(PAGE_THUMB_MIN_WIDTH, PAGE_THUMB_MAX_WIDTH);
+            let max_panel_width = (screen_width as f64 - 32.0).max(list_width);
+
+            // Dynamic column count based on page count:
+            // - 0-2 pages: 1 column (compact for few pages + add card)
+            // - 3-5 pages: 2 columns
+            // - 6+ pages: 3 columns (max)
+            let preferred_cols = if page_count <= 2 {
+                1
+            } else if page_count <= 5 {
+                2
+            } else {
+                PAGE_PANEL_MAX_COLS
+            };
+
+            // Find the best column count that fits
+            for cols in (1..=preferred_cols).rev() {
+                let candidate_width = PAGE_PANEL_PADDING_X * 2.0
+                    + page_thumb_width * cols as f64
+                    + page_thumb_gap * (cols.saturating_sub(1) as f64);
+                let total_width = list_width + PAGE_PANEL_GAP + candidate_width;
+                if total_width <= max_panel_width || cols == 1 {
+                    page_cols = cols;
+                    page_panel_width = candidate_width;
+                    break;
                 }
-                let max_rows = PAGE_PANEL_MAX_ROWS.max(1);
-                page_rows = page_count.div_ceil(page_cols).min(max_rows);
-                page_panel_height = page_rows as f64 * page_thumb_height
-                    + page_thumb_gap * (page_rows.saturating_sub(1) as f64);
-                page_visible_count = (page_rows * page_cols).min(page_count);
-                page_panel_enabled = true;
-                page_board_index = Some(board_index);
             }
+            let max_rows = PAGE_PANEL_MAX_ROWS.max(1);
+            // Account for the "Add page" card at the end
+            let total_slots = page_count + 1;
+            page_rows = total_slots.div_ceil(page_cols).min(max_rows);
+            page_panel_height = page_rows as f64 * page_thumb_height
+                + page_thumb_gap * (page_rows.saturating_sub(1) as f64);
+            page_visible_count = (page_rows * page_cols).saturating_sub(1).min(page_count);
+            page_panel_enabled = true;
+            page_board_index = Some(board_index);
         }
 
         if page_panel_enabled {
@@ -481,6 +496,12 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_page_add_button_at(&self, x: i32, y: i32) -> bool {
+        // Deprecated: use board_picker_page_add_card_at instead
+        self.board_picker_page_add_card_at(x, y)
+    }
+
+    /// Check if pointer is over the "Add page" card at the end of thumbnails
+    pub(crate) fn board_picker_page_add_card_at(&self, x: i32, y: i32) -> bool {
         let layout = match self.board_picker_layout {
             Some(layout) => layout,
             None => return false,
@@ -488,15 +509,80 @@ impl InputState {
         if !layout.page_panel_enabled {
             return false;
         }
-        let size = PAGE_HEADER_ICON_SIZE;
-        let add_x = layout.page_panel_x + layout.page_panel_width - PAGE_PANEL_PADDING_X - size;
-        let label_y = layout.origin_y + layout.padding_y + layout.title_font_size;
-        let center_y = label_y - layout.footer_font_size * 0.35;
-        let add_y = center_y - size * 0.5;
-        (x as f64) >= add_x
-            && (x as f64) <= add_x + size
-            && (y as f64) >= add_y
-            && (y as f64) <= add_y + size
+        let board_index = match layout.page_board_index {
+            Some(idx) => idx,
+            None => return false,
+        };
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).max(1).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+
+        // Add card position is after the last visible page
+        let add_index = visible;
+        let add_col = add_index % cols;
+        let add_row = add_index / cols;
+        if add_row >= max_rows {
+            return false;
+        }
+
+        let start_x = layout.page_panel_x + PAGE_PANEL_PADDING_X;
+        let start_y = layout.page_panel_y;
+        let card_x = start_x + add_col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+        let card_y = start_y + add_row as f64 * (layout.page_thumb_height + layout.page_thumb_gap);
+
+        (x as f64) >= card_x
+            && (x as f64) <= card_x + layout.page_thumb_width
+            && (y as f64) >= card_y
+            && (y as f64) <= card_y + layout.page_thumb_height
+    }
+
+    /// Check if pointer is over the overflow indicator ("+X more")
+    pub(crate) fn board_picker_page_overflow_at(&self, x: i32, y: i32) -> bool {
+        let layout = match self.board_picker_layout {
+            Some(layout) => layout,
+            None => return false,
+        };
+        if !layout.page_panel_enabled {
+            return false;
+        }
+        let board_index = match layout.page_board_index {
+            Some(idx) => idx,
+            None => return false,
+        };
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+
+        if page_count <= visible {
+            return false;
+        }
+
+        let start_x = layout.page_panel_x + PAGE_PANEL_PADDING_X;
+        let start_y = layout.page_panel_y;
+        let hint_y = start_y + layout.page_panel_height;
+        let hint_height = layout.footer_font_size + 10.0;
+        let hint_width = 80.0; // Approximate width for "+X more"
+
+        (x as f64) >= start_x
+            && (x as f64) <= start_x + hint_width
+            && (y as f64) >= hint_y
+            && (y as f64) <= hint_y + hint_height
     }
 
     pub(crate) fn board_picker_page_delete_index_at(&self, x: i32, y: i32) -> Option<usize> {
@@ -706,7 +792,10 @@ impl InputState {
         if self.board_picker_page_handle_index_at(x, y).is_some() {
             return Some(BoardPickerCursorHint::Grab);
         }
-        if self.board_picker_page_add_button_at(x, y) {
+        if self.board_picker_page_add_card_at(x, y) {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+        if self.board_picker_page_overflow_at(x, y) {
             return Some(BoardPickerCursorHint::Pointer);
         }
         if self.board_picker_open_icon_index_at(x, y).is_some() {

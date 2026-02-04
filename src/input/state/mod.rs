@@ -7,9 +7,7 @@ mod render;
 mod tests;
 
 pub(crate) use core::board_picker::BoardPickerEditMode;
-pub(crate) use core::board_picker::{
-    PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_HEADER_ICON_SIZE,
-};
+pub(crate) use core::board_picker::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 pub use core::color_picker_popup::{color_to_hex, parse_hex_color};
 #[allow(unused_imports)]
 pub use core::{
