@@ -612,6 +612,18 @@ impl InputState {
             _ => {}
         }
 
+        if self.is_board_picker_open() {
+            let active_index = self.boards.active_index();
+            if let Some(row) = self.board_picker_row_for_board(active_index) {
+                self.board_picker_set_selected(row);
+            }
+            if let super::board_picker::BoardPickerState::Open { hover_index, .. } =
+                &mut self.board_picker_state
+            {
+                *hover_index = None;
+            }
+        }
+
         // Reset drawing state to prevent partial shapes crossing modes
         self.state = super::base::DrawingState::Idle;
 

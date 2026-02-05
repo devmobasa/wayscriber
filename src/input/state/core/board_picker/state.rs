@@ -147,6 +147,7 @@ impl InputState {
         if let BoardPickerState::Open { selected, .. } = &mut self.board_picker_state {
             *selected = next;
             self.needs_redraw = true;
+            self.dirty_tracker.mark_full();
         }
     }
 
