@@ -153,7 +153,7 @@ impl BoardPages {
             return None;
         }
         if len == 1 {
-            let page = std::mem::replace(&mut self.pages[0], Frame::new());
+            let page = std::mem::take(&mut self.pages[0]);
             self.active = 0;
             return Some(page);
         }

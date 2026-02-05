@@ -6,7 +6,8 @@ use crate::ui::constants::{self, TEXT_HINT, TEXT_TERTIARY};
 use crate::ui::primitives::draw_rounded_rect;
 
 use thumbnail::{
-    PageThumbnailArgs, render_add_page_card, render_page_preview, render_page_thumbnail,
+    PagePreviewArgs, PageThumbnailArgs, render_add_page_card, render_page_preview,
+    render_page_thumbnail,
 };
 
 const PAGE_PANEL_PADDING_X: f64 = 12.0;
@@ -120,18 +121,18 @@ pub(super) fn render_page_panel(
         let thumb_x = start_x + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
         let thumb_y = start_y + row as f64 * row_stride;
         let page = &pages[hover_index];
-        render_page_preview(
+        render_page_preview(PagePreviewArgs {
             ctx,
-            page,
-            &board.spec.background,
+            frame: page,
+            background: &board.spec.background,
             thumb_x,
             thumb_y,
-            layout.page_thumb_width,
-            layout.page_thumb_height,
+            thumb_w: layout.page_thumb_width,
+            thumb_h: layout.page_thumb_height,
             screen_width,
             screen_height,
-            hover_index + 1,
-        );
+            page_number: hover_index + 1,
+        });
     }
 
     if let Some((edit_board, edit_page, buffer)) = input_state.board_picker_page_edit_state()

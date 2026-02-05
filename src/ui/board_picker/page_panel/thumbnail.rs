@@ -35,6 +35,31 @@ pub(super) struct PageThumbnailArgs<'a> {
     pub(super) rename_hovered: bool,
 }
 
+pub(super) struct PagePreviewArgs<'a> {
+    pub(super) ctx: &'a cairo::Context,
+    pub(super) frame: &'a crate::draw::Frame,
+    pub(super) background: &'a BoardBackground,
+    pub(super) thumb_x: f64,
+    pub(super) thumb_y: f64,
+    pub(super) thumb_w: f64,
+    pub(super) thumb_h: f64,
+    pub(super) screen_width: u32,
+    pub(super) screen_height: u32,
+    pub(super) page_number: usize,
+}
+
+pub(super) struct PageContentArgs<'a> {
+    pub(super) ctx: &'a cairo::Context,
+    pub(super) frame: &'a crate::draw::Frame,
+    pub(super) background: &'a BoardBackground,
+    pub(super) x: f64,
+    pub(super) y: f64,
+    pub(super) width: f64,
+    pub(super) height: f64,
+    pub(super) screen_width: u32,
+    pub(super) screen_height: u32,
+}
+
 pub(super) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
     let PageThumbnailArgs {
         ctx,
@@ -67,7 +92,7 @@ pub(super) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
-    render_page_content(
+    render_page_content(PageContentArgs {
         ctx,
         frame,
         background,
@@ -77,7 +102,7 @@ pub(super) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
         height,
         screen_width,
         screen_height,
-    );
+    });
 
     if is_active {
         constants::set_color(ctx, INDICATOR_ACTIVE_BOARD);
@@ -212,18 +237,19 @@ pub(super) fn render_add_page_card(
     }
 }
 
-pub(super) fn render_page_preview(
-    ctx: &cairo::Context,
-    frame: &crate::draw::Frame,
-    background: &BoardBackground,
-    thumb_x: f64,
-    thumb_y: f64,
-    thumb_w: f64,
-    thumb_h: f64,
-    screen_width: u32,
-    screen_height: u32,
-    page_number: usize,
-) {
+pub(super) fn render_page_preview(args: PagePreviewArgs<'_>) {
+    let PagePreviewArgs {
+        ctx,
+        frame,
+        background,
+        thumb_x,
+        thumb_y,
+        thumb_w,
+        thumb_h,
+        screen_width,
+        screen_height,
+        page_number,
+    } = args;
     let base_w = thumb_w * PREVIEW_SCALE;
     let base_h = thumb_h * PREVIEW_SCALE;
     let margin = 8.0;
@@ -257,17 +283,17 @@ pub(super) fn render_page_preview(
     ctx.set_line_width(1.2);
     let _ = ctx.stroke();
 
-    render_page_content(
+    render_page_content(PageContentArgs {
         ctx,
         frame,
         background,
-        preview_x,
-        preview_y,
-        preview_w,
-        preview_h,
+        x: preview_x,
+        y: preview_y,
+        width: preview_w,
+        height: preview_h,
         screen_width,
         screen_height,
-    );
+    });
 
     let label = frame
         .page_name()
@@ -392,17 +418,18 @@ fn draw_rename_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, alpha: f64)
     let _ = ctx.stroke();
 }
 
-fn render_page_content(
-    ctx: &cairo::Context,
-    frame: &crate::draw::Frame,
-    background: &BoardBackground,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    screen_width: u32,
-    screen_height: u32,
-) {
+fn render_page_content(args: PageContentArgs<'_>) {
+    let PageContentArgs {
+        ctx,
+        frame,
+        background,
+        x,
+        y,
+        width,
+        height,
+        screen_width,
+        screen_height,
+    } = args;
     let radius = 6.0;
     let _ = ctx.save();
     draw_rounded_rect(ctx, x, y, width, height, radius);

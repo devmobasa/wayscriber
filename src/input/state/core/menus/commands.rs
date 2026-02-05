@@ -200,17 +200,16 @@ impl InputState {
                         .board_states()
                         .iter()
                         .position(|board| board.spec.id == id)
-                    {
-                        if self.move_page_between_boards(
+                        && self.move_page_between_boards(
                             source_board,
                             page_index,
                             target_index,
                             false,
-                        ) {
-                            self.switch_board_slot(target_index);
-                            if let Some(row) = self.board_picker_row_for_board(target_index) {
-                                self.board_picker_set_selected(row);
-                            }
+                        )
+                    {
+                        self.switch_board_slot(target_index);
+                        if let Some(row) = self.board_picker_row_for_board(target_index) {
+                            self.board_picker_set_selected(row);
                         }
                     }
                 }
