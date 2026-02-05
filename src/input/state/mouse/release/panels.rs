@@ -97,8 +97,27 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
         state.needs_redraw = true;
         return true;
     }
+    if let Some(index) = state.board_picker_page_rename_index_at(x, y)
+        && let Some(board_index) = state.board_picker_page_panel_board_index()
+    {
+        state.board_picker_start_page_rename(board_index, index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_duplicate_index_at(x, y) {
+        state.board_picker_duplicate_page(index);
+        state.needs_redraw = true;
+        return true;
+    }
     if let Some(index) = state.board_picker_page_delete_index_at(x, y) {
         state.board_picker_delete_page(index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_name_index_at(x, y)
+        && let Some(board_index) = state.board_picker_page_panel_board_index()
+    {
+        state.board_picker_start_page_rename(board_index, index);
         state.needs_redraw = true;
         return true;
     }

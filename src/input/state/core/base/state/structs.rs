@@ -1,5 +1,8 @@
 use super::super::super::{
-    board_picker::{BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerState},
+    board_picker::{
+        BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerPageEdit,
+        BoardPickerPageTarget, BoardPickerState,
+    },
     color_picker_popup::{ColorPickerPopupLayout, ColorPickerPopupState},
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
@@ -202,6 +205,8 @@ pub struct InputState {
     pub last_selection_axis: Option<SelectionAxis>,
     /// Current context menu state
     pub context_menu_state: ContextMenuState,
+    /// Page context target for the context menu
+    pub(in crate::input::state::core) context_menu_page_target: Option<BoardPickerPageTarget>,
     /// Whether context menu interactions are enabled
     pub(in crate::input::state::core) context_menu_enabled: bool,
     /// Current board picker state
@@ -210,6 +215,8 @@ pub struct InputState {
     pub board_picker_drag: Option<BoardPickerDrag>,
     /// Active board picker page drag state (thumbnail reorder)
     pub board_picker_page_drag: Option<BoardPickerPageDrag>,
+    /// Active board picker page rename state
+    pub board_picker_page_edit: Option<BoardPickerPageEdit>,
     /// Current color picker popup state
     pub color_picker_popup_state: ColorPickerPopupState,
     /// Cached layout details for the color picker popup

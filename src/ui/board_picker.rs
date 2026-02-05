@@ -10,10 +10,9 @@ use super::constants::{
 };
 
 mod helpers;
-use helpers::{
-    BOARD_PALETTE, board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon,
-    render_page_panel,
-};
+mod page_panel;
+use helpers::{BOARD_PALETTE, board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon};
+use page_panel::render_page_panel;
 
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
 const PALETTE_SWATCH_GAP: f64 = 6.0;

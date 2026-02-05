@@ -131,6 +131,26 @@ impl InputState {
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
             }
+            MenuCommand::OpenPageMoveMenu => {
+                let anchor = if let Some(layout) = self.context_menu_layout {
+                    (
+                        (layout.origin_x + layout.width + 8.0).round() as i32,
+                        layout.origin_y.round() as i32,
+                    )
+                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
+                    *anchor
+                } else {
+                    self.last_pointer_position
+                };
+                let target = self.context_menu_page_target;
+                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::PageMove, None);
+                self.context_menu_page_target = target;
+                self.pending_menu_hover_recalc = false;
+                self.set_context_menu_focus(None);
+                self.focus_first_context_menu_entry();
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+            }
             MenuCommand::PagePrev => {
                 self.page_prev();
                 self.close_context_menu();
@@ -150,6 +170,49 @@ impl InputState {
             MenuCommand::PageDelete => {
                 if matches!(self.page_delete(), crate::draw::PageDeleteOutcome::Cleared) {
                     self.set_ui_toast(UiToastKind::Info, "Cleared the last page.");
+                }
+                self.close_context_menu();
+            }
+            MenuCommand::PageRename => {
+                if let Some(target) = self.context_menu_page_target {
+                    self.board_picker_start_page_rename(target.board_index, target.page_index);
+                }
+                self.close_context_menu();
+            }
+            MenuCommand::PageDuplicateFromContext => {
+                if let Some(target) = self.context_menu_page_target {
+                    let _ = self.duplicate_page_in_board(target.board_index, target.page_index);
+                }
+                self.close_context_menu();
+            }
+            MenuCommand::PageDeleteFromContext => {
+                if let Some(target) = self.context_menu_page_target {
+                    let _ = self.delete_page_in_board(target.board_index, target.page_index);
+                }
+                self.close_context_menu();
+            }
+            MenuCommand::PageMoveToBoard { id } => {
+                if let Some(target) = self.context_menu_page_target {
+                    let source_board = target.board_index;
+                    let page_index = target.page_index;
+                    if let Some(target_index) = self
+                        .boards
+                        .board_states()
+                        .iter()
+                        .position(|board| board.spec.id == id)
+                    {
+                        if self.move_page_between_boards(
+                            source_board,
+                            page_index,
+                            target_index,
+                            false,
+                        ) {
+                            self.switch_board_slot(target_index);
+                            if let Some(row) = self.board_picker_row_for_board(target_index) {
+                                self.board_picker_set_selected(row);
+                            }
+                        }
+                    }
                 }
                 self.close_context_menu();
             }

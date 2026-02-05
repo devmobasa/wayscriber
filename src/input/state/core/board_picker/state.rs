@@ -5,8 +5,8 @@ use super::super::base::{InputState, UiToastKind};
 use super::{
     BOARD_PICKER_RECENT_LABEL_MAX_CHARS, BOARD_PICKER_RECENT_MAX_NAMES,
     BOARD_PICKER_SEARCH_MAX_LEN, BoardPickerDrag, BoardPickerEdit, BoardPickerEditMode,
-    BoardPickerMode, BoardPickerPageDrag, BoardPickerState, MAX_BOARD_NAME_LEN, color_to_hex,
-    parse_hex_color, truncate_search_label,
+    BoardPickerMode, BoardPickerPageDrag, BoardPickerState, MAX_BOARD_NAME_LEN, MAX_PAGE_NAME_LEN,
+    color_to_hex, parse_hex_color, truncate_search_label,
 };
 
 impl InputState {
@@ -35,6 +35,7 @@ impl InputState {
         self.board_picker_clear_search();
         self.board_picker_drag = None;
         self.board_picker_page_drag = None;
+        self.board_picker_page_edit = None;
         let active_index = self.boards.active_index();
         self.board_picker_state = BoardPickerState::Open {
             selected: active_index,
@@ -62,6 +63,7 @@ impl InputState {
         self.board_picker_clear_search();
         self.board_picker_drag = None;
         self.board_picker_page_drag = None;
+        self.board_picker_page_edit = None;
         let active_index = self.boards.active_index();
         self.board_picker_state = BoardPickerState::Open {
             selected: active_index,
@@ -89,6 +91,7 @@ impl InputState {
         self.board_picker_state = BoardPickerState::Hidden;
         self.board_picker_drag = None;
         self.board_picker_page_drag = None;
+        self.board_picker_page_edit = None;
         self.board_picker_layout = None;
         self.last_board_picker_click = None;
         self.board_picker_clear_search();
@@ -192,6 +195,7 @@ impl InputState {
             source_index: page_index,
             current_index: page_index,
             board_index,
+            target_board: Some(board_index),
         });
         self.needs_redraw = true;
         true
@@ -230,18 +234,46 @@ impl InputState {
         let Some(layout) = self.board_picker_layout else {
             return;
         };
-        let Some(index) = self.board_picker_page_index_at(x, y) else {
-            return;
-        };
-        let Some(drag) = self.board_picker_page_drag.as_mut() else {
+        let Some(drag) = self.board_picker_page_drag else {
             return;
         };
         if !layout.page_panel_enabled {
             return;
         }
-        let target = index.min(layout.page_count.saturating_sub(1));
-        if drag.current_index != target {
-            drag.current_index = target;
+        let mut next_target_board = Some(drag.board_index);
+        let mut next_current_index = drag.current_index;
+        let mut next_hover_row = None;
+
+        if let Some(row) = self.board_picker_index_at(x, y)
+            && !self.board_picker_is_new_row(row)
+            && let Some(board_index) = self.board_picker_board_index_for_row(row)
+        {
+            next_target_board = Some(board_index);
+            next_hover_row = Some(row);
+        } else if let Some(index) = self.board_picker_page_index_at(x, y) {
+            next_current_index = index.min(layout.page_count.saturating_sub(1));
+        }
+
+        let mut updated = false;
+        if let Some(drag) = &mut self.board_picker_page_drag {
+            if drag.target_board != next_target_board {
+                drag.target_board = next_target_board;
+                updated = true;
+            }
+            if drag.current_index != next_current_index {
+                drag.current_index = next_current_index;
+                updated = true;
+            }
+        }
+
+        if let BoardPickerState::Open { hover_index, .. } = &mut self.board_picker_state
+            && *hover_index != next_hover_row
+        {
+            *hover_index = next_hover_row;
+            updated = true;
+        }
+
+        if updated {
             self.needs_redraw = true;
         }
     }
@@ -287,6 +319,23 @@ impl InputState {
         let Some(drag) = self.board_picker_page_drag.take() else {
             return false;
         };
+        let target_board = drag.target_board.unwrap_or(drag.board_index);
+        if target_board != drag.board_index {
+            let copy = self.modifiers.alt;
+            if self.move_page_between_boards(
+                drag.board_index,
+                drag.source_index,
+                target_board,
+                copy,
+            ) {
+                self.switch_board_slot(target_board);
+                if let Some(row) = self.board_picker_row_for_board(target_board) {
+                    self.board_picker_set_selected(row);
+                }
+            }
+            self.needs_redraw = true;
+            return true;
+        }
         if drag.source_index == drag.current_index {
             self.needs_redraw = true;
             return true;
@@ -322,6 +371,72 @@ impl InputState {
             return None;
         };
         edit.as_mut()
+    }
+
+    pub(crate) fn board_picker_page_edit_state(&self) -> Option<(usize, usize, &str)> {
+        self.board_picker_page_edit
+            .as_ref()
+            .map(|edit| (edit.board_index, edit.page_index, edit.buffer.as_str()))
+    }
+
+    pub(crate) fn board_picker_start_page_rename(&mut self, board_index: usize, page_index: usize) {
+        let Some(board) = self.boards.board_states().get(board_index) else {
+            return;
+        };
+        if page_index >= board.pages.page_count() {
+            return;
+        }
+        let buffer = board
+            .pages
+            .page_name(page_index)
+            .unwrap_or_default()
+            .to_string();
+        self.board_picker_clear_edit();
+        self.board_picker_page_edit = Some(super::BoardPickerPageEdit {
+            board_index,
+            page_index,
+            buffer,
+        });
+        self.board_picker_clear_search();
+        self.needs_redraw = true;
+    }
+
+    pub(crate) fn board_picker_commit_page_edit(&mut self) -> bool {
+        let Some(edit) = self.board_picker_page_edit.take() else {
+            return false;
+        };
+        let name = edit.buffer.trim().to_string();
+        let name = if name.is_empty() { None } else { Some(name) };
+        let _ = self.rename_page_in_board(edit.board_index, edit.page_index, name);
+        self.needs_redraw = true;
+        true
+    }
+
+    pub(crate) fn board_picker_cancel_page_edit(&mut self) {
+        if self.board_picker_page_edit.is_some() {
+            self.board_picker_page_edit = None;
+            self.needs_redraw = true;
+        }
+    }
+
+    pub(crate) fn board_picker_page_edit_backspace(&mut self) {
+        if let Some(edit) = &mut self.board_picker_page_edit {
+            edit.buffer.pop();
+            self.needs_redraw = true;
+        }
+    }
+
+    pub(crate) fn board_picker_page_edit_append(&mut self, ch: char) {
+        let Some(edit) = &mut self.board_picker_page_edit else {
+            return;
+        };
+        if edit.buffer.len() >= MAX_PAGE_NAME_LEN {
+            return;
+        }
+        if !ch.is_control() {
+            edit.buffer.push(ch);
+            self.needs_redraw = true;
+        }
     }
 
     pub(crate) fn board_picker_footer_text(&self) -> String {
@@ -493,6 +608,13 @@ impl InputState {
             return;
         };
         self.delete_page_in_board(board_index, page_index);
+    }
+
+    pub(crate) fn board_picker_duplicate_page(&mut self, page_index: usize) {
+        let Some(board_index) = self.board_picker_page_panel_board_index() else {
+            return;
+        };
+        let _ = self.duplicate_page_in_board(board_index, page_index);
     }
 
     pub(crate) fn board_picker_create_new(&mut self) {

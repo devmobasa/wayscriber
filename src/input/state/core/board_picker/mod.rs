@@ -46,6 +46,7 @@ const BOARD_PICKER_RECENT_LINE_HEIGHT: f64 = 16.0;
 const BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT: f64 = 14.0;
 const BOARD_PICKER_RECENT_MAX_NAMES: usize = 3;
 const BOARD_PICKER_RECENT_LABEL_MAX_CHARS: usize = BOARD_PICKER_SEARCH_MAX_LEN + 6;
+const MAX_PAGE_NAME_LEN: usize = 40;
 const PAGE_PANEL_GAP: f64 = 24.0;
 const PAGE_PANEL_PADDING_X: f64 = 12.0;
 const PAGE_THUMB_HEIGHT: f64 = 68.0;
@@ -57,6 +58,8 @@ const PAGE_PANEL_MAX_ROWS: usize = 4;
 pub(crate) const PAGE_HEADER_ICON_SIZE: f64 = 12.0;
 pub(crate) const PAGE_DELETE_ICON_SIZE: f64 = 14.0;
 pub(crate) const PAGE_DELETE_ICON_MARGIN: f64 = 5.0;
+pub(crate) const PAGE_NAME_HEIGHT: f64 = 14.0;
+pub(crate) const PAGE_NAME_PADDING: f64 = 6.0;
 
 #[derive(Debug, Clone)]
 pub enum BoardPickerState {
@@ -99,6 +102,20 @@ pub struct BoardPickerPageDrag {
     pub source_index: usize,
     pub current_index: usize,
     pub board_index: usize,
+    pub target_board: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BoardPickerPageTarget {
+    pub board_index: usize,
+    pub page_index: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoardPickerPageEdit {
+    pub board_index: usize,
+    pub page_index: usize,
+    pub buffer: String,
 }
 
 #[derive(Debug, Clone, Copy)]

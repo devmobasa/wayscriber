@@ -51,8 +51,18 @@ pub fn render_status_bar(
     };
     let page_count = input_state.boards.page_count().max(1);
     let page_index = input_state.boards.active_page_index();
+    let page_name = input_state
+        .boards
+        .board_states()
+        .get(input_state.boards.active_index())
+        .and_then(|board| board.pages.page_name(page_index))
+        .map(|name| crate::util::truncate_with_ellipsis(name, 20));
     let page_badge = if input_state.show_status_page_badge {
-        format!("[Page {}/{}] ", page_index + 1, page_count)
+        if let Some(name) = page_name {
+            format!("[Page {}/{}: {}] ", page_index + 1, page_count, name)
+        } else {
+            format!("[Page {}/{}] ", page_index + 1, page_count)
+        }
     } else {
         String::new()
     };

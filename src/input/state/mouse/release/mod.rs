@@ -26,13 +26,13 @@ impl InputState {
             if panels::handle_color_picker_popup_release(self, x, y) {
                 return;
             }
+            if panels::handle_context_menu_release(self, x, y) {
+                return;
+            }
             if panels::handle_board_picker_release(self, x, y) {
                 return;
             }
             if panels::handle_properties_panel_release(self, x, y) {
-                return;
-            }
-            if panels::handle_context_menu_release(self, x, y) {
                 return;
             }
         }

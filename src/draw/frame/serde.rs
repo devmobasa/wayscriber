@@ -58,6 +58,8 @@ impl<'de> Deserialize<'de> for Frame {
             #[serde(with = "frame_storage")]
             shapes: Vec<DrawnShape>,
             #[serde(default)]
+            page_name: Option<String>,
+            #[serde(default)]
             undo_stack: Vec<UndoAction>,
             #[serde(default)]
             redo_stack: Vec<UndoAction>,
@@ -66,6 +68,7 @@ impl<'de> Deserialize<'de> for Frame {
         let helper = FrameHelper::deserialize(deserializer)?;
         let mut frame = Frame {
             shapes: helper.shapes,
+            page_name: helper.page_name,
             undo_stack: helper.undo_stack,
             redo_stack: helper.redo_stack,
             next_shape_id: 1,

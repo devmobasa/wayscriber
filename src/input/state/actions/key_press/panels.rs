@@ -53,7 +53,31 @@ impl InputState {
             return false;
         }
 
-        if self.board_picker_edit_state().is_some() {
+        if self.board_picker_page_edit_state().is_some() {
+            match key {
+                Key::Escape => {
+                    self.board_picker_cancel_page_edit();
+                    true
+                }
+                Key::Return => {
+                    self.board_picker_commit_page_edit();
+                    true
+                }
+                Key::Backspace | Key::Delete => {
+                    self.board_picker_page_edit_backspace();
+                    true
+                }
+                Key::Space => {
+                    self.board_picker_page_edit_append(' ');
+                    true
+                }
+                Key::Char(ch) => {
+                    self.board_picker_page_edit_append(ch);
+                    true
+                }
+                _ => true,
+            }
+        } else if self.board_picker_edit_state().is_some() {
             match key {
                 Key::Escape => {
                     self.board_picker_cancel_edit();
