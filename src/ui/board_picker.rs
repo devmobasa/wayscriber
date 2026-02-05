@@ -10,7 +10,9 @@ use super::constants::{
 };
 
 mod helpers;
-use helpers::{BOARD_PALETTE, board_slot_hint, draw_drag_handle, draw_pin_icon};
+mod page_panel;
+use helpers::{BOARD_PALETTE, board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon};
+use page_panel::render_page_panel;
 
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
 const PALETTE_SWATCH_GAP: f64 = 6.0;
@@ -110,15 +112,23 @@ pub fn render_board_picker(
 
     let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
     let name_x = layout.origin_x + layout.padding_x + layout.swatch_size + layout.swatch_padding;
+    let list_right = layout.origin_x + layout.list_width;
     let handle_x = if layout.handle_width > 0.0 {
-        Some(layout.origin_x + layout.width - layout.padding_x - layout.handle_width)
+        Some(list_right - layout.padding_x - layout.handle_width)
     } else {
         None
     };
-    let hint_right_edge = if let Some(handle_x) = handle_x {
+    let open_icon_x = if layout.open_icon_size > 0.0 {
+        handle_x.map(|x| x - layout.open_icon_gap - layout.open_icon_size)
+    } else {
+        None
+    };
+    let hint_right_edge = if let Some(open_icon_x) = open_icon_x {
+        open_icon_x - layout.handle_gap
+    } else if let Some(handle_x) = handle_x {
         handle_x - layout.handle_gap
     } else {
-        layout.origin_x + layout.width - layout.padding_x
+        list_right - layout.padding_x
     };
     let hint_x = if layout.hint_width > 0.0 {
         Some(hint_right_edge - layout.hint_width)
@@ -138,7 +148,7 @@ pub fn render_board_picker(
         constants::set_color(ctx, DIVIDER_LIGHT);
         ctx.set_line_width(1.0);
         ctx.move_to(layout.origin_x + layout.padding_x, divider_y);
-        ctx.line_to(layout.origin_x + layout.width - layout.padding_x, divider_y);
+        ctx.line_to(list_right - layout.padding_x, divider_y);
         let _ = ctx.stroke();
     }
 
@@ -161,7 +171,7 @@ pub fn render_board_picker(
             ctx.rectangle(
                 layout.origin_x + 6.0,
                 row_top,
-                layout.width - 12.0,
+                layout.list_width - 12.0,
                 layout.row_height,
             );
             let _ = ctx.fill();
@@ -369,6 +379,19 @@ pub fn render_board_picker(
             }
         }
 
+        if let Some(open_icon_x) = open_icon_x
+            && !is_new_row
+            && !input_state.board_picker_is_quick()
+        {
+            let alpha = if is_highlighted || is_selected {
+                0.95
+            } else {
+                0.6
+            };
+            let center_x = open_icon_x + layout.open_icon_size * 0.5;
+            draw_open_icon(ctx, center_x, row_center, layout.open_icon_size, alpha);
+        }
+
         if let Some(handle_x) = handle_x
             && !is_new_row
             && !input_state.board_picker_is_quick()
@@ -435,6 +458,8 @@ pub fn render_board_picker(
             }
         }
     }
+
+    render_page_panel(ctx, input_state, layout, screen_width, screen_height);
 
     let _ = ctx.restore();
 }

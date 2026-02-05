@@ -240,3 +240,48 @@ fn test_delete_last_page_clears() {
     assert_eq!(outcome, PageDeleteOutcome::Cleared);
     assert_eq!(canvas_set.active_frame().shapes.len(), 0);
 }
+
+#[test]
+fn test_move_page_updates_active_and_order() {
+    let mut pages = BoardPages::new();
+    pages.active_frame_mut().add_shape(Shape::Line {
+        x1: 1,
+        y1: 0,
+        x2: 2,
+        y2: 0,
+        color: RED,
+        thick: 2.0,
+    });
+    pages.new_page();
+    pages.active_frame_mut().add_shape(Shape::Line {
+        x1: 2,
+        y1: 0,
+        x2: 3,
+        y2: 0,
+        color: RED,
+        thick: 2.0,
+    });
+    pages.new_page();
+    pages.active_frame_mut().add_shape(Shape::Line {
+        x1: 3,
+        y1: 0,
+        x2: 4,
+        y2: 0,
+        color: RED,
+        thick: 2.0,
+    });
+
+    pages.switch_to_page(2);
+    assert!(pages.move_page(2, 0));
+    assert_eq!(pages.active_index(), 0);
+
+    let ids: Vec<i32> = pages
+        .pages()
+        .iter()
+        .map(|frame| match frame.shapes.first().map(|shape| &shape.shape) {
+            Some(Shape::Line { x1, .. }) => *x1,
+            _ => 0,
+        })
+        .collect();
+    assert_eq!(ids, vec![3, 1, 2]);
+}

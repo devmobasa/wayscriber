@@ -1,5 +1,6 @@
 mod boards;
 mod canvas;
+mod page;
 mod pages;
 mod shape;
 
@@ -21,6 +22,8 @@ impl InputState {
                 ContextMenuKind::Shape => self.shape_menu_entries(shape_ids, *hovered_shape_id),
                 ContextMenuKind::Pages => self.pages_menu_entries(),
                 ContextMenuKind::Boards => self.boards_menu_entries(),
+                ContextMenuKind::Page => self.page_context_menu_entries(),
+                ContextMenuKind::PageMove => self.page_move_menu_entries(),
             },
         }
     }

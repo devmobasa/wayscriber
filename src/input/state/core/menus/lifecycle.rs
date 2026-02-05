@@ -9,6 +9,7 @@ impl InputState {
             self.mark_context_menu_region(layout);
         }
         self.context_menu_state = ContextMenuState::Hidden;
+        self.context_menu_page_target = None;
         self.pending_menu_hover_recalc = false;
         self.needs_redraw = true;
     }
@@ -30,6 +31,7 @@ impl InputState {
             return;
         }
         self.close_properties_panel();
+        self.context_menu_page_target = None;
         if let Some(layout) = self.context_menu_layout.take() {
             self.mark_context_menu_region(layout);
         }
@@ -42,6 +44,27 @@ impl InputState {
             hovered_shape_id,
         };
         self.pending_menu_hover_recalc = true;
+    }
+
+    pub fn open_page_context_menu(
+        &mut self,
+        anchor: (i32, i32),
+        board_index: usize,
+        page_index: usize,
+    ) {
+        if !self.context_menu_enabled {
+            return;
+        }
+        self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Page, None);
+        self.context_menu_page_target = Some(super::super::board_picker::BoardPickerPageTarget {
+            board_index,
+            page_index,
+        });
+        self.pending_menu_hover_recalc = false;
+        self.set_context_menu_focus(None);
+        self.focus_first_context_menu_entry();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
     }
 
     pub fn toggle_context_menu_via_keyboard(&mut self) {

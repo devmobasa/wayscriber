@@ -1,4 +1,9 @@
+use std::time::Instant;
+
 use crate::input::InputState;
+use crate::input::state::core::{BoardPickerClickState, MenuCommand};
+
+use super::super::{BOARD_PICKER_DOUBLE_CLICK_DISTANCE, BOARD_PICKER_DOUBLE_CLICK_MS};
 
 pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, y: i32) -> bool {
     if !state.is_color_picker_popup_open() {
@@ -64,6 +69,10 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
     if !state.is_board_picker_open() {
         return false;
     }
+    if state.board_picker_is_page_dragging() {
+        state.board_picker_finish_page_drag();
+        return true;
+    }
     if state.board_picker_is_dragging() {
         state.board_picker_finish_drag();
         return true;
@@ -83,9 +92,82 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
         state.needs_redraw = true;
         return true;
     }
-    if let Some(index) = state.board_picker_index_at(x, y) {
+    if state.board_picker_page_add_button_at(x, y) {
+        state.board_picker_add_page();
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_rename_index_at(x, y)
+        && let Some(board_index) = state.board_picker_page_panel_board_index()
+    {
+        state.board_picker_start_page_rename(board_index, index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_duplicate_index_at(x, y) {
+        state.board_picker_duplicate_page(index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_delete_index_at(x, y) {
+        state.board_picker_delete_page(index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_name_index_at(x, y)
+        && let Some(board_index) = state.board_picker_page_panel_board_index()
+    {
+        state.board_picker_start_page_rename(board_index, index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_page_index_at(x, y) {
+        state.board_picker_activate_page(index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if state.board_picker_page_overflow_at(x, y) {
+        state.update_pointer_position_synthetic(x, y);
+        state.execute_menu_command(MenuCommand::OpenPagesMenu);
+        return true;
+    }
+    if let Some(index) = state.board_picker_open_icon_index_at(x, y)
+        && !state.board_picker_is_new_row(index)
+    {
         state.board_picker_set_selected(index);
         state.board_picker_activate_row(index);
+        state.needs_redraw = true;
+        return true;
+    }
+    if let Some(index) = state.board_picker_index_at(x, y) {
+        state.board_picker_set_selected(index);
+        if state.board_picker_is_quick() || state.board_picker_is_new_row(index) {
+            state.board_picker_activate_row(index);
+            state.needs_redraw = true;
+            return true;
+        }
+        let now = Instant::now();
+        let is_double = state
+            .last_board_picker_click
+            .map(|last| {
+                last.row == index
+                    && now.duration_since(last.at).as_millis()
+                        <= BOARD_PICKER_DOUBLE_CLICK_MS as u128
+                    && (x - last.x).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
+                    && (y - last.y).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
+            })
+            .unwrap_or(false);
+        if is_double {
+            state.last_board_picker_click = None;
+            state.board_picker_activate_row(index);
+        } else {
+            state.last_board_picker_click = Some(BoardPickerClickState {
+                row: index,
+                x,
+                y,
+                at: now,
+            });
+        }
     } else {
         state.close_board_picker();
     }

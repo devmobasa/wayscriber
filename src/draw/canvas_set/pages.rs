@@ -93,6 +93,17 @@ impl BoardPages {
         self.active = self.pages.len() - 1;
     }
 
+    pub fn duplicate_page_at(&mut self, index: usize) -> Option<usize> {
+        if index >= self.pages.len() {
+            return None;
+        }
+        let cloned = self.pages[index].clone_without_history();
+        let insert_at = (index + 1).min(self.pages.len());
+        self.pages.insert(insert_at, cloned);
+        self.active = insert_at;
+        Some(insert_at)
+    }
+
     /// Insert a page after the current position.
     pub fn insert_page(&mut self, page: Frame) {
         let insert_at = (self.active + 1).min(self.pages.len());
@@ -113,6 +124,81 @@ impl BoardPages {
         }
     }
 
+    /// Delete a specific page by index.
+    pub fn delete_page_at(&mut self, index: usize) -> PageDeleteOutcome {
+        let len = self.pages.len();
+        if index >= len {
+            return PageDeleteOutcome::Pending;
+        }
+        if len == 1 {
+            self.pages[0].clear();
+            self.active = 0;
+            return PageDeleteOutcome::Cleared;
+        }
+        self.pages.remove(index);
+        if self.active == index {
+            if self.active >= self.pages.len() {
+                self.active = self.pages.len() - 1;
+            }
+        } else if self.active > index {
+            self.active = self.active.saturating_sub(1);
+        }
+        PageDeleteOutcome::Removed
+    }
+
+    /// Remove a page and return it, keeping at least one page in the board.
+    pub fn take_page(&mut self, index: usize) -> Option<Frame> {
+        let len = self.pages.len();
+        if index >= len {
+            return None;
+        }
+        if len == 1 {
+            let page = std::mem::take(&mut self.pages[0]);
+            self.active = 0;
+            return Some(page);
+        }
+        let page = self.pages.remove(index);
+        if self.active == index {
+            if self.active >= self.pages.len() {
+                self.active = self.pages.len() - 1;
+            }
+        } else if self.active > index {
+            self.active = self.active.saturating_sub(1);
+        }
+        Some(page)
+    }
+
+    /// Append a page and make it active. Returns the new index.
+    pub fn push_page(&mut self, page: Frame) -> usize {
+        self.pages.push(page);
+        self.active = self.pages.len() - 1;
+        self.active
+    }
+
+    /// Move a page from one index to another.
+    pub fn move_page(&mut self, from: usize, to: usize) -> bool {
+        let len = self.pages.len();
+        if from >= len || to >= len {
+            return false;
+        }
+        if from == to {
+            return true;
+        }
+        let page = self.pages.remove(from);
+        let insert_index = to.min(self.pages.len());
+        self.pages.insert(insert_index, page);
+
+        if self.active == from {
+            self.active = insert_index;
+        } else if from < self.active && insert_index >= self.active {
+            self.active = self.active.saturating_sub(1);
+        } else if from > self.active && insert_index <= self.active {
+            self.active = (self.active + 1).min(self.pages.len().saturating_sub(1));
+        }
+
+        true
+    }
+
     #[allow(dead_code)]
     pub fn trim_trailing_empty_pages(&mut self) {
         while self.pages.len() > 1
@@ -130,6 +216,18 @@ impl BoardPages {
 
     pub fn pages(&self) -> &[Frame] {
         &self.pages
+    }
+
+    pub fn page_name(&self, index: usize) -> Option<&str> {
+        self.pages.get(index).and_then(|page| page.page_name())
+    }
+
+    pub fn set_page_name(&mut self, index: usize, name: Option<String>) -> bool {
+        let Some(page) = self.pages.get_mut(index) else {
+            return false;
+        };
+        page.set_page_name(name);
+        true
     }
 
     pub fn pages_mut(&mut self) -> &mut Vec<Frame> {

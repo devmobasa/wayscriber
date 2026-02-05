@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 use crate::config::Action;
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::InputState;
-use crate::ui::constants::{self, ICON_DRAG_HANDLE};
+use crate::ui::constants::{self, ICON_DRAG_HANDLE, ICON_SUBMENU_ARROW};
 
 pub(super) const BOARD_PALETTE: [Color; 11] = [
     RED,
@@ -95,4 +95,13 @@ pub(super) fn draw_drag_handle(ctx: &cairo::Context, x: f64, y: f64, width: f64)
             let _ = ctx.fill();
         }
     }
+}
+
+pub(super) fn draw_open_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, alpha: f64) {
+    let half = size * 0.5;
+    constants::set_color(ctx, constants::with_alpha(ICON_SUBMENU_ARROW, alpha));
+    ctx.move_to(x - half * 0.2, y - half);
+    ctx.line_to(x + half, y);
+    ctx.line_to(x - half * 0.2, y + half);
+    let _ = ctx.fill();
 }

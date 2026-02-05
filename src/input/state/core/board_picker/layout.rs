@@ -11,9 +11,12 @@ use super::{
     COMPACT_BODY_FONT_SIZE, COMPACT_FOOTER_FONT_SIZE, COMPACT_FOOTER_HEIGHT, COMPACT_HEADER_HEIGHT,
     COMPACT_PADDING_X, COMPACT_PADDING_Y, COMPACT_ROW_HEIGHT, COMPACT_SWATCH_PADDING,
     COMPACT_SWATCH_SIZE, COMPACT_TITLE_FONT_SIZE, FOOTER_FONT_SIZE, FOOTER_HEIGHT, HANDLE_GAP,
-    HANDLE_WIDTH, HEADER_HEIGHT, PADDING_X, PADDING_Y, PALETTE_BOTTOM_GAP, PALETTE_SWATCH_GAP,
-    PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, PIN_OFFSET_FACTOR, ROW_HEIGHT, SWATCH_PADDING,
-    SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
+    HANDLE_WIDTH, HEADER_HEIGHT, OPEN_ICON_GAP, OPEN_ICON_SIZE, PADDING_X, PADDING_Y,
+    PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
+    PAGE_PANEL_GAP, PAGE_PANEL_MAX_COLS, PAGE_PANEL_MAX_ROWS, PAGE_PANEL_PADDING_X, PAGE_THUMB_GAP,
+    PAGE_THUMB_HEIGHT, PAGE_THUMB_MAX_WIDTH, PAGE_THUMB_MIN_WIDTH, PALETTE_BOTTOM_GAP,
+    PALETTE_SWATCH_GAP, PALETTE_SWATCH_SIZE, PALETTE_TOP_GAP, PIN_OFFSET_FACTOR, ROW_HEIGHT,
+    SWATCH_PADDING, SWATCH_SIZE, TITLE_FONT_SIZE, board_palette_colors,
 };
 
 impl InputState {
@@ -59,6 +62,8 @@ impl InputState {
             recent_line_height,
             handle_width,
             handle_gap,
+            open_icon_size,
+            open_icon_gap,
         ) = if self.board_picker_is_quick() {
             (
                 COMPACT_TITLE_FONT_SIZE,
@@ -72,6 +77,8 @@ impl InputState {
                 COMPACT_SWATCH_SIZE,
                 COMPACT_SWATCH_PADDING,
                 BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT,
+                0.0,
+                0.0,
                 0.0,
                 0.0,
             )
@@ -90,6 +97,8 @@ impl InputState {
                 BOARD_PICKER_RECENT_LINE_HEIGHT,
                 HANDLE_WIDTH,
                 HANDLE_GAP,
+                OPEN_ICON_SIZE,
+                OPEN_ICON_GAP,
             )
         };
 
@@ -165,12 +174,15 @@ impl InputState {
         }
         if handle_width > 0.0 {
             content_width += handle_gap + handle_width;
+            if open_icon_size > 0.0 {
+                content_width += open_icon_gap + open_icon_size;
+            }
         }
 
-        let mut panel_width = padding_x * 2.0 + content_width;
-        panel_width = panel_width.max(title_width + padding_x * 2.0);
-        panel_width = panel_width.max(footer_width + padding_x * 2.0);
-        panel_width = panel_width.max(recent_width + padding_x * 2.0);
+        let mut list_width = padding_x * 2.0 + content_width;
+        list_width = list_width.max(title_width + padding_x * 2.0);
+        list_width = list_width.max(footer_width + padding_x * 2.0);
+        list_width = list_width.max(recent_width + padding_x * 2.0);
 
         let mut palette_rows = 0usize;
         let mut palette_cols = 0usize;
@@ -185,7 +197,7 @@ impl InputState {
         {
             let colors = board_palette_colors();
             if !colors.is_empty() {
-                let available_width = panel_width - padding_x * 2.0;
+                let available_width = list_width - padding_x * 2.0;
                 let unit = PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP;
                 let max_cols = ((available_width + PALETTE_SWATCH_GAP) / unit).floor() as usize;
                 palette_cols = max_cols.clamp(1, colors.len());
@@ -213,10 +225,103 @@ impl InputState {
             + row_height * row_count as f64
             + palette_extra
             + footer_height;
+        let mut panel_height = panel_height;
+
+        let mut page_panel_enabled = false;
+        let mut page_panel_width = 0.0;
+        let mut page_panel_height = 0.0;
+        let mut page_thumb_width = 0.0;
+        let page_thumb_height = PAGE_THUMB_HEIGHT;
+        let page_thumb_gap = PAGE_THUMB_GAP;
+        let page_row_height = page_thumb_height + PAGE_NAME_HEIGHT + PAGE_NAME_PADDING;
+        let mut page_cols = 0usize;
+        let mut page_rows = 0usize;
+        let mut page_count = 0usize;
+        let mut page_visible_count = 0usize;
+        let mut page_board_index = None;
+
+        if !self.board_picker_is_quick()
+            && let Some(board_index) = self.board_picker_page_panel_board_index()
+            && let Some(board) = self.boards.board_states().get(board_index)
+        {
+            page_count = board.pages.page_count();
+            // Always show page panel (even empty state with 0 pages for "Add first page" CTA)
+            let aspect = screen_width as f64 / screen_height as f64;
+            let base_thumb_width =
+                (page_thumb_height * aspect).clamp(PAGE_THUMB_MIN_WIDTH, PAGE_THUMB_MAX_WIDTH);
+            let mut available_panel_width =
+                (screen_width as f64 - 16.0) - list_width - PAGE_PANEL_GAP;
+            if available_panel_width <= PAGE_PANEL_PADDING_X * 2.0 {
+                available_panel_width = PAGE_PANEL_PADDING_X * 2.0 + 1.0;
+            }
+
+            // Dynamic column count based on page count:
+            // - 0-2 pages: 1 column (compact for few pages + add card)
+            // - 3-5 pages: 2 columns
+            // - 6+ pages: 3 columns (max)
+            let preferred_cols = if page_count <= 2 {
+                1
+            } else if page_count <= 5 {
+                2
+            } else {
+                PAGE_PANEL_MAX_COLS
+            };
+
+            // Find the best column count that fits the available width
+            for cols in (1..=preferred_cols).rev() {
+                let gaps = page_thumb_gap * (cols.saturating_sub(1) as f64);
+                let available_thumb_width =
+                    (available_panel_width - PAGE_PANEL_PADDING_X * 2.0 - gaps) / cols as f64;
+                if available_thumb_width <= 0.0 {
+                    continue;
+                }
+                let candidate_thumb_width = base_thumb_width.min(available_thumb_width);
+                let candidate_width =
+                    PAGE_PANEL_PADDING_X * 2.0 + candidate_thumb_width * cols as f64 + gaps;
+                if candidate_width <= available_panel_width || cols == 1 {
+                    page_cols = cols;
+                    page_thumb_width = candidate_thumb_width;
+                    page_panel_width = candidate_width;
+                    break;
+                }
+            }
+            if page_cols == 0 {
+                page_cols = 1;
+                let fallback_thumb_width =
+                    (available_panel_width - PAGE_PANEL_PADDING_X * 2.0).max(1.0);
+                page_thumb_width = base_thumb_width.min(fallback_thumb_width);
+                page_panel_width = PAGE_PANEL_PADDING_X * 2.0 + page_thumb_width;
+            }
+            let max_rows = PAGE_PANEL_MAX_ROWS.max(1);
+            // Account for the "Add page" card at the end
+            let total_slots = page_count + 1;
+            page_rows = total_slots.div_ceil(page_cols).min(max_rows);
+            page_panel_height = page_rows as f64 * page_row_height
+                + page_thumb_gap * (page_rows.saturating_sub(1) as f64);
+            page_visible_count = (page_rows * page_cols).saturating_sub(1).min(page_count);
+            page_panel_enabled = true;
+            page_board_index = Some(board_index);
+        }
+
+        if page_panel_enabled {
+            panel_height = panel_height
+                .max(padding_y * 2.0 + header_height + page_panel_height + footer_height);
+        }
+
+        let mut panel_width = list_width;
+        if page_panel_enabled {
+            panel_width = list_width + PAGE_PANEL_GAP + page_panel_width;
+        }
 
         let mut origin_x = (screen_width as f64 - panel_width) * 0.5;
         let mut origin_y = (screen_height as f64 - panel_height) * 0.5;
-        origin_x = origin_x.max(8.0);
+        let min_origin_x = 8.0;
+        let max_origin_x = screen_width as f64 - panel_width - 8.0;
+        origin_x = if max_origin_x < min_origin_x {
+            max_origin_x
+        } else {
+            origin_x.clamp(min_origin_x, max_origin_x)
+        };
         origin_y = origin_y.max(8.0);
 
         let palette_top = if palette_rows > 0 {
@@ -230,6 +335,7 @@ impl InputState {
             origin_y,
             width: panel_width,
             height: panel_height,
+            list_width,
             title_font_size,
             body_font_size,
             footer_font_size,
@@ -248,6 +354,30 @@ impl InputState {
             recent_height,
             handle_width,
             handle_gap,
+            open_icon_size,
+            open_icon_gap,
+            page_panel_enabled,
+            page_panel_x: if page_panel_enabled {
+                origin_x + list_width + PAGE_PANEL_GAP
+            } else {
+                0.0
+            },
+            page_panel_y: if page_panel_enabled {
+                origin_y + padding_y + header_height
+            } else {
+                0.0
+            },
+            page_panel_width,
+            page_panel_height,
+            page_thumb_width,
+            page_thumb_height,
+            page_thumb_gap,
+            page_cols,
+            page_rows,
+            page_max_rows: PAGE_PANEL_MAX_ROWS,
+            page_count,
+            page_visible_count,
+            page_board_index,
         });
 
         if let Some(layout) = self.board_picker_layout {
@@ -257,6 +387,10 @@ impl InputState {
 
     pub(crate) fn board_picker_index_at(&self, x: i32, y: i32) -> Option<usize> {
         let layout = self.board_picker_layout?;
+        let list_right = layout.origin_x + layout.list_width;
+        if (x as f64) > list_right {
+            return None;
+        }
         let local_x = x as f64 - layout.origin_x;
         let local_y = y as f64 - layout.origin_y;
         if local_x < 0.0 || local_y < 0.0 || local_x > layout.width || local_y > layout.height {
@@ -337,21 +471,442 @@ impl InputState {
         palette.get(index).copied()
     }
 
+    pub(crate) fn board_picker_page_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if !layout.page_panel_enabled {
+            return None;
+        }
+        let board_index = layout.page_board_index?;
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+        if page_count == 0 {
+            return None;
+        }
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+        if visible == 0 {
+            return None;
+        }
+        let local_x = x as f64 - layout.page_panel_x - PAGE_PANEL_PADDING_X;
+        let local_y = y as f64 - layout.page_panel_y;
+        let grid_width = (layout.page_panel_width - PAGE_PANEL_PADDING_X * 2.0).max(0.0);
+        if local_x < 0.0
+            || local_y < 0.0
+            || local_x > grid_width
+            || local_y > layout.page_panel_height
+        {
+            return None;
+        }
+        let cell_w = layout.page_thumb_width + layout.page_thumb_gap;
+        let cell_h =
+            layout.page_thumb_height + PAGE_NAME_HEIGHT + PAGE_NAME_PADDING + layout.page_thumb_gap;
+        let col = (local_x / cell_w).floor() as usize;
+        let row = (local_y / cell_h).floor() as usize;
+        if col >= cols || row >= rows {
+            return None;
+        }
+        let within_x = local_x - col as f64 * cell_w <= layout.page_thumb_width;
+        let within_y = local_y - row as f64 * cell_h <= layout.page_thumb_height;
+        if !within_x || !within_y {
+            return None;
+        }
+        let index = row * cols + col;
+        if index < visible { Some(index) } else { None }
+    }
+
+    pub(crate) fn board_picker_page_name_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if !layout.page_panel_enabled {
+            return None;
+        }
+        let board_index = layout.page_board_index?;
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+        if page_count == 0 {
+            return None;
+        }
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+        if visible == 0 {
+            return None;
+        }
+        let local_x = x as f64 - layout.page_panel_x - PAGE_PANEL_PADDING_X;
+        let local_y = y as f64 - layout.page_panel_y;
+        let grid_width = (layout.page_panel_width - PAGE_PANEL_PADDING_X * 2.0).max(0.0);
+        if local_x < 0.0
+            || local_y < 0.0
+            || local_x > grid_width
+            || local_y > layout.page_panel_height
+        {
+            return None;
+        }
+        let cell_w = layout.page_thumb_width + layout.page_thumb_gap;
+        let cell_h =
+            layout.page_thumb_height + PAGE_NAME_HEIGHT + PAGE_NAME_PADDING + layout.page_thumb_gap;
+        let col = (local_x / cell_w).floor() as usize;
+        let row = (local_y / cell_h).floor() as usize;
+        if col >= cols || row >= rows {
+            return None;
+        }
+        let name_top = row as f64 * cell_h + layout.page_thumb_height + PAGE_NAME_PADDING;
+        let name_bottom = name_top + PAGE_NAME_HEIGHT;
+        let within_x = local_x - col as f64 * cell_w <= layout.page_thumb_width;
+        let within_y = local_y >= name_top && local_y <= name_bottom;
+        if !within_x || !within_y {
+            return None;
+        }
+        let index = row * cols + col;
+        if index < visible { Some(index) } else { None }
+    }
+
+    pub(crate) fn board_picker_page_add_button_at(&self, x: i32, y: i32) -> bool {
+        // Deprecated: use board_picker_page_add_card_at instead
+        self.board_picker_page_add_card_at(x, y)
+    }
+
+    /// Check if pointer is over the "Add page" card at the end of thumbnails
+    pub(crate) fn board_picker_page_add_card_at(&self, x: i32, y: i32) -> bool {
+        let layout = match self.board_picker_layout {
+            Some(layout) => layout,
+            None => return false,
+        };
+        if !layout.page_panel_enabled {
+            return false;
+        }
+        let board_index = match layout.page_board_index {
+            Some(idx) => idx,
+            None => return false,
+        };
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).max(1).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+
+        // Add card position is after the last visible page
+        let add_index = visible;
+        let add_col = add_index % cols;
+        let add_row = add_index / cols;
+        if add_row >= max_rows {
+            return false;
+        }
+
+        let start_x = layout.page_panel_x + PAGE_PANEL_PADDING_X;
+        let start_y = layout.page_panel_y;
+        let card_x = start_x + add_col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+        let row_stride =
+            layout.page_thumb_height + PAGE_NAME_HEIGHT + PAGE_NAME_PADDING + layout.page_thumb_gap;
+        let card_y = start_y + add_row as f64 * row_stride;
+
+        (x as f64) >= card_x
+            && (x as f64) <= card_x + layout.page_thumb_width
+            && (y as f64) >= card_y
+            && (y as f64) <= card_y + layout.page_thumb_height
+    }
+
+    /// Check if pointer is over the overflow indicator ("+X more")
+    pub(crate) fn board_picker_page_overflow_at(&self, x: i32, y: i32) -> bool {
+        let layout = match self.board_picker_layout {
+            Some(layout) => layout,
+            None => return false,
+        };
+        if !layout.page_panel_enabled {
+            return false;
+        }
+        let board_index = match layout.page_board_index {
+            Some(idx) => idx,
+            None => return false,
+        };
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+
+        if page_count <= visible {
+            return false;
+        }
+
+        let start_x = layout.page_panel_x + PAGE_PANEL_PADDING_X;
+        let start_y = layout.page_panel_y;
+        let hint_y = start_y + layout.page_panel_height;
+        let hint_height = layout.footer_font_size + 10.0;
+        let hint_width = 80.0; // Approximate width for "+X more"
+
+        (x as f64) >= start_x
+            && (x as f64) <= start_x + hint_width
+            && (y as f64) >= hint_y
+            && (y as f64) <= hint_y + hint_height
+    }
+
+    pub(crate) fn board_picker_page_delete_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if !layout.page_panel_enabled {
+            return None;
+        }
+        let board_index = layout.page_board_index?;
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+        if page_count == 0 {
+            return None;
+        }
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+        if visible == 0 {
+            return None;
+        }
+        let icon_size = PAGE_DELETE_ICON_SIZE;
+        let margin = PAGE_DELETE_ICON_MARGIN;
+        for index in 0..visible {
+            let col = index % cols;
+            let row = index / cols;
+            if row >= rows {
+                continue;
+            }
+            let thumb_x = layout.page_panel_x
+                + PAGE_PANEL_PADDING_X
+                + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+            let row_stride = layout.page_thumb_height
+                + PAGE_NAME_HEIGHT
+                + PAGE_NAME_PADDING
+                + layout.page_thumb_gap;
+            let thumb_y = layout.page_panel_y + row as f64 * row_stride;
+            // Delete icon: bottom-right (center at x + width - icon_size*0.5 - margin)
+            let icon_center_x = thumb_x + layout.page_thumb_width - icon_size * 0.5 - margin;
+            let icon_center_y = thumb_y + layout.page_thumb_height - icon_size * 0.5 - margin;
+            let half = icon_size * 0.5;
+            let within_x = (x as f64) >= icon_center_x - half && (x as f64) <= icon_center_x + half;
+            let within_y = (y as f64) >= icon_center_y - half && (y as f64) <= icon_center_y + half;
+            if within_x && within_y {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn board_picker_page_duplicate_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if !layout.page_panel_enabled {
+            return None;
+        }
+        let board_index = layout.page_board_index?;
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+        if page_count == 0 {
+            return None;
+        }
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+        if visible == 0 {
+            return None;
+        }
+        let icon_size = PAGE_DELETE_ICON_SIZE;
+        let margin = PAGE_DELETE_ICON_MARGIN;
+        for index in 0..visible {
+            let col = index % cols;
+            let row = index / cols;
+            if row >= rows {
+                continue;
+            }
+            let thumb_x = layout.page_panel_x
+                + PAGE_PANEL_PADDING_X
+                + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+            let row_stride = layout.page_thumb_height
+                + PAGE_NAME_HEIGHT
+                + PAGE_NAME_PADDING
+                + layout.page_thumb_gap;
+            let thumb_y = layout.page_panel_y + row as f64 * row_stride;
+            // Duplicate icon: bottom-center
+            let icon_center_x = thumb_x + layout.page_thumb_width * 0.5;
+            let icon_center_y = thumb_y + layout.page_thumb_height - icon_size * 0.5 - margin;
+            let half = icon_size * 0.5;
+            let within_x = (x as f64) >= icon_center_x - half && (x as f64) <= icon_center_x + half;
+            let within_y = (y as f64) >= icon_center_y - half && (y as f64) <= icon_center_y + half;
+            if within_x && within_y {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn board_picker_page_rename_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if !layout.page_panel_enabled {
+            return None;
+        }
+        let board_index = layout.page_board_index?;
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+        if page_count == 0 {
+            return None;
+        }
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+        if visible == 0 {
+            return None;
+        }
+        let icon_size = PAGE_DELETE_ICON_SIZE;
+        let margin = PAGE_DELETE_ICON_MARGIN;
+        for index in 0..visible {
+            let col = index % cols;
+            let row = index / cols;
+            if row >= rows {
+                continue;
+            }
+            let thumb_x = layout.page_panel_x
+                + PAGE_PANEL_PADDING_X
+                + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+            let row_stride = layout.page_thumb_height
+                + PAGE_NAME_HEIGHT
+                + PAGE_NAME_PADDING
+                + layout.page_thumb_gap;
+            let thumb_y = layout.page_panel_y + row as f64 * row_stride;
+            // Rename icon: bottom-left (center at x + icon_size*0.5 + margin)
+            let icon_center_x = thumb_x + icon_size * 0.5 + margin;
+            let icon_center_y = thumb_y + layout.page_thumb_height - icon_size * 0.5 - margin;
+            let half = icon_size * 0.5;
+            let within_x = (x as f64) >= icon_center_x - half && (x as f64) <= icon_center_x + half;
+            let within_y = (y as f64) >= icon_center_y - half && (y as f64) <= icon_center_y + half;
+            if within_x && within_y {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn board_picker_page_handle_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if !layout.page_panel_enabled {
+            return None;
+        }
+        let board_index = layout.page_board_index?;
+        let page_count = self
+            .boards
+            .board_states()
+            .get(board_index)
+            .map(|board| board.pages.page_count())
+            .unwrap_or(0);
+        if page_count == 0 {
+            return None;
+        }
+        let cols = layout.page_cols.max(1);
+        let max_rows = layout.page_max_rows.max(1);
+        let rows = page_count.div_ceil(cols).min(max_rows);
+        let visible = page_count.min(rows.saturating_mul(cols));
+        if visible == 0 {
+            return None;
+        }
+        let handle_size = (layout.page_thumb_height * 0.22).clamp(8.0, 12.0);
+        for index in 0..visible {
+            let col = index % cols;
+            let row = index / cols;
+            if row >= rows {
+                continue;
+            }
+            let thumb_x = layout.page_panel_x
+                + PAGE_PANEL_PADDING_X
+                + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
+            let row_stride = layout.page_thumb_height
+                + PAGE_NAME_HEIGHT
+                + PAGE_NAME_PADDING
+                + layout.page_thumb_gap;
+            let thumb_y = layout.page_panel_y + row as f64 * row_stride;
+            let handle_x = thumb_x + layout.page_thumb_width - handle_size - 4.0;
+            let handle_y = thumb_y + 4.0;
+            let within_x = (x as f64) >= handle_x && (x as f64) <= handle_x + handle_size;
+            let within_y = (y as f64) >= handle_y && (y as f64) <= handle_y + handle_size;
+            if within_x && within_y {
+                return Some(index);
+            }
+        }
+        None
+    }
+
     pub(crate) fn board_picker_handle_index_at(&self, x: i32, y: i32) -> Option<usize> {
         let layout = self.board_picker_layout?;
         if layout.handle_width <= 0.0 || self.board_picker_is_quick() {
             return None;
         }
+        let list_right = layout.origin_x + layout.list_width;
         let board_count = self.boards.board_count();
         if board_count == 0 {
             return None;
         }
         let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
-        let handle_x = layout.origin_x + layout.width - layout.padding_x - layout.handle_width;
+        let handle_x = list_right - layout.padding_x - layout.handle_width;
         let within_x = (x as f64) >= handle_x && (x as f64) <= handle_x + layout.handle_width;
         if !within_x {
             return None;
         }
+        for row in 0..board_count {
+            let row_top = rows_top + layout.row_height * row as f64;
+            let row_bottom = row_top + layout.row_height;
+            if (y as f64) >= row_top && (y as f64) <= row_bottom {
+                return Some(row);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn board_picker_open_icon_index_at(&self, x: i32, y: i32) -> Option<usize> {
+        let layout = self.board_picker_layout?;
+        if layout.open_icon_size <= 0.0 || self.board_picker_is_quick() {
+            return None;
+        }
+        let list_right = layout.origin_x + layout.list_width;
+        let board_count = self.boards.board_count();
+        if board_count == 0 {
+            return None;
+        }
+        let handle_x = list_right - layout.padding_x - layout.handle_width;
+        let icon_x = handle_x - layout.open_icon_gap - layout.open_icon_size;
+        let within_x = (x as f64) >= icon_x && (x as f64) <= icon_x + layout.open_icon_size;
+        if !within_x {
+            return None;
+        }
+        let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
         for row in 0..board_count {
             let row_top = rows_top + layout.row_height * row as f64;
             let row_bottom = row_top + layout.row_height;
@@ -414,13 +969,31 @@ impl InputState {
         }
 
         // Check if currently dragging a board (grabbing)
-        if self.board_picker_drag.is_some() {
+        if self.board_picker_drag.is_some() || self.board_picker_page_drag.is_some() {
             return Some(BoardPickerCursorHint::Grabbing);
         }
 
         // Check drag handles first (grab cursor)
         if self.board_picker_handle_index_at(x, y).is_some() {
             return Some(BoardPickerCursorHint::Grab);
+        }
+        if self.board_picker_page_handle_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Grab);
+        }
+        if self.board_picker_page_add_card_at(x, y) {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+        if self.board_picker_page_overflow_at(x, y) {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+        if self.board_picker_page_rename_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+        if self.board_picker_page_name_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Text);
+        }
+        if self.board_picker_open_icon_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
         }
 
         // Check if in edit mode and hovering over the edit row
@@ -450,6 +1023,11 @@ impl InputState {
 
         // Check color swatches (pointer for color edit)
         if self.board_picker_swatch_index_at(x, y).is_some() {
+            return Some(BoardPickerCursorHint::Pointer);
+        }
+
+        // Check page thumbnails (pointer)
+        if self.board_picker_page_index_at(x, y).is_some() {
             return Some(BoardPickerCursorHint::Pointer);
         }
 

@@ -327,6 +327,243 @@ impl InputState {
         true
     }
 
+    pub(crate) fn reorder_page_in_board(
+        &mut self,
+        board_index: usize,
+        from: usize,
+        to: usize,
+    ) -> bool {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return false;
+        };
+        if !board.pages.move_page(from, to) {
+            return false;
+        }
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        true
+    }
+
+    pub(crate) fn add_page_in_board(&mut self, board_index: usize) -> bool {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return false;
+        };
+        board.pages.new_page();
+        let page_num = board.pages.active_index() + 1;
+        let page_count = board.pages.page_count();
+        let board_name = board.spec.name.clone();
+        let board_id = board.spec.id.clone();
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        self.set_ui_toast(
+            UiToastKind::Info,
+            format!("Page added on '{board_name}' ({board_id}) ({page_num}/{page_count})"),
+        );
+        true
+    }
+
+    pub(crate) fn duplicate_page_in_board(
+        &mut self,
+        board_index: usize,
+        page_index: usize,
+    ) -> bool {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return false;
+        };
+        let Some(new_index) = board.pages.duplicate_page_at(page_index) else {
+            return false;
+        };
+        let page_num = new_index + 1;
+        let page_count = board.pages.page_count();
+        let board_name = board.spec.name.clone();
+        let board_id = board.spec.id.clone();
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        self.set_ui_toast(
+            UiToastKind::Info,
+            format!("Page duplicated on '{board_name}' ({board_id}) ({page_num}/{page_count})"),
+        );
+        true
+    }
+
+    pub(crate) fn rename_page_in_board(
+        &mut self,
+        board_index: usize,
+        page_index: usize,
+        name: Option<String>,
+    ) -> bool {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return false;
+        };
+        if !board.pages.set_page_name(page_index, name) {
+            return false;
+        }
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        self.set_ui_toast(UiToastKind::Info, "Page renamed.");
+        true
+    }
+
+    pub(crate) fn move_page_between_boards(
+        &mut self,
+        source_board: usize,
+        page_index: usize,
+        target_board: usize,
+        copy: bool,
+    ) -> bool {
+        if source_board == target_board {
+            return false;
+        }
+        let board_count = self.boards.board_count();
+        if source_board >= board_count || target_board >= board_count {
+            return false;
+        }
+        let (new_index, target_name, target_id, target_count) = {
+            let (source, target) = if source_board < target_board {
+                let (left, right) = self.boards.board_states_mut().split_at_mut(target_board);
+                (&mut left[source_board], &mut right[0])
+            } else {
+                let (left, right) = self.boards.board_states_mut().split_at_mut(source_board);
+                (&mut right[0], &mut left[target_board])
+            };
+
+            let page = if copy {
+                source
+                    .pages
+                    .pages()
+                    .get(page_index)
+                    .map(|frame| frame.clone_without_history())
+            } else {
+                source.pages.take_page(page_index)
+            };
+            let Some(page) = page else {
+                return false;
+            };
+
+            let new_index = target.pages.push_page(page);
+            let target_name = target.spec.name.clone();
+            let target_id = target.spec.id.clone();
+            let target_count = target.pages.page_count();
+            (new_index, target_name, target_id, target_count)
+        };
+
+        let action = if copy { "copied" } else { "moved" };
+        self.set_ui_toast(
+            UiToastKind::Info,
+            format!(
+                "Page {action} to '{target_name}' ({target_id}) ({}/{})",
+                new_index + 1,
+                target_count
+            ),
+        );
+        self.mark_session_dirty();
+        true
+    }
+
+    pub(crate) fn delete_page_in_board(
+        &mut self,
+        board_index: usize,
+        page_index: usize,
+    ) -> crate::draw::PageDeleteOutcome {
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return crate::draw::PageDeleteOutcome::Pending;
+        };
+        let page_count = board.pages.page_count();
+        if page_index >= page_count {
+            return crate::draw::PageDeleteOutcome::Pending;
+        }
+        let board_name = board.spec.name.clone();
+        let board_id = board.spec.id.clone();
+
+        if page_count <= 1 {
+            let outcome = board.pages.delete_page_at(page_index);
+            if self.boards.active_index() == board_index {
+                self.prepare_page_switch();
+            } else {
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                self.mark_session_dirty();
+            }
+            self.set_ui_toast(
+                UiToastKind::Info,
+                format!("Page cleared on '{board_name}' ({board_id})"),
+            );
+            return outcome;
+        }
+
+        let now = Instant::now();
+        if self
+            .pending_page_delete
+            .as_ref()
+            .is_some_and(|pending| now > pending.expires_at)
+        {
+            self.pending_page_delete = None;
+        }
+        let confirmed = self.pending_page_delete.as_ref().is_some_and(|pending| {
+            pending.board_id == board_id
+                && pending.page_index == page_index
+                && now <= pending.expires_at
+        });
+        if !confirmed {
+            self.pending_page_delete = Some(PendingPageDelete {
+                board_id: board_id.clone(),
+                page_index,
+                expires_at: now + Duration::from_millis(PAGE_DELETE_CONFIRM_MS),
+            });
+            self.set_ui_toast_with_duration(
+                UiToastKind::Warning,
+                format!(
+                    "Delete page {}/{} on '{board_name}' ({board_id})? Click delete again to confirm.",
+                    page_index + 1,
+                    page_count
+                ),
+                PAGE_DELETE_CONFIRM_MS,
+            );
+            return crate::draw::PageDeleteOutcome::Pending;
+        }
+
+        self.pending_page_delete = None;
+        let outcome = board.pages.delete_page_at(page_index);
+        let new_page_num = board.pages.active_index() + 1;
+        let new_page_count = board.pages.page_count();
+        if self.boards.active_index() == board_index {
+            self.prepare_page_switch();
+        } else {
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        if matches!(outcome, crate::draw::PageDeleteOutcome::Removed) {
+            self.set_ui_toast(
+                UiToastKind::Info,
+                format!(
+                    "Page deleted on '{board_name}' ({board_id}) ({new_page_num}/{new_page_count})"
+                ),
+            );
+        }
+        outcome
+    }
+
     fn switch_board_with(
         &mut self,
         switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,
@@ -373,6 +610,18 @@ impl InputState {
                 }
             }
             _ => {}
+        }
+
+        if self.is_board_picker_open() {
+            let active_index = self.boards.active_index();
+            if let Some(row) = self.board_picker_row_for_board(active_index) {
+                self.board_picker_set_selected(row);
+            }
+            if let super::board_picker::BoardPickerState::Open { hover_index, .. } =
+                &mut self.board_picker_state
+            {
+                *hover_index = None;
+            }
         }
 
         // Reset drawing state to prevent partial shapes crossing modes

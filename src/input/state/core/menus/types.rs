@@ -7,6 +7,8 @@ pub enum ContextMenuKind {
     Canvas,
     Pages,
     Boards,
+    Page,
+    PageMove,
 }
 
 /// Tracks the context menu lifecycle.
@@ -38,11 +40,16 @@ pub enum MenuCommand {
     ClearAll,
     ToggleHighlightTool,
     OpenPagesMenu,
+    OpenPageMoveMenu,
     PagePrev,
     PageNext,
     PageNew,
     PageDuplicate,
     PageDelete,
+    PageRename,
+    PageDuplicateFromContext,
+    PageDeleteFromContext,
+    PageMoveToBoard { id: String },
     SwitchToPage(usize),
     OpenBoardsMenu,
     OpenBoardPicker,

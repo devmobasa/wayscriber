@@ -38,6 +38,10 @@ impl InputState {
             return;
         }
 
+        if self.is_context_menu_open() && self.handle_context_menu_key(key) {
+            return;
+        }
+
         if self.is_board_picker_open() && self.handle_board_picker_key(key) {
             return;
         }
@@ -69,13 +73,6 @@ impl InputState {
                 return;
             }
             return;
-        }
-
-        if self.is_context_menu_open() {
-            let handled = self.handle_context_menu_key(key);
-            if handled {
-                return;
-            }
         }
 
         // Escape cancels pending board or page deletion

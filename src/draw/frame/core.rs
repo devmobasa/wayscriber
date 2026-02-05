@@ -7,6 +7,8 @@ use serde::Serialize;
 pub struct Frame {
     #[serde(with = "frame_storage")]
     pub shapes: Vec<DrawnShape>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_name: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) undo_stack: Vec<UndoAction>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -26,6 +28,7 @@ impl Frame {
     pub fn new() -> Self {
         Self {
             shapes: Vec::new(),
+            page_name: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             next_shape_id: 1,
@@ -45,8 +48,25 @@ impl Frame {
     pub fn clone_without_history(&self) -> Self {
         let mut frame = Frame::new();
         frame.shapes = self.shapes.clone();
+        frame.page_name = self.page_name.clone();
         frame.rebuild_next_id();
         frame
+    }
+
+    pub fn page_name(&self) -> Option<&str> {
+        self.page_name.as_deref()
+    }
+
+    pub fn set_page_name(&mut self, name: Option<String>) {
+        let trimmed = name.and_then(|value| {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        });
+        self.page_name = trimmed;
     }
 
     #[allow(dead_code)]
@@ -61,9 +81,12 @@ impl Frame {
         self.shapes.is_empty()
     }
 
-    /// Returns true if shapes or history stacks contain data worth persisting.
+    /// Returns true if the frame contains data worth persisting.
     pub fn has_persistable_data(&self) -> bool {
-        !self.shapes.is_empty() || !self.undo_stack.is_empty() || !self.redo_stack.is_empty()
+        !self.shapes.is_empty()
+            || self.page_name.is_some()
+            || !self.undo_stack.is_empty()
+            || !self.redo_stack.is_empty()
     }
 
     /// Adds a shape at the end of the stack and returns its identifier.
