@@ -142,6 +142,16 @@ pub fn render_board_picker(
     let edit_state = input_state.board_picker_edit_state();
     let pinned_count = input_state.board_picker_pinned_count();
 
+    // Draw "Pinned" section label
+    if pinned_count > 0 && !input_state.board_picker_is_quick() {
+        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        ctx.set_font_size(layout.footer_font_size * 0.9);
+        ctx.set_source_rgba(TEXT_HINT.0, TEXT_HINT.1, TEXT_HINT.2, 0.6);
+        let pinned_label_y = rows_top - layout.footer_font_size * 0.4;
+        ctx.move_to(layout.origin_x + layout.padding_x, pinned_label_y);
+        let _ = ctx.show_text("Pinned");
+    }
+
     // Draw pinned/unpinned section divider
     if pinned_count > 0 && pinned_count < board_count {
         let divider_y = rows_top + layout.row_height * pinned_count as f64;
@@ -187,9 +197,23 @@ pub fn render_board_picker(
         let swatch_y = row_center - layout.swatch_size * 0.5;
 
         let is_new_row = row >= board_count;
+        if is_new_row && row > 0 {
+            constants::set_color(ctx, DIVIDER_LIGHT);
+            ctx.set_line_width(0.5);
+            ctx.move_to(layout.origin_x + layout.padding_x, row_top);
+            ctx.line_to(list_right - layout.padding_x, row_top);
+            let _ = ctx.stroke();
+        }
         if is_new_row {
             constants::set_color(ctx, TEXT_HINT);
-            ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+            draw_rounded_rect(
+                ctx,
+                swatch_x,
+                swatch_y,
+                layout.swatch_size,
+                layout.swatch_size,
+                3.5,
+            );
             let _ = ctx.stroke();
             ctx.set_line_width(1.5);
             let mid_x = swatch_x + layout.swatch_size * 0.5;
@@ -204,7 +228,14 @@ pub fn render_board_picker(
             match board.spec.background {
                 BoardBackground::Transparent => {
                     ctx.set_source_rgba(0.62, 0.68, 0.76, 0.85);
-                    ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+                    draw_rounded_rect(
+                        ctx,
+                        swatch_x,
+                        swatch_y,
+                        layout.swatch_size,
+                        layout.swatch_size,
+                        3.5,
+                    );
                     let _ = ctx.stroke();
                     ctx.move_to(swatch_x, swatch_y);
                     ctx.line_to(swatch_x + layout.swatch_size, swatch_y + layout.swatch_size);
@@ -214,20 +245,36 @@ pub fn render_board_picker(
                 }
                 BoardBackground::Solid(color) => {
                     ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
-                    ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+                    draw_rounded_rect(
+                        ctx,
+                        swatch_x,
+                        swatch_y,
+                        layout.swatch_size,
+                        layout.swatch_size,
+                        3.5,
+                    );
                     let _ = ctx.fill();
                     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.2);
-                    ctx.rectangle(swatch_x, swatch_y, layout.swatch_size, layout.swatch_size);
+                    draw_rounded_rect(
+                        ctx,
+                        swatch_x,
+                        swatch_y,
+                        layout.swatch_size,
+                        layout.swatch_size,
+                        3.5,
+                    );
                     let _ = ctx.stroke();
                 }
             }
             if is_active_board {
                 constants::set_color(ctx, INDICATOR_ACTIVE_BOARD);
-                ctx.rectangle(
+                draw_rounded_rect(
+                    ctx,
                     swatch_x - 2.0,
                     swatch_y - 2.0,
                     layout.swatch_size + 4.0,
                     layout.swatch_size + 4.0,
+                    4.0,
                 );
                 let _ = ctx.stroke();
             }
@@ -298,9 +345,9 @@ pub fn render_board_picker(
         ctx.move_to(name_x, row_center + layout.body_font_size * 0.35);
         let _ = ctx.show_text(&name);
 
-        // Show page count badge after board name
+        // Show page count badge after board name (skip when page panel is visible)
         let page_count = board.pages.page_count();
-        if page_count > 1 {
+        if page_count > 1 && !layout.page_panel_enabled {
             let name_extents = text_extents_for(
                 ctx,
                 "Sans",
@@ -330,7 +377,8 @@ pub fn render_board_picker(
                 layout.body_font_size,
                 &name,
             );
-            let caret_x = name_x + extents.width() + 2.0;
+            let advance = extents.x_advance();
+            let caret_x = name_x + advance + 2.0;
             constants::set_color(ctx, INPUT_CARET);
             ctx.set_line_width(1.0);
             ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
@@ -338,7 +386,7 @@ pub fn render_board_picker(
             let _ = ctx.stroke();
             ctx.move_to(name_x, row_center + layout.body_font_size * 0.55);
             ctx.line_to(
-                name_x + extents.width() + 6.0,
+                name_x + advance + 6.0,
                 row_center + layout.body_font_size * 0.55,
             );
             let _ = ctx.stroke();
@@ -363,7 +411,8 @@ pub fn render_board_picker(
                         layout.body_font_size,
                         &hint,
                     );
-                    let caret_x = hint_x + extents.width() + 2.0;
+                    let advance = extents.x_advance();
+                    let caret_x = hint_x + advance + 2.0;
                     constants::set_color(ctx, INPUT_CARET);
                     ctx.set_line_width(1.0);
                     ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
@@ -371,7 +420,7 @@ pub fn render_board_picker(
                     let _ = ctx.stroke();
                     ctx.move_to(hint_x, row_center + layout.body_font_size * 0.55);
                     ctx.line_to(
-                        hint_x + extents.width() + 6.0,
+                        hint_x + advance + 6.0,
                         row_center + layout.body_font_size * 0.55,
                     );
                     let _ = ctx.stroke();

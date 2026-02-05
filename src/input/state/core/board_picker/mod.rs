@@ -12,11 +12,11 @@ const TITLE_FONT_SIZE: f64 = 17.0;
 const BODY_FONT_SIZE: f64 = 14.0;
 const FOOTER_FONT_SIZE: f64 = 12.0;
 const ROW_HEIGHT: f64 = 32.0;
-const HEADER_HEIGHT: f64 = 28.0;
+const HEADER_HEIGHT: f64 = 32.0;
 const FOOTER_HEIGHT: f64 = 22.0;
 const PADDING_X: f64 = 16.0;
 const PADDING_Y: f64 = 14.0;
-const SWATCH_SIZE: f64 = 14.0;
+const SWATCH_SIZE: f64 = 16.0;
 const SWATCH_PADDING: f64 = 10.0;
 
 const COMPACT_TITLE_FONT_SIZE: f64 = 15.0;
@@ -47,14 +47,14 @@ const BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT: f64 = 14.0;
 const BOARD_PICKER_RECENT_MAX_NAMES: usize = 3;
 const BOARD_PICKER_RECENT_LABEL_MAX_CHARS: usize = BOARD_PICKER_SEARCH_MAX_LEN + 6;
 const MAX_PAGE_NAME_LEN: usize = 40;
-const PAGE_PANEL_GAP: f64 = 24.0;
+const PAGE_PANEL_GAP: f64 = 16.0;
 const PAGE_PANEL_PADDING_X: f64 = 12.0;
-const PAGE_THUMB_HEIGHT: f64 = 68.0;
+const PAGE_THUMB_HEIGHT: f64 = 88.0;
 const PAGE_THUMB_GAP: f64 = 10.0;
 const PAGE_THUMB_MIN_WIDTH: f64 = 72.0;
 const PAGE_THUMB_MAX_WIDTH: f64 = 150.0;
 const PAGE_PANEL_MAX_COLS: usize = 3;
-const PAGE_PANEL_MAX_ROWS: usize = 4;
+const PAGE_PANEL_MAX_ROWS: usize = 3;
 pub(crate) const PAGE_HEADER_ICON_SIZE: f64 = 12.0;
 pub(crate) const PAGE_DELETE_ICON_SIZE: f64 = 14.0;
 pub(crate) const PAGE_DELETE_ICON_MARGIN: f64 = 5.0;
@@ -69,7 +69,15 @@ pub enum BoardPickerState {
         hover_index: Option<usize>,
         edit: Option<BoardPickerEdit>,
         mode: BoardPickerMode,
+        focus: BoardPickerFocus,
+        page_focus_index: Option<usize>,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardPickerFocus {
+    BoardList,
+    PagePanel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
