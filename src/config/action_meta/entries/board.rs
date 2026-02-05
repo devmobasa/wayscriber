@@ -192,6 +192,26 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        FocusNextOutput,
+        "Next Output",
+        Some("Next Output"),
+        "Move overlay focus to next output",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
+        FocusPrevOutput,
+        "Previous Output",
+        Some("Prev Output"),
+        "Move overlay focus to previous output",
+        Board,
+        true,
+        true,
+        false
+    ),
+    meta!(
         BoardNew,
         "New Board",
         Some("New"),

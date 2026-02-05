@@ -89,6 +89,8 @@ pub enum Action {
     BoardRestoreDeleted,
     BoardDuplicate,
     BoardSwitchRecent,
+    FocusNextOutput,
+    FocusPrevOutput,
 
     // Page navigation
     PagePrev,

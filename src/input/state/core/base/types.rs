@@ -163,6 +163,12 @@ pub enum ZoomAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputFocusAction {
+    Next,
+    Prev,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolbarDrawerTab {
     View,
     App,

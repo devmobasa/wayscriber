@@ -66,6 +66,18 @@ pub fn render_status_bar(
     } else {
         String::new()
     };
+    let output_badge = if input_state.show_active_output_badge {
+        input_state
+            .active_output_label
+            .as_ref()
+            .map(|label| {
+                let label = crate::util::truncate_with_ellipsis(label, 28);
+                format!("[Output: {label}] ")
+            })
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
 
     let font_size = input_state.current_font_size;
     let highlight_badge = if input_state.click_highlight_enabled() {
@@ -108,10 +120,11 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
+        "{}{}{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
         frozen_badge,
         zoom_badge,
         selection_badge,
+        output_badge,
         board_badge,
         page_badge,
         color_name,

@@ -62,6 +62,12 @@ pub struct BoardKeybindingsConfig {
     #[serde(default = "default_board_prev")]
     pub board_prev: Vec<String>,
 
+    #[serde(default = "default_focus_next_output")]
+    pub focus_next_output: Vec<String>,
+
+    #[serde(default = "default_focus_prev_output")]
+    pub focus_prev_output: Vec<String>,
+
     #[serde(default = "default_board_new")]
     pub board_new: Vec<String>,
 
@@ -97,6 +103,8 @@ impl Default for BoardKeybindingsConfig {
             board_9: default_board_9(),
             board_next: default_board_next(),
             board_prev: default_board_prev(),
+            focus_next_output: default_focus_next_output(),
+            focus_prev_output: default_focus_prev_output(),
             board_new: default_board_new(),
             board_duplicate: default_board_duplicate(),
             board_delete: default_board_delete(),

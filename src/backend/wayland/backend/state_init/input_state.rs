@@ -51,6 +51,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
     input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
+    input_state.show_active_output_badge = config.ui.active_output_badge;
     input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
     #[cfg(tablet)]
     {

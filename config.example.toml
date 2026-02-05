@@ -102,6 +102,9 @@ decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
 toggle_whiteboard = ["Ctrl+W"]
 toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
+# Cycle overlay focus across monitors (layer-shell + xdg fullscreen fallback)
+focus_prev_output = ["Ctrl+Alt+Shift+ArrowLeft"]
+focus_next_output = ["Ctrl+Alt+Shift+ArrowRight"]
 
 # Page navigation
 # Ubuntu/GNOME defaults avoid Ctrl+Alt workspace shortcuts (Ctrl+ArrowLeft/Right, Ctrl+PageUp/PageDown).
@@ -246,6 +249,12 @@ command_palette_toast_duration_ms = 1500
 # Preferred monitor for GNOME fallback (xdg-shell) overlay. Case-insensitive match
 # against monitor identity; leave empty to use the current/first monitor.
 #preferred_output = "eDP-1"
+
+# Enable output-cycling shortcuts on layer-shell compositors.
+multi_monitor_enabled = true
+
+# Show active output label in the status bar.
+active_output_badge = true
 
 # Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
 #xdg_fullscreen = false

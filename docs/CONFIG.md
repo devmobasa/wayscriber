@@ -245,6 +245,12 @@ status_bar_position = "bottom-left"
 # Preferred output name for GNOME fallback (xdg-shell) overlays
 #preferred_output = "eDP-1"
 
+# Enable output-cycling shortcuts on layer-shell compositors
+multi_monitor_enabled = true
+
+# Show active output label in the status bar
+active_output_badge = true
+
 # Request fullscreen for the GNOME fallback overlay (disable if opaque)
 #xdg_fullscreen = false
 
@@ -301,6 +307,7 @@ enabled = true
 - **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; by default the halo follows your current pen color (set `use_pen_color = false` to keep a fixed color)
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
+- **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized
 
 **Defaults:**
@@ -741,6 +748,8 @@ decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
 toggle_whiteboard = ["Ctrl+W"]
 toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
+focus_prev_output = ["Ctrl+Alt+Shift+ArrowLeft"]
+focus_next_output = ["Ctrl+Alt+Shift+ArrowRight"]
 board_1 = ["Ctrl+Shift+1"]
 board_2 = ["Ctrl+Shift+2"]
 board_3 = ["Ctrl+Shift+3"]

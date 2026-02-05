@@ -153,7 +153,7 @@ pub(super) fn run_event_loop(
         }
 
         capture::flush_if_capture_active(conn, capture_active);
-        capture::handle_pending_actions(state);
+        capture::handle_pending_actions(state, qh);
         state.apply_onboarding_hints();
 
         if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {

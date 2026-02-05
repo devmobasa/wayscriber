@@ -18,7 +18,7 @@ mod utility;
 
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DrawingState, InputState,
-    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, PRESET_FEEDBACK_DURATION_MS,
+    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS,
     PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
     PressureThicknessEntryMode, SelectionAxis, SelectionHandle, TextInputMode, ToolbarDrawerTab,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
