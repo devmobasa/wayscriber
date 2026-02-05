@@ -350,6 +350,9 @@ Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; other
 - Open the log folder
 - Open configurator / open config file / quit
 
+Troubleshooting tray icons:
+- If the tray icon is blank or the menu shows square placeholders (notably Noctalia/Quickshell), start the daemon with `WAYSCRIBER_TRAY_FORCE_PIXMAP=1`.
+
 **Alternative** — use compositor autostart instead of systemd:
 ```conf
 exec-once = wayscriber --daemon
