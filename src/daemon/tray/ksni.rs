@@ -119,6 +119,15 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
+                label: format_binding_label(action_label(Action::BoardPicker), None),
+                icon_name: menu_icon_name("view-grid", use_theme_icons),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action(TrayAction::ToggleBoardPicker);
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
                 label: format_binding_label(action_label(Action::ToggleFrozenMode), None),
                 icon_name: menu_icon_name("media-playback-pause", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
