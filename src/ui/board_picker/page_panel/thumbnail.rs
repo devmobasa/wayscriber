@@ -6,8 +6,8 @@ use crate::input::state::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };
 use crate::ui::constants::{
-    self, BG_SELECTION, BORDER_BOARD_PICKER, INDICATOR_ACTIVE_BOARD, PANEL_BG_BOARD_PICKER,
-    TEXT_HINT, TEXT_TERTIARY,
+    self, BG_SELECTION, BORDER_BOARD_PICKER, BORDER_FOCUS, INDICATOR_ACTIVE_BOARD,
+    PANEL_BG_BOARD_PICKER, TEXT_HINT, TEXT_TERTIARY,
 };
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 
@@ -30,6 +30,7 @@ pub(super) struct PageThumbnailArgs<'a> {
     pub(super) is_active: bool,
     pub(super) is_drop_target: bool,
     pub(super) is_hovered: bool,
+    pub(super) is_keyboard_focused: bool,
     pub(super) delete_hovered: bool,
     pub(super) duplicate_hovered: bool,
     pub(super) rename_hovered: bool,
@@ -76,6 +77,7 @@ pub(super) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
         is_active,
         is_drop_target,
         is_hovered,
+        is_keyboard_focused,
         delete_hovered,
         duplicate_hovered,
         rename_hovered,
@@ -118,6 +120,20 @@ pub(super) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
         let _ = ctx.stroke();
     }
 
+    if is_keyboard_focused {
+        constants::set_color(ctx, BORDER_FOCUS);
+        ctx.set_line_width(1.5);
+        draw_rounded_rect(
+            ctx,
+            x - 1.0,
+            y - 1.0,
+            width + 2.0,
+            height + 2.0,
+            radius + 1.0,
+        );
+        let _ = ctx.stroke();
+    }
+
     let handle_size = (height * 0.22).clamp(8.0, 12.0);
     let handle_x = x + width - handle_size - 4.0;
     let handle_y = y + 4.0 + handle_size * 0.5;
@@ -135,46 +151,48 @@ pub(super) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
     let rename_alpha = if rename_hovered {
         1.0
     } else if is_hovered {
-        0.85
+        0.7
     } else {
-        0.6
+        0.2
     };
     draw_rename_icon(ctx, rename_x, icon_y, icon_size, rename_alpha);
 
     let dup_alpha = if duplicate_hovered {
         1.0
     } else if is_hovered {
-        0.85
+        0.7
     } else {
-        0.6
+        0.2
     };
     draw_duplicate_icon(ctx, duplicate_x, icon_y, icon_size, dup_alpha);
 
     let del_alpha = if delete_hovered {
         1.0
     } else if is_hovered {
-        0.85
+        0.7
     } else {
-        0.6
+        0.2
     };
     draw_delete_icon(ctx, delete_x, icon_y, icon_size, del_alpha);
 
     let badge = page_number.to_string();
+    let badge_font_size = if is_hovered { 10.0 } else { 9.0 };
+    let badge_bg_alpha = if is_hovered { 0.6 } else { 0.35 };
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    ctx.set_font_size(10.0);
+    ctx.set_font_size(badge_font_size);
     let extents = text_extents_for(
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
         cairo::FontWeight::Bold,
-        10.0,
+        badge_font_size,
         &badge,
     );
     let badge_w = extents.width() + 8.0;
     let badge_h = 14.0;
     let badge_x = x + 6.0;
     let badge_y = y + 6.0;
-    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.6);
+    ctx.set_source_rgba(0.0, 0.0, 0.0, badge_bg_alpha);
     draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, 4.0);
     let _ = ctx.fill();
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
@@ -197,7 +215,7 @@ pub(super) fn render_add_page_card(
 
     draw_rounded_rect(ctx, x, y, width, height, radius);
     if is_hovered {
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.08);
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.10);
     } else {
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.03);
     }
@@ -205,9 +223,13 @@ pub(super) fn render_add_page_card(
 
     constants::set_color(ctx, BORDER_BOARD_PICKER);
     ctx.set_line_width(1.0);
-    ctx.set_dash(&[4.0, 3.0], 0.0);
+    if !is_hovered {
+        ctx.set_dash(&[4.0, 3.0], 0.0);
+    }
     let _ = ctx.stroke();
-    ctx.set_dash(&[], 0.0);
+    if !is_hovered {
+        ctx.set_dash(&[], 0.0);
+    }
 
     let icon_size = 16.0;
     let icon_alpha = if is_hovered { 0.8 } else { 0.45 };
@@ -502,7 +524,7 @@ fn render_page_name_label(
     };
     let max_w = width - 4.0;
     ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    ctx.set_font_size(9.5);
+    ctx.set_font_size(10.5);
     let label_x = x + 2.0;
     let label_y = y + height + PAGE_NAME_PADDING + PAGE_NAME_HEIGHT * 0.8;
     let color = if name.is_some() {

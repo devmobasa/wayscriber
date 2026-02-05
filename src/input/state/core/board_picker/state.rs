@@ -5,8 +5,8 @@ use super::super::base::{InputState, UiToastKind};
 use super::{
     BOARD_PICKER_RECENT_LABEL_MAX_CHARS, BOARD_PICKER_RECENT_MAX_NAMES,
     BOARD_PICKER_SEARCH_MAX_LEN, BoardPickerDrag, BoardPickerEdit, BoardPickerEditMode,
-    BoardPickerMode, BoardPickerPageDrag, BoardPickerState, MAX_BOARD_NAME_LEN, MAX_PAGE_NAME_LEN,
-    color_to_hex, parse_hex_color, truncate_search_label,
+    BoardPickerFocus, BoardPickerMode, BoardPickerPageDrag, BoardPickerState, MAX_BOARD_NAME_LEN,
+    MAX_PAGE_NAME_LEN, color_to_hex, parse_hex_color, truncate_search_label,
 };
 
 impl InputState {
@@ -42,6 +42,8 @@ impl InputState {
             hover_index: None,
             edit: None,
             mode: BoardPickerMode::Full,
+            focus: BoardPickerFocus::BoardList,
+            page_focus_index: None,
         };
         let selected_row = self.board_picker_row_for_board(active_index);
         if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
@@ -70,6 +72,8 @@ impl InputState {
             hover_index: None,
             edit: None,
             mode: BoardPickerMode::Quick,
+            focus: BoardPickerFocus::BoardList,
+            page_focus_index: None,
         };
         let selected_row = self.board_picker_row_for_board(active_index);
         if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
@@ -141,11 +145,112 @@ impl InputState {
         }
     }
 
+    pub(crate) fn board_picker_focus(&self) -> BoardPickerFocus {
+        match &self.board_picker_state {
+            BoardPickerState::Open { focus, .. } => *focus,
+            BoardPickerState::Hidden => BoardPickerFocus::BoardList,
+        }
+    }
+
+    pub(crate) fn board_picker_set_focus(&mut self, new_focus: BoardPickerFocus) {
+        if self.board_picker_focus() == new_focus {
+            return;
+        }
+        // Compute active page index before mutably borrowing state,
+        // clamped to visible thumbnail count so focus never lands off-screen.
+        let active_page = if new_focus == BoardPickerFocus::PagePanel {
+            let visible = self
+                .board_picker_layout
+                .map(|l| l.page_visible_count)
+                .unwrap_or(0);
+            if visible == 0 {
+                0
+            } else {
+                let bi = self.board_picker_page_panel_board_index_inner();
+                let raw = bi
+                    .and_then(|i| self.boards.board_states().get(i))
+                    .map(|b| b.pages.active_index())
+                    .unwrap_or(0);
+                raw.min(visible.saturating_sub(1))
+            }
+        } else {
+            0
+        };
+        let BoardPickerState::Open {
+            focus,
+            page_focus_index,
+            ..
+        } = &mut self.board_picker_state
+        else {
+            return;
+        };
+        *focus = new_focus;
+        match new_focus {
+            BoardPickerFocus::PagePanel => {
+                if page_focus_index.is_none() {
+                    *page_focus_index = Some(active_page);
+                }
+            }
+            BoardPickerFocus::BoardList => {
+                *page_focus_index = None;
+            }
+        }
+        self.needs_redraw = true;
+        self.dirty_tracker.mark_full();
+    }
+
+    pub(crate) fn board_picker_page_focus_index(&self) -> Option<usize> {
+        match &self.board_picker_state {
+            BoardPickerState::Open {
+                page_focus_index, ..
+            } => *page_focus_index,
+            BoardPickerState::Hidden => None,
+        }
+    }
+
+    pub(crate) fn board_picker_set_page_focus_index(&mut self, index: usize) {
+        let visible = self
+            .board_picker_layout
+            .map(|l| l.page_visible_count)
+            .unwrap_or(0);
+        let clamped = if visible == 0 {
+            0
+        } else {
+            index.min(visible.saturating_sub(1))
+        };
+        if let BoardPickerState::Open {
+            page_focus_index, ..
+        } = &mut self.board_picker_state
+        {
+            *page_focus_index = Some(clamped);
+            self.needs_redraw = true;
+            self.dirty_tracker.mark_full();
+        }
+    }
+
+    /// Internal helper that reads page panel board index without borrowing &mut self.
+    fn board_picker_page_panel_board_index_inner(&self) -> Option<usize> {
+        let selected = self.board_picker_selected_index()?;
+        if let Some(board_index) = self.board_picker_board_index_for_row(selected) {
+            Some(board_index)
+        } else {
+            Some(self.boards.active_index())
+        }
+    }
+
     pub(crate) fn board_picker_set_selected(&mut self, index: usize) {
         let row_count = self.board_picker_row_count().max(1);
         let next = index.min(row_count.saturating_sub(1));
-        if let BoardPickerState::Open { selected, .. } = &mut self.board_picker_state {
+        if let BoardPickerState::Open {
+            selected,
+            focus,
+            page_focus_index,
+            ..
+        } = &mut self.board_picker_state
+        {
             *selected = next;
+            *focus = BoardPickerFocus::BoardList;
+            *page_focus_index = None;
             self.needs_redraw = true;
             self.dirty_tracker.mark_full();
         }
@@ -442,25 +547,25 @@ impl InputState {
 
     pub(crate) fn board_picker_footer_text(&self) -> String {
         let search = self.board_picker_search.trim();
-        let search_label = if search.is_empty() {
-            "Type: jump".to_string()
-        } else {
-            format!(
-                "Search: {}",
+        if !search.is_empty() {
+            return format!(
+                "Search: {}  (Esc: clear)",
                 truncate_search_label(search, BOARD_PICKER_SEARCH_MAX_LEN)
-            )
-        };
-        let esc_label = if search.is_empty() {
-            "Esc: close"
-        } else {
-            "Esc: clear"
-        };
+            );
+        }
         if self.board_picker_is_quick() {
-            format!("Enter: switch  {search_label}  {esc_label}")
+            "Enter: switch  Type: jump  Esc: close".to_string()
+        } else if self.board_picker_focus() == BoardPickerFocus::PagePanel {
+            "Enter: open  F2: rename  Del: delete  Tab: back  Esc: close".to_string()
         } else {
-            format!(
-                "Click: preview  Enter/Dbl-click: open  Ctrl+N: new  Ctrl+R: rename  Ctrl+C: color  Ctrl+P: pin  {search_label}  Del: delete  {esc_label}"
-            )
+            let page_panel_enabled = self
+                .board_picker_layout
+                .is_some_and(|l| l.page_panel_enabled);
+            if page_panel_enabled {
+                "Enter: open  F2: rename  Del: delete  Tab: pages  Esc: close".to_string()
+            } else {
+                "Enter: open  F2: rename  Ctrl+N: new  Del: delete  Esc: close".to_string()
+            }
         }
     }
 
@@ -535,6 +640,8 @@ impl InputState {
             hover_index,
             edit,
             mode,
+            focus,
+            page_focus_index,
         } = &mut self.board_picker_state
         else {
             return;
@@ -545,6 +652,8 @@ impl InputState {
         *mode = BoardPickerMode::Full;
         *hover_index = None;
         *edit = None;
+        *focus = BoardPickerFocus::BoardList;
+        *page_focus_index = None;
         if let Some(row) = selected_row_full {
             *selected = row;
         }

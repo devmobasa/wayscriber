@@ -1,7 +1,9 @@
 use std::time::Instant;
 
 use super::super::base::InputState;
-use super::{BOARD_PICKER_SEARCH_MAX_LEN, BOARD_PICKER_SEARCH_TIMEOUT};
+use super::{
+    BOARD_PICKER_SEARCH_MAX_LEN, BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus, BoardPickerState,
+};
 
 impl InputState {
     pub(crate) fn board_picker_clear_search(&mut self) -> bool {
@@ -36,6 +38,16 @@ impl InputState {
         }
         self.board_picker_search.push(ch);
         self.board_picker_search_last_input = Some(Instant::now());
+        // Typing always returns focus to the board list
+        if let BoardPickerState::Open {
+            focus,
+            page_focus_index,
+            ..
+        } = &mut self.board_picker_state
+        {
+            *focus = BoardPickerFocus::BoardList;
+            *page_focus_index = None;
+        }
         self.board_picker_select_search_match();
         self.needs_redraw = true;
         true

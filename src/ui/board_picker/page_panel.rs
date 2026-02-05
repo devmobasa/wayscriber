@@ -1,8 +1,10 @@
 mod thumbnail;
 
 use crate::input::InputState;
-use crate::input::state::{BoardPickerLayout, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING};
-use crate::ui::constants::{self, TEXT_HINT, TEXT_TERTIARY};
+use crate::input::state::{
+    BoardPickerFocus, BoardPickerLayout, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
+};
+use crate::ui::constants::{self, DIVIDER_LIGHT, TEXT_HINT, TEXT_TERTIARY};
 use crate::ui::primitives::draw_rounded_rect;
 
 use thumbnail::{
@@ -32,6 +34,18 @@ pub(super) fn render_page_panel(
     let page_count = board.pages.page_count();
     let drag = input_state.board_picker_page_drag;
     let is_dragging = drag.is_some_and(|d| d.board_index == board_index);
+
+    // Vertical divider between board list and page panel
+    {
+        let divider_x = layout.page_panel_x - 8.0;
+        let divider_top = layout.origin_y + layout.padding_y;
+        let divider_bottom = layout.origin_y + layout.height - layout.padding_y;
+        ctx.set_source_rgba(DIVIDER_LIGHT.0, DIVIDER_LIGHT.1, DIVIDER_LIGHT.2, 0.4);
+        ctx.set_line_width(1.0);
+        ctx.move_to(divider_x, divider_top);
+        ctx.line_to(divider_x, divider_bottom);
+        let _ = ctx.stroke();
+    }
 
     // Header: show "drag to reorder" hint only during drag
     let label = if is_dragging && page_count > 1 {
@@ -70,6 +84,11 @@ pub(super) fn render_page_panel(
     }
 
     let active_page = board.pages.active_index();
+    let page_focus_index = if input_state.board_picker_focus() == BoardPickerFocus::PagePanel {
+        input_state.board_picker_page_focus_index()
+    } else {
+        None
+    };
     let hover_index = input_state.board_picker_page_index_at(pointer_x, pointer_y);
     let hover_delete = input_state.board_picker_page_delete_index_at(pointer_x, pointer_y);
     let hover_duplicate = input_state.board_picker_page_duplicate_index_at(pointer_x, pointer_y);
@@ -106,6 +125,7 @@ pub(super) fn render_page_panel(
             is_active,
             is_drop_target,
             is_hovered: hover_index == Some(index),
+            is_keyboard_focused: page_focus_index == Some(index),
             delete_hovered: hover_delete == Some(index),
             duplicate_hovered: hover_duplicate == Some(index),
             rename_hovered: hover_rename == Some(index),
@@ -233,7 +253,7 @@ fn render_page_rename_overlay(
     let _ = ctx.restore();
 
     if let Ok(extents) = ctx.text_extents(text) {
-        let caret_x = (text_x + extents.width()).min(input_x + input_w - 6.0);
+        let caret_x = (text_x + extents.x_advance()).min(input_x + input_w - 6.0);
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
         ctx.set_line_width(1.0);
         ctx.move_to(caret_x, input_y + 3.0);
