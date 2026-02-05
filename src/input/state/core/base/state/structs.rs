@@ -119,6 +119,8 @@ pub struct InputState {
     pub command_palette_selected: usize,
     /// Scroll offset for command palette (first visible item index)
     pub command_palette_scroll: usize,
+    /// Most recently executed command palette actions (most recent first)
+    pub command_palette_recent: Vec<Action>,
     /// Duration for command palette action toasts (ms)
     pub command_palette_toast_duration_ms: u64,
     /// Whether the status bar is currently visible (toggled via keybinding)

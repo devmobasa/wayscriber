@@ -5,6 +5,7 @@ mod registry;
 pub use registry::{CommandEntry, command_palette_entries};
 
 use super::base::{InputState, UiToastKind};
+use crate::config::action_meta::ActionCategory;
 use crate::config::keybindings::Action;
 use crate::input::events::Key;
 
@@ -16,6 +17,13 @@ const PALETTE_WIDTH: f64 = 400.0;
 const ITEM_HEIGHT: f64 = 32.0;
 const PADDING: f64 = 12.0;
 const INPUT_HEIGHT: f64 = 36.0;
+const COMMAND_PALETTE_RECENT_LIMIT: usize = 10;
+
+struct CommandMatch {
+    command: &'static CommandEntry,
+    score: i32,
+    index: usize,
+}
 
 /// Cursor hint for different regions of the command palette.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,11 +73,12 @@ impl InputState {
                 true
             }
             Key::Return => {
-                if let Some(action) = self.execute_selected_command() {
+                if let Some(command) = self.selected_command() {
                     self.command_palette_open = false;
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
-                    self.handle_action(action);
+                    self.record_command_palette_action(command.action);
+                    self.handle_action(command.action);
                 }
                 true
             }
@@ -183,10 +192,11 @@ impl InputState {
                     .unwrap_or("Command");
 
                 // Execute the command
-                if let Some(action) = self.execute_selected_command() {
+                if let Some(command) = filtered.get(actual_index).copied() {
                     self.command_palette_open = false;
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
+                    self.record_command_palette_action(command.action);
 
                     // Show brief toast feedback
                     self.set_ui_toast_with_duration(
@@ -195,7 +205,7 @@ impl InputState {
                         self.command_palette_toast_duration_ms,
                     );
 
-                    self.handle_action(action);
+                    self.handle_action(command.action);
                 }
                 return true;
             }
@@ -265,28 +275,94 @@ impl InputState {
 
     /// Get the filtered list of commands matching the current query.
     pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
-        let query = self.command_palette_query.to_lowercase();
-        if query.is_empty() {
-            return command_palette_entries().collect();
-        }
+        let query = normalize_query(&self.command_palette_query);
+        let tokens = query_tokens(&query);
 
-        let mut results: Vec<(&'static CommandEntry, i32)> = command_palette_entries()
-            .filter_map(|cmd| {
-                let score = fuzzy_score(&query, cmd.label) + fuzzy_score(&query, cmd.description);
-                if score > 0 { Some((cmd, score)) } else { None }
+        let mut results: Vec<CommandMatch> = command_palette_entries()
+            .enumerate()
+            .filter_map(|(index, command)| {
+                self.score_command(command, &query, &tokens)
+                    .map(|score| CommandMatch {
+                        command,
+                        score,
+                        index,
+                    })
             })
             .collect();
 
-        results.sort_by(|a, b| b.1.cmp(&a.1));
-        results.into_iter().map(|(cmd, _)| cmd).collect()
+        results.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.index.cmp(&b.index)));
+        results.into_iter().map(|result| result.command).collect()
     }
 
-    /// Execute the currently selected command.
-    fn execute_selected_command(&self) -> Option<Action> {
+    fn selected_command(&self) -> Option<&'static CommandEntry> {
         let filtered = self.filtered_commands();
-        filtered
-            .get(self.command_palette_selected)
-            .map(|cmd| cmd.action)
+        filtered.get(self.command_palette_selected).copied()
+    }
+
+    fn score_command(
+        &self,
+        command: &'static CommandEntry,
+        query: &str,
+        tokens: &[&str],
+    ) -> Option<i32> {
+        let recent_bonus = self.recent_bonus(command.action);
+        if query.is_empty() {
+            return Some(recent_bonus);
+        }
+
+        let category_name = action_category_name(command.category);
+        let shortcuts = self.action_binding_labels(command.action).join(" ");
+        let mut score = 0;
+
+        // Require all tokens to match somewhere for cleaner result sets.
+        for token in tokens {
+            let token_score = fuzzy_score(token, command.label).max(
+                fuzzy_score(token, command.description)
+                    .max(fuzzy_score(token, category_name))
+                    .max(fuzzy_score(token, &shortcuts))
+                    .max(
+                        command
+                            .short_label
+                            .map_or(0, |label| fuzzy_score(token, label)),
+                    ),
+            );
+            if token_score == 0 {
+                return None;
+            }
+            score += token_score;
+        }
+
+        score += fuzzy_score(query, command.label) * 2;
+        score += fuzzy_score(query, command.description);
+        score += fuzzy_score(query, &shortcuts) * 2;
+        score += fuzzy_score(query, category_name);
+        if let Some(short_label) = command.short_label {
+            score += fuzzy_score(query, short_label);
+        }
+
+        if score == 0 {
+            return None;
+        }
+
+        Some(score + (recent_bonus / 2))
+    }
+
+    fn recent_bonus(&self, action: Action) -> i32 {
+        self.command_palette_recent
+            .iter()
+            .position(|recent| *recent == action)
+            .map(|idx| (COMMAND_PALETTE_RECENT_LIMIT.saturating_sub(idx) as i32) * 20)
+            .unwrap_or(0)
+    }
+
+    fn record_command_palette_action(&mut self, action: Action) {
+        self.command_palette_recent
+            .retain(|recent| *recent != action);
+        self.command_palette_recent.insert(0, action);
+        if self.command_palette_recent.len() > COMMAND_PALETTE_RECENT_LIMIT {
+            self.command_palette_recent
+                .truncate(COMMAND_PALETTE_RECENT_LIMIT);
+        }
     }
 }
 
@@ -330,4 +406,117 @@ fn fuzzy_score(query: &str, text: &str) -> i32 {
     }
 
     0
+}
+
+fn normalize_query(query: &str) -> String {
+    query.trim().to_lowercase()
+}
+
+fn query_tokens(query: &str) -> Vec<&str> {
+    query
+        .split(|c: char| c.is_whitespace() || c == '+' || c == '/')
+        .filter(|token| !token.is_empty())
+        .collect()
+}
+
+fn action_category_name(category: ActionCategory) -> &'static str {
+    match category {
+        ActionCategory::Core => "core",
+        ActionCategory::Drawing => "drawing",
+        ActionCategory::Tools => "tools",
+        ActionCategory::Colors => "colors",
+        ActionCategory::UI => "ui",
+        ActionCategory::Board => "board",
+        ActionCategory::Zoom => "zoom",
+        ActionCategory::Capture => "capture",
+        ActionCategory::Selection => "selection",
+        ActionCategory::History => "history",
+        ActionCategory::Presets => "presets",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+        let action_bindings = keybindings
+            .build_action_bindings()
+            .expect("default keybindings bindings");
+
+        let mut state = InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        );
+        state.set_action_bindings(action_bindings);
+        state
+    }
+
+    #[test]
+    fn shortcut_query_prioritizes_bound_command() {
+        let mut state = make_state();
+        state.command_palette_query = "ctrl+shift+f".to_string();
+
+        let results = state.filtered_commands();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].action, Action::ToggleFrozenMode);
+    }
+
+    #[test]
+    fn multi_token_query_returns_file_capture_first() {
+        let mut state = make_state();
+        state.command_palette_query = "capture file".to_string();
+
+        let results = state.filtered_commands();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].action, Action::CaptureFileFull);
+    }
+
+    #[test]
+    fn recent_commands_rank_first_for_empty_query() {
+        let mut state = make_state();
+        state.record_command_palette_action(Action::CaptureFileFull);
+        state.record_command_palette_action(Action::TogglePresenterMode);
+        state.command_palette_query.clear();
+
+        let results = state.filtered_commands();
+        assert!(results.len() >= 2);
+        assert_eq!(results[0].action, Action::TogglePresenterMode);
+        assert_eq!(results[1].action, Action::CaptureFileFull);
+    }
 }
