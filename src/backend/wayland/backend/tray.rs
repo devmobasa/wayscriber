@@ -55,6 +55,10 @@ pub(super) fn process_tray_action(state: &mut WaylandState) {
         TrayAction::ToggleHelp => {
             state.input_state.toggle_help_overlay();
         }
+        TrayAction::ToggleBoardPicker => {
+            state.input_state.toggle_board_picker();
+            state.input_state.needs_redraw = true;
+        }
     }
 
     let _ = fs::remove_file(&action_path);

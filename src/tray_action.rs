@@ -5,6 +5,7 @@ pub(crate) enum TrayAction {
     CaptureWindow,
     CaptureRegion,
     ToggleHelp,
+    ToggleBoardPicker,
 }
 
 impl TrayAction {
@@ -16,6 +17,7 @@ impl TrayAction {
             TrayAction::CaptureWindow => "capture_window",
             TrayAction::CaptureRegion => "capture_region",
             TrayAction::ToggleHelp => "toggle_help",
+            TrayAction::ToggleBoardPicker => "toggle_board_picker",
         }
     }
 
@@ -26,6 +28,7 @@ impl TrayAction {
             "capture_window" => Some(TrayAction::CaptureWindow),
             "capture_region" => Some(TrayAction::CaptureRegion),
             "toggle_help" => Some(TrayAction::ToggleHelp),
+            "toggle_board_picker" => Some(TrayAction::ToggleBoardPicker),
             _ => None,
         }
     }
@@ -43,6 +46,7 @@ mod tests {
             TrayAction::CaptureWindow,
             TrayAction::CaptureRegion,
             TrayAction::ToggleHelp,
+            TrayAction::ToggleBoardPicker,
         ];
 
         for action in actions {
