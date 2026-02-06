@@ -16,6 +16,7 @@ impl ToolbarSurfaceManager {
         compositor: &CompositorState,
         layer_shell: &LayerShell,
         scale: i32,
+        output: Option<&wl_output::WlOutput>,
         snapshot: &ToolbarSnapshot,
     ) {
         let top_size = crate::backend::wayland::toolbar::top_size(snapshot);
@@ -39,7 +40,8 @@ impl ToolbarSurfaceManager {
             if self.top.logical_size == (0, 0) || self.top.logical_size != top_size {
                 self.top.set_logical_size(top_size);
             }
-            self.top.ensure_created(qh, compositor, layer_shell, scale);
+            self.top
+                .ensure_created(qh, compositor, layer_shell, scale, output);
         }
 
         if self.is_side_visible() {
@@ -60,7 +62,8 @@ impl ToolbarSurfaceManager {
             if self.side.logical_size == (0, 0) || self.side.logical_size != side_size {
                 self.side.set_logical_size(side_size);
             }
-            self.side.ensure_created(qh, compositor, layer_shell, scale);
+            self.side
+                .ensure_created(qh, compositor, layer_shell, scale, output);
         }
 
         if self.suppressed {

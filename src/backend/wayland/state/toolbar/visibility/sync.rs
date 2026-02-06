@@ -168,11 +168,13 @@ impl WaylandState {
             }
             if let Some(layer_shell) = self.layer_shell.as_ref() {
                 let scale = self.surface.scale();
+                let output = self.surface.current_output();
                 self.toolbar.ensure_created(
                     qh,
                     &self.compositor_state,
                     layer_shell,
                     scale,
+                    output.as_ref(),
                     &snapshot,
                 );
             }

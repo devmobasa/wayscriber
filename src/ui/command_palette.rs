@@ -6,18 +6,20 @@ use crate::ui_text::{UiTextStyle, draw_text_baseline};
 use super::constants::{
     self, BG_INPUT_SELECTION, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE,
     EMPTY_COMMAND_SUGGESTIONS, HINT_PRESS_ESC, INPUT_BG, INPUT_BORDER_FOCUSED, OVERLAY_DIM_MEDIUM,
-    PANEL_BG_COMMAND_PALETTE, RADIUS_LG, RADIUS_SM, RADIUS_STD, SHADOW, SPACING_MD,
-    TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
+    PANEL_BG_COMMAND_PALETTE, RADIUS_LG, RADIUS_SM, RADIUS_STD, SHADOW, TEXT_DESCRIPTION,
+    TEXT_PLACEHOLDER, TEXT_WHITE,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for};
 
-const PALETTE_WIDTH: f64 = 400.0;
 const PALETTE_MAX_HEIGHT: f64 = 420.0;
 const ITEM_HEIGHT: f64 = 32.0;
 const PADDING: f64 = 12.0;
-const PADDING_BOTTOM: f64 = 24.0;
+const PADDING_BOTTOM: f64 = 48.0;
 const INPUT_HEIGHT: f64 = 36.0;
+const LIST_GAP: f64 = 8.0;
 const MAX_VISIBLE_ITEMS: usize = 10;
+const HINT_BASELINE_BOTTOM_OFFSET: f64 = 12.0;
+const ELLIPSIS: &str = "\u{2026}";
 
 /// Render the command palette if open.
 pub fn render_command_palette(
@@ -31,12 +33,13 @@ pub fn render_command_palette(
     }
 
     let filtered = input_state.filtered_commands();
+    let palette_width = input_state.command_palette_width(screen_width);
     let visible_count = filtered.len().min(MAX_VISIBLE_ITEMS);
     let content_height =
-        INPUT_HEIGHT + (visible_count as f64 * ITEM_HEIGHT) + PADDING + PADDING_BOTTOM;
+        INPUT_HEIGHT + LIST_GAP + (visible_count as f64 * ITEM_HEIGHT) + PADDING + PADDING_BOTTOM;
     let height = content_height.min(PALETTE_MAX_HEIGHT);
 
-    let x = (screen_width as f64 - PALETTE_WIDTH) / 2.0;
+    let x = (screen_width as f64 - palette_width) / 2.0;
     let y = screen_height as f64 * 0.2;
 
     // Dimmed background overlay
@@ -46,22 +49,22 @@ pub fn render_command_palette(
 
     // Drop shadow
     constants::set_color(ctx, SHADOW);
-    draw_rounded_rect(ctx, x + 4.0, y + 4.0, PALETTE_WIDTH, height, RADIUS_LG);
+    draw_rounded_rect(ctx, x + 4.0, y + 4.0, palette_width, height, RADIUS_LG);
     let _ = ctx.fill();
 
     // Main background
     constants::set_color(ctx, PANEL_BG_COMMAND_PALETTE);
-    draw_rounded_rect(ctx, x, y, PALETTE_WIDTH, height, RADIUS_LG);
+    draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
     let _ = ctx.fill();
 
     // Border
     constants::set_color(ctx, BORDER_COMMAND_PALETTE);
-    draw_rounded_rect(ctx, x, y, PALETTE_WIDTH, height, RADIUS_LG);
+    draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
     let inner_x = x + PADDING;
-    let inner_width = PALETTE_WIDTH - PADDING * 2.0;
+    let inner_width = palette_width - PADDING * 2.0;
     let mut cursor_y = y + PADDING;
 
     // Input field
@@ -117,7 +120,7 @@ pub fn render_command_palette(
         );
     }
 
-    cursor_y += INPUT_HEIGHT + 8.0;
+    cursor_y += INPUT_HEIGHT + LIST_GAP;
 
     // Command list (with scroll offset)
     let scroll = input_state.command_palette_scroll;
@@ -151,49 +154,6 @@ pub fn render_command_palette(
         ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, text_alpha);
         draw_text_baseline(ctx, input_style, cmd.label, inner_x + 10.0, label_y, None);
 
-        // Keyboard shortcut badge (right-aligned)
-        let shortcut_labels = input_state.action_binding_labels(cmd.action);
-        let shortcut_x_end = inner_x + inner_width - 8.0;
-        if let Some(shortcut) = shortcut_labels.first() {
-            let shortcut_style = UiTextStyle {
-                family: "Sans",
-                slant: cairo::FontSlant::Normal,
-                weight: cairo::FontWeight::Normal,
-                size: 10.0,
-            };
-            let shortcut_extents = text_extents_for(
-                ctx,
-                "Sans",
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Normal,
-                10.0,
-                shortcut,
-            );
-            let badge_w = shortcut_extents.width() + 10.0;
-            let badge_h = 18.0;
-            let badge_x = shortcut_x_end - badge_w;
-            let badge_y = item_y + (ITEM_HEIGHT - badge_h) / 2.0 - 1.0;
-
-            // Badge background - increased visibility
-            let badge_alpha = if is_selected { 0.35 } else { 0.25 };
-            ctx.set_source_rgba(1.0, 1.0, 1.0, badge_alpha);
-            draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
-            let _ = ctx.fill();
-
-            // Badge text - increased visibility
-            let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
-            ctx.set_source_rgba(1.0, 1.0, 1.0, shortcut_alpha);
-            draw_text_baseline(
-                ctx,
-                shortcut_style,
-                shortcut,
-                badge_x + 5.0,
-                badge_y + badge_h / 2.0 + 3.0,
-                None,
-            );
-        }
-
-        // Description (dimmer but improved contrast)
         let label_extents = text_extents_for(
             ctx,
             "Sans",
@@ -202,13 +162,76 @@ pub fn render_command_palette(
             font_size,
             cmd.label,
         );
-        // Limit description width to avoid overlapping with shortcut badge
-        let max_desc_width = if !shortcut_labels.is_empty() {
-            inner_width - label_extents.width() - 100.0
-        } else {
-            inner_width - label_extents.width() - 30.0
-        };
         let desc_x = inner_x + 10.0 + label_extents.width() + 12.0;
+        let content_right = inner_x + inner_width - 8.0;
+        let mut badge_left_edge = content_right;
+
+        // Keyboard shortcut badge (right-aligned)
+        let shortcut_labels = input_state.action_binding_labels(cmd.action);
+        if let Some(shortcut) = shortcut_labels.first() {
+            let shortcut_style = UiTextStyle {
+                family: "Sans",
+                slant: cairo::FontSlant::Normal,
+                weight: cairo::FontWeight::Normal,
+                size: 10.0,
+            };
+            let badge_padding_x = 5.0;
+            let badge_h = 18.0;
+            let badge_gap_from_desc = 12.0;
+            let min_desc_width = 48.0;
+            let max_badge_w =
+                (content_right - (desc_x + min_desc_width + badge_gap_from_desc)).max(0.0);
+
+            if max_badge_w > badge_padding_x * 2.0 {
+                let max_shortcut_text_w = max_badge_w - badge_padding_x * 2.0;
+                let shortcut_display = ellipsize_to_width(
+                    ctx,
+                    shortcut,
+                    "Sans",
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Normal,
+                    10.0,
+                    max_shortcut_text_w,
+                );
+
+                if !shortcut_display.is_empty() {
+                    let shortcut_extents = text_extents_for(
+                        ctx,
+                        "Sans",
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Normal,
+                        10.0,
+                        &shortcut_display,
+                    );
+                    let badge_w =
+                        (shortcut_extents.width() + badge_padding_x * 2.0).min(max_badge_w);
+                    let badge_x = content_right - badge_w;
+                    let badge_y = item_y + (ITEM_HEIGHT - badge_h) / 2.0 - 1.0;
+                    badge_left_edge = badge_x;
+
+                    // Badge background - increased visibility
+                    let badge_alpha = if is_selected { 0.35 } else { 0.25 };
+                    ctx.set_source_rgba(1.0, 1.0, 1.0, badge_alpha);
+                    draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
+                    let _ = ctx.fill();
+
+                    // Badge text - increased visibility
+                    let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
+                    ctx.set_source_rgba(1.0, 1.0, 1.0, shortcut_alpha);
+                    draw_text_baseline(
+                        ctx,
+                        shortcut_style,
+                        &shortcut_display,
+                        badge_x + badge_padding_x,
+                        badge_y + badge_h / 2.0 + 3.0,
+                        None,
+                    );
+                }
+            }
+        }
+
+        // Description (dimmer but improved contrast)
+        let max_desc_width = (badge_left_edge - 12.0 - desc_x).max(0.0);
         let desc_alpha = if is_selected { 0.9 } else { 0.75 };
         ctx.set_source_rgba(
             TEXT_DESCRIPTION.0,
@@ -216,14 +239,21 @@ pub fn render_command_palette(
             TEXT_DESCRIPTION.2,
             desc_alpha,
         );
-        draw_text_baseline(
-            ctx,
-            desc_style,
-            cmd.description,
-            desc_x,
-            label_y,
-            Some(max_desc_width.max(50.0)),
-        );
+        if max_desc_width > 6.0 {
+            let desc_display = ellipsize_to_width(
+                ctx,
+                cmd.description,
+                "Sans",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+                12.0,
+                max_desc_width,
+            );
+            if desc_display.is_empty() {
+                continue;
+            }
+            draw_text_baseline(ctx, desc_style, &desc_display, desc_x, label_y, None);
+        }
     }
 
     // Enhanced empty state
@@ -290,7 +320,7 @@ pub fn render_command_palette(
     // Scroll indicator (when there are more items than visible)
     let total_items = filtered.len();
     if total_items > MAX_VISIBLE_ITEMS {
-        let scroll_track_x = x + PALETTE_WIDTH - 8.0;
+        let scroll_track_x = x + palette_width - 8.0;
         let scroll_track_y = cursor_y;
         let scroll_track_h = (MAX_VISIBLE_ITEMS as f64) * ITEM_HEIGHT - 4.0;
         let scroll_track_w = 4.0;
@@ -337,7 +367,7 @@ pub fn render_command_palette(
         TEXT_DESCRIPTION.2,
         0.6,
     );
-    let hint_y = y + height - SPACING_MD;
+    let hint_y = y + height - HINT_BASELINE_BOTTOM_OFFSET;
     let hint_extents = text_extents_for(
         ctx,
         "Sans",
@@ -350,8 +380,48 @@ pub fn render_command_palette(
         ctx,
         hint_style,
         HINT_PRESS_ESC,
-        x + (PALETTE_WIDTH - hint_extents.width()) / 2.0,
+        x + (palette_width - hint_extents.width()) / 2.0,
         hint_y,
         None,
     );
+}
+
+fn ellipsize_to_width(
+    ctx: &cairo::Context,
+    text: &str,
+    family: &str,
+    slant: cairo::FontSlant,
+    weight: cairo::FontWeight,
+    size: f64,
+    max_width: f64,
+) -> String {
+    if max_width <= 0.0 {
+        return String::new();
+    }
+
+    let extents = text_extents_for(ctx, family, slant, weight, size, text);
+    if extents.width() <= max_width {
+        return text.to_string();
+    }
+
+    let ellipsis_extents = text_extents_for(ctx, family, slant, weight, size, ELLIPSIS);
+    if ellipsis_extents.width() > max_width {
+        return String::new();
+    }
+
+    let mut end = text.len();
+    while end > 0 {
+        if !text.is_char_boundary(end) {
+            end -= 1;
+            continue;
+        }
+        let candidate = format!("{}{}", &text[..end], ELLIPSIS);
+        let candidate_extents = text_extents_for(ctx, family, slant, weight, size, &candidate);
+        if candidate_extents.width() <= max_width {
+            return candidate;
+        }
+        end -= 1;
+    }
+
+    ELLIPSIS.to_string()
 }

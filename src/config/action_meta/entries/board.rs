@@ -199,7 +199,14 @@ pub const ENTRIES: &[ActionMeta] = &[
         Board,
         true,
         true,
-        false
+        false,
+        &[
+            "monitor",
+            "display",
+            "screen",
+            "next monitor",
+            "next display"
+        ]
     ),
     meta!(
         FocusPrevOutput,
@@ -209,7 +216,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         Board,
         true,
         true,
-        false
+        false,
+        &[
+            "monitor",
+            "display",
+            "screen",
+            "previous monitor",
+            "previous display",
+            "prev monitor",
+            "prev display",
+        ]
     ),
     meta!(
         BoardNew,

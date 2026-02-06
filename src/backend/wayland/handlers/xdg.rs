@@ -72,6 +72,7 @@ impl WindowHandler for WaylandState {
             && let Some(output) = self.output_state.outputs().next()
         {
             self.surface.set_current_output(output);
+            self.set_has_seen_surface_enter(false);
         }
         self.refresh_active_output_label();
 

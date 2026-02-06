@@ -3,9 +3,13 @@ use smithay_client_toolkit::shell::{
     WaylandSurface,
     wlr_layer::{Anchor, Layer},
 };
+use std::time::Instant;
 
 use super::super::*;
-use crate::input::state::{OutputFocusAction, UiToastKind};
+use crate::{
+    input::state::{OutputFocusAction, UiToastKind},
+    session::{self, SessionSnapshot},
+};
 
 const OUTPUT_BADGE_MAX_LEN: usize = 28;
 
@@ -111,6 +115,62 @@ impl WaylandState {
         }
     }
 
+    pub(in crate::backend::wayland) fn persist_session_for_output(
+        &mut self,
+        output: Option<&wl_output::WlOutput>,
+        reason: &str,
+    ) {
+        let output_identity =
+            output.and_then(|surface_output| self.output_identity_for(surface_output));
+        let Some(mut save_options) = self.session_options().cloned() else {
+            return;
+        };
+        save_options.set_output_identity(output_identity.as_deref());
+
+        let save_result = if let Some(snapshot) =
+            session::snapshot_from_input(&self.input_state, &save_options)
+        {
+            session::save_snapshot(&snapshot, &save_options).map(|_| true)
+        } else if Self::session_persistence_enabled(&save_options) {
+            let empty_snapshot = SessionSnapshot {
+                active_board_id: self.input_state.board_id().to_string(),
+                boards: Vec::new(),
+                tool_state: None,
+            };
+            session::save_snapshot(&empty_snapshot, &save_options).map(|_| true)
+        } else {
+            Ok(false)
+        };
+
+        match save_result {
+            Ok(saved) => {
+                if !saved {
+                    return;
+                }
+                if let Some(runtime_options) = self.session_options_mut() {
+                    runtime_options.set_output_identity(output_identity.as_deref());
+                }
+                let _ = self.input_state.take_session_dirty();
+                self.session.mark_saved(Instant::now());
+                info!(
+                    "Persisted session before {} (output_identity={:?})",
+                    reason,
+                    output_identity.as_deref()
+                );
+            }
+            Err(err) => warn!(
+                "Failed to persist session before {} (output_identity={:?}): {}",
+                reason,
+                output_identity.as_deref(),
+                err
+            ),
+        }
+    }
+
+    fn session_persistence_enabled(options: &session::SessionOptions) -> bool {
+        options.any_enabled() || options.restore_tool_state || options.persist_history
+    }
+
     pub(in crate::backend::wayland) fn handle_output_focus_action(
         &mut self,
         qh: &QueueHandle<Self>,
@@ -127,10 +187,12 @@ impl WaylandState {
         if self.capture.is_in_progress()
             || self.frozen.is_in_progress()
             || self.zoom.is_in_progress()
+            || self.input_state.frozen_active()
+            || self.input_state.zoom_active()
         {
             self.input_state.set_ui_toast(
                 UiToastKind::Info,
-                "Cannot switch outputs while capture, frozen mode, or zoom capture is active",
+                "Cannot switch outputs while capture, frozen mode, or zoom mode is active",
             );
             self.input_state.trigger_blocked_feedback();
             return;
@@ -144,9 +206,9 @@ impl WaylandState {
             return;
         }
 
-        let current_output = self
-            .surface
-            .current_output()
+        let surface_current_output = self.surface.current_output();
+        let current_output = surface_current_output
+            .clone()
             .or_else(|| self.preferred_fullscreen_output());
         let current_index = current_output
             .as_ref()
@@ -167,6 +229,10 @@ impl WaylandState {
             .output_badge_label_for(&target_output)
             .unwrap_or_else(|| format!("Output {}", target_index + 1));
 
+        if self.has_seen_surface_enter() {
+            self.persist_session_for_output(surface_current_output.as_ref(), "output switch");
+        }
+
         if self.surface.is_xdg_window() {
             if !self.xdg_fullscreen() {
                 self.input_state.set_ui_toast(
@@ -184,6 +250,7 @@ impl WaylandState {
             window.set_fullscreen(Some(&target_output));
             window.commit();
             self.surface.set_current_output(target_output);
+            self.set_has_seen_surface_enter(false);
             self.refresh_active_output_label();
             self.request_xdg_activation(qh);
             self.input_state.needs_redraw = true;
@@ -199,6 +266,7 @@ impl WaylandState {
         info!("Switching layer overlay to {}", target_label);
         self.recreate_layer_surface_for_output(qh, &target_output);
         self.surface.set_current_output(target_output);
+        self.set_has_seen_surface_enter(false);
         self.refresh_active_output_label();
         self.set_keyboard_focus(false);
         self.set_overlay_ready(false);

@@ -310,6 +310,13 @@ enabled = true
 - **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized
 
+**Multi-monitor behavior:**
+- Use `focus_prev_output` / `focus_next_output` (default: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>) to move overlay focus between outputs.
+- Toolbar surfaces and status bar follow the active output when focus changes.
+- Output switching is blocked while capture, frozen, or zoom is active/in progress; finish or exit those modes first.
+- Command palette (`Ctrl+K`) includes hidden aliases, so searching `monitor` or `display` finds output actions.
+- For GNOME/xdg fallback, set `preferred_output` (or env override `WAYSCRIBER_XDG_OUTPUT`) to pin the overlay to a specific monitor.
+
 **Defaults:**
 - Show status bar: true
 - Show frozen badge: false
@@ -658,6 +665,7 @@ Session overrides and recovery:
 ### `[keybindings]` - Custom Keybindings
 
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
+For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
 ```toml
 [keybindings]

@@ -62,6 +62,9 @@ impl OutputHandler for WaylandState {
     ) {
         debug!("Output destroyed");
         self.surface.clear_output(&output);
+        if self.surface.current_output().is_none() {
+            self.set_has_seen_surface_enter(false);
+        }
         self.refresh_active_output_label();
     }
 }

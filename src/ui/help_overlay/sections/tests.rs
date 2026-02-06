@@ -17,6 +17,7 @@ fn gesture_hints_remain_present() {
         ("Tab+Drag", action_label(Action::SelectEllipseTool)),
         ("Ctrl+Shift+Drag", action_label(Action::SelectArrowTool)),
         ("Drag", "Selection tool"),
+        ("Ctrl+Shift+Alt+Left/Right", "Previous/next output"),
         ("Selection properties panel", "Text background"),
         ("Middle drag / arrow keys", "Pan view"),
     ];
