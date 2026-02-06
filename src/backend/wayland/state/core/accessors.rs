@@ -113,6 +113,14 @@ impl WaylandState {
         self.data.pending_freeze_on_start = value;
     }
 
+    pub(in crate::backend::wayland) fn has_seen_surface_enter(&self) -> bool {
+        self.data.has_seen_surface_enter
+    }
+
+    pub(in crate::backend::wayland) fn set_has_seen_surface_enter(&mut self, value: bool) {
+        self.data.has_seen_surface_enter = value;
+    }
+
     pub(in crate::backend::wayland) fn pending_activation_token(&self) -> Option<String> {
         self.data.pending_activation_token.clone()
     }

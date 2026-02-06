@@ -56,6 +56,17 @@ pub struct UiConfig {
     #[serde(default)]
     pub preferred_output: Option<String>,
 
+    /// Enable multi-monitor features on layer-shell compositors.
+    ///
+    /// When disabled, output-cycling actions are ignored and the overlay remains
+    /// on the compositor-selected output.
+    #[serde(default = "default_multi_monitor_enabled")]
+    pub multi_monitor_enabled: bool,
+
+    /// Show active output identity in the status bar.
+    #[serde(default = "default_active_output_badge")]
+    pub active_output_badge: bool,
+
     /// Duration for command palette action toasts (ms)
     #[serde(default = "default_command_palette_toast_duration_ms")]
     pub command_palette_toast_duration_ms: u64,
@@ -91,6 +102,8 @@ impl Default for UiConfig {
             help_overlay_style: HelpOverlayStyle::default(),
             help_overlay_context_filter: default_help_overlay_context_filter(),
             preferred_output: None,
+            multi_monitor_enabled: default_multi_monitor_enabled(),
+            active_output_badge: default_active_output_badge(),
             command_palette_toast_duration_ms: default_command_palette_toast_duration_ms(),
             xdg_fullscreen: default_xdg_fullscreen(),
             click_highlight: ClickHighlightConfig::default(),
@@ -130,6 +143,14 @@ fn default_help_overlay_context_filter() -> bool {
 
 fn default_command_palette_toast_duration_ms() -> u64 {
     1500
+}
+
+fn default_multi_monitor_enabled() -> bool {
+    true
+}
+
+fn default_active_output_badge() -> bool {
+    true
 }
 
 fn default_status_position() -> StatusPosition {

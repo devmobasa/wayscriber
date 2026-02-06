@@ -11,10 +11,10 @@ use super::super::super::{
 };
 use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, CompositorCapabilities, DelayedHistory,
-    DrawingState, PendingBoardDelete, PendingClipboardFallback, PendingPageDelete, PresetAction,
-    PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
-    StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab,
-    UiToastState, ZoomAction,
+    DrawingState, OutputFocusAction, PendingBoardDelete, PendingClipboardFallback,
+    PendingPageDelete, PresetAction, PresetFeedbackState, PressureThicknessEditMode,
+    PressureThicknessEntryMode, SelectionAxis, StatusChangeHighlight, TextClickState,
+    TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
 };
 use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
@@ -167,6 +167,10 @@ pub struct InputState {
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
     pub screen_height: u32,
+    /// Whether to show active output badge in status bar.
+    pub show_active_output_badge: bool,
+    /// Active output label shown in status bar when configured.
+    pub active_output_label: Option<String>,
     /// Previous color before entering board mode (for restoration)
     pub board_previous_color: Option<Color>,
     /// Most recently used board ids (most recent first)
@@ -189,6 +193,8 @@ pub struct InputState {
     pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
     /// Pending capture action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_capture_action: Option<Action>,
+    /// Pending output focus action (to be handled by WaylandState)
+    pub(in crate::input::state::core) pending_output_focus_action: Option<OutputFocusAction>,
     /// Pending zoom action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_zoom_action: Option<ZoomAction>,
     /// Pending copy hex color to clipboard request

@@ -29,6 +29,8 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.board.board_9, Action::Board9)?;
         inserter.insert_all(&self.board.board_next, Action::BoardNext)?;
         inserter.insert_all(&self.board.board_prev, Action::BoardPrev)?;
+        inserter.insert_all(&self.board.focus_next_output, Action::FocusNextOutput)?;
+        inserter.insert_all(&self.board.focus_prev_output, Action::FocusPrevOutput)?;
         inserter.insert_all(&self.board.board_new, Action::BoardNew)?;
         inserter.insert_all(&self.board.board_duplicate, Action::BoardDuplicate)?;
         inserter.insert_all(&self.board.board_delete, Action::BoardDelete)?;

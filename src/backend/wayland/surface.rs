@@ -61,12 +61,24 @@ impl SurfaceState {
     pub fn set_layer_surface(&mut self, surface: LayerSurface) {
         self.wl_surface = Some(surface.wl_surface().clone());
         self.kind = Some(SurfaceKind::Layer(surface));
+        // A new shell surface invalidates current buffer resources/state.
+        self.pool = None;
+        self.pool_size = 0;
+        self.current_output = None;
+        self.configured = false;
+        self.frame_callback_pending = false;
     }
 
     /// Assigns an xdg-shell window produced during startup.
     pub fn set_xdg_window(&mut self, window: Window) {
         self.wl_surface = Some(window.wl_surface().clone());
         self.kind = Some(SurfaceKind::Xdg { window });
+        // A new shell surface invalidates current buffer resources/state.
+        self.pool = None;
+        self.pool_size = 0;
+        self.current_output = None;
+        self.configured = false;
+        self.frame_callback_pending = false;
     }
 
     /// Returns the active wl_surface, if initialized.
@@ -78,6 +90,14 @@ impl SurfaceState {
     pub fn layer_surface_mut(&mut self) -> Option<&mut LayerSurface> {
         match &mut self.kind {
             Some(SurfaceKind::Layer(layer)) => Some(layer),
+            _ => None,
+        }
+    }
+
+    /// Returns the xdg-shell window, if initialized.
+    pub fn xdg_window(&self) -> Option<&Window> {
+        match &self.kind {
+            Some(SurfaceKind::Xdg { window }) => Some(window),
             _ => None,
         }
     }

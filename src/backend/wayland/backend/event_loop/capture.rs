@@ -22,10 +22,16 @@ pub(super) fn flush_if_capture_active(conn: &Connection, capture_active: bool) {
     }
 }
 
-pub(super) fn handle_pending_actions(state: &mut WaylandState) {
+pub(super) fn handle_pending_actions(
+    state: &mut WaylandState,
+    qh: &wayland_client::QueueHandle<WaylandState>,
+) {
     state.apply_capture_completion();
     handle_frozen_toggle(state);
 
+    if let Some(action) = state.input_state.take_pending_output_focus_action() {
+        state.handle_output_focus_action(qh, action);
+    }
     if let Some(action) = state.input_state.take_pending_zoom_action() {
         state.handle_zoom_action(action);
     }

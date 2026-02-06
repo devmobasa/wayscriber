@@ -6,7 +6,7 @@ use smithay_client_toolkit::{
         wlr_layer::{KeyboardInteractivity, Layer, LayerShell, LayerSurfaceConfigure},
     },
 };
-use wayland_client::QueueHandle;
+use wayland_client::{QueueHandle, protocol::wl_output};
 
 use super::structs::ToolbarSurface;
 use crate::backend::wayland::state::WaylandState;
@@ -18,6 +18,7 @@ impl ToolbarSurface {
         compositor: &CompositorState,
         layer_shell: &LayerShell,
         scale: i32,
+        output: Option<&wl_output::WlOutput>,
     ) {
         if self.layer_surface.is_some() {
             return;
@@ -36,7 +37,7 @@ impl ToolbarSurface {
             wl_surface.clone(),
             Layer::Overlay, // map in overlay layer so toolbars can stack above main surface
             Some(self.name),
-            None,
+            output,
         );
         layer_surface.set_anchor(self.anchor);
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);

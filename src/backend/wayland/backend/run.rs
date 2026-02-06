@@ -14,6 +14,7 @@ pub(super) fn run_backend(backend: &mut WaylandBackend) -> Result<()> {
     let mut runtime = init_state(backend, setup)?;
 
     create_overlay_surface(&mut runtime.state, &runtime.qh)?;
+    runtime.state.refresh_active_output_label();
 
     let outcome = run_event_loop(
         &runtime.conn,

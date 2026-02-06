@@ -245,6 +245,12 @@ status_bar_position = "bottom-left"
 # Preferred output name for GNOME fallback (xdg-shell) overlays
 #preferred_output = "eDP-1"
 
+# Enable output-cycling shortcuts on layer-shell compositors
+multi_monitor_enabled = true
+
+# Show active output label in the status bar
+active_output_badge = true
+
 # Request fullscreen for the GNOME fallback overlay (disable if opaque)
 #xdg_fullscreen = false
 
@@ -301,7 +307,15 @@ enabled = true
 - **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; by default the halo follows your current pen color (set `use_pen_color = false` to keep a fixed color)
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
+- **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized
+
+**Multi-monitor behavior:**
+- Use `focus_prev_output` / `focus_next_output` (default: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>) to move overlay focus between outputs.
+- Toolbar surfaces and status bar follow the active output when focus changes.
+- Output switching is blocked while capture, frozen, or zoom is active/in progress; finish or exit those modes first.
+- Command palette (`Ctrl+K`) includes hidden aliases, so searching `monitor` or `display` finds output actions.
+- For GNOME/xdg fallback, set `preferred_output` (or env override `WAYSCRIBER_XDG_OUTPUT`) to pin the overlay to a specific monitor.
 
 **Defaults:**
 - Show status bar: true
@@ -651,6 +665,7 @@ Session overrides and recovery:
 ### `[keybindings]` - Custom Keybindings
 
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
+For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
 ```toml
 [keybindings]
@@ -741,6 +756,8 @@ decrease_font_size = ["Ctrl+Shift+-", "Ctrl+Shift+_"]
 toggle_whiteboard = ["Ctrl+W"]
 toggle_blackboard = ["Ctrl+B"]
 return_to_transparent = ["Ctrl+Shift+T"]
+focus_prev_output = ["Ctrl+Alt+Shift+ArrowLeft"]
+focus_next_output = ["Ctrl+Alt+Shift+ArrowRight"]
 board_1 = ["Ctrl+Shift+1"]
 board_2 = ["Ctrl+Shift+2"]
 board_3 = ["Ctrl+Shift+3"]

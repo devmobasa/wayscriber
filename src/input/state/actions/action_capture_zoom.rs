@@ -1,5 +1,5 @@
 use crate::config::Action;
-use crate::input::ZoomAction;
+use crate::input::{OutputFocusAction, ZoomAction};
 
 use super::super::InputState;
 
@@ -54,6 +54,16 @@ impl InputState {
             }
             Action::RefreshZoomCapture => {
                 self.request_zoom_action(ZoomAction::RefreshCapture);
+                self.reset_modifiers();
+                true
+            }
+            Action::FocusNextOutput => {
+                self.request_output_focus_action(OutputFocusAction::Next);
+                self.reset_modifiers();
+                true
+            }
+            Action::FocusPrevOutput => {
+                self.request_output_focus_action(OutputFocusAction::Prev);
                 self.reset_modifiers();
                 true
             }

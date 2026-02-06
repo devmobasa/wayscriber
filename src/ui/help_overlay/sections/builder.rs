@@ -77,6 +77,14 @@ pub(crate) fn build_section_sets(
                 "Previous/next board",
             ),
             row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::FocusPrevOutput, Action::FocusNextOutput],
+                    "Ctrl+Shift+Alt+Left/Right",
+                ),
+                "Previous/next output",
+            ),
+            row(
                 binding_or_fallback(bindings, Action::BoardNew, NOT_BOUND_LABEL),
                 action_label(Action::BoardNew),
             ),

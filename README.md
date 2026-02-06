@@ -115,6 +115,13 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - Help overlay (<kbd>F1</kbd>), quick reference (<kbd>Shift+F1</kbd>)
 - Command palette (<kbd>Ctrl+K</kbd>)
 
+### Multi-Monitor
+- Move overlay focus between monitors: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>
+- Toolbars and status bar follow the active output when output focus changes
+- Optional active output badge in status bar (`ui.active_output_badge`)
+- Output-scoped session restore when `session.per_output = true`
+- GNOME fallback output pinning via `ui.preferred_output` or `WAYSCRIBER_XDG_OUTPUT`
+
 ### Presets
 - Save tool + color + size (plus fill/opacity/text) into 3-5 slots
 - Apply: <kbd>1</kbd>-<kbd>5</kbd>
@@ -390,7 +397,7 @@ Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the o
 
 - **Help overlay:** <kbd>F1</kbd> or <kbd>F10</kbd>
 - **Quick reference:** <kbd>Shift+F1</kbd>
-- **Command palette:** <kbd>Ctrl+K</kbd>
+- **Command palette:** <kbd>Ctrl+K</kbd> (search `monitor` or `display` for output actions)
 - **Full docs:** https://wayscriber.com/docs/
 
 ---
@@ -440,6 +447,7 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Toggle Blackboard | <kbd>Ctrl+B</kbd> |
 | Return to Transparent | <kbd>Ctrl+Shift+T</kbd> |
 | Switch board slot | <kbd>Ctrl+Shift+1..9</kbd> |
+| Previous/next output | <kbd>Ctrl+Alt+Shift</kbd> + <kbd>←</kbd>/<kbd>→</kbd> |
 | Previous/next board | <kbd>Ctrl+Shift</kbd> + <kbd>←</kbd>/<kbd>→</kbd> |
 | New board | <kbd>Ctrl+Shift+N</kbd> |
 | Delete board | <kbd>Ctrl+Shift+Delete</kbd> |
@@ -700,7 +708,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Presenter mode
 - [x] Command palette
 - [x] Numbered callouts (incrementing arrow labels)
-- [ ] Multi-monitor support
+- [x] Multi-monitor support
 - [ ] Save annotations to image
 - [ ] Color picker integration with captures/export
 

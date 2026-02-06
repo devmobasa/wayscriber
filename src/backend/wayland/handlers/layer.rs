@@ -82,6 +82,7 @@ impl LayerShellHandler for WaylandState {
         }
 
         self.surface.set_configured(true);
+        self.refresh_active_output_label();
         self.input_state.needs_redraw = true;
 
         // Mark overlay ready if we already have keyboard focus (configure came after enter)

@@ -17,17 +17,21 @@ impl OutputHandler for WaylandState {
         _output: wl_output::WlOutput,
     ) {
         debug!("New output detected");
+        self.refresh_active_output_label();
     }
 
     fn update_output(
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
+        output: wl_output::WlOutput,
     ) {
         debug!("Output updated");
+        if self.surface.current_output().as_ref() == Some(&output) {
+            self.refresh_active_output_label();
+        }
         // Refresh geometry only for the active output so fallback cropping stays correct.
-        if let Some(info) = self.output_state.info(&_output) {
+        if let Some(info) = self.output_state.info(&output) {
             if !self.frozen.active_output_matches(info.id)
                 && !self.zoom.active_output_matches(info.id)
             {
@@ -42,10 +46,10 @@ impl OutputHandler for WaylandState {
             ) {
                 self.frozen.set_active_geometry(Some(geo.clone()));
                 self.frozen
-                    .set_active_output(Some(_output.clone()), Some(info.id));
+                    .set_active_output(Some(output.clone()), Some(info.id));
                 self.zoom.set_active_geometry(Some(geo));
                 self.zoom
-                    .set_active_output(Some(_output.clone()), Some(info.id));
+                    .set_active_output(Some(output.clone()), Some(info.id));
             }
         }
     }
@@ -54,8 +58,13 @@ impl OutputHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
+        output: wl_output::WlOutput,
     ) {
         debug!("Output destroyed");
+        self.surface.clear_output(&output);
+        if self.surface.current_output().is_none() {
+            self.set_has_seen_surface_enter(false);
+        }
+        self.refresh_active_output_label();
     }
 }

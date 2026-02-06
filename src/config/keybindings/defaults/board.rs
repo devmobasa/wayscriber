@@ -107,6 +107,14 @@ pub(crate) fn default_board_prev() -> Vec<String> {
     vec!["Ctrl+Shift+ArrowLeft".to_string()]
 }
 
+pub(crate) fn default_focus_next_output() -> Vec<String> {
+    vec!["Ctrl+Alt+Shift+ArrowRight".to_string()]
+}
+
+pub(crate) fn default_focus_prev_output() -> Vec<String> {
+    vec!["Ctrl+Alt+Shift+ArrowLeft".to_string()]
+}
+
 pub(crate) fn default_board_new() -> Vec<String> {
     vec!["Ctrl+Shift+N".to_string()]
 }

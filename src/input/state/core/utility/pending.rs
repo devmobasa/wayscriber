@@ -1,4 +1,4 @@
-use super::super::base::{InputState, PresetAction, ZoomAction};
+use super::super::base::{InputState, OutputFocusAction, PresetAction, ZoomAction};
 use crate::config::{Action, BoardsConfig};
 
 impl InputState {
@@ -10,6 +10,16 @@ impl InputState {
     /// Stores a capture action for retrieval by the backend.
     pub(crate) fn set_pending_capture_action(&mut self, action: Action) {
         self.pending_capture_action = Some(action);
+    }
+
+    /// Stores an output focus action for retrieval by the backend.
+    pub(crate) fn request_output_focus_action(&mut self, action: OutputFocusAction) {
+        self.pending_output_focus_action = Some(action);
+    }
+
+    /// Takes and clears any pending output focus action.
+    pub fn take_pending_output_focus_action(&mut self) -> Option<OutputFocusAction> {
+        self.pending_output_focus_action.take()
     }
 
     /// Stores a zoom action for retrieval by the backend.

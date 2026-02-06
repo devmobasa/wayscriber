@@ -21,6 +21,7 @@ pub struct ActionMeta {
     pub label: &'static str,
     pub short_label: Option<&'static str>,
     pub description: &'static str,
+    pub search_aliases: &'static [&'static str],
     #[allow(dead_code)]
     pub category: ActionCategory,
     pub in_command_palette: bool,
@@ -43,6 +44,29 @@ macro_rules! meta {
         $category:ident,
         $in_palette:expr,
         $in_help:expr,
+        $in_toolbar:expr,
+        $aliases:expr
+    ) => {
+        ActionMeta {
+            action: crate::config::Action::$action,
+            label: $label,
+            short_label: $short,
+            description: $desc,
+            search_aliases: $aliases,
+            category: crate::config::action_meta::ActionCategory::$category,
+            in_command_palette: $in_palette,
+            in_help: $in_help,
+            in_toolbar: $in_toolbar,
+        }
+    };
+    (
+        $action:ident,
+        $label:expr,
+        $short:expr,
+        $desc:expr,
+        $category:ident,
+        $in_palette:expr,
+        $in_help:expr,
         $in_toolbar:expr
     ) => {
         ActionMeta {
@@ -50,6 +74,7 @@ macro_rules! meta {
             label: $label,
             short_label: $short,
             description: $desc,
+            search_aliases: &[],
             category: crate::config::action_meta::ActionCategory::$category,
             in_command_palette: $in_palette,
             in_help: $in_help,

@@ -68,6 +68,14 @@ impl WindowHandler for WaylandState {
             window.set_maximized();
         }
 
+        if self.surface.current_output().is_none()
+            && let Some(output) = self.output_state.outputs().next()
+        {
+            self.surface.set_current_output(output);
+            self.set_has_seen_surface_enter(false);
+        }
+        self.refresh_active_output_label();
+
         if self.surface.update_dimensions(width, height) {
             info!("xdg window configured: {}x{}", width, height);
             self.buffer_damage.mark_all_full();
