@@ -129,7 +129,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             x: end_x,
             y: end_y,
             color: state.current_color,
-            label: step_label.expect("step label required"),
+            label: step_label.unwrap_or_else(|| state.next_step_marker_label()),
         },
         Tool::Eraser => {
             if state.eraser_mode == EraserMode::Stroke {

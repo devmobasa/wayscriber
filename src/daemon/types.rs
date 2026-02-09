@@ -1,3 +1,5 @@
+#[cfg(feature = "tray")]
+use log::warn;
 use std::ffi::OsString;
 #[cfg(feature = "tray")]
 use std::sync::Mutex;
@@ -51,35 +53,50 @@ impl TrayStatusShared {
     }
 
     pub(crate) fn snapshot(&self) -> TrayStatus {
-        self.inner.lock().unwrap().clone()
+        self.lock_status().clone()
     }
 
     pub(crate) fn set_overlay_error(&self, error: Option<OverlaySpawnErrorInfo>) {
-        let mut status = self.inner.lock().unwrap();
-        status.overlay_error = error;
+        {
+            let mut status = self.lock_status();
+            status.overlay_error = error;
+        }
         self.bump_revision();
     }
 
     pub(crate) fn set_watcher_offline(&self, reason: String) -> bool {
-        let mut status = self.inner.lock().unwrap();
-        let was_offline = status.watcher_offline;
-        status.watcher_offline = true;
-        status.watcher_reason = Some(reason);
+        let was_offline = {
+            let mut status = self.lock_status();
+            let was_offline = status.watcher_offline;
+            status.watcher_offline = true;
+            status.watcher_reason = Some(reason);
+            was_offline
+        };
         self.bump_revision();
         !was_offline
     }
 
     pub(crate) fn set_watcher_online(&self) -> bool {
-        let mut status = self.inner.lock().unwrap();
-        let was_offline = status.watcher_offline;
-        status.watcher_offline = false;
-        status.watcher_reason = None;
+        let was_offline = {
+            let mut status = self.lock_status();
+            let was_offline = status.watcher_offline;
+            status.watcher_offline = false;
+            status.watcher_reason = None;
+            was_offline
+        };
         self.bump_revision();
         was_offline
     }
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision.load(Ordering::Acquire)
+    }
+
+    fn lock_status(&self) -> std::sync::MutexGuard<'_, TrayStatus> {
+        self.inner.lock().unwrap_or_else(|poisoned| {
+            warn!("tray status mutex poisoned; recovering");
+            poisoned.into_inner()
+        })
     }
 
     fn bump_revision(&self) {
