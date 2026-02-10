@@ -44,6 +44,11 @@ trait Request {
     fn response(&self, response: u32, results: HashMap<String, OwnedValue>) -> zbus::Result<()>;
 }
 
+struct PortalAttempt {
+    label: &'static str,
+    options: HashMap<String, zbus::zvariant::Value<'static>>,
+}
+
 /// Capture a screenshot using xdg-desktop-portal.
 ///
 /// This function communicates with the desktop portal via D-Bus to capture
@@ -67,33 +72,70 @@ pub async fn capture_via_portal(capture_type: CaptureType) -> Result<String, Cap
         .await
         .map_err(CaptureError::DBusError)?;
 
-    // Prepare options based on capture type
-    let options = build_portal_options(capture_type);
+    let attempts = portal_attempts(capture_type);
+    let mut last_error = None;
 
+    for (index, attempt) in attempts.into_iter().enumerate() {
+        if index > 0 {
+            log::info!(
+                "Retrying portal capture with '{}' options after previous failure",
+                attempt.label
+            );
+        }
+
+        match capture_once(&connection, &proxy, attempt.options).await {
+            Ok(uri) => return Ok(uri),
+            Err(err) => {
+                log::warn!("Portal capture attempt '{}' failed: {}", attempt.label, err);
+                last_error = Some(err);
+            }
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        CaptureError::InvalidResponse("Portal capture failed without an explicit error".to_string())
+    }))
+}
+
+fn portal_attempts(capture_type: CaptureType) -> Vec<PortalAttempt> {
+    match capture_type {
+        CaptureType::ActiveWindow => vec![PortalAttempt {
+            // Use interactive portal flow for correctness: some compositors accept
+            // non-standard `window=true` but ignore it and return fullscreen.
+            label: "active-window-interactive",
+            options: build_active_window_interactive_options(),
+        }],
+        _ => vec![PortalAttempt {
+            label: "default",
+            options: build_portal_options(capture_type),
+        }],
+    }
+}
+
+async fn capture_once(
+    connection: &Connection,
+    proxy: &ScreenshotProxy<'_>,
+    options: HashMap<String, zbus::zvariant::Value<'static>>,
+) -> Result<String, CaptureError> {
     log::debug!("Calling portal screenshot with options: {:?}", options);
 
-    // Call screenshot method - this returns a Request object path
-    let request_path = proxy.screenshot("", options).await.map_err(|e| {
-        log::error!("Portal screenshot call failed: {}", e);
-        // Check if it's a permission denial
-        if e.to_string().contains("Cancelled") || e.to_string().contains("denied") {
-            CaptureError::PermissionDenied
-        } else {
-            CaptureError::DBusError(e)
-        }
-    })?;
+    // Call screenshot method - this returns a Request object path.
+    let request_path = proxy
+        .screenshot("", options)
+        .await
+        .map_err(map_portal_call_error)?;
 
     log::info!("Screenshot request created: {:?}", request_path);
 
-    // Create a proxy for the Request object to receive Response signal
-    let request_proxy = RequestProxy::builder(&connection)
-        .path(request_path.clone())
+    // Create a proxy for the Request object to receive Response signal.
+    let request_proxy = RequestProxy::builder(connection)
+        .path(request_path)
         .map_err(CaptureError::DBusError)?
         .build()
         .await
         .map_err(CaptureError::DBusError)?;
 
-    // Wait for the Response signal
+    // Wait for the Response signal.
     let mut response_stream = request_proxy
         .receive_response()
         .await
@@ -101,7 +143,7 @@ pub async fn capture_via_portal(capture_type: CaptureType) -> Result<String, Cap
 
     log::debug!("Waiting for Response signal...");
 
-    // Get the first (and only) response
+    // Get the first (and only) response.
     let response_signal = response_stream
         .next()
         .await
@@ -117,16 +159,22 @@ pub async fn capture_via_portal(capture_type: CaptureType) -> Result<String, Cap
         args.results
     );
 
-    // Check response code (0 = success, 1 = cancelled, 2 = other error)
-    match args.response {
+    parse_response(args.response, &args.results)
+}
+
+fn parse_response(
+    response_code: u32,
+    results: &HashMap<String, OwnedValue>,
+) -> Result<String, CaptureError> {
+    // Check response code (0 = success, 1 = cancelled, 2 = other error).
+    match response_code {
         0 => {
-            // Success - extract URI from results
-            let uri_value = args.results.get("uri").ok_or_else(|| {
+            // Success - extract URI from results.
+            let uri_value = results.get("uri").ok_or_else(|| {
                 CaptureError::InvalidResponse("No 'uri' field in response".to_string())
             })?;
 
-            // Extract string from OwnedValue
-            // OwnedValue can be converted to a borrowed Value for downcasting
+            // Extract string from OwnedValue.
             let uri_str: &str = uri_value.downcast_ref().map_err(|e| {
                 CaptureError::InvalidResponse(format!("URI is not a string: {}", e))
             })?;
@@ -148,6 +196,16 @@ pub async fn capture_via_portal(capture_type: CaptureType) -> Result<String, Cap
     }
 }
 
+fn map_portal_call_error(err: zbus::Error) -> CaptureError {
+    log::error!("Portal screenshot call failed: {}", err);
+    let message = err.to_string();
+    if message.contains("Cancelled") || message.contains("denied") {
+        CaptureError::PermissionDenied
+    } else {
+        CaptureError::DBusError(err)
+    }
+}
+
 /// Build portal options based on capture type.
 fn build_portal_options(
     capture_type: CaptureType,
@@ -159,16 +217,21 @@ fn build_portal_options(
             options.insert("interactive".to_string(), false.into());
         }
         CaptureType::ActiveWindow => {
-            // Interactive = true lets user select window
-            // TODO: Try to get active window first, fall back to interactive
             options.insert("interactive".to_string(), true.into());
         }
         CaptureType::Selection { .. } => {
-            // Interactive mode for selection
+            // Interactive mode for selection.
             options.insert("interactive".to_string(), true.into());
         }
     }
 
+    options
+}
+
+/// Active-window capture options (user picks window interactively).
+fn build_active_window_interactive_options() -> HashMap<String, zbus::zvariant::Value<'static>> {
+    let mut options = HashMap::new();
+    options.insert("interactive".to_string(), true.into());
     options
 }
 
@@ -177,7 +240,7 @@ fn build_portal_options(
 pub async fn is_portal_available() -> bool {
     match Connection::session().await {
         Ok(connection) => {
-            // Try to create the proxy
+            // Try to create the proxy.
             ScreenshotProxy::new(&connection).await.is_ok()
         }
         Err(_) => false,
@@ -192,7 +255,7 @@ mod tests {
     fn test_build_portal_options_full_screen() {
         let options = build_portal_options(CaptureType::FullScreen);
 
-        // Full screen should be non-interactive
+        // Full screen should be non-interactive.
         assert_eq!(
             options.get("interactive"),
             Some(&zbus::zvariant::Value::from(false))
@@ -208,7 +271,29 @@ mod tests {
             height: 100,
         });
 
-        // Selection should be interactive
+        // Selection should be interactive.
+        assert_eq!(
+            options.get("interactive"),
+            Some(&zbus::zvariant::Value::from(true))
+        );
+    }
+
+    #[test]
+    fn test_portal_attempts_active_window_uses_interactive_only() {
+        let attempts = portal_attempts(CaptureType::ActiveWindow);
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].label, "active-window-interactive");
+        assert_eq!(
+            attempts[0].options.get("interactive"),
+            Some(&zbus::zvariant::Value::from(true))
+        );
+        assert!(!attempts[0].options.contains_key("window"));
+    }
+
+    #[test]
+    fn test_build_active_window_interactive_options() {
+        let options = build_active_window_interactive_options();
+
         assert_eq!(
             options.get("interactive"),
             Some(&zbus::zvariant::Value::from(true))

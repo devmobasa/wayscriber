@@ -29,6 +29,10 @@ pub use color_picker_popup::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
     PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE, rgb_to_hsv as color_picker_rgb_to_hsv,
 };
+pub(crate) use command_palette::{
+    COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
+};
 pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint};
 #[allow(unused_imports)]
 pub use menus::{

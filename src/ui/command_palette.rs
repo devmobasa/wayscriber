@@ -1,6 +1,10 @@
 //! Command palette UI rendering.
 
 use crate::input::InputState;
+use crate::input::state::{
+    COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
+    COMMAND_PALETTE_MAX_VISIBLE, COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
+};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
@@ -11,13 +15,6 @@ use super::constants::{
 };
 use super::primitives::{draw_rounded_rect, text_extents_for};
 
-const PALETTE_MAX_HEIGHT: f64 = 420.0;
-const ITEM_HEIGHT: f64 = 32.0;
-const PADDING: f64 = 12.0;
-const PADDING_BOTTOM: f64 = 48.0;
-const INPUT_HEIGHT: f64 = 36.0;
-const LIST_GAP: f64 = 8.0;
-const MAX_VISIBLE_ITEMS: usize = 10;
 const HINT_BASELINE_BOTTOM_OFFSET: f64 = 12.0;
 const ELLIPSIS: &str = "\u{2026}";
 
@@ -33,14 +30,13 @@ pub fn render_command_palette(
     }
 
     let filtered = input_state.filtered_commands();
-    let palette_width = input_state.command_palette_width(screen_width);
-    let visible_count = filtered.len().min(MAX_VISIBLE_ITEMS);
-    let content_height =
-        INPUT_HEIGHT + LIST_GAP + (visible_count as f64 * ITEM_HEIGHT) + PADDING + PADDING_BOTTOM;
-    let height = content_height.min(PALETTE_MAX_HEIGHT);
+    let geometry =
+        input_state.command_palette_geometry(screen_width, screen_height, filtered.len());
+    let palette_width = geometry.width;
+    let height = geometry.height;
 
-    let x = (screen_width as f64 - palette_width) / 2.0;
-    let y = screen_height as f64 * 0.2;
+    let x = geometry.x;
+    let y = geometry.y;
 
     // Dimmed background overlay
     ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_MEDIUM);
@@ -63,9 +59,9 @@ pub fn render_command_palette(
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
-    let inner_x = x + PADDING;
-    let inner_width = palette_width - PADDING * 2.0;
-    let mut cursor_y = y + PADDING;
+    let inner_x = x + COMMAND_PALETTE_PADDING;
+    let inner_width = palette_width - COMMAND_PALETTE_PADDING * 2.0;
+    let mut cursor_y = y + COMMAND_PALETTE_PADDING;
 
     // Input field
     draw_rounded_rect(
@@ -73,7 +69,7 @@ pub fn render_command_palette(
         inner_x,
         cursor_y,
         inner_width,
-        INPUT_HEIGHT,
+        COMMAND_PALETTE_INPUT_HEIGHT,
         RADIUS_STD,
     );
     constants::set_color(ctx, INPUT_BG);
@@ -97,13 +93,13 @@ pub fn render_command_palette(
         size: 12.0,
     };
 
-    let text_y = cursor_y + INPUT_HEIGHT / 2.0 + font_size / 3.0;
+    let text_y = cursor_y + COMMAND_PALETTE_INPUT_HEIGHT / 2.0 + font_size / 3.0;
     if input_state.command_palette_query.is_empty() {
         constants::set_color(ctx, TEXT_PLACEHOLDER);
         draw_text_baseline(
             ctx,
             input_style,
-            "Type to search commands...",
+            COMMAND_PALETTE_QUERY_PLACEHOLDER,
             inner_x + 10.0,
             text_y,
             None,
@@ -120,19 +116,19 @@ pub fn render_command_palette(
         );
     }
 
-    cursor_y += INPUT_HEIGHT + LIST_GAP;
+    cursor_y += COMMAND_PALETTE_INPUT_HEIGHT + COMMAND_PALETTE_LIST_GAP;
 
     // Command list (with scroll offset)
     let scroll = input_state.command_palette_scroll;
     for (visible_idx, cmd) in filtered
         .iter()
         .skip(scroll)
-        .take(MAX_VISIBLE_ITEMS)
+        .take(COMMAND_PALETTE_MAX_VISIBLE)
         .enumerate()
     {
         let actual_idx = scroll + visible_idx;
         let is_selected = actual_idx == input_state.command_palette_selected;
-        let item_y = cursor_y + (visible_idx as f64 * ITEM_HEIGHT);
+        let item_y = cursor_y + (visible_idx as f64 * COMMAND_PALETTE_ITEM_HEIGHT);
 
         // Selection highlight
         if is_selected {
@@ -141,7 +137,7 @@ pub fn render_command_palette(
                 inner_x,
                 item_y,
                 inner_width,
-                ITEM_HEIGHT - 2.0,
+                COMMAND_PALETTE_ITEM_HEIGHT - 2.0,
                 RADIUS_SM,
             );
             constants::set_color(ctx, BG_INPUT_SELECTION);
@@ -149,7 +145,7 @@ pub fn render_command_palette(
         }
 
         // Command label
-        let label_y = item_y + ITEM_HEIGHT / 2.0 + font_size / 3.0;
+        let label_y = item_y + COMMAND_PALETTE_ITEM_HEIGHT / 2.0 + font_size / 3.0;
         let text_alpha = if is_selected { 1.0 } else { 0.85 };
         ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, text_alpha);
         draw_text_baseline(ctx, input_style, cmd.label, inner_x + 10.0, label_y, None);
@@ -206,7 +202,7 @@ pub fn render_command_palette(
                     let badge_w =
                         (shortcut_extents.width() + badge_padding_x * 2.0).min(max_badge_w);
                     let badge_x = content_right - badge_w;
-                    let badge_y = item_y + (ITEM_HEIGHT - badge_h) / 2.0 - 1.0;
+                    let badge_y = item_y + (COMMAND_PALETTE_ITEM_HEIGHT - badge_h) / 2.0 - 1.0;
                     badge_left_edge = badge_x;
 
                     // Badge background - increased visibility
@@ -258,7 +254,7 @@ pub fn render_command_palette(
 
     // Enhanced empty state
     if filtered.is_empty() && !input_state.command_palette_query.is_empty() {
-        let empty_y = cursor_y + ITEM_HEIGHT;
+        let empty_y = cursor_y + COMMAND_PALETTE_ITEM_HEIGHT;
         let center_x = inner_x + inner_width / 2.0;
 
         // Main message - larger and centered
@@ -319,10 +315,11 @@ pub fn render_command_palette(
 
     // Scroll indicator (when there are more items than visible)
     let total_items = filtered.len();
-    if total_items > MAX_VISIBLE_ITEMS {
+    if total_items > COMMAND_PALETTE_MAX_VISIBLE {
         let scroll_track_x = x + palette_width - 8.0;
         let scroll_track_y = cursor_y;
-        let scroll_track_h = (MAX_VISIBLE_ITEMS as f64) * ITEM_HEIGHT - 4.0;
+        let scroll_track_h =
+            (COMMAND_PALETTE_MAX_VISIBLE as f64) * COMMAND_PALETTE_ITEM_HEIGHT - 4.0;
         let scroll_track_w = 4.0;
 
         // Track background
@@ -338,9 +335,9 @@ pub fn render_command_palette(
         let _ = ctx.fill();
 
         // Thumb position and size
-        let thumb_ratio = MAX_VISIBLE_ITEMS as f64 / total_items as f64;
+        let thumb_ratio = COMMAND_PALETTE_MAX_VISIBLE as f64 / total_items as f64;
         let thumb_h = (scroll_track_h * thumb_ratio).max(20.0);
-        let scroll_range = total_items - MAX_VISIBLE_ITEMS;
+        let scroll_range = total_items - COMMAND_PALETTE_MAX_VISIBLE;
         let scroll_progress = if scroll_range > 0 {
             scroll as f64 / scroll_range as f64
         } else {

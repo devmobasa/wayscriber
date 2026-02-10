@@ -78,8 +78,7 @@ fn render_status_bar_draws_for_all_positions() {
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
-            "status bar should render pixels for {:?}",
-            position
+            "status bar should render pixels for {position:?}"
         );
     }
 }
@@ -119,8 +118,7 @@ fn render_status_bar_draws_in_board_modes() {
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
-            "status bar should render pixels for board {}",
-            board_id
+            "status bar should render pixels for board {board_id}"
         );
     }
 }

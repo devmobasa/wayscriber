@@ -3,26 +3,14 @@ use log::warn;
 use std::sync::mpsc;
 
 use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::portal_capture::{
+    capture_via_portal_fullscreen_bytes, crop_argb, portal_output_matches,
+};
 use crate::capture::sources::frozen::decode_image_to_argb;
-#[cfg(feature = "portal")]
-use crate::capture::types::CaptureType;
 use crate::input::InputState;
 
 use super::PortalCaptureResult;
 use super::state::ZoomState;
-
-#[cfg(feature = "portal")]
-async fn portal_capture_bytes() -> Result<Vec<u8>, String> {
-    use crate::capture::sources::portal::capture_via_portal_bytes;
-    capture_via_portal_bytes(CaptureType::FullScreen)
-        .await
-        .map_err(|e| format!("Portal capture failed: {}", e))
-}
-
-#[cfg(not(feature = "portal"))]
-async fn portal_capture_bytes() -> Result<Vec<u8>, String> {
-    Err("Portal capture is disabled (feature flag)".to_string())
-}
 
 impl ZoomState {
     pub(super) fn capture_via_portal(
@@ -51,7 +39,7 @@ impl ZoomState {
         );
         tokio_handle.spawn(async move {
             let result = async {
-                let bytes = portal_capture_bytes().await?;
+                let bytes = capture_via_portal_fullscreen_bytes().await?;
 
                 let (mut data, mut width, mut height) =
                     decode_image_to_argb(&bytes).map_err(|e| format!("Decode failed: {}", e))?;
@@ -123,12 +111,8 @@ impl ZoomState {
         if let Some(rx) = self.portal_rx.as_ref() {
             match rx.try_recv() {
                 Ok(Ok((target_output, image))) => {
-                    let output_matches = match (target_output, self.active_output_id) {
-                        (Some(t), Some(current)) => t == current,
-                        (None, None) => true,
-                        (None, Some(_)) => true,
-                        (Some(_), None) => false,
-                    };
+                    let output_matches =
+                        portal_output_matches(target_output, self.active_output_id);
 
                     if output_matches {
                         self.image = Some(image);
@@ -185,37 +169,4 @@ impl ZoomState {
             }
         }
     }
-}
-
-fn crop_argb(
-    data: &[u8],
-    width: u32,
-    height: u32,
-    x: u32,
-    y: u32,
-    crop_w: u32,
-    crop_h: u32,
-) -> Option<Vec<u8>> {
-    if x >= width || y >= height {
-        return None;
-    }
-    let max_w = width.saturating_sub(x);
-    let max_h = height.saturating_sub(y);
-    let cw = crop_w.min(max_w);
-    let ch = crop_h.min(max_h);
-
-    let mut out = vec![0u8; (cw * ch * 4) as usize];
-    let src_stride = (width * 4) as usize;
-    let dst_stride = (cw * 4) as usize;
-    for row in 0..ch as usize {
-        let src_offset = ((y as usize + row) * src_stride) + (x as usize * 4);
-        let dst_offset = row * dst_stride;
-        let end = src_offset + dst_stride;
-        if end > data.len() || dst_offset + dst_stride > out.len() {
-            return None;
-        }
-        out[dst_offset..dst_offset + dst_stride]
-            .copy_from_slice(&data[src_offset..src_offset + dst_stride]);
-    }
-    Some(out)
 }

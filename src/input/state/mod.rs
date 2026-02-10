@@ -24,4 +24,8 @@ pub use core::{
     SelectionAxis, SelectionHandle, SelectionState, TextInputMode, ToolbarDrawerTab, TourStep,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction, color_picker_rgb_to_hsv,
 };
+pub(crate) use core::{
+    COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
+};
 pub use highlight::ClickHighlightSettings;
