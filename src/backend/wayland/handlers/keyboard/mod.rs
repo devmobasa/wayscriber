@@ -132,7 +132,9 @@ impl KeyboardHandler for WaylandState {
             }
         }
         debug!("Key pressed: {:?}", key);
-        if self.handle_toolbar_key(key) {
+        if should_try_toolbar_key(key, self.input_state.command_palette_open)
+            && self.handle_toolbar_key(key)
+        {
             return;
         }
 
@@ -226,7 +228,9 @@ impl KeyboardHandler for WaylandState {
                 _ => {}
             }
         }
-        if self.handle_toolbar_key(key) {
+        if should_try_toolbar_key(key, self.input_state.command_palette_open)
+            && self.handle_toolbar_key(key)
+        {
             return;
         }
         debug!("Key repeated: {:?}", key);
@@ -237,6 +241,13 @@ impl KeyboardHandler for WaylandState {
             self.handle_zoom_action(action);
         }
     }
+}
+
+fn should_try_toolbar_key(key: Key, command_palette_open: bool) -> bool {
+    if command_palette_open {
+        return false;
+    }
+    matches!(key, Key::Tab | Key::Return | Key::Space)
 }
 
 impl WaylandState {
@@ -295,5 +306,25 @@ impl WaylandState {
         if let Some(action) = self.input_state.take_pending_zoom_action() {
             self.handle_zoom_action(action);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toolbar_routing_is_blocked_when_command_palette_is_open() {
+        assert!(!should_try_toolbar_key(Key::Tab, true));
+        assert!(!should_try_toolbar_key(Key::Return, true));
+        assert!(!should_try_toolbar_key(Key::Space, true));
+    }
+
+    #[test]
+    fn toolbar_routing_only_allows_activate_and_tab_keys() {
+        assert!(should_try_toolbar_key(Key::Tab, false));
+        assert!(should_try_toolbar_key(Key::Return, false));
+        assert!(should_try_toolbar_key(Key::Space, false));
+        assert!(!should_try_toolbar_key(Key::Down, false));
     }
 }
