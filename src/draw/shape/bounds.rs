@@ -93,19 +93,24 @@ pub(crate) fn bounding_box_for_arrow(
         (x1, y1, x2, y2)
     };
 
-    let arrow_points =
-        util::calculate_arrowhead_custom(tip_x, tip_y, tail_x, tail_y, arrow_length, arrow_angle);
-
     let mut min_x = tip_x.min(tail_x) as f64;
     let mut max_x = tip_x.max(tail_x) as f64;
     let mut min_y = tip_y.min(tail_y) as f64;
     let mut max_y = tip_y.max(tail_y) as f64;
 
-    for &(px, py) in &arrow_points {
-        min_x = min_x.min(px);
-        max_x = max_x.max(px);
-        min_y = min_y.min(py);
-        max_y = max_y.max(py);
+    if let Some(geometry) = util::calculate_arrowhead_triangle_custom(
+        tip_x,
+        tip_y,
+        tail_x,
+        tail_y,
+        thick,
+        arrow_length,
+        arrow_angle,
+    ) {
+        min_x = min_x.min(geometry.left.0).min(geometry.right.0);
+        max_x = max_x.max(geometry.left.0).max(geometry.right.0);
+        min_y = min_y.min(geometry.left.1).min(geometry.right.1);
+        max_y = max_y.max(geometry.left.1).max(geometry.right.1);
     }
 
     let padding = stroke_padding(thick) as f64;

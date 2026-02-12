@@ -2,17 +2,20 @@ use super::*;
 use crate::draw::{BLACK, Color, RED, WHITE};
 
 #[test]
-fn arrowhead_caps_at_thirty_percent_of_line_length() {
-    let [(lx, ly), _] = calculate_arrowhead_custom(10, 10, 0, 10, 100.0, 30.0);
-    let distance = ((10.0 - lx).powi(2) + (10.0 - ly).powi(2)).sqrt();
-    assert!((distance - 3.0).abs() < f64::EPSILON);
+fn arrowhead_triangle_caps_at_forty_percent_of_line_length() {
+    // Line length = 10, requested head length = 100 -> capped at 40% = 4.
+    let geometry = calculate_arrowhead_triangle_custom(10, 10, 0, 10, 1.0, 100.0, 30.0)
+        .expect("non-degenerate line should yield geometry");
+    let distance = ((geometry.tip.0 - geometry.base.0).powi(2)
+        + (geometry.tip.1 - geometry.base.1).powi(2))
+    .sqrt();
+    assert!((distance - 4.0).abs() < f64::EPSILON);
 }
 
 #[test]
-fn arrowhead_handles_degenerate_lines() {
-    let [(lx, ly), (rx, ry)] = calculate_arrowhead_custom(5, 5, 5, 5, 15.0, 45.0);
-    assert_eq!((lx, ly), (5.0, 5.0));
-    assert_eq!((rx, ry), (5.0, 5.0));
+fn arrowhead_triangle_handles_degenerate_lines() {
+    let geometry = calculate_arrowhead_triangle_custom(5, 5, 5, 5, 2.0, 15.0, 45.0);
+    assert!(geometry.is_none());
 }
 
 #[test]

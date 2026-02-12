@@ -11,7 +11,7 @@ mod colors;
 mod geometry;
 mod text;
 
-pub use arrow::calculate_arrowhead_custom;
+pub(crate) use arrow::calculate_arrowhead_triangle_custom;
 pub use colors::{color_to_name, key_to_color, name_to_color};
 pub use geometry::{Rect, ellipse_bounds};
 pub use text::truncate_with_ellipsis;

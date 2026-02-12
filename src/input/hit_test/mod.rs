@@ -92,6 +92,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
                     tip_y,
                     tail_x,
                     tail_y,
+                    *thick,
                     *arrow_length,
                     *arrow_angle,
                     point,

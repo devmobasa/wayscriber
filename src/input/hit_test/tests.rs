@@ -103,12 +103,12 @@ fn arrowhead_hit_detects_point_near_tip_and_rejects_distant_point() {
     let tail = (0, -20);
 
     assert!(
-        shapes::arrowhead_hit(tip.0, tip.1, tail.0, tail.1, 10.0, 30.0, tip, 0.5),
+        shapes::arrowhead_hit(tip.0, tip.1, tail.0, tail.1, 2.0, 10.0, 30.0, tip, 0.5),
         "tip point should be inside arrowhead"
     );
 
     assert!(
-        !shapes::arrowhead_hit(tip.0, tip.1, tail.0, tail.1, 10.0, 30.0, (50, 50), 0.5),
+        !shapes::arrowhead_hit(tip.0, tip.1, tail.0, tail.1, 2.0, 10.0, 30.0, (50, 50), 0.5),
         "faraway point should not be inside arrowhead even with tolerance"
     );
 }

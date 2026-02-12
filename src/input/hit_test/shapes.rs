@@ -132,14 +132,26 @@ pub(super) fn arrowhead_hit(
     tip_y: i32,
     tail_x: i32,
     tail_y: i32,
+    thick: f64,
     arrow_length: f64,
     arrow_angle: f64,
     point: (i32, i32),
     tolerance: f64,
 ) -> bool {
-    let [(left_x, left_y), (right_x, right_y)] =
-        util::calculate_arrowhead_custom(tip_x, tip_y, tail_x, tail_y, arrow_length, arrow_angle);
-    let tip = (tip_x as f64, tip_y as f64);
+    let Some(geometry) = util::calculate_arrowhead_triangle_custom(
+        tip_x,
+        tip_y,
+        tail_x,
+        tail_y,
+        thick,
+        arrow_length,
+        arrow_angle,
+    ) else {
+        return false;
+    };
+    let tip = geometry.tip;
+    let (left_x, left_y) = geometry.left;
+    let (right_x, right_y) = geometry.right;
     let p = (point.0 as f64, point.1 as f64);
     if point_in_triangle(p, tip, (left_x, left_y), (right_x, right_y)) {
         return true;
