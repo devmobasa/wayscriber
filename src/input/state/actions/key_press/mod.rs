@@ -34,6 +34,13 @@ impl InputState {
             return;
         }
 
+        if self.is_radial_menu_open() {
+            if matches!(key, Key::Escape) {
+                self.close_radial_menu();
+            }
+            return;
+        }
+
         if self.is_color_picker_popup_open() && self.handle_color_picker_popup_key(key) {
             return;
         }

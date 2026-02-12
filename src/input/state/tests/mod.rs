@@ -16,6 +16,7 @@ mod erase;
 mod menus;
 mod presenter_mode;
 mod pressure_modes;
+mod radial_menu;
 mod selection;
 mod step_markers;
 mod text_edit;

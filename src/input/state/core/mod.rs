@@ -9,6 +9,7 @@ mod history;
 mod index;
 mod menus;
 mod properties;
+pub(crate) mod radial_menu;
 mod selection;
 mod selection_actions;
 mod session;
@@ -37,6 +38,12 @@ pub use command_palette::{COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint}
 #[allow(unused_imports)]
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
+};
+pub use radial_menu::state::{radial_color_for_index, sub_ring_child_count, sub_ring_child_label};
+pub use radial_menu::{
+    COLOR_SEGMENT_COUNT as RADIAL_COLOR_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState,
+    RadialSegmentId, TOOL_LABELS as RADIAL_TOOL_LABELS,
+    TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT,
 };
 pub use selection::SelectionState;
 pub use tour::TourStep;

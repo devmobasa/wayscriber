@@ -17,6 +17,11 @@ impl InputState {
     pub fn on_mouse_motion(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
 
+        if self.is_radial_menu_open() {
+            self.update_radial_menu_hover(x as f64, y as f64);
+            return;
+        }
+
         if self.is_color_picker_popup_open() {
             if self.color_picker_popup_is_dragging()
                 && let Some(layout) = self.color_picker_popup_layout()

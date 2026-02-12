@@ -57,7 +57,7 @@ impl TourStep {
                 "Wayscriber is a screen annotation tool.\nDraw anywhere on your screen to highlight, explain, or present."
             }
             Self::DrawingBasics => {
-                "Click and drag to draw with the pen tool.\nUse R/G/B/Y keys to change colors.\nScroll wheel or +/- to adjust thickness."
+                "Click and drag to draw with the pen tool.\nUse R/G/B/Y keys to change colors.\nScroll wheel or +/- to adjust thickness.\nMiddle-click opens the radial menu for quick tool/color changes."
             }
             Self::ToolbarIntro => {
                 "Press F2 to toggle the toolbar.\nThe toolbar provides quick access to all tools and settings."

@@ -167,3 +167,16 @@ fn keyboard_context_menu_focuses_edit_for_selected_text() {
     let entries = state.context_menu_entries();
     assert_eq!(entries[*focus_index].command, Some(MenuCommand::EditText));
 }
+
+#[test]
+fn context_menu_help_entry_prefers_f1_shortcut_label() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+
+    let entries = state.context_menu_entries();
+    let help_entry = entries
+        .iter()
+        .find(|entry| entry.label == "Help")
+        .expect("help entry should exist in context menu");
+    assert_eq!(help_entry.shortcut.as_deref(), Some("F1"));
+}

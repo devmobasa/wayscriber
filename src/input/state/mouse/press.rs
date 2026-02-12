@@ -111,6 +111,27 @@ impl InputState {
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
+        // Radial menu intercept
+        if self.is_radial_menu_open() {
+            self.update_pointer_position(x, y);
+            match button {
+                MouseButton::Left => {
+                    // Update hover at exact click position before selecting
+                    self.update_radial_menu_hover(x as f64, y as f64);
+                    self.radial_menu_select_hovered();
+                }
+                MouseButton::Right => {
+                    // Keep right-click context-menu flow consistent even when radial is visible.
+                    self.close_radial_menu();
+                    self.handle_right_click(x, y);
+                }
+                MouseButton::Middle => {
+                    self.close_radial_menu();
+                }
+            }
+            return;
+        }
+
         if self.is_color_picker_popup_open() {
             self.update_pointer_position(x, y);
             match button {
@@ -346,7 +367,11 @@ impl InputState {
                     | DrawingState::ResizingSelection { .. } => {}
                 }
             }
-            MouseButton::Middle => {}
+            MouseButton::Middle => {
+                if !self.zoom_active() && matches!(self.state, DrawingState::Idle) {
+                    self.toggle_radial_menu(x as f64, y as f64);
+                }
+            }
         }
     }
 }

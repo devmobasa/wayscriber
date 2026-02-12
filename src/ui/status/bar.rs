@@ -32,11 +32,7 @@ pub fn render_status_bar(
 ) {
     let color = &input_state.current_color;
     let tool = input_state.active_tool();
-    let thickness = if tool == Tool::Eraser {
-        input_state.eraser_size
-    } else {
-        input_state.current_thickness
-    };
+    let thickness = input_state.size_for_active_tool();
 
     let tool_name = tool_display_name(input_state, tool);
     let color_name = crate::util::color_to_name(color);

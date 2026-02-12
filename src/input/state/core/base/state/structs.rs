@@ -7,6 +7,7 @@ use super::super::super::{
     index::SpatialGrid,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
+    radial_menu::{RadialMenuLayout, RadialMenuState},
     selection::SelectionState,
 };
 use super::super::types::{
@@ -229,6 +230,10 @@ pub struct InputState {
     pub color_picker_popup_state: ColorPickerPopupState,
     /// Cached layout details for the color picker popup
     pub color_picker_popup_layout: Option<ColorPickerPopupLayout>,
+    /// Current radial menu state
+    pub radial_menu_state: RadialMenuState,
+    /// Cached layout details for the radial menu
+    pub radial_menu_layout: Option<RadialMenuLayout>,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Hit test tolerance in pixels

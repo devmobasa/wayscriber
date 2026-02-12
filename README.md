@@ -89,6 +89,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - Selection: Alt-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, palettes, size via hotkeys or scroll
+- Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection + scroll size adjust
 
 ### Boards
 - Named boards with transparent overlay or custom backgrounds
@@ -530,6 +531,7 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Quick reference | <kbd>Shift+F1</kbd> |
 | Configurator | <kbd>F11</kbd> |
 | Command palette | <kbd>Ctrl+K</kbd> |
+| Radial menu | <kbd>Middle-click</kbd> (idle) open/close; <kbd>Left-click</kbd> select; <kbd>Right-click</kbd>/<kbd>Escape</kbd> dismiss; scroll adjusts active tool size |
 | Status bar | <kbd>F4</kbd> / <kbd>F12</kbd> |
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
 | Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |
