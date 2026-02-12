@@ -21,6 +21,18 @@ pub enum StatusPosition {
     BottomRight,
 }
 
+/// Mouse button used to toggle the radial menu.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum RadialMenuMouseBinding {
+    /// Toggle radial menu with middle click.
+    Middle,
+    /// Toggle radial menu with right click.
+    Right,
+    /// Disable mouse-button toggling (keyboard action only).
+    Disabled,
+}
+
 /// Color specification - either a named color or RGB values.
 ///
 /// # Examples

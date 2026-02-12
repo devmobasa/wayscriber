@@ -26,6 +26,10 @@ pub(crate) fn default_toggle_fill() -> Vec<String> {
     Vec::new()
 }
 
+pub(crate) fn default_toggle_radial_menu() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_toggle_selection_properties() -> Vec<String> {
     vec!["Ctrl+Alt+P".to_string()]
 }

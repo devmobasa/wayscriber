@@ -17,7 +17,9 @@ use super::super::types::{
     PressureThicknessEntryMode, SelectionAxis, StatusChangeHighlight, TextClickState,
     TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
 };
-use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig, ToolPresetConfig};
+use crate::config::{
+    Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding, ToolPresetConfig,
+};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::BoardManager;
@@ -234,6 +236,8 @@ pub struct InputState {
     pub radial_menu_state: RadialMenuState,
     /// Cached layout details for the radial menu
     pub radial_menu_layout: Option<RadialMenuLayout>,
+    /// Mouse button used to toggle the radial menu.
+    pub radial_menu_mouse_binding: RadialMenuMouseBinding,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Hit test tolerance in pixels

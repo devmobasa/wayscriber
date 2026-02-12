@@ -7,6 +7,21 @@ use super::super::core::MenuCommand;
 use super::super::{ContextMenuKind, DrawingState, InputState};
 
 impl InputState {
+    fn is_radial_menu_toggle_button(&self, button: MouseButton) -> bool {
+        use crate::config::RadialMenuMouseBinding;
+        match self.radial_menu_mouse_binding {
+            RadialMenuMouseBinding::Middle => matches!(button, MouseButton::Middle),
+            RadialMenuMouseBinding::Right => matches!(button, MouseButton::Right),
+            RadialMenuMouseBinding::Disabled => false,
+        }
+    }
+
+    fn should_toggle_radial_menu_from_mouse(&self, button: MouseButton) -> bool {
+        !self.zoom_active()
+            && matches!(self.state, DrawingState::Idle)
+            && self.is_radial_menu_toggle_button(button)
+    }
+
     fn handle_right_click(&mut self, x: i32, y: i32) {
         self.update_pointer_position(x, y);
         self.last_text_click = None;
@@ -121,9 +136,12 @@ impl InputState {
                     self.radial_menu_select_hovered();
                 }
                 MouseButton::Right => {
-                    // Keep right-click context-menu flow consistent even when radial is visible.
                     self.close_radial_menu();
-                    self.handle_right_click(x, y);
+                    if !self.is_radial_menu_toggle_button(MouseButton::Right) {
+                        // Keep right-click context-menu flow when right button is not the
+                        // configured radial-menu trigger.
+                        self.handle_right_click(x, y);
+                    }
                 }
                 MouseButton::Middle => {
                     self.close_radial_menu();
@@ -217,7 +235,11 @@ impl InputState {
         self.close_properties_panel();
         match button {
             MouseButton::Right => {
-                self.handle_right_click(x, y);
+                if self.should_toggle_radial_menu_from_mouse(MouseButton::Right) {
+                    self.toggle_radial_menu(x as f64, y as f64);
+                } else {
+                    self.handle_right_click(x, y);
+                }
             }
             MouseButton::Left => {
                 self.update_pointer_position(x, y);
@@ -368,7 +390,7 @@ impl InputState {
                 }
             }
             MouseButton::Middle => {
-                if !self.zoom_active() && matches!(self.state, DrawingState::Idle) {
+                if self.should_toggle_radial_menu_from_mouse(MouseButton::Middle) {
                     self.toggle_radial_menu(x as f64, y as f64);
                 }
             }

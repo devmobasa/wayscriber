@@ -254,6 +254,10 @@ active_output_badge = true
 # Request fullscreen for the GNOME fallback overlay (disable if opaque)
 #xdg_fullscreen = false
 
+# Mouse button that toggles radial menu
+# Options: "middle", "right", "disabled"
+radial_menu_mouse_binding = "middle"
+
 # Status bar styling
 [ui.status_bar_style]
 font_size = 21.0
@@ -309,6 +313,7 @@ enabled = true
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
 - **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized
+- **Radial menu trigger**: `radial_menu_mouse_binding` selects which mouse button opens radial menu (`middle` default, `right`, or `disabled`)
 
 **Multi-monitor behavior:**
 - Use `focus_prev_output` / `focus_next_output` (default: <kbd>Ctrl+Alt+Shift+←</kbd>/<kbd>Ctrl+Alt+Shift+→</kbd>) to move overlay focus between outputs.
@@ -321,6 +326,7 @@ enabled = true
 - Show status bar: true
 - Show frozen badge: false
 - Position: bottom-left
+- Radial menu mouse trigger: middle
 - Status bar font: 21px
 - Help overlay font: 14px
 - Semi-transparent dark backgrounds with muted borders
@@ -798,6 +804,9 @@ toggle_click_highlight = ["Ctrl+Shift+H"]
 
 # Toggle fill for rectangle/ellipse
 toggle_fill = []
+
+# Optional keyboard binding to toggle radial menu at cursor
+toggle_radial_menu = []
 
 # Toggle selection properties panel
 toggle_selection_properties = ["Ctrl+Alt+P"]

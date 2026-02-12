@@ -7,7 +7,7 @@ use super::super::types::{
     PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode, ToolbarDrawerTab,
 };
 use super::structs::InputState;
-use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX};
+use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, RadialMenuMouseBinding};
 use crate::draw::{DirtyTracker, EraserKind, FontDescriptor};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{BoardManager, modifiers::Modifiers, tool::EraserMode};
@@ -159,6 +159,7 @@ impl InputState {
             color_picker_popup_layout: None,
             radial_menu_state: RadialMenuState::Hidden,
             radial_menu_layout: None,
+            radial_menu_mouse_binding: RadialMenuMouseBinding::Middle,
             hit_test_cache: HashMap::new(),
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,

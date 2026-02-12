@@ -1,3 +1,4 @@
+use super::helpers::create_test_input_state_with_keybindings;
 use super::*;
 use std::f64::consts::PI;
 
@@ -83,6 +84,57 @@ fn opening_radial_menu_closes_help_overlay() {
 
     assert!(!state.show_help);
     assert!(state.is_radial_menu_open());
+}
+
+#[test]
+fn right_click_toggles_radial_when_configured() {
+    let mut state = create_test_input_state();
+    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+
+    state.on_mouse_press(MouseButton::Right, 200, 150);
+    assert!(state.is_radial_menu_open());
+    assert!(!state.is_context_menu_open());
+
+    state.on_mouse_press(MouseButton::Right, 200, 150);
+    assert!(!state.is_radial_menu_open());
+    assert!(!state.is_context_menu_open());
+}
+
+#[test]
+fn toggle_radial_menu_action_opens_and_closes_menu() {
+    let mut state = create_test_input_state();
+    state.update_pointer_position(320, 240);
+
+    state.handle_action(Action::ToggleRadialMenu);
+    assert!(state.is_radial_menu_open());
+
+    state.handle_action(Action::ToggleRadialMenu);
+    assert!(!state.is_radial_menu_open());
+
+    state.state = DrawingState::Selecting {
+        start_x: 10,
+        start_y: 20,
+        additive: false,
+    };
+    state.handle_action(Action::ToggleRadialMenu);
+    assert!(!state.is_radial_menu_open());
+}
+
+#[test]
+fn toggle_radial_menu_with_modifier_keybinding_closes_when_open() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_radial_menu = vec!["Ctrl+R".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+    state.update_pointer_position(320, 240);
+
+    state.on_key_press(Key::Ctrl);
+    state.on_key_press(Key::Char('r'));
+    assert!(state.is_radial_menu_open());
+
+    state.on_key_release(Key::Ctrl);
+    state.on_key_press(Key::Ctrl);
+    state.on_key_press(Key::Char('r'));
+    assert!(!state.is_radial_menu_open());
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use crate::config::enums::StatusPosition;
+use crate::config::enums::{RadialMenuMouseBinding, StatusPosition};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +76,10 @@ pub struct UiConfig {
     #[serde(default = "default_xdg_fullscreen")]
     pub xdg_fullscreen: bool,
 
+    /// Mouse button used to toggle the radial menu.
+    #[serde(default = "default_radial_menu_mouse_binding")]
+    pub radial_menu_mouse_binding: RadialMenuMouseBinding,
+
     /// Click highlight visual indicator settings
     #[serde(default)]
     pub click_highlight: ClickHighlightConfig,
@@ -106,6 +110,7 @@ impl Default for UiConfig {
             active_output_badge: default_active_output_badge(),
             command_palette_toast_duration_ms: default_command_palette_toast_duration_ms(),
             xdg_fullscreen: default_xdg_fullscreen(),
+            radial_menu_mouse_binding: default_radial_menu_mouse_binding(),
             click_highlight: ClickHighlightConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
             toolbar: ToolbarConfig::default(),
@@ -155,4 +160,8 @@ fn default_active_output_badge() -> bool {
 
 fn default_status_position() -> StatusPosition {
     StatusPosition::BottomLeft
+}
+
+fn default_radial_menu_mouse_binding() -> RadialMenuMouseBinding {
+    RadialMenuMouseBinding::Middle
 }
