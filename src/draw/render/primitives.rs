@@ -1,4 +1,5 @@
 use crate::draw::Color;
+use crate::util;
 
 /// Render a straight line
 pub(super) fn render_line(
@@ -106,57 +107,29 @@ pub(super) fn render_arrow(
     arrow_angle: f64,
     head_at_end: bool,
 ) {
-    let dx = (x2 - x1) as f64;
-    let dy = (y2 - y1) as f64;
-    let line_length = (dx * dx + dy * dy).sqrt();
-
-    if line_length < 1.0 {
-        return;
-    }
-
-    // Unit vector along the arrow direction (from tail to tip)
-    let ux = dx / line_length;
-    let uy = dy / line_length;
-
-    // Perpendicular unit vector
-    let px = -uy;
-    let py = ux;
-
     // Determine which end gets the arrowhead
     let (tip_x, tip_y, tail_x, tail_y) = if head_at_end {
-        (x2 as f64, y2 as f64, x1 as f64, y1 as f64)
+        (x2, y2, x1, y1)
     } else {
-        (x1 as f64, y1 as f64, x2 as f64, y2 as f64)
+        (x1, y1, x2, y2)
     };
 
-    // Direction from tip toward tail
-    let arrow_dx = tail_x - tip_x;
-    let arrow_dy = tail_y - tip_y;
-    let arrow_dist = (arrow_dx * arrow_dx + arrow_dy * arrow_dy).sqrt();
-    let (arrow_ux, arrow_uy) = if arrow_dist > 0.0 {
-        (arrow_dx / arrow_dist, arrow_dy / arrow_dist)
-    } else {
-        (0.0, 0.0)
+    let Some(geometry) = util::calculate_arrowhead_triangle_custom(
+        tip_x,
+        tip_y,
+        tail_x,
+        tail_y,
+        thick,
+        arrow_length,
+        arrow_angle,
+    ) else {
+        return;
     };
-
-    // Scale arrowhead: ensure it's at least 2x the line thickness for visibility
-    let scaled_length = arrow_length.max(thick * 2.5);
-    // Cap at 40% of line length to avoid oversized heads on short arrows
-    let effective_length = scaled_length.min(line_length * 0.4);
-
-    // Calculate arrowhead base width: must cover the line thickness, plus extra for the angle
-    let angle_rad = arrow_angle.to_radians();
-    let half_base_from_angle = effective_length * angle_rad.tan();
-    let half_base = half_base_from_angle.max(thick * 0.6);
-
-    // Arrowhead points
-    let base_x = tip_x + arrow_ux * effective_length;
-    let base_y = tip_y + arrow_uy * effective_length;
-
-    let left_x = base_x + px * half_base;
-    let left_y = base_y + py * half_base;
-    let right_x = base_x - px * half_base;
-    let right_y = base_y - py * half_base;
+    let (tip_x, tip_y) = geometry.tip;
+    let (base_x, base_y) = geometry.base;
+    let (left_x, left_y) = geometry.left;
+    let (right_x, right_y) = geometry.right;
+    let (tail_x, tail_y) = (tail_x as f64, tail_y as f64);
 
     // Draw the shaft line, stopping at the arrowhead base to avoid overlap
     ctx.save().ok();
@@ -165,11 +138,11 @@ pub(super) fn render_arrow(
     ctx.set_line_cap(cairo::LineCap::Butt);
 
     if head_at_end {
-        ctx.move_to(x1 as f64, y1 as f64);
+        ctx.move_to(tail_x, tail_y);
         ctx.line_to(base_x, base_y);
     } else {
         ctx.move_to(base_x, base_y);
-        ctx.line_to(x2 as f64, y2 as f64);
+        ctx.line_to(tail_x, tail_y);
     }
     let _ = ctx.stroke();
 

@@ -9,6 +9,17 @@ use super::super::{DrawingState, InputState};
 use bindings::{fallback_unshifted_label, key_to_action_label};
 
 impl InputState {
+    fn handle_modifier_key_press(&mut self, key: Key) -> bool {
+        match key {
+            Key::Shift => self.modifiers.shift = true,
+            Key::Ctrl => self.modifiers.ctrl = true,
+            Key::Alt => self.modifiers.alt = true,
+            Key::Tab => self.modifiers.tab = true,
+            _ => return false,
+        }
+        true
+    }
+
     /// Processes a key press event.
     ///
     /// Handles all keyboard input including:
@@ -34,6 +45,32 @@ impl InputState {
             return;
         }
 
+        if self.is_radial_menu_open() {
+            if self.handle_modifier_key_press(key) {
+                return;
+            }
+
+            if matches!(key, Key::Escape) {
+                self.close_radial_menu();
+                return;
+            }
+
+            if let Some(key_str) = key_to_action_label(key) {
+                let mapped_action = self.find_action(&key_str).or_else(|| {
+                    if self.modifiers.shift {
+                        fallback_unshifted_label(&key_str)
+                            .and_then(|fallback| self.find_action(fallback))
+                    } else {
+                        None
+                    }
+                });
+                if matches!(mapped_action, Some(Action::ToggleRadialMenu)) {
+                    self.close_radial_menu();
+                }
+            }
+            return;
+        }
+
         if self.is_color_picker_popup_open() && self.handle_color_picker_popup_key(key) {
             return;
         }
@@ -47,24 +84,8 @@ impl InputState {
         }
 
         // Handle modifier keys first
-        match key {
-            Key::Shift => {
-                self.modifiers.shift = true;
-                return;
-            }
-            Key::Ctrl => {
-                self.modifiers.ctrl = true;
-                return;
-            }
-            Key::Alt => {
-                self.modifiers.alt = true;
-                return;
-            }
-            Key::Tab => {
-                self.modifiers.tab = true;
-                return;
-            }
-            _ => {}
+        if self.handle_modifier_key_press(key) {
+            return;
         }
 
         if self.is_properties_panel_open() {

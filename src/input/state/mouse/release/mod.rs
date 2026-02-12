@@ -22,6 +22,12 @@ impl InputState {
     /// - Returns to Idle state
     pub fn on_mouse_release(&mut self, button: MouseButton, x: i32, y: i32) {
         self.update_pointer_position(x, y);
+
+        // Radial menu uses press for selection, ignore release
+        if self.is_radial_menu_open() {
+            return;
+        }
+
         if button == MouseButton::Left {
             if panels::handle_color_picker_popup_release(self, x, y) {
                 return;

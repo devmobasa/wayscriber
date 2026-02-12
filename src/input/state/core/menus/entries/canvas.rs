@@ -113,6 +113,13 @@ impl InputState {
             Some(MenuCommand::OpenCommandPalette),
         ));
         entries.push(ContextMenuEntry::new(
+            "Radial Menu",
+            self.shortcut_for_action(Action::ToggleRadialMenu),
+            false,
+            false,
+            Some(MenuCommand::OpenRadialMenu),
+        ));
+        entries.push(ContextMenuEntry::new(
             "Help",
             self.shortcut_for_action(Action::ToggleHelp),
             false,

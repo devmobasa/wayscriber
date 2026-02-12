@@ -59,6 +59,15 @@ impl InputState {
                 );
                 true
             }
+            Action::ToggleRadialMenu => {
+                if self.is_radial_menu_open() {
+                    self.close_radial_menu();
+                } else if !self.zoom_active() && matches!(self.state, DrawingState::Idle) {
+                    let (x, y) = self.pointer_position();
+                    self.open_radial_menu(x as f64, y as f64);
+                }
+                true
+            }
             Action::OpenContextMenu => {
                 if !self.zoom_active() {
                     self.toggle_context_menu_via_keyboard();

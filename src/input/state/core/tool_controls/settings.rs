@@ -69,6 +69,14 @@ impl InputState {
         }
     }
 
+    /// Returns the current size value for the active tool.
+    pub fn size_for_active_tool(&self) -> f64 {
+        match self.active_tool() {
+            Tool::Eraser => self.eraser_size,
+            _ => self.current_thickness,
+        }
+    }
+
     /// Updates the current drawing color to an arbitrary value. Returns true if changed.
     pub fn set_color(&mut self, color: Color) -> bool {
         if self.current_color == color {

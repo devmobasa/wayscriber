@@ -62,6 +62,7 @@ pub enum MenuCommand {
     SwitchToWhiteboard,
     SwitchToBlackboard,
     ReturnToTransparent,
+    OpenRadialMenu,
     ToggleHelp,
     OpenCommandPalette,
     OpenConfigFile,

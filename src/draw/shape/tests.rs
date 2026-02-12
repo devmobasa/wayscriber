@@ -60,8 +60,9 @@ fn arrow_bounding_box_includes_head() {
     assert!(x_min <= 50 && x_max >= 100);
     assert!(y_min <= 100 && y_max >= 120);
 
-    let arrow_points = util::calculate_arrowhead_custom(100, 100, 50, 120, 20.0, 30.0);
-    for &(px, py) in &arrow_points {
+    let geometry = util::calculate_arrowhead_triangle_custom(100, 100, 50, 120, 3.0, 20.0, 30.0)
+        .expect("arrow geometry should exist");
+    for (px, py) in [geometry.left, geometry.right] {
         assert!(px >= x_min as f64 && px <= x_max as f64);
         assert!(py >= y_min as f64 && py <= y_max as f64);
     }

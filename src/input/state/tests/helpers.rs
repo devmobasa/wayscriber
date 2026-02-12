@@ -1,9 +1,12 @@
 use super::*;
 
 pub(super) fn create_test_input_state() -> InputState {
-    use crate::config::KeybindingsConfig;
+    create_test_input_state_with_keybindings(crate::config::KeybindingsConfig::default())
+}
 
-    let keybindings = KeybindingsConfig::default();
+pub(super) fn create_test_input_state_with_keybindings(
+    keybindings: crate::config::KeybindingsConfig,
+) -> InputState {
     let action_map = keybindings.build_action_map().unwrap();
     let action_bindings = keybindings.build_action_bindings().unwrap();
 

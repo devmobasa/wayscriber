@@ -219,11 +219,7 @@ impl InputState {
 
     fn capture_current_preset(&self) -> ToolPresetConfig {
         let active_tool = self.active_tool();
-        let size = if active_tool == Tool::Eraser {
-            self.eraser_size
-        } else {
-            self.current_thickness
-        };
+        let size = self.size_for_active_tool();
         ToolPresetConfig {
             name: None,
             tool: active_tool,

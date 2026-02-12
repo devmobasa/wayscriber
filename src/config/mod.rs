@@ -29,7 +29,7 @@ pub use action_meta::{
     action_meta, action_meta_iter, action_short_label,
 };
 pub use core::Config;
-pub use enums::StatusPosition;
+pub use enums::{RadialMenuMouseBinding, StatusPosition};
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};

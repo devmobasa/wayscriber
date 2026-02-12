@@ -167,3 +167,102 @@ fn keyboard_context_menu_focuses_edit_for_selected_text() {
     let entries = state.context_menu_entries();
     assert_eq!(entries[*focus_index].command, Some(MenuCommand::EditText));
 }
+
+#[test]
+fn context_menu_help_entry_prefers_f1_shortcut_label() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+
+    let entries = state.context_menu_entries();
+    let help_entry = entries
+        .iter()
+        .find(|entry| entry.label == "Help")
+        .expect("help entry should exist in context menu");
+    assert_eq!(help_entry.shortcut.as_deref(), Some("F1"));
+}
+
+#[test]
+fn context_menu_includes_radial_menu_entry() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+
+    let entries = state.context_menu_entries();
+    let radial_entry = entries
+        .iter()
+        .find(|entry| entry.label == "Radial Menu")
+        .expect("radial menu entry should exist in context menu");
+    assert_eq!(radial_entry.command, Some(MenuCommand::OpenRadialMenu));
+}
+
+#[test]
+fn context_menu_radial_entry_shows_default_mouse_shortcut() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+
+    let entries = state.context_menu_entries();
+    let radial_entry = entries
+        .iter()
+        .find(|entry| entry.label == "Radial Menu")
+        .expect("radial menu entry should exist in context menu");
+    assert_eq!(radial_entry.shortcut.as_deref(), Some("Middle Click"));
+}
+
+#[test]
+fn context_menu_radial_entry_shows_mouse_and_keyboard_shortcut() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_radial_menu = vec!["Ctrl+R".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+    state.toggle_context_menu_via_keyboard();
+
+    let entries = state.context_menu_entries();
+    let radial_entry = entries
+        .iter()
+        .find(|entry| entry.label == "Radial Menu")
+        .expect("radial menu entry should exist in context menu");
+    assert_eq!(
+        radial_entry.shortcut.as_deref(),
+        Some("Middle Click / Ctrl+R")
+    );
+}
+
+#[test]
+fn context_menu_radial_entry_shows_right_click_shortcut_when_configured() {
+    let mut state = create_test_input_state();
+    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.toggle_context_menu_via_keyboard();
+
+    let entries = state.context_menu_entries();
+    let radial_entry = entries
+        .iter()
+        .find(|entry| entry.label == "Radial Menu")
+        .expect("radial menu entry should exist in context menu");
+    assert_eq!(radial_entry.shortcut.as_deref(), Some("Right Click"));
+}
+
+#[test]
+fn context_menu_radial_entry_shows_keyboard_shortcut_when_mouse_binding_disabled() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_radial_menu = vec!["Ctrl+R".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Disabled;
+    state.toggle_context_menu_via_keyboard();
+
+    let entries = state.context_menu_entries();
+    let radial_entry = entries
+        .iter()
+        .find(|entry| entry.label == "Radial Menu")
+        .expect("radial menu entry should exist in context menu");
+    assert_eq!(radial_entry.shortcut.as_deref(), Some("Ctrl+R"));
+}
+
+#[test]
+fn context_menu_open_radial_command_opens_radial_and_closes_context_menu() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+    assert!(state.is_context_menu_open());
+
+    state.execute_menu_command(MenuCommand::OpenRadialMenu);
+
+    assert!(state.is_radial_menu_open());
+    assert!(!state.is_context_menu_open());
+}

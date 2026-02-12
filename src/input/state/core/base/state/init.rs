@@ -1,13 +1,13 @@
 use super::super::super::{
     board_picker::BoardPickerState, color_picker_popup::ColorPickerPopupState,
-    menus::ContextMenuState, selection::SelectionState,
+    menus::ContextMenuState, radial_menu::RadialMenuState, selection::SelectionState,
 };
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode, ToolbarDrawerTab,
 };
 use super::structs::InputState;
-use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX};
+use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, RadialMenuMouseBinding};
 use crate::draw::{DirtyTracker, EraserKind, FontDescriptor};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{BoardManager, modifiers::Modifiers, tool::EraserMode};
@@ -157,6 +157,9 @@ impl InputState {
             board_picker_page_edit: None,
             color_picker_popup_state: ColorPickerPopupState::Hidden,
             color_picker_popup_layout: None,
+            radial_menu_state: RadialMenuState::Hidden,
+            radial_menu_layout: None,
+            radial_menu_mouse_binding: RadialMenuMouseBinding::Middle,
             hit_test_cache: HashMap::new(),
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,

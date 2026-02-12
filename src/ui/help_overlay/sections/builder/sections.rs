@@ -319,6 +319,18 @@ pub(super) fn build_main_sections(
             action_label(Action::OpenContextMenu),
         ),
         row(
+            match (
+                bindings.radial_menu_mouse_label(),
+                joined_labels(bindings, &[Action::ToggleRadialMenu]),
+            ) {
+                (Some(mouse), Some(label)) => format!("{mouse} / {label}"),
+                (Some(mouse), None) => mouse.to_string(),
+                (None, Some(label)) => label,
+                (None, None) => NOT_BOUND_LABEL.to_string(),
+            },
+            action_label(Action::ToggleRadialMenu),
+        ),
+        row(
             binding_or_fallback(bindings, Action::Exit, NOT_BOUND_LABEL),
             action_label(Action::Exit),
         ),

@@ -62,6 +62,17 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ToggleRadialMenu,
+        "Radial Menu",
+        None,
+        "Toggle radial menu at cursor",
+        UI,
+        true,
+        false,
+        false,
+        &["pie menu"]
+    ),
+    meta!(
         ToggleSelectionProperties,
         "Selection Properties",
         None,

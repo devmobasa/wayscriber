@@ -20,6 +20,7 @@ fn gesture_hints_remain_present() {
         ("Ctrl+Shift+Alt+Left/Right", "Previous/next output"),
         ("Selection properties panel", "Text background"),
         ("Middle drag / arrow keys", "Pan view"),
+        ("Middle Click", action_label(Action::ToggleRadialMenu)),
     ];
 
     for (key, action) in expected {

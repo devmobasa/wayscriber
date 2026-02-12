@@ -1,13 +1,23 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::config::{Action, action_meta_iter};
+use crate::config::{Action, RadialMenuMouseBinding, action_meta_iter};
 use crate::input::InputState;
 use crate::label_format::{format_binding_labels_or, join_binding_labels};
 
-#[derive(Default)]
 pub struct HelpOverlayBindings {
     labels: HashMap<Action, Vec<String>>,
     cache_key: String,
+    radial_menu_mouse_label: Option<String>,
+}
+
+impl Default for HelpOverlayBindings {
+    fn default() -> Self {
+        Self {
+            labels: HashMap::new(),
+            cache_key: String::new(),
+            radial_menu_mouse_label: Some("Middle Click".to_string()),
+        }
+    }
 }
 
 impl HelpOverlayBindings {
@@ -26,10 +36,20 @@ impl HelpOverlayBindings {
                 cache_parts.push(format!("{:?}={}", meta.action, values.join("/")));
             }
         }
+        let radial_menu_mouse_label = match state.radial_menu_mouse_binding {
+            RadialMenuMouseBinding::Middle => Some("Middle Click".to_string()),
+            RadialMenuMouseBinding::Right => Some("Right Click".to_string()),
+            RadialMenuMouseBinding::Disabled => None,
+        };
+        cache_parts.push(format!(
+            "radial_mouse={}",
+            radial_menu_mouse_label.as_deref().unwrap_or("")
+        ));
 
         Self {
             labels,
             cache_key: cache_parts.join("|"),
+            radial_menu_mouse_label,
         }
     }
 
@@ -39,6 +59,10 @@ impl HelpOverlayBindings {
 
     pub(crate) fn cache_key(&self) -> &str {
         self.cache_key.as_str()
+    }
+
+    pub(crate) fn radial_menu_mouse_label(&self) -> Option<&str> {
+        self.radial_menu_mouse_label.as_deref()
     }
 }
 

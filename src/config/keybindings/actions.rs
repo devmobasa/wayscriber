@@ -109,6 +109,7 @@ pub enum Action {
     TogglePresenterMode,
     ToggleHighlightTool,
     ToggleFill,
+    ToggleRadialMenu,
     ToggleSelectionProperties,
     OpenContextMenu,
 

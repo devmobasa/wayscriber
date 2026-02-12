@@ -132,6 +132,9 @@ toggle_presenter_mode = ["Ctrl+Shift+M"]
 # Toggle fill for rectangle/ellipse
 toggle_fill = []
 
+# Optional keyboard binding to toggle radial menu at cursor
+toggle_radial_menu = []
+
 # Toggle selection properties panel
 toggle_selection_properties = ["Ctrl+Alt+P"]
 
@@ -258,6 +261,10 @@ active_output_badge = true
 
 # Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
 #xdg_fullscreen = false
+
+# Mouse button that toggles radial menu
+# Options: "middle", "right", "disabled"
+radial_menu_mouse_binding = "middle"
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Floating Toolbars (Press F2/F9 to toggle)
