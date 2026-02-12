@@ -75,6 +75,13 @@ impl InputState {
             false,
             Some(MenuCommand::Properties),
         ));
+        entries.push(ContextMenuEntry::new(
+            "Radial Menu",
+            self.shortcut_for_action(Action::ToggleRadialMenu),
+            false,
+            false,
+            Some(MenuCommand::OpenRadialMenu),
+        ));
 
         if ids.len() == 1 {
             let shape_id = ids[0];

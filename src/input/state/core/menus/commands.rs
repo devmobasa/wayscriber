@@ -259,6 +259,10 @@ impl InputState {
                 self.switch_board(BOARD_ID_TRANSPARENT);
                 self.close_context_menu();
             }
+            MenuCommand::OpenRadialMenu => {
+                self.close_context_menu();
+                self.handle_action(crate::config::Action::ToggleRadialMenu);
+            }
             MenuCommand::ToggleHelp => {
                 self.toggle_help_overlay();
                 self.close_context_menu();
