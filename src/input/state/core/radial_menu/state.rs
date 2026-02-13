@@ -1,4 +1,4 @@
-use super::{RadialMenuState, RadialSegmentId, SHAPES_CHILDREN, TEXT_CHILDREN};
+use super::{ACTIONS_CHILDREN, RadialMenuState, RadialSegmentId, SHAPES_CHILDREN, TEXT_CHILDREN};
 use crate::config::Action;
 use crate::draw::color;
 use crate::input::DrawingState;
@@ -81,6 +81,9 @@ impl InputState {
                 }
                 Some(RadialSegmentId::Tool(5)) => {
                     *expanded_sub_ring = Some(5);
+                }
+                Some(RadialSegmentId::Tool(8)) => {
+                    *expanded_sub_ring = Some(8);
                 }
                 // Keep sub-ring expanded while hovering its children
                 Some(RadialSegmentId::SubTool(_, _)) => {}
@@ -190,7 +193,7 @@ impl InputState {
                 self.set_tool_override(Some(Tool::Select));
             }
             8 => {
-                self.handle_action(Action::ClearCanvas);
+                // Actions parent — sub-ring expanded by radial_menu_select_hovered
             }
             _ => {}
         }
@@ -218,6 +221,15 @@ impl InputState {
                     2 => {
                         self.set_tool_override(Some(Tool::StepMarker));
                     }
+                    _ => {}
+                }
+            }
+            8 => {
+                // Actions sub-ring
+                match child {
+                    0 => self.handle_action(Action::Undo),
+                    1 => self.handle_action(Action::Redo),
+                    2 => self.handle_action(Action::ClearCanvas),
                     _ => {}
                 }
             }
@@ -283,6 +295,7 @@ pub fn sub_ring_child_count(parent_idx: u8) -> usize {
     match parent_idx {
         4 => SHAPES_CHILDREN.len(),
         5 => TEXT_CHILDREN.len(),
+        8 => ACTIONS_CHILDREN.len(),
         _ => 0,
     }
 }
@@ -295,6 +308,10 @@ pub fn sub_ring_child_label(parent_idx: u8, child_idx: u8) -> &'static str {
             .copied()
             .unwrap_or(""),
         5 => TEXT_CHILDREN.get(child_idx as usize).copied().unwrap_or(""),
+        8 => ACTIONS_CHILDREN
+            .get(child_idx as usize)
+            .copied()
+            .unwrap_or(""),
         _ => "",
     }
 }
