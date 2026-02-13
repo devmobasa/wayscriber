@@ -17,6 +17,27 @@ fn point_in_tool_segment(layout: &RadialMenuLayout, segment_idx: u8) -> (f64, f6
     )
 }
 
+fn point_in_sub_tool_segment(
+    layout: &RadialMenuLayout,
+    parent_idx: u8,
+    child_idx: u8,
+    child_count: usize,
+) -> (f64, f64) {
+    let seg_angle = 2.0 * PI / RADIAL_TOOL_SEGMENT_COUNT as f64;
+    let half_seg = seg_angle / 2.0;
+    let child_angle = seg_angle / child_count as f64;
+    // Compute the desired tool_angle in hit-test space (0 at top, with half-seg offset).
+    let tool_angle =
+        parent_idx as f64 * seg_angle + child_idx as f64 * child_angle + child_angle / 2.0;
+    // Convert back to raw atan2 angle (undo the +PI/2 and +half_seg transforms).
+    let raw_angle = tool_angle - PI / 2.0 - half_seg;
+    let radius = (layout.sub_inner + layout.sub_outer) / 2.0;
+    (
+        layout.center_x + radius * raw_angle.cos(),
+        layout.center_y + radius * raw_angle.sin(),
+    )
+}
+
 #[test]
 fn radial_layout_small_surface_centers_menu_without_panic() {
     let mut state = create_test_input_state();
@@ -169,8 +190,12 @@ fn selecting_clear_tool_segment_clears_canvas() {
         .radial_menu_layout
         .expect("layout should exist for open radial menu");
 
-    // Segment 8 is the Clear Canvas action.
-    let (clear_x, clear_y) = point_in_tool_segment(&layout, 8);
+    // Segment 8 is now the Actions parent — hover to expand sub-ring.
+    let (actions_x, actions_y) = point_in_tool_segment(&layout, 8);
+    state.update_radial_menu_hover(actions_x, actions_y);
+
+    // Hover the Clear sub-item (child 2 within Actions sub-ring).
+    let (clear_x, clear_y) = point_in_sub_tool_segment(&layout, 8, 2, 3);
     state.update_radial_menu_hover(clear_x, clear_y);
     state.radial_menu_select_hovered();
 

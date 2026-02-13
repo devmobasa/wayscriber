@@ -66,8 +66,10 @@ pub const COLOR_SEGMENT_COUNT: usize = 8;
 pub const SHAPES_CHILDREN: &[&str] = &["Rect", "Ellipse"];
 /// Sub-ring children for the Text segment (index 5).
 pub const TEXT_CHILDREN: &[&str] = &["Text", "Sticky", "Step"];
+/// Sub-ring children for the Actions segment (index 8).
+pub const ACTIONS_CHILDREN: &[&str] = &["Undo", "Redo", "Clear"];
 
 /// Tool labels for the primary ring (clockwise from top).
 pub const TOOL_LABELS: [&str; TOOL_SEGMENT_COUNT] = [
-    "Pen", "Marker", "Line", "Arrow", "Shapes", "Text", "Eraser", "Select", "Clear",
+    "Pen", "Marker", "Line", "Arrow", "Shapes", "Text", "Eraser", "Select", "Actions",
 ];

@@ -1,20 +1,118 @@
 use cairo::Context as CairoContext;
 
-use crate::config::Action;
-
 use super::super::super::base::InputState;
 use super::super::{
     BOARD_PICKER_RECENT_LINE_HEIGHT, BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT, BODY_FONT_SIZE,
-    BoardPickerEditMode, BoardPickerLayout, COMPACT_BODY_FONT_SIZE, COMPACT_FOOTER_FONT_SIZE,
-    COMPACT_FOOTER_HEIGHT, COMPACT_HEADER_HEIGHT, COMPACT_PADDING_X, COMPACT_PADDING_Y,
-    COMPACT_ROW_HEIGHT, COMPACT_SWATCH_PADDING, COMPACT_SWATCH_SIZE, COMPACT_TITLE_FONT_SIZE,
-    FOOTER_FONT_SIZE, FOOTER_HEIGHT, HANDLE_GAP, HANDLE_WIDTH, HEADER_HEIGHT, OPEN_ICON_GAP,
-    OPEN_ICON_SIZE, PADDING_X, PADDING_Y, PAGE_PANEL_GAP, PAGE_PANEL_MAX_COLS, PAGE_PANEL_MAX_ROWS,
-    PAGE_PANEL_PADDING_X, PAGE_THUMB_GAP, PAGE_THUMB_HEIGHT, PAGE_THUMB_MAX_WIDTH,
-    PAGE_THUMB_MIN_WIDTH, PALETTE_BOTTOM_GAP, PALETTE_SWATCH_GAP, PALETTE_SWATCH_SIZE,
-    PALETTE_TOP_GAP, ROW_HEIGHT, SWATCH_PADDING, SWATCH_SIZE, TITLE_FONT_SIZE,
-    board_palette_colors,
+    BoardPickerLayout, COMPACT_BODY_FONT_SIZE, COMPACT_FOOTER_FONT_SIZE, COMPACT_FOOTER_HEIGHT,
+    COMPACT_HEADER_HEIGHT, COMPACT_PADDING_X, COMPACT_PADDING_Y, COMPACT_ROW_HEIGHT,
+    COMPACT_SWATCH_PADDING, COMPACT_SWATCH_SIZE, COMPACT_TITLE_FONT_SIZE, FOOTER_FONT_SIZE,
+    FOOTER_HEIGHT, HANDLE_GAP, HANDLE_WIDTH, HEADER_HEIGHT, OPEN_ICON_GAP, OPEN_ICON_SIZE,
+    PADDING_X, PADDING_Y, PAGE_PANEL_MAX_ROWS, PAGE_THUMB_GAP, PAGE_THUMB_HEIGHT, PALETTE_TOP_GAP,
+    ROW_HEIGHT, SWATCH_PADDING, SWATCH_SIZE, TITLE_FONT_SIZE,
 };
+mod content_metrics;
+mod layout_geometry;
+mod page_panel;
+mod palette_metrics;
+
+#[derive(Clone, Copy)]
+struct BoardPickerLayoutConfig {
+    title_font_size: f64,
+    body_font_size: f64,
+    footer_font_size: f64,
+    row_height: f64,
+    header_height: f64,
+    base_footer_height: f64,
+    padding_x: f64,
+    padding_y: f64,
+    swatch_size: f64,
+    swatch_padding: f64,
+    recent_line_height: f64,
+    handle_width: f64,
+    handle_gap: f64,
+    open_icon_size: f64,
+    open_icon_gap: f64,
+}
+
+impl BoardPickerLayoutConfig {
+    fn for_mode(is_quick: bool) -> Self {
+        if is_quick {
+            Self {
+                title_font_size: COMPACT_TITLE_FONT_SIZE,
+                body_font_size: COMPACT_BODY_FONT_SIZE,
+                footer_font_size: COMPACT_FOOTER_FONT_SIZE,
+                row_height: COMPACT_ROW_HEIGHT,
+                header_height: COMPACT_HEADER_HEIGHT,
+                base_footer_height: COMPACT_FOOTER_HEIGHT,
+                padding_x: COMPACT_PADDING_X,
+                padding_y: COMPACT_PADDING_Y,
+                swatch_size: COMPACT_SWATCH_SIZE,
+                swatch_padding: COMPACT_SWATCH_PADDING,
+                recent_line_height: BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT,
+                handle_width: 0.0,
+                handle_gap: 0.0,
+                open_icon_size: 0.0,
+                open_icon_gap: 0.0,
+            }
+        } else {
+            Self {
+                title_font_size: TITLE_FONT_SIZE,
+                body_font_size: BODY_FONT_SIZE,
+                footer_font_size: FOOTER_FONT_SIZE,
+                row_height: ROW_HEIGHT,
+                header_height: HEADER_HEIGHT,
+                base_footer_height: FOOTER_HEIGHT,
+                padding_x: PADDING_X,
+                padding_y: PADDING_Y,
+                swatch_size: SWATCH_SIZE,
+                swatch_padding: SWATCH_PADDING,
+                recent_line_height: BOARD_PICKER_RECENT_LINE_HEIGHT,
+                handle_width: HANDLE_WIDTH,
+                handle_gap: HANDLE_GAP,
+                open_icon_size: OPEN_ICON_SIZE,
+                open_icon_gap: OPEN_ICON_GAP,
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct BoardPickerContentMetrics {
+    list_width: f64,
+    max_hint_width: f64,
+    footer_height: f64,
+    recent_height: f64,
+}
+
+#[derive(Clone, Copy)]
+struct BoardPickerPaletteMetrics {
+    rows: usize,
+    cols: usize,
+    extra_height: f64,
+}
+
+#[derive(Clone, Copy)]
+struct BoardPickerPagePanelMetrics {
+    enabled: bool,
+    width: f64,
+    height: f64,
+    thumb_width: f64,
+    cols: usize,
+    rows: usize,
+    count: usize,
+    visible_count: usize,
+    board_index: Option<usize>,
+}
+
+#[derive(Clone, Copy)]
+struct BoardPickerLayoutGeometry {
+    origin_x: f64,
+    origin_y: f64,
+    width: f64,
+    list_width: f64,
+    page_panel_x: f64,
+    page_panel_y: f64,
+}
 
 impl InputState {
     pub(crate) fn board_picker_layout(&self) -> Option<&BoardPickerLayout> {
@@ -45,352 +143,118 @@ impl InputState {
         let board_count = self.boards.board_count();
         let max_count = self.boards.max_count();
 
-        let (
-            title_font_size,
-            body_font_size,
-            footer_font_size,
-            row_height,
-            header_height,
-            base_footer_height,
-            padding_x,
-            padding_y,
-            swatch_size,
-            swatch_padding,
-            recent_line_height,
-            handle_width,
-            handle_gap,
-            open_icon_size,
-            open_icon_gap,
-        ) = if self.board_picker_is_quick() {
-            (
-                COMPACT_TITLE_FONT_SIZE,
-                COMPACT_BODY_FONT_SIZE,
-                COMPACT_FOOTER_FONT_SIZE,
-                COMPACT_ROW_HEIGHT,
-                COMPACT_HEADER_HEIGHT,
-                COMPACT_FOOTER_HEIGHT,
-                COMPACT_PADDING_X,
-                COMPACT_PADDING_Y,
-                COMPACT_SWATCH_SIZE,
-                COMPACT_SWATCH_PADDING,
-                BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-            )
-        } else {
-            (
-                TITLE_FONT_SIZE,
-                BODY_FONT_SIZE,
-                FOOTER_FONT_SIZE,
-                ROW_HEIGHT,
-                HEADER_HEIGHT,
-                FOOTER_HEIGHT,
-                PADDING_X,
-                PADDING_Y,
-                SWATCH_SIZE,
-                SWATCH_PADDING,
-                BOARD_PICKER_RECENT_LINE_HEIGHT,
-                HANDLE_WIDTH,
-                HANDLE_GAP,
-                OPEN_ICON_SIZE,
-                OPEN_ICON_GAP,
-            )
-        };
-
-        let title = self.board_picker_title(board_count, max_count);
-        let footer = self.board_picker_footer_text();
-        let recent_label = self.board_picker_recent_label();
-
-        let _ = ctx.save();
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-        ctx.set_font_size(title_font_size);
-        let title_width = text_width(ctx, &title, title_font_size);
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        ctx.set_font_size(footer_font_size);
-        let footer_width = text_width(ctx, &footer, footer_font_size);
-        let recent_width = recent_label
-            .as_deref()
-            .map(|label| text_width(ctx, label, footer_font_size))
-            .unwrap_or(0.0);
-
-        let mut max_name_width: f64 = 0.0;
-        let mut max_hint_width: f64 = 0.0;
-
+        let config = BoardPickerLayoutConfig::for_mode(self.board_picker_is_quick());
         let edit_state = self.board_picker_edit_state();
-        let show_hints = !self.board_picker_is_quick();
-
-        for index in 0..row_count {
-            let (label, hint) = if index < board_count {
-                let board_index = self
-                    .board_picker_board_index_for_row(index)
-                    .unwrap_or(index);
-                let board = &self.boards.board_states()[board_index];
-                let label = match edit_state {
-                    Some((BoardPickerEditMode::Name, edit_index, buffer))
-                        if edit_index == index =>
-                    {
-                        buffer.to_string()
-                    }
-                    _ => board.spec.name.clone(),
-                };
-                let hint = if show_hints {
-                    match edit_state {
-                        Some((BoardPickerEditMode::Color, edit_index, buffer))
-                            if edit_index == index =>
-                        {
-                            Some(buffer.to_string())
-                        }
-                        _ => board_slot_hint(self, board_index),
-                    }
-                } else {
-                    None
-                };
-                (label, hint)
-            } else {
-                let label = if board_count >= max_count {
-                    "New board (max reached)".to_string()
-                } else {
-                    "New board".to_string()
-                };
-                (label, None)
-            };
-
-            max_name_width = max_name_width.max(text_width(ctx, &label, body_font_size));
-            if let Some(hint) = hint {
-                max_hint_width = max_hint_width.max(text_width(ctx, &hint, body_font_size));
-            }
-        }
-
-        let _ = ctx.restore();
-
-        let mut content_width = swatch_size + swatch_padding + max_name_width;
-        if max_hint_width > 0.0 {
-            content_width += super::super::COLUMN_GAP + max_hint_width;
-        }
-        if handle_width > 0.0 {
-            content_width += handle_gap + handle_width;
-            if open_icon_size > 0.0 {
-                content_width += open_icon_gap + open_icon_size;
-            }
-        }
-
-        let mut list_width = padding_x * 2.0 + content_width;
-        list_width = list_width.max(title_width + padding_x * 2.0);
-        list_width = list_width.max(footer_width + padding_x * 2.0);
-        list_width = list_width.max(recent_width + padding_x * 2.0);
-
-        let mut palette_rows = 0usize;
-        let mut palette_cols = 0usize;
-        let mut palette_height = 0.0;
-        if let Some((BoardPickerEditMode::Color, edit_index, _)) = edit_state
-            && edit_index < board_count
-            && self
-                .board_picker_board_index_for_row(edit_index)
-                .and_then(|board_index| self.boards.board_states().get(board_index))
-                .map(|board| !board.spec.background.is_transparent())
-                .unwrap_or(false)
-        {
-            let colors = board_palette_colors();
-            if !colors.is_empty() {
-                let available_width = list_width - padding_x * 2.0;
-                let unit = PALETTE_SWATCH_SIZE + PALETTE_SWATCH_GAP;
-                let max_cols = ((available_width + PALETTE_SWATCH_GAP) / unit).floor() as usize;
-                palette_cols = max_cols.clamp(1, colors.len());
-                palette_rows = colors.len().div_ceil(palette_cols);
-                palette_height = palette_rows as f64 * PALETTE_SWATCH_SIZE
-                    + (palette_rows.saturating_sub(1) as f64) * PALETTE_SWATCH_GAP;
-            }
-        }
-
-        let palette_extra = if palette_rows > 0 {
-            PALETTE_TOP_GAP + palette_height + PALETTE_BOTTOM_GAP
-        } else {
-            0.0
-        };
-
-        let recent_height = if recent_label.is_some() {
-            recent_line_height
-        } else {
-            0.0
-        };
-        let footer_height = base_footer_height + recent_height;
-
-        let panel_height = padding_y * 2.0
-            + header_height
-            + row_height * row_count as f64
-            + palette_extra
-            + footer_height;
-        let mut panel_height = panel_height;
-
-        let mut page_panel_enabled = false;
-        let mut page_panel_width = 0.0;
-        let mut page_panel_height = 0.0;
-        let mut page_thumb_width = 0.0;
-        let page_thumb_height = PAGE_THUMB_HEIGHT;
-        let page_thumb_gap = PAGE_THUMB_GAP;
-        let page_row_height =
-            page_thumb_height + super::super::PAGE_NAME_HEIGHT + super::super::PAGE_NAME_PADDING;
-        let mut page_cols = 0usize;
-        let mut page_rows = 0usize;
-        let mut page_count = 0usize;
-        let mut page_visible_count = 0usize;
-        let mut page_board_index = None;
-
-        if !self.board_picker_is_quick()
-            && let Some(board_index) = self.board_picker_page_panel_board_index()
-            && let Some(board) = self.boards.board_states().get(board_index)
-        {
-            page_count = board.pages.page_count();
-            // Always show page panel (even empty state with 0 pages for "Add first page" CTA)
-            let aspect = screen_width as f64 / screen_height as f64;
-            let base_thumb_width =
-                (page_thumb_height * aspect).clamp(PAGE_THUMB_MIN_WIDTH, PAGE_THUMB_MAX_WIDTH);
-
-            let available_right =
-                (screen_width as f64 - (PAGE_PANEL_GAP + 32.0)).max(base_thumb_width + 32.0);
-            let mut candidate_cols = PAGE_PANEL_MAX_COLS.max(1);
-            loop {
-                let candidate_width = PAGE_PANEL_PADDING_X * 2.0
-                    + candidate_cols as f64 * base_thumb_width
-                    + (candidate_cols.saturating_sub(1) as f64) * page_thumb_gap;
-                if candidate_width <= available_right || candidate_cols == 1 {
-                    page_cols = candidate_cols;
-                    page_panel_width = candidate_width.min(available_right);
-                    break;
-                }
-                candidate_cols -= 1;
-            }
-
-            if page_cols == 0 {
-                page_cols = 1;
-            }
-
-            page_thumb_width = ((page_panel_width
-                - PAGE_PANEL_PADDING_X * 2.0
-                - (page_cols.saturating_sub(1) as f64) * page_thumb_gap)
-                / page_cols as f64)
-                .clamp(PAGE_THUMB_MIN_WIDTH, PAGE_THUMB_MAX_WIDTH);
-
-            let total_rows = page_count.max(1).div_ceil(page_cols);
-            page_rows = total_rows.max(1).clamp(1, PAGE_PANEL_MAX_ROWS);
-            page_visible_count = page_count.min(page_rows.saturating_mul(page_cols));
-            page_panel_height = PAGE_PANEL_PADDING_X * 2.0
-                + page_rows as f64 * page_row_height
-                + (page_rows.saturating_sub(1) as f64) * page_thumb_gap
-                + footer_height;
-            panel_height = panel_height.max(page_panel_height);
-            page_panel_enabled = true;
-            page_board_index = Some(board_index);
-        }
-
-        let total_width = if page_panel_enabled {
-            list_width + PAGE_PANEL_GAP + page_panel_width
-        } else {
-            list_width
-        };
-
-        let max_width = (screen_width as f64 - 40.0).max(220.0);
-        let final_total_width = total_width.min(max_width);
-
-        let mut final_list_width = list_width;
-        if page_panel_enabled {
-            let available_for_list =
-                (final_total_width - PAGE_PANEL_GAP - page_panel_width).max(180.0);
-            final_list_width = final_list_width.min(available_for_list);
-        } else {
-            final_list_width = final_total_width;
-        }
-
-        let final_total_width = if page_panel_enabled {
-            final_list_width + PAGE_PANEL_GAP + page_panel_width
-        } else {
-            final_list_width
-        };
-
-        let origin_x = (screen_width as f64 - final_total_width) * 0.5;
-        let origin_y = (screen_height as f64 - panel_height) * 0.5;
-
-        let page_panel_x = if page_panel_enabled {
-            origin_x + final_list_width + PAGE_PANEL_GAP
-        } else {
-            0.0
-        };
-        let page_panel_y = origin_y;
-
-        self.board_picker_layout = Some(BoardPickerLayout {
-            origin_x,
-            origin_y,
-            width: final_total_width,
-            height: panel_height,
-            list_width: final_list_width,
-            title_font_size,
-            body_font_size,
-            footer_font_size,
-            row_height,
-            header_height,
-            footer_height,
-            padding_x,
-            padding_y,
-            swatch_size,
-            swatch_padding,
-            hint_width: max_hint_width,
+        let content = self.compute_board_picker_content_metrics(
+            ctx,
             row_count,
-            palette_top: origin_y
-                + padding_y
-                + header_height
-                + row_height * row_count as f64
+            board_count,
+            max_count,
+            &config,
+            edit_state,
+        );
+        let palette = self.compute_board_picker_palette_metrics(
+            edit_state,
+            content.list_width,
+            config.padding_x,
+        );
+
+        let panel_height =
+            self.derive_board_picker_panel_height(&config, row_count, &content, &palette);
+        let (page_panel, panel_height) = self.compute_board_picker_page_panel_metrics(
+            screen_width,
+            screen_height,
+            content.footer_height,
+            panel_height,
+        );
+        let geometry = self.compute_board_picker_layout_geometry(
+            screen_width,
+            screen_height,
+            content.list_width,
+            panel_height,
+            &page_panel,
+        );
+
+        self.board_picker_layout = Some(self.build_board_picker_layout(
+            &config,
+            row_count,
+            &content,
+            &palette,
+            &page_panel,
+            &geometry,
+            panel_height,
+        ));
+    }
+
+    fn derive_board_picker_panel_height(
+        &self,
+        config: &BoardPickerLayoutConfig,
+        row_count: usize,
+        content: &BoardPickerContentMetrics,
+        palette: &BoardPickerPaletteMetrics,
+    ) -> f64 {
+        config.padding_y * 2.0
+            + config.header_height
+            + config.row_height * row_count as f64
+            + palette.extra_height
+            + content.footer_height
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_board_picker_layout(
+        &self,
+        config: &BoardPickerLayoutConfig,
+        row_count: usize,
+        content: &BoardPickerContentMetrics,
+        palette: &BoardPickerPaletteMetrics,
+        page_panel: &BoardPickerPagePanelMetrics,
+        geometry: &BoardPickerLayoutGeometry,
+        panel_height: f64,
+    ) -> BoardPickerLayout {
+        BoardPickerLayout {
+            origin_x: geometry.origin_x,
+            origin_y: geometry.origin_y,
+            width: geometry.width,
+            height: panel_height,
+            list_width: geometry.list_width,
+            title_font_size: config.title_font_size,
+            body_font_size: config.body_font_size,
+            footer_font_size: config.footer_font_size,
+            row_height: config.row_height,
+            header_height: config.header_height,
+            footer_height: content.footer_height,
+            padding_x: config.padding_x,
+            padding_y: config.padding_y,
+            swatch_size: config.swatch_size,
+            swatch_padding: config.swatch_padding,
+            hint_width: content.max_hint_width,
+            row_count,
+            palette_top: geometry.origin_y
+                + config.padding_y
+                + config.header_height
+                + config.row_height * row_count as f64
                 + PALETTE_TOP_GAP,
-            palette_rows,
-            palette_cols,
-            recent_height,
-            handle_width,
-            handle_gap,
-            open_icon_size,
-            open_icon_gap,
-            page_panel_enabled,
-            page_panel_x,
-            page_panel_y,
-            page_panel_width,
-            page_panel_height,
-            page_thumb_width,
-            page_thumb_height,
-            page_thumb_gap,
-            page_cols,
-            page_rows,
+            palette_rows: palette.rows,
+            palette_cols: palette.cols,
+            recent_height: content.recent_height,
+            handle_width: config.handle_width,
+            handle_gap: config.handle_gap,
+            open_icon_size: config.open_icon_size,
+            open_icon_gap: config.open_icon_gap,
+            page_panel_enabled: page_panel.enabled,
+            page_panel_x: geometry.page_panel_x,
+            page_panel_y: geometry.page_panel_y,
+            page_panel_width: page_panel.width,
+            page_panel_height: page_panel.height,
+            page_thumb_width: page_panel.thumb_width,
+            page_thumb_height: PAGE_THUMB_HEIGHT,
+            page_thumb_gap: PAGE_THUMB_GAP,
+            page_cols: page_panel.cols,
+            page_rows: page_panel.rows,
             page_max_rows: PAGE_PANEL_MAX_ROWS,
-            page_count,
-            page_visible_count,
-            page_board_index,
-        });
-    }
-}
-
-fn text_width(ctx: &CairoContext, text: &str, font_size: f64) -> f64 {
-    match ctx.text_extents(text) {
-        Ok(extents) => extents.width(),
-        Err(_) => text.len() as f64 * font_size * 0.5,
-    }
-}
-
-fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
-    let action = match index {
-        0 => Action::Board1,
-        1 => Action::Board2,
-        2 => Action::Board3,
-        3 => Action::Board4,
-        4 => Action::Board5,
-        5 => Action::Board6,
-        6 => Action::Board7,
-        7 => Action::Board8,
-        8 => Action::Board9,
-        _ => return None,
-    };
-    let label = state.action_binding_label(action);
-    if label == "Not bound" {
-        None
-    } else {
-        Some(label)
+            page_count: page_panel.count,
+            page_visible_count: page_panel.visible_count,
+            page_board_index: page_panel.board_index,
+        }
     }
 }
