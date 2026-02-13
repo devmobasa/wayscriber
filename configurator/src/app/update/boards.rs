@@ -221,3 +221,52 @@ impl ConfiguratorApp {
         self.sync_board_color_picker_hex();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::ColorPickerId;
+
+    #[test]
+    fn add_item_updates_boards_and_collapsed_state() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let before = app.draft.boards.items.len();
+
+        let _ = app.handle_boards_add_item();
+
+        assert_eq!(app.draft.boards.items.len(), before + 1);
+        assert_eq!(app.boards_collapsed.len(), app.draft.boards.items.len());
+        assert!(app.is_dirty);
+    }
+
+    #[test]
+    fn duplicate_item_inserts_copy_with_new_id() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let before = app.draft.boards.items.len();
+        let original_id = app
+            .draft
+            .boards
+            .items
+            .first()
+            .map(|item| item.id.clone())
+            .unwrap_or_default();
+
+        let _ = app.handle_boards_duplicate_item(0);
+
+        assert_eq!(app.draft.boards.items.len(), before + 1);
+        assert_eq!(app.boards_collapsed.len(), app.draft.boards.items.len());
+        assert_ne!(app.draft.boards.items[1].id, original_id);
+    }
+
+    #[test]
+    fn remove_item_clears_board_color_picker_when_targeting_board_entry() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let _ = app.handle_boards_add_item();
+        app.color_picker_open = Some(ColorPickerId::BoardBackground(0));
+
+        let _ = app.handle_boards_remove_item(0);
+
+        assert!(app.color_picker_open.is_none());
+        assert_eq!(app.boards_collapsed.len(), app.draft.boards.items.len());
+    }
+}

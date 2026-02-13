@@ -131,3 +131,56 @@ fn build_action_bindings(config: &Config) -> HashMap<Action, Vec<KeyBinding>> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_action_map_falls_back_when_keybindings_invalid() {
+        let mut config = Config::default();
+        config.keybindings.core.undo = vec!["Ctrl+Z".to_string()];
+        config.keybindings.core.redo = vec!["Ctrl+Z".to_string()];
+
+        let map = build_action_map(&config);
+        let default_map = KeybindingsConfig::default()
+            .build_action_map()
+            .expect("default keybindings should build");
+
+        assert_eq!(map, default_map);
+    }
+
+    #[test]
+    fn build_action_bindings_fall_back_when_keybindings_invalid() {
+        let mut config = Config::default();
+        config.keybindings.core.undo = vec!["Ctrl+Z".to_string()];
+        config.keybindings.core.redo = vec!["Ctrl+Z".to_string()];
+
+        let bindings = build_action_bindings(&config);
+        let default_bindings = KeybindingsConfig::default()
+            .build_action_bindings()
+            .expect("default keybindings should build");
+
+        assert_eq!(bindings, default_bindings);
+    }
+
+    #[test]
+    fn build_input_state_applies_selected_ui_flags() {
+        let mut config = Config::default();
+        config.ui.context_menu.enabled = false;
+        config.ui.show_status_board_badge = false;
+        config.ui.show_status_page_badge = false;
+        config.ui.show_floating_badge_always = true;
+        config.ui.active_output_badge = true;
+        config.ui.command_palette_toast_duration_ms = 1234;
+
+        let input = build_input_state(&config);
+
+        assert!(!input.context_menu_enabled());
+        assert!(!input.show_status_board_badge);
+        assert!(!input.show_status_page_badge);
+        assert!(input.show_floating_badge_always);
+        assert!(input.show_active_output_badge);
+        assert_eq!(input.command_palette_toast_duration_ms, 1234);
+    }
+}

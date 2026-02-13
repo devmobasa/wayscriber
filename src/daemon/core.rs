@@ -12,7 +12,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-#[cfg(all(test, feature = "tray"))]
+#[cfg(test)]
 use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
@@ -71,7 +71,7 @@ impl Daemon {
         }
     }
 
-    #[cfg(all(test, feature = "tray"))]
+    #[cfg(test)]
     fn with_backend_runner_internal(
         initial_mode: Option<String>,
         backend_runner: Arc<BackendRunner>,
@@ -97,7 +97,7 @@ impl Daemon {
         }
     }
 
-    #[cfg(all(test, feature = "tray"))]
+    #[cfg(test)]
     pub fn with_backend_runner(
         initial_mode: Option<String>,
         backend_runner: Arc<BackendRunner>,
@@ -265,7 +265,7 @@ impl Daemon {
     }
 }
 
-#[cfg(all(test, feature = "tray"))]
+#[cfg(test)]
 impl Daemon {
     pub fn test_state(&self) -> OverlayState {
         self.overlay_state

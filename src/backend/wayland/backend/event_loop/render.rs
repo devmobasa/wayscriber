@@ -31,6 +31,30 @@ pub(super) fn frame_rate_cap_timeout(
     }
 }
 
+fn handle_render_failure(
+    consecutive_render_failures: &mut u32,
+    needs_redraw: &mut bool,
+    err: &anyhow::Error,
+) -> Option<anyhow::Error> {
+    *consecutive_render_failures += 1;
+    warn!(
+        "Rendering error (attempt {}/{}): {}",
+        *consecutive_render_failures, MAX_RENDER_FAILURES, err
+    );
+
+    if *consecutive_render_failures >= MAX_RENDER_FAILURES {
+        return Some(anyhow::anyhow!(
+            "Too many consecutive render failures ({}), exiting: {}",
+            *consecutive_render_failures,
+            err
+        ));
+    }
+
+    // Clear redraw flag to avoid infinite error loop.
+    *needs_redraw = false;
+    None
+}
+
 pub(super) fn maybe_render(
     state: &mut WaylandState,
     qh: &wayland_client::QueueHandle<WaylandState>,
@@ -86,22 +110,13 @@ pub(super) fn maybe_render(
                 }
             }
             Err(e) => {
-                *consecutive_render_failures += 1;
-                warn!(
-                    "Rendering error (attempt {}/{}): {}",
-                    *consecutive_render_failures, MAX_RENDER_FAILURES, e
-                );
-
-                if *consecutive_render_failures >= MAX_RENDER_FAILURES {
-                    return Some(anyhow::anyhow!(
-                        "Too many consecutive render failures ({}), exiting: {}",
-                        *consecutive_render_failures,
-                        e
-                    ));
+                if let Some(err) = handle_render_failure(
+                    consecutive_render_failures,
+                    &mut state.input_state.needs_redraw,
+                    &e,
+                ) {
+                    return Some(err);
                 }
-
-                // Clear redraw flag to avoid infinite error loop.
-                state.input_state.needs_redraw = false;
             }
         }
     } else {
@@ -119,4 +134,59 @@ pub(super) fn maybe_render(
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_rate_cap_timeout_returns_none_when_unlimited_or_missing_last_frame() {
+        assert_eq!(frame_rate_cap_timeout(0, None), None);
+        assert_eq!(frame_rate_cap_timeout(60, None), None);
+    }
+
+    #[test]
+    fn frame_rate_cap_timeout_returns_remaining_budget_when_called_too_soon() {
+        let timeout = frame_rate_cap_timeout(60, Some(Instant::now())).expect("timeout");
+        assert!(timeout > Duration::ZERO);
+        assert!(timeout <= Duration::from_millis(17));
+    }
+
+    #[test]
+    fn frame_rate_cap_timeout_returns_none_when_budget_elapsed() {
+        let last = Instant::now() - Duration::from_millis(20);
+        assert_eq!(frame_rate_cap_timeout(60, Some(last)), None);
+    }
+
+    #[test]
+    fn handle_render_failure_increments_counter_and_clears_redraw() {
+        let mut failures = 0;
+        let mut needs_redraw = true;
+        let err = anyhow::anyhow!("render failed");
+
+        let fatal = handle_render_failure(&mut failures, &mut needs_redraw, &err);
+
+        assert!(fatal.is_none());
+        assert_eq!(failures, 1);
+        assert!(!needs_redraw);
+    }
+
+    #[test]
+    fn handle_render_failure_returns_fatal_error_at_limit() {
+        let mut failures = MAX_RENDER_FAILURES - 1;
+        let mut needs_redraw = true;
+        let err = anyhow::anyhow!("render failed");
+
+        let fatal = handle_render_failure(&mut failures, &mut needs_redraw, &err)
+            .expect("should fail at limit");
+
+        assert_eq!(failures, MAX_RENDER_FAILURES);
+        assert!(
+            fatal
+                .to_string()
+                .contains("Too many consecutive render failures")
+        );
+        assert!(needs_redraw);
+    }
 }
