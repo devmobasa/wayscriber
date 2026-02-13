@@ -1,6 +1,6 @@
 pkgbase = wayscriber
 	pkgdesc = Screen annotation tool for Wayland compositors
-	pkgver = 0.9.9.3
+	pkgver = 0.9.10
 	pkgrel = 1
 	url = https://wayscriber.com
 	arch = x86_64
@@ -16,7 +16,7 @@ pkgbase = wayscriber
 	depends = wl-clipboard
 	depends = grim
 	depends = slurp
-	source = git+https://github.com/devmobasa/wayscriber.git#tag=v0.9.9.3
+	source = git+https://github.com/devmobasa/wayscriber.git#tag=v0.9.10
 	source = wayscriber.desktop
 	source = wayscriber-configurator.desktop
 	source = icons/wayscriber-16.png
