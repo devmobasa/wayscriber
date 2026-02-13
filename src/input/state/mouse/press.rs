@@ -126,109 +126,19 @@ impl InputState {
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
-        // Radial menu intercept
-        if self.is_radial_menu_open() {
-            self.update_pointer_position(x, y);
-            match button {
-                MouseButton::Left => {
-                    // Update hover at exact click position before selecting
-                    self.update_radial_menu_hover(x as f64, y as f64);
-                    self.radial_menu_select_hovered();
-                }
-                MouseButton::Right => {
-                    self.close_radial_menu();
-                    if !self.is_radial_menu_toggle_button(MouseButton::Right) {
-                        // Keep right-click context-menu flow when right button is not the
-                        // configured radial-menu trigger.
-                        self.handle_right_click(x, y);
-                    }
-                }
-                MouseButton::Middle => {
-                    self.close_radial_menu();
-                }
-            }
+        if self.handle_radial_menu_press(button, x, y) {
             return;
         }
 
-        if self.is_color_picker_popup_open() {
-            self.update_pointer_position(x, y);
-            match button {
-                MouseButton::Left => {
-                    if let Some(layout) = self.color_picker_popup_layout() {
-                        let fx = x as f64;
-                        let fy = y as f64;
-                        // Start dragging if clicking on gradient
-                        if layout.point_in_gradient(fx, fy) {
-                            self.color_picker_popup_set_dragging(true);
-                            let norm_x = (fx - layout.gradient_x) / layout.gradient_w;
-                            let norm_y = (fy - layout.gradient_y) / layout.gradient_h;
-                            self.color_picker_popup_set_from_gradient(norm_x, norm_y);
-                            self.color_picker_popup_set_hex_editing(false);
-                        }
-                    }
-                }
-                MouseButton::Right => {
-                    self.close_color_picker_popup(true);
-                }
-                MouseButton::Middle => {}
-            }
+        if self.handle_color_picker_press(button, x, y) {
             return;
         }
 
-        if self.is_board_picker_open() {
-            self.update_pointer_position(x, y);
-            match button {
-                MouseButton::Left => {
-                    if self.board_picker_contains_point(x, y) {
-                        if let Some(index) = self.board_picker_page_handle_index_at(x, y) {
-                            self.board_picker_start_page_drag(index);
-                            return;
-                        }
-                        if let Some(row) = self.board_picker_handle_index_at(x, y) {
-                            self.board_picker_start_drag(row);
-                            return;
-                        }
-                        if self.board_picker_index_at(x, y).is_some() {
-                            self.update_board_picker_hover_from_pointer(x, y);
-                        }
-                    } else {
-                        self.close_board_picker();
-                    }
-                }
-                MouseButton::Right => {
-                    if self.board_picker_contains_point(x, y)
-                        && let Some(page_index) = self.board_picker_page_index_at(x, y)
-                        && let Some(board_index) = self.board_picker_page_panel_board_index()
-                    {
-                        self.update_pointer_position_synthetic(x, y);
-                        self.open_page_context_menu((x, y), board_index, page_index);
-                    } else {
-                        self.close_board_picker();
-                    }
-                }
-                MouseButton::Middle => {}
-            }
+        if self.handle_board_picker_press(button, x, y) {
             return;
         }
 
-        if self.is_properties_panel_open() {
-            self.update_pointer_position(x, y);
-            if self.properties_panel_layout().is_none() {
-                return;
-            }
-            match button {
-                MouseButton::Left => {
-                    if let Some(index) = self.properties_panel_index_at(x, y) {
-                        self.set_properties_panel_focus(Some(index));
-                    } else {
-                        self.close_properties_panel();
-                    }
-                }
-                MouseButton::Right => {
-                    self.close_properties_panel();
-                }
-                MouseButton::Middle => {}
-            }
+        if self.handle_properties_panel_press(button, x, y) {
             return;
         }
 
@@ -257,124 +167,7 @@ impl InputState {
                 }
 
                 match &mut self.state {
-                    DrawingState::Idle => {
-                        let selection_click =
-                            self.modifiers.alt || self.active_tool() == Tool::Select;
-
-                        if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
-                            let snapshot = {
-                                let frame = self.boards.active_frame();
-                                frame.shape(shape_id).map(|shape| ShapeSnapshot {
-                                    shape: shape.shape.clone(),
-                                    locked: shape.locked,
-                                })
-                            };
-                            if let Some(snapshot) = snapshot {
-                                let (base_x, size) = match &snapshot.shape {
-                                    Shape::Text { x, size, .. } => (*x, *size),
-                                    Shape::StickyNote { x, size, .. } => (*x, *size),
-                                    _ => return,
-                                };
-                                self.last_text_click = None;
-                                self.state = DrawingState::ResizingText {
-                                    shape_id,
-                                    snapshot,
-                                    base_x,
-                                    size,
-                                };
-                                return;
-                            }
-                        }
-
-                        // Check for selection handle resize after text resize handle
-                        if let Some(handle) = self.hit_selection_handle(x, y)
-                            && let Some(original_bounds) = self.selection_bounds()
-                        {
-                            let snapshots = self.capture_resize_selection_snapshots();
-                            if !snapshots.is_empty() {
-                                self.last_text_click = None;
-                                self.state = DrawingState::ResizingSelection {
-                                    handle,
-                                    original_bounds,
-                                    start_x: x,
-                                    start_y: y,
-                                    snapshots: Arc::new(snapshots),
-                                };
-                                return;
-                            }
-                        }
-
-                        if !selection_click && let Some(hit_id) = self.hit_test_at(x, y) {
-                            let is_text = self
-                                .boards
-                                .active_frame()
-                                .shape(hit_id)
-                                .map(|shape| {
-                                    !shape.locked
-                                        && matches!(
-                                            shape.shape,
-                                            Shape::Text { .. } | Shape::StickyNote { .. }
-                                        )
-                                })
-                                .unwrap_or(false);
-                            if is_text {
-                                self.state = DrawingState::PendingTextClick {
-                                    x,
-                                    y,
-                                    tool: self.active_tool(),
-                                    shape_id: hit_id,
-                                };
-                                return;
-                            }
-                        }
-                        self.last_text_click = None;
-                        if selection_click {
-                            if let Some(hit_id) = self.hit_test_at(x, y) {
-                                if !self.selected_shape_ids().contains(&hit_id) {
-                                    if self.modifiers.shift {
-                                        self.extend_selection([hit_id]);
-                                    } else {
-                                        self.set_selection(vec![hit_id]);
-                                    }
-                                }
-
-                                let snapshots = self.capture_movable_selection_snapshots();
-                                if !snapshots.is_empty() {
-                                    self.state = DrawingState::MovingSelection {
-                                        last_x: x,
-                                        last_y: y,
-                                        snapshots,
-                                        moved: false,
-                                    };
-                                    return;
-                                }
-                            } else {
-                                self.state = DrawingState::Selecting {
-                                    start_x: x,
-                                    start_y: y,
-                                    additive: self.modifiers.shift,
-                                };
-                                self.last_provisional_bounds = None;
-                                self.update_provisional_dirty(x, y);
-                                self.needs_redraw = true;
-                                return;
-                            }
-                        }
-
-                        let tool = self.active_tool();
-                        if tool != Tool::Highlight && tool != Tool::Select {
-                            self.state = DrawingState::Drawing {
-                                tool,
-                                start_x: x,
-                                start_y: y,
-                                points: vec![(x, y)],
-                                point_thicknesses: vec![self.current_thickness as f32],
-                            };
-                            self.last_provisional_bounds = None;
-                            self.update_provisional_dirty(x, y);
-                            self.needs_redraw = true;
-                        }
-                    }
+                    DrawingState::Idle => self.handle_idle_left_click(x, y),
                     DrawingState::TextInput { x: tx, y: ty, .. } => {
                         *tx = x;
                         *ty = y;
@@ -395,5 +188,238 @@ impl InputState {
                 }
             }
         }
+    }
+
+    fn handle_idle_left_click(&mut self, x: i32, y: i32) {
+        let selection_click = self.modifiers.alt || self.active_tool() == Tool::Select;
+        let hit_id = self.hit_test_at(x, y);
+
+        if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
+            let snapshot = {
+                let frame = self.boards.active_frame();
+                frame.shape(shape_id).map(|shape| ShapeSnapshot {
+                    shape: shape.shape.clone(),
+                    locked: shape.locked,
+                })
+            };
+            if let Some(snapshot) = snapshot {
+                let (base_x, size) = match &snapshot.shape {
+                    Shape::Text { x, size, .. } => (*x, *size),
+                    Shape::StickyNote { x, size, .. } => (*x, *size),
+                    _ => return,
+                };
+                self.last_text_click = None;
+                self.state = DrawingState::ResizingText {
+                    shape_id,
+                    snapshot,
+                    base_x,
+                    size,
+                };
+                return;
+            }
+        }
+
+        if let Some(handle) = self.hit_selection_handle(x, y)
+            && let Some(original_bounds) = self.selection_bounds()
+        {
+            let snapshots = self.capture_resize_selection_snapshots();
+            if !snapshots.is_empty() {
+                self.last_text_click = None;
+                self.state = DrawingState::ResizingSelection {
+                    handle,
+                    original_bounds,
+                    start_x: x,
+                    start_y: y,
+                    snapshots: Arc::new(snapshots),
+                };
+                return;
+            }
+        }
+
+        if !selection_click && let Some(hit_id) = hit_id {
+            let is_text = self
+                .boards
+                .active_frame()
+                .shape(hit_id)
+                .map(|shape| {
+                    !shape.locked
+                        && matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
+                })
+                .unwrap_or(false);
+            if is_text {
+                self.state = DrawingState::PendingTextClick {
+                    x,
+                    y,
+                    tool: self.active_tool(),
+                    shape_id: hit_id,
+                };
+                return;
+            }
+        }
+
+        self.last_text_click = None;
+        if selection_click {
+            if let Some(hit_id) = hit_id {
+                if !self.selected_shape_ids().contains(&hit_id) {
+                    if self.modifiers.shift {
+                        self.extend_selection([hit_id]);
+                    } else {
+                        self.set_selection(vec![hit_id]);
+                    }
+                }
+
+                let snapshots = self.capture_movable_selection_snapshots();
+                if !snapshots.is_empty() {
+                    self.state = DrawingState::MovingSelection {
+                        last_x: x,
+                        last_y: y,
+                        snapshots,
+                        moved: false,
+                    };
+                    return;
+                }
+            } else {
+                self.state = DrawingState::Selecting {
+                    start_x: x,
+                    start_y: y,
+                    additive: self.modifiers.shift,
+                };
+                self.last_provisional_bounds = None;
+                self.update_provisional_dirty(x, y);
+                self.needs_redraw = true;
+                return;
+            }
+        }
+
+        let tool = self.active_tool();
+        if tool != Tool::Highlight && tool != Tool::Select {
+            self.state = DrawingState::Drawing {
+                tool,
+                start_x: x,
+                start_y: y,
+                points: vec![(x, y)],
+                point_thicknesses: vec![self.current_thickness as f32],
+            };
+            self.last_provisional_bounds = None;
+            self.update_provisional_dirty(x, y);
+            self.needs_redraw = true;
+        }
+    }
+
+    fn handle_radial_menu_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+        if !self.is_radial_menu_open() {
+            return false;
+        }
+        self.update_pointer_position(x, y);
+        match button {
+            MouseButton::Left => {
+                // Update hover at exact click position before selecting
+                self.update_radial_menu_hover(x as f64, y as f64);
+                self.radial_menu_select_hovered();
+            }
+            MouseButton::Right => {
+                self.close_radial_menu();
+                if !self.is_radial_menu_toggle_button(MouseButton::Right) {
+                    // Keep right-click context-menu flow when right button is not the
+                    // configured radial-menu trigger.
+                    self.handle_right_click(x, y);
+                }
+            }
+            MouseButton::Middle => {
+                self.close_radial_menu();
+            }
+        }
+        true
+    }
+
+    fn handle_color_picker_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+        if !self.is_color_picker_popup_open() {
+            return false;
+        }
+        self.update_pointer_position(x, y);
+        match button {
+            MouseButton::Left => {
+                if let Some(layout) = self.color_picker_popup_layout() {
+                    let fx = x as f64;
+                    let fy = y as f64;
+                    // Start dragging if clicking on gradient
+                    if layout.point_in_gradient(fx, fy) {
+                        self.color_picker_popup_set_dragging(true);
+                        let norm_x = (fx - layout.gradient_x) / layout.gradient_w;
+                        let norm_y = (fy - layout.gradient_y) / layout.gradient_h;
+                        self.color_picker_popup_set_from_gradient(norm_x, norm_y);
+                        self.color_picker_popup_set_hex_editing(false);
+                    }
+                }
+            }
+            MouseButton::Right => {
+                self.close_color_picker_popup(true);
+            }
+            MouseButton::Middle => {}
+        }
+        true
+    }
+
+    fn handle_board_picker_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+        if !self.is_board_picker_open() {
+            return false;
+        }
+        self.update_pointer_position(x, y);
+        match button {
+            MouseButton::Left => {
+                if self.board_picker_contains_point(x, y) {
+                    if let Some(index) = self.board_picker_page_handle_index_at(x, y) {
+                        self.board_picker_start_page_drag(index);
+                        return true;
+                    }
+                    if let Some(row) = self.board_picker_handle_index_at(x, y) {
+                        self.board_picker_start_drag(row);
+                        return true;
+                    }
+                    if self.board_picker_index_at(x, y).is_some() {
+                        self.update_board_picker_hover_from_pointer(x, y);
+                    }
+                } else {
+                    self.close_board_picker();
+                }
+            }
+            MouseButton::Right => {
+                if self.board_picker_contains_point(x, y)
+                    && let Some(page_index) = self.board_picker_page_index_at(x, y)
+                    && let Some(board_index) = self.board_picker_page_panel_board_index()
+                {
+                    self.update_pointer_position_synthetic(x, y);
+                    self.open_page_context_menu((x, y), board_index, page_index);
+                } else {
+                    self.close_board_picker();
+                }
+            }
+            MouseButton::Middle => {}
+        }
+        true
+    }
+
+    fn handle_properties_panel_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+        if !self.is_properties_panel_open() {
+            return false;
+        }
+        self.update_pointer_position(x, y);
+        if self.properties_panel_layout().is_none() {
+            return true;
+        }
+        match button {
+            MouseButton::Left => {
+                if let Some(index) = self.properties_panel_index_at(x, y) {
+                    self.set_properties_panel_focus(Some(index));
+                } else {
+                    self.close_properties_panel();
+                }
+            }
+            MouseButton::Right => {
+                self.close_properties_panel();
+            }
+            MouseButton::Middle => {}
+        }
+        true
     }
 }

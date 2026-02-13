@@ -5,8 +5,9 @@ use crate::draw::{Shape, ShapeId};
 use crate::input::InputState;
 use crate::input::state::core::base::SelectionHandle;
 use crate::util::Rect;
+mod resize_helpers;
 
-/// Handle size for hit testing (matches render constants)
+// Handle size for hit testing (matches render constants)
 const HANDLE_SIZE: i32 = 8;
 const HANDLE_TOLERANCE: i32 = 4;
 
@@ -14,98 +15,36 @@ impl InputState {
     /// Hit test for selection handles. Returns the handle if mouse is over one.
     pub fn hit_selection_handle(&self, x: i32, y: i32) -> Option<SelectionHandle> {
         let bounds = self.selection_bounds()?;
-        let half = HANDLE_SIZE / 2;
-        let tol = HANDLE_TOLERANCE;
+        let corner_radius = (HANDLE_SIZE / 2) + HANDLE_TOLERANCE;
+        let edge_radius = (HANDLE_SIZE * 3 / 4) / 2 + HANDLE_TOLERANCE;
 
-        // Check corner handles first (they have priority)
-        // Top-left
-        if self.point_near(x, y, bounds.x, bounds.y, half + tol) {
-            return Some(SelectionHandle::TopLeft);
-        }
-        // Top-right
-        if self.point_near(x, y, bounds.x + bounds.width, bounds.y, half + tol) {
-            return Some(SelectionHandle::TopRight);
-        }
-        // Bottom-left
-        if self.point_near(x, y, bounds.x, bounds.y + bounds.height, half + tol) {
-            return Some(SelectionHandle::BottomLeft);
-        }
-        // Bottom-right
-        if self.point_near(
-            x,
-            y,
-            bounds.x + bounds.width,
-            bounds.y + bounds.height,
-            half + tol,
-        ) {
-            return Some(SelectionHandle::BottomRight);
-        }
-
-        // Edge handles
-        let edge_half = (HANDLE_SIZE * 3 / 4) / 2;
-        // Top center
-        if self.point_near(x, y, bounds.x + bounds.width / 2, bounds.y, edge_half + tol) {
-            return Some(SelectionHandle::Top);
-        }
-        // Bottom center
-        if self.point_near(
-            x,
-            y,
-            bounds.x + bounds.width / 2,
-            bounds.y + bounds.height,
-            edge_half + tol,
-        ) {
-            return Some(SelectionHandle::Bottom);
-        }
-        // Left center
-        if self.point_near(
-            x,
-            y,
-            bounds.x,
-            bounds.y + bounds.height / 2,
-            edge_half + tol,
-        ) {
-            return Some(SelectionHandle::Left);
-        }
-        // Right center
-        if self.point_near(
-            x,
-            y,
-            bounds.x + bounds.width,
-            bounds.y + bounds.height / 2,
-            edge_half + tol,
-        ) {
-            return Some(SelectionHandle::Right);
-        }
-
-        None
-    }
-
-    fn point_near(&self, x: i32, y: i32, cx: i32, cy: i32, radius: i32) -> bool {
-        (x - cx).abs() <= radius && (y - cy).abs() <= radius
+        Self::selection_handle_probes(&bounds, corner_radius, edge_radius)
+            .into_iter()
+            .find_map(|probe| {
+                self.point_near(x, y, probe.x, probe.y, probe.radius)
+                    .then_some(probe.handle)
+            })
     }
 
     /// Capture snapshots of selected shapes for resize operation.
     pub(crate) fn capture_resize_selection_snapshots(&self) -> Vec<(ShapeId, ShapeSnapshot)> {
         let ids = self.selected_shape_ids();
         let frame = self.boards.active_frame();
-        ids.iter()
-            .filter_map(|id| {
-                frame.shape(*id).and_then(|shape| {
-                    if shape.locked {
-                        None
-                    } else {
-                        Some((
-                            *id,
-                            ShapeSnapshot {
-                                shape: shape.shape.clone(),
-                                locked: shape.locked,
-                            },
-                        ))
-                    }
-                })
-            })
-            .collect()
+        let mut snapshots = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(shape) = frame.shape(*id)
+                && !shape.locked
+            {
+                snapshots.push((
+                    *id,
+                    ShapeSnapshot {
+                        shape: shape.shape.clone(),
+                        locked: shape.locked,
+                    },
+                ));
+            }
+        }
+        snapshots
     }
 
     /// Apply resize transformation to all selected shapes.
@@ -117,13 +56,17 @@ impl InputState {
         dy: i32,
         snapshots: &[(ShapeId, ShapeSnapshot)],
     ) {
+        if snapshots.is_empty() || (dx == 0 && dy == 0) {
+            return;
+        }
+
         self.mark_selection_dirty_region(Some(*original_bounds));
         // Calculate scale factors based on handle and delta
         let (scale_x, scale_y, anchor_x, anchor_y) =
             Self::compute_scale_factors(handle, original_bounds, dx, dy);
 
         // Collect IDs to invalidate after the loop
-        let mut ids_to_invalidate = Vec::new();
+        let mut ids_to_invalidate = Vec::with_capacity(snapshots.len());
 
         {
             let frame = self.boards.active_frame_mut();
@@ -149,57 +92,6 @@ impl InputState {
         self.mark_selection_dirty_region(self.selection_bounds());
     }
 
-    fn compute_scale_factors(
-        handle: SelectionHandle,
-        bounds: &Rect,
-        dx: i32,
-        dy: i32,
-    ) -> (f64, f64, f64, f64) {
-        let w = bounds.width as f64;
-        let h = bounds.height as f64;
-        let x = bounds.x as f64;
-        let y = bounds.y as f64;
-
-        match handle {
-            SelectionHandle::TopLeft => {
-                let new_w = (w - dx as f64).max(10.0);
-                let new_h = (h - dy as f64).max(10.0);
-                (new_w / w, new_h / h, x + w, y + h)
-            }
-            SelectionHandle::TopRight => {
-                let new_w = (w + dx as f64).max(10.0);
-                let new_h = (h - dy as f64).max(10.0);
-                (new_w / w, new_h / h, x, y + h)
-            }
-            SelectionHandle::BottomLeft => {
-                let new_w = (w - dx as f64).max(10.0);
-                let new_h = (h + dy as f64).max(10.0);
-                (new_w / w, new_h / h, x + w, y)
-            }
-            SelectionHandle::BottomRight => {
-                let new_w = (w + dx as f64).max(10.0);
-                let new_h = (h + dy as f64).max(10.0);
-                (new_w / w, new_h / h, x, y)
-            }
-            SelectionHandle::Top => {
-                let new_h = (h - dy as f64).max(10.0);
-                (1.0, new_h / h, x + w / 2.0, y + h)
-            }
-            SelectionHandle::Bottom => {
-                let new_h = (h + dy as f64).max(10.0);
-                (1.0, new_h / h, x + w / 2.0, y)
-            }
-            SelectionHandle::Left => {
-                let new_w = (w - dx as f64).max(10.0);
-                (new_w / w, 1.0, x + w, y + h / 2.0)
-            }
-            SelectionHandle::Right => {
-                let new_w = (w + dx as f64).max(10.0);
-                (new_w / w, 1.0, x, y + h / 2.0)
-            }
-        }
-    }
-
     fn scale_shape(
         original: &Shape,
         scale_x: f64,
@@ -218,13 +110,12 @@ impl InputState {
                 color,
                 thick,
             } => {
-                let (nx, ny) =
-                    Self::scale_point(*x as f64, *y as f64, anchor_x, anchor_y, scale_x, scale_y);
-                let nw = (*w as f64 * scale_x).round() as i32;
-                let nh = (*h as f64 * scale_y).round() as i32;
+                let (nx, ny) = Self::scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
+                let nw = Self::scale_size(*w, scale_x);
+                let nh = Self::scale_size(*h, scale_y);
                 Shape::Rect {
-                    x: nx.round() as i32,
-                    y: ny.round() as i32,
+                    x: nx,
+                    y: ny,
                     w: nw.max(1),
                     h: nh.max(1),
                     fill: *fill,
@@ -242,12 +133,12 @@ impl InputState {
                 thick,
             } => {
                 let (ncx, ncy) =
-                    Self::scale_point(*cx as f64, *cy as f64, anchor_x, anchor_y, scale_x, scale_y);
-                let nrx = (*rx as f64 * scale_x).round() as i32;
-                let nry = (*ry as f64 * scale_y).round() as i32;
+                    Self::scale_point_i32(*cx, *cy, anchor_x, anchor_y, scale_x, scale_y);
+                let nrx = Self::scale_size(*rx, scale_x);
+                let nry = Self::scale_size(*ry, scale_y);
                 Shape::Ellipse {
-                    cx: ncx.round() as i32,
-                    cy: ncy.round() as i32,
+                    cx: ncx,
+                    cy: ncy,
                     rx: nrx.max(1),
                     ry: nry.max(1),
                     fill: *fill,
@@ -264,14 +155,14 @@ impl InputState {
                 thick,
             } => {
                 let (nx1, ny1) =
-                    Self::scale_point(*x1 as f64, *y1 as f64, anchor_x, anchor_y, scale_x, scale_y);
+                    Self::scale_point_i32(*x1, *y1, anchor_x, anchor_y, scale_x, scale_y);
                 let (nx2, ny2) =
-                    Self::scale_point(*x2 as f64, *y2 as f64, anchor_x, anchor_y, scale_x, scale_y);
+                    Self::scale_point_i32(*x2, *y2, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::Line {
-                    x1: nx1.round() as i32,
-                    y1: ny1.round() as i32,
-                    x2: nx2.round() as i32,
-                    y2: ny2.round() as i32,
+                    x1: nx1,
+                    y1: ny1,
+                    x2: nx2,
+                    y2: ny2,
                     color: *color,
                     thick: *thick,
                 }
@@ -289,14 +180,14 @@ impl InputState {
                 label,
             } => {
                 let (nx1, ny1) =
-                    Self::scale_point(*x1 as f64, *y1 as f64, anchor_x, anchor_y, scale_x, scale_y);
+                    Self::scale_point_i32(*x1, *y1, anchor_x, anchor_y, scale_x, scale_y);
                 let (nx2, ny2) =
-                    Self::scale_point(*x2 as f64, *y2 as f64, anchor_x, anchor_y, scale_x, scale_y);
+                    Self::scale_point_i32(*x2, *y2, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::Arrow {
-                    x1: nx1.round() as i32,
-                    y1: ny1.round() as i32,
-                    x2: nx2.round() as i32,
-                    y2: ny2.round() as i32,
+                    x1: nx1,
+                    y1: ny1,
+                    x2: nx2,
+                    y2: ny2,
                     color: *color,
                     thick: *thick,
                     arrow_length: *arrow_length,
@@ -310,15 +201,8 @@ impl InputState {
                 color,
                 thick,
             } => {
-                let scaled_points: Vec<(i32, i32)> = points
-                    .iter()
-                    .map(|(px, py)| {
-                        let (nx, ny) = Self::scale_point(
-                            *px as f64, *py as f64, anchor_x, anchor_y, scale_x, scale_y,
-                        );
-                        (nx.round() as i32, ny.round() as i32)
-                    })
-                    .collect();
+                let scaled_points =
+                    Self::scale_points(points, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::Freehand {
                     points: scaled_points,
                     color: *color,
@@ -326,15 +210,8 @@ impl InputState {
                 }
             }
             Shape::FreehandPressure { points, color } => {
-                let scaled_points: Vec<(i32, i32, f32)> = points
-                    .iter()
-                    .map(|(px, py, pressure)| {
-                        let (nx, ny) = Self::scale_point(
-                            *px as f64, *py as f64, anchor_x, anchor_y, scale_x, scale_y,
-                        );
-                        (nx.round() as i32, ny.round() as i32, *pressure)
-                    })
-                    .collect();
+                let scaled_points =
+                    Self::scale_points_with_pressure(points, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::FreehandPressure {
                     points: scaled_points,
                     color: *color,
@@ -345,15 +222,8 @@ impl InputState {
                 color,
                 thick,
             } => {
-                let scaled_points: Vec<(i32, i32)> = points
-                    .iter()
-                    .map(|(px, py)| {
-                        let (nx, ny) = Self::scale_point(
-                            *px as f64, *py as f64, anchor_x, anchor_y, scale_x, scale_y,
-                        );
-                        (nx.round() as i32, ny.round() as i32)
-                    })
-                    .collect();
+                let scaled_points =
+                    Self::scale_points(points, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::MarkerStroke {
                     points: scaled_points,
                     color: *color,
@@ -361,25 +231,17 @@ impl InputState {
                 }
             }
             Shape::StepMarker { x, y, color, label } => {
-                let (nx, ny) =
-                    Self::scale_point(*x as f64, *y as f64, anchor_x, anchor_y, scale_x, scale_y);
+                let (nx, ny) = Self::scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::StepMarker {
-                    x: nx.round() as i32,
-                    y: ny.round() as i32,
+                    x: nx,
+                    y: ny,
                     color: *color,
                     label: label.clone(),
                 }
             }
             Shape::EraserStroke { points, brush } => {
-                let scaled_points: Vec<(i32, i32)> = points
-                    .iter()
-                    .map(|(px, py)| {
-                        let (nx, ny) = Self::scale_point(
-                            *px as f64, *py as f64, anchor_x, anchor_y, scale_x, scale_y,
-                        );
-                        (nx.round() as i32, ny.round() as i32)
-                    })
-                    .collect();
+                let scaled_points =
+                    Self::scale_points(points, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::EraserStroke {
                     points: scaled_points,
                     brush: brush.clone(),
@@ -396,11 +258,10 @@ impl InputState {
                 background_enabled,
                 wrap_width,
             } => {
-                let (nx, ny) =
-                    Self::scale_point(*x as f64, *y as f64, anchor_x, anchor_y, scale_x, scale_y);
+                let (nx, ny) = Self::scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::Text {
-                    x: nx.round() as i32,
-                    y: ny.round() as i32,
+                    x: nx,
+                    y: ny,
                     text: text.clone(),
                     color: *color,
                     size: *size,
@@ -418,11 +279,10 @@ impl InputState {
                 font_descriptor,
                 wrap_width,
             } => {
-                let (nx, ny) =
-                    Self::scale_point(*x as f64, *y as f64, anchor_x, anchor_y, scale_x, scale_y);
+                let (nx, ny) = Self::scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::StickyNote {
-                    x: nx.round() as i32,
-                    y: ny.round() as i32,
+                    x: nx,
+                    y: ny,
                     text: text.clone(),
                     background: *background,
                     size: *size,
@@ -433,23 +293,11 @@ impl InputState {
         }
     }
 
-    fn scale_point(
-        x: f64,
-        y: f64,
-        anchor_x: f64,
-        anchor_y: f64,
-        scale_x: f64,
-        scale_y: f64,
-    ) -> (f64, f64) {
-        let dx = x - anchor_x;
-        let dy = y - anchor_y;
-        (anchor_x + dx * scale_x, anchor_y + dy * scale_y)
-    }
-
     /// Restore shapes from snapshots (used for cancel).
     pub(crate) fn restore_resize_from_snapshots(&mut self, snapshots: &[(ShapeId, ShapeSnapshot)]) {
-        let mut dirty_rects: Vec<Option<Rect>> = Vec::new();
-        let mut ids_to_invalidate = Vec::new();
+        let mut dirty_rects: Vec<Option<Rect>> =
+            Vec::with_capacity(snapshots.len().saturating_mul(2));
+        let mut ids_to_invalidate = Vec::with_capacity(snapshots.len());
 
         {
             let frame = self.boards.active_frame_mut();

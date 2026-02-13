@@ -1,5 +1,6 @@
 //! Command palette UI rendering.
 
+use crate::config::action_meta::ActionMeta;
 use crate::input::InputState;
 use crate::input::state::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
@@ -8,15 +9,27 @@ use crate::input::state::{
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BG_INPUT_SELECTION, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE,
-    EMPTY_COMMAND_SUGGESTIONS, HINT_PRESS_ESC, INPUT_BG, INPUT_BORDER_FOCUSED, OVERLAY_DIM_MEDIUM,
-    PANEL_BG_COMMAND_PALETTE, RADIUS_LG, RADIUS_SM, RADIUS_STD, SHADOW, TEXT_DESCRIPTION,
-    TEXT_PLACEHOLDER, TEXT_WHITE,
+    self, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, HINT_PRESS_ESC,
+    INPUT_BG, INPUT_BORDER_FOCUSED, OVERLAY_DIM_MEDIUM, PANEL_BG_COMMAND_PALETTE, RADIUS_LG,
+    RADIUS_STD, SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for};
 
+mod command_palette_row;
+
+use self::command_palette_row::{command_palette_row_styles, render_command_row};
+
 const HINT_BASELINE_BOTTOM_OFFSET: f64 = 12.0;
 const ELLIPSIS: &str = "\u{2026}";
+const COMMAND_PALETTE_FONT_FAMILY: &str = "Sans";
+const COMMAND_PALETTE_LABEL_TEXT_SIZE: f64 = 14.0;
+const COMMAND_PALETTE_DESC_TEXT_SIZE: f64 = 12.0;
+const COMMAND_PALETTE_SHORTCUT_TEXT_SIZE: f64 = 10.0;
+const COMMAND_PALETTE_HINT_TEXT_SIZE: f64 = 11.0;
+const COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X: f64 = 5.0;
+const COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT: f64 = 18.0;
+const COMMAND_PALETTE_SHORTCUT_BADGE_GAP: f64 = 12.0;
+const COMMAND_PALETTE_SHORTCUT_MIN_DESC_WIDTH: f64 = 48.0;
 
 /// Render the command palette if open.
 pub fn render_command_palette(
@@ -38,32 +51,99 @@ pub fn render_command_palette(
     let x = geometry.x;
     let y = geometry.y;
 
-    // Dimmed background overlay
-    ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_MEDIUM);
-    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
-    let _ = ctx.fill();
-
-    // Drop shadow
-    constants::set_color(ctx, SHADOW);
-    draw_rounded_rect(ctx, x + 4.0, y + 4.0, palette_width, height, RADIUS_LG);
-    let _ = ctx.fill();
-
-    // Main background
-    constants::set_color(ctx, PANEL_BG_COMMAND_PALETTE);
-    draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
-    let _ = ctx.fill();
-
-    // Border
-    constants::set_color(ctx, BORDER_COMMAND_PALETTE);
-    draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
+    draw_command_palette_frame(
+        ctx,
+        screen_width as f64,
+        screen_height as f64,
+        x,
+        y,
+        palette_width,
+        height,
+    );
 
     let inner_x = x + COMMAND_PALETTE_PADDING;
     let inner_width = palette_width - COMMAND_PALETTE_PADDING * 2.0;
     let mut cursor_y = y + COMMAND_PALETTE_PADDING;
 
-    // Input field
+    cursor_y = draw_command_palette_input(
+        ctx,
+        inner_x,
+        cursor_y,
+        inner_width,
+        &input_state.command_palette_query,
+    );
+
+    render_command_palette_rows(ctx, input_state, &filtered, inner_x, inner_width, cursor_y);
+
+    if filtered.is_empty() && !input_state.command_palette_query.is_empty() {
+        draw_command_palette_empty_state(
+            ctx,
+            inner_x,
+            inner_width,
+            cursor_y + COMMAND_PALETTE_ITEM_HEIGHT,
+        );
+    }
+
+    render_command_palette_scroll_indicator(
+        ctx,
+        x,
+        y,
+        palette_width,
+        cursor_y,
+        filtered.len(),
+        input_state.command_palette_scroll,
+    );
+
+    draw_command_palette_escape_hint(ctx, x, y, palette_width, height);
+}
+
+fn command_palette_text_style(
+    size: f64,
+    weight: cairo::FontWeight,
+    slant: cairo::FontSlant,
+) -> UiTextStyle<'static> {
+    UiTextStyle {
+        family: COMMAND_PALETTE_FONT_FAMILY,
+        slant,
+        weight,
+        size,
+    }
+}
+
+fn draw_command_palette_frame(
+    ctx: &cairo::Context,
+    screen_width: f64,
+    screen_height: f64,
+    x: f64,
+    y: f64,
+    palette_width: f64,
+    height: f64,
+) {
+    ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_MEDIUM);
+    ctx.rectangle(0.0, 0.0, screen_width, screen_height);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, SHADOW);
+    draw_rounded_rect(ctx, x + 4.0, y + 4.0, palette_width, height, RADIUS_LG);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, PANEL_BG_COMMAND_PALETTE);
+    draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
+    let _ = ctx.fill();
+
+    constants::set_color(ctx, BORDER_COMMAND_PALETTE);
+    draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
+    ctx.set_line_width(1.0);
+    let _ = ctx.stroke();
+}
+
+fn draw_command_palette_input(
+    ctx: &cairo::Context,
+    inner_x: f64,
+    mut cursor_y: f64,
+    inner_width: f64,
+    query: &str,
+) -> f64 {
     draw_rounded_rect(
         ctx,
         inner_x,
@@ -78,23 +158,14 @@ pub fn render_command_palette(
     ctx.set_line_width(1.5);
     let _ = ctx.stroke();
 
-    // Input text
-    let font_size = 14.0;
-    let input_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: font_size,
-    };
-    let desc_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: 12.0,
-    };
+    let input_style = command_palette_text_style(
+        COMMAND_PALETTE_LABEL_TEXT_SIZE,
+        cairo::FontWeight::Normal,
+        cairo::FontSlant::Normal,
+    );
+    let text_y = cursor_y + COMMAND_PALETTE_INPUT_HEIGHT / 2.0 + input_style.size / 3.0;
 
-    let text_y = cursor_y + COMMAND_PALETTE_INPUT_HEIGHT / 2.0 + font_size / 3.0;
-    if input_state.command_palette_query.is_empty() {
+    if query.is_empty() {
         constants::set_color(ctx, TEXT_PLACEHOLDER);
         draw_text_baseline(
             ctx,
@@ -106,19 +177,23 @@ pub fn render_command_palette(
         );
     } else {
         constants::set_color(ctx, TEXT_WHITE);
-        draw_text_baseline(
-            ctx,
-            input_style,
-            &input_state.command_palette_query,
-            inner_x + 10.0,
-            text_y,
-            None,
-        );
+        draw_text_baseline(ctx, input_style, query, inner_x + 10.0, text_y, None);
     }
 
     cursor_y += COMMAND_PALETTE_INPUT_HEIGHT + COMMAND_PALETTE_LIST_GAP;
+    cursor_y
+}
 
-    // Command list (with scroll offset)
+fn render_command_palette_rows(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    filtered: &[&'static ActionMeta],
+    inner_x: f64,
+    inner_width: f64,
+    start_y: f64,
+) {
+    let styles = command_palette_row_styles();
+
     let scroll = input_state.command_palette_scroll;
     for (visible_idx, cmd) in filtered
         .iter()
@@ -128,236 +203,135 @@ pub fn render_command_palette(
     {
         let actual_idx = scroll + visible_idx;
         let is_selected = actual_idx == input_state.command_palette_selected;
-        let item_y = cursor_y + (visible_idx as f64 * COMMAND_PALETTE_ITEM_HEIGHT);
-
-        // Selection highlight
-        if is_selected {
-            draw_rounded_rect(
-                ctx,
-                inner_x,
-                item_y,
-                inner_width,
-                COMMAND_PALETTE_ITEM_HEIGHT - 2.0,
-                RADIUS_SM,
-            );
-            constants::set_color(ctx, BG_INPUT_SELECTION);
-            let _ = ctx.fill();
-        }
-
-        // Command label
-        let label_y = item_y + COMMAND_PALETTE_ITEM_HEIGHT / 2.0 + font_size / 3.0;
-        let text_alpha = if is_selected { 1.0 } else { 0.85 };
-        ctx.set_source_rgba(TEXT_WHITE.0, TEXT_WHITE.1, TEXT_WHITE.2, text_alpha);
-        draw_text_baseline(ctx, input_style, cmd.label, inner_x + 10.0, label_y, None);
-
-        let label_extents = text_extents_for(
+        let item_y = start_y + (visible_idx as f64 * COMMAND_PALETTE_ITEM_HEIGHT);
+        render_command_row(
             ctx,
-            "Sans",
-            cairo::FontSlant::Normal,
-            cairo::FontWeight::Normal,
-            font_size,
-            cmd.label,
-        );
-        let desc_x = inner_x + 10.0 + label_extents.width() + 12.0;
-        let content_right = inner_x + inner_width - 8.0;
-        let mut badge_left_edge = content_right;
-
-        // Keyboard shortcut badge (right-aligned)
-        let shortcut_labels = input_state.action_binding_labels(cmd.action);
-        if let Some(shortcut) = shortcut_labels.first() {
-            let shortcut_style = UiTextStyle {
-                family: "Sans",
-                slant: cairo::FontSlant::Normal,
-                weight: cairo::FontWeight::Normal,
-                size: 10.0,
-            };
-            let badge_padding_x = 5.0;
-            let badge_h = 18.0;
-            let badge_gap_from_desc = 12.0;
-            let min_desc_width = 48.0;
-            let max_badge_w =
-                (content_right - (desc_x + min_desc_width + badge_gap_from_desc)).max(0.0);
-
-            if max_badge_w > badge_padding_x * 2.0 {
-                let max_shortcut_text_w = max_badge_w - badge_padding_x * 2.0;
-                let shortcut_display = ellipsize_to_width(
-                    ctx,
-                    shortcut,
-                    "Sans",
-                    cairo::FontSlant::Normal,
-                    cairo::FontWeight::Normal,
-                    10.0,
-                    max_shortcut_text_w,
-                );
-
-                if !shortcut_display.is_empty() {
-                    let shortcut_extents = text_extents_for(
-                        ctx,
-                        "Sans",
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Normal,
-                        10.0,
-                        &shortcut_display,
-                    );
-                    let badge_w =
-                        (shortcut_extents.width() + badge_padding_x * 2.0).min(max_badge_w);
-                    let badge_x = content_right - badge_w;
-                    let badge_y = item_y + (COMMAND_PALETTE_ITEM_HEIGHT - badge_h) / 2.0 - 1.0;
-                    badge_left_edge = badge_x;
-
-                    // Badge background - increased visibility
-                    let badge_alpha = if is_selected { 0.35 } else { 0.25 };
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, badge_alpha);
-                    draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, 3.0);
-                    let _ = ctx.fill();
-
-                    // Badge text - increased visibility
-                    let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
-                    ctx.set_source_rgba(1.0, 1.0, 1.0, shortcut_alpha);
-                    draw_text_baseline(
-                        ctx,
-                        shortcut_style,
-                        &shortcut_display,
-                        badge_x + badge_padding_x,
-                        badge_y + badge_h / 2.0 + 3.0,
-                        None,
-                    );
-                }
-            }
-        }
-
-        // Description (dimmer but improved contrast)
-        let max_desc_width = (badge_left_edge - 12.0 - desc_x).max(0.0);
-        let desc_alpha = if is_selected { 0.9 } else { 0.75 };
-        ctx.set_source_rgba(
-            TEXT_DESCRIPTION.0,
-            TEXT_DESCRIPTION.1,
-            TEXT_DESCRIPTION.2,
-            desc_alpha,
-        );
-        if max_desc_width > 6.0 {
-            let desc_display = ellipsize_to_width(
-                ctx,
-                cmd.description,
-                "Sans",
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Normal,
-                12.0,
-                max_desc_width,
-            );
-            if desc_display.is_empty() {
-                continue;
-            }
-            draw_text_baseline(ctx, desc_style, &desc_display, desc_x, label_y, None);
-        }
-    }
-
-    // Enhanced empty state
-    if filtered.is_empty() && !input_state.command_palette_query.is_empty() {
-        let empty_y = cursor_y + COMMAND_PALETTE_ITEM_HEIGHT;
-        let center_x = inner_x + inner_width / 2.0;
-
-        // Main message - larger and centered
-        let empty_style = UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Bold,
-            size: font_size,
-        };
-        constants::set_color(ctx, TEXT_DESCRIPTION);
-        let msg_extents = text_extents_for(
-            ctx,
-            "Sans",
-            cairo::FontSlant::Normal,
-            cairo::FontWeight::Bold,
-            font_size,
-            EMPTY_COMMAND_PALETTE,
-        );
-        draw_text_baseline(
-            ctx,
-            empty_style,
-            EMPTY_COMMAND_PALETTE,
-            center_x - msg_extents.width() / 2.0,
-            empty_y,
-            None,
-        );
-
-        // Suggestions
-        let suggest_style = UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Italic,
-            weight: cairo::FontWeight::Normal,
-            size: 11.0,
-        };
-        ctx.set_source_rgba(
-            TEXT_DESCRIPTION.0,
-            TEXT_DESCRIPTION.1,
-            TEXT_DESCRIPTION.2,
-            0.7,
-        );
-        let suggest_extents = text_extents_for(
-            ctx,
-            "Sans",
-            cairo::FontSlant::Italic,
-            cairo::FontWeight::Normal,
-            11.0,
-            EMPTY_COMMAND_SUGGESTIONS,
-        );
-        draw_text_baseline(
-            ctx,
-            suggest_style,
-            EMPTY_COMMAND_SUGGESTIONS,
-            center_x - suggest_extents.width() / 2.0,
-            empty_y + 20.0,
-            None,
+            input_state,
+            cmd,
+            &styles,
+            inner_x,
+            inner_width,
+            item_y,
+            is_selected,
         );
     }
+}
 
-    // Scroll indicator (when there are more items than visible)
-    let total_items = filtered.len();
-    if total_items > COMMAND_PALETTE_MAX_VISIBLE {
-        let scroll_track_x = x + palette_width - 8.0;
-        let scroll_track_y = cursor_y;
-        let scroll_track_h =
-            (COMMAND_PALETTE_MAX_VISIBLE as f64) * COMMAND_PALETTE_ITEM_HEIGHT - 4.0;
-        let scroll_track_w = 4.0;
+fn draw_command_palette_empty_state(
+    ctx: &cairo::Context,
+    inner_x: f64,
+    inner_width: f64,
+    empty_y: f64,
+) {
+    let center_x = inner_x + inner_width / 2.0;
 
-        // Track background
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.1);
-        draw_rounded_rect(
-            ctx,
-            scroll_track_x,
-            scroll_track_y,
-            scroll_track_w,
-            scroll_track_h,
-            2.0,
-        );
-        let _ = ctx.fill();
+    let empty_style = command_palette_text_style(
+        COMMAND_PALETTE_LABEL_TEXT_SIZE,
+        cairo::FontWeight::Bold,
+        cairo::FontSlant::Normal,
+    );
+    constants::set_color(ctx, TEXT_DESCRIPTION);
+    let msg_extents = text_extents_for(
+        ctx,
+        COMMAND_PALETTE_FONT_FAMILY,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        empty_style.size,
+        EMPTY_COMMAND_PALETTE,
+    );
+    draw_text_baseline(
+        ctx,
+        empty_style,
+        EMPTY_COMMAND_PALETTE,
+        center_x - msg_extents.width() / 2.0,
+        empty_y,
+        None,
+    );
 
-        // Thumb position and size
-        let thumb_ratio = COMMAND_PALETTE_MAX_VISIBLE as f64 / total_items as f64;
-        let thumb_h = (scroll_track_h * thumb_ratio).max(20.0);
-        let scroll_range = total_items - COMMAND_PALETTE_MAX_VISIBLE;
-        let scroll_progress = if scroll_range > 0 {
-            scroll as f64 / scroll_range as f64
-        } else {
-            0.0
-        };
-        let thumb_y = scroll_track_y + scroll_progress * (scroll_track_h - thumb_h);
+    let suggest_style = command_palette_text_style(
+        COMMAND_PALETTE_HINT_TEXT_SIZE,
+        cairo::FontWeight::Normal,
+        cairo::FontSlant::Italic,
+    );
+    ctx.set_source_rgba(
+        TEXT_DESCRIPTION.0,
+        TEXT_DESCRIPTION.1,
+        TEXT_DESCRIPTION.2,
+        0.7,
+    );
+    let suggest_extents = text_extents_for(
+        ctx,
+        COMMAND_PALETTE_FONT_FAMILY,
+        cairo::FontSlant::Italic,
+        cairo::FontWeight::Normal,
+        suggest_style.size,
+        EMPTY_COMMAND_SUGGESTIONS,
+    );
+    draw_text_baseline(
+        ctx,
+        suggest_style,
+        EMPTY_COMMAND_SUGGESTIONS,
+        center_x - suggest_extents.width() / 2.0,
+        empty_y + 20.0,
+        None,
+    );
+}
 
-        // Thumb
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
-        draw_rounded_rect(ctx, scroll_track_x, thumb_y, scroll_track_w, thumb_h, 2.0);
-        let _ = ctx.fill();
+fn render_command_palette_scroll_indicator(
+    ctx: &cairo::Context,
+    x: f64,
+    _y: f64,
+    palette_width: f64,
+    start_y: f64,
+    total_items: usize,
+    scroll: usize,
+) {
+    if total_items <= COMMAND_PALETTE_MAX_VISIBLE {
+        return;
     }
 
-    // Escape hint at bottom
-    let hint_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: 11.0,
+    let scroll_track_x = x + palette_width - 8.0;
+    let scroll_track_h = (COMMAND_PALETTE_MAX_VISIBLE as f64) * COMMAND_PALETTE_ITEM_HEIGHT - 4.0;
+    let scroll_track_w = 4.0;
+
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.1);
+    draw_rounded_rect(
+        ctx,
+        scroll_track_x,
+        start_y,
+        scroll_track_w,
+        scroll_track_h,
+        2.0,
+    );
+    let _ = ctx.fill();
+
+    let thumb_ratio = COMMAND_PALETTE_MAX_VISIBLE as f64 / total_items as f64;
+    let thumb_h = (scroll_track_h * thumb_ratio).max(20.0);
+    let scroll_range = total_items - COMMAND_PALETTE_MAX_VISIBLE;
+    let scroll_progress = if scroll_range > 0 {
+        scroll as f64 / scroll_range as f64
+    } else {
+        0.0
     };
+    let thumb_y = start_y + scroll_progress * (scroll_track_h - thumb_h);
+
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35);
+    draw_rounded_rect(ctx, scroll_track_x, thumb_y, scroll_track_w, thumb_h, 2.0);
+    let _ = ctx.fill();
+}
+
+fn draw_command_palette_escape_hint(
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    palette_width: f64,
+    height: f64,
+) {
+    let hint_style = command_palette_text_style(
+        COMMAND_PALETTE_HINT_TEXT_SIZE,
+        cairo::FontWeight::Normal,
+        cairo::FontSlant::Normal,
+    );
     ctx.set_source_rgba(
         TEXT_DESCRIPTION.0,
         TEXT_DESCRIPTION.1,
@@ -367,10 +341,10 @@ pub fn render_command_palette(
     let hint_y = y + height - HINT_BASELINE_BOTTOM_OFFSET;
     let hint_extents = text_extents_for(
         ctx,
-        "Sans",
+        COMMAND_PALETTE_FONT_FAMILY,
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
-        11.0,
+        COMMAND_PALETTE_HINT_TEXT_SIZE,
         HINT_PRESS_ESC,
     );
     draw_text_baseline(
