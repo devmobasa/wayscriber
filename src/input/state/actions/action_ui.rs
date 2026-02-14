@@ -44,6 +44,7 @@ impl InputState {
                 let now_visible = !self.toolbar_visible();
                 let changed = self.set_toolbar_visible(now_visible);
                 if changed {
+                    self.pending_onboarding_usage.used_toolbar_toggle = true;
                     info!(
                         "Toolbar visibility {}",
                         if now_visible { "enabled" } else { "disabled" }

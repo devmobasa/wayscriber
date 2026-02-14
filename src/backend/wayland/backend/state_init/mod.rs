@@ -54,13 +54,22 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     };
 
     let mut onboarding = OnboardingStore::load();
-    if !onboarding.state().welcome_shown {
-        // Start the guided tour for new users
-        input_state.start_tour();
-        onboarding.state_mut().welcome_shown = true;
-        onboarding.state_mut().tour_shown = true;
-        onboarding.save();
+    {
+        let state = onboarding.state_mut();
+        state.sessions_seen = state.sessions_seen.saturating_add(1);
+        if !state.first_run_completed && !state.first_run_skipped {
+            state
+                .active_step
+                .get_or_insert(crate::onboarding::FirstRunStep::WaitDraw);
+        } else {
+            state.active_step = None;
+            state.quick_access_requires_toolbar = false;
+        }
+        // Keep legacy flags marked so older checks never re-trigger.
+        state.welcome_shown = true;
+        state.tour_shown = true;
     }
+    onboarding.save();
     apply_initial_mode(backend, &config, &mut input_state);
 
     let capture_manager = CaptureManager::new(backend.tokio_runtime.handle());

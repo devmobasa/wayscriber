@@ -8,6 +8,7 @@ impl InputState {
             Action::Undo => {
                 if let Some(action) = self.boards.active_frame_mut().undo_last() {
                     self.apply_action_side_effects(&action);
+                    self.pending_onboarding_usage.first_undo_done = true;
                 } else {
                     // Nothing to undo - show blocked feedback
                     self.trigger_blocked_feedback();
