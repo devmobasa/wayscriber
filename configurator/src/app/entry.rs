@@ -30,3 +30,57 @@ fn should_force_tiny_skia() -> bool {
     let combined = combined.to_ascii_lowercase();
     combined.contains("gnome") || combined.contains("ubuntu")
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Mutex, OnceLock};
+
+    use super::*;
+
+    fn env_mutex() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn should_force_tiny_skia_requires_wayland_and_gnome_like_desktop() {
+        let _guard = env_mutex().lock().unwrap();
+        let original_wayland = std::env::var_os("WAYLAND_DISPLAY");
+        let original_current = std::env::var_os("XDG_CURRENT_DESKTOP");
+        let original_session = std::env::var_os("XDG_SESSION_DESKTOP");
+
+        // SAFETY: serialized by env mutex in this test module.
+        unsafe {
+            std::env::set_var("WAYLAND_DISPLAY", "wayland-0");
+            std::env::set_var("XDG_CURRENT_DESKTOP", "GNOME");
+            std::env::set_var("XDG_SESSION_DESKTOP", "");
+        }
+        assert!(should_force_tiny_skia());
+
+        // SAFETY: serialized by env mutex in this test module.
+        unsafe {
+            std::env::set_var("XDG_CURRENT_DESKTOP", "KDE");
+            std::env::set_var("XDG_SESSION_DESKTOP", "plasma");
+        }
+        assert!(!should_force_tiny_skia());
+
+        // SAFETY: serialized by env mutex in this test module.
+        unsafe {
+            std::env::remove_var("WAYLAND_DISPLAY");
+        }
+        assert!(!should_force_tiny_skia());
+
+        match original_wayland {
+            Some(value) => unsafe { std::env::set_var("WAYLAND_DISPLAY", value) },
+            None => unsafe { std::env::remove_var("WAYLAND_DISPLAY") },
+        }
+        match original_current {
+            Some(value) => unsafe { std::env::set_var("XDG_CURRENT_DESKTOP", value) },
+            None => unsafe { std::env::remove_var("XDG_CURRENT_DESKTOP") },
+        }
+        match original_session {
+            Some(value) => unsafe { std::env::set_var("XDG_SESSION_DESKTOP", value) },
+            None => unsafe { std::env::remove_var("XDG_SESSION_DESKTOP") },
+        }
+    }
+}

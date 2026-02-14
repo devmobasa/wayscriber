@@ -122,3 +122,54 @@ impl ConfiguratorApp {
         self.is_dirty = self.draft != self.baseline;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use super::*;
+
+    fn temp_config_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "wayscriber-configurator-state-{}-{name}.toml",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn refresh_dirty_flag_tracks_draft_vs_baseline() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        app.refresh_dirty_flag();
+        assert!(!app.is_dirty);
+
+        app.draft.capture_enabled = !app.draft.capture_enabled;
+        app.refresh_dirty_flag();
+        assert!(app.is_dirty);
+    }
+
+    #[test]
+    fn config_changed_on_disk_detects_newer_file() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let path = temp_config_path("mtime");
+        std::fs::write(&path, "test").expect("write config");
+
+        app.config_path = Some(path.clone());
+        app.config_mtime = Some(SystemTime::UNIX_EPOCH);
+
+        assert!(app.config_changed_on_disk());
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn config_changed_on_disk_returns_false_without_path_or_mtime() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        app.config_path = None;
+        app.config_mtime = Some(SystemTime::UNIX_EPOCH);
+        assert!(!app.config_changed_on_disk());
+
+        app.config_path = Some(temp_config_path("missing"));
+        app.config_mtime = None;
+        assert!(!app.config_changed_on_disk());
+    }
+}

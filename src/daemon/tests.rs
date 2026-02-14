@@ -2,13 +2,39 @@ use super::core::Daemon;
 #[cfg(feature = "tray")]
 use super::tray::WayscriberTray;
 use super::types::{BackendRunner, OverlayState};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
 #[cfg(feature = "tray")]
 use ksni::{Tray, menu::MenuItem};
 #[cfg(feature = "tray")]
-use std::sync::Arc;
-#[cfg(feature = "tray")]
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::atomic::AtomicBool;
+
+#[test]
+fn daemon_session_resume_override_reflects_constructor_value() {
+    let daemon_true = Daemon::new(None, false, Some(true));
+    let daemon_false = Daemon::new(None, false, Some(false));
+    let daemon_none = Daemon::new(None, false, None);
+
+    assert_eq!(daemon_true.session_resume_override(), Some(true));
+    assert_eq!(daemon_false.session_resume_override(), Some(false));
+    assert_eq!(daemon_none.session_resume_override(), None);
+}
+
+#[test]
+fn toggle_overlay_with_backend_runner_works_without_external_process() {
+    let called = Arc::new(AtomicUsize::new(0));
+    let called_clone = Arc::clone(&called);
+    let runner: Arc<BackendRunner> = Arc::new(move |_| {
+        called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+        Ok(())
+    });
+    let mut daemon = Daemon::with_backend_runner(None, runner);
+
+    daemon.toggle_overlay().unwrap();
+    assert_eq!(called.load(AtomicOrdering::SeqCst), 1);
+    assert_eq!(daemon.test_state(), OverlayState::Hidden);
+}
 
 #[cfg(feature = "tray")]
 fn runner_counter(count: Arc<AtomicUsize>) -> Arc<BackendRunner> {

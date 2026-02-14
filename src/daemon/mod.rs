@@ -6,7 +6,7 @@ mod overlay;
 mod tray;
 mod types;
 
-#[cfg(all(test, feature = "tray"))]
+#[cfg(test)]
 mod tests;
 
 pub use core::Daemon;

@@ -34,16 +34,9 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
         &options,
         session::snapshot_from_input(&state.input_state, &options),
     ) {
-        Ok(saved) => {
-            if saved {
-                state.session.mark_saved(now);
-            }
-        }
+        Ok(saved) => record_autosave_success(&mut state.session, now, saved),
         Err(err) => {
-            if state
-                .session
-                .mark_autosave_failure(now, options.autosave_failure_backoff)
-            {
+            if record_autosave_failure(&mut state.session, now, &options) {
                 notify_session_failure(state, &err);
             }
             return Err(err);
@@ -79,6 +72,24 @@ fn persistence_enabled(options: &session::SessionOptions) -> bool {
     options.any_enabled() || options.restore_tool_state || options.persist_history
 }
 
+fn record_autosave_success(
+    session_state: &mut crate::backend::wayland::session::SessionState,
+    now: Instant,
+    saved: bool,
+) {
+    if saved {
+        session_state.mark_saved(now);
+    }
+}
+
+fn record_autosave_failure(
+    session_state: &mut crate::backend::wayland::session::SessionState,
+    now: Instant,
+    options: &session::SessionOptions,
+) -> bool {
+    session_state.mark_autosave_failure(now, options.autosave_failure_backoff)
+}
+
 pub(super) fn notify_session_failure(state: &WaylandState, err: &anyhow::Error) {
     notification::send_notification_async(
         &state.tokio_handle,
@@ -86,4 +97,83 @@ pub(super) fn notify_session_failure(state: &WaylandState, err: &anyhow::Error) 
         format!("Your drawings may not persist: {}", err),
         Some("dialog-error".to_string()),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn persistence_enabled_respects_any_enabled_boards() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = true;
+        options.persist_history = false;
+        options.restore_tool_state = false;
+
+        assert!(persistence_enabled(&options));
+    }
+
+    #[test]
+    fn persistence_enabled_respects_restore_tool_state() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = false;
+        options.persist_whiteboard = false;
+        options.persist_blackboard = false;
+        options.persist_history = false;
+        options.restore_tool_state = true;
+
+        assert!(persistence_enabled(&options));
+    }
+
+    #[test]
+    fn persistence_enabled_is_false_when_nothing_is_enabled() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = false;
+        options.persist_whiteboard = false;
+        options.persist_blackboard = false;
+        options.persist_history = false;
+        options.restore_tool_state = false;
+
+        assert!(!persistence_enabled(&options));
+    }
+
+    #[test]
+    fn record_autosave_failure_notifies_only_once_until_saved() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = true;
+        options.autosave_enabled = true;
+        options.autosave_idle = Duration::from_millis(1);
+        options.autosave_interval = Duration::from_millis(1);
+        options.autosave_failure_backoff = Duration::from_millis(50);
+
+        let mut state = crate::backend::wayland::session::SessionState::new(Some(options.clone()));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+
+        assert!(record_autosave_failure(&mut state, now, &options));
+        assert!(!record_autosave_failure(&mut state, now, &options));
+        assert!(!state.autosave_due(now, &options));
+
+        record_autosave_success(&mut state, now, true);
+        state.record_input_dirty(now, true);
+        assert!(record_autosave_failure(&mut state, now, &options));
+    }
+
+    #[test]
+    fn record_autosave_success_clears_dirty_state_when_saved() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = true;
+        options.autosave_enabled = true;
+        options.autosave_idle = Duration::from_millis(1);
+        options.autosave_interval = Duration::from_millis(1);
+
+        let mut state = crate::backend::wayland::session::SessionState::new(Some(options.clone()));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+        assert!(state.autosave_due(now + Duration::from_millis(2), &options));
+
+        record_autosave_success(&mut state, now + Duration::from_millis(2), true);
+        assert!(!state.autosave_due(now + Duration::from_millis(2), &options));
+    }
 }

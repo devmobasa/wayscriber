@@ -181,3 +181,73 @@ impl Daemon {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backoff_duration_grows_and_caps() {
+        let mut daemon = Daemon::new(None, false, None);
+
+        daemon.overlay_spawn_failures = 1;
+        assert_eq!(
+            daemon.overlay_spawn_backoff_duration(),
+            Duration::from_secs(1)
+        );
+
+        daemon.overlay_spawn_failures = 2;
+        assert_eq!(
+            daemon.overlay_spawn_backoff_duration(),
+            Duration::from_secs(2)
+        );
+
+        daemon.overlay_spawn_failures = 5;
+        assert_eq!(
+            daemon.overlay_spawn_backoff_duration(),
+            Duration::from_secs(16)
+        );
+
+        daemon.overlay_spawn_failures = 6;
+        assert_eq!(
+            daemon.overlay_spawn_backoff_duration(),
+            Duration::from_secs(30)
+        );
+    }
+
+    #[test]
+    fn overlay_spawn_allowed_honors_retry_window() {
+        let mut daemon = Daemon::new(None, false, None);
+        daemon.overlay_spawn_next_retry = Some(Instant::now() + Duration::from_secs(2));
+        daemon.overlay_spawn_backoff_logged = false;
+
+        assert!(!daemon.overlay_spawn_allowed());
+        assert!(daemon.overlay_spawn_backoff_logged);
+
+        daemon.overlay_spawn_next_retry = Some(Instant::now() - Duration::from_secs(1));
+        assert!(daemon.overlay_spawn_allowed());
+        assert!(!daemon.overlay_spawn_backoff_logged);
+    }
+
+    #[test]
+    fn push_spawn_candidate_deduplicates_programs() {
+        let mut candidates = Vec::new();
+        let mut seen = HashSet::<OsString>::new();
+
+        Daemon::push_spawn_candidate(
+            &mut candidates,
+            &mut seen,
+            OsString::from("wayscriber"),
+            "PATH",
+        );
+        Daemon::push_spawn_candidate(
+            &mut candidates,
+            &mut seen,
+            OsString::from("wayscriber"),
+            "argv0",
+        );
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].source, "PATH");
+    }
+}
