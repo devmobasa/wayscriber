@@ -53,7 +53,7 @@ pub fn render_onboarding_card(
     let card_height = content_height + card_padding * 2.0;
 
     rounded_rect(ctx, x, y, card_width, card_height, card_radius);
-    ctx.set_source_rgba(0.07, 0.09, 0.12, 0.94);
+    ctx.set_source_rgba(0.07, 0.09, 0.12, 0.85);
     let _ = ctx.fill_preserve();
     ctx.set_source_rgba(0.36, 0.46, 0.58, 0.8);
     ctx.set_line_width(1.0);
@@ -146,14 +146,7 @@ pub fn render_onboarding_card(
 
         if item.done {
             ctx.set_source_rgba(0.96, 1.0, 0.97, 1.0);
-            draw_text_baseline(
-                ctx,
-                item_style,
-                "x",
-                content_x + 1.8 * CARD_SCALE,
-                cursor_y + 10.0 * CARD_SCALE,
-                None,
-            );
+            draw_checkmark(ctx, dot_x, dot_y, item_dot_size * 0.5);
         }
 
         ctx.set_source_rgba(0.86, 0.90, 0.96, 1.0);
@@ -228,4 +221,22 @@ fn rounded_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
         3.0 * std::f64::consts::FRAC_PI_2,
     );
     ctx.close_path();
+}
+
+fn draw_checkmark(ctx: &cairo::Context, cx: f64, cy: f64, radius: f64) {
+    let left_x = cx - radius * 0.55;
+    let left_y = cy + radius * 0.05;
+    let mid_x = cx - radius * 0.10;
+    let mid_y = cy + radius * 0.45;
+    let right_x = cx + radius * 0.62;
+    let right_y = cy - radius * 0.42;
+
+    ctx.new_path();
+    ctx.move_to(left_x, left_y);
+    ctx.line_to(mid_x, mid_y);
+    ctx.line_to(right_x, right_y);
+    ctx.set_line_width((radius * 0.48).max(1.0));
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    let _ = ctx.stroke();
 }

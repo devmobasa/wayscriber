@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const ONBOARDING_VERSION: u32 = 3;
 pub(crate) const DRAWER_HINT_MAX: u32 = 2;
+pub(crate) const DEFERRED_HINT_REPEAT_MAX: u32 = 3;
 const ONBOARDING_FILE: &str = "onboarding.toml";
 const ONBOARDING_DIR: &str = "wayscriber";
 
@@ -91,12 +92,21 @@ pub struct OnboardingState {
     /// Whether deferred help hint has already been shown
     #[serde(default)]
     pub hint_help_shown: bool,
+    /// Number of deferred help hints shown across sessions
+    #[serde(default)]
+    pub hint_help_count: u32,
     /// Whether deferred command palette hint has already been shown
     #[serde(default)]
     pub hint_palette_shown: bool,
+    /// Number of deferred command palette hints shown across sessions
+    #[serde(default)]
+    pub hint_palette_count: u32,
     /// Whether deferred quick-access hint has already been shown
     #[serde(default)]
     pub hint_quick_access_shown: bool,
+    /// Number of deferred quick-access hints shown across sessions
+    #[serde(default)]
+    pub hint_quick_access_count: u32,
 }
 
 impl Default for OnboardingState {
@@ -126,8 +136,11 @@ impl Default for OnboardingState {
             used_help_overlay: false,
             used_command_palette: false,
             hint_help_shown: false,
+            hint_help_count: 0,
             hint_palette_shown: false,
+            hint_palette_count: 0,
             hint_quick_access_shown: false,
+            hint_quick_access_count: 0,
         }
     }
 }
@@ -287,6 +300,18 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
         state.quick_access_requires_toolbar = false;
         needs_save = true;
     }
+    if state.hint_help_shown && state.hint_help_count == 0 {
+        state.hint_help_count = 1;
+        needs_save = true;
+    }
+    if state.hint_palette_shown && state.hint_palette_count == 0 {
+        state.hint_palette_count = 1;
+        needs_save = true;
+    }
+    if state.hint_quick_access_shown && state.hint_quick_access_count == 0 {
+        state.hint_quick_access_count = 1;
+        needs_save = true;
+    }
 
     needs_save
 }
@@ -331,8 +356,11 @@ fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
         used_help_overlay: false,
         used_command_palette: false,
         hint_help_shown: true,
+        hint_help_count: DEFERRED_HINT_REPEAT_MAX,
         hint_palette_shown: true,
+        hint_palette_count: DEFERRED_HINT_REPEAT_MAX,
         hint_quick_access_shown: true,
+        hint_quick_access_count: DEFERRED_HINT_REPEAT_MAX,
     };
     let store = OnboardingStore {
         state: state.clone(),

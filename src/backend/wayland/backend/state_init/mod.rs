@@ -10,7 +10,7 @@ use crate::{
     capture::CaptureManager,
     config::Config,
     input::{InputState, state::CompositorCapabilities},
-    onboarding::OnboardingStore,
+    onboarding::{DEFERRED_HINT_REPEAT_MAX, OnboardingStore},
 };
 
 mod config;
@@ -57,6 +57,20 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     {
         let state = onboarding.state_mut();
         state.sessions_seen = state.sessions_seen.saturating_add(1);
+        // Re-arm deferred hints per session until each feature is actually used.
+        if !state.used_help_overlay && state.hint_help_count < DEFERRED_HINT_REPEAT_MAX {
+            state.hint_help_shown = false;
+        }
+        if !state.used_command_palette && state.hint_palette_count < DEFERRED_HINT_REPEAT_MAX {
+            state.hint_palette_shown = false;
+        }
+        if !state.used_radial_menu
+            && !state.used_context_menu_right_click
+            && !state.used_context_menu_keyboard
+            && state.hint_quick_access_count < DEFERRED_HINT_REPEAT_MAX
+        {
+            state.hint_quick_access_shown = false;
+        }
         if !state.first_run_completed && !state.first_run_skipped {
             state
                 .active_step

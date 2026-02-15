@@ -1,6 +1,6 @@
 use crate::config::{RadialMenuMouseBinding, keybindings::Action};
 use crate::input::state::UiToastKind;
-use crate::onboarding::{FirstRunStep, OnboardingState};
+use crate::onboarding::{DEFERRED_HINT_REPEAT_MAX, FirstRunStep, OnboardingState};
 use crate::ui::{OnboardingCard, OnboardingChecklistItem};
 
 use super::*;
@@ -42,14 +42,14 @@ impl WaylandState {
             return None;
         }
         let step = state.active_step?;
+        let eyebrow = first_run_step_eyebrow(step);
         let footer = "Shift+Escape to skip".to_string();
 
         let card = match step {
             FirstRunStep::WaitDraw => OnboardingCard {
-                eyebrow: "First-run onboarding".to_string(),
+                eyebrow: eyebrow.to_string(),
                 title: "Draw one mark".to_string(),
-                body: "Make one quick stroke to start. This onboarding stays out of your way."
-                    .to_string(),
+                body: "Draw one quick stroke anywhere on the canvas.".to_string(),
                 items: vec![OnboardingChecklistItem {
                     label: "Draw a stroke".to_string(),
                     done: state.first_stroke_done,
@@ -57,7 +57,7 @@ impl WaylandState {
                 footer,
             },
             FirstRunStep::DrawUndo => OnboardingCard {
-                eyebrow: "First-run onboarding".to_string(),
+                eyebrow: eyebrow.to_string(),
                 title: "Try Undo".to_string(),
                 body: "You can always revert mistakes. Draw, then undo once.".to_string(),
                 items: vec![
@@ -75,17 +75,15 @@ impl WaylandState {
             FirstRunStep::QuickAccess => {
                 let items = self.quick_access_checklist_items(state);
                 OnboardingCard {
-                    eyebrow: "First-run onboarding".to_string(),
+                    eyebrow: eyebrow.to_string(),
                     title: "Quick access at cursor".to_string(),
-                    body:
-                        "Open quick actions near the pointer. This is faster than hunting buttons."
-                            .to_string(),
+                    body: "Open quick actions near the pointer.".to_string(),
                     items,
                     footer,
                 }
             }
             FirstRunStep::Reference => OnboardingCard {
-                eyebrow: "First-run onboarding".to_string(),
+                eyebrow: eyebrow.to_string(),
                 title: "Find anything fast".to_string(),
                 body: "Use help for full shortcuts and command palette for searchable actions."
                     .to_string(),
@@ -243,7 +241,7 @@ impl WaylandState {
         }
         if completed_now && self.input_state.ui_toast.is_none() {
             self.input_state
-                .set_ui_toast(UiToastKind::Info, "Onboarding complete.");
+                .set_ui_toast(UiToastKind::Info, "Nice work. Onboarding complete.");
         }
     }
 
@@ -269,15 +267,22 @@ impl WaylandState {
             if !state.first_run_completed {
                 return;
             }
-            if state.sessions_seen >= 2 && !state.used_help_overlay && !state.hint_help_shown {
+            if state.sessions_seen >= 2
+                && !state.used_help_overlay
+                && !state.hint_help_shown
+                && state.hint_help_count < DEFERRED_HINT_REPEAT_MAX
+            {
                 state.hint_help_shown = true;
+                state.hint_help_count = state.hint_help_count.saturating_add(1);
                 changed = true;
                 hint_kind = Some("help");
             } else if state.sessions_seen >= 3
                 && !state.used_command_palette
                 && !state.hint_palette_shown
+                && state.hint_palette_count < DEFERRED_HINT_REPEAT_MAX
             {
                 state.hint_palette_shown = true;
+                state.hint_palette_count = state.hint_palette_count.saturating_add(1);
                 changed = true;
                 hint_kind = Some("palette");
             } else if state.sessions_seen >= 2
@@ -285,8 +290,10 @@ impl WaylandState {
                 && !state.used_context_menu_right_click
                 && !state.used_context_menu_keyboard
                 && !state.hint_quick_access_shown
+                && state.hint_quick_access_count < DEFERRED_HINT_REPEAT_MAX
             {
                 state.hint_quick_access_shown = true;
+                state.hint_quick_access_count = state.hint_quick_access_count.saturating_add(1);
                 changed = true;
                 hint_kind = Some("quick_access");
             }
@@ -518,6 +525,15 @@ fn quick_access_completed(
     done
 }
 
+fn first_run_step_eyebrow(step: FirstRunStep) -> &'static str {
+    match step {
+        FirstRunStep::WaitDraw => "Step 1 / 4",
+        FirstRunStep::DrawUndo => "Step 2 / 4",
+        FirstRunStep::QuickAccess => "Step 3 / 4",
+        FirstRunStep::Reference => "Step 4 / 4",
+    }
+}
+
 fn first_run_skip_allowed(first_run_active: bool, card_visible: bool) -> bool {
     first_run_active && card_visible
 }
@@ -542,7 +558,11 @@ fn first_run_card_hidden_by_ui_state(
 
 #[cfg(test)]
 mod tests {
-    use super::{first_run_card_hidden_by_ui_state, first_run_skip_allowed};
+    use super::{
+        FirstRunStep, OnboardingState, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
+        first_run_step_eyebrow, quick_access_completed,
+    };
+    use crate::config::RadialMenuMouseBinding;
 
     #[test]
     fn first_run_skip_requires_active_onboarding_and_visible_card() {
@@ -578,6 +598,74 @@ mod tests {
     fn first_run_card_remains_visible_without_modal_states() {
         assert!(!first_run_card_hidden_by_ui_state(
             false, false, false, false, false, false, false
+        ));
+    }
+
+    #[test]
+    fn first_run_eyebrow_shows_progress() {
+        assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 1 / 4");
+        assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 2 / 4");
+        assert_eq!(
+            first_run_step_eyebrow(FirstRunStep::QuickAccess),
+            "Step 3 / 4"
+        );
+        assert_eq!(
+            first_run_step_eyebrow(FirstRunStep::Reference),
+            "Step 4 / 4"
+        );
+    }
+
+    #[test]
+    fn quick_access_completes_when_radial_unavailable_and_context_disabled() {
+        let state = OnboardingState::default();
+        assert!(quick_access_completed(
+            &state,
+            false,
+            RadialMenuMouseBinding::Middle,
+            false,
+            false,
+            true,
+        ));
+    }
+
+    #[test]
+    fn quick_access_waives_context_when_radial_uses_right_click_without_context_shortcut() {
+        let state = OnboardingState {
+            used_radial_menu: true,
+            ..OnboardingState::default()
+        };
+        assert!(quick_access_completed(
+            &state,
+            true,
+            RadialMenuMouseBinding::Right,
+            true,
+            false,
+            true,
+        ));
+    }
+
+    #[test]
+    fn quick_access_blocks_when_toolbar_required_and_still_hidden() {
+        let mut state = OnboardingState {
+            quick_access_requires_toolbar: true,
+            ..OnboardingState::default()
+        };
+        assert!(!quick_access_completed(
+            &state,
+            false,
+            RadialMenuMouseBinding::Middle,
+            false,
+            false,
+            false,
+        ));
+        state.used_toolbar_toggle = true;
+        assert!(quick_access_completed(
+            &state,
+            false,
+            RadialMenuMouseBinding::Middle,
+            false,
+            false,
+            false,
         ));
     }
 }
