@@ -14,31 +14,43 @@ pub enum HelpOverlayCursorHint {
 }
 
 impl InputState {
-    pub(crate) fn toggle_help_overlay(&mut self) {
-        let now_visible = !self.show_help;
-        self.show_help = now_visible;
-        // Preserve search when reopening; Escape clears it
+    fn open_help_overlay_internal(&mut self, quick_mode: bool, track_usage: bool) {
+        self.show_help = true;
+        self.help_overlay_quick_mode = quick_mode;
         self.help_overlay_scroll = 0.0;
         self.help_overlay_scroll_max = 0.0;
-        if now_visible {
-            self.help_overlay_page = 0;
-            self.help_overlay_quick_mode = false;
+        if track_usage {
+            self.pending_onboarding_usage.used_help_overlay = true;
         }
+        self.help_overlay_page = 0;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
-    pub(crate) fn toggle_quick_help(&mut self) {
-        let now_visible = !self.show_help || !self.help_overlay_quick_mode;
-        self.show_help = now_visible;
-        self.help_overlay_quick_mode = now_visible;
-        self.help_overlay_scroll = 0.0;
-        self.help_overlay_scroll_max = 0.0;
-        if now_visible {
-            self.help_overlay_page = 0;
+    pub(crate) fn toggle_help_overlay(&mut self) {
+        if self.show_help {
+            self.show_help = false;
+            self.help_overlay_quick_mode = false;
+            self.help_overlay_scroll = 0.0;
+            self.help_overlay_scroll_max = 0.0;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return;
         }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
+        self.open_help_overlay_internal(false, true);
+    }
+
+    pub(crate) fn toggle_quick_help(&mut self) {
+        if self.show_help && self.help_overlay_quick_mode {
+            self.show_help = false;
+            self.help_overlay_quick_mode = false;
+            self.help_overlay_scroll = 0.0;
+            self.help_overlay_scroll_max = 0.0;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return;
+        }
+        self.open_help_overlay_internal(true, true);
     }
 
     pub(crate) fn help_overlay_next_page(&mut self) -> bool {

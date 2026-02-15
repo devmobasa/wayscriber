@@ -143,3 +143,22 @@ fn render_frozen_badge_draws_pixels() {
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }
+
+#[test]
+fn render_onboarding_card_tiny_surface_does_not_panic() {
+    let (mut surface, ctx) = surface_with_context(200, 40);
+    let card = wayscriber::ui::OnboardingCard {
+        eyebrow: "First-run onboarding".to_string(),
+        title: "Draw one mark".to_string(),
+        body: "Make one quick stroke to start.".to_string(),
+        items: vec![wayscriber::ui::OnboardingChecklistItem {
+            label: "Draw a stroke".to_string(),
+            done: false,
+        }],
+        footer: "Shift+Escape to skip".to_string(),
+    };
+
+    wayscriber::ui::render_onboarding_card(&ctx, 200, 40, &card);
+    drop(ctx);
+    assert!(surface_has_pixels(&mut surface));
+}

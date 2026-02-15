@@ -105,6 +105,9 @@ impl InputState {
                 self.focus_first_context_menu_entry();
             }
         }
+        if self.is_context_menu_open() {
+            self.pending_onboarding_usage.used_context_menu_keyboard = true;
+        }
         self.needs_redraw = true;
     }
 

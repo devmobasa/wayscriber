@@ -13,9 +13,10 @@ use super::super::super::{
 use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, CompositorCapabilities, DelayedHistory,
     DrawingState, OutputFocusAction, PendingBoardDelete, PendingClipboardFallback,
-    PendingPageDelete, PresetAction, PresetFeedbackState, PressureThicknessEditMode,
-    PressureThicknessEntryMode, SelectionAxis, StatusChangeHighlight, TextClickState,
-    TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
+    PendingOnboardingUsage, PendingPageDelete, PresetAction, PresetFeedbackState,
+    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, StatusChangeHighlight,
+    TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab, UiToastState,
+    ZoomAction,
 };
 use crate::config::{
     Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding, ToolPresetConfig,
@@ -200,6 +201,8 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_output_focus_action: Option<OutputFocusAction>,
     /// Pending zoom action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_zoom_action: Option<ZoomAction>,
+    /// Pending first-run onboarding usage markers to persist in onboarding store
+    pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
     /// Pending copy hex color to clipboard request
     pub(crate) pending_copy_hex: bool,
     /// Pending paste hex color from clipboard request

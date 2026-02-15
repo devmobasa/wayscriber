@@ -4,7 +4,8 @@ use super::super::super::{
 };
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
-    PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode, ToolbarDrawerTab,
+    PendingOnboardingUsage, PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode,
+    ToolbarDrawerTab,
 };
 use super::structs::InputState;
 use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, RadialMenuMouseBinding};
@@ -141,6 +142,7 @@ impl InputState {
             pending_capture_action: None,
             pending_output_focus_action: None,
             pending_zoom_action: None,
+            pending_onboarding_usage: PendingOnboardingUsage::default(),
             pending_copy_hex: false,
             pending_paste_hex: false,
             max_shapes_per_frame,

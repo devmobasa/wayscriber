@@ -339,3 +339,16 @@ pub const TEXT_EDIT_ENTRY_DURATION_MS: u64 = 200;
 pub(crate) struct TextEditEntryFeedback {
     pub started: Instant,
 }
+
+/// Pending first-run onboarding usage signals emitted by input handlers.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct PendingOnboardingUsage {
+    pub first_stroke_done: bool,
+    pub first_undo_done: bool,
+    pub used_toolbar_toggle: bool,
+    pub used_radial_menu: bool,
+    pub used_context_menu_right_click: bool,
+    pub used_context_menu_keyboard: bool,
+    pub used_help_overlay: bool,
+    pub used_command_palette: bool,
+}

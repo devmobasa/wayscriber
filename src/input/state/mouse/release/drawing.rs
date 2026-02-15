@@ -199,6 +199,13 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         state.clear_selection();
         state.needs_redraw = true;
         state.mark_session_dirty();
+        if !state.pending_onboarding_usage.first_stroke_done {
+            // First-run onboarding card can live outside the stroke bounds.
+            // Force a full repaint when first stroke usage is recorded so the
+            // step transition appears immediately.
+            state.dirty_tracker.mark_full();
+            state.pending_onboarding_usage.first_stroke_done = true;
+        }
         if used_arrow_label {
             state.bump_arrow_label();
         }
