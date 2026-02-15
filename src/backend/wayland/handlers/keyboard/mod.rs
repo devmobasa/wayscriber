@@ -93,6 +93,12 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        if matches!(key, Key::Escape)
+            && self.input_state.modifiers.shift
+            && self.try_skip_first_run_onboarding()
+        {
+            return;
+        }
         if self.zoom.is_engaged() {
             match key {
                 Key::Escape => {

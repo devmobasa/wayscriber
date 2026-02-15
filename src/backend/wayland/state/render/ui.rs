@@ -172,6 +172,9 @@ impl WaylandState {
             }
 
             // Modal overlays render last (on top of everything including toolbars)
+            if let Some(card) = self.first_run_onboarding_card() {
+                crate::ui::render_onboarding_card(ctx, width, height, &card);
+            }
             crate::ui::render_command_palette(ctx, &self.input_state, width, height);
             crate::ui::render_tour(ctx, &self.input_state, width, height);
         } else {

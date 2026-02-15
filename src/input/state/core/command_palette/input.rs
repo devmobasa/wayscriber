@@ -4,25 +4,36 @@ use super::{CommandPaletteCursorHint, layout::CommandPaletteGeometry};
 use crate::input::events::Key;
 
 impl InputState {
-    /// Toggle the command palette visibility.
-    pub(crate) fn toggle_command_palette(&mut self) {
-        self.command_palette_open = !self.command_palette_open;
-        if self.command_palette_open {
-            self.command_palette_query.clear();
-            self.command_palette_selected = 0;
-            self.command_palette_scroll = 0;
-            // Close other overlays
-            if self.show_help {
-                self.show_help = false;
-            }
-            if self.tour_active {
-                self.tour_active = false;
-            }
-            self.close_context_menu();
-            self.close_properties_panel();
+    fn open_command_palette_internal(&mut self, track_usage: bool) {
+        self.command_palette_open = true;
+        if track_usage {
+            self.pending_onboarding_usage.used_command_palette = true;
         }
+        self.command_palette_query.clear();
+        self.command_palette_selected = 0;
+        self.command_palette_scroll = 0;
+        // Close other overlays
+        if self.show_help {
+            self.show_help = false;
+        }
+        if self.tour_active {
+            self.tour_active = false;
+        }
+        self.close_context_menu();
+        self.close_properties_panel();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+    }
+
+    /// Toggle the command palette visibility.
+    pub(crate) fn toggle_command_palette(&mut self) {
+        if self.command_palette_open {
+            self.command_palette_open = false;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            return;
+        }
+        self.open_command_palette_internal(true);
     }
 
     /// Handle a key press while the command palette is open.

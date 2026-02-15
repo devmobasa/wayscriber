@@ -12,8 +12,7 @@ impl InputState {
         matches!(self.radial_menu_state, RadialMenuState::Open { .. })
     }
 
-    /// Open the radial menu centered on the given surface coordinates.
-    pub fn open_radial_menu(&mut self, x: f64, y: f64) {
+    fn open_radial_menu_internal(&mut self, x: f64, y: f64, track_usage: bool) {
         // Mutual exclusion with other popups
         if self.show_help {
             self.toggle_help_overlay();
@@ -37,8 +36,16 @@ impl InputState {
             hover: None,
             expanded_sub_ring: None,
         };
+        if track_usage {
+            self.pending_onboarding_usage.used_radial_menu = true;
+        }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
+    }
+
+    /// Open the radial menu centered on the given surface coordinates.
+    pub fn open_radial_menu(&mut self, x: f64, y: f64) {
+        self.open_radial_menu_internal(x, y, true);
     }
 
     /// Close the radial menu.

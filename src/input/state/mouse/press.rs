@@ -98,6 +98,9 @@ impl InputState {
         if focus_edit {
             self.focus_context_menu_command(MenuCommand::EditText);
         }
+        if self.is_context_menu_open() {
+            self.pending_onboarding_usage.used_context_menu_right_click = true;
+        }
         self.needs_redraw = true;
     }
 
