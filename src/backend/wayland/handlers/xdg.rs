@@ -8,7 +8,13 @@ use super::super::state::WaylandState;
 use crate::session;
 
 impl WindowHandler for WaylandState {
-    fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window) {
+    fn request_close(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, _window: &Window) {
+        if !self.xdg_focus_loss_exits_overlay() && !self.has_keyboard_focus() {
+            warn!("xdg window close requested while unfocused in stay mode; keeping overlay open");
+            self.request_xdg_activation(qh);
+            return;
+        }
+
         info!("xdg window close requested by compositor");
         self.input_state.should_exit = true;
     }
