@@ -116,13 +116,11 @@ pub(super) fn run_event_loop(
 
         // Check immediately after dispatch returns.
         if state.input_state.should_exit {
-            let now = Instant::now();
             let explicit_xdg_close_requested = state.take_xdg_explicit_close_requested();
             if should_defer_xdg_unfocused_exit(
                 state.surface.is_xdg_window(),
                 !state.xdg_focus_loss_exits_overlay(),
                 state.has_keyboard_focus(),
-                state.xdg_close_guard_active(now),
                 explicit_xdg_close_requested,
             ) {
                 warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");
@@ -208,14 +206,9 @@ fn should_defer_xdg_unfocused_exit(
     is_xdg_window: bool,
     stay_mode: bool,
     has_keyboard_focus: bool,
-    close_guard_active: bool,
     explicit_xdg_close_requested: bool,
 ) -> bool {
-    is_xdg_window
-        && stay_mode
-        && !has_keyboard_focus
-        && close_guard_active
-        && !explicit_xdg_close_requested
+    is_xdg_window && stay_mode && !has_keyboard_focus && !explicit_xdg_close_requested
 }
 
 #[cfg(test)]
@@ -223,24 +216,11 @@ mod tests {
     use super::should_defer_xdg_unfocused_exit;
 
     #[test]
-    fn defers_exit_only_for_unfocused_xdg_stay_with_guard_without_explicit_close() {
-        assert!(should_defer_xdg_unfocused_exit(
-            true, true, false, true, false
-        ));
-        assert!(!should_defer_xdg_unfocused_exit(
-            true, true, true, true, false
-        ));
-        assert!(!should_defer_xdg_unfocused_exit(
-            true, false, false, true, false
-        ));
-        assert!(!should_defer_xdg_unfocused_exit(
-            false, true, false, true, false
-        ));
-        assert!(!should_defer_xdg_unfocused_exit(
-            true, true, false, false, false
-        ));
-        assert!(!should_defer_xdg_unfocused_exit(
-            true, true, false, true, true
-        ));
+    fn defers_exit_only_for_unfocused_xdg_stay_without_explicit_close() {
+        assert!(should_defer_xdg_unfocused_exit(true, true, false, false));
+        assert!(!should_defer_xdg_unfocused_exit(true, true, true, false));
+        assert!(!should_defer_xdg_unfocused_exit(true, false, false, false));
+        assert!(!should_defer_xdg_unfocused_exit(false, true, false, false));
+        assert!(!should_defer_xdg_unfocused_exit(true, true, false, true));
     }
 }

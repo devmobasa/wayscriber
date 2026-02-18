@@ -188,7 +188,9 @@ pub(crate) fn print_usage() {
     println!("  1. Run: wayscriber --daemon");
     println!("  2. Add to Hyprland config:");
     println!("     exec-once = wayscriber --daemon");
-    println!("     bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber");
+    println!(
+        "     bind = SUPER, D, exec, bash -lc \"kill -USR1 $(pgrep -fo 'wayscriber --daemon')\""
+    );
     println!("  3. Press your bound shortcut (e.g. Super+D) to toggle overlay on/off");
     println!();
     println!("Requirements:");

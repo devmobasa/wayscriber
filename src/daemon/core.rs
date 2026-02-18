@@ -152,8 +152,12 @@ impl Daemon {
     /// Run daemon with signal handling
     pub fn run(&mut self) -> Result<()> {
         info!("Starting wayscriber daemon");
-        info!("Send SIGUSR1 to toggle overlay (e.g., pkill -SIGUSR1 wayscriber)");
-        info!("Configure Hyprland: bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber");
+        info!(
+            "Send SIGUSR1 to toggle overlay (e.g., kill -USR1 $(pgrep -fo 'wayscriber --daemon'))"
+        );
+        info!(
+            "Configure Hyprland: bind = SUPER, D, exec, bash -lc \"kill -USR1 $(pgrep -fo 'wayscriber --daemon')\""
+        );
 
         self.acquire_daemon_lock()?;
 
