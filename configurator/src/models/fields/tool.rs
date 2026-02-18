@@ -1,6 +1,27 @@
 use wayscriber::input::Tool;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragToolField {
+    Drag,
+    ShiftDrag,
+    CtrlDrag,
+    CtrlShiftDrag,
+    TabDrag,
+}
+
+impl DragToolField {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Drag => "Drag",
+            Self::ShiftDrag => "Shift+Drag",
+            Self::CtrlDrag => "Ctrl+Drag",
+            Self::CtrlShiftDrag => "Ctrl+Shift+Drag",
+            Self::TabDrag => "Tab+Drag",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolOption {
     Select,
     Pen,

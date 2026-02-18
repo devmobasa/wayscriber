@@ -39,6 +39,11 @@ impl ConfigDraft {
         config.drawing.font_style = self.drawing_font_style.clone();
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
+        config.drawing.drag_tool = self.drawing_drag_tool.to_tool();
+        config.drawing.shift_drag_tool = self.drawing_shift_drag_tool.to_tool();
+        config.drawing.ctrl_drag_tool = self.drawing_ctrl_drag_tool.to_tool();
+        config.drawing.ctrl_shift_drag_tool = self.drawing_ctrl_shift_drag_tool.to_tool();
+        config.drawing.tab_drag_tool = self.drawing_tab_drag_tool.to_tool();
         parse_field(
             &self.drawing_hit_test_tolerance,
             "drawing.hit_test_tolerance",

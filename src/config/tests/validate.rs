@@ -228,3 +228,17 @@ fn validate_does_not_clamp_autosave_interval_to_idle() {
     assert_eq!(config.session.autosave_idle_ms, 60_000);
     assert_eq!(config.session.autosave_interval_ms, 5_000);
 }
+
+#[test]
+fn drawing_drag_tool_defaults_match_legacy_mapping() {
+    let config = Config::default();
+
+    assert_eq!(config.drawing.drag_tool, crate::input::Tool::Pen);
+    assert_eq!(config.drawing.shift_drag_tool, crate::input::Tool::Line);
+    assert_eq!(config.drawing.ctrl_drag_tool, crate::input::Tool::Rect);
+    assert_eq!(
+        config.drawing.ctrl_shift_drag_tool,
+        crate::input::Tool::Arrow
+    );
+    assert_eq!(config.drawing.tab_drag_tool, crate::input::Tool::Ellipse);
+}

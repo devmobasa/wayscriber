@@ -2,10 +2,10 @@ use iced::Command;
 
 use crate::messages::Message;
 use crate::models::{
-    ColorMode, ColorPickerId, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
-    NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
+    ColorMode, ColorPickerId, DragToolField, EraserModeOption, FontStyleOption, FontWeightOption,
+    KeybindingField, NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -101,6 +101,17 @@ impl ConfiguratorApp {
     ) -> Command<Message> {
         self.status = StatusMessage::idle();
         self.draft.drawing_default_eraser_mode = option;
+        self.refresh_dirty_flag();
+        Command::none()
+    }
+
+    pub(super) fn handle_drawing_drag_tool_changed(
+        &mut self,
+        field: DragToolField,
+        option: ToolOption,
+    ) -> Command<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.set_drag_tool(field, option);
         self.refresh_dirty_flag();
         Command::none()
     }

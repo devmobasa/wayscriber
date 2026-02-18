@@ -84,15 +84,18 @@ impl InputState {
             return *tool;
         }
 
-        let modifier_tool = self.modifiers.current_tool();
+        let drag_modifier = self.modifiers.active_drag_modifier();
+        let modifier_tool = self
+            .modifiers
+            .current_tool_with_bindings(self.drag_tool_bindings);
 
         if let Some(override_tool) = self.tool_override {
             if matches!(override_tool, Tool::Highlight | Tool::Eraser) {
                 return override_tool;
             }
 
-            // Allow temporary modifier-based tools when the override is a drawing tool
-            if modifier_tool != Tool::Pen && modifier_tool != override_tool {
+            // Allow temporary modifier-based tools when an override is active.
+            if drag_modifier.is_active() && modifier_tool != override_tool {
                 return modifier_tool;
             }
 
@@ -104,14 +107,7 @@ impl InputState {
 
     /// Returns whether the highlight tool is currently selected.
     pub fn highlight_tool_active(&self) -> bool {
-        matches!(self.tool_override, Some(Tool::Highlight))
-            || matches!(
-                self.state,
-                DrawingState::Drawing {
-                    tool: Tool::Highlight,
-                    ..
-                }
-            )
+        self.active_tool() == Tool::Highlight
     }
 
     /// Sets highlight-only tool mode on/off and keeps click highlight in sync.

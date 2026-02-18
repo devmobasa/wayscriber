@@ -1,4 +1,5 @@
 use super::*;
+use crate::input::DragToolBindings;
 
 #[test]
 fn mouse_drag_creates_shapes_for_each_tool() {
@@ -41,6 +42,51 @@ fn mouse_drag_creates_shapes_for_each_tool() {
     state.on_mouse_press(MouseButton::Left, 80, 80);
     state.on_mouse_release(MouseButton::Left, 86, 86);
     assert_eq!(state.boards.active_frame().shapes.len(), 5);
+}
+
+#[test]
+fn custom_drag_bindings_remap_default_and_modifier_tools() {
+    let mut state = create_test_input_state();
+    assert!(state.set_drag_tool_bindings(DragToolBindings {
+        drag: Tool::Arrow,
+        shift_drag: Tool::Eraser,
+        ctrl_drag: Tool::Pen,
+        ctrl_shift_drag: Tool::Rect,
+        tab_drag: Tool::Ellipse,
+    }));
+
+    assert_eq!(state.active_tool(), Tool::Arrow);
+    assert!(state.set_tool_override(Some(Tool::Arrow)));
+    assert_eq!(state.active_tool(), Tool::Arrow);
+
+    state.modifiers.ctrl = true;
+    assert_eq!(state.active_tool(), Tool::Pen);
+
+    state.modifiers.ctrl = false;
+    state.modifiers.shift = true;
+    assert_eq!(state.active_tool(), Tool::Eraser);
+
+    state.modifiers.ctrl = true;
+    assert_eq!(state.active_tool(), Tool::Rect);
+}
+
+#[test]
+fn drag_mapped_highlight_reports_highlight_active() {
+    let mut state = create_test_input_state();
+    assert!(state.set_drag_tool_bindings(DragToolBindings {
+        drag: Tool::Highlight,
+        shift_drag: Tool::Line,
+        ctrl_drag: Tool::Rect,
+        ctrl_shift_drag: Tool::Arrow,
+        tab_drag: Tool::Ellipse,
+    }));
+
+    assert_eq!(state.active_tool(), Tool::Highlight);
+    assert!(state.highlight_tool_active());
+
+    state.modifiers.shift = true;
+    assert_eq!(state.active_tool(), Tool::Line);
+    assert!(!state.highlight_tool_active());
 }
 
 #[test]

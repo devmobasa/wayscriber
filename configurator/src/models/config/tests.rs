@@ -1,6 +1,7 @@
 use super::super::color::ColorInput;
 use super::super::fields::{
-    FontWeightOption, QuadField, SessionStorageModeOption, TextField, ToggleField, TripletField,
+    FontWeightOption, QuadField, SessionStorageModeOption, TextField, ToggleField, ToolOption,
+    TripletField,
 };
 use super::super::{ColorMode, NamedColorOption};
 use super::ConfigDraft;
@@ -130,4 +131,42 @@ fn config_draft_round_trips_presets_and_history() {
     );
     assert_eq!(round_trip.presets.slot_count, config.presets.slot_count);
     assert_eq!(round_trip.presets.get_slot(1), config.presets.get_slot(1));
+}
+
+#[test]
+fn config_draft_round_trips_drag_tool_mapping() {
+    let mut config = Config::default();
+    config.drawing.drag_tool = Tool::Arrow;
+    config.drawing.shift_drag_tool = Tool::Eraser;
+    config.drawing.ctrl_drag_tool = Tool::Pen;
+    config.drawing.ctrl_shift_drag_tool = Tool::Rect;
+    config.drawing.tab_drag_tool = Tool::Ellipse;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.drawing_drag_tool, ToolOption::Arrow);
+    assert_eq!(draft.drawing_shift_drag_tool, ToolOption::Eraser);
+    assert_eq!(draft.drawing_ctrl_drag_tool, ToolOption::Pen);
+    assert_eq!(draft.drawing_ctrl_shift_drag_tool, ToolOption::Rect);
+    assert_eq!(draft.drawing_tab_drag_tool, ToolOption::Ellipse);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(round_trip.drawing.drag_tool, config.drawing.drag_tool);
+    assert_eq!(
+        round_trip.drawing.shift_drag_tool,
+        config.drawing.shift_drag_tool
+    );
+    assert_eq!(
+        round_trip.drawing.ctrl_drag_tool,
+        config.drawing.ctrl_drag_tool
+    );
+    assert_eq!(
+        round_trip.drawing.ctrl_shift_drag_tool,
+        config.drawing.ctrl_shift_drag_tool
+    );
+    assert_eq!(
+        round_trip.drawing.tab_drag_tool,
+        config.drawing.tab_drag_tool
+    );
 }

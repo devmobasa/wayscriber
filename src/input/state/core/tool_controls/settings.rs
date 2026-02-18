@@ -1,6 +1,9 @@
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::draw::{Color, FontDescriptor};
-use crate::input::tool::{EraserMode, Tool};
+use crate::input::{
+    modifiers::DragToolBindings,
+    tool::{EraserMode, Tool},
+};
 
 impl InputState {
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
@@ -51,6 +54,17 @@ impl InputState {
     /// Returns the current explicit tool override (if any).
     pub fn tool_override(&self) -> Option<Tool> {
         self.tool_override
+    }
+
+    /// Sets drag modifier -> tool mappings. Returns true if changed.
+    pub fn set_drag_tool_bindings(&mut self, bindings: DragToolBindings) -> bool {
+        if self.drag_tool_bindings == bindings {
+            return false;
+        }
+        self.drag_tool_bindings = bindings;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        true
     }
 
     /// Sets thickness or eraser size depending on the active tool.

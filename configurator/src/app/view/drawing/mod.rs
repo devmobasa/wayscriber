@@ -5,7 +5,7 @@ use iced::widget::{column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
 use crate::messages::Message;
-use crate::models::{EraserModeOption, TextField, ToggleField};
+use crate::models::{DragToolField, EraserModeOption, TextField, ToggleField, ToolOption};
 
 use self::color::drawing_color_block;
 use self::font::font_controls;
@@ -22,6 +22,12 @@ impl ConfiguratorApp {
             Some(self.draft.drawing_default_eraser_mode),
             Message::EraserModeChanged,
         );
+        let drag_tool_pick = |field: DragToolField, selected: ToolOption| {
+            pick_list(ToolOption::list(), Some(selected), move |option| {
+                Message::DrawingDragToolChanged(field, option)
+            })
+            .width(Length::Fill)
+        };
 
         let column = column![
             text("Drawing Defaults").size(20),
@@ -65,6 +71,54 @@ impl ConfiguratorApp {
                         != self.defaults.drawing_default_eraser_mode,
                 )
             ]
+            .spacing(12),
+            text("Drag Tool Mapping").size(16),
+            row![
+                labeled_control(
+                    DragToolField::Drag.label(),
+                    drag_tool_pick(DragToolField::Drag, self.draft.drawing_drag_tool).into(),
+                    self.defaults.drawing_drag_tool.label().to_string(),
+                    self.draft.drawing_drag_tool != self.defaults.drawing_drag_tool,
+                ),
+                labeled_control(
+                    DragToolField::ShiftDrag.label(),
+                    drag_tool_pick(DragToolField::ShiftDrag, self.draft.drawing_shift_drag_tool)
+                        .into(),
+                    self.defaults.drawing_shift_drag_tool.label().to_string(),
+                    self.draft.drawing_shift_drag_tool != self.defaults.drawing_shift_drag_tool,
+                )
+            ]
+            .spacing(12),
+            row![
+                labeled_control(
+                    DragToolField::CtrlDrag.label(),
+                    drag_tool_pick(DragToolField::CtrlDrag, self.draft.drawing_ctrl_drag_tool)
+                        .into(),
+                    self.defaults.drawing_ctrl_drag_tool.label().to_string(),
+                    self.draft.drawing_ctrl_drag_tool != self.defaults.drawing_ctrl_drag_tool,
+                ),
+                labeled_control(
+                    DragToolField::CtrlShiftDrag.label(),
+                    drag_tool_pick(
+                        DragToolField::CtrlShiftDrag,
+                        self.draft.drawing_ctrl_shift_drag_tool,
+                    )
+                    .into(),
+                    self.defaults
+                        .drawing_ctrl_shift_drag_tool
+                        .label()
+                        .to_string(),
+                    self.draft.drawing_ctrl_shift_drag_tool
+                        != self.defaults.drawing_ctrl_shift_drag_tool,
+                )
+            ]
+            .spacing(12),
+            row![labeled_control(
+                DragToolField::TabDrag.label(),
+                drag_tool_pick(DragToolField::TabDrag, self.draft.drawing_tab_drag_tool).into(),
+                self.defaults.drawing_tab_drag_tool.label().to_string(),
+                self.draft.drawing_tab_drag_tool != self.defaults.drawing_tab_drag_tool,
+            )]
             .spacing(12),
             row![
                 labeled_input_with_feedback(

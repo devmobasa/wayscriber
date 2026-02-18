@@ -3,7 +3,7 @@ mod from_config;
 use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PresenterToolBehaviorOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
     ToolbarLayoutModeOption,
 };
 #[cfg(feature = "tablet-input")]
@@ -29,6 +29,11 @@ pub struct ConfigDraft {
     pub drawing_font_style: String,
     pub drawing_text_background_enabled: bool,
     pub drawing_default_fill_enabled: bool,
+    pub drawing_drag_tool: ToolOption,
+    pub drawing_shift_drag_tool: ToolOption,
+    pub drawing_ctrl_drag_tool: ToolOption,
+    pub drawing_ctrl_shift_drag_tool: ToolOption,
+    pub drawing_tab_drag_tool: ToolOption,
     pub drawing_font_style_option: FontStyleOption,
     pub drawing_font_weight_option: FontWeightOption,
 

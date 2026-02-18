@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Drawing tool selection.
 ///
 /// The active tool determines what shape is created when the user drags the mouse.
-/// Tools are selected by holding modifier keys (Shift, Ctrl, Tab) while dragging.
+/// Drag modifier mappings are configurable via `[drawing]` drag-tool fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum Tool {

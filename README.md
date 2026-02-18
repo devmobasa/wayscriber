@@ -437,6 +437,8 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
+Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_tool`, `shift_drag_tool`, `ctrl_drag_tool`, `ctrl_shift_drag_tool`, `tab_drag_tool`) or in the configurator Drawing tab.
+
 </details>
 
 <details>
