@@ -46,6 +46,11 @@ impl WaylandState {
         let mut data = StateData::new();
         data.frozen_enabled = frozen_enabled;
         data.pending_freeze_on_start = pending_freeze_on_start;
+        let startup_activation_token = startup_activation_token_from_env();
+        if startup_activation_token.is_some() {
+            info!("Received startup activation token from launcher environment");
+        }
+        data.startup_activation_token = startup_activation_token;
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
         let force_inline_toolbars = force_inline_toolbars_requested(&config);
@@ -147,4 +152,11 @@ impl WaylandState {
             tokio_handle,
         }
     }
+}
+
+fn startup_activation_token_from_env() -> Option<String> {
+    std::env::var("XDG_ACTIVATION_TOKEN")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }

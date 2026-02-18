@@ -156,6 +156,10 @@ impl WaylandState {
         self.data.pending_activation_token = token;
     }
 
+    pub(in crate::backend::wayland) fn take_startup_activation_token(&mut self) -> Option<String> {
+        self.data.startup_activation_token.take()
+    }
+
     pub(in crate::backend::wayland) fn preferred_output_identity(&self) -> Option<&str> {
         self.data.preferred_output_identity.as_deref()
     }

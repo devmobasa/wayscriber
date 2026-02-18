@@ -55,7 +55,9 @@ pub(super) fn create_overlay_surface(
         }
         window.commit();
         state.surface.set_xdg_window(window);
-        state.request_xdg_activation(qh);
+        if !state.activate_xdg_window_with_startup_token_if_present() {
+            state.request_xdg_activation(qh);
+        }
         info!("xdg-shell window created");
     } else {
         return Err(anyhow::anyhow!(
