@@ -5,7 +5,7 @@ use super::super::fields::{
 };
 use super::super::{ColorMode, NamedColorOption};
 use super::ConfigDraft;
-use wayscriber::config::{ColorSpec, Config, ToolPresetConfig};
+use wayscriber::config::{ColorSpec, Config, ToolPresetConfig, XdgFocusLossBehavior};
 use wayscriber::input::Tool;
 
 #[test]
@@ -168,5 +168,22 @@ fn config_draft_round_trips_drag_tool_mapping() {
     assert_eq!(
         round_trip.drawing.tab_drag_tool,
         config.drawing.tab_drag_tool
+    );
+}
+
+#[test]
+fn config_draft_round_trips_xdg_focus_loss_behavior() {
+    let mut config = Config::default();
+    config.ui.xdg_focus_loss_behavior = XdgFocusLossBehavior::Stay;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(draft.ui_xdg_keep_on_focus_loss);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(
+        round_trip.ui.xdg_focus_loss_behavior,
+        XdgFocusLossBehavior::Stay
     );
 }

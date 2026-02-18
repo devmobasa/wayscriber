@@ -123,15 +123,24 @@ pub(super) fn run_event_loop(
             && !state.has_keyboard_focus()
             && state.focus_exit_suppression_expired(Instant::now())
         {
-            warn!("Keyboard focus not restored after clipboard action; exiting overlay");
-            state.clear_focus_exit_suppression();
-            notification::send_notification_async(
-                &state.tokio_handle,
-                "Wayscriber lost focus".to_string(),
-                "GNOME could not keep the overlay focused; closing fallback window.".to_string(),
-                Some("dialog-warning".to_string()),
-            );
-            state.input_state.should_exit = true;
+            if state.xdg_focus_loss_exits_overlay() {
+                warn!("Keyboard focus not restored after clipboard action; exiting overlay");
+                state.clear_focus_exit_suppression();
+                notification::send_notification_async(
+                    &state.tokio_handle,
+                    "Wayscriber lost focus".to_string(),
+                    "GNOME could not keep the overlay focused; closing fallback window."
+                        .to_string(),
+                    Some("dialog-warning".to_string()),
+                );
+                state.input_state.should_exit = true;
+            } else {
+                warn!(
+                    "Keyboard focus not restored after clipboard action; keeping overlay open (ui.xdg_focus_loss_behavior=stay)"
+                );
+                state.clear_focus_exit_suppression();
+                state.request_xdg_activation(qh);
+            }
         }
         // Adjust keyboard interactivity if toolbar visibility changed.
         state.sync_toolbar_visibility(qh);

@@ -148,6 +148,13 @@ impl WaylandState {
         self.data.xdg_fullscreen
     }
 
+    pub(in crate::backend::wayland) fn xdg_focus_loss_exits_overlay(&self) -> bool {
+        matches!(
+            self.config.ui.xdg_focus_loss_behavior,
+            crate::config::XdgFocusLossBehavior::Exit
+        )
+    }
+
     #[allow(dead_code)]
     pub(in crate::backend::wayland) fn set_xdg_fullscreen(&mut self, value: bool) {
         self.data.xdg_fullscreen = value;

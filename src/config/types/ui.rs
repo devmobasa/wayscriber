@@ -1,6 +1,7 @@
-use crate::config::enums::{RadialMenuMouseBinding, StatusPosition};
+use crate::config::enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::env;
 
 use super::{
     ClickHighlightConfig, ContextMenuUiConfig, HelpOverlayStyle, StatusBarStyle, ToolbarConfig,
@@ -76,6 +77,12 @@ pub struct UiConfig {
     #[serde(default = "default_xdg_fullscreen")]
     pub xdg_fullscreen: bool,
 
+    /// Behavior when the xdg-shell fallback overlay loses keyboard focus.
+    ///
+    /// `exit` preserves legacy behavior; `stay` keeps the overlay open.
+    #[serde(default = "default_xdg_focus_loss_behavior")]
+    pub xdg_focus_loss_behavior: XdgFocusLossBehavior,
+
     /// Mouse button used to toggle the radial menu.
     #[serde(default = "default_radial_menu_mouse_binding")]
     pub radial_menu_mouse_binding: RadialMenuMouseBinding,
@@ -110,6 +117,7 @@ impl Default for UiConfig {
             active_output_badge: default_active_output_badge(),
             command_palette_toast_duration_ms: default_command_palette_toast_duration_ms(),
             xdg_fullscreen: default_xdg_fullscreen(),
+            xdg_focus_loss_behavior: default_xdg_focus_loss_behavior(),
             radial_menu_mouse_binding: default_radial_menu_mouse_binding(),
             click_highlight: ClickHighlightConfig::default(),
             context_menu: ContextMenuUiConfig::default(),
@@ -140,6 +148,31 @@ fn default_show_frozen_badge() -> bool {
 
 fn default_xdg_fullscreen() -> bool {
     false
+}
+
+fn default_xdg_focus_loss_behavior() -> XdgFocusLossBehavior {
+    if use_gnome_fallback_defaults() {
+        XdgFocusLossBehavior::Stay
+    } else {
+        XdgFocusLossBehavior::Exit
+    }
+}
+
+fn use_gnome_fallback_defaults() -> bool {
+    if !cfg!(target_os = "linux") {
+        return false;
+    }
+    [
+        "XDG_CURRENT_DESKTOP",
+        "XDG_SESSION_DESKTOP",
+        "DESKTOP_SESSION",
+    ]
+    .iter()
+    .filter_map(|key| env::var(key).ok())
+    .any(|value| {
+        let value = value.to_lowercase();
+        value.contains("ubuntu") || value.contains("gnome")
+    })
 }
 
 fn default_help_overlay_context_filter() -> bool {
