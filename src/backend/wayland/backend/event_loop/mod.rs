@@ -139,6 +139,7 @@ pub(super) fn run_event_loop(
                     "Keyboard focus not restored after clipboard action; keeping overlay open (ui.xdg_focus_loss_behavior=stay)"
                 );
                 state.clear_focus_exit_suppression();
+                state.set_xdg_close_guard_for(Duration::from_millis(2500));
                 state.request_xdg_activation(qh);
             }
         }

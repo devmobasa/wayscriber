@@ -2,6 +2,7 @@
 // layer-shell is unavailable (e.g., GNOME).
 use log::{debug, info, warn};
 use smithay_client_toolkit::shell::xdg::window::{Window, WindowConfigure, WindowHandler};
+use std::time::Instant;
 use wayland_client::{Connection, QueueHandle};
 
 use super::super::state::WaylandState;
@@ -9,7 +10,11 @@ use crate::session;
 
 impl WindowHandler for WaylandState {
     fn request_close(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, _window: &Window) {
-        if !self.xdg_focus_loss_exits_overlay() && !self.has_keyboard_focus() {
+        if should_ignore_xdg_close_request(
+            !self.xdg_focus_loss_exits_overlay(),
+            self.has_keyboard_focus(),
+            self.xdg_close_guard_active(Instant::now()),
+        ) {
             warn!("xdg window close requested while unfocused in stay mode; keeping overlay open");
             self.request_xdg_activation(qh);
             return;
@@ -160,5 +165,26 @@ impl WindowHandler for WaylandState {
             }
             self.input_state.needs_redraw = true;
         }
+    }
+}
+
+fn should_ignore_xdg_close_request(
+    stay_mode: bool,
+    has_keyboard_focus: bool,
+    close_guard_active: bool,
+) -> bool {
+    stay_mode && !has_keyboard_focus && close_guard_active
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_ignore_xdg_close_request;
+
+    #[test]
+    fn ignores_close_only_for_unfocused_stay_with_active_guard() {
+        assert!(should_ignore_xdg_close_request(true, false, true));
+        assert!(!should_ignore_xdg_close_request(true, true, true));
+        assert!(!should_ignore_xdg_close_request(false, false, true));
+        assert!(!should_ignore_xdg_close_request(true, false, false));
     }
 }

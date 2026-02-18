@@ -96,6 +96,20 @@ impl WaylandState {
         self.data.suppress_focus_exit_until = None;
     }
 
+    pub(in crate::backend::wayland) fn set_xdg_close_guard_for(&mut self, duration: Duration) {
+        self.data.xdg_close_guard_until = Some(Instant::now() + duration);
+    }
+
+    pub(in crate::backend::wayland) fn clear_xdg_close_guard(&mut self) {
+        self.data.xdg_close_guard_until = None;
+    }
+
+    pub(in crate::backend::wayland) fn xdg_close_guard_active(&self, now: Instant) -> bool {
+        self.data
+            .xdg_close_guard_until
+            .is_some_and(|until| now <= until)
+    }
+
     pub(in crate::backend::wayland) fn frozen_enabled(&self) -> bool {
         self.data.frozen_enabled
     }

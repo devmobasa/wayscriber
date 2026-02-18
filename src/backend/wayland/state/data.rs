@@ -82,6 +82,9 @@ pub struct StateData {
     pub(super) suppress_next_release: bool,
     /// Suppress overlay exit on focus loss for a short window (e.g., clipboard helpers).
     pub(super) suppress_focus_exit_until: Option<Instant>,
+    /// Short guard window after xdg focus loss where compositor close requests are ignored
+    /// in stay mode to avoid spurious GNOME close events.
+    pub(super) xdg_close_guard_until: Option<Instant>,
 }
 
 impl StateData {
@@ -136,6 +139,7 @@ impl StateData {
             overlay_ready: false,
             suppress_next_release: false,
             suppress_focus_exit_until: None,
+            xdg_close_guard_until: None,
         }
     }
 }
