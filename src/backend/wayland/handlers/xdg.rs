@@ -21,6 +21,7 @@ impl WindowHandler for WaylandState {
         }
 
         info!("xdg window close requested by compositor");
+        self.mark_xdg_explicit_close_requested();
         self.input_state.should_exit = true;
     }
 

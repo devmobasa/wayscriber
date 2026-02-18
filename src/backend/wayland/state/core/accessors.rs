@@ -110,6 +110,16 @@ impl WaylandState {
             .is_some_and(|until| now <= until)
     }
 
+    pub(in crate::backend::wayland) fn mark_xdg_explicit_close_requested(&mut self) {
+        self.data.xdg_explicit_close_requested = true;
+    }
+
+    pub(in crate::backend::wayland) fn take_xdg_explicit_close_requested(&mut self) -> bool {
+        let was_requested = self.data.xdg_explicit_close_requested;
+        self.data.xdg_explicit_close_requested = false;
+        was_requested
+    }
+
     pub(in crate::backend::wayland) fn frozen_enabled(&self) -> bool {
         self.data.frozen_enabled
     }
