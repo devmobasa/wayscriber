@@ -37,7 +37,7 @@ pub fn run_about_window() -> Result<()> {
     let wl_surface = compositor_state.create_surface(&qh);
     let window = xdg_shell.create_window(wl_surface, WindowDecorations::None, &qh);
     window.set_title("Wayscriber About");
-    window.set_app_id("com.devmobasa.wayscriber");
+    window.set_app_id("wayscriber");
     window.set_min_size(Some((ABOUT_WIDTH, ABOUT_HEIGHT)));
     window.set_max_size(Some((ABOUT_WIDTH, ABOUT_HEIGHT)));
     window.commit();

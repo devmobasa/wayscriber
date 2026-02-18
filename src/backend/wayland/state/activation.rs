@@ -23,7 +23,7 @@ impl WaylandState {
             activation.request_token::<Self>(
                 qh,
                 RequestData {
-                    app_id: Some("com.devmobasa.wayscriber".to_string()),
+                    app_id: Some("wayscriber".to_string()),
                     seat_and_serial: Some(seat_serial),
                     surface: Some(wl_surface),
                 },

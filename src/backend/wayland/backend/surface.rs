@@ -41,7 +41,7 @@ pub(super) fn create_overlay_surface(
         info!("Layer shell missing; creating xdg-shell window");
         let window = xdg_shell.create_window(wl_surface, WindowDecorations::None, qh);
         window.set_title("wayscriber overlay");
-        window.set_app_id("com.devmobasa.wayscriber");
+        window.set_app_id("wayscriber");
         if state.xdg_fullscreen() {
             if let Some(output) = state.preferred_fullscreen_output() {
                 info!("Requesting fullscreen on preferred output");

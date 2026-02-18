@@ -50,7 +50,8 @@ impl PointerHandler for WaylandState {
                 PointerEventKind::Motion { .. } => {
                     self.handle_pointer_motion(conn, event, on_toolbar, inline_active);
                 }
-                PointerEventKind::Press { button, .. } => {
+                PointerEventKind::Press { button, serial, .. } => {
+                    self.set_last_activation_serial(Some(serial));
                     self.handle_pointer_press(conn, qh, event, on_toolbar, inline_active, button);
                 }
                 PointerEventKind::Release { button, .. } => {
