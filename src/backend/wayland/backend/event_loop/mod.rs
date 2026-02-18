@@ -132,7 +132,6 @@ pub(super) fn run_event_loop(
                     warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");
                 }
                 state.input_state.should_exit = false;
-                state.request_xdg_activation(qh);
             } else {
                 info!("Exit requested after dispatch, breaking event loop");
                 break;

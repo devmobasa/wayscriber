@@ -73,10 +73,9 @@ impl KeyboardHandler for WaylandState {
         if self.surface.is_xdg_window() {
             if !self.xdg_focus_loss_exits_overlay() {
                 warn!(
-                    "Keyboard focus lost in xdg fallback; keeping overlay open (ui.xdg_focus_loss_behavior=stay)"
+                    "Keyboard focus lost in xdg fallback; keeping overlay open without auto-reactivation (ui.xdg_focus_loss_behavior=stay)"
                 );
                 self.set_xdg_close_guard_for(Duration::from_millis(2500));
-                self.request_xdg_activation(qh);
                 return;
             }
             warn!("Keyboard focus lost in xdg fallback; exiting overlay");
