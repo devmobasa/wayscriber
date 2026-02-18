@@ -123,14 +123,9 @@ pub(super) fn run_event_loop(
                 !state.xdg_focus_loss_exits_overlay(),
                 state.has_keyboard_focus(),
                 state.xdg_close_guard_active(now),
+                explicit_xdg_close_requested,
             ) {
-                if explicit_xdg_close_requested {
-                    warn!(
-                        "Compositor close arrived in xdg focus-loss guard window; keeping overlay open"
-                    );
-                } else {
-                    warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");
-                }
+                warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");
                 state.input_state.should_exit = false;
             } else {
                 info!("Exit requested after dispatch, breaking event loop");
@@ -214,8 +209,13 @@ fn should_defer_xdg_unfocused_exit(
     stay_mode: bool,
     has_keyboard_focus: bool,
     close_guard_active: bool,
+    explicit_xdg_close_requested: bool,
 ) -> bool {
-    is_xdg_window && stay_mode && !has_keyboard_focus && close_guard_active
+    is_xdg_window
+        && stay_mode
+        && !has_keyboard_focus
+        && close_guard_active
+        && !explicit_xdg_close_requested
 }
 
 #[cfg(test)]
@@ -223,11 +223,24 @@ mod tests {
     use super::should_defer_xdg_unfocused_exit;
 
     #[test]
-    fn defers_exit_only_for_unfocused_xdg_stay_with_active_guard() {
-        assert!(should_defer_xdg_unfocused_exit(true, true, false, true));
-        assert!(!should_defer_xdg_unfocused_exit(true, true, true, true));
-        assert!(!should_defer_xdg_unfocused_exit(true, false, false, true));
-        assert!(!should_defer_xdg_unfocused_exit(false, true, false, true));
-        assert!(!should_defer_xdg_unfocused_exit(true, true, false, false));
+    fn defers_exit_only_for_unfocused_xdg_stay_with_guard_without_explicit_close() {
+        assert!(should_defer_xdg_unfocused_exit(
+            true, true, false, true, false
+        ));
+        assert!(!should_defer_xdg_unfocused_exit(
+            true, true, true, true, false
+        ));
+        assert!(!should_defer_xdg_unfocused_exit(
+            true, false, false, true, false
+        ));
+        assert!(!should_defer_xdg_unfocused_exit(
+            false, true, false, true, false
+        ));
+        assert!(!should_defer_xdg_unfocused_exit(
+            true, true, false, false, false
+        ));
+        assert!(!should_defer_xdg_unfocused_exit(
+            true, true, false, true, true
+        ));
     }
 }
