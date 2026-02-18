@@ -1,5 +1,5 @@
 use crate::config::enums::ColorSpec;
-use crate::input::EraserMode;
+use crate::input::{EraserMode, Tool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +50,26 @@ pub struct DrawingConfig {
     #[serde(default = "default_undo_stack_limit")]
     pub undo_stack_limit: usize,
 
+    /// Tool used for drag with no modifier.
+    #[serde(default = "default_drag_tool")]
+    pub drag_tool: Tool,
+
+    /// Tool used for Shift+drag.
+    #[serde(default = "default_shift_drag_tool")]
+    pub shift_drag_tool: Tool,
+
+    /// Tool used for Ctrl+drag.
+    #[serde(default = "default_ctrl_drag_tool")]
+    pub ctrl_drag_tool: Tool,
+
+    /// Tool used for Ctrl+Shift+drag.
+    #[serde(default = "default_ctrl_shift_drag_tool")]
+    pub ctrl_shift_drag_tool: Tool,
+
+    /// Tool used for Tab+drag.
+    #[serde(default = "default_tab_drag_tool")]
+    pub tab_drag_tool: Tool,
+
     /// Font family name for text rendering (e.g., "Sans", "Monospace", "JetBrains Mono")
     /// Falls back to "Sans" if the specified font is not available
     /// Note: Install fonts system-wide and reference by family name
@@ -83,6 +103,11 @@ impl Default for DrawingConfig {
             hit_test_tolerance: default_hit_test_tolerance(),
             hit_test_linear_threshold: default_hit_test_threshold(),
             undo_stack_limit: default_undo_stack_limit(),
+            drag_tool: default_drag_tool(),
+            shift_drag_tool: default_shift_drag_tool(),
+            ctrl_drag_tool: default_ctrl_drag_tool(),
+            ctrl_shift_drag_tool: default_ctrl_shift_drag_tool(),
+            tab_drag_tool: default_tab_drag_tool(),
             font_family: default_font_family(),
             font_weight: default_font_weight(),
             font_style: default_font_style(),
@@ -145,4 +170,24 @@ fn default_hit_test_threshold() -> usize {
 
 fn default_undo_stack_limit() -> usize {
     100
+}
+
+fn default_drag_tool() -> Tool {
+    Tool::Pen
+}
+
+fn default_shift_drag_tool() -> Tool {
+    Tool::Line
+}
+
+fn default_ctrl_drag_tool() -> Tool {
+    Tool::Rect
+}
+
+fn default_ctrl_shift_drag_tool() -> Tool {
+    Tool::Arrow
+}
+
+fn default_tab_drag_tool() -> Tool {
+    Tool::Ellipse
 }

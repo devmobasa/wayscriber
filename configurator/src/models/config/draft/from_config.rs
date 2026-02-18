@@ -1,7 +1,7 @@
 use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PresenterToolBehaviorOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
     ToolbarLayoutModeOption,
 };
 #[cfg(feature = "tablet-input")]
@@ -38,6 +38,13 @@ impl ConfigDraft {
             drawing_font_style: style_value,
             drawing_text_background_enabled: config.drawing.text_background_enabled,
             drawing_default_fill_enabled: config.drawing.default_fill_enabled,
+            drawing_drag_tool: ToolOption::from_tool(config.drawing.drag_tool),
+            drawing_shift_drag_tool: ToolOption::from_tool(config.drawing.shift_drag_tool),
+            drawing_ctrl_drag_tool: ToolOption::from_tool(config.drawing.ctrl_drag_tool),
+            drawing_ctrl_shift_drag_tool: ToolOption::from_tool(
+                config.drawing.ctrl_shift_drag_tool,
+            ),
+            drawing_tab_drag_tool: ToolOption::from_tool(config.drawing.tab_drag_tool),
             drawing_font_style_option: style_option,
             drawing_font_weight_option: weight_option,
 

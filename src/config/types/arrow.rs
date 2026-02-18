@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// Arrow drawing settings.
 ///
-/// Controls the appearance of arrowheads when using the arrow tool (Ctrl+Shift+Drag).
+/// Controls the appearance of arrowheads when using the arrow tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ArrowConfig {
     /// Arrowhead length in pixels (valid range: 5.0 - 50.0)

@@ -41,6 +41,9 @@ impl ConfiguratorApp {
             Message::ColorModeChanged(mode) => self.handle_color_mode_changed(mode),
             Message::NamedColorSelected(option) => self.handle_named_color_selected(option),
             Message::EraserModeChanged(option) => self.handle_eraser_mode_changed(option),
+            Message::DrawingDragToolChanged(field, option) => {
+                self.handle_drawing_drag_tool_changed(field, option)
+            }
             Message::StatusPositionChanged(option) => self.handle_status_position_changed(option),
             Message::ToolbarLayoutModeChanged(option) => {
                 self.handle_toolbar_layout_mode_changed(option)

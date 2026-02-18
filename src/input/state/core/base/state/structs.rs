@@ -27,7 +27,7 @@ use crate::input::BoardManager;
 use crate::input::boards::BoardState;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
-    modifiers::Modifiers,
+    modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, Tool},
 };
 use crate::util::Rect;
@@ -93,6 +93,8 @@ pub struct InputState {
     pub step_marker_counter: u32,
     /// Current modifier key state
     pub modifiers: Modifiers,
+    /// Tool mapping for drag gestures with modifier keys
+    pub drag_tool_bindings: DragToolBindings,
     /// Current drawing mode state machine
     pub state: DrawingState,
     /// Whether user requested to exit the overlay

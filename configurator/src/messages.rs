@@ -5,11 +5,12 @@ use wayscriber::config::Config;
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
-    ColorPickerValue, EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField,
-    KeybindingsTabId, NamedColorOption, OverrideOption, PresenterToolBehaviorOption,
-    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
-    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    ColorPickerValue, DragToolField, EraserModeOption, FontStyleOption, FontWeightOption,
+    KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption,
+    PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
+    PresetToggleField, QuadField, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
+    ToolbarOverrideField, TripletField, UiTabId,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -35,6 +36,7 @@ pub enum Message {
     ColorModeChanged(ColorMode),
     NamedColorSelected(NamedColorOption),
     EraserModeChanged(EraserModeOption),
+    DrawingDragToolChanged(DragToolField, ToolOption),
     StatusPositionChanged(StatusPositionOption),
     ToolbarLayoutModeChanged(ToolbarLayoutModeOption),
     ToolbarOverrideModeChanged(ToolbarLayoutModeOption),

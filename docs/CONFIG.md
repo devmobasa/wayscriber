@@ -61,6 +61,13 @@ text_background_enabled = false
 hit_test_tolerance = 6.0
 hit_test_linear_threshold = 400
 undo_stack_limit = 100
+
+# Drag gesture tool mapping
+drag_tool = "pen"
+shift_drag_tool = "line"
+ctrl_drag_tool = "rect"
+ctrl_shift_drag_tool = "arrow"
+tab_drag_tool = "ellipse"
 ```
 
 **Color Options:**
@@ -86,6 +93,7 @@ undo_stack_limit = 100
 - Text background: false
 - Hit-test tolerance: 6.0px (linear threshold: 400)
 - Undo stack limit: 100
+- Drag mapping: Drag=Pen, Shift+Drag=Line, Ctrl+Drag=Rect, Ctrl+Shift+Drag=Arrow, Tab+Drag=Ellipse
 
 ### `[arrow]` - Arrow Geometry
 

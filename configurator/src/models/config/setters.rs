@@ -1,6 +1,6 @@
 use super::super::fields::{
-    FontStyleOption, FontWeightOption, OverrideOption, QuadField, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    DragToolField, FontStyleOption, FontWeightOption, OverrideOption, QuadField, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 use super::draft::ConfigDraft;
 
@@ -28,6 +28,16 @@ impl ConfigDraft {
         self.ui_toolbar_mode_overrides
             .for_mode_mut(mode)
             .set(field, value);
+    }
+
+    pub fn set_drag_tool(&mut self, field: DragToolField, value: ToolOption) {
+        match field {
+            DragToolField::Drag => self.drawing_drag_tool = value,
+            DragToolField::ShiftDrag => self.drawing_shift_drag_tool = value,
+            DragToolField::CtrlDrag => self.drawing_ctrl_drag_tool = value,
+            DragToolField::CtrlShiftDrag => self.drawing_ctrl_shift_drag_tool = value,
+            DragToolField::TabDrag => self.drawing_tab_drag_tool = value,
+        }
     }
 
     pub fn set_toggle(&mut self, field: ToggleField, value: bool) {

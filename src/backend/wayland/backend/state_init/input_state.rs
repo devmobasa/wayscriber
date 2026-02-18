@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::config::{Action, Config, KeyBinding, KeybindingsConfig};
 use crate::draw::FontDescriptor;
-use crate::input::{ClickHighlightSettings, InputState};
+use crate::input::{ClickHighlightSettings, InputState, modifiers::DragToolBindings};
 
 pub(super) fn build_input_state(config: &Config) -> InputState {
     let font_descriptor = FontDescriptor::new(
@@ -43,6 +43,13 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.presenter_mode.clone(),
     );
     input_state.set_action_bindings(action_bindings);
+    input_state.set_drag_tool_bindings(DragToolBindings {
+        drag: config.drawing.drag_tool,
+        shift_drag: config.drawing.shift_drag_tool,
+        ctrl_drag: config.drawing.ctrl_drag_tool,
+        ctrl_shift_drag: config.drawing.ctrl_shift_drag_tool,
+        tab_drag: config.drawing.tab_drag_tool,
+    });
 
     input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
     input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
@@ -182,5 +189,27 @@ mod tests {
         assert!(input.show_floating_badge_always);
         assert!(input.show_active_output_badge);
         assert_eq!(input.command_palette_toast_duration_ms, 1234);
+    }
+
+    #[test]
+    fn build_input_state_applies_drag_tool_bindings() {
+        let mut config = Config::default();
+        config.drawing.drag_tool = crate::input::Tool::Arrow;
+        config.drawing.shift_drag_tool = crate::input::Tool::Eraser;
+        config.drawing.ctrl_drag_tool = crate::input::Tool::Pen;
+        config.drawing.ctrl_shift_drag_tool = crate::input::Tool::Rect;
+        config.drawing.tab_drag_tool = crate::input::Tool::Ellipse;
+
+        let input = build_input_state(&config);
+        assert_eq!(
+            input.drag_tool_bindings,
+            crate::input::DragToolBindings {
+                drag: crate::input::Tool::Arrow,
+                shift_drag: crate::input::Tool::Eraser,
+                ctrl_drag: crate::input::Tool::Pen,
+                ctrl_shift_drag: crate::input::Tool::Rect,
+                tab_drag: crate::input::Tool::Ellipse,
+            }
+        );
     }
 }

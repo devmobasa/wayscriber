@@ -32,4 +32,4 @@ pub use tool::{EraserMode, Tool};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]
-pub use modifiers::Modifiers;
+pub use modifiers::{DragModifier, DragToolBindings, Modifiers};

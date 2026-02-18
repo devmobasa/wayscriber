@@ -11,7 +11,11 @@ use super::structs::InputState;
 use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, RadialMenuMouseBinding};
 use crate::draw::{DirtyTracker, EraserKind, FontDescriptor};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
-use crate::input::{BoardManager, modifiers::Modifiers, tool::EraserMode};
+use crate::input::{
+    BoardManager,
+    modifiers::{DragToolBindings, Modifiers},
+    tool::EraserMode,
+};
 use std::collections::HashMap;
 
 impl InputState {
@@ -88,6 +92,7 @@ impl InputState {
             arrow_label_counter: 1,
             step_marker_counter: 1,
             modifiers: Modifiers::new(),
+            drag_tool_bindings: DragToolBindings::default(),
             state: DrawingState::Idle,
             should_exit: false,
             needs_redraw: true,

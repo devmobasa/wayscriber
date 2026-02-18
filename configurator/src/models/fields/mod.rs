@@ -19,7 +19,7 @@ pub use status::StatusPositionOption;
 pub use toggles::{
     PresetTextField, PresetToggleField, QuadField, TextField, ToggleField, TripletField,
 };
-pub use tool::ToolOption;
+pub use tool::{DragToolField, ToolOption};
 pub use toolbar::{OverrideOption, ToolbarLayoutModeOption, ToolbarOverrideField};
 
 #[cfg(test)]

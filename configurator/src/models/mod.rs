@@ -11,7 +11,7 @@ pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
 pub use color_picker::{ColorPickerId, ColorPickerValue};
 pub use config::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft};
 pub use fields::{
-    EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
+    DragToolField, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
     PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
     PresetToggleField, QuadField, SessionCompressionOption, SessionStorageModeOption,
     StatusPositionOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
