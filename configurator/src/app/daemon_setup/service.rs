@@ -2,11 +2,15 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use wayscriber::paths::config_dir;
+use wayscriber::systemd_user_service::{
+    USER_SERVICE_NAME, escape_systemd_env_value as shared_escape_systemd_env_value,
+    portal_shortcut_dropin_path as shared_portal_shortcut_dropin_path, render_user_service_unit,
+    user_service_unit_path as shared_user_service_unit_path,
+};
 
 use super::command::{command_available, find_in_path, run_command, run_command_checked};
 
-pub(super) const SERVICE_NAME: &str = "wayscriber.service";
+pub(super) const SERVICE_NAME: &str = USER_SERVICE_NAME;
 
 pub(super) fn detect_service_unit_path(systemctl_available: bool) -> Option<PathBuf> {
     if systemctl_available {
@@ -77,11 +81,11 @@ pub(super) fn run_systemctl_user(args: &[&str]) -> Result<(), String> {
 }
 
 pub(super) fn user_service_unit_path() -> Option<PathBuf> {
-    config_dir().map(|root| user_service_unit_path_from_config_root(&root))
+    shared_user_service_unit_path()
 }
 
 pub(super) fn portal_shortcut_dropin_path() -> Option<PathBuf> {
-    config_dir().map(|root| portal_shortcut_dropin_path_from_config_root(&root))
+    shared_portal_shortcut_dropin_path()
 }
 
 pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
@@ -151,51 +155,21 @@ fn resolve_wayscriber_binary_path() -> Result<PathBuf, String> {
     )
 }
 
-fn user_service_unit_path_from_config_root(config_root: &Path) -> PathBuf {
-    config_root.join("systemd").join("user").join(SERVICE_NAME)
-}
-
-fn portal_shortcut_dropin_path_from_config_root(config_root: &Path) -> PathBuf {
-    config_root
-        .join("systemd")
-        .join("user")
-        .join(format!("{SERVICE_NAME}.d"))
-        .join("shortcut.conf")
-}
-
-fn quote_systemd_exec(path: &Path) -> String {
-    let escaped = path
-        .to_string_lossy()
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"");
-    format!("\"{escaped}\"")
-}
-
 fn render_user_service_file(binary_path: &Path) -> String {
-    let quoted_exec = quote_systemd_exec(binary_path);
-    let binary_dir = binary_path
-        .parent()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "/usr/bin".to_string());
-    let escaped_path_env =
-        escape_systemd_env_value(&format!("{binary_dir}:/usr/local/bin:/usr/bin:/bin"));
-    format!(
-        "[Unit]\nDescription=Wayscriber - Screen annotation tool for Wayland\nDocumentation=https://wayscriber.com\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c '[ -n \"$WAYLAND_DISPLAY\" ] && [ -S \"$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY\" ]'\nExecStart={} --daemon\nRestart=on-failure\nRestartSec=5\nRestartPreventExitStatus=75\nSuccessExitStatus=75\nEnvironment=\"PATH={}\"\n\n[Install]\nWantedBy=graphical-session.target\n",
-        quoted_exec, escaped_path_env
-    )
+    render_user_service_unit(binary_path)
 }
 
 pub(super) fn escape_systemd_env_value(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
+    shared_escape_systemd_env_value(value)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        portal_shortcut_dropin_path_from_config_root, quote_systemd_exec, render_user_service_file,
-        user_service_unit_path_from_config_root,
-    };
+    use super::render_user_service_file;
     use std::path::Path;
+    use wayscriber::systemd_user_service::{
+        portal_shortcut_dropin_path_from_config_root, user_service_unit_path_from_config_root,
+    };
 
     #[test]
     fn service_paths_are_derived_from_xdg_config_root() {
@@ -207,14 +181,6 @@ mod tests {
         assert_eq!(
             portal_shortcut_dropin_path_from_config_root(root),
             Path::new("/tmp/xdg-config/systemd/user/wayscriber.service.d/shortcut.conf")
-        );
-    }
-
-    #[test]
-    fn quote_systemd_exec_supports_whitespace() {
-        assert_eq!(
-            quote_systemd_exec(Path::new("/tmp/My Apps/wayscriber")),
-            "\"/tmp/My Apps/wayscriber\""
         );
     }
 

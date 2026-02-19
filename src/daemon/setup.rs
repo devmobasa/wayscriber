@@ -4,9 +4,9 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::paths::config_dir;
-
-const SERVICE_UNIT_NAME: &str = "wayscriber.service";
+use wayscriber::systemd_user_service::{
+    USER_SERVICE_NAME, render_user_service_unit, user_service_unit_path,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct BackgroundModeSetupSummary {
@@ -16,12 +16,13 @@ pub(crate) struct BackgroundModeSetupSummary {
 pub(crate) fn setup_background_mode() -> Result<BackgroundModeSetupSummary> {
     let service_path = ensure_user_service_file()?;
     run_systemctl_user(&["daemon-reload"])?;
-    run_systemctl_user(&["enable", "--now", SERVICE_UNIT_NAME])?;
+    run_systemctl_user(&["enable", "--now", USER_SERVICE_NAME])?;
     Ok(BackgroundModeSetupSummary { service_path })
 }
 
 fn ensure_user_service_file() -> Result<PathBuf> {
-    let service_path = user_service_path()?;
+    let service_path =
+        user_service_unit_path().context("unable to resolve XDG config directory")?;
     if let Some(parent) = service_path.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!(
@@ -32,17 +33,9 @@ fn ensure_user_service_file() -> Result<PathBuf> {
     }
 
     let executable = std::env::current_exe().context("failed to resolve wayscriber executable")?;
-    let service_contents = render_user_service(&executable);
+    let service_contents = render_user_service_unit(&executable);
     write_if_changed(&service_path, &service_contents)?;
     Ok(service_path)
-}
-
-fn user_service_path() -> Result<PathBuf> {
-    let config_root = config_dir().context("unable to resolve XDG config directory")?;
-    Ok(config_root
-        .join("systemd")
-        .join("user")
-        .join(SERVICE_UNIT_NAME))
 }
 
 fn write_if_changed(path: &Path, content: &str) -> Result<()> {
@@ -88,75 +81,5 @@ fn systemctl_error_detail(stdout: &str, stderr: &str) -> String {
         (true, false) => stderr.to_string(),
         (false, true) => stdout.to_string(),
         (false, false) => format!("{stderr} | {stdout}"),
-    }
-}
-
-fn render_user_service(executable: &Path) -> String {
-    let quoted_exec = quote_systemd_exec(executable);
-    let binary_dir = executable
-        .parent()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "/usr/bin".to_string());
-    let escaped_path_env =
-        escape_systemd_env_value(&format!("{binary_dir}:/usr/local/bin:/usr/bin:/bin"));
-    format!(
-        "[Unit]
-Description=Wayscriber - Screen annotation tool for Wayland
-Documentation=https://wayscriber.com
-PartOf=graphical-session.target
-After=graphical-session.target
-
-[Service]
-Type=simple
-ExecStartPre=/bin/sh -c '[ -n \"$WAYLAND_DISPLAY\" ] && [ -S \"$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY\" ]'
-ExecStart={quoted_exec} --daemon
-Restart=on-failure
-RestartSec=5
-RestartPreventExitStatus=75
-SuccessExitStatus=75
-Environment=\"PATH={escaped_path_env}\"
-
-[Install]
-WantedBy=graphical-session.target
-"
-    )
-}
-
-fn quote_systemd_exec(path: &Path) -> String {
-    let escaped = path
-        .to_string_lossy()
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"");
-    format!("\"{escaped}\"")
-}
-
-fn escape_systemd_env_value(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{quote_systemd_exec, render_user_service};
-    use std::path::Path;
-
-    #[test]
-    fn systemd_exec_path_is_quoted_for_whitespace() {
-        let quoted = quote_systemd_exec(Path::new("/tmp/My App/wayscriber"));
-        assert_eq!(quoted, "\"/tmp/My App/wayscriber\"");
-    }
-
-    #[test]
-    fn render_user_service_uses_daemon_exec_start() {
-        let service = render_user_service(Path::new("/usr/bin/wayscriber"));
-        assert!(service.contains("ExecStart=\"/usr/bin/wayscriber\" --daemon"));
-        assert!(service.contains("Documentation=https://wayscriber.com"));
-        assert!(service.contains("Environment=\"PATH=/usr/bin:/usr/local/bin:/usr/bin:/bin\""));
-        assert!(service.contains("WantedBy=graphical-session.target"));
-    }
-
-    #[test]
-    fn render_user_service_quotes_execstart_path_with_spaces() {
-        let service = render_user_service(Path::new("/tmp/My App/wayscriber"));
-        assert!(service.contains("ExecStart=\"/tmp/My App/wayscriber\" --daemon"));
     }
 }
