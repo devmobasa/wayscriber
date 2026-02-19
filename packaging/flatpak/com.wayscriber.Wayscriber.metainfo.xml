@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.wayscriber.Wayscriber</id>
+  <name>Wayscriber</name>
+  <summary>Screen annotation tool for Wayland compositors</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <developer_name>Wayscriber maintainers</developer_name>
+  <url type="homepage">https://wayscriber.com</url>
+  <url type="bugtracker">https://github.com/devmobasa/wayscriber/issues</url>
+  <launchable type="desktop-id">com.wayscriber.Wayscriber.desktop</launchable>
+  <description>
+    <p>
+      Wayscriber is a ZoomIt-like real-time annotation tool for Linux/Wayland.
+      Draw on top of your desktop, use one-shot mode, or run background daemon mode.
+    </p>
+  </description>
+  <provides>
+    <binary>wayscriber</binary>
+    <binary>wayscriber-configurator</binary>
+  </provides>
+</component>

@@ -308,6 +308,15 @@ nix profile install github:devmobasa/wayscriber#wayscriber-configurator
 nix develop github:devmobasa/wayscriber
 ```
 
+### Flatpak / Snap (experimental)
+
+Starter manifests are included for local sandbox packaging:
+
+- Flatpak: `packaging/flatpak/com.wayscriber.Wayscriber.yaml` (guide: `packaging/flatpak/README.md`)
+- Snap: `snap/snapcraft.yaml` (guide: `snap/README.md`)
+
+These are intended as starting points. Native `.deb`/`.rpm` packages currently provide the most reliable daemon and global-shortcut workflow.
+
 ### From Source
 
 **Dependencies:**

@@ -36,6 +36,10 @@ packaging/**
 !packaging/icons/*.png
 !packaging/wayscriber.desktop
 !packaging/wayscriber-configurator.desktop
+!packaging/flatpak/
+!packaging/flatpak/*.yaml
+!packaging/flatpak/*.xml
+!packaging/flatpak/*.md
 
 .venv/
 

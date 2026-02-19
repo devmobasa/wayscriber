@@ -1,0 +1,50 @@
+app-id: com.wayscriber.Wayscriber
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: wayscriber
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=home
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+
+modules:
+  - name: wayscriber
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/wayscriber/cargo
+        CARGO_TARGET_DIR: /run/build/wayscriber/target
+    build-commands:
+      - cargo build --release --locked --bins
+      - cargo build --release --locked --manifest-path configurator/Cargo.toml --bins
+      - install -Dm755 target/release/wayscriber /app/bin/wayscriber
+      - install -Dm755 target/release/wayscriber-configurator /app/bin/wayscriber-configurator
+      - install -Dm644 packaging/wayscriber.desktop /app/share/applications/com.wayscriber.Wayscriber.desktop
+      - install -Dm644 packaging/wayscriber-configurator.desktop /app/share/applications/com.wayscriber.Wayscriber.Configurator.desktop
+      - install -Dm644 packaging/flatpak/com.wayscriber.Wayscriber.metainfo.xml /app/share/metainfo/com.wayscriber.Wayscriber.metainfo.xml
+      - install -Dm644 packaging/icons/wayscriber-128.png /app/share/icons/hicolor/128x128/apps/com.wayscriber.Wayscriber.png
+      - install -Dm644 packaging/icons/wayscriber-configurator-128.png /app/share/icons/hicolor/128x128/apps/com.wayscriber.Wayscriber.Configurator.png
+      - desktop-file-edit --set-key=Exec --set-value="wayscriber --active" /app/share/applications/com.wayscriber.Wayscriber.desktop
+      - desktop-file-edit --set-key=Icon --set-value=com.wayscriber.Wayscriber /app/share/applications/com.wayscriber.Wayscriber.desktop
+      - desktop-file-edit --set-key=Exec --set-value=wayscriber-configurator /app/share/applications/com.wayscriber.Wayscriber.Configurator.desktop
+      - desktop-file-edit --set-key=Icon --set-value=com.wayscriber.Wayscriber.Configurator /app/share/applications/com.wayscriber.Wayscriber.Configurator.desktop
+    sources:
+      - type: dir
+        path: ../..

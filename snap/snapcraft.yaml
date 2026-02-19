@@ -1,0 +1,91 @@
+name: wayscriber
+base: core24
+version: "0.9.10"
+summary: Screen annotation tool for Wayland compositors
+description: |
+  Wayscriber is a ZoomIt-like screen annotation tool for Linux/Wayland.
+  This snap includes the main app, optional daemon launcher command, and
+  the configurator app.
+grade: devel
+confinement: strict
+license: MIT
+website: https://wayscriber.com
+source-code: https://github.com/devmobasa/wayscriber
+issues: https://github.com/devmobasa/wayscriber/issues
+icon: packaging/icons/wayscriber-128.png
+
+apps:
+  wayscriber:
+    command: bin/wayscriber --active
+    desktop: meta/gui/wayscriber.desktop
+    plugs:
+      - desktop
+      - desktop-legacy
+      - gsettings
+      - home
+      - opengl
+      - wayland
+      - x11
+
+  wayscriber-daemon:
+    command: bin/wayscriber --daemon --no-tray
+    plugs:
+      - desktop
+      - desktop-legacy
+      - gsettings
+      - home
+      - opengl
+      - wayland
+      - x11
+
+  wayscriber-configurator:
+    command: bin/wayscriber-configurator
+    desktop: meta/gui/wayscriber-configurator.desktop
+    plugs:
+      - desktop
+      - desktop-legacy
+      - gsettings
+      - home
+      - opengl
+      - wayland
+      - x11
+
+parts:
+  wayscriber:
+    plugin: rust
+    source: .
+    rust-channel: stable
+    build-packages:
+      - pkg-config
+      - libwayland-dev
+      - libcairo2-dev
+      - libpango1.0-dev
+      - libxkbcommon-dev
+      - libegl1-mesa-dev
+      - libgl1-mesa-dev
+    stage-packages:
+      - libwayland-client0
+      - libcairo2
+      - libpango-1.0-0
+      - libpangocairo-1.0-0
+      - libxkbcommon0
+      - wl-clipboard
+      - grim
+      - slurp
+    override-build: |
+      set -eux
+      craftctl default
+      cargo build --release --locked --manifest-path configurator/Cargo.toml --bins
+      install -Dm755 target/release/wayscriber-configurator "$CRAFT_PART_INSTALL/bin/wayscriber-configurator"
+
+      install -Dm644 packaging/wayscriber.desktop "$CRAFT_PART_INSTALL/meta/gui/wayscriber.desktop"
+      install -Dm644 packaging/wayscriber-configurator.desktop "$CRAFT_PART_INSTALL/meta/gui/wayscriber-configurator.desktop"
+      install -Dm644 packaging/icons/wayscriber-128.png "$CRAFT_PART_INSTALL/meta/gui/wayscriber.png"
+      install -Dm644 packaging/icons/wayscriber-configurator-128.png "$CRAFT_PART_INSTALL/meta/gui/wayscriber-configurator.png"
+
+      sed -i 's|^Exec=.*|Exec=wayscriber|' "$CRAFT_PART_INSTALL/meta/gui/wayscriber.desktop"
+      sed -i 's|^TryExec=.*|TryExec=wayscriber|' "$CRAFT_PART_INSTALL/meta/gui/wayscriber.desktop"
+      sed -i 's|^Icon=.*|Icon=${SNAP}/meta/gui/wayscriber.png|' "$CRAFT_PART_INSTALL/meta/gui/wayscriber.desktop"
+      sed -i 's|^Exec=.*|Exec=wayscriber.wayscriber-configurator|' "$CRAFT_PART_INSTALL/meta/gui/wayscriber-configurator.desktop"
+      sed -i 's|^TryExec=.*|TryExec=wayscriber.wayscriber-configurator|' "$CRAFT_PART_INSTALL/meta/gui/wayscriber-configurator.desktop"
+      sed -i 's|^Icon=.*|Icon=${SNAP}/meta/gui/wayscriber-configurator.png|' "$CRAFT_PART_INSTALL/meta/gui/wayscriber-configurator.desktop"
