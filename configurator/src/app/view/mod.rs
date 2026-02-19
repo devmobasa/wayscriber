@@ -1,6 +1,7 @@
 mod arrow;
 mod boards;
 mod capture;
+mod daemon;
 mod drawing;
 mod history;
 mod keybindings;
@@ -119,6 +120,7 @@ impl ConfiguratorApp {
             TabId::Ui => self.ui_tab(),
             TabId::Boards => self.boards_tab(),
             TabId::Capture => self.capture_tab(),
+            TabId::Daemon => self.daemon_tab(),
             TabId::Session => self.session_tab(),
             TabId::Keybindings => self.keybindings_tab(),
             #[cfg(feature = "tablet-input")]

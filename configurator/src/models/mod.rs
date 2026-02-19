@@ -1,6 +1,7 @@
 pub mod color;
 pub mod color_picker;
 pub mod config;
+pub mod daemon;
 pub mod error;
 pub mod fields;
 pub mod keybindings;
@@ -10,6 +11,9 @@ pub mod util;
 pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
 pub use color_picker::{ColorPickerId, ColorPickerValue};
 pub use config::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft};
+pub use daemon::{
+    DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment, ShortcutBackend,
+};
 pub use fields::{
     DragToolField, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
     PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,

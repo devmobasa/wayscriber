@@ -15,6 +15,7 @@ const ONBOARDING_DIR: &str = "wayscriber";
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FirstRunStep {
+    BackgroundModeSetup,
     WaitDraw,
     DrawUndo,
     QuickAccess,
@@ -50,6 +51,12 @@ pub struct OnboardingState {
     /// Active first-run onboarding step (if any)
     #[serde(default)]
     pub active_step: Option<FirstRunStep>,
+    /// Whether the first-run background mode prompt was answered
+    #[serde(default)]
+    pub first_run_background_mode_prompted: bool,
+    /// Whether background mode setup was completed from first-run prompt
+    #[serde(default)]
+    pub first_run_background_mode_enabled: bool,
     /// Whether quick-access step requires revealing hidden toolbars
     #[serde(default)]
     pub quick_access_requires_toolbar: bool,
@@ -122,6 +129,8 @@ impl Default for OnboardingState {
             first_run_completed: false,
             first_run_skipped: false,
             active_step: None,
+            first_run_background_mode_prompted: false,
+            first_run_background_mode_enabled: false,
             quick_access_requires_toolbar: false,
             quick_access_radial_preview_shown: false,
             quick_access_context_preview_shown: false,
@@ -296,6 +305,14 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
         state.active_step = None;
         needs_save = true;
     }
+    if state.first_run_background_mode_enabled && !state.first_run_background_mode_prompted {
+        state.first_run_background_mode_prompted = true;
+        needs_save = true;
+    }
+    if state.first_run_completed && !state.first_run_background_mode_prompted {
+        state.first_run_background_mode_prompted = true;
+        needs_save = true;
+    }
     if state.quick_access_requires_toolbar && state.active_step != Some(FirstRunStep::QuickAccess) {
         state.quick_access_requires_toolbar = false;
         needs_save = true;
@@ -342,6 +359,8 @@ fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
         first_run_completed: true,
         first_run_skipped: false,
         active_step: None,
+        first_run_background_mode_prompted: true,
+        first_run_background_mode_enabled: false,
         quick_access_requires_toolbar: false,
         quick_access_radial_preview_shown: false,
         quick_access_context_preview_shown: false,

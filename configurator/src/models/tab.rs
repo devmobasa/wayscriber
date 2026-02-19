@@ -8,6 +8,7 @@ pub enum TabId {
     Ui,
     Boards,
     Capture,
+    Daemon,
     Session,
     Keybindings,
     #[cfg(feature = "tablet-input")]
@@ -16,7 +17,8 @@ pub enum TabId {
 
 impl TabId {
     #[cfg(feature = "tablet-input")]
-    pub const ALL: [TabId; 11] = [
+    pub const ALL: [TabId; 12] = [
+        TabId::Daemon,
         TabId::Drawing,
         TabId::Presets,
         TabId::Ui,
@@ -31,7 +33,8 @@ impl TabId {
     ];
 
     #[cfg(not(feature = "tablet-input"))]
-    pub const ALL: [TabId; 10] = [
+    pub const ALL: [TabId; 11] = [
+        TabId::Daemon,
         TabId::Drawing,
         TabId::Presets,
         TabId::Ui,
@@ -54,6 +57,7 @@ impl TabId {
             TabId::Ui => "UI",
             TabId::Boards => "Boards",
             TabId::Capture => "Capture",
+            TabId::Daemon => "Background Mode",
             TabId::Session => "Session",
             TabId::Keybindings => "Keybindings",
             #[cfg(feature = "tablet-input")]

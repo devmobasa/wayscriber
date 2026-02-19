@@ -5,12 +5,12 @@ use wayscriber::config::Config;
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
-    ColorPickerValue, DragToolField, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption,
-    PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
-    PresetToggleField, QuadField, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, TripletField, UiTabId,
+    ColorPickerValue, DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragToolField,
+    EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField, KeybindingsTabId,
+    NamedColorOption, OverrideOption, PresenterToolBehaviorOption, PresetEraserKindOption,
+    PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -22,6 +22,10 @@ pub enum Message {
     ResetToDefaults,
     SaveRequested,
     ConfigSaved(Result<(Option<PathBuf>, Arc<Config>), String>),
+    DaemonStatusLoaded(u64, Result<DaemonRuntimeStatus, String>),
+    DaemonShortcutInputChanged(String),
+    DaemonActionRequested(DaemonAction),
+    DaemonActionCompleted(Result<DaemonActionResult, String>),
     TabSelected(TabId),
     UiTabSelected(UiTabId),
     KeybindingsTabSelected(KeybindingsTabId),

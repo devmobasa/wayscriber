@@ -15,6 +15,8 @@ use log::{info, warn};
 #[cfg(feature = "tray")]
 use std::env;
 #[cfg(feature = "tray")]
+use std::process::Command;
+#[cfg(feature = "tray")]
 use std::sync::atomic::Ordering;
 #[cfg(feature = "tray")]
 use std::time::{Duration, Instant};
@@ -43,6 +45,7 @@ impl ksni::Tray for WayscriberTray {
 
     fn tool_tip(&self) -> ksni::ToolTip {
         let status = self.tray_status.snapshot();
+        let overlay_active = self.overlay_pid.load(Ordering::Acquire) > 0;
         let TrayStatus {
             overlay_error,
             watcher_offline,
@@ -50,6 +53,8 @@ impl ksni::Tray for WayscriberTray {
         } = status;
         let mut description =
             "Toggle overlay, open configurator, or quit from the tray".to_string();
+        description.push_str("\nOverlay: ");
+        description.push_str(if overlay_active { "active" } else { "hidden" });
 
         if watcher_offline {
             description.push_str("\nTray watcher offline");
@@ -97,6 +102,8 @@ impl ksni::Tray for WayscriberTray {
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
         let use_theme_icons = tray_theme_icons_enabled();
+        let overlay_active = self.overlay_pid.load(Ordering::Acquire) > 0;
+        let toggle_label = toggle_overlay_menu_label();
 
         vec![
             StandardItem {
@@ -110,11 +117,20 @@ impl ksni::Tray for WayscriberTray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Toggle Overlay".to_string(),
+                label: toggle_label,
                 icon_name: menu_icon_name("tool-pointer", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {
                     this.toggle_flag.store(true, Ordering::Release);
                 }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: format!(
+                    "Overlay: {}",
+                    if overlay_active { "active" } else { "hidden" }
+                ),
+                enabled: false,
                 ..Default::default()
             }
             .into(),
@@ -290,4 +306,52 @@ fn resolve_icon_theme_path() -> String {
         return value;
     }
     String::new()
+}
+
+#[cfg(feature = "tray")]
+fn toggle_overlay_menu_label() -> String {
+    let base = "Toggle Overlay";
+    match configured_toggle_shortcut_hint() {
+        Some(shortcut) => format!("{base} ({shortcut})"),
+        None => base.to_string(),
+    }
+}
+
+#[cfg(feature = "tray")]
+fn configured_toggle_shortcut_hint() -> Option<String> {
+    if let Ok(shortcut) = env::var("WAYSCRIBER_PORTAL_SHORTCUT")
+        && !shortcut.trim().is_empty()
+    {
+        return Some(shortcut.trim().to_string());
+    }
+    read_gnome_toggle_shortcut_binding()
+}
+
+#[cfg(feature = "tray")]
+fn read_gnome_toggle_shortcut_binding() -> Option<String> {
+    let schema = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/wayscriber-toggle/";
+    let output = Command::new("gsettings")
+        .args(["get", schema, "binding"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_gsettings_string_value(&String::from_utf8_lossy(&output.stdout))
+}
+
+#[cfg(feature = "tray")]
+fn parse_gsettings_string_value(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "''" {
+        return None;
+    }
+    let unquoted = trimmed
+        .strip_prefix('\'')
+        .and_then(|value| value.strip_suffix('\''))
+        .unwrap_or(trimmed);
+    if unquoted.is_empty() {
+        return None;
+    }
+    Some(unquoted.replace("\\'", "'").replace("\\\\", "\\"))
 }

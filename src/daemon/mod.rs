@@ -4,6 +4,7 @@ mod core;
 mod global_shortcuts;
 mod icons;
 mod overlay;
+pub(crate) mod setup;
 mod tray;
 mod types;
 

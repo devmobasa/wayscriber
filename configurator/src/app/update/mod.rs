@@ -1,6 +1,7 @@
 mod boards;
 mod color_picker;
 mod config;
+mod daemon;
 mod fields;
 mod presets;
 mod tabs;
@@ -19,6 +20,14 @@ impl ConfiguratorApp {
             Message::ResetToDefaults => self.handle_reset_to_defaults(),
             Message::SaveRequested => self.handle_save_requested(),
             Message::ConfigSaved(result) => self.handle_config_saved(result),
+            Message::DaemonStatusLoaded(request_id, result) => {
+                self.handle_daemon_status_loaded(request_id, result)
+            }
+            Message::DaemonShortcutInputChanged(value) => {
+                self.handle_daemon_shortcut_input_changed(value)
+            }
+            Message::DaemonActionRequested(action) => self.handle_daemon_action_requested(action),
+            Message::DaemonActionCompleted(result) => self.handle_daemon_action_completed(result),
             Message::TabSelected(tab) => self.handle_tab_selected(tab),
             Message::UiTabSelected(tab) => self.handle_ui_tab_selected(tab),
             Message::KeybindingsTabSelected(tab) => self.handle_keybindings_tab_selected(tab),

@@ -6,9 +6,11 @@ use wayscriber::config::{Config, PRESET_SLOTS_MAX};
 
 use crate::messages::Message;
 use crate::models::{
-    ColorPickerId, ConfigDraft, KeybindingsTabId, TabId, ToolbarLayoutModeOption, UiTabId,
+    ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, KeybindingsTabId, TabId,
+    ToolbarLayoutModeOption, UiTabId,
 };
 
+use super::daemon_setup::load_daemon_runtime_status;
 use super::io::load_config_from_disk;
 
 #[derive(Debug)]
@@ -34,6 +36,13 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) config_path: Option<PathBuf>,
     pub(crate) config_mtime: Option<SystemTime>,
     pub(crate) last_backup_path: Option<PathBuf>,
+    pub(crate) daemon_status: Option<DaemonRuntimeStatus>,
+    pub(crate) daemon_shortcut_input: String,
+    pub(crate) daemon_feedback: Option<String>,
+    pub(crate) daemon_busy: bool,
+    pub(crate) daemon_next_status_request_id: u64,
+    pub(crate) daemon_latest_status_request_id: u64,
+    pub(crate) daemon_preserve_feedback_status_request_id: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +80,7 @@ impl ConfiguratorApp {
         let boards_len = defaults.boards.items.len();
         let config_path = Config::get_config_path().ok();
         let base_config = Arc::new(default_config.clone());
+        let desktop = DesktopEnvironment::detect_current();
 
         let mut app = Self {
             draft: baseline.clone(),
@@ -78,7 +88,7 @@ impl ConfiguratorApp {
             defaults,
             base_config,
             status: StatusMessage::info("Loading configuration..."),
-            active_tab: TabId::Drawing,
+            active_tab: TabId::Daemon,
             active_ui_tab: UiTabId::Toolbar,
             active_keybindings_tab: KeybindingsTabId::General,
             preset_collapsed: vec![false; PRESET_SLOTS_MAX],
@@ -93,13 +103,23 @@ impl ConfiguratorApp {
             config_path,
             config_mtime: None,
             last_backup_path: None,
+            daemon_status: None,
+            daemon_shortcut_input: desktop.default_shortcut_input().to_string(),
+            daemon_feedback: Some("Detecting background mode setup status...".to_string()),
+            daemon_busy: false,
+            daemon_next_status_request_id: 2,
+            daemon_latest_status_request_id: 1,
+            daemon_preserve_feedback_status_request_id: None,
         };
         app.sync_all_color_picker_hex();
 
-        let command = Command::batch(vec![Command::perform(
-            load_config_from_disk(),
-            Message::ConfigLoaded,
-        )]);
+        let initial_status_request_id = app.daemon_latest_status_request_id;
+        let command = Command::batch(vec![
+            Command::perform(load_config_from_disk(), Message::ConfigLoaded),
+            Command::perform(load_daemon_runtime_status(), move |result| {
+                Message::DaemonStatusLoaded(initial_status_request_id, result)
+            }),
+        ]);
 
         (app, command)
     }

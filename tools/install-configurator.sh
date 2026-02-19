@@ -22,9 +22,19 @@ die() {
 echo "Building configurator (release)..."
 (cd "$PROJECT_ROOT" && cargo build --release --bins --manifest-path configurator/Cargo.toml)
 
-BIN_PATH="$PROJECT_ROOT/configurator/target/release/$BINARY_NAME"
-if [ ! -f "$BIN_PATH" ]; then
-    die "Configurator binary not found at $BIN_PATH"
+BIN_PATH=""
+for CANDIDATE in \
+    "$PROJECT_ROOT/target/release/$BINARY_NAME" \
+    "$PROJECT_ROOT/configurator/target/release/$BINARY_NAME"
+do
+    if [ -f "$CANDIDATE" ]; then
+        BIN_PATH="$CANDIDATE"
+        break
+    fi
+done
+
+if [ -z "$BIN_PATH" ]; then
+    die "Configurator binary not found at expected paths under $PROJECT_ROOT/target/release or $PROJECT_ROOT/configurator/target/release"
 fi
 
 if [ ! -d "$INSTALL_DIR" ] || [ ! -w "$INSTALL_DIR" ]; then

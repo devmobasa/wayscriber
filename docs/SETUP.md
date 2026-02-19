@@ -12,6 +12,19 @@ systemctl --user enable --now wayscriber.service
 
 The service keeps the daemon running in the background; you only need a keybind to toggle the overlay.
 
+### Configurator setup (no CLI)
+
+If you installed `wayscriber-configurator`, you can set this up entirely in GUI:
+1. Open `wayscriber-configurator`.
+2. Go to the `Daemon` tab.
+3. Click `Install/Update Service`.
+4. Click `Enable + Start`.
+5. Set your shortcut and click `Apply Shortcut`.
+
+Desktop-specific shortcut handling:
+- GNOME: creates/updates a GNOME custom shortcut that runs `pkill -SIGUSR1 wayscriber`.
+- KDE/Plasma: writes a systemd user drop-in with `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcut handling.
+
 ### Quick Install
 
 Run the install script:
