@@ -70,6 +70,7 @@ pub struct StateData {
     pub(super) toolbar_drag_pending_apply: bool,
     pub(super) last_toolbar_drag_apply: Option<Instant>,
     pub(super) pending_activation_token: Option<String>,
+    pub(super) startup_activation_token: Option<String>,
     pub(super) pending_freeze_on_start: bool,
     pub(super) frozen_enabled: bool,
     pub(super) has_seen_surface_enter: bool,
@@ -82,6 +83,11 @@ pub struct StateData {
     pub(super) suppress_next_release: bool,
     /// Suppress overlay exit on focus loss for a short window (e.g., clipboard helpers).
     pub(super) suppress_focus_exit_until: Option<Instant>,
+    /// Short guard window after xdg focus loss where compositor close requests are ignored
+    /// in stay mode to avoid spurious GNOME close events.
+    pub(super) xdg_close_guard_until: Option<Instant>,
+    /// Explicit compositor close request received for xdg fallback window.
+    pub(super) xdg_explicit_close_requested: bool,
 }
 
 impl StateData {
@@ -127,6 +133,7 @@ impl StateData {
             toolbar_drag_pending_apply: false,
             last_toolbar_drag_apply: None,
             pending_activation_token: None,
+            startup_activation_token: None,
             pending_freeze_on_start: false,
             frozen_enabled: false,
             has_seen_surface_enter: false,
@@ -136,6 +143,8 @@ impl StateData {
             overlay_ready: false,
             suppress_next_release: false,
             suppress_focus_exit_until: None,
+            xdg_close_guard_until: None,
+            xdg_explicit_close_requested: false,
         }
     }
 }

@@ -1,5 +1,6 @@
 mod about_window;
 mod app;
+mod app_id;
 mod backend;
 mod build_info;
 mod capture;

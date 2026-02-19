@@ -7,6 +7,7 @@ use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::process::{Child, Command};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
@@ -18,6 +19,7 @@ use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
 
+use super::global_shortcuts::start_global_shortcuts_listener;
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
@@ -31,8 +33,11 @@ pub struct Daemon {
     pub(super) tray_enabled: bool,
     pub(super) backend_runner: Option<Arc<BackendRunner>>,
     pub(super) tray_thread: Option<JoinHandle<()>>,
+    pub(super) global_shortcuts_thread: Option<JoinHandle<()>>,
     pub(super) overlay_child: Option<Child>,
     pub(super) overlay_pid: Arc<AtomicU32>,
+    pub(super) pending_activation_token: Option<String>,
+    pub(super) portal_activation_token_slot: Arc<Mutex<Option<String>>>,
     pub(super) session_resume_override: Arc<AtomicU8>,
     pub(super) lock_file: Option<std::fs::File>,
     pub(super) overlay_spawn_failures: u32,
@@ -59,8 +64,11 @@ impl Daemon {
             tray_enabled,
             backend_runner: None,
             tray_thread: None,
+            global_shortcuts_thread: None,
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
+            pending_activation_token: None,
+            portal_activation_token_slot: Arc::new(Mutex::new(None)),
             session_resume_override: override_state,
             lock_file: None,
             overlay_spawn_failures: 0,
@@ -85,8 +93,11 @@ impl Daemon {
             tray_enabled: true,
             backend_runner: Some(backend_runner),
             tray_thread: None,
+            global_shortcuts_thread: None,
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
+            pending_activation_token: None,
+            portal_activation_token_slot: Arc::new(Mutex::new(None)),
             session_resume_override: override_state,
             lock_file: None,
             overlay_spawn_failures: 0,
@@ -152,8 +163,12 @@ impl Daemon {
     /// Run daemon with signal handling
     pub fn run(&mut self) -> Result<()> {
         info!("Starting wayscriber daemon");
-        info!("Send SIGUSR1 to toggle overlay (e.g., pkill -SIGUSR1 wayscriber)");
-        info!("Configure Hyprland: bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber");
+        info!(
+            "Send SIGUSR1 to toggle overlay (e.g., kill -USR1 $(pgrep -fo 'wayscriber --daemon'))"
+        );
+        info!(
+            "Configure Hyprland: bind = SUPER, D, exec, bash -lc \"kill -USR1 $(pgrep -fo 'wayscriber --daemon')\""
+        );
 
         self.acquire_daemon_lock()?;
 
@@ -222,6 +237,15 @@ impl Daemon {
             info!("System tray disabled; running daemon without tray");
         }
 
+        self.global_shortcuts_thread = start_global_shortcuts_listener(
+            self.toggle_requested.clone(),
+            self.should_quit.clone(),
+            self.portal_activation_token_slot.clone(),
+        );
+        if self.global_shortcuts_thread.is_some() {
+            info!("Global shortcuts portal listener started");
+        }
+
         info!("Daemon ready - waiting for toggle signal");
 
         // Main daemon loop
@@ -239,10 +263,21 @@ impl Daemon {
             // Check for toggle request
             // Use Acquire ordering to ensure we see all memory operations
             // that happened before the flag was set
-            if self.toggle_requested.swap(false, Ordering::Acquire)
-                && let Err(err) = self.toggle_overlay()
-            {
-                warn!("Toggle overlay failed: {}", err);
+            if self.toggle_requested.swap(false, Ordering::Acquire) {
+                let pending_token = self
+                    .portal_activation_token_slot
+                    .lock()
+                    .unwrap_or_else(|poisoned| {
+                        warn!("portal activation token mutex poisoned; recovering");
+                        poisoned.into_inner()
+                    })
+                    .take();
+                self.pending_activation_token = pending_token;
+
+                if let Err(err) = self.toggle_overlay() {
+                    self.pending_activation_token = None;
+                    warn!("Toggle overlay failed: {}", err);
+                }
             }
 
             // Small sleep to avoid busy-waiting
@@ -259,6 +294,12 @@ impl Daemon {
             match handle.join() {
                 Ok(()) => info!("System tray thread joined"),
                 Err(err) => warn!("System tray thread panicked: {:?}", err),
+            }
+        }
+        if let Some(handle) = self.global_shortcuts_thread.take() {
+            match handle.join() {
+                Ok(()) => info!("Global shortcuts listener thread joined"),
+                Err(err) => warn!("Global shortcuts listener thread panicked: {:?}", err),
             }
         }
         Ok(())

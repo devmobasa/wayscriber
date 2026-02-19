@@ -3,10 +3,17 @@ use iced::{Application, Settings, Size};
 use super::state::ConfiguratorApp;
 
 pub fn run() -> iced::Result {
-    let mut settings = Settings::default();
+    let mut settings = Settings {
+        id: Some("wayscriber-configurator".to_string()),
+        ..Settings::default()
+    };
     settings.window.size = Size::new(960.0, 640.0);
     settings.window.resizable = true;
     settings.window.decorations = true;
+    #[cfg(target_os = "linux")]
+    {
+        settings.window.platform_specific.application_id = "wayscriber-configurator".to_string();
+    }
     if std::env::var_os("ICED_BACKEND").is_none() && should_force_tiny_skia() {
         // GNOME Wayland + wgpu can crash on dma-buf/present mode selection; tiny-skia avoids this.
         // SAFETY: setting a process-local env var before initializing iced is safe here.

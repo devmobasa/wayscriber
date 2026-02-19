@@ -14,7 +14,7 @@ use super::super::boards::BoardsDraft;
 use super::super::presets::PresetsDraft;
 use super::super::toolbar_overrides::ToolbarModeOverridesDraft;
 use super::ConfigDraft;
-use wayscriber::config::Config;
+use wayscriber::config::{Config, XdgFocusLossBehavior};
 
 impl ConfigDraft {
     pub fn from_config(config: &Config) -> Self {
@@ -73,6 +73,10 @@ impl ConfigDraft {
             ui_context_menu_enabled: config.ui.context_menu.enabled,
             ui_preferred_output: config.ui.preferred_output.clone().unwrap_or_default(),
             ui_xdg_fullscreen: config.ui.xdg_fullscreen,
+            ui_xdg_keep_on_focus_loss: matches!(
+                config.ui.xdg_focus_loss_behavior,
+                XdgFocusLossBehavior::Stay
+            ),
             ui_command_palette_toast_duration_ms: config
                 .ui
                 .command_palette_toast_duration_ms

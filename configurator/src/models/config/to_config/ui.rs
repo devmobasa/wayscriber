@@ -1,7 +1,7 @@
 use super::super::draft::ConfigDraft;
 use super::super::parse::{parse_field, parse_u64_field};
 use crate::models::error::FormError;
-use wayscriber::config::Config;
+use wayscriber::config::{Config, XdgFocusLossBehavior};
 
 impl ConfigDraft {
     pub(super) fn apply_ui(&self, config: &mut Config, errors: &mut Vec<FormError>) {
@@ -18,6 +18,11 @@ impl ConfigDraft {
             Some(preferred_output.to_string())
         };
         config.ui.xdg_fullscreen = self.ui_xdg_fullscreen;
+        config.ui.xdg_focus_loss_behavior = if self.ui_xdg_keep_on_focus_loss {
+            XdgFocusLossBehavior::Stay
+        } else {
+            XdgFocusLossBehavior::Exit
+        };
         parse_u64_field(
             &self.ui_command_palette_toast_duration_ms,
             "ui.command_palette_toast_duration_ms",

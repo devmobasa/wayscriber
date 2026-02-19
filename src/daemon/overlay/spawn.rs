@@ -127,6 +127,16 @@ impl Daemon {
     fn build_overlay_command(&self, program: &OsStr) -> Command {
         let mut command = Command::new(program);
         command.arg("--active");
+        // Overlay children launched by daemon are already backgrounded and tracked.
+        // Prevent `--active` from spawning another detached grandchild process.
+        command.env("WAYSCRIBER_NO_DETACH", "1");
+        if let Some(token) = self.pending_activation_token.as_deref() {
+            command.env("XDG_ACTIVATION_TOKEN", token);
+            command.env("DESKTOP_STARTUP_ID", token);
+        } else {
+            command.env_remove("XDG_ACTIVATION_TOKEN");
+            command.env_remove("DESKTOP_STARTUP_ID");
+        }
         self.apply_session_override_env(&mut command);
         if let Some(mode) = &self.initial_mode {
             command.arg("--mode").arg(mode);
@@ -146,6 +156,7 @@ impl Daemon {
         let mut failures = Vec::new();
 
         for candidate in candidates {
+            let had_activation_token = self.pending_activation_token.is_some();
             debug!(
                 "Attempting overlay spawn via {} ({})",
                 candidate.source,
@@ -158,9 +169,10 @@ impl Daemon {
                     self.overlay_pid.store(pid, Ordering::Release);
                     self.overlay_child = Some(child);
                     self.overlay_state = OverlayState::Visible;
+                    self.pending_activation_token = None;
                     info!(
-                        "Overlay process started via {} (pid {pid})",
-                        candidate.source
+                        "Overlay process started via {} (pid {pid}, startup_activation_token={})",
+                        candidate.source, had_activation_token
                     );
                     return Ok(());
                 }
@@ -175,6 +187,7 @@ impl Daemon {
             }
         }
 
+        self.pending_activation_token = None;
         warn!("Overlay spawn attempts failed: {}", failures.join("; "));
         Err(anyhow!(
             "Unable to launch overlay process (tried current_exe/argv0/PATH)"

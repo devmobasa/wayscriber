@@ -9,4 +9,4 @@ Icon=wayscriber
 Terminal=false
 Categories=Graphics;
 Keywords=draw;annotate;screenshot;whiteboard;wayland;
-StartupNotify=false
+StartupNotify=true
