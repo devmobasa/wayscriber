@@ -57,7 +57,7 @@ impl TabId {
             TabId::Ui => "UI",
             TabId::Boards => "Boards",
             TabId::Capture => "Capture",
-            TabId::Daemon => "Background & Shortcuts",
+            TabId::Daemon => "Background Mode",
             TabId::Session => "Session",
             TabId::Keybindings => "Keybindings",
             #[cfg(feature = "tablet-input")]

@@ -61,33 +61,13 @@ impl ShortcutBackend {
         Self::Manual
     }
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::GnomeCustomShortcut => "GNOME Settings custom shortcut",
-            Self::PortalServiceDropIn => "Portal shortcut via systemd service drop-in",
-            Self::Manual => "Manual keybind required",
-        }
-    }
-
-    pub fn guidance(self) -> &'static str {
-        match self {
-            Self::GnomeCustomShortcut => {
-                "Configurator will write a GNOME custom shortcut that runs `pkill -SIGUSR1 wayscriber`."
-            }
-            Self::PortalServiceDropIn => {
-                "Configurator will set WAYSCRIBER_PORTAL_SHORTCUT in systemd user service drop-ins."
-            }
-            Self::Manual => {
-                "Automatic setup unavailable in this environment; add a keybind manually to run `pkill -SIGUSR1 wayscriber`."
-            }
-        }
-    }
-
     pub fn friendly_label(self) -> &'static str {
         match self {
             Self::GnomeCustomShortcut => "Shortcut will be configured via GNOME Settings",
             Self::PortalServiceDropIn => "Shortcut will be configured via your desktop portal",
-            Self::Manual => "Automatic shortcut setup is not available — you'll need to add a keybind manually",
+            Self::Manual => {
+                "Automatic shortcut setup is not available — you'll need to add a keybind manually"
+            }
         }
     }
 }

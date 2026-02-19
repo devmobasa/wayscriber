@@ -109,6 +109,9 @@ impl KeyboardHandler for WaylandState {
         {
             return;
         }
+        if self.try_handle_first_run_background_mode_choice(key) {
+            return;
+        }
         if self.zoom.is_engaged() {
             match key {
                 Key::Escape => {

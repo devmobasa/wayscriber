@@ -31,10 +31,6 @@ pub fn render_onboarding_card(
     height: u32,
     card: &OnboardingCard,
 ) {
-    if card.items.is_empty() {
-        return;
-    }
-
     let margin = CARD_MARGIN * CARD_SCALE;
     let card_max_width = CARD_MAX_WIDTH * CARD_SCALE;
     let card_min_width = CARD_MIN_WIDTH * CARD_SCALE;

@@ -10,18 +10,21 @@ use super::super::state::ConfiguratorApp;
 impl ConfiguratorApp {
     pub(super) fn daemon_tab(&self) -> Element<'_, Message> {
         let busy = self.daemon_busy;
+        let status_loading = self.daemon_status.is_none();
+        let service_installed = self
+            .daemon_status
+            .as_ref()
+            .is_some_and(|status| status.service_installed);
 
         let mut content = column![].spacing(16);
 
         // ── Title and explanation ──
-        content = content
-            .push(text("Background Mode").size(20))
-            .push(text(
-                "Run wayscriber in the background and toggle it with a keyboard shortcut.",
-            ));
+        content = content.push(text("Background Mode").size(20)).push(text(
+            "Run wayscriber in the background and toggle it with a keyboard shortcut.",
+        ));
 
         // ── Overall status summary ──
-        content = content.push(self.daemon_overall_status());
+        content = content.push(self.daemon_overall_status(busy));
 
         // ── Feedback banner ──
         if let Some(feedback) = self.daemon_feedback.as_deref() {
@@ -39,6 +42,16 @@ impl ConfiguratorApp {
             content = content.push(text("Working...").size(12));
         }
 
+        if status_loading {
+            content = content.push(
+                text("Checking your system and background service status...")
+                    .size(14)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            );
+            content = content.push(self.daemon_technical_details(busy));
+            return scrollable(content).into();
+        }
+
         content = content.push(horizontal_rule(1));
 
         // ── Step 1: Install the service ──
@@ -46,11 +59,11 @@ impl ConfiguratorApp {
         content = content.push(horizontal_rule(1));
 
         // ── Step 2: Set your shortcut ──
-        content = content.push(self.daemon_step_shortcut(busy));
+        content = content.push(self.daemon_step_shortcut(busy, service_installed));
         content = content.push(horizontal_rule(1));
 
         // ── Step 3: Start the service ──
-        content = content.push(self.daemon_step_start(busy));
+        content = content.push(self.daemon_step_start(busy, service_installed));
         content = content.push(horizontal_rule(1));
 
         // ── Technical details (bottom) ──
@@ -59,7 +72,7 @@ impl ConfiguratorApp {
         scrollable(content).into()
     }
 
-    fn daemon_overall_status(&self) -> Element<'_, Message> {
+    fn daemon_overall_status(&self, busy: bool) -> Element<'_, Message> {
         let (label, color) = match self.daemon_status.as_ref() {
             None => ("Status: Detecting...", iced::Color::from_rgb(0.6, 0.6, 0.6)),
             Some(status) => {
@@ -79,10 +92,18 @@ impl ConfiguratorApp {
             }
         };
 
-        text(label)
-            .size(16)
-            .style(theme::Text::Color(color))
-            .into()
+        let mut refresh_button = button("Refresh").style(theme::Button::Secondary);
+        if !busy {
+            refresh_button = refresh_button
+                .on_press(Message::DaemonActionRequested(DaemonAction::RefreshStatus));
+        }
+
+        row![
+            text(label).size(16).style(theme::Text::Color(color)),
+            refresh_button
+        ]
+        .spacing(12)
+        .into()
     }
 
     fn daemon_step_install(&self, busy: bool) -> Element<'_, Message> {
@@ -115,19 +136,28 @@ impl ConfiguratorApp {
 
         column![
             text("Step 1 — Install the service").size(16),
-            text("Install wayscriber as a background service so it starts automatically.").size(14),
+            text("Install wayscriber as a background service.").size(14),
             row![status_indicator, install_button].spacing(12),
         ]
         .spacing(8)
         .into()
     }
 
-    fn daemon_step_shortcut(&self, busy: bool) -> Element<'_, Message> {
-        let placeholder = match self
-            .daemon_status
-            .as_ref()
-            .map(|s| s.shortcut_backend)
-        {
+    fn daemon_step_shortcut(&self, busy: bool, service_installed: bool) -> Element<'_, Message> {
+        if !service_installed {
+            return column![
+                text("Step 2 — Set your shortcut")
+                    .size(16)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.55, 0.55, 0.55))),
+                text("Install the background service first, then set your shortcut.")
+                    .size(14)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.55, 0.55, 0.55))),
+            ]
+            .spacing(8)
+            .into();
+        }
+
+        let placeholder = match self.daemon_status.as_ref().map(|s| s.shortcut_backend) {
             Some(ShortcutBackend::GnomeCustomShortcut) => "e.g. Super+G or <Super>g",
             Some(ShortcutBackend::PortalServiceDropIn) => "e.g. Ctrl+Shift+G or <Ctrl><Shift>g",
             _ => "e.g. Ctrl+Shift+G",
@@ -142,10 +172,11 @@ impl ConfiguratorApp {
         let mut step = column![
             text("Step 2 — Set your shortcut").size(16),
             text("Choose a keyboard shortcut to toggle drawing on/off.").size(14),
-            text_input(placeholder, &self.daemon_shortcut_input)
-                .on_input(Message::DaemonShortcutInputChanged)
-                .padding(8),
-            shortcut_button,
+            text(
+                "The shortcut takes effect after the background service is installed and running."
+            )
+            .size(12)
+            .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
         ]
         .spacing(8);
 
@@ -161,21 +192,53 @@ impl ConfiguratorApp {
             );
         }
 
+        step = step.push(
+            text_input(placeholder, &self.daemon_shortcut_input)
+                .on_input(Message::DaemonShortcutInputChanged)
+                .padding(8),
+        );
+        step = step.push(shortcut_button);
+
         step.into()
     }
 
-    fn daemon_step_start(&self, busy: bool) -> Element<'_, Message> {
+    fn daemon_step_start(&self, busy: bool, service_installed: bool) -> Element<'_, Message> {
+        if !service_installed {
+            return column![
+                text("Step 3 — Start the service")
+                    .size(16)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.55, 0.55, 0.55))),
+                text("Install the background service first.")
+                    .size(14)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.55, 0.55, 0.55))),
+            ]
+            .spacing(8)
+            .into();
+        }
+
+        let enabled = self
+            .daemon_status
+            .as_ref()
+            .is_some_and(|status| status.service_enabled);
         let running = self
             .daemon_status
             .as_ref()
             .is_some_and(|s| s.service_active);
 
-        let status_indicator = if running {
+        let status_indicator = if running && enabled {
             text("Running \u{2713}")
                 .size(14)
                 .style(theme::Text::Color(iced::Color::from_rgb(0.5, 0.9, 0.5)))
+        } else if running {
+            text("Running (not enabled)")
+                .size(14)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.8, 0.3)))
+        } else if enabled {
+            text("Enabled, not running")
+                .size(14)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.8, 0.3)))
         } else {
-            text("Stopped")
+            text("Stopped and disabled")
                 .size(14)
                 .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6)))
         };
@@ -194,7 +257,7 @@ impl ConfiguratorApp {
                 restart_button = restart_button
                     .on_press(Message::DaemonActionRequested(DaemonAction::RestartService));
             }
-            let mut stop_button = button("Stop").style(theme::Button::Secondary);
+            let mut stop_button = button("Stop & Disable").style(theme::Button::Secondary);
             if !busy {
                 stop_button = stop_button.on_press(Message::DaemonActionRequested(
                     DaemonAction::StopAndDisableService,

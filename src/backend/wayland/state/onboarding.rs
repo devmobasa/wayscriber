@@ -1,5 +1,5 @@
 use crate::config::{RadialMenuMouseBinding, keybindings::Action};
-use crate::input::state::UiToastKind;
+use crate::input::{Key, state::UiToastKind};
 use crate::onboarding::{DEFERRED_HINT_REPEAT_MAX, FirstRunStep, OnboardingState};
 use crate::ui::{OnboardingCard, OnboardingChecklistItem};
 
@@ -12,6 +12,57 @@ impl WaylandState {
         self.apply_first_run_progress();
         self.apply_contextual_feature_hints();
         self.apply_toolbar_visibility_hint();
+    }
+
+    pub(in crate::backend::wayland) fn try_handle_first_run_background_mode_choice(
+        &mut self,
+        key: Key,
+    ) -> bool {
+        if !background_mode_prompt_active(
+            self.onboarding.state(),
+            self.first_run_onboarding_card_visible(),
+        ) {
+            return false;
+        }
+
+        let Some(enable_background_mode) = background_mode_prompt_choice(key) else {
+            return false;
+        };
+
+        if enable_background_mode {
+            match crate::daemon::setup::setup_background_mode() {
+                Ok(summary) => {
+                    mark_background_mode_prompt(self.onboarding.state_mut(), true);
+                    self.onboarding.save();
+                    self.input_state.set_ui_toast(
+                        UiToastKind::Info,
+                        format!(
+                            "Background mode enabled. Service file: {}",
+                            summary.service_path.display()
+                        ),
+                    );
+                }
+                Err(err) => {
+                    mark_background_mode_prompt(self.onboarding.state_mut(), false);
+                    self.onboarding.save();
+                    self.input_state.set_ui_toast(
+                        UiToastKind::Error,
+                        format!(
+                            "Background mode setup failed: {err}. You can set this up later in Background Mode settings."
+                        ),
+                    );
+                }
+            }
+        } else {
+            mark_background_mode_prompt(self.onboarding.state_mut(), false);
+            self.onboarding.save();
+            self.input_state
+                .set_ui_toast(UiToastKind::Info, "Skipped background mode setup for now.");
+        }
+
+        self.input_state.dirty_tracker.mark_full();
+        self.input_state.needs_redraw = true;
+        true
     }
 
     pub(in crate::backend::wayland) fn try_skip_first_run_onboarding(&mut self) -> bool {
@@ -46,6 +97,15 @@ impl WaylandState {
         let footer = "Shift+Escape to skip".to_string();
 
         let card = match step {
+            FirstRunStep::BackgroundModeSetup => OnboardingCard {
+                eyebrow: eyebrow.to_string(),
+                title: "Enable background mode?".to_string(),
+                body: "Keeps Wayscriber ready in the background so you can toggle overlay quickly."
+                    .to_string(),
+                items: Vec::new(),
+                footer: "Y = set up now   •   N = skip   •   Shift+Escape = skip onboarding"
+                    .to_string(),
+            },
             FirstRunStep::WaitDraw => OnboardingCard {
                 eyebrow: eyebrow.to_string(),
                 title: "Draw one mark".to_string(),
@@ -179,7 +239,7 @@ impl WaylandState {
                     changed = true;
                 }
             } else if state.active_step.is_none() {
-                state.active_step = Some(FirstRunStep::WaitDraw);
+                state.active_step = Some(FirstRunStep::BackgroundModeSetup);
                 changed = true;
             }
 
@@ -188,6 +248,13 @@ impl WaylandState {
                     break;
                 };
                 match step {
+                    FirstRunStep::BackgroundModeSetup => {
+                        if !state.first_run_background_mode_prompted {
+                            break;
+                        }
+                        state.active_step = Some(FirstRunStep::WaitDraw);
+                        changed = true;
+                    }
                     FirstRunStep::WaitDraw => {
                         if !state.first_stroke_done {
                             break;
@@ -525,12 +592,36 @@ fn quick_access_completed(
     done
 }
 
+fn background_mode_prompt_active(state: &OnboardingState, card_visible: bool) -> bool {
+    state.first_run_active()
+        && card_visible
+        && state.active_step == Some(FirstRunStep::BackgroundModeSetup)
+}
+
+fn background_mode_prompt_choice(key: Key) -> Option<bool> {
+    let Key::Char(ch) = key else {
+        return None;
+    };
+
+    match ch.to_ascii_lowercase() {
+        'y' => Some(true),
+        'n' => Some(false),
+        _ => None,
+    }
+}
+
+fn mark_background_mode_prompt(state: &mut OnboardingState, enabled: bool) {
+    state.first_run_background_mode_prompted = true;
+    state.first_run_background_mode_enabled = enabled;
+}
+
 fn first_run_step_eyebrow(step: FirstRunStep) -> &'static str {
     match step {
-        FirstRunStep::WaitDraw => "Step 1 / 4",
-        FirstRunStep::DrawUndo => "Step 2 / 4",
-        FirstRunStep::QuickAccess => "Step 3 / 4",
-        FirstRunStep::Reference => "Step 4 / 4",
+        FirstRunStep::BackgroundModeSetup => "Step 1 / 5",
+        FirstRunStep::WaitDraw => "Step 2 / 5",
+        FirstRunStep::DrawUndo => "Step 3 / 5",
+        FirstRunStep::QuickAccess => "Step 4 / 5",
+        FirstRunStep::Reference => "Step 5 / 5",
     }
 }
 
@@ -559,10 +650,12 @@ fn first_run_card_hidden_by_ui_state(
 #[cfg(test)]
 mod tests {
     use super::{
-        FirstRunStep, OnboardingState, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
+        FirstRunStep, OnboardingState, background_mode_prompt_active,
+        background_mode_prompt_choice, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
         first_run_step_eyebrow, quick_access_completed,
     };
     use crate::config::RadialMenuMouseBinding;
+    use crate::input::Key;
 
     #[test]
     fn first_run_skip_requires_active_onboarding_and_visible_card() {
@@ -603,16 +696,47 @@ mod tests {
 
     #[test]
     fn first_run_eyebrow_shows_progress() {
-        assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 1 / 4");
-        assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 2 / 4");
+        assert_eq!(
+            first_run_step_eyebrow(FirstRunStep::BackgroundModeSetup),
+            "Step 1 / 5"
+        );
+        assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 2 / 5");
+        assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 3 / 5");
         assert_eq!(
             first_run_step_eyebrow(FirstRunStep::QuickAccess),
-            "Step 3 / 4"
+            "Step 4 / 5"
         );
         assert_eq!(
             first_run_step_eyebrow(FirstRunStep::Reference),
-            "Step 4 / 4"
+            "Step 5 / 5"
         );
+    }
+
+    #[test]
+    fn background_mode_prompt_choice_accepts_yes_and_no_keys() {
+        assert_eq!(background_mode_prompt_choice(Key::Char('y')), Some(true));
+        assert_eq!(background_mode_prompt_choice(Key::Char('Y')), Some(true));
+        assert_eq!(background_mode_prompt_choice(Key::Char('n')), Some(false));
+        assert_eq!(background_mode_prompt_choice(Key::Char('N')), Some(false));
+        assert_eq!(background_mode_prompt_choice(Key::Char('x')), None);
+        assert_eq!(background_mode_prompt_choice(Key::Escape), None);
+    }
+
+    #[test]
+    fn background_mode_prompt_active_requires_step_and_visible_card() {
+        let mut state = OnboardingState {
+            active_step: Some(FirstRunStep::BackgroundModeSetup),
+            ..OnboardingState::default()
+        };
+        assert!(background_mode_prompt_active(&state, true));
+        assert!(!background_mode_prompt_active(&state, false));
+
+        state.active_step = Some(FirstRunStep::WaitDraw);
+        assert!(!background_mode_prompt_active(&state, true));
+
+        state.active_step = Some(FirstRunStep::BackgroundModeSetup);
+        state.first_run_completed = true;
+        assert!(!background_mode_prompt_active(&state, true));
     }
 
     #[test]

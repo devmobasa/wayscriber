@@ -74,7 +74,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         if !state.first_run_completed && !state.first_run_skipped {
             state
                 .active_step
-                .get_or_insert(crate::onboarding::FirstRunStep::WaitDraw);
+                .get_or_insert(crate::onboarding::FirstRunStep::BackgroundModeSetup);
         } else {
             state.active_step = None;
             state.quick_access_requires_toolbar = false;
