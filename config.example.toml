@@ -262,6 +262,10 @@ active_output_badge = true
 # Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
 #xdg_fullscreen = false
 
+# Behavior when GNOME fallback (xdg-shell) loses keyboard focus.
+# "stay" (default on Ubuntu/GNOME) keeps it open. "exit" closes the overlay.
+#xdg_focus_loss_behavior = "exit"
+
 # Mouse button that toggles radial menu
 # Options: "middle", "right", "disabled"
 radial_menu_mouse_binding = "middle"

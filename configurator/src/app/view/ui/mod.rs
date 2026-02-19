@@ -58,6 +58,12 @@ impl ConfiguratorApp {
                 ToggleField::UiXdgFullscreen,
             ),
             toggle_row(
+                "Keep open on xdg focus loss",
+                self.draft.ui_xdg_keep_on_focus_loss,
+                self.defaults.ui_xdg_keep_on_focus_loss,
+                ToggleField::UiXdgKeepOnFocusLoss,
+            ),
+            toggle_row(
                 "Enable context menu",
                 self.draft.ui_context_menu_enabled,
                 self.defaults.ui_context_menu_enabled,

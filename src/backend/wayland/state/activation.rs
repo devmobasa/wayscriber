@@ -1,6 +1,32 @@
+use log::info;
+
+use crate::app_id::runtime_app_id;
+
 use super::*;
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn activate_xdg_window_with_startup_token_if_present(
+        &mut self,
+    ) -> bool {
+        if !self.surface.is_xdg_window() {
+            return false;
+        }
+
+        let Some(token) = self.take_startup_activation_token() else {
+            return false;
+        };
+        let Some(activation) = self.activation.as_ref() else {
+            return false;
+        };
+        let Some(wl_surface) = self.surface.wl_surface().cloned() else {
+            return false;
+        };
+
+        info!("Applying startup activation token for xdg fallback window");
+        activation.activate::<WaylandState>(&wl_surface, token);
+        true
+    }
+
     pub(in crate::backend::wayland) fn request_xdg_activation(&mut self, qh: &QueueHandle<Self>) {
         if !self.surface.is_xdg_window() {
             return;
@@ -20,10 +46,11 @@ impl WaylandState {
             .cloned()
             .zip(self.last_activation_serial())
         {
+            let app_id = runtime_app_id();
             activation.request_token::<Self>(
                 qh,
                 RequestData {
-                    app_id: Some("com.devmobasa.wayscriber".to_string()),
+                    app_id: Some(app_id),
                     seat_and_serial: Some(seat_serial),
                     surface: Some(wl_surface),
                 },

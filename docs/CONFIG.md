@@ -262,6 +262,10 @@ active_output_badge = true
 # Request fullscreen for the GNOME fallback overlay (disable if opaque)
 #xdg_fullscreen = false
 
+# Behavior when GNOME fallback (xdg-shell) loses keyboard focus
+# Options: "exit", "stay" (default on Ubuntu/GNOME)
+#xdg_focus_loss_behavior = "exit"
+
 # Mouse button that toggles radial menu
 # Options: "middle", "right", "disabled"
 radial_menu_mouse_binding = "middle"
@@ -320,7 +324,7 @@ enabled = true
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
 - **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
-- **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized
+- **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized; `xdg_focus_loss_behavior` controls whether losing focus closes (`exit`) or keeps (`stay`) the overlay
 - **Radial menu trigger**: `radial_menu_mouse_binding` selects which mouse button opens radial menu (`middle` default, `right`, or `disabled`)
 
 **Multi-monitor behavior:**

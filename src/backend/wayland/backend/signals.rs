@@ -23,6 +23,10 @@ pub(super) fn setup_signal_handlers() -> (Option<Arc<AtomicBool>>, Option<Arc<At
                 thread::spawn(move || {
                     for sig in signals.forever() {
                         match sig {
+                            SIGUSR1 => {
+                                // SIGUSR1 is reserved for daemon toggle; ignore in overlay.
+                                log::debug!("Overlay received SIGUSR1; ignoring");
+                            }
                             SIGUSR2 => {
                                 log::debug!("Overlay received SIGUSR2 for tray action");
                                 tray_action_flag_clone.store(true, Ordering::Release);

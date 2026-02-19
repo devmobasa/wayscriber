@@ -33,6 +33,17 @@ pub enum RadialMenuMouseBinding {
     Disabled,
 }
 
+/// Behavior when the GNOME/xdg fallback overlay loses keyboard focus.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, JsonSchema, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum XdgFocusLossBehavior {
+    /// Close the overlay when focus moves away (legacy/default behavior).
+    #[default]
+    Exit,
+    /// Keep the overlay open after focus loss and let users reactivate it manually.
+    Stay,
+}
+
 /// Color specification - either a named color or RGB values.
 ///
 /// # Examples

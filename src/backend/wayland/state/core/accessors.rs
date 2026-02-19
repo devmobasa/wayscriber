@@ -96,6 +96,30 @@ impl WaylandState {
         self.data.suppress_focus_exit_until = None;
     }
 
+    pub(in crate::backend::wayland) fn set_xdg_close_guard_for(&mut self, duration: Duration) {
+        self.data.xdg_close_guard_until = Some(Instant::now() + duration);
+    }
+
+    pub(in crate::backend::wayland) fn clear_xdg_close_guard(&mut self) {
+        self.data.xdg_close_guard_until = None;
+    }
+
+    pub(in crate::backend::wayland) fn xdg_close_guard_active(&self, now: Instant) -> bool {
+        self.data
+            .xdg_close_guard_until
+            .is_some_and(|until| now <= until)
+    }
+
+    pub(in crate::backend::wayland) fn mark_xdg_explicit_close_requested(&mut self) {
+        self.data.xdg_explicit_close_requested = true;
+    }
+
+    pub(in crate::backend::wayland) fn take_xdg_explicit_close_requested(&mut self) -> bool {
+        let was_requested = self.data.xdg_explicit_close_requested;
+        self.data.xdg_explicit_close_requested = false;
+        was_requested
+    }
+
     pub(in crate::backend::wayland) fn frozen_enabled(&self) -> bool {
         self.data.frozen_enabled
     }
@@ -132,6 +156,10 @@ impl WaylandState {
         self.data.pending_activation_token = token;
     }
 
+    pub(in crate::backend::wayland) fn take_startup_activation_token(&mut self) -> Option<String> {
+        self.data.startup_activation_token.take()
+    }
+
     pub(in crate::backend::wayland) fn preferred_output_identity(&self) -> Option<&str> {
         self.data.preferred_output_identity.as_deref()
     }
@@ -146,6 +174,13 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn xdg_fullscreen(&self) -> bool {
         self.data.xdg_fullscreen
+    }
+
+    pub(in crate::backend::wayland) fn xdg_focus_loss_exits_overlay(&self) -> bool {
+        matches!(
+            self.config.ui.xdg_focus_loss_behavior,
+            crate::config::XdgFocusLossBehavior::Exit
+        )
     }
 
     #[allow(dead_code)]

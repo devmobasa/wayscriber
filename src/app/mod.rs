@@ -4,11 +4,38 @@ mod usage;
 
 use crate::backend::ExitAfterCaptureMode;
 use crate::cli::Cli;
+use crate::paths::overlay_lock_file;
+use crate::session::try_lock_exclusive;
 use crate::session_override::set_runtime_session_override;
 use env::env_flag_enabled;
 use session::run_session_cli_commands;
+use std::fs::{File, OpenOptions};
+use std::io::ErrorKind;
 use std::process::{Command, Stdio};
 use usage::{log_overlay_controls, print_usage};
+
+fn acquire_overlay_lock() -> anyhow::Result<Option<File>> {
+    let lock_path = overlay_lock_file();
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)?;
+
+    match try_lock_exclusive(&lock_file) {
+        Ok(()) => Ok(Some(lock_file)),
+        Err(err) if err.kind() == ErrorKind::WouldBlock => {
+            log::warn!("Overlay already running; skipping duplicate --active launch");
+            Ok(None)
+        }
+        Err(err) => Err(err.into()),
+    }
+}
 
 fn maybe_detach_active(cli: &Cli) -> anyhow::Result<bool> {
     if !(cli.active || cli.freeze) {
@@ -89,6 +116,10 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         if maybe_detach_active(&cli)? {
             return Ok(());
         }
+        let _overlay_lock = match acquire_overlay_lock()? {
+            Some(lock) => lock,
+            None => return Ok(()),
+        };
         // One-shot mode: show overlay immediately and exit when done
         log_overlay_controls(cli.freeze);
 

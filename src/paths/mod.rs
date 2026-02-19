@@ -87,5 +87,10 @@ pub fn daemon_lock_file() -> PathBuf {
     runtime_root().join("wayscriber.lock")
 }
 
+/// Location for the active-overlay single-instance lock.
+pub fn overlay_lock_file() -> PathBuf {
+    runtime_root().join("wayscriber-overlay.lock")
+}
+
 #[cfg(test)]
 mod tests;

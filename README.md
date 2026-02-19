@@ -178,7 +178,7 @@ Press <kbd>F1</kbd> or <kbd>F10</kbd> for help; <kbd>Shift+F1</kbd> for quick re
 
 **3. Daemon mode (preferred for daily use, optional)**
 Daemon mode is faster and keeps session state between toggles.
-For setup steps, see [Usage](#daemon-mode-preferred).
+For setup steps, see [Usage](#daemon-mode-preferred). Ubuntu GNOME users: <kbd>Super+G</kbd> is a good default because <kbd>Super+D</kbd> is often reserved.
 
 Alternative (one-shot mode):
 ```bash
@@ -359,7 +359,9 @@ Run wayscriber in the background and toggle with a keybind:
 systemctl --user enable --now wayscriber.service
 ```
 
-Add keybinding (Hyprland):
+Add keybinding:
+
+Hyprland:
 ```conf
 bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
 ```
@@ -368,6 +370,23 @@ Reload your config:
 ```bash
 hyprctl reload
 ```
+
+GNOME (Ubuntu/Debian/Fedora):
+1. Open `Settings -> Keyboard -> Keyboard Shortcuts`.
+2. Scroll down to `Custom Shortcuts`, click `+`.
+3. Name: `Wayscriber Toggle`.
+4. Command: `pkill -SIGUSR1 wayscriber`.
+5. Set a shortcut key (recommended on Ubuntu GNOME: <kbd>Super+G</kbd>; <kbd>Super+D</kbd> is often already in use).
+
+KDE Plasma:
+1. Open `Settings -> Keyboard -> Shortcuts`.
+2. Add new `Command or Script`.
+3. Name: `Wayscriber Toggle`.
+4. Command: `pkill -SIGUSR1 wayscriber`.
+5. Assign a key (for example <kbd>Meta+Shift+D</kbd>).
+
+Other desktops/window managers:
+- Bind `pkill -SIGUSR1 wayscriber` to any global shortcut key you prefer.
 
 Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; otherwise right-click the tray icon for options:
 - Toggle overlay visibility
