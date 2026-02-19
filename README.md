@@ -359,6 +359,14 @@ Run wayscriber in the background and toggle with a keybind:
 systemctl --user enable --now wayscriber.service
 ```
 
+No-CLI setup path:
+- Open `wayscriber-configurator`
+- Go to the `Daemon` tab
+- Click `Install/Update Service`, then `Enable + Start`
+- Set a shortcut and click `Apply Shortcut`
+  - GNOME: writes a GNOME custom shortcut (`pkill -SIGUSR1 wayscriber`)
+  - KDE/Plasma: writes systemd drop-in env (`WAYSCRIBER_PORTAL_SHORTCUT`) for portal global shortcuts
+
 Add keybinding:
 
 Hyprland:
