@@ -147,29 +147,66 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 
 ## Quick Start
 
-**1. Install** (Debian/Ubuntu repo, auto-updates):
+**1. Install wayscriber (choose one path)**
+
+**Option A: No CLI (click and install)**
+- Main app (`wayscriber`) `.deb` (Ubuntu, Debian, Linux Mint, Pop!_OS, and other Debian-based distros): [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb)
+- Main app (`wayscriber`) `.rpm` (Fedora, RHEL, Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros): [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm)
+- Optional GUI app (`wayscriber-configurator`) `.deb`: [wayscriber-configurator-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb)
+- Optional GUI app (`wayscriber-configurator`) `.rpm`: [wayscriber-configurator-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm)
+- [Latest release page (all assets)](https://github.com/devmobasa/wayscriber/releases/latest)
+
+Install the main app package first. `wayscriber-configurator` is optional and does not include the `wayscriber` binary.
+Open the downloaded package in your software installer (Software Center / Discover), then install.
+Important: direct GitHub `.deb`/`.rpm` installs are one-off installs and do not auto-update. Use repo install commands if you want automatic updates.
+
+**Option B: CLI (Debian/Ubuntu repo, auto-updates recommended)**
 ```bash
 sudo install -d /usr/share/keyrings
 curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | sudo gpg --dearmor -o /usr/share/keyrings/wayscriber.gpg
 echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
 sudo apt update
 sudo apt install wayscriber
-# Optional GUI configurator
+# Optional GUI configurator (separate app)
 sudo apt install wayscriber-configurator
 ```
+Fedora/RHEL CLI users: use the [Fedora / RHEL (repo – recommended)](#fedora--rhel-repo--recommended) section below instead of this `apt` block.
 
-**2. Run:**
+**2. First launch (GUI-first, no terminal needed)**
+Open your app menu/launcher and start **Wayscriber**.
+Press <kbd>F1</kbd> or <kbd>F10</kbd> for help; <kbd>Shift+F1</kbd> for quick reference; <kbd>Ctrl+K</kbd> for the command palette; <kbd>Escape</kbd> hides/exits.
+
+**3. Daemon mode (preferred for daily use, optional)**
+Daemon mode is faster and keeps session state between toggles.
+For setup steps, see [Usage](#daemon-mode-preferred).
+
+Alternative (one-shot mode):
 ```bash
 wayscriber --active
 ```
 
-**3. Draw** — use your mouse. Press <kbd>F1</kbd> or <kbd>F10</kbd> for help; <kbd>Shift+F1</kbd> for quick reference; <kbd>Ctrl+K</kbd> for the command palette; <kbd>Escape</kbd> to exit.
-
-For other distros or running as a daemon, see [Installation](#installation) and [Usage](#usage).
+For distro-specific package steps, see [Installation](#installation). For daemon vs one-shot behavior, see [Usage](#usage).
 
 ---
 
 ## Installation
+
+### No terminal install (GitHub Releases)
+
+If you prefer downloading files in a browser instead of using package-manager commands:
+
+1. Open [latest release](https://github.com/devmobasa/wayscriber/releases/latest).
+2. Install the main app package that matches your distro:
+   - [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb) (Ubuntu, Debian, Linux Mint, Pop!_OS, and other Debian-based distros)
+   - [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm) (Fedora, RHEL, Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros)
+3. Optional: install the configurator package (`wayscriber-configurator`) after wayscriber:
+   - [wayscriber-configurator-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb)
+   - [wayscriber-configurator-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm)
+   - Note: `wayscriber-configurator` is a separate app and does not install `wayscriber`.
+4. Launch **Wayscriber** from your application menu/launcher.
+5. Optional later: switch to daemon mode (preferred) using the steps in [Usage](#daemon-mode-preferred).
+
+Release packages are one-off installs (no auto-updates). Use repo installs below for automatic updates.
 
 ### Debian / Ubuntu (repo – recommended)
 ```bash
@@ -312,25 +349,9 @@ See https://wayscriber.com/docs/ for the latest documentation.
 
 ## Usage
 
-### One-Shot Mode
+### Daemon Mode (preferred)
 
-Launch wayscriber when you need it, exit when done:
-
-```bash
-wayscriber --active
-wayscriber --active --mode whiteboard
-wayscriber --active --mode blueprint
-wayscriber --freeze   # start with screen frozen
-```
-
-Bind to a key (Hyprland example):
-```conf
-bind = SUPER, D, exec, wayscriber --active
-```
-
-Press <kbd>F1</kbd>/<kbd>F10</kbd> for help or <kbd>Shift+F1</kbd> for quick reference. <kbd>Ctrl+K</kbd> opens the command palette; <kbd>F11</kbd> opens the configurator; <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd> exits.
-
-### Daemon Mode
+Recommended for daily use: faster toggle, better workflow, and session persistence.
 
 Run wayscriber in the background and toggle with a keybind:
 
@@ -373,6 +394,24 @@ systemctl --user status wayscriber.service
 systemctl --user restart wayscriber.service
 journalctl --user -u wayscriber.service -f
 ```
+
+### One-Shot Mode (alternative)
+
+Launch wayscriber when you need it, then exit:
+
+```bash
+wayscriber --active
+wayscriber --active --mode whiteboard
+wayscriber --active --mode blueprint
+wayscriber --freeze   # start with screen frozen
+```
+
+Bind to a key (Hyprland example):
+```conf
+bind = SUPER, D, exec, wayscriber --active
+```
+
+Press <kbd>F1</kbd>/<kbd>F10</kbd> for help or <kbd>Shift+F1</kbd> for quick reference. <kbd>Ctrl+K</kbd> opens the command palette; <kbd>F11</kbd> opens the configurator; <kbd>Escape</kbd> or <kbd>Ctrl+Q</kbd> exits.
 
 ### Screenshot Shortcuts
 
