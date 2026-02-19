@@ -33,10 +33,10 @@ pub(super) fn detect_service_unit_path(systemctl_available: bool) -> Option<Path
         }
     }
 
-    if let Some(path) = user_service_unit_path() {
-        if path.exists() {
-            return Some(path);
-        }
+    if let Some(path) = user_service_unit_path()
+        && path.exists()
+    {
+        return Some(path);
     }
 
     package_service_paths()
@@ -130,18 +130,18 @@ fn package_service_paths() -> Vec<PathBuf> {
 }
 
 fn resolve_wayscriber_binary_path() -> Result<PathBuf, String> {
-    if let Some(path) = env::var_os("WAYSCRIBER_BIN").map(PathBuf::from) {
-        if path.exists() {
-            return Ok(path);
-        }
+    if let Some(path) = env::var_os("WAYSCRIBER_BIN").map(PathBuf::from)
+        && path.exists()
+    {
+        return Ok(path);
     }
 
-    if let Ok(current_exe) = env::current_exe() {
-        if let Some(exe_dir) = current_exe.parent() {
-            let sibling = exe_dir.join("wayscriber");
-            if sibling.exists() {
-                return Ok(sibling);
-            }
+    if let Ok(current_exe) = env::current_exe()
+        && let Some(exe_dir) = current_exe.parent()
+    {
+        let sibling = exe_dir.join("wayscriber");
+        if sibling.exists() {
+            return Ok(sibling);
         }
     }
 
