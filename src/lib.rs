@@ -12,6 +12,7 @@ pub mod input;
 mod label_format;
 pub mod paths;
 pub mod session;
+pub mod shortcut_hint;
 pub mod systemd_user_service;
 pub mod time_utils;
 pub mod toolbar_icons;

@@ -5,6 +5,8 @@ use super::WayscriberTray;
 #[cfg(feature = "tray")]
 use super::runtime::update_session_resume_in_config;
 #[cfg(feature = "tray")]
+use super::shortcut_hint_io::configured_toggle_shortcut_hint;
+#[cfg(feature = "tray")]
 use crate::config::{Action, action_label};
 #[cfg(feature = "tray")]
 use crate::label_format::format_binding_label;
@@ -14,8 +16,6 @@ use crate::tray_action::TrayAction;
 use log::{info, warn};
 #[cfg(feature = "tray")]
 use std::env;
-#[cfg(feature = "tray")]
-use std::process::Command;
 #[cfg(feature = "tray")]
 use std::sync::atomic::Ordering;
 #[cfg(feature = "tray")]
@@ -315,43 +315,4 @@ fn toggle_overlay_menu_label() -> String {
         Some(shortcut) => format!("{base} ({shortcut})"),
         None => base.to_string(),
     }
-}
-
-#[cfg(feature = "tray")]
-fn configured_toggle_shortcut_hint() -> Option<String> {
-    if let Ok(shortcut) = env::var("WAYSCRIBER_PORTAL_SHORTCUT")
-        && !shortcut.trim().is_empty()
-    {
-        return Some(shortcut.trim().to_string());
-    }
-    read_gnome_toggle_shortcut_binding()
-}
-
-#[cfg(feature = "tray")]
-fn read_gnome_toggle_shortcut_binding() -> Option<String> {
-    let schema = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/wayscriber-toggle/";
-    let output = Command::new("gsettings")
-        .args(["get", schema, "binding"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    parse_gsettings_string_value(&String::from_utf8_lossy(&output.stdout))
-}
-
-#[cfg(feature = "tray")]
-fn parse_gsettings_string_value(raw: &str) -> Option<String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed == "''" {
-        return None;
-    }
-    let unquoted = trimmed
-        .strip_prefix('\'')
-        .and_then(|value| value.strip_suffix('\''))
-        .unwrap_or(trimmed);
-    if unquoted.is_empty() {
-        return None;
-    }
-    Some(unquoted.replace("\\'", "'").replace("\\\\", "\\"))
 }

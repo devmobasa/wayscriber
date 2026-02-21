@@ -2,6 +2,8 @@ mod helpers;
 #[cfg(feature = "tray")]
 mod ksni;
 mod runtime;
+#[cfg(feature = "tray")]
+mod shortcut_hint_io;
 
 pub(crate) use runtime::start_system_tray;
 
