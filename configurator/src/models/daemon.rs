@@ -1,3 +1,5 @@
+use wayscriber::shortcut_hint::is_gnome_desktop;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesktopEnvironment {
     Gnome,
@@ -13,10 +15,10 @@ impl DesktopEnvironment {
     }
 
     pub fn from_desktop_strings(current: &str, session: &str) -> Self {
-        let combined = format!("{current};{session}").to_lowercase();
-        if combined.contains("gnome") {
+        if is_gnome_desktop(current, session) {
             return Self::Gnome;
         }
+        let combined = format!("{current};{session}").to_lowercase();
         if combined.contains("kde") || combined.contains("plasma") {
             return Self::Kde;
         }

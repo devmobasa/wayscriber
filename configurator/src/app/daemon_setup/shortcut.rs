@@ -1,6 +1,11 @@
 use std::fs;
 
 use crate::models::{DesktopEnvironment, ShortcutBackend};
+use wayscriber::shortcut_hint::{
+    GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, GNOME_WAYSCRIBER_KEYBINDING_PATH,
+    gnome_effective_shortcut, gnome_shortcut_schema_with_path, normalize_shortcut_hint,
+    parse_gsettings_path_list,
+};
 
 use super::command::{command_available, run_command, run_command_checked};
 use super::service::{
@@ -10,13 +15,6 @@ use super::service::{
 
 const PORTAL_APP_ID: &str = "wayscriber";
 const TOGGLE_COMMAND: &str = "pkill -SIGUSR1 wayscriber";
-
-const GNOME_MEDIA_KEYS_SCHEMA: &str = "org.gnome.settings-daemon.plugins.media-keys";
-const GNOME_MEDIA_KEYS_KEY: &str = "custom-keybindings";
-const GNOME_CUSTOM_KEYBINDING_SCHEMA: &str =
-    "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
-const GNOME_WAYSCRIBER_KEYBINDING_PATH: &str =
-    "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/wayscriber-toggle/";
 const GNOME_SHORTCUT_NAME: &str = "Wayscriber Toggle";
 
 pub(super) fn read_configured_shortcut(backend: ShortcutBackend) -> Option<String> {
@@ -80,8 +78,7 @@ fn apply_gnome_custom_shortcut(binding: &str) -> Result<(), String> {
         &rendered_bindings,
     ])?;
 
-    let schema_with_path =
-        format!("{GNOME_CUSTOM_KEYBINDING_SCHEMA}:{GNOME_WAYSCRIBER_KEYBINDING_PATH}");
+    let schema_with_path = gnome_shortcut_schema_with_path();
     run_gsettings_command(&[
         "set",
         &schema_with_path,
@@ -116,13 +113,21 @@ fn read_gnome_shortcut_binding() -> Option<String> {
     if !command_available("gsettings") {
         return None;
     }
-    let schema_with_path =
-        format!("{GNOME_CUSTOM_KEYBINDING_SCHEMA}:{GNOME_WAYSCRIBER_KEYBINDING_PATH}");
-    let capture = run_command("gsettings", &["get", &schema_with_path, "binding"]).ok()?;
-    if !capture.success {
+    let custom_keybindings = run_command(
+        "gsettings",
+        &["get", GNOME_MEDIA_KEYS_SCHEMA, GNOME_MEDIA_KEYS_KEY],
+    )
+    .ok()?;
+    if !custom_keybindings.success {
         return None;
     }
-    parse_gsettings_string_value(capture.stdout.trim())
+
+    let schema_with_path = gnome_shortcut_schema_with_path();
+    let binding = run_command("gsettings", &["get", &schema_with_path, "binding"]).ok()?;
+    if !binding.success {
+        return None;
+    }
+    resolve_gnome_shortcut_from_gsettings(&custom_keybindings.stdout, &binding.stdout)
 }
 
 fn require_gsettings_available() -> Result<(), String> {
@@ -182,36 +187,9 @@ fn parse_portal_shortcut_from_dropin(content: &str) -> Option<String> {
             return None;
         }
         let inner = &trimmed[prefix.len()..trimmed.len() - 1];
-        if inner.is_empty() {
-            return None;
-        }
-        Some(inner.replace("\\\"", "\"").replace("\\\\", "\\"))
+        let unescaped = inner.replace("\\\"", "\"").replace("\\\\", "\\");
+        normalize_shortcut_hint(Some(&unescaped))
     })
-}
-
-fn parse_gsettings_path_list(raw: &str) -> Result<Vec<String>, String> {
-    let trimmed = raw.trim();
-    let list_literal = trimmed.strip_prefix("@as ").map_or(trimmed, str::trim);
-    if !list_literal.starts_with('[') || !list_literal.ends_with(']') {
-        return Err(format!(
-            "Unexpected gsettings list format: `{}`",
-            raw.trim()
-        ));
-    }
-    let inner = list_literal[1..list_literal.len() - 1].trim();
-    if inner.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut values = Vec::new();
-    for chunk in inner.split(',') {
-        let value = chunk.trim().trim_matches('\'').trim_matches('"').trim();
-        if value.is_empty() {
-            continue;
-        }
-        values.push(value.to_string());
-    }
-    Ok(values)
 }
 
 fn serialize_gsettings_path_list(paths: &[String]) -> String {
@@ -233,19 +211,11 @@ fn gvariant_string_literal(value: &str) -> String {
     format!("'{escaped}'")
 }
 
-fn parse_gsettings_string_value(raw: &str) -> Option<String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed == "''" {
-        return None;
-    }
-    let unquoted = trimmed
-        .strip_prefix('\'')
-        .and_then(|value| value.strip_suffix('\''))
-        .unwrap_or(trimmed);
-    if unquoted.is_empty() {
-        return None;
-    }
-    Some(unquoted.replace("\\'", "'").replace("\\\\", "\\"))
+fn resolve_gnome_shortcut_from_gsettings(
+    custom_keybindings_output: &str,
+    binding_output: &str,
+) -> Option<String> {
+    gnome_effective_shortcut(custom_keybindings_output, binding_output)
 }
 
 fn normalize_shortcut_for_gnome(input: &str) -> Result<String, String> {
@@ -364,6 +334,44 @@ mod tests {
         assert_eq!(
             parse_portal_shortcut_from_dropin(content),
             Some("<Ctrl><Shift>g".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_portal_shortcut_ignores_blank_value() {
+        let content = "[Service]\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=   \"\n";
+        assert_eq!(parse_portal_shortcut_from_dropin(content), None);
+    }
+
+    #[test]
+    fn resolve_gnome_shortcut_requires_registered_path() {
+        let custom_keybindings =
+            "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/not-wayscriber/']";
+        assert_eq!(
+            resolve_gnome_shortcut_from_gsettings(custom_keybindings, "'<Super>g'"),
+            None
+        );
+    }
+
+    #[test]
+    fn resolve_gnome_shortcut_rejects_disabled_binding() {
+        let custom_keybindings = "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/wayscriber-toggle/']";
+        assert_eq!(
+            resolve_gnome_shortcut_from_gsettings(custom_keybindings, "'disabled'"),
+            None
+        );
+        assert_eq!(
+            resolve_gnome_shortcut_from_gsettings(custom_keybindings, "''"),
+            None
+        );
+    }
+
+    #[test]
+    fn resolve_gnome_shortcut_accepts_registered_binding() {
+        let custom_keybindings = "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/wayscriber-toggle/']";
+        assert_eq!(
+            resolve_gnome_shortcut_from_gsettings(custom_keybindings, "'<Super>g'"),
+            Some("<Super>g".to_string())
         );
     }
 
