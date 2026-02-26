@@ -7,35 +7,68 @@
 //! current source color.
 
 use cairo::{Context, Format, ImageSurface};
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque};
+use std::sync::LazyLock;
 
-// Cached render entry
-struct CachedRender {
-    /// Pre-converted Cairo ARGB32 pixel data (native byte-order, premultiplied).
-    data: Vec<u8>,
-    width: i32,
-    height: i32,
-    stride: i32,
+const MAX_CACHED_SIZES: usize = 8;
+
+thread_local! {
+    static ICON_SURFACE_CACHE: RefCell<HashMap<usize, RenderCache>> = RefCell::new(HashMap::new());
 }
 
-// Parsed + cached SVG icon
+// LRU cache for rasterized icon sizes.
+struct RenderCache {
+    entries: HashMap<u32, ImageSurface>,
+    lru: VecDeque<u32>,
+}
+
+impl RenderCache {
+    fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+            lru: VecDeque::new(),
+        }
+    }
+
+    fn get(&mut self, px: u32) -> Option<ImageSurface> {
+        let surface = self.entries.get(&px)?.clone();
+        self.touch(px);
+        Some(surface)
+    }
+
+    fn insert(&mut self, px: u32, surface: ImageSurface) {
+        self.entries.insert(px, surface);
+        self.touch(px);
+        self.evict_oldest();
+    }
+
+    fn touch(&mut self, px: u32) {
+        self.lru.retain(|cached_px| *cached_px != px);
+        self.lru.push_back(px);
+    }
+
+    fn evict_oldest(&mut self) {
+        while self.entries.len() > MAX_CACHED_SIZES {
+            if let Some(oldest) = self.lru.pop_front() {
+                self.entries.remove(&oldest);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+// Parsed SVG icon
 struct SvgIcon {
     tree: resvg::usvg::Tree,
-    /// Per-pixel-size cache of rasterised data. The `Mutex` is uncontended in
-    /// practice because the Wayland event loop is single-threaded.
-    cache: Mutex<HashMap<u32, CachedRender>>,
 }
 
 impl SvgIcon {
     fn parse(svg_data: &str) -> Self {
-        let tree =
-            resvg::usvg::Tree::from_str(svg_data, &resvg::usvg::Options::default())
-                .expect("embedded SVG must be valid");
-        Self {
-            tree,
-            cache: Mutex::new(HashMap::new()),
-        }
+        let tree = resvg::usvg::Tree::from_str(svg_data, &resvg::usvg::Options::default())
+            .expect("embedded SVG must be valid");
+        Self { tree }
     }
 
     /// Render this icon into ctx at (`x`, `y`) with the given square
@@ -50,28 +83,26 @@ impl SvgIcon {
         }
     }
 
-    /// Return a Cairo ['ImageSurface'] for the requested pixel size, creating
+    /// Return a Cairo [`ImageSurface`] for the requested pixel size, creating
     /// and caching the rasterised data on first call
     fn surface_for(&self, px: u32) -> Option<ImageSurface> {
-        let mut cache = self.cache.lock().ok()?;
-        if !cache.contains_key(&px) {
-            cache.insert(px, self.rasterize(px)?);
-        }
-        let c = cache.get(&px)?;
-        ImageSurface::create_for_data(
-            c.data.clone(),
-            Format::ARgb32,
-            c.width,
-            c.height,
-            c.stride,
-        )
-        .ok()
+        let key = self.cache_key();
+        ICON_SURFACE_CACHE.with(|caches| {
+            let mut caches = caches.borrow_mut();
+            let cache = caches.entry(key).or_insert_with(RenderCache::new);
+            if let Some(surface) = cache.get(px) {
+                return Some(surface);
+            }
+            let surface = self.rasterize(px)?;
+            cache.insert(px, surface.clone());
+            Some(surface)
+        })
     }
 
     /// Rasterize the SVG tree at `px x px` and convert the pixel data from
     /// tiny-skia premultiplied RGBA to Cairo premultiplied ARGB32 (BGRA on
     /// little-endian).
-    fn rasterize(&self, px: u32) -> Option<CachedRender> {
+    fn rasterize(&self, px: u32) -> Option<ImageSurface> {
         let mut pixmap = tiny_skia::Pixmap::new(px, px)?;
 
         let sz = self.tree.size();
@@ -101,11 +132,20 @@ impl SvgIcon {
             }
         }
 
-        Some(CachedRender {
-            data,
-            width: px as i32,
-            height: px as i32,
-            stride: stride as i32,
+        ImageSurface::create_for_data(data, Format::ARgb32, px as i32, px as i32, stride as i32)
+            .ok()
+    }
+
+    fn cache_key(&self) -> usize {
+        self as *const Self as usize
+    }
+
+    #[cfg(test)]
+    fn cache_len(&self) -> usize {
+        let key = self.cache_key();
+        ICON_SURFACE_CACHE.with(|caches| {
+            let caches = caches.borrow();
+            caches.get(&key).map_or(0, |cache| cache.entries.len())
         })
     }
 }
@@ -113,23 +153,22 @@ impl SvgIcon {
 // Embed SVG files and create lazy-parsed statics
 macro_rules! svg_icon {
     ($name:ident, $path:expr) => {
-        static $name: LazyLock<SvgIcon> =
-            LazyLock::new(|| SvgIcon::parse(include_str!($path)));
+        static $name: LazyLock<SvgIcon> = LazyLock::new(|| SvgIcon::parse(include_str!($path)));
     };
 }
 
-svg_icon!(SELECT,       "../../assets/icons/mouse-pointer.svg");
-svg_icon!(PEN,          "../../assets/icons/pen-tool.svg");
-svg_icon!(LINE,         "../../assets/icons/minus.svg");
-svg_icon!(RECT,         "../../assets/icons/rectangle-horizontal.svg");
-svg_icon!(CIRCLE,       "../../assets/icons/circle.svg");
-svg_icon!(ARROW,        "../../assets/icons/arrow-up-right.svg");
-svg_icon!(ERASER,       "../../assets/icons/eraser.svg");
-svg_icon!(TEXT,         "../../assets/icons/type.svg");
-svg_icon!(NOTE,         "../../assets/icons/sticky-note.svg");
-svg_icon!(HIGHLIGHT,    "../../assets/icons/mouse-pointer-click.svg");
-svg_icon!(MARKER,       "../../assets/icons/highlighter.svg");
-svg_icon!(STEP_MARKER,  "../../assets/icons/list-ordered.svg");
+svg_icon!(SELECT, "../../assets/icons/mouse-pointer.svg");
+svg_icon!(PEN, "../../assets/icons/pen-tool.svg");
+svg_icon!(LINE, "../../assets/icons/minus.svg");
+svg_icon!(RECT, "../../assets/icons/rectangle-horizontal.svg");
+svg_icon!(CIRCLE, "../../assets/icons/circle.svg");
+svg_icon!(ARROW, "../../assets/icons/arrow-up-right.svg");
+svg_icon!(ERASER, "../../assets/icons/eraser.svg");
+svg_icon!(TEXT, "../../assets/icons/type.svg");
+svg_icon!(NOTE, "../../assets/icons/sticky-note.svg");
+svg_icon!(HIGHLIGHT, "../../assets/icons/mouse-pointer-click.svg");
+svg_icon!(MARKER, "../../assets/icons/highlighter.svg");
+svg_icon!(STEP_MARKER, "../../assets/icons/list-ordered.svg");
 
 // Render helpers, matching the draw_icon_* signatures
 pub fn render_select(ctx: &Context, x: f64, y: f64, size: f64) {
@@ -178,4 +217,62 @@ pub fn render_marker(ctx: &Context, x: f64, y: f64, size: f64) {
 
 pub fn render_step_marker(ctx: &Context, x: f64, y: f64, size: f64) {
     STEP_MARKER.render(ctx, x, y, size);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_icon_renders(name: &str, icon: &SvgIcon) {
+        let surface = ImageSurface::create(Format::ARgb32, 24, 24).expect("surface");
+        let ctx = Context::new(&surface).expect("context");
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+        icon.render(&ctx, 0.0, 0.0, 24.0);
+        surface.flush();
+
+        let mut has_ink = false;
+        surface
+            .with_data(|pixels| {
+                has_ink = pixels.chunks_exact(4).any(|pixel| pixel[3] != 0);
+            })
+            .expect("surface data");
+        assert!(has_ink, "{name} icon rendered an empty surface");
+    }
+
+    #[test]
+    fn embedded_icons_render_non_empty_alpha() {
+        let icons: [(&str, &SvgIcon); 12] = [
+            ("select", &*SELECT),
+            ("pen", &*PEN),
+            ("line", &*LINE),
+            ("rect", &*RECT),
+            ("circle", &*CIRCLE),
+            ("arrow", &*ARROW),
+            ("eraser", &*ERASER),
+            ("text", &*TEXT),
+            ("note", &*NOTE),
+            ("highlight", &*HIGHLIGHT),
+            ("marker", &*MARKER),
+            ("step_marker", &*STEP_MARKER),
+        ];
+
+        for (name, icon) in icons {
+            assert_icon_renders(name, icon);
+        }
+    }
+
+    #[test]
+    fn icon_surface_cache_stays_bounded() {
+        let icon = &*SELECT;
+        for px in 8..(8 + MAX_CACHED_SIZES as u32 + 5) {
+            let _ = icon.surface_for(px).expect("surface for size");
+        }
+
+        assert!(
+            icon.cache_len() <= MAX_CACHED_SIZES,
+            "cache grew beyond limit: {} > {}",
+            icon.cache_len(),
+            MAX_CACHED_SIZES
+        );
+    }
 }
