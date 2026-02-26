@@ -22,6 +22,10 @@ calloop = "0.14"
 cairo-rs = { version = "0.21", features = ["png"] }
 cairo-sys-rs = "0.21"
 
+# SVG icon rendering
+resvg = "0.44"
+tiny-skia = "0.11"
+
 # Pango for advanced text rendering and font support
 pango = "0.21"
 pangocairo = "0.21"
