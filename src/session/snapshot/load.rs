@@ -187,45 +187,20 @@ pub(crate) fn load_snapshot_inner(
         ..
     } = session_file;
 
-    let pages_from_file = |pages: Option<Vec<Frame>>,
-                           active: Option<usize>,
-                           legacy: Option<Frame>|
-     -> Option<BoardPagesSnapshot> {
-        if let Some(mut pages) = pages {
-            if pages.is_empty() {
-                pages.push(Frame::new());
-            }
-            let active = active.unwrap_or(0).min(pages.len() - 1);
-            return Some(BoardPagesSnapshot { pages, active });
-        }
-        legacy.map(|frame| BoardPagesSnapshot {
-            pages: vec![frame],
-            active: 0,
-        })
-    };
-
     let mut snapshot = if !boards.is_empty() || active_board_id.is_some() {
         let mut board_snaps = Vec::new();
         for BoardFile {
             id,
-            mut pages,
+            pages,
             active_page,
         } in boards
         {
-            if pages.is_empty() {
-                pages.push(Frame::new());
-            }
-            let active = active_page.min(pages.len().saturating_sub(1));
             board_snaps.push(BoardSnapshot {
                 id,
-                pages: BoardPagesSnapshot { pages, active },
+                pages: normalized_board_pages_snapshot(pages, Some(active_page)),
             });
         }
-        let fallback_id = board_snaps
-            .first()
-            .map(|board| board.id.clone())
-            .unwrap_or_else(|| "transparent".to_string());
-        let active_board_id = active_board_id.unwrap_or(fallback_id);
+        let active_board_id = resolved_active_board_id(active_board_id, &board_snaps);
         SessionSnapshot {
             active_board_id,
             boards: board_snaps,
@@ -234,28 +209,31 @@ pub(crate) fn load_snapshot_inner(
     } else {
         let mut board_snaps = Vec::new();
         if let Some(pages) =
-            pages_from_file(transparent_pages, transparent_active_page, transparent)
+            board_pages_from_file(transparent_pages, transparent_active_page, transparent)
         {
             board_snaps.push(BoardSnapshot {
                 id: "transparent".to_string(),
                 pages,
             });
         }
-        if let Some(pages) = pages_from_file(whiteboard_pages, whiteboard_active_page, whiteboard) {
+        if let Some(pages) =
+            board_pages_from_file(whiteboard_pages, whiteboard_active_page, whiteboard)
+        {
             board_snaps.push(BoardSnapshot {
                 id: "whiteboard".to_string(),
                 pages,
             });
         }
-        if let Some(pages) = pages_from_file(blackboard_pages, blackboard_active_page, blackboard) {
+        if let Some(pages) =
+            board_pages_from_file(blackboard_pages, blackboard_active_page, blackboard)
+        {
             board_snaps.push(BoardSnapshot {
                 id: "blackboard".to_string(),
                 pages,
             });
         }
-        let active_board_id = active_mode
-            .unwrap_or_else(|| "transparent".to_string())
-            .to_lowercase();
+        let active_board_id =
+            resolved_active_board_id(active_mode.map(|mode| mode.to_lowercase()), &board_snaps);
         SessionSnapshot {
             active_board_id,
             boards: board_snaps,
@@ -286,6 +264,48 @@ pub(crate) fn load_snapshot_inner(
         compressed,
         version: session_file.version,
     }))
+}
+
+fn board_pages_from_file(
+    pages: Option<Vec<Frame>>,
+    active: Option<usize>,
+    legacy: Option<Frame>,
+) -> Option<BoardPagesSnapshot> {
+    if let Some(pages) = pages {
+        return Some(normalized_board_pages_snapshot(pages, active));
+    }
+    legacy.map(|frame| BoardPagesSnapshot {
+        pages: vec![frame],
+        active: 0,
+    })
+}
+
+fn normalized_board_pages_snapshot(
+    mut pages: Vec<Frame>,
+    active: Option<usize>,
+) -> BoardPagesSnapshot {
+    if pages.is_empty() {
+        pages.push(Frame::new());
+    }
+    let active = active.unwrap_or(0).min(pages.len().saturating_sub(1));
+    BoardPagesSnapshot { pages, active }
+}
+
+fn resolved_active_board_id(requested: Option<String>, boards: &[BoardSnapshot]) -> String {
+    let Some(fallback_id) = boards.first().map(|board| board.id.clone()) else {
+        return "transparent".to_string();
+    };
+
+    let requested = requested.unwrap_or_else(|| fallback_id.clone());
+    if boards.iter().any(|board| board.id == requested) {
+        requested
+    } else {
+        warn!(
+            "Session active board '{}' missing from restored boards; falling back to '{}'",
+            requested, fallback_id
+        );
+        fallback_id
+    }
 }
 
 fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Result<()> {

@@ -7,7 +7,11 @@ impl WaylandState {
         if self.overlay_suppressed() {
             return KeyboardInteractivity::None;
         }
-        desired_keyboard_interactivity_for(self.layer_shell.is_some(), self.toolbar.is_visible())
+        desired_keyboard_interactivity_for(
+            self.layer_shell.is_some(),
+            self.toolbar.is_visible(),
+            self.inline_toolbars_active(),
+        )
     }
 
     fn log_toolbar_layer_shell_missing_once(&mut self) {

@@ -123,6 +123,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub frozen_enabled: bool,
     pub preferred_output_identity: Option<String>,
     pub xdg_fullscreen: bool,
+    pub main_surface_uses_overlay_layer: bool,
     pub pending_freeze_on_start: bool,
     pub screencopy_manager: Option<ScreencopyManager>,
     #[cfg(tablet)]

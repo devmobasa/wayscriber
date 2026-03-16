@@ -111,6 +111,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         frozen_enabled: frozen_supported,
         preferred_output_identity: output_prefs.preferred_output_identity,
         xdg_fullscreen: output_prefs.xdg_fullscreen,
+        main_surface_uses_overlay_layer: output_prefs.main_surface_uses_overlay_layer,
         pending_freeze_on_start: freeze_on_start,
         screencopy_manager: setup.screencopy_manager,
         #[cfg(tablet)]

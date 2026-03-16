@@ -1,7 +1,7 @@
 use super::compression::is_gzip;
 use super::load::load_snapshot_inner;
 use super::types::{
-    BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
+    BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
 };
 use super::{load_snapshot, save_snapshot};
 use crate::draw::{Color, Frame, Shape};
@@ -9,7 +9,7 @@ use crate::session::options::{CompressionMode, SessionOptions};
 use crate::time_utils::now_rfc3339;
 use tempfile::tempdir;
 
-fn sample_snapshot() -> SessionSnapshot {
+fn sample_frame() -> Frame {
     let mut frame = Frame::new();
     frame.add_shape(Shape::Line {
         x1: 0,
@@ -24,13 +24,16 @@ fn sample_snapshot() -> SessionSnapshot {
         },
         thick: 2.0,
     });
+    frame
+}
 
+fn sample_snapshot() -> SessionSnapshot {
     SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
             id: "transparent".to_string(),
             pages: BoardPagesSnapshot {
-                pages: vec![frame],
+                pages: vec![sample_frame()],
                 active: 0,
             },
         }],
@@ -268,4 +271,81 @@ fn load_snapshot_inner_migrates_legacy_frame_to_pages() {
     assert_eq!(pages.pages.pages.len(), 1);
     assert_eq!(pages.pages.active, 0);
     assert_eq!(pages.pages.pages[0].shapes.len(), 1);
+}
+
+#[test]
+fn load_snapshot_inner_falls_back_when_active_board_is_missing() {
+    let temp = tempdir().unwrap();
+    let session_path = temp.path().join("session.json");
+
+    let file = SessionFile {
+        version: CURRENT_VERSION,
+        last_modified: now_rfc3339(),
+        active_board_id: Some("missing".to_string()),
+        active_mode: None,
+        boards: vec![BoardFile {
+            id: "transparent".to_string(),
+            pages: vec![sample_frame()],
+            active_page: 0,
+        }],
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: None,
+        whiteboard_pages: None,
+        blackboard_pages: None,
+        transparent_active_page: None,
+        whiteboard_active_page: None,
+        blackboard_active_page: None,
+        tool_state: None,
+    };
+    let bytes = serde_json::to_vec_pretty(&file).unwrap();
+    std::fs::write(&session_path, bytes).unwrap();
+
+    let options = SessionOptions::new(temp.path().to_path_buf(), "missing-active-board");
+    let loaded = load_snapshot_inner(&session_path, &options)
+        .expect("load_snapshot_inner should succeed")
+        .expect("snapshot should be present");
+
+    assert_eq!(loaded.snapshot.active_board_id, "transparent");
+}
+
+#[test]
+fn load_snapshot_inner_normalizes_empty_legacy_page_lists() {
+    let temp = tempdir().unwrap();
+    let session_path = temp.path().join("session.json");
+
+    let file = SessionFile {
+        version: CURRENT_VERSION,
+        last_modified: now_rfc3339(),
+        active_board_id: None,
+        active_mode: Some("transparent".to_string()),
+        boards: Vec::new(),
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: Some(Vec::new()),
+        whiteboard_pages: Some(vec![sample_frame()]),
+        blackboard_pages: None,
+        transparent_active_page: Some(99),
+        whiteboard_active_page: Some(0),
+        blackboard_active_page: None,
+        tool_state: None,
+    };
+    let bytes = serde_json::to_vec_pretty(&file).unwrap();
+    std::fs::write(&session_path, bytes).unwrap();
+
+    let options = SessionOptions::new(temp.path().to_path_buf(), "empty-legacy-pages");
+    let loaded = load_snapshot_inner(&session_path, &options)
+        .expect("load_snapshot_inner should succeed")
+        .expect("snapshot should be present");
+    let pages = loaded
+        .snapshot
+        .boards
+        .iter()
+        .find(|board| board.id == "transparent")
+        .expect("transparent pages");
+
+    assert_eq!(pages.pages.pages.len(), 1);
+    assert_eq!(pages.pages.active, 0);
 }

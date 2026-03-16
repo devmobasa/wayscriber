@@ -1,6 +1,6 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
-use crate::draw::{Color, Shape};
+use crate::draw::{Color, Frame, Shape};
 use crate::input::{EraserMode, Tool};
 use std::path::PathBuf;
 
@@ -109,4 +109,27 @@ fn apply_snapshot_restores_tool_state() {
         })
     );
     assert!(!restored.show_status_bar);
+}
+
+#[test]
+fn apply_snapshot_keeps_current_board_when_active_board_is_missing() {
+    let options = SessionOptions::new(PathBuf::from("/tmp"), "display-missing-board");
+    let mut input = dummy_input_state();
+    input.switch_board_force("whiteboard");
+
+    let snapshot = SessionSnapshot {
+        active_board_id: "missing".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![Frame::new()],
+                active: 0,
+            },
+        }],
+        tool_state: None,
+    };
+
+    apply_snapshot(&mut input, snapshot, &options);
+
+    assert_eq!(input.board_id(), "whiteboard");
 }
