@@ -32,10 +32,13 @@
             postInstall = ''
               install -Dm644 packaging/wayscriber.desktop $out/share/applications/wayscriber.desktop
               install -Dm644 packaging/wayscriber.service $out/lib/systemd/user/wayscriber.service
-              for size in 24 64 128; do
-                install -Dm644 packaging/icons/wayscriber-$size.png \
-                  $out/share/icons/hicolor/''${size}x''${size}/apps/wayscriber.png
+              for size in 16 19 22 24 38 64 128; do
+                for category in apps status; do
+                  install -Dm644 packaging/icons/wayscriber-$size.png \
+                    $out/share/icons/hicolor/''${size}x''${size}/''${category}/wayscriber.png
+                done
               done
+              install -Dm644 packaging/icons/wayscriber-128.png $out/share/pixmaps/wayscriber.png
               install -Dm644 config.example.toml $out/share/doc/wayscriber/config.example.toml
               install -Dm644 README.md $out/share/doc/wayscriber/README.md
               install -Dm644 LICENSE $out/share/licenses/wayscriber/LICENSE
@@ -77,6 +80,8 @@
                 install -Dm644 packaging/icons/wayscriber-configurator-$size.png \
                   $out/share/icons/hicolor/''${size}x''${size}/apps/wayscriber-configurator.png
               done
+              install -Dm644 packaging/icons/wayscriber-configurator-128.png \
+                $out/share/pixmaps/wayscriber-configurator.png
               install -Dm644 README.md $out/share/doc/wayscriber-configurator/README.md
               install -Dm644 LICENSE $out/share/licenses/wayscriber-configurator/LICENSE
 

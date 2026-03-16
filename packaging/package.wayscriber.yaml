@@ -74,6 +74,14 @@ contents:
     dst: /usr/share/icons/hicolor/64x64/status/wayscriber.png
     file_info:
       mode: 0644
+  - src: packaging/icons/wayscriber-128.png
+    dst: /usr/share/icons/hicolor/128x128/status/wayscriber.png
+    file_info:
+      mode: 0644
+  - src: packaging/icons/wayscriber-128.png
+    dst: /usr/share/pixmaps/wayscriber.png
+    file_info:
+      mode: 0644
   - src: config.example.toml
     dst: /usr/share/doc/wayscriber/config.example.toml
     file_info:

@@ -109,17 +109,24 @@ package_tar() {
     mkdir -p "${dist_dir}/usr/bin" \
              "${dist_dir}/usr/lib/systemd/user" \
              "${dist_dir}/usr/share/applications" \
-             "${dist_dir}/usr/share/icons/hicolor/24x24/apps" \
-             "${dist_dir}/usr/share/icons/hicolor/64x64/apps" \
-             "${dist_dir}/usr/share/icons/hicolor/128x128/apps" \
-             "${dist_dir}/usr/share/doc/wayscriber"
+             "${dist_dir}/usr/share/doc/wayscriber" \
+             "${dist_dir}/usr/share/pixmaps"
+
+    for size in 16 19 22 24 38 64 128; do
+        mkdir -p "${dist_dir}/usr/share/icons/hicolor/${size}x${size}/apps" \
+                 "${dist_dir}/usr/share/icons/hicolor/${size}x${size}/status"
+    done
 
     cp "${REPO_ROOT}/target/release/wayscriber" "${dist_dir}/usr/bin/"
     cp "${REPO_ROOT}/packaging/wayscriber.service" "${dist_dir}/usr/lib/systemd/user/"
     cp "${REPO_ROOT}/packaging/wayscriber.desktop" "${dist_dir}/usr/share/applications/"
-    cp "${REPO_ROOT}/packaging/icons/wayscriber-24.png" "${dist_dir}/usr/share/icons/hicolor/24x24/apps/wayscriber.png"
-    cp "${REPO_ROOT}/packaging/icons/wayscriber-64.png" "${dist_dir}/usr/share/icons/hicolor/64x64/apps/wayscriber.png"
-    cp "${REPO_ROOT}/packaging/icons/wayscriber-128.png" "${dist_dir}/usr/share/icons/hicolor/128x128/apps/wayscriber.png"
+    for size in 16 19 22 24 38 64 128; do
+        cp "${REPO_ROOT}/packaging/icons/wayscriber-${size}.png" \
+           "${dist_dir}/usr/share/icons/hicolor/${size}x${size}/apps/wayscriber.png"
+        cp "${REPO_ROOT}/packaging/icons/wayscriber-${size}.png" \
+           "${dist_dir}/usr/share/icons/hicolor/${size}x${size}/status/wayscriber.png"
+    done
+    cp "${REPO_ROOT}/packaging/icons/wayscriber-128.png" "${dist_dir}/usr/share/pixmaps/wayscriber.png"
     cp "${REPO_ROOT}/README.md" "${REPO_ROOT}/config.example.toml" "${dist_dir}/usr/share/doc/wayscriber/"
     [[ -f "${REPO_ROOT}/LICENSE" ]] && cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/doc/wayscriber/" || true
 
@@ -143,13 +150,15 @@ package_tar_configurator() {
              "${dist_dir}/usr/share/icons/hicolor/24x24/apps" \
              "${dist_dir}/usr/share/icons/hicolor/64x64/apps" \
              "${dist_dir}/usr/share/icons/hicolor/128x128/apps" \
-             "${dist_dir}/usr/share/doc/wayscriber-configurator"
+             "${dist_dir}/usr/share/doc/wayscriber-configurator" \
+             "${dist_dir}/usr/share/pixmaps"
 
     cp "${REPO_ROOT}/target/release/wayscriber-configurator" "${dist_dir}/usr/bin/"
     cp "${REPO_ROOT}/packaging/wayscriber-configurator.desktop" "${dist_dir}/usr/share/applications/"
     cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-24.png" "${dist_dir}/usr/share/icons/hicolor/24x24/apps/wayscriber-configurator.png"
     cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-64.png" "${dist_dir}/usr/share/icons/hicolor/64x64/apps/wayscriber-configurator.png"
     cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-128.png" "${dist_dir}/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png"
+    cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-128.png" "${dist_dir}/usr/share/pixmaps/wayscriber-configurator.png"
     cp "${REPO_ROOT}/README.md" "${dist_dir}/usr/share/doc/wayscriber-configurator/"
     [[ -f "${REPO_ROOT}/LICENSE" ]] && cp "${REPO_ROOT}/LICENSE" "${dist_dir}/usr/share/doc/wayscriber-configurator/" || true
 
