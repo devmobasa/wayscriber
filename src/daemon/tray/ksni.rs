@@ -17,6 +17,8 @@ use log::{info, warn};
 #[cfg(feature = "tray")]
 use std::env;
 #[cfg(feature = "tray")]
+use std::path::PathBuf;
+#[cfg(feature = "tray")]
 use std::sync::atomic::Ordering;
 #[cfg(feature = "tray")]
 use std::time::{Duration, Instant};
@@ -283,12 +285,7 @@ fn tray_theme_icons_enabled() -> bool {
     let desktop_session = env::var("DESKTOP_SESSION")
         .unwrap_or_default()
         .to_lowercase();
-    !(desktop_env.contains("noctalia")
-        || session_env.contains("noctalia")
-        || desktop_session.contains("noctalia")
-        || desktop_env.contains("quickshell")
-        || session_env.contains("quickshell")
-        || desktop_session.contains("quickshell"))
+    tray_theme_icons_supported(&desktop_env, &session_env, &desktop_session)
 }
 
 #[cfg(feature = "tray")]
@@ -305,7 +302,29 @@ fn resolve_icon_theme_path() -> String {
     if let Ok(value) = env::var("WAYSCRIBER_ICON_THEME_PATH") {
         return value;
     }
-    String::new()
+    installed_icon_theme_path()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+#[cfg(feature = "tray")]
+fn tray_theme_icons_supported(desktop_env: &str, session_env: &str, desktop_session: &str) -> bool {
+    !tray_theme_icons_blocked_by_desktop(desktop_env)
+        && !tray_theme_icons_blocked_by_desktop(session_env)
+        && !tray_theme_icons_blocked_by_desktop(desktop_session)
+}
+
+#[cfg(feature = "tray")]
+fn tray_theme_icons_blocked_by_desktop(value: &str) -> bool {
+    value.contains("noctalia") || value.contains("quickshell") || value.contains("cosmic")
+}
+
+#[cfg(feature = "tray")]
+fn installed_icon_theme_path() -> Option<PathBuf> {
+    let exe_path = env::current_exe().ok()?;
+    let install_root = exe_path.parent()?.parent()?;
+    let icon_theme_path = install_root.join("share/icons");
+    icon_theme_path.is_dir().then_some(icon_theme_path)
 }
 
 #[cfg(feature = "tray")]
@@ -314,5 +333,28 @@ fn toggle_overlay_menu_label() -> String {
     match configured_toggle_shortcut_hint() {
         Some(shortcut) => format!("{base} ({shortcut})"),
         None => base.to_string(),
+    }
+}
+
+#[cfg(all(feature = "tray", test))]
+mod tests {
+    use super::tray_theme_icons_supported;
+
+    #[test]
+    fn tray_theme_icons_supported_allows_common_desktops() {
+        assert!(tray_theme_icons_supported("kde", "plasma", "plasmashell"));
+    }
+
+    #[test]
+    fn tray_theme_icons_supported_blocks_cosmic() {
+        assert!(!tray_theme_icons_supported("cosmic", "", ""));
+        assert!(!tray_theme_icons_supported("", "cosmic", ""));
+        assert!(!tray_theme_icons_supported("", "", "cosmic-session"));
+    }
+
+    #[test]
+    fn tray_theme_icons_supported_blocks_existing_problem_shells() {
+        assert!(!tray_theme_icons_supported("quickshell", "", ""));
+        assert!(!tray_theme_icons_supported("", "noctalia", ""));
     }
 }
