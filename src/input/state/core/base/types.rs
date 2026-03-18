@@ -352,3 +352,45 @@ pub(crate) struct PendingOnboardingUsage {
     pub used_help_overlay: bool,
     pub used_command_palette: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::CompositorCapabilities;
+
+    #[test]
+    fn compositor_capabilities_all_available_requires_every_flag() {
+        assert!(!CompositorCapabilities::default().all_available());
+        assert!(CompositorCapabilities {
+            layer_shell: true,
+            screencopy: true,
+            pointer_constraints: true,
+        }
+        .all_available());
+    }
+
+    #[test]
+    fn compositor_capabilities_limitations_summary_returns_none_when_fully_available() {
+        assert_eq!(
+            CompositorCapabilities {
+                layer_shell: true,
+                screencopy: true,
+                pointer_constraints: true,
+            }
+            .limitations_summary(),
+            None
+        );
+    }
+
+    #[test]
+    fn compositor_capabilities_limitations_summary_lists_missing_features_in_order() {
+        assert_eq!(
+            CompositorCapabilities {
+                layer_shell: false,
+                screencopy: true,
+                pointer_constraints: false,
+            }
+            .limitations_summary(),
+            Some("Toolbars limited, Pointer lock unavailable".to_string())
+        );
+    }
+}

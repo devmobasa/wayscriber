@@ -154,4 +154,61 @@ mod tests {
         );
         assert!(BoardMode::from_str("invalid").is_err());
     }
+
+    #[test]
+    fn test_background_color_uses_custom_config_values() {
+        let mut config = BoardConfig::default();
+        config.whiteboard_color = [0.2, 0.3, 0.4];
+        config.blackboard_color = [0.7, 0.6, 0.5];
+
+        assert_eq!(
+            BoardMode::Whiteboard.background_color(&config),
+            Some(Color {
+                r: 0.2,
+                g: 0.3,
+                b: 0.4,
+                a: 1.0,
+            })
+        );
+        assert_eq!(
+            BoardMode::Blackboard.background_color(&config),
+            Some(Color {
+                r: 0.7,
+                g: 0.6,
+                b: 0.5,
+                a: 1.0,
+            })
+        );
+    }
+
+    #[test]
+    fn test_default_pen_color_uses_custom_config_values() {
+        let mut config = BoardConfig::default();
+        config.whiteboard_pen_color = [0.9, 0.8, 0.7];
+        config.blackboard_pen_color = [0.1, 0.2, 0.3];
+
+        assert_eq!(
+            BoardMode::Whiteboard.default_pen_color(&config),
+            Some(Color {
+                r: 0.9,
+                g: 0.8,
+                b: 0.7,
+                a: 1.0,
+            })
+        );
+        assert_eq!(
+            BoardMode::Blackboard.default_pen_color(&config),
+            Some(Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            })
+        );
+    }
+
+    #[test]
+    fn test_from_str_rejects_whitespace_padded_values() {
+        assert!(BoardMode::from_str(" whiteboard ").is_err());
+    }
 }

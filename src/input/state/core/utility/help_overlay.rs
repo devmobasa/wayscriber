@@ -201,3 +201,129 @@ impl InputState {
         Some(HelpOverlayCursorHint::Default)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{ClickHighlightSettings, EraserMode};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+
+        InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        )
+    }
+
+    #[test]
+    fn toggle_help_overlay_opens_and_tracks_usage() {
+        let mut state = make_state();
+        state.toggle_help_overlay();
+
+        assert!(state.show_help);
+        assert!(!state.help_overlay_quick_mode);
+        assert!(state.pending_onboarding_usage.used_help_overlay);
+        assert_eq!(state.help_overlay_page, 0);
+    }
+
+    #[test]
+    fn toggle_quick_help_closes_when_already_in_quick_mode() {
+        let mut state = make_state();
+        state.toggle_quick_help();
+        assert!(state.show_help);
+        assert!(state.help_overlay_quick_mode);
+
+        state.toggle_quick_help();
+        assert!(!state.show_help);
+        assert!(!state.help_overlay_quick_mode);
+    }
+
+    #[test]
+    fn help_overlay_page_navigation_resets_scroll_and_respects_bounds() {
+        let mut state = make_state();
+        state.help_overlay_scroll = 123.0;
+        assert!(state.help_overlay_next_page());
+        assert_eq!(state.help_overlay_page, 1);
+        assert_eq!(state.help_overlay_scroll, 0.0);
+
+        state.help_overlay_page = HELP_OVERLAY_MAX_PAGES - 1;
+        assert!(!state.help_overlay_next_page());
+        assert!(state.help_overlay_prev_page());
+        assert_eq!(state.help_overlay_page, HELP_OVERLAY_MAX_PAGES - 2);
+    }
+
+    #[test]
+    fn help_search_insert_and_cursor_movement_handle_unicode_scalars() {
+        let mut state = make_state();
+        state.help_search_insert("a🙂");
+        assert_eq!(state.help_overlay_search, "a🙂");
+        assert_eq!(state.help_overlay_search_cursor, 2);
+
+        state.help_search_cursor_left();
+        assert_eq!(state.help_overlay_search_cursor, 1);
+        state.help_search_cursor_right();
+        assert_eq!(state.help_overlay_search_cursor, 2);
+    }
+
+    #[test]
+    fn help_search_backspace_removes_previous_unicode_character() {
+        let mut state = make_state();
+        state.help_overlay_search = "a🙂b".to_string();
+        state.help_overlay_search_cursor = 2;
+
+        state.help_search_backspace();
+
+        assert_eq!(state.help_overlay_search, "ab");
+        assert_eq!(state.help_overlay_search_cursor, 1);
+    }
+
+    #[test]
+    fn help_overlay_cursor_hint_uses_nav_region_and_overlay_bounds() {
+        let mut state = make_state();
+        state.toggle_help_overlay();
+
+        assert_eq!(
+            state.help_overlay_cursor_hint_at(200, 60, 1000, 800),
+            Some(HelpOverlayCursorHint::Text)
+        );
+        assert_eq!(
+            state.help_overlay_cursor_hint_at(200, 200, 1000, 800),
+            Some(HelpOverlayCursorHint::Default)
+        );
+        assert_eq!(state.help_overlay_cursor_hint_at(5, 5, 1000, 800), None);
+    }
+}

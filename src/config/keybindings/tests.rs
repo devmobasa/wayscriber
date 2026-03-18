@@ -53,6 +53,36 @@ fn test_parse_with_spaces() {
 }
 
 #[test]
+fn test_parse_plus_key() {
+    let binding = KeyBinding::parse("Ctrl+Shift++").unwrap();
+    assert_eq!(binding.key, "+");
+    assert!(binding.ctrl);
+    assert!(binding.shift);
+    assert!(!binding.alt);
+}
+
+#[test]
+fn test_parse_control_alias() {
+    let binding = KeyBinding::parse("Control+Alt+Delete").unwrap();
+    assert_eq!(binding.key, "Delete");
+    assert!(binding.ctrl);
+    assert!(binding.alt);
+    assert!(!binding.shift);
+}
+
+#[test]
+fn test_parse_requires_non_modifier_key() {
+    let err = KeyBinding::parse("Ctrl+Shift").unwrap_err();
+    assert!(err.contains("No key specified"));
+}
+
+#[test]
+fn test_display_normalizes_modifier_order() {
+    let binding = KeyBinding::parse("Shift+Ctrl+W").unwrap();
+    assert_eq!(binding.to_string(), "Ctrl+Shift+W");
+}
+
+#[test]
 fn test_matches() {
     let binding = KeyBinding::parse("Ctrl+Shift+W").unwrap();
     assert!(binding.matches("W", true, true, false));
@@ -169,4 +199,63 @@ fn test_duplicate_with_different_modifier_order() {
     let err_msg = result.unwrap_err();
     assert!(err_msg.contains("Duplicate keybinding"));
     assert!(err_msg.contains("Shift+Ctrl+W"));
+}
+
+#[test]
+fn test_parse_plus_key_without_modifiers() {
+    let binding = KeyBinding::parse("+").unwrap();
+    assert_eq!(binding.key, "+");
+    assert!(!binding.ctrl);
+    assert!(!binding.shift);
+    assert!(!binding.alt);
+}
+
+#[test]
+fn test_parse_trims_surrounding_whitespace() {
+    let binding = KeyBinding::parse("  Escape  ").unwrap();
+    assert_eq!(binding.key, "Escape");
+    assert!(!binding.ctrl);
+    assert!(!binding.shift);
+    assert!(!binding.alt);
+}
+
+#[test]
+fn test_matches_requires_exact_alt_state() {
+    let binding = KeyBinding::parse("Alt+X").unwrap();
+    assert!(binding.matches("x", false, false, true));
+    assert!(!binding.matches("x", false, false, false));
+}
+
+#[test]
+fn test_build_action_bindings_preserves_declared_binding_order() {
+    let config = KeybindingsConfig::default();
+    let bindings = config.build_action_bindings().unwrap();
+
+    assert_eq!(
+        bindings.get(&Action::ToggleHelp),
+        Some(&vec![
+            KeyBinding::parse("F10").unwrap(),
+            KeyBinding::parse("F1").unwrap(),
+        ])
+    );
+    assert_eq!(
+        bindings.get(&Action::Redo),
+        Some(&vec![
+            KeyBinding::parse("Ctrl+Shift+Z").unwrap(),
+            KeyBinding::parse("Ctrl+Y").unwrap(),
+        ])
+    );
+}
+
+#[test]
+fn test_build_action_bindings_reports_duplicate_keybindings() {
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Z".to_string()];
+    config.core.undo = vec!["Ctrl+Z".to_string()];
+
+    let result = config.build_action_bindings();
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err();
+    assert!(err_msg.contains("Duplicate keybinding"));
+    assert!(err_msg.contains("Ctrl+Z"));
 }

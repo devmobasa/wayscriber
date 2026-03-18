@@ -210,3 +210,146 @@ impl InputState {
         self.needs_redraw = true;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor, Shape, ShapeId};
+    use crate::input::{ClickHighlightSettings, EraserMode};
+    use crate::input::state::SelectionState;
+    use std::collections::HashSet;
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+
+        InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        )
+    }
+
+    fn add_rect(state: &mut InputState, x: i32, y: i32, w: i32, h: i32) -> ShapeId {
+        state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x,
+            y,
+            w,
+            h,
+            fill: false,
+            color: state.current_color,
+            thick: state.current_thickness,
+        })
+    }
+
+    fn set_selection_state(state: &mut InputState, ids: Vec<ShapeId>) {
+        let shape_ids_set = ids.iter().copied().collect::<HashSet<_>>();
+        state.selection_state = SelectionState::Active {
+            shape_ids: ids,
+            shape_ids_set,
+        };
+    }
+
+    #[test]
+    fn show_properties_panel_returns_false_without_selection() {
+        let mut state = make_state();
+
+        assert!(!state.show_properties_panel());
+        assert!(state.properties_panel().is_none());
+    }
+
+    #[test]
+    fn refresh_properties_panel_closes_panel_when_selection_is_empty() {
+        let mut state = make_state();
+        let shape_id = add_rect(&mut state, 10, 20, 30, 40);
+        state.set_selection(vec![shape_id]);
+        assert!(state.show_properties_panel());
+
+        state.selection_state = SelectionState::None;
+        state.refresh_properties_panel();
+
+        assert!(state.properties_panel().is_none());
+    }
+
+    #[test]
+    fn refresh_properties_panel_preserves_valid_keyboard_focus() {
+        let mut state = make_state();
+        let shape_id = add_rect(&mut state, 10, 20, 30, 40);
+        state.set_selection(vec![shape_id]);
+        assert!(state.show_properties_panel());
+        state
+            .shape_properties_panel
+            .as_mut()
+            .expect("panel")
+            .keyboard_focus = Some(0);
+
+        state.refresh_properties_panel();
+
+        assert_eq!(state.properties_panel().and_then(|panel| panel.keyboard_focus), Some(0));
+    }
+
+    #[test]
+    fn refresh_properties_panel_clears_invalid_focus_and_hover() {
+        let mut state = make_state();
+        let shape_id = add_rect(&mut state, 10, 20, 30, 40);
+        state.set_selection(vec![shape_id]);
+        assert!(state.show_properties_panel());
+        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        panel.keyboard_focus = Some(99);
+        panel.hover_index = Some(99);
+
+        state.refresh_properties_panel();
+
+        let panel = state.properties_panel().expect("panel after refresh");
+        assert_eq!(panel.keyboard_focus, None);
+        assert_eq!(panel.hover_index, None);
+    }
+
+    #[test]
+    fn refresh_properties_panel_updates_summary_when_selection_expands() {
+        let mut state = make_state();
+        let first = add_rect(&mut state, 10, 20, 30, 40);
+        let second = add_rect(&mut state, 80, 30, 20, 10);
+        state.set_selection(vec![first]);
+        assert!(state.show_properties_panel());
+
+        set_selection_state(&mut state, vec![first, second]);
+        state.refresh_properties_panel();
+
+        let panel = state.properties_panel().expect("panel after refresh");
+        assert_eq!(panel.title, "Selection Properties");
+        assert!(panel.multiple_selection);
+        assert!(panel.lines.iter().any(|line| line == "Shapes selected: 2"));
+        assert!(panel.lines.iter().any(|line| line.starts_with("Bounds: ")));
+    }
+}

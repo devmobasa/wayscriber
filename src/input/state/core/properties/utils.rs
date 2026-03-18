@@ -52,3 +52,52 @@ pub(super) fn approx_eq(a: &f64, b: &f64) -> bool {
 pub(super) fn format_timestamp(ms: u64) -> Option<String> {
     format_unix_millis(ms, "%Y-%m-%d %H:%M")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cycle_index_wraps_forward_and_backward() {
+        assert_eq!(cycle_index(0, 8, -1), 7);
+        assert_eq!(cycle_index(7, 8, 1), 0);
+        assert_eq!(cycle_index(2, 8, 10), 4);
+    }
+
+    #[test]
+    fn cycle_index_returns_zero_for_empty_palettes() {
+        assert_eq!(cycle_index(5, 0, 3), 0);
+    }
+
+    #[test]
+    fn color_palette_index_and_label_use_approximate_rgb_matching() {
+        let near_red = Color {
+            r: RED.r - 0.009,
+            g: RED.g,
+            b: RED.b + 0.009,
+            a: 0.25,
+        };
+
+        assert_eq!(color_palette_index(near_red), Some(0));
+        assert_eq!(color_label(near_red), "Red");
+    }
+
+    #[test]
+    fn color_label_returns_custom_outside_palette_tolerance() {
+        let custom = Color {
+            r: 0.13,
+            g: 0.27,
+            b: 0.61,
+            a: 1.0,
+        };
+
+        assert_eq!(color_palette_index(custom), None);
+        assert_eq!(color_label(custom), "Custom");
+    }
+
+    #[test]
+    fn approx_eq_uses_stable_threshold_comparisons() {
+        assert!(approx_eq(&1.0, &1.009));
+        assert!(!approx_eq(&1.0, &1.011));
+    }
+}

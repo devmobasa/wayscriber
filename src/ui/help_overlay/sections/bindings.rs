@@ -181,3 +181,85 @@ fn split_numeric_suffix(label: &str) -> Option<(String, u32)> {
     let number = digits.parse::<u32>().ok()?;
     Some((prefix.to_string(), number))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Action;
+
+    fn bindings_with(entries: &[(Action, &[&str])]) -> HelpOverlayBindings {
+        let labels = entries
+            .iter()
+            .map(|(action, values)| {
+                (
+                    *action,
+                    values.iter().map(|value| (*value).to_string()).collect(),
+                )
+            })
+            .collect();
+        HelpOverlayBindings {
+            labels,
+            cache_key: String::new(),
+            radial_menu_mouse_label: Some("Middle Click".to_string()),
+        }
+    }
+
+    #[test]
+    fn collect_labels_dedupes_across_actions_in_first_seen_order() {
+        let bindings = bindings_with(&[
+            (Action::ToggleHelp, &["F1", "F10"]),
+            (Action::ToggleToolbar, &["F10", "F2"]),
+        ]);
+
+        assert_eq!(
+            collect_labels(&bindings, &[Action::ToggleHelp, Action::ToggleToolbar]),
+            vec!["F1", "F10", "F2"]
+        );
+    }
+
+    #[test]
+    fn bindings_compact_or_fallback_compacts_contiguous_numeric_ranges() {
+        let bindings = bindings_with(&[
+            (Action::Board1, &["Ctrl+Shift+1"]),
+            (Action::Board2, &["Ctrl+Shift+2"]),
+            (Action::Board3, &["Ctrl+Shift+3"]),
+        ]);
+
+        assert_eq!(
+            bindings_compact_or_fallback(
+                &bindings,
+                &[Action::Board1, Action::Board2, Action::Board3],
+                "fallback",
+            ),
+            "Ctrl+Shift+1..3"
+        );
+    }
+
+    #[test]
+    fn bindings_compact_or_fallback_keeps_non_contiguous_ranges_expanded() {
+        let bindings = bindings_with(&[
+            (Action::Board1, &["Ctrl+Shift+1"]),
+            (Action::Board3, &["Ctrl+Shift+3"]),
+        ]);
+
+        assert_eq!(
+            bindings_compact_or_fallback(&bindings, &[Action::Board1, Action::Board3], "fallback"),
+            "Ctrl+Shift+1 / Ctrl+Shift+3"
+        );
+    }
+
+    #[test]
+    fn primary_or_fallback_returns_fallback_for_unbound_action() {
+        let bindings = HelpOverlayBindings::default();
+
+        assert_eq!(
+            primary_or_fallback(&bindings, Action::ToggleCommandPalette, "Ctrl+K"),
+            "Ctrl+K"
+        );
+    }
+
+    #[test]
+    fn split_numeric_suffix_rejects_labels_without_numeric_suffix() {
+        assert_eq!(split_numeric_suffix("Ctrl+K"), None);
+    }
+}

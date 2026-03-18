@@ -135,3 +135,200 @@ pub(super) fn shape_text_background(shape: &Shape) -> Option<bool> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::FontDescriptor;
+    use crate::input::state::core::properties::utils::color_eq;
+
+    fn rect(color: Color, fill: bool, thick: f64) -> Shape {
+        Shape::Rect {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 10,
+            fill,
+            color,
+            thick,
+        }
+    }
+
+    #[test]
+    fn summarize_property_returns_not_applicable_when_no_shapes_support_it() {
+        let mut frame = Frame::new();
+        let text_id = frame.add_shape(Shape::Text {
+            x: 10,
+            y: 20,
+            text: "hello".to_string(),
+            color: Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            size: 16.0,
+            font_descriptor: FontDescriptor::default(),
+            background_enabled: false,
+            wrap_width: None,
+        });
+
+        let summary = summarize_property(&frame, &[text_id], shape_fill, |a, b| a == b);
+
+        assert!(!summary.applicable);
+        assert!(!summary.editable);
+        assert!(!summary.mixed);
+        assert!(summary.value.is_none());
+    }
+
+    #[test]
+    fn summarize_property_reports_locked_applicable_shapes_as_not_editable() {
+        let mut frame = Frame::new();
+        let id = frame.add_shape(rect(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            false,
+            2.0,
+        ));
+        frame.shape_mut(id).expect("locked shape").locked = true;
+
+        let summary = summarize_property(&frame, &[id], shape_color, color_eq);
+
+        assert!(summary.applicable);
+        assert!(!summary.editable);
+        assert!(!summary.mixed);
+        assert!(summary.value.is_none());
+    }
+
+    #[test]
+    fn summarize_property_reports_mixed_when_unlocked_values_differ() {
+        let mut frame = Frame::new();
+        let first = frame.add_shape(rect(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            false,
+            2.0,
+        ));
+        let second = frame.add_shape(rect(
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            false,
+            2.0,
+        ));
+
+        let summary = summarize_property(&frame, &[first, second], shape_color, color_eq);
+
+        assert!(summary.applicable);
+        assert!(summary.editable);
+        assert!(summary.mixed);
+        assert_eq!(
+            summary.value,
+            Some(Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+    }
+
+    #[test]
+    fn summarize_property_ignores_locked_shapes_when_computing_value() {
+        let mut frame = Frame::new();
+        let unlocked = frame.add_shape(rect(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            false,
+            2.0,
+        ));
+        let locked = frame.add_shape(rect(
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            false,
+            2.0,
+        ));
+        frame.shape_mut(locked).expect("locked shape").locked = true;
+
+        let summary = summarize_property(&frame, &[unlocked, locked], shape_color, color_eq);
+
+        assert!(summary.applicable);
+        assert!(summary.editable);
+        assert!(!summary.mixed);
+        assert_eq!(
+            summary.value,
+            Some(Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+    }
+
+    #[test]
+    fn shape_color_uses_sticky_note_background_and_marker_opaque_alpha() {
+        let sticky = Shape::StickyNote {
+            x: 10,
+            y: 20,
+            text: "note".to_string(),
+            background: Color {
+                r: 0.2,
+                g: 0.3,
+                b: 0.4,
+                a: 1.0,
+            },
+            size: 18.0,
+            font_descriptor: FontDescriptor::default(),
+            wrap_width: None,
+        };
+        let marker = Shape::MarkerStroke {
+            points: vec![(0, 0), (5, 5)],
+            color: Color {
+                r: 1.0,
+                g: 0.5,
+                b: 0.0,
+                a: 0.25,
+            },
+            thick: 6.0,
+        };
+
+        assert_eq!(
+            shape_color(&sticky),
+            Some(Color {
+                r: 0.2,
+                g: 0.3,
+                b: 0.4,
+                a: 1.0,
+            })
+        );
+        assert_eq!(
+            shape_color(&marker),
+            Some(Color {
+                r: 1.0,
+                g: 0.5,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+    }
+}

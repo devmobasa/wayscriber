@@ -90,3 +90,98 @@ impl InputState {
         self.report_selection_apply_result(result, "arrow angle")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{ClickHighlightSettings, EraserMode};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+
+        InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        )
+    }
+
+    fn add_arrow(state: &mut InputState, head_at_end: bool, arrow_angle: f64) -> crate::draw::ShapeId {
+        state.boards.active_frame_mut().add_shape(Shape::Arrow {
+            x1: 0,
+            y1: 0,
+            x2: 20,
+            y2: 10,
+            color: state.current_color,
+            thick: 3.0,
+            arrow_length: 24.0,
+            arrow_angle,
+            head_at_end,
+            label: None,
+        })
+    }
+
+    #[test]
+    fn apply_selection_arrow_head_on_mixed_selection_sets_heads_to_end() {
+        let mut state = make_state();
+        let first = add_arrow(&mut state, true, 30.0);
+        let second = add_arrow(&mut state, false, 30.0);
+        state.set_selection(vec![first, second]);
+
+        assert!(state.apply_selection_arrow_head(0));
+
+        for id in [first, second] {
+            match &state.boards.active_frame().shape(id).expect("arrow").shape {
+                Shape::Arrow { head_at_end, .. } => assert!(*head_at_end),
+                other => panic!("expected arrow, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn apply_selection_arrow_angle_clamps_to_maximum() {
+        let mut state = make_state();
+        let arrow_id = add_arrow(&mut state, true, MAX_ARROW_ANGLE - 1.0);
+        state.set_selection(vec![arrow_id]);
+
+        assert!(state.apply_selection_arrow_angle(1));
+        assert!(!state.apply_selection_arrow_angle(1));
+
+        match &state.boards.active_frame().shape(arrow_id).expect("arrow").shape {
+            Shape::Arrow { arrow_angle, .. } => assert_eq!(*arrow_angle, MAX_ARROW_ANGLE),
+            other => panic!("expected arrow, got {other:?}"),
+        }
+    }
+}

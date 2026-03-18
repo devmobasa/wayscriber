@@ -111,3 +111,111 @@ fn duplicate_selection_skips_locked_shapes() {
         "locked shape should remain locked"
     );
 }
+
+#[test]
+fn copy_selection_of_only_locked_shapes_leaves_clipboard_empty() {
+    let mut state = create_test_input_state();
+    let locked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 5,
+        y: 5,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let locked_index = state.boards.active_frame().find_index(locked_id).expect("locked index");
+    state.boards.active_frame_mut().shapes[locked_index].locked = true;
+    state.set_selection(vec![locked_id]);
+
+    assert_eq!(state.copy_selection(), 0);
+    assert!(state.selection_clipboard_is_empty());
+}
+
+#[test]
+fn repeated_paste_selection_uses_increasing_offsets() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 30,
+        h: 40,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    assert_eq!(state.copy_selection(), 1);
+
+    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.paste_selection(), 1);
+
+    let frame = state.boards.active_frame();
+    assert_eq!(frame.shapes.len(), 3);
+    let coords = frame
+        .shapes
+        .iter()
+        .map(|shape| match &shape.shape {
+            Shape::Rect { x, y, .. } => (*x, *y),
+            _ => panic!("expected rectangles"),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(coords, vec![(10, 20), (22, 32), (34, 44)]);
+}
+
+#[test]
+fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 30,
+        h: 40,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    assert_eq!(state.copy_selection(), 1);
+    state.max_shapes_per_frame = 1;
+
+    assert_eq!(state.paste_selection(), 0);
+    assert_eq!(
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Shape limit reached; nothing pasted.")
+    );
+}
+
+#[test]
+fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
+    let mut state = create_test_input_state();
+    let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 20,
+        y: 20,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![first, second]);
+    assert_eq!(state.copy_selection(), 2);
+    state.max_shapes_per_frame = 3;
+
+    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.boards.active_frame().shapes.len(), 3);
+    assert_eq!(state.selected_shape_ids().len(), 1);
+    assert_eq!(
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Shape limit reached; pasted 1 of 2.")
+    );
+}

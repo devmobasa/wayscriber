@@ -103,3 +103,24 @@ pub(super) fn draw_rename_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, 
     ctx.line_to(tip_x, tip_y);
     let _ = ctx.stroke();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icon_alpha_prefers_icon_hover_state() {
+        assert_eq!(icon_alpha(true, true), 1.0);
+        assert_eq!(icon_alpha(false, true), 1.0);
+    }
+
+    #[test]
+    fn icon_alpha_uses_row_hover_alpha_when_only_row_is_hovered() {
+        assert_eq!(icon_alpha(true, false), 0.7);
+    }
+
+    #[test]
+    fn icon_alpha_uses_idle_alpha_without_any_hover() {
+        assert_eq!(icon_alpha(false, false), 0.2);
+    }
+}

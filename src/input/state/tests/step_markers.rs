@@ -98,3 +98,24 @@ fn drawing_step_marker_increments_counter() {
     assert_eq!(second_value, 2);
     assert_eq!(state.step_marker_counter, 3);
 }
+
+#[test]
+fn reset_step_marker_counter_reports_no_change_at_default() {
+    let mut state = create_test_input_state();
+    state.needs_redraw = false;
+
+    assert!(!state.reset_step_marker_counter());
+    assert_eq!(state.step_marker_counter, 1);
+    assert!(!state.needs_redraw);
+}
+
+#[test]
+fn next_step_marker_label_uses_current_counter_value() {
+    let mut state = create_test_input_state();
+    state.step_marker_counter = 9;
+
+    let label = state.next_step_marker_label();
+
+    assert_eq!(label.value, 9);
+    assert_eq!(label.font_descriptor.family, state.font_descriptor.family);
+}

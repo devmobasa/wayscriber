@@ -147,6 +147,195 @@ mod tests {
     }
 
     #[test]
+    fn alias_query_matches_radial_menu_command() {
+        let mut state = make_state();
+        state.command_palette_query = "pie menu".to_string();
+
+        let results = state.filtered_commands();
+        assert!(!results.is_empty());
+        assert_eq!(
+            results[0].action,
+            crate::config::keybindings::Action::ToggleRadialMenu
+        );
+    }
+
+    #[test]
+    fn short_label_query_matches_configurator_command() {
+        let mut state = make_state();
+        state.command_palette_query = "config ui".to_string();
+
+        let results = state.filtered_commands();
+        assert!(!results.is_empty());
+        assert_eq!(
+            results[0].action,
+            crate::config::keybindings::Action::OpenConfigurator
+        );
+    }
+
+    #[test]
+    fn slash_separated_tokens_match_capture_file_command() {
+        let mut state = make_state();
+        state.command_palette_query = "capture/file".to_string();
+
+        let results = state.filtered_commands();
+        assert!(!results.is_empty());
+        assert_eq!(
+            results[0].action,
+            crate::config::keybindings::Action::CaptureFileFull
+        );
+    }
+
+    #[test]
+    fn toggle_command_palette_opens_and_tracks_usage() {
+        let mut state = make_state();
+        assert!(!state.command_palette_open);
+        assert!(!state.pending_onboarding_usage.used_command_palette);
+
+        state.toggle_command_palette();
+
+        assert!(state.command_palette_open);
+        assert!(state.pending_onboarding_usage.used_command_palette);
+        assert_eq!(state.command_palette_selected, 0);
+        assert_eq!(state.command_palette_scroll, 0);
+    }
+
+    #[test]
+    fn backspace_resets_selection_and_scroll_when_query_changes() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "zoom".to_string();
+        state.command_palette_selected = 4;
+        state.command_palette_scroll = 3;
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+        assert_eq!(state.command_palette_query, "zoo");
+        assert_eq!(state.command_palette_selected, 0);
+        assert_eq!(state.command_palette_scroll, 0);
+    }
+
+    #[test]
+    fn down_key_scrolls_once_selection_moves_past_visible_window() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        assert!(state.filtered_commands().len() > COMMAND_PALETTE_MAX_VISIBLE);
+
+        for _ in 0..COMMAND_PALETTE_MAX_VISIBLE {
+            assert!(state.handle_command_palette_key(crate::input::Key::Down));
+        }
+
+        assert_eq!(state.command_palette_selected, COMMAND_PALETTE_MAX_VISIBLE);
+        assert_eq!(state.command_palette_scroll, 1);
+    }
+
+    #[test]
+    fn repeated_recent_action_moves_to_front_without_duplication() {
+        let mut state = make_state();
+        state.record_command_palette_action(crate::config::keybindings::Action::CaptureFileFull);
+        state.record_command_palette_action(crate::config::keybindings::Action::ToggleHelp);
+        state.record_command_palette_action(crate::config::keybindings::Action::CaptureFileFull);
+
+        assert_eq!(
+            state.command_palette_recent,
+            vec![
+                crate::config::keybindings::Action::CaptureFileFull,
+                crate::config::keybindings::Action::ToggleHelp,
+            ]
+        );
+    }
+
+    #[test]
+    fn escape_key_closes_command_palette() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        assert!(state.command_palette_open);
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Escape));
+        assert!(!state.command_palette_open);
+    }
+
+    #[test]
+    fn return_key_executes_selected_command_and_records_it() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "status bar".to_string();
+        let selected = state.selected_command().expect("selected command");
+        assert_eq!(selected.action, crate::config::keybindings::Action::ToggleStatusBar);
+        assert!(state.show_status_bar);
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+        assert!(!state.command_palette_open);
+        assert!(!state.show_status_bar);
+        assert_eq!(
+            state.command_palette_recent.first().copied(),
+            Some(crate::config::keybindings::Action::ToggleStatusBar)
+        );
+    }
+
+    #[test]
+    fn clicking_outside_palette_closes_it() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+
+        assert!(state.handle_command_palette_click(0, 0, 1920, 1000));
+        assert!(!state.command_palette_open);
+    }
+
+    #[test]
+    fn char_key_appends_query_and_resets_selection_and_scroll() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_selected = 3;
+        state.command_palette_scroll = 2;
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('z')));
+        assert_eq!(state.command_palette_query, "z");
+        assert_eq!(state.command_palette_selected, 0);
+        assert_eq!(state.command_palette_scroll, 0);
+    }
+
+    #[test]
+    fn clicking_input_region_keeps_palette_open_without_executing() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "status".to_string();
+        state.command_palette_selected = 1;
+        let filtered = state.filtered_commands();
+        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
+        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
+        let y = (geometry.y + geometry.input_top + 4.0) as i32;
+
+        assert!(state.handle_command_palette_click(x, y, 1920, 1000));
+        assert!(state.command_palette_open);
+        assert_eq!(state.command_palette_selected, 1);
+        assert!(state.ui_toast.is_none());
+    }
+
+    #[test]
+    fn clicking_visible_item_executes_selected_command_and_sets_toast() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "status bar".to_string();
+        state.command_palette_selected = 0;
+        let filtered = state.filtered_commands();
+        let selected = filtered.first().expect("selected command");
+        assert_eq!(
+            selected.action,
+            crate::config::keybindings::Action::ToggleStatusBar
+        );
+        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
+        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
+        let y = (geometry.y + geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+
+        assert!(state.show_status_bar);
+        assert!(state.handle_command_palette_click(x, y, 1920, 1000));
+        assert!(!state.command_palette_open);
+        assert!(!state.show_status_bar);
+        let toast = state.ui_toast.as_ref().expect("command toast");
+        assert_eq!(toast.kind, crate::input::state::core::base::UiToastKind::Info);
+        assert_eq!(toast.message, selected.label);
+    }
+
+    #[test]
     fn cursor_hint_rejects_strip_below_clamped_panel_height() {
         let mut state = make_state();
         state.toggle_command_palette();

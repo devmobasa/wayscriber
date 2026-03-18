@@ -147,3 +147,145 @@ pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{ClickHighlightSettings, EraserMode};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+        let action_bindings = keybindings
+            .build_action_bindings()
+            .expect("default keybindings bindings");
+
+        let mut state = InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        );
+        state.set_action_bindings(action_bindings);
+        state
+    }
+
+    #[test]
+    fn action_for_tool_maps_selection_and_eraser_tools() {
+        assert_eq!(action_for_tool(Tool::Select), Some(Action::SelectSelectionTool));
+        assert_eq!(action_for_tool(Tool::Eraser), Some(Action::SelectEraserTool));
+    }
+
+    #[test]
+    fn action_for_event_maps_board_picker_related_events() {
+        assert_eq!(action_for_event(&ToolbarEvent::BoardRename), Some(Action::BoardPicker));
+        assert_eq!(
+            action_for_event(&ToolbarEvent::ToggleBoardPicker),
+            Some(Action::BoardPicker)
+        );
+    }
+
+    #[test]
+    fn action_for_event_returns_none_for_layout_only_events() {
+        assert_eq!(action_for_event(&ToolbarEvent::OpenConfigFile), None);
+        assert_eq!(action_for_event(&ToolbarEvent::ToggleShapePicker(true)), None);
+    }
+
+    #[test]
+    fn preset_action_helpers_cover_valid_slots_only() {
+        assert_eq!(action_for_apply_preset(1), Some(Action::ApplyPreset1));
+        assert_eq!(action_for_save_preset(5), Some(Action::SavePreset5));
+        assert_eq!(action_for_clear_preset(3), Some(Action::ClearPreset3));
+        assert_eq!(action_for_apply_preset(0), None);
+        assert_eq!(action_for_save_preset(6), None);
+        assert_eq!(action_for_clear_preset(99), None);
+    }
+
+    #[test]
+    fn toolbar_binding_hints_collect_only_toolbar_actions() {
+        let state = make_state();
+        let hints = ToolbarBindingHints::from_input_state(&state);
+
+        assert_eq!(hints.binding_for_action(Action::OpenConfigurator), Some("F11"));
+        assert_eq!(hints.binding_for_action(Action::Exit), None);
+    }
+
+    #[test]
+    fn toolbar_binding_hints_follow_event_mapping() {
+        let state = make_state();
+        let hints = ToolbarBindingHints::from_input_state(&state);
+
+        assert_eq!(
+            hints.binding_for_event(&ToolbarEvent::OpenConfigurator),
+            Some("F11")
+        );
+        assert_eq!(hints.binding_for_event(&ToolbarEvent::OpenConfigFile), None);
+    }
+
+    #[test]
+    fn toolbar_binding_hints_resolve_tool_bindings() {
+        let state = make_state();
+        let hints = ToolbarBindingHints::from_input_state(&state);
+
+        assert_eq!(hints.for_tool(Tool::Pen), Some("F"));
+        assert_eq!(hints.for_tool(Tool::Eraser), Some("D"));
+        assert_eq!(hints.for_tool(Tool::StepMarker), None);
+    }
+
+    #[test]
+    fn toolbar_binding_hints_resolve_preset_bindings() {
+        let state = make_state();
+        let hints = ToolbarBindingHints::from_input_state(&state);
+
+        assert_eq!(hints.apply_preset(1), Some("1"));
+        assert_eq!(hints.save_preset(1), Some("Shift+1"));
+        assert_eq!(hints.clear_preset(1), Some("Ctrl+1"));
+        assert_eq!(hints.apply_preset(6), None);
+    }
+
+    #[test]
+    fn tool_label_and_tooltip_label_use_action_metadata() {
+        assert_eq!(tool_label(Tool::Ellipse), "Circle");
+        assert_eq!(tool_tooltip_label(Tool::Ellipse), "Ellipse Tool");
+        assert_eq!(tool_label(Tool::Select), "Select");
+    }
+
+    #[test]
+    fn action_for_event_maps_select_tool_and_freeze_events() {
+        assert_eq!(
+            action_for_event(&ToolbarEvent::SelectTool(Tool::Pen)),
+            Some(Action::SelectPenTool)
+        );
+        assert_eq!(action_for_event(&ToolbarEvent::ToggleFreeze), Some(Action::ToggleFrozenMode));
+    }
+}

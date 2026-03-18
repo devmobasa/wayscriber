@@ -166,3 +166,75 @@ impl InputState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_geometry() -> CommandPaletteGeometry {
+        CommandPaletteGeometry {
+            x: 100.0,
+            y: 200.0,
+            width: 400.0,
+            height: 300.0,
+            inner_x: COMMAND_PALETTE_PADDING,
+            inner_width: 376.0,
+            input_top: COMMAND_PALETTE_PADDING,
+            input_bottom: COMMAND_PALETTE_PADDING + COMMAND_PALETTE_INPUT_HEIGHT,
+            items_top: COMMAND_PALETTE_PADDING
+                + COMMAND_PALETTE_INPUT_HEIGHT
+                + COMMAND_PALETTE_LIST_GAP,
+            visible_count: 3,
+        }
+    }
+
+    #[test]
+    fn visible_count_caps_at_max_visible() {
+        assert_eq!(command_palette_visible_count(0), 0);
+        assert_eq!(command_palette_visible_count(3), 3);
+        assert_eq!(command_palette_visible_count(99), COMMAND_PALETTE_MAX_VISIBLE);
+    }
+
+    #[test]
+    fn command_palette_height_clamps_to_maximum() {
+        assert!(command_palette_height(1) < COMMAND_PALETTE_MAX_HEIGHT);
+        assert_eq!(command_palette_height(COMMAND_PALETTE_MAX_VISIBLE), COMMAND_PALETTE_MAX_HEIGHT);
+    }
+
+    #[test]
+    fn contains_local_includes_edges_and_rejects_outside_points() {
+        let geometry = sample_geometry();
+        assert!(geometry.contains_local(0.0, 0.0));
+        assert!(geometry.contains_local(geometry.width, geometry.height));
+        assert!(!geometry.contains_local(-0.1, 0.0));
+        assert!(!geometry.contains_local(0.0, geometry.height + 0.1));
+    }
+
+    #[test]
+    fn local_in_input_checks_inner_bounds() {
+        let geometry = sample_geometry();
+        assert!(geometry.local_in_input(geometry.inner_x + 1.0, geometry.input_top + 1.0));
+        assert!(!geometry.local_in_input(geometry.inner_x - 1.0, geometry.input_top + 1.0));
+        assert!(!geometry.local_in_input(geometry.inner_x + 1.0, geometry.input_bottom + 1.0));
+    }
+
+    #[test]
+    fn visible_item_at_maps_rows_and_rejects_outside_items() {
+        let geometry = sample_geometry();
+        let x = geometry.inner_x + 10.0;
+
+        assert_eq!(geometry.visible_item_at(x, geometry.items_top + 1.0), Some(0));
+        assert_eq!(
+            geometry.visible_item_at(x, geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT + 1.0),
+            Some(1)
+        );
+        assert_eq!(geometry.visible_item_at(geometry.inner_x - 1.0, geometry.items_top + 1.0), None);
+        assert_eq!(
+            geometry.visible_item_at(
+                x,
+                geometry.items_top + geometry.visible_count as f64 * COMMAND_PALETTE_ITEM_HEIGHT + 1.0,
+            ),
+            None
+        );
+    }
+}

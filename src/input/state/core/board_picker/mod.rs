@@ -285,3 +285,76 @@ pub enum BoardPickerCursorHint {
     /// Text editing cursor (I-beam) for name/hex editing.
     Text,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_search_label_preserves_short_values() {
+        assert_eq!(truncate_search_label("Blueprint", 24), "Blueprint");
+    }
+
+    #[test]
+    fn truncate_search_label_counts_characters_before_ellipsizing() {
+        assert_eq!(truncate_search_label("ééééé", 4), "é...");
+    }
+
+    #[test]
+    fn parse_hex_color_accepts_three_digit_notation() {
+        let color = parse_hex_color("#0f8").expect("3-digit color");
+        assert_eq!(color.r, 0.0);
+        assert_eq!(color.g, 1.0);
+        assert_eq!(color.b, 136.0 / 255.0);
+        assert_eq!(color.a, 1.0);
+    }
+
+    #[test]
+    fn parse_hex_color_accepts_prefixed_six_digit_notation() {
+        let color = parse_hex_color("  0x3366CC  ").expect("6-digit color");
+        assert_eq!(color.r, 51.0 / 255.0);
+        assert_eq!(color.g, 102.0 / 255.0);
+        assert_eq!(color.b, 204.0 / 255.0);
+    }
+
+    #[test]
+    fn parse_hex_color_rejects_invalid_digits() {
+        assert_eq!(parse_hex_color("#12xz89"), None);
+    }
+
+    #[test]
+    fn color_to_hex_rounds_and_uppercases_components() {
+        let color = Color {
+            r: 0.2,
+            g: 0.4,
+            b: 0.6,
+            a: 0.5,
+        };
+
+        assert_eq!(color_to_hex(color), "#336699");
+    }
+
+    #[test]
+    fn contrast_color_prefers_black_for_light_backgrounds() {
+        let contrast = contrast_color(Color {
+            r: 0.9,
+            g: 0.9,
+            b: 0.9,
+            a: 1.0,
+        });
+
+        assert_eq!(contrast, BLACK);
+    }
+
+    #[test]
+    fn contrast_color_prefers_white_for_dark_backgrounds() {
+        let contrast = contrast_color(Color {
+            r: 0.1,
+            g: 0.1,
+            b: 0.1,
+            a: 1.0,
+        });
+
+        assert_eq!(contrast, WHITE);
+    }
+}
