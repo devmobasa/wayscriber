@@ -318,7 +318,11 @@ fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let locked_index = state.boards.active_frame().find_index(locked).expect("locked index");
+    let locked_index = state
+        .boards
+        .active_frame()
+        .find_index(locked)
+        .expect("locked index");
     state.boards.active_frame_mut().shapes[locked_index].locked = true;
 
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Canvas, None);
@@ -382,9 +386,11 @@ fn pages_menu_shows_window_indicators_around_active_page() {
     let entries = state.context_menu_entries();
     assert!(entries.iter().any(|entry| entry.label == "  ... 1 above"));
     assert!(entries.iter().any(|entry| entry.label == "  ... 1 below"));
-    assert!(entries
-        .iter()
-        .any(|entry| entry.label == "  Page 6 (current)" && entry.disabled));
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.label == "  Page 6 (current)" && entry.disabled)
+    );
 }
 
 #[test]
@@ -461,7 +467,10 @@ fn page_duplicate_from_context_duplicates_target_page_and_closes_menu() {
 
     state.execute_menu_command(MenuCommand::PageDuplicateFromContext);
 
-    assert_eq!(state.boards.board_states()[blackboard].pages.page_count(), 2);
+    assert_eq!(
+        state.boards.board_states()[blackboard].pages.page_count(),
+        2
+    );
     assert!(!state.is_context_menu_open());
 }
 
@@ -479,9 +488,18 @@ fn page_move_to_board_command_moves_page_switches_board_and_closes_menu() {
     });
 
     assert_eq!(state.board_id(), "whiteboard");
-    assert_eq!(state.boards.board_states()[blackboard].pages.page_count(), 1);
-    assert_eq!(state.boards.board_states()[whiteboard].pages.page_count(), 2);
-    assert_eq!(state.boards.board_states()[whiteboard].pages.page_name(1), Some("Move me"));
+    assert_eq!(
+        state.boards.board_states()[blackboard].pages.page_count(),
+        1
+    );
+    assert_eq!(
+        state.boards.board_states()[whiteboard].pages.page_count(),
+        2
+    );
+    assert_eq!(
+        state.boards.board_states()[whiteboard].pages.page_name(1),
+        Some("Move me")
+    );
     assert!(!state.is_context_menu_open());
 }
 

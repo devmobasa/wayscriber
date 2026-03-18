@@ -95,7 +95,10 @@ mod tests {
         let mut state = make_state();
         state.set_pending_capture_action(Action::CaptureFileFull);
 
-        assert_eq!(state.take_pending_capture_action(), Some(Action::CaptureFileFull));
+        assert_eq!(
+            state.take_pending_capture_action(),
+            Some(Action::CaptureFileFull)
+        );
         assert_eq!(state.take_pending_capture_action(), None);
     }
 
@@ -104,7 +107,10 @@ mod tests {
         let mut state = make_state();
         state.request_output_focus_action(OutputFocusAction::Next);
 
-        assert_eq!(state.take_pending_output_focus_action(), Some(OutputFocusAction::Next));
+        assert_eq!(
+            state.take_pending_output_focus_action(),
+            Some(OutputFocusAction::Next)
+        );
         assert_eq!(state.take_pending_output_focus_action(), None);
     }
 
@@ -113,7 +119,10 @@ mod tests {
         let mut state = make_state();
         state.request_zoom_action(ZoomAction::ToggleLock);
 
-        assert_eq!(state.take_pending_zoom_action(), Some(ZoomAction::ToggleLock));
+        assert_eq!(
+            state.take_pending_zoom_action(),
+            Some(ZoomAction::ToggleLock)
+        );
         assert_eq!(state.take_pending_zoom_action(), None);
     }
 
@@ -132,8 +141,10 @@ mod tests {
     #[test]
     fn pending_board_config_is_taken_once() {
         let mut state = make_state();
-        let mut config = BoardsConfig::default();
-        config.default_board = "blackboard".to_string();
+        let config = BoardsConfig {
+            default_board: "blackboard".to_string(),
+            ..BoardsConfig::default()
+        };
         state.pending_board_config = Some(config.clone());
 
         let taken = state.take_pending_board_config().expect("board config");

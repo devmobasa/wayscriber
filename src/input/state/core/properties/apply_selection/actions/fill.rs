@@ -111,11 +111,23 @@ mod tests {
 
         assert!(state.apply_selection_fill(0));
 
-        match &state.boards.active_frame().shape(rect_id).expect("rect").shape {
+        match &state
+            .boards
+            .active_frame()
+            .shape(rect_id)
+            .expect("rect")
+            .shape
+        {
             Shape::Rect { fill, .. } => assert!(*fill),
             other => panic!("expected rect, got {other:?}"),
         }
-        match &state.boards.active_frame().shape(ellipse_id).expect("ellipse").shape {
+        match &state
+            .boards
+            .active_frame()
+            .shape(ellipse_id)
+            .expect("ellipse")
+            .shape
+        {
             Shape::Ellipse { fill, .. } => assert!(*fill),
             other => panic!("expected ellipse, got {other:?}"),
         }

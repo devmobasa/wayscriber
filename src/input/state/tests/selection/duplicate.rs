@@ -124,7 +124,11 @@ fn copy_selection_of_only_locked_shapes_leaves_clipboard_empty() {
         color: state.current_color,
         thick: state.current_thickness,
     });
-    let locked_index = state.boards.active_frame().find_index(locked_id).expect("locked index");
+    let locked_index = state
+        .boards
+        .active_frame()
+        .find_index(locked_id)
+        .expect("locked index");
     state.boards.active_frame_mut().shapes[locked_index].locked = true;
     state.set_selection(vec![locked_id]);
 

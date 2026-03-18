@@ -26,10 +26,7 @@ fn explicit_action_binding_labels_dedup_and_preserve_order() {
 fn custom_action_bindings_override_fallback_action_map_labels() {
     let mut state = create_test_input_state();
     let mut bindings = HashMap::new();
-    bindings.insert(
-        Action::ToggleHelp,
-        vec![KeyBinding::parse("Menu").unwrap()],
-    );
+    bindings.insert(Action::ToggleHelp, vec![KeyBinding::parse("Menu").unwrap()]);
     state.set_action_bindings(bindings);
 
     assert_eq!(

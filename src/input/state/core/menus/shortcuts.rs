@@ -68,7 +68,10 @@ mod tests {
             Action::ToggleHelp,
             &["Ctrl+Alt+Shift+H", "F1"],
         )]));
-        assert_eq!(state.shortcut_for_action(Action::ToggleHelp), Some("F1".to_string()));
+        assert_eq!(
+            state.shortcut_for_action(Action::ToggleHelp),
+            Some("F1".to_string())
+        );
     }
 
     #[test]

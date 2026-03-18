@@ -156,7 +156,13 @@ mod tests {
         assert!(state.apply_selection_font_size(1));
         assert!(!state.apply_selection_font_size(1));
 
-        match &state.boards.active_frame().shape(text_id).expect("text").shape {
+        match &state
+            .boards
+            .active_frame()
+            .shape(text_id)
+            .expect("text")
+            .shape
+        {
             Shape::Text { size, .. } => assert_eq!(*size, MAX_FONT_SIZE),
             other => panic!("expected text, got {other:?}"),
         }

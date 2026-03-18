@@ -33,7 +33,12 @@ fn show_properties_panel_for_single_shape_reports_type_layer_and_lock_state() {
     let panel = state.properties_panel().expect("properties panel");
     assert_eq!(panel.title, "Shape Properties");
     assert!(!panel.multiple_selection);
-    assert!(panel.lines.iter().any(|line| line == &format!("Shape ID: {shape_id}")));
+    assert!(
+        panel
+            .lines
+            .iter()
+            .any(|line| line == &format!("Shape ID: {shape_id}"))
+    );
     assert!(panel.lines.iter().any(|line| line == "Type: Rectangle"));
     assert!(panel.lines.iter().any(|line| line == "Layer: 1 of 1"));
     assert!(panel.lines.iter().any(|line| line == "Locked: No"));
@@ -45,7 +50,11 @@ fn show_properties_panel_for_multi_selection_includes_locked_count_and_summary()
     let mut state = create_test_input_state();
     let first = add_rect(&mut state, 10, 10, 20, 20);
     let second = add_rect(&mut state, 50, 15, 10, 15);
-    let second_index = state.boards.active_frame().find_index(second).expect("second index");
+    let second_index = state
+        .boards
+        .active_frame()
+        .find_index(second)
+        .expect("second index");
     state.boards.active_frame_mut().shapes[second_index].locked = true;
     state.set_selection(vec![first, second]);
 
@@ -85,7 +94,13 @@ fn activate_fill_entry_toggles_rectangle_fill_and_refreshes_panel_value() {
 
     assert!(state.activate_properties_panel_entry());
 
-    match &state.boards.active_frame().shape(shape_id).expect("shape").shape {
+    match &state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("shape")
+        .shape
+    {
         Shape::Rect { fill, .. } => assert!(*fill),
         other => panic!("expected rect, got {other:?}"),
     }
@@ -115,7 +130,13 @@ fn adjust_font_size_entry_increases_text_size_and_refreshes_panel_value() {
 
     assert!(state.adjust_properties_panel_entry(1));
 
-    match &state.boards.active_frame().shape(shape_id).expect("shape").shape {
+    match &state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("shape")
+        .shape
+    {
         Shape::Text { size, .. } => assert_eq!(*size, 20.0),
         other => panic!("expected text, got {other:?}"),
     }
@@ -156,7 +177,13 @@ fn activate_text_background_entry_on_mixed_selection_turns_all_backgrounds_on() 
     assert!(state.activate_properties_panel_entry());
 
     for id in [first, second] {
-        match &state.boards.active_frame().shape(id).expect("text shape").shape {
+        match &state
+            .boards
+            .active_frame()
+            .shape(id)
+            .expect("text shape")
+            .shape
+        {
             Shape::Text {
                 background_enabled, ..
             } => assert!(*background_enabled),
@@ -192,7 +219,13 @@ fn adjust_arrow_length_entry_clamps_to_max_and_refreshes_panel_value() {
     assert!(state.adjust_properties_panel_entry(1));
     assert!(!state.adjust_properties_panel_entry(1));
 
-    match &state.boards.active_frame().shape(shape_id).expect("arrow").shape {
+    match &state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("arrow")
+        .shape
+    {
         Shape::Arrow { arrow_length, .. } => assert_eq!(*arrow_length, 50.0),
         other => panic!("expected arrow, got {other:?}"),
     }

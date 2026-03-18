@@ -267,7 +267,10 @@ mod tests {
     }
 
     fn entry<'a>(entries: &'a [SelectionPropertyEntry], label: &str) -> &'a SelectionPropertyEntry {
-        entries.iter().find(|entry| entry.label == label).expect(label)
+        entries
+            .iter()
+            .find(|entry| entry.label == label)
+            .expect(label)
     }
 
     #[test]
@@ -322,7 +325,11 @@ mod tests {
             background_enabled: true,
             wrap_width: None,
         });
-        let index = state.boards.active_frame().find_index(text_id).expect("text index");
+        let index = state
+            .boards
+            .active_frame()
+            .find_index(text_id)
+            .expect("text index");
         state.boards.active_frame_mut().shapes[index].locked = true;
 
         let entries = state.build_selection_property_entries(&[text_id]);
@@ -394,16 +401,19 @@ mod tests {
     #[test]
     fn property_entries_treat_marker_alpha_as_opaque_for_palette_labels() {
         let mut state = make_state();
-        let marker_id = state.boards.active_frame_mut().add_shape(Shape::MarkerStroke {
-            points: vec![(0, 0), (10, 10)],
-            color: Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.2,
-            },
-            thick: 8.0,
-        });
+        let marker_id = state
+            .boards
+            .active_frame_mut()
+            .add_shape(Shape::MarkerStroke {
+                points: vec![(0, 0), (10, 10)],
+                color: Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.2,
+                },
+                thick: 8.0,
+            });
 
         let entries = state.build_selection_property_entries(&[marker_id]);
 

@@ -644,7 +644,11 @@ fn board_picker_activate_row_on_new_row_creates_board_and_starts_editing() {
     assert_eq!(input.boards.board_count(), initial_count + 1);
     assert_eq!(
         input.board_picker_edit_state(),
-        Some((BoardPickerEditMode::Name, active_row, input.boards.active_board_name()))
+        Some((
+            BoardPickerEditMode::Name,
+            active_row,
+            input.boards.active_board_name()
+        ))
     );
 }
 
@@ -710,7 +714,11 @@ fn board_picker_create_new_from_quick_mode_promotes_to_full_and_starts_editing()
     assert_eq!(input.boards.board_count(), initial_count + 1);
     assert_eq!(
         input.board_picker_edit_state(),
-        Some((BoardPickerEditMode::Name, active_row, input.boards.active_board_name()))
+        Some((
+            BoardPickerEditMode::Name,
+            active_row,
+            input.boards.active_board_name()
+        ))
     );
 }
 
@@ -734,7 +742,9 @@ fn board_picker_duplicate_page_uses_selected_page_panel_board() {
     input.board_picker_duplicate_page(0);
 
     assert_eq!(
-        input.boards.board_states()[blackboard_index].pages.page_count(),
+        input.boards.board_states()[blackboard_index]
+            .pages
+            .page_count(),
         2
     );
 }
@@ -759,7 +769,9 @@ fn board_picker_add_page_uses_selected_page_panel_board() {
     input.board_picker_add_page();
 
     assert_eq!(
-        input.boards.board_states()[blackboard_index].pages.page_count(),
+        input.boards.board_states()[blackboard_index]
+            .pages
+            .page_count(),
         2
     );
 }
@@ -783,17 +795,23 @@ fn board_picker_delete_page_requires_confirmation_for_multi_page_boards() {
 
     input.board_picker_delete_page(1);
     assert_eq!(
-        input.boards.board_states()[blackboard_index].pages.page_count(),
+        input.boards.board_states()[blackboard_index]
+            .pages
+            .page_count(),
         2
     );
-    assert!(input
-        .ui_toast
-        .as_ref()
-        .is_some_and(|toast| toast.message.contains("Click delete again to confirm.")));
+    assert!(
+        input
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Click delete again to confirm."))
+    );
 
     input.board_picker_delete_page(1);
     assert_eq!(
-        input.boards.board_states()[blackboard_index].pages.page_count(),
+        input.boards.board_states()[blackboard_index]
+            .pages
+            .page_count(),
         1
     );
 }

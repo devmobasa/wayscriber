@@ -34,9 +34,7 @@ pub use highlight::ClickHighlightSettings;
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use crate::config::{
-        Action, BoardsConfig, KeyBinding, KeybindingsConfig, PresenterModeConfig,
-    };
+    use crate::config::{Action, BoardsConfig, KeyBinding, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode, InputState};
     use std::collections::HashMap;

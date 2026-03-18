@@ -185,21 +185,30 @@ mod tests {
     #[test]
     fn apply_selection_color_value_preserves_marker_alpha() {
         let mut state = make_state();
-        let marker_id = state.boards.active_frame_mut().add_shape(Shape::MarkerStroke {
-            points: vec![(0, 0), (10, 10)],
-            color: Color {
-                r: 0.0,
-                g: 0.0,
-                b: 1.0,
-                a: 0.25,
-            },
-            thick: 8.0,
-        });
+        let marker_id = state
+            .boards
+            .active_frame_mut()
+            .add_shape(Shape::MarkerStroke {
+                points: vec![(0, 0), (10, 10)],
+                color: Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 1.0,
+                    a: 0.25,
+                },
+                thick: 8.0,
+            });
         state.set_selection(vec![marker_id]);
 
         assert!(state.apply_selection_color_value(RED));
 
-        match &state.boards.active_frame().shape(marker_id).expect("marker").shape {
+        match &state
+            .boards
+            .active_frame()
+            .shape(marker_id)
+            .expect("marker")
+            .shape
+        {
             Shape::MarkerStroke { color, .. } => assert_eq!(
                 *color,
                 Color {
@@ -229,7 +238,13 @@ mod tests {
 
         assert!(state.apply_selection_color(0));
 
-        match &state.boards.active_frame().shape(rect_id).expect("rect").shape {
+        match &state
+            .boards
+            .active_frame()
+            .shape(rect_id)
+            .expect("rect")
+            .shape
+        {
             Shape::Rect { color, .. } => assert_eq!(*color, RED),
             other => panic!("expected rect, got {other:?}"),
         }

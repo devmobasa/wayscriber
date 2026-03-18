@@ -259,7 +259,10 @@ mod tests {
         state.toggle_command_palette();
         state.command_palette_query = "status bar".to_string();
         let selected = state.selected_command().expect("selected command");
-        assert_eq!(selected.action, crate::config::keybindings::Action::ToggleStatusBar);
+        assert_eq!(
+            selected.action,
+            crate::config::keybindings::Action::ToggleStatusBar
+        );
         assert!(state.show_status_bar);
 
         assert!(state.handle_command_palette_key(crate::input::Key::Return));
@@ -331,7 +334,10 @@ mod tests {
         assert!(!state.command_palette_open);
         assert!(!state.show_status_bar);
         let toast = state.ui_toast.as_ref().expect("command toast");
-        assert_eq!(toast.kind, crate::input::state::core::base::UiToastKind::Info);
+        assert_eq!(
+            toast.kind,
+            crate::input::state::core::base::UiToastKind::Info
+        );
         assert_eq!(toast.message, selected.label);
     }
 

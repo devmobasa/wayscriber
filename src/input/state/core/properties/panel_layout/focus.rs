@@ -193,7 +193,12 @@ mod tests {
         panel.entries[1].disabled = false;
 
         assert!(state.focus_first_properties_entry());
-        assert_eq!(state.properties_panel().and_then(|panel| panel.keyboard_focus), Some(1));
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(1)
+        );
     }
 
     #[test]
@@ -205,7 +210,12 @@ mod tests {
         panel.entries[last].disabled = true;
 
         assert!(state.focus_last_properties_entry());
-        assert_eq!(state.properties_panel().and_then(|panel| panel.keyboard_focus), Some(last - 1));
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(last - 1)
+        );
     }
 
     #[test]
@@ -218,7 +228,12 @@ mod tests {
         panel.entries[1].disabled = true;
 
         assert!(state.focus_next_properties_entry());
-        assert_eq!(state.properties_panel().and_then(|panel| panel.keyboard_focus), Some(2));
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(2)
+        );
     }
 
     #[test]
@@ -228,6 +243,11 @@ mod tests {
         state.set_properties_panel_focus(Some(0));
 
         assert!(state.focus_previous_properties_entry());
-        assert_eq!(state.properties_panel().and_then(|panel| panel.keyboard_focus), Some(0));
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(0)
+        );
     }
 }

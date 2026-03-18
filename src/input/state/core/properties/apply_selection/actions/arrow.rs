@@ -138,7 +138,11 @@ mod tests {
         )
     }
 
-    fn add_arrow(state: &mut InputState, head_at_end: bool, arrow_angle: f64) -> crate::draw::ShapeId {
+    fn add_arrow(
+        state: &mut InputState,
+        head_at_end: bool,
+        arrow_angle: f64,
+    ) -> crate::draw::ShapeId {
         state.boards.active_frame_mut().add_shape(Shape::Arrow {
             x1: 0,
             y1: 0,
@@ -179,7 +183,13 @@ mod tests {
         assert!(state.apply_selection_arrow_angle(1));
         assert!(!state.apply_selection_arrow_angle(1));
 
-        match &state.boards.active_frame().shape(arrow_id).expect("arrow").shape {
+        match &state
+            .boards
+            .active_frame()
+            .shape(arrow_id)
+            .expect("arrow")
+            .shape
+        {
             Shape::Arrow { arrow_angle, .. } => assert_eq!(*arrow_angle, MAX_ARROW_ANGLE),
             other => panic!("expected arrow, got {other:?}"),
         }

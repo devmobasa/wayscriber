@@ -216,8 +216,8 @@ mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor, Shape, ShapeId};
-    use crate::input::{ClickHighlightSettings, EraserMode};
     use crate::input::state::SelectionState;
+    use crate::input::{ClickHighlightSettings, EraserMode};
     use std::collections::HashSet;
 
     fn make_state() -> InputState {
@@ -315,7 +315,12 @@ mod tests {
 
         state.refresh_properties_panel();
 
-        assert_eq!(state.properties_panel().and_then(|panel| panel.keyboard_focus), Some(0));
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(0)
+        );
     }
 
     #[test]

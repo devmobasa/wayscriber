@@ -12,7 +12,9 @@ fn board_index(state: &InputState, id: &str) -> usize {
 }
 
 fn set_page_count(state: &mut InputState, board_index: usize, count: usize) {
-    let pages = state.boards.board_states_mut()[board_index].pages.pages_mut();
+    let pages = state.boards.board_states_mut()[board_index]
+        .pages
+        .pages_mut();
     pages.clear();
     pages.extend((0..count.max(1)).map(|_| Frame::new()));
 }
@@ -26,10 +28,12 @@ fn delete_active_board_requires_confirmation_then_restore_recovers_board() {
     state.delete_active_board();
     assert!(state.has_pending_board_delete());
     assert_eq!(state.boards.board_count(), initial_count);
-    assert!(state
-        .ui_toast
-        .as_ref()
-        .is_some_and(|toast| toast.message.contains("Click to confirm.")));
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Click to confirm."))
+    );
 
     state.delete_active_board();
     assert!(!state.has_pending_board_delete());

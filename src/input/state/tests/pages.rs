@@ -74,7 +74,10 @@ fn set_board_background_color_updates_active_auto_adjust_pen_color() {
             a: 1.0,
         })
     );
-    assert_eq!(state.current_color, board.spec.effective_pen_color().expect("pen color"));
+    assert_eq!(
+        state.current_color,
+        board.spec.effective_pen_color().expect("pen color")
+    );
     assert!(state.take_pending_board_config().is_some());
 }
 
@@ -105,11 +108,16 @@ fn move_page_between_boards_copy_preserves_source_and_adds_page_to_target() {
 
     assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
     assert_eq!(state.boards.board_states()[target].pages.page_count(), 2);
-    assert_eq!(state.boards.board_states()[target].pages.page_name(1), Some("Copied page"));
-    assert!(state
-        .ui_toast
-        .as_ref()
-        .is_some_and(|toast| toast.message.contains("Page copied to 'Blackboard'")));
+    assert_eq!(
+        state.boards.board_states()[target].pages.page_name(1),
+        Some("Copied page")
+    );
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page copied to 'Blackboard'"))
+    );
 }
 
 #[test]
@@ -123,12 +131,20 @@ fn move_page_between_boards_move_removes_source_page_and_activates_target_copy()
     assert!(state.move_page_between_boards(source, 1, target, false));
 
     assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
-    assert_eq!(state.boards.board_states()[source].pages.page_name(0), Some("Keep"));
+    assert_eq!(
+        state.boards.board_states()[source].pages.page_name(0),
+        Some("Keep")
+    );
     assert_eq!(state.boards.board_states()[target].pages.page_count(), 2);
-    assert_eq!(state.boards.board_states()[target].pages.page_name(1), Some("Move me"));
+    assert_eq!(
+        state.boards.board_states()[target].pages.page_name(1),
+        Some("Move me")
+    );
     assert_eq!(state.boards.board_states()[target].pages.active_index(), 1);
-    assert!(state
-        .ui_toast
-        .as_ref()
-        .is_some_and(|toast| toast.message.contains("Page moved to 'Blackboard'")));
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page moved to 'Blackboard'"))
+    );
 }

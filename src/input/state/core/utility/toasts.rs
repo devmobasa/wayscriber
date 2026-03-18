@@ -259,8 +259,8 @@ mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
     use crate::input::state::core::base::TextEditEntryFeedback;
+    use crate::input::{ClickHighlightSettings, EraserMode};
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();

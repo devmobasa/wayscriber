@@ -1,6 +1,6 @@
 use super::*;
-use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 use crate::input::state::core::board_picker::BoardPickerState;
+use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
 #[test]
 fn switch_board_force_does_not_toggle_back_to_transparent() {
@@ -88,8 +88,10 @@ fn create_board_adds_board_queues_config_save_and_emits_toast() {
 
     assert_eq!(state.boards.board_count(), initial_count + 1);
     assert!(state.take_pending_board_config().is_some());
-    assert!(state
-        .ui_toast
-        .as_ref()
-        .is_some_and(|toast| toast.message.starts_with("Board created:")));
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.starts_with("Board created:"))
+    );
 }

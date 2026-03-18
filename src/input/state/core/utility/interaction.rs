@@ -147,7 +147,10 @@ mod tests {
         state.update_screen_dimensions(100, 50);
         state.dirty_tracker.mark_full();
 
-        assert_eq!(state.take_dirty_regions(), vec![Rect::new(0, 0, 100, 50).unwrap()]);
+        assert_eq!(
+            state.take_dirty_regions(),
+            vec![Rect::new(0, 0, 100, 50).unwrap()]
+        );
         assert!(state.take_dirty_regions().is_empty());
     }
 }

@@ -184,9 +184,7 @@ fn fuzzy_score_with_single_swap(needle: &str, haystack: &str) -> Option<i32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus, fuzzy_score, fuzzy_score_relaxed,
-    };
+    use super::{BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus, fuzzy_score, fuzzy_score_relaxed};
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode, InputState};
@@ -253,7 +251,10 @@ mod tests {
         let mut state = make_state();
         state.open_board_picker();
 
-        assert_eq!(state.board_picker_match_index("3"), state.board_picker_row_for_board(2));
+        assert_eq!(
+            state.board_picker_match_index("3"),
+            state.board_picker_row_for_board(2)
+        );
     }
 
     #[test]
@@ -299,9 +300,8 @@ mod tests {
         let mut state = make_state();
         state.open_board_picker();
         state.board_picker_search = "old".to_string();
-        state.board_picker_search_last_input = Some(
-            Instant::now() - BOARD_PICKER_SEARCH_TIMEOUT - Duration::from_millis(1),
-        );
+        state.board_picker_search_last_input =
+            Some(Instant::now() - BOARD_PICKER_SEARCH_TIMEOUT - Duration::from_millis(1));
 
         state.board_picker_append_search('b');
 

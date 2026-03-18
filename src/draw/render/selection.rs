@@ -359,6 +359,10 @@ mod tests {
         let bounds = Rect::new(0, 0, 1, 1).unwrap();
         let handles = selection_handle_rects(&bounds);
 
-        assert!(handles.iter().all(|handle| handle.width > 0 && handle.height > 0));
+        assert!(
+            handles
+                .iter()
+                .all(|handle| handle.width > 0 && handle.height > 0)
+        );
     }
 }

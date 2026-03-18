@@ -38,7 +38,10 @@ mod tests {
     #[test]
     fn join_binding_labels_uses_shared_separator() {
         let labels = vec!["Ctrl+K".to_string(), "F1".to_string()];
-        assert_eq!(join_binding_labels(&labels), Some("Ctrl+K / F1".to_string()));
+        assert_eq!(
+            join_binding_labels(&labels),
+            Some("Ctrl+K / F1".to_string())
+        );
     }
 
     #[test]
@@ -53,7 +56,10 @@ mod tests {
 
     #[test]
     fn format_binding_label_includes_optional_binding_text() {
-        assert_eq!(format_binding_label("Undo", Some("Ctrl+Z")), "Undo (Ctrl+Z)");
+        assert_eq!(
+            format_binding_label("Undo", Some("Ctrl+Z")),
+            "Undo (Ctrl+Z)"
+        );
         assert_eq!(format_binding_label("Undo", None), "Undo");
     }
 }

@@ -192,13 +192,19 @@ mod tests {
     fn visible_count_caps_at_max_visible() {
         assert_eq!(command_palette_visible_count(0), 0);
         assert_eq!(command_palette_visible_count(3), 3);
-        assert_eq!(command_palette_visible_count(99), COMMAND_PALETTE_MAX_VISIBLE);
+        assert_eq!(
+            command_palette_visible_count(99),
+            COMMAND_PALETTE_MAX_VISIBLE
+        );
     }
 
     #[test]
     fn command_palette_height_clamps_to_maximum() {
         assert!(command_palette_height(1) < COMMAND_PALETTE_MAX_HEIGHT);
-        assert_eq!(command_palette_height(COMMAND_PALETTE_MAX_VISIBLE), COMMAND_PALETTE_MAX_HEIGHT);
+        assert_eq!(
+            command_palette_height(COMMAND_PALETTE_MAX_VISIBLE),
+            COMMAND_PALETTE_MAX_HEIGHT
+        );
     }
 
     #[test]
@@ -223,16 +229,24 @@ mod tests {
         let geometry = sample_geometry();
         let x = geometry.inner_x + 10.0;
 
-        assert_eq!(geometry.visible_item_at(x, geometry.items_top + 1.0), Some(0));
+        assert_eq!(
+            geometry.visible_item_at(x, geometry.items_top + 1.0),
+            Some(0)
+        );
         assert_eq!(
             geometry.visible_item_at(x, geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT + 1.0),
             Some(1)
         );
-        assert_eq!(geometry.visible_item_at(geometry.inner_x - 1.0, geometry.items_top + 1.0), None);
+        assert_eq!(
+            geometry.visible_item_at(geometry.inner_x - 1.0, geometry.items_top + 1.0),
+            None
+        );
         assert_eq!(
             geometry.visible_item_at(
                 x,
-                geometry.items_top + geometry.visible_count as f64 * COMMAND_PALETTE_ITEM_HEIGHT + 1.0,
+                geometry.items_top
+                    + geometry.visible_count as f64 * COMMAND_PALETTE_ITEM_HEIGHT
+                    + 1.0,
             ),
             None
         );

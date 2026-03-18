@@ -171,13 +171,22 @@ mod tests {
 
     #[test]
     fn action_for_tool_maps_selection_and_eraser_tools() {
-        assert_eq!(action_for_tool(Tool::Select), Some(Action::SelectSelectionTool));
-        assert_eq!(action_for_tool(Tool::Eraser), Some(Action::SelectEraserTool));
+        assert_eq!(
+            action_for_tool(Tool::Select),
+            Some(Action::SelectSelectionTool)
+        );
+        assert_eq!(
+            action_for_tool(Tool::Eraser),
+            Some(Action::SelectEraserTool)
+        );
     }
 
     #[test]
     fn action_for_event_maps_board_picker_related_events() {
-        assert_eq!(action_for_event(&ToolbarEvent::BoardRename), Some(Action::BoardPicker));
+        assert_eq!(
+            action_for_event(&ToolbarEvent::BoardRename),
+            Some(Action::BoardPicker)
+        );
         assert_eq!(
             action_for_event(&ToolbarEvent::ToggleBoardPicker),
             Some(Action::BoardPicker)
@@ -187,7 +196,10 @@ mod tests {
     #[test]
     fn action_for_event_returns_none_for_layout_only_events() {
         assert_eq!(action_for_event(&ToolbarEvent::OpenConfigFile), None);
-        assert_eq!(action_for_event(&ToolbarEvent::ToggleShapePicker(true)), None);
+        assert_eq!(
+            action_for_event(&ToolbarEvent::ToggleShapePicker(true)),
+            None
+        );
     }
 
     #[test]
@@ -281,6 +293,9 @@ mod tests {
             action_for_event(&ToolbarEvent::SelectTool(Tool::Pen)),
             Some(Action::SelectPenTool)
         );
-        assert_eq!(action_for_event(&ToolbarEvent::ToggleFreeze), Some(Action::ToggleFrozenMode));
+        assert_eq!(
+            action_for_event(&ToolbarEvent::ToggleFreeze),
+            Some(Action::ToggleFrozenMode)
+        );
     }
 }

@@ -223,7 +223,12 @@ mod tests {
         state
     }
 
-    fn add_rect(state: &mut InputState, color: Color, fill: bool, locked: bool) -> crate::draw::ShapeId {
+    fn add_rect(
+        state: &mut InputState,
+        color: Color,
+        fill: bool,
+        locked: bool,
+    ) -> crate::draw::ShapeId {
         let id = state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 10,
             y: 20,
@@ -234,7 +239,11 @@ mod tests {
             thick: 2.0,
         });
         if locked {
-            let index = state.boards.active_frame().find_index(id).expect("shape index");
+            let index = state
+                .boards
+                .active_frame()
+                .find_index(id)
+                .expect("shape index");
             state.boards.active_frame_mut().shapes[index].locked = true;
         }
         id
@@ -245,13 +254,23 @@ mod tests {
         let mut state = make_state();
         let locked = add_rect(
             &mut state,
-            Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 1.0,
+                a: 1.0,
+            },
             false,
             true,
         );
         let unlocked = add_rect(
             &mut state,
-            Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
             false,
             false,
         );
@@ -259,15 +278,40 @@ mod tests {
 
         assert_eq!(
             state.selection_primary_color(),
-            Some(Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 })
+            Some(Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0
+            })
         );
     }
 
     #[test]
     fn selection_bool_target_returns_true_for_mixed_or_locked_only_values() {
         let mut state = make_state();
-        let first = add_rect(&mut state, Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }, false, false);
-        let second = add_rect(&mut state, Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 }, true, false);
+        let first = add_rect(
+            &mut state,
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            false,
+            false,
+        );
+        let second = add_rect(
+            &mut state,
+            Color {
+                r: 0.0,
+                g: 1.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            true,
+            false,
+        );
         state.set_selection(vec![first, second]);
 
         assert_eq!(
@@ -281,7 +325,12 @@ mod tests {
         let mut locked_state = make_state();
         let locked = add_rect(
             &mut locked_state,
-            Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
             false,
             true,
         );
@@ -298,8 +347,28 @@ mod tests {
     #[test]
     fn selection_bool_target_flips_uniform_unlocked_value() {
         let mut state = make_state();
-        let first = add_rect(&mut state, Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }, false, false);
-        let second = add_rect(&mut state, Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 }, false, false);
+        let first = add_rect(
+            &mut state,
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            false,
+            false,
+        );
+        let second = add_rect(
+            &mut state,
+            Color {
+                r: 0.0,
+                g: 1.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            false,
+            false,
+        );
         state.set_selection(vec![first, second]);
 
         assert_eq!(
@@ -314,7 +383,8 @@ mod tests {
         if let Shape::Rect { fill, .. } = &mut frame.shape_mut(first).expect("first shape").shape {
             *fill = true;
         }
-        if let Shape::Rect { fill, .. } = &mut frame.shape_mut(second).expect("second shape").shape {
+        if let Shape::Rect { fill, .. } = &mut frame.shape_mut(second).expect("second shape").shape
+        {
             *fill = true;
         }
 
@@ -332,13 +402,23 @@ mod tests {
         let mut state = make_state();
         let unlocked = add_rect(
             &mut state,
-            Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
             false,
             false,
         );
         let locked = add_rect(
             &mut state,
-            Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 1.0,
+                a: 1.0,
+            },
             false,
             true,
         );
