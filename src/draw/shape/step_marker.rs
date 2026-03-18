@@ -37,3 +37,36 @@ pub(crate) fn step_marker_bounds(
     let max_y = (y as f64 + total).ceil() as i32;
     Rect::from_min_max(min_x, min_y, max_x, max_y)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn step_marker_outline_thickness_has_minimum_floor() {
+        assert_eq!(step_marker_outline_thickness(1.0), 1.5);
+        assert_eq!(step_marker_outline_thickness(20.0), 2.4);
+    }
+
+    #[test]
+    fn step_marker_radius_grows_with_font_size() {
+        let font = FontDescriptor::default();
+        assert!(step_marker_radius(1, 32.0, &font) > step_marker_radius(1, 12.0, &font));
+    }
+
+    #[test]
+    fn step_marker_radius_grows_for_multi_digit_labels() {
+        let font = FontDescriptor::default();
+        assert!(step_marker_radius(88, 18.0, &font) >= step_marker_radius(8, 18.0, &font));
+    }
+
+    #[test]
+    fn step_marker_bounds_are_centered_around_marker_position() {
+        let font = FontDescriptor::default();
+        let bounds = step_marker_bounds(50, 75, 3, 18.0, &font).expect("step marker bounds");
+
+        assert!(bounds.contains(50, 75));
+        assert!(bounds.width > 0);
+        assert!(bounds.height > 0);
+    }
+}

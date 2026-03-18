@@ -111,3 +111,143 @@ impl InputState {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor, Shape};
+    use crate::input::{ClickHighlightSettings, EraserMode};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+
+        InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        )
+    }
+
+    fn open_rect_panel(state: &mut InputState) {
+        let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x: 10,
+            y: 20,
+            w: 30,
+            h: 40,
+            fill: false,
+            color: state.current_color,
+            thick: state.current_thickness,
+        });
+        state.set_selection(vec![shape_id]);
+        assert!(state.show_properties_panel());
+    }
+
+    #[test]
+    fn current_properties_focus_prefers_keyboard_focus_over_hover() {
+        let mut state = make_state();
+        open_rect_panel(&mut state);
+        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        panel.hover_index = Some(1);
+        panel.keyboard_focus = Some(0);
+
+        assert_eq!(state.current_properties_focus_or_hover(), Some(0));
+    }
+
+    #[test]
+    fn focus_first_properties_entry_skips_disabled_entries() {
+        let mut state = make_state();
+        open_rect_panel(&mut state);
+        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        panel.entries[0].disabled = true;
+        panel.entries[1].disabled = false;
+
+        assert!(state.focus_first_properties_entry());
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn focus_last_properties_entry_skips_disabled_entries() {
+        let mut state = make_state();
+        open_rect_panel(&mut state);
+        let last = state.properties_panel().expect("panel").entries.len() - 1;
+        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        panel.entries[last].disabled = true;
+
+        assert!(state.focus_last_properties_entry());
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(last - 1)
+        );
+    }
+
+    #[test]
+    fn focus_next_properties_entry_uses_hover_when_keyboard_focus_is_missing() {
+        let mut state = make_state();
+        open_rect_panel(&mut state);
+        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        panel.hover_index = Some(0);
+        panel.keyboard_focus = None;
+        panel.entries[1].disabled = true;
+
+        assert!(state.focus_next_properties_entry());
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn focus_previous_properties_entry_at_start_is_a_stable_no_op() {
+        let mut state = make_state();
+        open_rect_panel(&mut state);
+        state.set_properties_panel_focus(Some(0));
+
+        assert!(state.focus_previous_properties_entry());
+        assert_eq!(
+            state
+                .properties_panel()
+                .and_then(|panel| panel.keyboard_focus),
+            Some(0)
+        );
+    }
+}

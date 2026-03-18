@@ -327,3 +327,42 @@ pub fn selection_handle_rects(bounds: &Rect) -> [Rect; 8] {
         }),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn selection_handle_rects_cover_all_corners() {
+        let bounds = Rect::new(10, 20, 30, 40).unwrap();
+        let handles = selection_handle_rects(&bounds);
+
+        assert!(handles[0].contains(10, 20));
+        assert!(handles[1].contains(40, 20));
+        assert!(handles[2].contains(10, 60));
+        assert!(handles[3].contains(40, 60));
+    }
+
+    #[test]
+    fn selection_handle_rects_cover_edge_midpoints() {
+        let bounds = Rect::new(10, 20, 30, 40).unwrap();
+        let handles = selection_handle_rects(&bounds);
+
+        assert!(handles[4].contains(25, 20));
+        assert!(handles[5].contains(25, 60));
+        assert!(handles[6].contains(10, 40));
+        assert!(handles[7].contains(40, 40));
+    }
+
+    #[test]
+    fn selection_handle_rects_remain_valid_for_tiny_bounds() {
+        let bounds = Rect::new(0, 0, 1, 1).unwrap();
+        let handles = selection_handle_rects(&bounds);
+
+        assert!(
+            handles
+                .iter()
+                .all(|handle| handle.width > 0 && handle.height > 0)
+        );
+    }
+}

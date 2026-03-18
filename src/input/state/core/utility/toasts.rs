@@ -253,3 +253,121 @@ impl InputState {
         Some((elapsed / total).min(1.0))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::state::core::base::TextEditEntryFeedback;
+    use crate::input::{ClickHighlightSettings, EraserMode};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+
+        InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        )
+    }
+
+    #[test]
+    fn advance_ui_toast_clears_expired_toast_and_bounds() {
+        let mut state = make_state();
+        state.set_ui_toast_with_duration(UiToastKind::Info, "Hello", 10);
+        state.ui_toast_bounds = Some((1.0, 2.0, 3.0, 4.0));
+        let now = state.ui_toast.as_ref().unwrap().started + Duration::from_millis(10);
+
+        assert!(!state.advance_ui_toast(now));
+        assert!(state.ui_toast.is_none());
+        assert!(state.ui_toast_bounds.is_none());
+    }
+
+    #[test]
+    fn check_toast_click_returns_action_and_dismisses_inside_bounds() {
+        let mut state = make_state();
+        state.set_ui_toast_with_action(
+            UiToastKind::Info,
+            "Saved",
+            "Open",
+            Action::OpenCaptureFolder,
+        );
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+        let (hit, action) = state.check_toast_click(50, 40);
+
+        assert!(hit);
+        assert_eq!(action, Some(Action::OpenCaptureFolder));
+        assert!(state.ui_toast.is_none());
+        assert!(state.ui_toast_bounds.is_none());
+    }
+
+    #[test]
+    fn check_toast_click_ignores_clicks_outside_bounds() {
+        let mut state = make_state();
+        state.set_ui_toast(UiToastKind::Info, "Saved");
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+        let (hit, action) = state.check_toast_click(5, 5);
+
+        assert!(!hit);
+        assert_eq!(action, None);
+        assert!(state.ui_toast.is_some());
+    }
+
+    #[test]
+    fn save_pending_clipboard_to_file_without_pending_data_warns_and_triggers_feedback() {
+        let mut state = make_state();
+
+        state.save_pending_clipboard_to_file();
+
+        let toast = state.ui_toast.as_ref().expect("warning toast");
+        assert_eq!(toast.kind, UiToastKind::Warning);
+        assert_eq!(toast.message, "No pending image to save");
+        assert!(state.blocked_action_feedback.is_some());
+    }
+
+    #[test]
+    fn advance_text_edit_entry_feedback_clears_expired_feedback() {
+        let mut state = make_state();
+        state.text_edit_entry_feedback = Some(TextEditEntryFeedback {
+            started: Instant::now(),
+        });
+        let now = state.text_edit_entry_feedback.as_ref().unwrap().started
+            + Duration::from_millis(TEXT_EDIT_ENTRY_DURATION_MS);
+
+        assert!(!state.advance_text_edit_entry_feedback(now));
+        assert!(state.text_edit_entry_feedback.is_none());
+    }
+}

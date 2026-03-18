@@ -52,3 +52,49 @@ fn sync_arrow_label_counter_uses_max_across_boards() {
     state.sync_arrow_label_counter();
     assert_eq!(state.arrow_label_counter, 8);
 }
+
+#[test]
+fn next_arrow_label_returns_none_when_disabled() {
+    let state = create_test_input_state();
+    assert!(state.next_arrow_label().is_none());
+}
+
+#[test]
+fn enabling_arrow_labels_syncs_counter_and_marks_session_dirty() {
+    let mut state = create_test_input_state();
+    let font_descriptor = state.font_descriptor.clone();
+    state
+        .boards
+        .active_frame_mut()
+        .add_shape(arrow_with_label(5, &font_descriptor));
+    state.needs_redraw = false;
+    state.session_dirty = false;
+
+    assert!(state.set_arrow_label_enabled(true));
+    assert!(state.arrow_label_enabled);
+    assert_eq!(state.arrow_label_counter, 6);
+    assert!(state.needs_redraw);
+    assert!(state.session_dirty);
+}
+
+#[test]
+fn enabling_arrow_labels_is_noop_when_already_enabled() {
+    let mut state = create_test_input_state();
+    state.arrow_label_enabled = true;
+    state.needs_redraw = false;
+    state.session_dirty = false;
+
+    assert!(!state.set_arrow_label_enabled(true));
+    assert!(!state.needs_redraw);
+    assert!(!state.session_dirty);
+}
+
+#[test]
+fn reset_arrow_label_counter_reports_no_change_at_default() {
+    let mut state = create_test_input_state();
+    state.needs_redraw = false;
+
+    assert!(!state.reset_arrow_label_counter());
+    assert_eq!(state.arrow_label_counter, 1);
+    assert!(!state.needs_redraw);
+}

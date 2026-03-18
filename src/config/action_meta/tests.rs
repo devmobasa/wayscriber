@@ -224,3 +224,18 @@ fn action_meta_covers_surface_actions() {
         meta.in_command_palette
     });
 }
+
+#[test]
+fn action_display_label_strips_toggle_prefix() {
+    assert_eq!(action_display_label(Action::ToggleStatusBar), "Status Bar");
+}
+
+#[test]
+fn action_display_label_strips_mode_suffix() {
+    assert_eq!(action_display_label(Action::ToggleWhiteboard), "Whiteboard");
+}
+
+#[test]
+fn action_display_label_uses_short_label_for_ellipse_tool() {
+    assert_eq!(action_display_label(Action::SelectEllipseTool), "Circle");
+}

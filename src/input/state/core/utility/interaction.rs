@@ -96,3 +96,61 @@ impl InputState {
         self.dirty_tracker.take_regions(width, height)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn update_pointer_position_synthetic_updates_pointer_without_redraw() {
+        let mut state = make_test_input_state();
+        state.needs_redraw = false;
+
+        state.update_pointer_position_synthetic(12, 34);
+
+        assert_eq!(state.pointer_position(), (12, 34));
+        assert!(!state.needs_redraw);
+    }
+
+    #[test]
+    fn set_undo_stack_limit_clamps_to_at_least_one() {
+        let mut state = make_test_input_state();
+        state.set_undo_stack_limit(0);
+        assert_eq!(state.undo_stack_limit, 1);
+
+        state.set_undo_stack_limit(25);
+        assert_eq!(state.undo_stack_limit, 25);
+    }
+
+    #[test]
+    fn cancel_text_input_clears_wrap_width_and_returns_to_idle() {
+        let mut state = make_test_input_state();
+        state.text_wrap_width = Some(240);
+        state.state = DrawingState::TextInput {
+            x: 10,
+            y: 20,
+            buffer: "hello".to_string(),
+        };
+        state.needs_redraw = false;
+
+        state.cancel_text_input();
+
+        assert!(matches!(state.state, DrawingState::Idle));
+        assert!(state.text_wrap_width.is_none());
+        assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn take_dirty_regions_returns_full_surface_and_drains_tracker() {
+        let mut state = make_test_input_state();
+        state.update_screen_dimensions(100, 50);
+        state.dirty_tracker.mark_full();
+
+        assert_eq!(
+            state.take_dirty_regions(),
+            vec![Rect::new(0, 0, 100, 50).unwrap()]
+        );
+        assert!(state.take_dirty_regions().is_empty());
+    }
+}

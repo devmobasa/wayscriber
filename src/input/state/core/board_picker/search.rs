@@ -184,7 +184,56 @@ fn fuzzy_score_with_single_swap(needle: &str, haystack: &str) -> Option<i32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{fuzzy_score, fuzzy_score_relaxed};
+    use super::{BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus, fuzzy_score, fuzzy_score_relaxed};
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+    use std::time::{Duration, Instant};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+        let action_bindings = keybindings
+            .build_action_bindings()
+            .expect("default keybindings bindings");
+
+        let mut state = InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        );
+        state.set_action_bindings(action_bindings);
+        state
+    }
 
     #[test]
     fn fuzzy_score_relaxed_handles_transpose() {
@@ -195,5 +244,117 @@ mod tests {
     #[test]
     fn fuzzy_score_relaxed_rejects_unrelated() {
         assert!(fuzzy_score_relaxed("zz", "blackboard").is_none());
+    }
+
+    #[test]
+    fn board_picker_match_index_accepts_numeric_board_selection() {
+        let mut state = make_state();
+        state.open_board_picker();
+
+        assert_eq!(
+            state.board_picker_match_index("3"),
+            state.board_picker_row_for_board(2)
+        );
+    }
+
+    #[test]
+    fn board_picker_match_index_trims_surrounding_whitespace() {
+        let mut state = make_state();
+        state.open_board_picker();
+        let blueprint_index = state
+            .boards
+            .board_states()
+            .iter()
+            .position(|board| board.spec.id == "blueprint")
+            .expect("blueprint board");
+
+        assert_eq!(
+            state.board_picker_match_index("  blue  "),
+            state.board_picker_row_for_board(blueprint_index)
+        );
+    }
+
+    #[test]
+    fn board_picker_match_index_rejects_whitespace_only_queries() {
+        let mut state = make_state();
+        state.open_board_picker();
+
+        assert_eq!(state.board_picker_match_index("   \t  "), None);
+    }
+
+    #[test]
+    fn board_picker_append_search_returns_focus_to_board_list() {
+        let mut state = make_state();
+        state.open_board_picker();
+        state.board_picker_set_focus(BoardPickerFocus::PagePanel);
+        assert_eq!(state.board_picker_focus(), BoardPickerFocus::PagePanel);
+
+        state.board_picker_append_search('b');
+
+        assert_eq!(state.board_picker_focus(), BoardPickerFocus::BoardList);
+        assert_eq!(state.board_picker_page_focus_index(), None);
+    }
+
+    #[test]
+    fn board_picker_append_search_resets_stale_query_before_appending() {
+        let mut state = make_state();
+        state.open_board_picker();
+        state.board_picker_search = "old".to_string();
+        state.board_picker_search_last_input =
+            Some(Instant::now() - BOARD_PICKER_SEARCH_TIMEOUT - Duration::from_millis(1));
+
+        state.board_picker_append_search('b');
+
+        assert_eq!(state.board_picker_search, "b");
+        assert!(state.board_picker_search_last_input.is_some());
+    }
+
+    #[test]
+    fn board_picker_clear_search_reports_when_work_was_done() {
+        let mut state = make_state();
+        state.board_picker_search = "blue".to_string();
+        state.board_picker_search_last_input = Some(Instant::now());
+        state.needs_redraw = false;
+
+        assert!(state.board_picker_clear_search());
+        assert!(state.board_picker_search.is_empty());
+        assert!(state.board_picker_search_last_input.is_none());
+        assert!(state.needs_redraw);
+        assert!(!state.board_picker_clear_search());
+    }
+
+    #[test]
+    fn board_picker_backspace_search_clears_timestamp_when_last_character_removed() {
+        let mut state = make_state();
+        state.board_picker_search = "b".to_string();
+        state.board_picker_search_last_input = Some(Instant::now());
+
+        assert!(state.board_picker_backspace_search());
+        assert!(state.board_picker_search.is_empty());
+        assert!(state.board_picker_search_last_input.is_none());
+    }
+
+    #[test]
+    fn board_picker_append_search_rejects_input_past_max_len() {
+        let mut state = make_state();
+        state.board_picker_search = "x".repeat(super::BOARD_PICKER_SEARCH_MAX_LEN);
+
+        assert!(!state.board_picker_append_search('y'));
+        assert_eq!(
+            state.board_picker_search.len(),
+            super::BOARD_PICKER_SEARCH_MAX_LEN
+        );
+    }
+
+    #[test]
+    fn fuzzy_score_prefers_prefix_matches_over_internal_matches() {
+        assert!(fuzzy_score("blue", "blueprint") > fuzzy_score("blue", "my blueprint"));
+    }
+
+    #[test]
+    fn fuzzy_score_relaxed_penalizes_transposed_matches_vs_exact_matches() {
+        let exact = fuzzy_score_relaxed("blackboard", "blackboard").unwrap();
+        let swapped = fuzzy_score_relaxed("balckboard", "blackboard").unwrap();
+        assert!(exact > swapped);
     }
 }

@@ -329,3 +329,38 @@ pub fn lerp_color(
         from.3 + (to.3 - from.3) * t,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn with_alpha_replaces_only_alpha_component() {
+        assert_eq!(with_alpha((0.1, 0.2, 0.3, 0.4), 0.9), (0.1, 0.2, 0.3, 0.9));
+    }
+
+    #[test]
+    fn lerp_color_clamps_progress_before_zero() {
+        assert_eq!(
+            lerp_color((0.0, 0.2, 0.4, 0.6), (1.0, 0.8, 0.6, 0.4), -1.0),
+            (0.0, 0.2, 0.4, 0.6)
+        );
+    }
+
+    #[test]
+    fn lerp_color_interpolates_midpoint() {
+        let color = lerp_color((0.0, 0.0, 0.0, 0.0), (1.0, 0.5, 0.25, 1.0), 0.5);
+        assert!((color.0 - 0.5).abs() < 1e-9);
+        assert!((color.1 - 0.25).abs() < 1e-9);
+        assert!((color.2 - 0.125).abs() < 1e-9);
+        assert!((color.3 - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn lerp_color_clamps_progress_after_one() {
+        assert_eq!(
+            lerp_color((0.0, 0.2, 0.4, 0.6), (1.0, 0.8, 0.6, 0.4), 2.0),
+            (1.0, 0.8, 0.6, 0.4)
+        );
+    }
+}

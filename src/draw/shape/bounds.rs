@@ -198,3 +198,41 @@ pub(crate) fn ensure_positive_rect_f64(
     let max_y = max_y.ceil() as i32;
     ensure_positive_rect(min_x, min_y, max_x, max_y)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounding_box_for_points_returns_none_for_empty_input() {
+        assert_eq!(bounding_box_for_points(&[], 2.0), None);
+    }
+
+    #[test]
+    fn bounding_box_for_rect_handles_negative_drag_dimensions() {
+        assert_eq!(
+            bounding_box_for_rect(10, 20, -4, -6, 1.0),
+            Rect::new(5, 13, 6, 8)
+        );
+    }
+
+    #[test]
+    fn ensure_positive_rect_makes_degenerate_integer_bounds_visible() {
+        assert_eq!(ensure_positive_rect(5, 7, 5, 7), Rect::new(5, 7, 1, 1));
+    }
+
+    #[test]
+    fn ensure_positive_rect_f64_uses_floor_and_ceil_bounds() {
+        assert_eq!(
+            ensure_positive_rect_f64(1.2, 3.8, 4.1, 6.0),
+            Rect::new(1, 3, 4, 3)
+        );
+    }
+
+    #[test]
+    fn stroke_padding_never_drops_below_one_pixel() {
+        assert_eq!(stroke_padding(0.0), 1);
+        assert_eq!(stroke_padding(1.1), 1);
+        assert_eq!(stroke_padding(2.1), 2);
+    }
+}

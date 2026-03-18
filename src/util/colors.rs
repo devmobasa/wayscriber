@@ -92,3 +92,47 @@ pub fn color_to_name(color: &Color) -> &'static str {
         "Custom"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_to_color_is_case_insensitive() {
+        assert_eq!(key_to_color('r'), Some(RED));
+        assert_eq!(key_to_color('K'), Some(BLACK));
+    }
+
+    #[test]
+    fn key_to_color_rejects_unknown_keys() {
+        assert_eq!(key_to_color('x'), None);
+    }
+
+    #[test]
+    fn name_to_color_is_case_insensitive() {
+        assert_eq!(name_to_color("Orange"), Some(ORANGE));
+        assert_eq!(name_to_color("WHITE"), Some(WHITE));
+    }
+
+    #[test]
+    fn color_to_name_matches_approximate_orange_band() {
+        let color = Color {
+            r: 0.95,
+            g: 0.5,
+            b: 0.05,
+            a: 1.0,
+        };
+        assert_eq!(color_to_name(&color), "Orange");
+    }
+
+    #[test]
+    fn color_to_name_returns_custom_outside_thresholds() {
+        let color = Color {
+            r: 0.85,
+            g: 0.5,
+            b: 0.05,
+            a: 1.0,
+        };
+        assert_eq!(color_to_name(&color), "Custom");
+    }
+}

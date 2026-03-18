@@ -198,6 +198,16 @@ pub fn invalidate_text_cache() {
 mod tests {
     use super::*;
 
+    fn measurement(width: f64) -> TextMeasurement {
+        TextMeasurement {
+            ink_x: 0.0,
+            ink_y: 0.0,
+            ink_width: width,
+            ink_height: 10.0,
+            baseline: 8.0,
+        }
+    }
+
     #[test]
     fn test_cache_returns_same_measurement() {
         let text = "Hello World";
@@ -246,6 +256,51 @@ mod tests {
 
         assert_eq!(m2.ink_width, m2_cached.ink_width);
         assert_eq!(m2.ink_height, m2_cached.ink_height);
+    }
+
+    #[test]
+    fn test_cache_evicts_oldest_entry_at_capacity() {
+        let mut cache = TextMeasurementCache::new(2);
+        let key_a = TextCacheKey::new("A", "Sans", 12.0, None);
+        let key_b = TextCacheKey::new("B", "Sans", 12.0, None);
+        let key_c = TextCacheKey::new("C", "Sans", 12.0, None);
+
+        cache.insert(key_a.clone(), measurement(10.0));
+        cache.insert(key_b.clone(), measurement(20.0));
+        cache.insert(key_c.clone(), measurement(30.0));
+
+        assert!(cache.get(&key_a).is_none());
+        assert_eq!(cache.get(&key_b).unwrap().ink_width, 20.0);
+        assert_eq!(cache.get(&key_c).unwrap().ink_width, 30.0);
+    }
+
+    #[test]
+    fn test_get_refreshes_lru_order_before_eviction() {
+        let mut cache = TextMeasurementCache::new(2);
+        let key_a = TextCacheKey::new("A", "Sans", 12.0, None);
+        let key_b = TextCacheKey::new("B", "Sans", 12.0, None);
+        let key_c = TextCacheKey::new("C", "Sans", 12.0, None);
+
+        cache.insert(key_a.clone(), measurement(10.0));
+        cache.insert(key_b.clone(), measurement(20.0));
+        assert_eq!(cache.get(&key_a).unwrap().ink_width, 10.0);
+        cache.insert(key_c.clone(), measurement(30.0));
+
+        assert!(cache.get(&key_b).is_none());
+        assert_eq!(cache.get(&key_a).unwrap().ink_width, 10.0);
+        assert_eq!(cache.get(&key_c).unwrap().ink_width, 30.0);
+    }
+
+    #[test]
+    fn test_insert_existing_key_updates_cached_measurement() {
+        let mut cache = TextMeasurementCache::new(2);
+        let key = TextCacheKey::new("A", "Sans", 12.0, None);
+
+        cache.insert(key.clone(), measurement(10.0));
+        cache.insert(key.clone(), measurement(42.0));
+
+        assert_eq!(cache.get(&key).unwrap().ink_width, 42.0);
+        assert_eq!(cache.entries.len(), 1);
     }
 
     #[test]

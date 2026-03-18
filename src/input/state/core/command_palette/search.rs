@@ -177,3 +177,37 @@ fn action_category_name(category: ActionCategory) -> &'static str {
         ActionCategory::Presets => "presets",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_query_trims_and_lowercases() {
+        assert_eq!(normalize_query("  Ctrl+K / Zoom  "), "ctrl+k / zoom");
+    }
+
+    #[test]
+    fn query_tokens_split_on_whitespace_plus_and_slash() {
+        assert_eq!(
+            query_tokens("ctrl+shift/file open"),
+            vec!["ctrl", "shift", "file", "open"]
+        );
+    }
+
+    #[test]
+    fn fuzzy_score_prefers_prefix_matches_over_subsequence_matches() {
+        assert!(fuzzy_score("cap", "capture to file") > fuzzy_score("cap", "clipboard action"));
+    }
+
+    #[test]
+    fn fuzzy_score_prefers_word_boundary_matches_over_plain_substrings() {
+        assert!(fuzzy_score("bar", "status bar") > fuzzy_score("bar", "crowbar"));
+    }
+
+    #[test]
+    fn action_category_name_covers_palette_categories() {
+        assert_eq!(action_category_name(ActionCategory::Capture), "capture");
+        assert_eq!(action_category_name(ActionCategory::Presets), "presets");
+    }
+}

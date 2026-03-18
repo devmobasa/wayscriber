@@ -56,3 +56,90 @@ impl InputState {
         self.zoom_scale
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{ClickHighlightSettings, EraserMode};
+
+    fn make_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_map = keybindings
+            .build_action_map()
+            .expect("default keybindings map");
+
+        InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        )
+    }
+
+    #[test]
+    fn frozen_toggle_request_is_consumed_once() {
+        let mut state = make_state();
+        state.request_frozen_toggle();
+
+        assert!(state.take_pending_frozen_toggle());
+        assert!(!state.take_pending_frozen_toggle());
+    }
+
+    #[test]
+    fn set_frozen_active_marks_redraw_only_on_change() {
+        let mut state = make_state();
+        state.needs_redraw = false;
+
+        state.set_frozen_active(true);
+        assert!(state.frozen_active());
+        assert!(state.needs_redraw);
+
+        state.needs_redraw = false;
+        state.set_frozen_active(true);
+        assert!(!state.needs_redraw);
+    }
+
+    #[test]
+    fn set_zoom_status_updates_accessors_and_marks_redraw_only_on_change() {
+        let mut state = make_state();
+        state.needs_redraw = false;
+
+        state.set_zoom_status(true, true, 2.0);
+        assert!(state.zoom_active());
+        assert!(state.zoom_locked());
+        assert_eq!(state.zoom_scale(), 2.0);
+        assert!(state.needs_redraw);
+
+        state.needs_redraw = false;
+        state.set_zoom_status(true, true, 2.0);
+        assert!(!state.needs_redraw);
+    }
+}

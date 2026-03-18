@@ -43,4 +43,14 @@ mod tests {
     fn test_truncate_one() {
         assert_eq!(truncate_with_ellipsis("hello", 1), "…");
     }
+
+    #[test]
+    fn test_truncate_counts_unicode_scalar_values() {
+        assert_eq!(truncate_with_ellipsis("éééé", 3), "éé…");
+    }
+
+    #[test]
+    fn test_truncate_preserves_exact_unicode_length() {
+        assert_eq!(truncate_with_ellipsis("🙂🙂", 2), "🙂🙂");
+    }
 }

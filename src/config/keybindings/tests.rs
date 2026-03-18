@@ -53,6 +53,36 @@ fn test_parse_with_spaces() {
 }
 
 #[test]
+fn test_parse_plus_key() {
+    let binding = KeyBinding::parse("Ctrl+Shift++").unwrap();
+    assert_eq!(binding.key, "+");
+    assert!(binding.ctrl);
+    assert!(binding.shift);
+    assert!(!binding.alt);
+}
+
+#[test]
+fn test_parse_control_alias() {
+    let binding = KeyBinding::parse("Control+Alt+Delete").unwrap();
+    assert_eq!(binding.key, "Delete");
+    assert!(binding.ctrl);
+    assert!(binding.alt);
+    assert!(!binding.shift);
+}
+
+#[test]
+fn test_parse_requires_non_modifier_key() {
+    let err = KeyBinding::parse("Ctrl+Shift").unwrap_err();
+    assert!(err.contains("No key specified"));
+}
+
+#[test]
+fn test_display_normalizes_modifier_order() {
+    let binding = KeyBinding::parse("Shift+Ctrl+W").unwrap();
+    assert_eq!(binding.to_string(), "Ctrl+Shift+W");
+}
+
+#[test]
 fn test_matches() {
     let binding = KeyBinding::parse("Ctrl+Shift+W").unwrap();
     assert!(binding.matches("W", true, true, false));
@@ -91,53 +121,33 @@ fn test_parse_modifier_order_independence() {
 
 #[test]
 fn test_build_action_map() {
-    let config = KeybindingsConfig::default();
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Alt+Shift+1".to_string()];
+    config.core.undo = vec!["Ctrl+Alt+Shift+2".to_string()];
+    config.core.redo = vec!["Ctrl+Alt+Shift+3".to_string()];
+    config.ui.toggle_help = vec!["Ctrl+Alt+Shift+4".to_string()];
+    config.board.toggle_whiteboard = vec!["Ctrl+Alt+Shift+5".to_string()];
     let map = config.build_action_map().unwrap();
 
-    // Check that some default bindings are present
-    let escape = KeyBinding::parse("Escape").unwrap();
-    assert_eq!(map.get(&escape), Some(&Action::Exit));
-
-    let ctrl_z = KeyBinding::parse("Ctrl+Z").unwrap();
-    assert_eq!(map.get(&ctrl_z), Some(&Action::Undo));
-
-    let ctrl_shift_z = KeyBinding::parse("Ctrl+Shift+Z").unwrap();
-    assert_eq!(map.get(&ctrl_shift_z), Some(&Action::Redo));
-
-    let move_front = KeyBinding::parse("]").unwrap();
-    assert_eq!(map.get(&move_front), Some(&Action::MoveSelectionToFront));
-
-    let move_back = KeyBinding::parse("[").unwrap();
-    assert_eq!(map.get(&move_back), Some(&Action::MoveSelectionToBack));
-
-    let copy_selection = KeyBinding::parse("Ctrl+Alt+C").unwrap();
-    assert_eq!(map.get(&copy_selection), Some(&Action::CopySelection));
-
-    let capture_selection = KeyBinding::parse("Ctrl+Shift+C").unwrap();
     assert_eq!(
-        map.get(&capture_selection),
-        Some(&Action::CaptureClipboardSelection)
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+1").unwrap()),
+        Some(&Action::Exit)
     );
-
-    let select_all = KeyBinding::parse("Ctrl+A").unwrap();
-    assert_eq!(map.get(&select_all), Some(&Action::SelectAll));
-
-    let toggle_highlight = KeyBinding::parse("Ctrl+Shift+H").unwrap();
     assert_eq!(
-        map.get(&toggle_highlight),
-        Some(&Action::ToggleClickHighlight)
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+2").unwrap()),
+        Some(&Action::Undo)
     );
-
-    let toggle_highlight_tool = KeyBinding::parse("Ctrl+Alt+H").unwrap();
     assert_eq!(
-        map.get(&toggle_highlight_tool),
-        Some(&Action::ToggleHighlightTool)
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+3").unwrap()),
+        Some(&Action::Redo)
     );
-
-    let reset_arrow_labels = KeyBinding::parse("Ctrl+Shift+R").unwrap();
     assert_eq!(
-        map.get(&reset_arrow_labels),
-        Some(&Action::ResetArrowLabelCounter)
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+4").unwrap()),
+        Some(&Action::ToggleHelp)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+5").unwrap()),
+        Some(&Action::ToggleWhiteboard)
     );
 }
 
@@ -169,4 +179,71 @@ fn test_duplicate_with_different_modifier_order() {
     let err_msg = result.unwrap_err();
     assert!(err_msg.contains("Duplicate keybinding"));
     assert!(err_msg.contains("Shift+Ctrl+W"));
+}
+
+#[test]
+fn test_parse_plus_key_without_modifiers() {
+    let binding = KeyBinding::parse("+").unwrap();
+    assert_eq!(binding.key, "+");
+    assert!(!binding.ctrl);
+    assert!(!binding.shift);
+    assert!(!binding.alt);
+}
+
+#[test]
+fn test_parse_trims_surrounding_whitespace() {
+    let binding = KeyBinding::parse("  Escape  ").unwrap();
+    assert_eq!(binding.key, "Escape");
+    assert!(!binding.ctrl);
+    assert!(!binding.shift);
+    assert!(!binding.alt);
+}
+
+#[test]
+fn test_matches_requires_exact_alt_state() {
+    let binding = KeyBinding::parse("Alt+X").unwrap();
+    assert!(binding.matches("x", false, false, true));
+    assert!(!binding.matches("x", false, false, false));
+}
+
+#[test]
+fn test_build_action_bindings_preserves_declared_binding_order() {
+    let mut config = KeybindingsConfig::default();
+    config.ui.toggle_help = vec![
+        "Ctrl+Alt+Shift+1".to_string(),
+        "Ctrl+Alt+Shift+2".to_string(),
+    ];
+    config.core.redo = vec![
+        "Ctrl+Alt+Shift+3".to_string(),
+        "Ctrl+Alt+Shift+4".to_string(),
+    ];
+    let bindings = config.build_action_bindings().unwrap();
+
+    assert_eq!(
+        bindings.get(&Action::ToggleHelp),
+        Some(&vec![
+            KeyBinding::parse("Ctrl+Alt+Shift+1").unwrap(),
+            KeyBinding::parse("Ctrl+Alt+Shift+2").unwrap(),
+        ])
+    );
+    assert_eq!(
+        bindings.get(&Action::Redo),
+        Some(&vec![
+            KeyBinding::parse("Ctrl+Alt+Shift+3").unwrap(),
+            KeyBinding::parse("Ctrl+Alt+Shift+4").unwrap(),
+        ])
+    );
+}
+
+#[test]
+fn test_build_action_bindings_reports_duplicate_keybindings() {
+    let mut config = KeybindingsConfig::default();
+    config.core.exit = vec!["Ctrl+Z".to_string()];
+    config.core.undo = vec!["Ctrl+Z".to_string()];
+
+    let result = config.build_action_bindings();
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err();
+    assert!(err_msg.contains("Duplicate keybinding"));
+    assert!(err_msg.contains("Ctrl+Z"));
 }

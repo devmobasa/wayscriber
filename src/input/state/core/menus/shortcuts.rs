@@ -39,3 +39,84 @@ impl InputState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{KeyBinding, RadialMenuMouseBinding};
+    use crate::input::state::test_support::make_test_input_state_with_action_bindings;
+    use std::collections::HashMap;
+
+    fn binding_map(entries: &[(Action, &[&str])]) -> HashMap<Action, Vec<KeyBinding>> {
+        entries
+            .iter()
+            .map(|(action, values)| {
+                (
+                    *action,
+                    values
+                        .iter()
+                        .map(|value| KeyBinding::parse(value).expect("binding"))
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn shortcut_for_help_prefers_f1_over_other_bindings() {
+        let state = make_test_input_state_with_action_bindings(binding_map(&[(
+            Action::ToggleHelp,
+            &["Ctrl+Alt+Shift+H", "F1"],
+        )]));
+        assert_eq!(
+            state.shortcut_for_action(Action::ToggleHelp),
+            Some("F1".to_string())
+        );
+    }
+
+    #[test]
+    fn shortcut_for_radial_menu_uses_mouse_binding_when_no_key_binding_exists() {
+        let mut state = make_test_input_state_with_action_bindings(HashMap::new());
+        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Middle;
+        assert_eq!(
+            state.shortcut_for_action(Action::ToggleRadialMenu),
+            Some("Middle Click".to_string())
+        );
+    }
+
+    #[test]
+    fn shortcut_for_radial_menu_combines_mouse_and_keyboard_bindings() {
+        let mut state = make_test_input_state_with_action_bindings(binding_map(&[(
+            Action::ToggleRadialMenu,
+            &["Ctrl+R"],
+        )]));
+        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Middle;
+
+        assert_eq!(
+            state.shortcut_for_action(Action::ToggleRadialMenu),
+            Some("Middle Click / Ctrl+R".to_string())
+        );
+    }
+
+    #[test]
+    fn shortcut_for_radial_menu_returns_keyboard_only_when_mouse_binding_disabled() {
+        let mut state = make_test_input_state_with_action_bindings(binding_map(&[(
+            Action::ToggleRadialMenu,
+            &["Ctrl+R"],
+        )]));
+        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
+
+        assert_eq!(
+            state.shortcut_for_action(Action::ToggleRadialMenu),
+            Some("Ctrl+R".to_string())
+        );
+    }
+
+    #[test]
+    fn shortcut_for_radial_menu_returns_none_when_fully_unbound() {
+        let mut state = make_test_input_state_with_action_bindings(HashMap::new());
+        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
+
+        assert_eq!(state.shortcut_for_action(Action::ToggleRadialMenu), None);
+    }
+}

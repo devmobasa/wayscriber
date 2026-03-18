@@ -1,4 +1,34 @@
 use super::*;
+use crate::draw::{BoardPages, Frame};
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT};
+
+fn board_index(state: &InputState, id: &str) -> usize {
+    state
+        .boards
+        .board_states()
+        .iter()
+        .position(|board| board.spec.id == id)
+        .expect("board index")
+}
+
+fn set_named_pages(
+    state: &mut InputState,
+    board_index: usize,
+    names: &[Option<&str>],
+    active: usize,
+) {
+    let pages = names
+        .iter()
+        .map(|name| {
+            let mut frame = Frame::new();
+            if let Some(name) = name {
+                frame.set_page_name(Some((*name).to_string()));
+            }
+            frame
+        })
+        .collect();
+    state.boards.board_states_mut()[board_index].pages = BoardPages::from_pages(pages, active);
+}
 
 #[test]
 fn context_menu_respects_enable_flag() {
@@ -265,4 +295,222 @@ fn context_menu_open_radial_command_opens_radial_and_closes_context_menu() {
 
     assert!(state.is_radial_menu_open());
     assert!(!state.is_context_menu_open());
+}
+
+#[test]
+fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
+    let mut state = create_test_input_state();
+    let locked = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 20,
+        y: 20,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    let locked_index = state
+        .boards
+        .active_frame()
+        .find_index(locked)
+        .expect("locked index");
+    state.boards.active_frame_mut().shapes[locked_index].locked = true;
+
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Canvas, None);
+
+    let clear_entry = state
+        .context_menu_entries()
+        .into_iter()
+        .find(|entry| entry.command == Some(MenuCommand::ClearAll))
+        .expect("clear entry");
+    assert_eq!(clear_entry.label, "Clear Unlocked");
+    assert!(!clear_entry.disabled);
+}
+
+#[test]
+fn page_context_menu_header_uses_page_name_and_enables_move_submenu() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    set_named_pages(&mut state, blackboard, &[None, Some("Agenda")], 1);
+
+    state.open_page_context_menu((5, 5), blackboard, 1);
+
+    let entries = state.context_menu_entries();
+    assert_eq!(entries[0].label, "Agenda — Page 2 (2/2)");
+    let move_entry = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::OpenPageMoveMenu))
+        .expect("move entry");
+    assert!(move_entry.has_submenu);
+    assert!(!move_entry.disabled);
+}
+
+#[test]
+fn page_move_menu_excludes_source_board_and_lists_other_boards() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.open_page_context_menu((5, 5), blackboard, 0);
+
+    state.execute_menu_command(MenuCommand::OpenPageMoveMenu);
+
+    let entries = state.context_menu_entries();
+    assert!(entries.iter().any(|entry| entry.label == "Overlay"));
+    assert!(entries.iter().any(|entry| entry.label == "Whiteboard"));
+    assert!(!entries.iter().any(|entry| entry.label == "Blackboard"));
+}
+
+#[test]
+fn pages_menu_shows_window_indicators_around_active_page() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    let pages = (0..10)
+        .map(|index| {
+            let mut frame = Frame::new();
+            frame.set_page_name(Some(format!("Page {index}")));
+            frame
+        })
+        .collect();
+    state.boards.board_states_mut()[blackboard].pages = BoardPages::from_pages(pages, 5);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Pages, None);
+
+    let entries = state.context_menu_entries();
+    assert!(entries.iter().any(|entry| entry.label == "  ... 1 above"));
+    assert!(entries.iter().any(|entry| entry.label == "  ... 1 below"));
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.label == "  Page 6 (current)" && entry.disabled)
+    );
+}
+
+#[test]
+fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() {
+    let mut state = create_test_input_state();
+    state.switch_board_slot(8);
+    state.switch_board_slot(5);
+
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+    let overflow_entries = state
+        .context_menu_entries()
+        .into_iter()
+        .filter(|entry| entry.command == Some(MenuCommand::OpenBoardPicker))
+        .collect::<Vec<_>>();
+    assert_eq!(overflow_entries.len(), 1);
+    assert!(overflow_entries[0].label.contains("open picker"));
+
+    state.switch_board(BOARD_ID_TRANSPARENT);
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
+    let delete_entry = state
+        .context_menu_entries()
+        .into_iter()
+        .find(|entry| entry.command == Some(MenuCommand::BoardDelete))
+        .expect("delete board entry");
+    assert!(delete_entry.disabled);
+}
+
+#[test]
+fn open_pages_menu_command_switches_to_pages_submenu_with_actionable_focus() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
+
+    state.execute_menu_command(MenuCommand::OpenPagesMenu);
+
+    let focus_index = match &state.context_menu_state {
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Pages,
+            keyboard_focus,
+            ..
+        } => keyboard_focus.expect("pages submenu focus"),
+        _ => panic!("expected pages submenu to be open"),
+    };
+    let entries = state.context_menu_entries();
+    assert!(!entries[focus_index].disabled);
+    assert!(entries[focus_index].command.is_some());
+}
+
+#[test]
+fn open_boards_menu_command_switches_to_boards_submenu_with_actionable_focus() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
+
+    state.execute_menu_command(MenuCommand::OpenBoardsMenu);
+
+    let focus_index = match &state.context_menu_state {
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Boards,
+            keyboard_focus,
+            ..
+        } => keyboard_focus.expect("boards submenu focus"),
+        _ => panic!("expected boards submenu to be open"),
+    };
+    let entries = state.context_menu_entries();
+    assert!(!entries[focus_index].disabled);
+    assert!(entries[focus_index].command.is_some());
+}
+
+#[test]
+fn page_duplicate_from_context_duplicates_target_page_and_closes_menu() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    set_named_pages(&mut state, blackboard, &[Some("Only page")], 0);
+    state.open_page_context_menu((5, 5), blackboard, 0);
+
+    state.execute_menu_command(MenuCommand::PageDuplicateFromContext);
+
+    assert_eq!(
+        state.boards.board_states()[blackboard].pages.page_count(),
+        2
+    );
+    assert!(!state.is_context_menu_open());
+}
+
+#[test]
+fn page_move_to_board_command_moves_page_switches_board_and_closes_menu() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    let whiteboard = board_index(&state, "whiteboard");
+    set_named_pages(&mut state, blackboard, &[Some("Keep"), Some("Move me")], 1);
+    set_named_pages(&mut state, whiteboard, &[Some("Target")], 0);
+    state.open_page_context_menu((5, 5), blackboard, 1);
+
+    state.execute_menu_command(MenuCommand::PageMoveToBoard {
+        id: "whiteboard".to_string(),
+    });
+
+    assert_eq!(state.board_id(), "whiteboard");
+    assert_eq!(
+        state.boards.board_states()[blackboard].pages.page_count(),
+        1
+    );
+    assert_eq!(
+        state.boards.board_states()[whiteboard].pages.page_count(),
+        2
+    );
+    assert_eq!(
+        state.boards.board_states()[whiteboard].pages.page_name(1),
+        Some("Move me")
+    );
+    assert!(!state.is_context_menu_open());
+}
+
+#[test]
+fn open_board_picker_command_closes_context_menu_and_opens_picker() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Canvas, None);
+    assert!(state.is_context_menu_open());
+
+    state.execute_menu_command(MenuCommand::OpenBoardPicker);
+
+    assert!(!state.is_context_menu_open());
+    assert!(state.is_board_picker_open());
 }

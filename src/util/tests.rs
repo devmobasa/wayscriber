@@ -62,3 +62,33 @@ fn rect_inflated_returns_none_when_degenerate() {
     let rect = Rect::new(0, 0, 2, 2).unwrap();
     assert!(rect.inflated(-2).is_none());
 }
+
+#[test]
+fn arrowhead_triangle_respects_minimum_length_for_thick_strokes() {
+    let geometry = calculate_arrowhead_triangle_custom(100, 0, 0, 0, 10.0, 1.0, 30.0)
+        .expect("non-degenerate line should yield geometry");
+    let distance = ((geometry.tip.0 - geometry.base.0).powi(2)
+        + (geometry.tip.1 - geometry.base.1).powi(2))
+    .sqrt();
+    assert!((distance - 25.0).abs() < 1e-9);
+}
+
+#[test]
+fn arrowhead_triangle_uses_thickness_floor_for_half_base() {
+    let geometry = calculate_arrowhead_triangle_custom(100, 0, 0, 0, 10.0, 5.0, 1.0)
+        .expect("non-degenerate line should yield geometry");
+    let half_base = (geometry.left.1 - geometry.right.1).abs() / 2.0;
+    assert!((half_base - 6.0).abs() < 1e-9);
+}
+
+#[test]
+fn arrowhead_triangle_is_symmetric_around_base_point() {
+    let geometry = calculate_arrowhead_triangle_custom(50, 50, 0, 0, 3.0, 20.0, 30.0)
+        .expect("non-degenerate line should yield geometry");
+    let midpoint = (
+        (geometry.left.0 + geometry.right.0) / 2.0,
+        (geometry.left.1 + geometry.right.1) / 2.0,
+    );
+    assert!((midpoint.0 - geometry.base.0).abs() < 1e-9);
+    assert!((midpoint.1 - geometry.base.1).abs() < 1e-9);
+}

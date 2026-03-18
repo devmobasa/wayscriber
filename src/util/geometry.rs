@@ -89,3 +89,48 @@ pub fn ellipse_bounds(x1: i32, y1: i32, x2: i32, y2: i32) -> (i32, i32, i32, i32
     let ry = ((y2 - y1).abs()) / 2;
     (cx, cy, rx, ry)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rect_new_rejects_non_positive_dimensions() {
+        assert_eq!(Rect::new(0, 0, 0, 4), None);
+        assert_eq!(Rect::new(0, 0, 4, -1), None);
+    }
+
+    #[test]
+    fn rect_contains_uses_inclusive_min_and_exclusive_max_edges() {
+        let rect = Rect::new(10, 20, 5, 4).unwrap();
+
+        assert!(rect.contains(10, 20));
+        assert!(rect.contains(14, 23));
+        assert!(!rect.contains(15, 23));
+        assert!(!rect.contains(14, 24));
+    }
+
+    #[test]
+    fn rect_inflated_expands_evenly_in_all_directions() {
+        let rect = Rect::new(10, 20, 5, 4).unwrap();
+
+        assert_eq!(rect.inflated(2), Rect::new(8, 18, 9, 8));
+    }
+
+    #[test]
+    fn rect_inflated_returns_none_when_negative_amount_eliminates_area() {
+        let rect = Rect::new(10, 20, 5, 4).unwrap();
+
+        assert_eq!(rect.inflated(-3), None);
+    }
+
+    #[test]
+    fn ellipse_bounds_are_order_independent() {
+        assert_eq!(ellipse_bounds(0, 0, 10, 20), ellipse_bounds(10, 20, 0, 0));
+    }
+
+    #[test]
+    fn ellipse_bounds_compute_center_and_radii_from_drag_corners() {
+        assert_eq!(ellipse_bounds(4, 6, 14, 18), (9, 12, 5, 6));
+    }
+}

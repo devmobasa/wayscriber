@@ -31,3 +31,65 @@ pub(crate) use core::{
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
 };
 pub use highlight::ClickHighlightSettings;
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use crate::config::{Action, BoardsConfig, KeyBinding, KeybindingsConfig, PresenterModeConfig};
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+    use std::collections::HashMap;
+
+    pub(crate) fn make_test_input_state() -> InputState {
+        let keybindings = KeybindingsConfig::default();
+        let action_bindings = keybindings
+            .build_action_bindings()
+            .expect("default keybindings bindings");
+        make_test_input_state_with_action_bindings(action_bindings)
+    }
+
+    // This helper is for tests that only need a stable InputState plus optional
+    // action-binding label overrides. It intentionally keeps the default
+    // dispatch/action map and swaps only the formatted bindings.
+    pub(crate) fn make_test_input_state_with_action_bindings(
+        action_bindings: HashMap<Action, Vec<KeyBinding>>,
+    ) -> InputState {
+        let action_map = KeybindingsConfig::default()
+            .build_action_map()
+            .expect("default keybindings map");
+
+        let mut state = InputState::with_defaults(
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            4.0,
+            4.0,
+            EraserMode::Brush,
+            0.32,
+            false,
+            32.0,
+            FontDescriptor::default(),
+            false,
+            20.0,
+            30.0,
+            false,
+            true,
+            BoardsConfig::default(),
+            action_map,
+            usize::MAX,
+            ClickHighlightSettings::disabled(),
+            0,
+            0,
+            true,
+            0,
+            0,
+            5,
+            5,
+            PresenterModeConfig::default(),
+        );
+        state.set_action_bindings(action_bindings);
+        state
+    }
+}
