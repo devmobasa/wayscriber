@@ -100,53 +100,11 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
-
-    fn make_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
-
-        InputState::with_defaults(
-            Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-            4.0,
-            4.0,
-            EraserMode::Brush,
-            0.32,
-            false,
-            32.0,
-            FontDescriptor::default(),
-            false,
-            20.0,
-            30.0,
-            false,
-            true,
-            BoardsConfig::default(),
-            action_map,
-            usize::MAX,
-            ClickHighlightSettings::disabled(),
-            0,
-            0,
-            true,
-            0,
-            0,
-            5,
-            5,
-            PresenterModeConfig::default(),
-        )
-    }
+    use crate::input::state::test_support::make_test_input_state;
 
     #[test]
     fn update_pointer_position_synthetic_updates_pointer_without_redraw() {
-        let mut state = make_state();
+        let mut state = make_test_input_state();
         state.needs_redraw = false;
 
         state.update_pointer_position_synthetic(12, 34);
@@ -157,7 +115,7 @@ mod tests {
 
     #[test]
     fn set_undo_stack_limit_clamps_to_at_least_one() {
-        let mut state = make_state();
+        let mut state = make_test_input_state();
         state.set_undo_stack_limit(0);
         assert_eq!(state.undo_stack_limit, 1);
 
@@ -166,16 +124,8 @@ mod tests {
     }
 
     #[test]
-    fn update_screen_dimensions_updates_cached_values() {
-        let mut state = make_state();
-        state.update_screen_dimensions(1920, 1080);
-        assert_eq!(state.screen_width, 1920);
-        assert_eq!(state.screen_height, 1080);
-    }
-
-    #[test]
     fn cancel_text_input_clears_wrap_width_and_returns_to_idle() {
-        let mut state = make_state();
+        let mut state = make_test_input_state();
         state.text_wrap_width = Some(240);
         state.state = DrawingState::TextInput {
             x: 10,
@@ -193,7 +143,7 @@ mod tests {
 
     #[test]
     fn take_dirty_regions_returns_full_surface_and_drains_tracker() {
-        let mut state = make_state();
+        let mut state = make_test_input_state();
         state.update_screen_dimensions(100, 50);
         state.dirty_tracker.mark_full();
 

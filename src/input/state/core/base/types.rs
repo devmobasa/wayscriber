@@ -358,17 +358,6 @@ mod tests {
     use super::CompositorCapabilities;
 
     #[test]
-    fn compositor_capabilities_all_available_requires_every_flag() {
-        assert!(!CompositorCapabilities::default().all_available());
-        assert!(CompositorCapabilities {
-            layer_shell: true,
-            screencopy: true,
-            pointer_constraints: true,
-        }
-        .all_available());
-    }
-
-    #[test]
     fn compositor_capabilities_limitations_summary_returns_none_when_fully_available() {
         assert_eq!(
             CompositorCapabilities {

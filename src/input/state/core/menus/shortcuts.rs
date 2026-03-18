@@ -43,67 +43,38 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        BoardsConfig, KeyBinding, KeybindingsConfig, PresenterModeConfig, RadialMenuMouseBinding,
-    };
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
+    use crate::config::{KeyBinding, RadialMenuMouseBinding};
+    use crate::input::state::test_support::make_test_input_state_with_action_bindings;
     use std::collections::HashMap;
 
-    fn make_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
-        let action_bindings = keybindings
-            .build_action_bindings()
-            .expect("default keybindings bindings");
-
-        let mut state = InputState::with_defaults(
-            Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-            4.0,
-            4.0,
-            EraserMode::Brush,
-            0.32,
-            false,
-            32.0,
-            FontDescriptor::default(),
-            false,
-            20.0,
-            30.0,
-            false,
-            true,
-            BoardsConfig::default(),
-            action_map,
-            usize::MAX,
-            ClickHighlightSettings::disabled(),
-            0,
-            0,
-            true,
-            0,
-            0,
-            5,
-            5,
-            PresenterModeConfig::default(),
-        );
-        state.set_action_bindings(action_bindings);
-        state
+    fn binding_map(entries: &[(Action, &[&str])]) -> HashMap<Action, Vec<KeyBinding>> {
+        entries
+            .iter()
+            .map(|(action, values)| {
+                (
+                    *action,
+                    values
+                        .iter()
+                        .map(|value| KeyBinding::parse(value).expect("binding"))
+                        .collect(),
+                )
+            })
+            .collect()
     }
 
     #[test]
     fn shortcut_for_help_prefers_f1_over_other_bindings() {
-        let state = make_state();
+        let state = make_test_input_state_with_action_bindings(binding_map(&[(
+            Action::ToggleHelp,
+            &["Ctrl+Alt+Shift+H", "F1"],
+        )]));
         assert_eq!(state.shortcut_for_action(Action::ToggleHelp), Some("F1".to_string()));
     }
 
     #[test]
     fn shortcut_for_radial_menu_uses_mouse_binding_when_no_key_binding_exists() {
-        let state = make_state();
+        let mut state = make_test_input_state_with_action_bindings(HashMap::new());
+        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Middle;
         assert_eq!(
             state.shortcut_for_action(Action::ToggleRadialMenu),
             Some("Middle Click".to_string())
@@ -112,13 +83,11 @@ mod tests {
 
     #[test]
     fn shortcut_for_radial_menu_combines_mouse_and_keyboard_bindings() {
-        let mut state = make_state();
-        let mut action_bindings = HashMap::new();
-        action_bindings.insert(
+        let mut state = make_test_input_state_with_action_bindings(binding_map(&[(
             Action::ToggleRadialMenu,
-            vec![KeyBinding::parse("Ctrl+R").expect("binding")],
-        );
-        state.set_action_bindings(action_bindings);
+            &["Ctrl+R"],
+        )]));
+        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Middle;
 
         assert_eq!(
             state.shortcut_for_action(Action::ToggleRadialMenu),
@@ -128,14 +97,11 @@ mod tests {
 
     #[test]
     fn shortcut_for_radial_menu_returns_keyboard_only_when_mouse_binding_disabled() {
-        let mut state = make_state();
-        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
-        let mut action_bindings = HashMap::new();
-        action_bindings.insert(
+        let mut state = make_test_input_state_with_action_bindings(binding_map(&[(
             Action::ToggleRadialMenu,
-            vec![KeyBinding::parse("Ctrl+R").expect("binding")],
-        );
-        state.set_action_bindings(action_bindings);
+            &["Ctrl+R"],
+        )]));
+        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
 
         assert_eq!(
             state.shortcut_for_action(Action::ToggleRadialMenu),
@@ -145,9 +111,8 @@ mod tests {
 
     #[test]
     fn shortcut_for_radial_menu_returns_none_when_fully_unbound() {
-        let mut state = make_state();
+        let mut state = make_test_input_state_with_action_bindings(HashMap::new());
         state.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
-        state.set_action_bindings(HashMap::new());
 
         assert_eq!(state.shortcut_for_action(Action::ToggleRadialMenu), None);
     }
