@@ -51,6 +51,7 @@ impl ConfigDraft {
             ToggleField::PerformanceVsync => self.performance_enable_vsync = value,
             ToggleField::UiShowStatusBar => self.ui_show_status_bar = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
+            ToggleField::UiShowCapabilitiesWarning => self.ui_show_capabilities_warning = value,
             ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,
             ToggleField::UiShowStatusPageBadge => self.ui_show_status_page_badge = value,
             ToggleField::UiShowPageBadgeWithStatusBar => {

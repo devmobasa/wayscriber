@@ -505,6 +505,9 @@ impl WaylandState {
         if self.input_state.capability_toast_shown {
             return;
         }
+        if !self.config.ui.show_capabilities_warning {
+            return;
+        }
         if !self.surface.is_configured() {
             return;
         }
