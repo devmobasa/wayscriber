@@ -1,3 +1,5 @@
+use smithay_client_toolkit::shell::wlr_layer::Layer;
+
 use super::super::*;
 use std::time::{Duration, Instant};
 
@@ -174,6 +176,14 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn xdg_fullscreen(&self) -> bool {
         self.data.xdg_fullscreen
+    }
+
+    pub(in crate::backend::wayland) fn main_surface_layer(&self) -> Layer {
+        if self.data.main_surface_uses_overlay_layer {
+            Layer::Overlay
+        } else {
+            Layer::Top
+        }
     }
 
     pub(in crate::backend::wayland) fn xdg_focus_loss_exits_overlay(&self) -> bool {

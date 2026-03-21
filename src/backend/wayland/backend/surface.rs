@@ -1,9 +1,7 @@
 use anyhow::Result;
 use log::info;
 use smithay_client_toolkit::shell::{
-    WaylandSurface,
-    wlr_layer::{Anchor, Layer},
-    xdg::window::WindowDecorations,
+    WaylandSurface, wlr_layer::Anchor, xdg::window::WindowDecorations,
 };
 
 use crate::app_id::runtime_app_id;
@@ -17,11 +15,12 @@ pub(super) fn create_overlay_surface(
     // Create surface using layer-shell when available, otherwise fall back to xdg-shell
     let wl_surface = state.compositor_state.create_surface(qh);
     if let Some(layer_shell) = state.layer_shell.as_ref() {
-        info!("Creating layer shell surface");
+        let layer = state.main_surface_layer();
+        info!("Creating layer shell surface in {:?} layer", layer);
         let layer_surface = layer_shell.create_layer_surface(
             qh,
             wl_surface,
-            Layer::Top,
+            layer,
             Some("wayscriber"),
             None, // Default output
         );

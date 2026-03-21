@@ -15,6 +15,7 @@ impl WaylandState {
             frozen_enabled,
             preferred_output_identity,
             xdg_fullscreen,
+            main_surface_uses_overlay_layer,
             pending_freeze_on_start,
             screencopy_manager,
             #[cfg(tablet)]
@@ -53,11 +54,18 @@ impl WaylandState {
         data.startup_activation_token = startup_activation_token;
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
+        data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
         let force_inline_toolbars = force_inline_toolbars_requested(&config);
-        data.inline_toolbars = layer_shell.is_none() || force_inline_toolbars;
+        data.inline_toolbars =
+            layer_shell.is_none() || force_inline_toolbars || main_surface_uses_overlay_layer;
         if force_inline_toolbars {
             info!(
                 "Forcing inline toolbars (config/ui.toolbar.force_inline or WAYSCRIBER_FORCE_INLINE_TOOLBARS)"
+            );
+        }
+        if main_surface_uses_overlay_layer {
+            info!(
+                "Using inline toolbars because the main overlay surface runs above fullscreen windows"
             );
         }
         data.toolbar_top_offset = config.ui.toolbar.top_offset;

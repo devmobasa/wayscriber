@@ -21,7 +21,15 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
         }
     }
 
-    input.switch_board_force(&snapshot.active_board_id);
+    if input.boards.has_board(&snapshot.active_board_id) {
+        input.switch_board_force(&snapshot.active_board_id);
+    } else {
+        log::warn!(
+            "Session active board '{}' missing after restore; keeping current board '{}'",
+            snapshot.active_board_id,
+            input.board_id()
+        );
+    }
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {

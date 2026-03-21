@@ -1,8 +1,5 @@
 use log::{info, warn};
-use smithay_client_toolkit::shell::{
-    WaylandSurface,
-    wlr_layer::{Anchor, Layer},
-};
+use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Anchor};
 use std::time::Instant;
 
 use super::super::*;
@@ -285,10 +282,11 @@ impl WaylandState {
 
         let wl_surface = self.compositor_state.create_surface(qh);
         wl_surface.set_buffer_scale(self.surface.scale().max(1));
+        let layer = self.main_surface_layer();
         let layer_surface = layer_shell.create_layer_surface(
             qh,
             wl_surface,
-            Layer::Top,
+            layer,
             Some("wayscriber"),
             Some(output),
         );
