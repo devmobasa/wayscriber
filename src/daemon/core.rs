@@ -19,6 +19,7 @@ use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
 
+use super::control::DaemonToggleRequest;
 use super::global_shortcuts::start_global_shortcuts_listener;
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
@@ -29,7 +30,10 @@ pub struct Daemon {
     pub(super) overlay_state: OverlayState,
     pub(super) should_quit: Arc<AtomicBool>,
     pub(super) toggle_requested: Arc<AtomicBool>,
+    pub(super) signal_toggle_requested: Arc<AtomicBool>,
     pub(super) initial_mode: Option<String>,
+    pub(super) instance_token: String,
+    pub(super) freeze_on_show: bool,
     pub(super) tray_enabled: bool,
     pub(super) backend_runner: Option<Arc<BackendRunner>>,
     pub(super) tray_thread: Option<JoinHandle<()>>,
@@ -37,6 +41,7 @@ pub struct Daemon {
     pub(super) overlay_child: Option<Child>,
     pub(super) overlay_pid: Arc<AtomicU32>,
     pub(super) pending_activation_token: Option<String>,
+    pub(super) pending_toggle_request: Option<DaemonToggleRequest>,
     pub(super) portal_activation_token_slot: Arc<Mutex<Option<String>>>,
     pub(super) session_resume_override: Arc<AtomicU8>,
     pub(super) lock_file: Option<std::fs::File>,
@@ -60,7 +65,10 @@ impl Daemon {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
+            signal_toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            instance_token: crate::daemon::generate_daemon_instance_token(),
+            freeze_on_show: false,
             tray_enabled,
             backend_runner: None,
             tray_thread: None,
@@ -68,6 +76,7 @@ impl Daemon {
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
             pending_activation_token: None,
+            pending_toggle_request: None,
             portal_activation_token_slot: Arc::new(Mutex::new(None)),
             session_resume_override: override_state,
             lock_file: None,
@@ -89,7 +98,10 @@ impl Daemon {
             overlay_state: OverlayState::Hidden,
             should_quit: Arc::new(AtomicBool::new(false)),
             toggle_requested: Arc::new(AtomicBool::new(false)),
+            signal_toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            instance_token: crate::daemon::generate_daemon_instance_token(),
+            freeze_on_show: false,
             tray_enabled: true,
             backend_runner: Some(backend_runner),
             tray_thread: None,
@@ -97,6 +109,7 @@ impl Daemon {
             overlay_child: None,
             overlay_pid: Arc::new(AtomicU32::new(0)),
             pending_activation_token: None,
+            pending_toggle_request: None,
             portal_activation_token_slot: Arc::new(Mutex::new(None)),
             session_resume_override: override_state,
             lock_file: None,
@@ -114,6 +127,55 @@ impl Daemon {
         backend_runner: Arc<BackendRunner>,
     ) -> Self {
         Self::with_backend_runner_internal(initial_mode, backend_runner)
+    }
+
+    pub fn set_freeze_on_show(&mut self, enabled: bool) {
+        self.freeze_on_show = enabled;
+    }
+
+    fn process_single_toggle(
+        &mut self,
+        request: Option<DaemonToggleRequest>,
+        activation_token: Option<String>,
+    ) -> Result<()> {
+        self.pending_activation_token = activation_token;
+        self.pending_toggle_request = request.filter(|request| !request.is_empty());
+        if let Err(err) = self.toggle_overlay() {
+            self.pending_activation_token = None;
+            self.pending_toggle_request = None;
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    fn process_pending_toggles(
+        &mut self,
+        activation_token: Option<String>,
+        signal_toggle_requested: bool,
+    ) -> Result<()> {
+        let queued_requests = if signal_toggle_requested {
+            crate::daemon::take_daemon_toggle_requests(&self.instance_token)?
+        } else {
+            Vec::new()
+        };
+
+        if !signal_toggle_requested || activation_token.is_some() {
+            self.process_single_toggle(None, activation_token)?;
+        }
+
+        if signal_toggle_requested {
+            let requests = if queued_requests.is_empty() {
+                vec![DaemonToggleRequest::default()]
+            } else {
+                queued_requests
+            };
+
+            for request in requests {
+                self.process_single_toggle(Some(request), None)?;
+            }
+        }
+
+        Ok(())
     }
 
     pub(super) fn session_resume_override(&self) -> Option<bool> {
@@ -163,20 +225,29 @@ impl Daemon {
     /// Run daemon with signal handling
     pub fn run(&mut self) -> Result<()> {
         info!("Starting wayscriber daemon");
-        info!(
-            "Send SIGUSR1 to toggle overlay (e.g., kill -USR1 $(pgrep -fo 'wayscriber --daemon'))"
-        );
-        info!(
-            "Configure Hyprland: bind = SUPER, D, exec, bash -lc \"kill -USR1 $(pgrep -fo 'wayscriber --daemon')\""
-        );
+        if self.freeze_on_show {
+            info!("Daemon activations will request frozen mode on show");
+        }
+        info!("Daemon control command: wayscriber --daemon-toggle [--freeze] [--mode …]");
+        info!("Preferred external control: wayscriber --daemon-toggle");
+        info!("Legacy raw SIGUSR1 toggle still works, but cannot carry launch args");
 
         self.acquire_daemon_lock()?;
+        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
+            warn!(
+                "Failed to clear stale daemon toggle request on startup: {}",
+                err
+            );
+        }
 
         // Set up signal handling
         let mut signals = Signals::new([SIGUSR1, SIGTERM, SIGINT])
             .context("Failed to register signal handler")?;
 
+        crate::daemon::write_daemon_pid_file(std::process::id(), &self.instance_token)?;
+
         let toggle_flag = self.toggle_requested.clone();
+        let signal_toggle_flag = self.signal_toggle_requested.clone();
         let quit_flag = self.should_quit.clone();
 
         // Spawn signal handler thread
@@ -195,6 +266,7 @@ impl Daemon {
                         info!("Received SIGUSR1 - toggling overlay");
                         // Use Release ordering to ensure all prior memory operations
                         // are visible to the thread that reads this flag
+                        signal_toggle_flag.store(true, Ordering::Release);
                         toggle_flag.store(true, Ordering::Release);
                     }
                     SIGTERM | SIGINT => {
@@ -264,6 +336,8 @@ impl Daemon {
             // Use Acquire ordering to ensure we see all memory operations
             // that happened before the flag was set
             if self.toggle_requested.swap(false, Ordering::Acquire) {
+                let signal_toggle_requested =
+                    self.signal_toggle_requested.swap(false, Ordering::Acquire);
                 let pending_token = self
                     .portal_activation_token_slot
                     .lock()
@@ -272,10 +346,9 @@ impl Daemon {
                         poisoned.into_inner()
                     })
                     .take();
-                self.pending_activation_token = pending_token;
-
-                if let Err(err) = self.toggle_overlay() {
-                    self.pending_activation_token = None;
+                if let Err(err) =
+                    self.process_pending_toggles(pending_token, signal_toggle_requested)
+                {
                     warn!("Toggle overlay failed: {}", err);
                 }
             }
@@ -301,6 +374,12 @@ impl Daemon {
                 Ok(()) => info!("Global shortcuts listener thread joined"),
                 Err(err) => warn!("Global shortcuts listener thread panicked: {:?}", err),
             }
+        }
+        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
+            warn!("Failed to clear daemon toggle request file: {}", err);
+        }
+        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
+            warn!("Failed to clear daemon pid file: {}", err);
         }
         Ok(())
     }

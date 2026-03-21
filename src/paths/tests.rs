@@ -19,6 +19,9 @@ fn tray_action_prefers_runtime_dir_when_set() {
 
     let path = tray_action_file();
     assert!(path.starts_with(tmp.path()));
+    assert!(daemon_command_file().starts_with(tmp.path()));
+    assert!(daemon_command_dir().starts_with(tmp.path()));
+    assert!(daemon_pid_file().starts_with(tmp.path()));
 
     if let Some(prev) = prev {
         unsafe {

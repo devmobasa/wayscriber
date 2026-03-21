@@ -127,6 +127,15 @@ impl Daemon {
     fn build_overlay_command(&self, program: &OsStr) -> Command {
         let mut command = Command::new(program);
         command.arg("--active");
+        let request = self.pending_toggle_request.as_ref();
+        if request.is_some_and(|request| request.freeze) || self.freeze_on_show {
+            command.arg("--freeze");
+        }
+        if request.is_some_and(|request| request.exit_after_capture) {
+            command.arg("--exit-after-capture");
+        } else if request.is_some_and(|request| request.no_exit_after_capture) {
+            command.arg("--no-exit-after-capture");
+        }
         // Overlay children launched by daemon are already backgrounded and tracked.
         // Prevent `--active` from spawning another detached grandchild process.
         command.env("WAYSCRIBER_NO_DETACH", "1");
@@ -137,8 +146,20 @@ impl Daemon {
             command.env_remove("XDG_ACTIVATION_TOKEN");
             command.env_remove("DESKTOP_STARTUP_ID");
         }
-        self.apply_session_override_env(&mut command);
-        if let Some(mode) = &self.initial_mode {
+        if let Some(request_override) =
+            request.and_then(|request| request.session_resume_override())
+        {
+            match request_override {
+                true => command.env(crate::RESUME_SESSION_ENV, "on"),
+                false => command.env(crate::RESUME_SESSION_ENV, "off"),
+            };
+        } else {
+            self.apply_session_override_env(&mut command);
+        }
+        if let Some(mode) = request
+            .and_then(|request| request.mode.as_ref())
+            .or(self.initial_mode.as_ref())
+        {
             command.arg("--mode").arg(mode);
         }
         command.stdin(Stdio::null());
@@ -199,6 +220,13 @@ impl Daemon {
 mod tests {
     use super::*;
 
+    fn command_args(command: &Command) -> Vec<String> {
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect()
+    }
+
     #[test]
     fn backoff_duration_grows_and_caps() {
         let mut daemon = Daemon::new(None, false, None);
@@ -240,6 +268,55 @@ mod tests {
         daemon.overlay_spawn_next_retry = Some(Instant::now() - Duration::from_secs(1));
         assert!(daemon.overlay_spawn_allowed());
         assert!(!daemon.overlay_spawn_backoff_logged);
+    }
+
+    #[test]
+    fn build_overlay_command_includes_freeze_when_enabled() {
+        let mut daemon = Daemon::new(Some("whiteboard".into()), false, None);
+        daemon.set_freeze_on_show(true);
+
+        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+
+        assert_eq!(
+            command_args(&command),
+            vec!["--active", "--freeze", "--mode", "whiteboard"]
+        );
+    }
+
+    #[test]
+    fn build_overlay_command_uses_toggle_request_args() {
+        let mut daemon = Daemon::new(Some("whiteboard".into()), false, None);
+        daemon.pending_toggle_request = Some(crate::daemon::DaemonToggleRequest {
+            mode: Some("transparent".into()),
+            freeze: true,
+            exit_after_capture: true,
+            ..Default::default()
+        });
+
+        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+
+        assert_eq!(
+            command_args(&command),
+            vec![
+                "--active",
+                "--freeze",
+                "--exit-after-capture",
+                "--mode",
+                "transparent"
+            ]
+        );
+    }
+
+    #[test]
+    fn build_overlay_command_omits_freeze_by_default() {
+        let daemon = Daemon::new(Some("whiteboard".into()), false, None);
+
+        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+
+        assert_eq!(
+            command_args(&command),
+            vec!["--active", "--mode", "whiteboard"]
+        );
     }
 
     #[test]

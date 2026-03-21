@@ -4,6 +4,7 @@ mod usage;
 
 use crate::backend::ExitAfterCaptureMode;
 use crate::cli::Cli;
+use crate::daemon::DaemonToggleRequest;
 use crate::paths::overlay_lock_file;
 use crate::session::try_lock_exclusive;
 use crate::session_override::set_runtime_session_override;
@@ -91,6 +92,19 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if cli.daemon_toggle {
+        let request = DaemonToggleRequest {
+            mode: cli.mode,
+            freeze: cli.freeze,
+            exit_after_capture: cli.exit_after_capture,
+            no_exit_after_capture: cli.no_exit_after_capture,
+            resume_session: cli.resume_session,
+            no_resume_session: cli.no_resume_session,
+        };
+        crate::daemon::send_daemon_toggle_request(&request)?;
+        return Ok(());
+    }
+
     if cli.clear_session || cli.session_info {
         run_session_cli_commands(&cli)?;
         return Ok(());
@@ -111,6 +125,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             log::info!("Tray disabled via --no-tray / WAYSCRIBER_NO_TRAY");
         }
         let mut daemon = crate::daemon::Daemon::new(cli.mode, !tray_disabled, session_override);
+        daemon.set_freeze_on_show(cli.freeze_on_show);
         daemon.run()?;
     } else if cli.active || cli.freeze {
         if maybe_detach_active(&cli)? {
