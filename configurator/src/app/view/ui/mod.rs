@@ -69,6 +69,12 @@ impl ConfiguratorApp {
                 self.defaults.ui_context_menu_enabled,
                 ToggleField::UiContextMenuEnabled,
             ),
+            toggle_row(
+                "Show capabilities warning toast",
+                self.draft.ui_show_capabilities_warning,
+                self.defaults.ui_show_capabilities_warning,
+                ToggleField::UiShowCapabilitiesWarning,
+            ),
             labeled_input(
                 "Command palette toast (ms)",
                 &self.draft.ui_command_palette_toast_duration_ms,

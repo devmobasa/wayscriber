@@ -246,6 +246,9 @@ status_bar_position = "bottom-left"
 # Filter help overlay sections based on enabled features
 help_overlay_context_filter = true
 
+# Show compositor capabilities warning toast each time the overlay starts
+show_capabilities_warning = true
+
 # Command palette action toast duration (ms)
 command_palette_toast_duration_ms = 1500
 

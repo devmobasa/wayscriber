@@ -52,6 +52,10 @@ pub struct UiConfig {
     #[serde(default = "default_help_overlay_context_filter")]
     pub help_overlay_context_filter: bool,
 
+    /// Show compositor capability warning toast on overlay start
+    #[serde(default = "default_show_capabilities_warning")]
+    pub show_capabilities_warning: bool,
+
     /// Preferred output name for the xdg-shell fallback overlay (GNOME).
     /// Falls back to last entered output or first available.
     #[serde(default)]
@@ -112,6 +116,7 @@ impl Default for UiConfig {
             status_bar_style: StatusBarStyle::default(),
             help_overlay_style: HelpOverlayStyle::default(),
             help_overlay_context_filter: default_help_overlay_context_filter(),
+            show_capabilities_warning: default_show_capabilities_warning(),
             preferred_output: None,
             multi_monitor_enabled: default_multi_monitor_enabled(),
             active_output_badge: default_active_output_badge(),
@@ -176,6 +181,10 @@ fn use_gnome_fallback_defaults() -> bool {
 }
 
 fn default_help_overlay_context_filter() -> bool {
+    true
+}
+
+fn default_show_capabilities_warning() -> bool {
     true
 }
 
