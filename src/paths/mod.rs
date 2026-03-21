@@ -73,6 +73,24 @@ pub fn tray_action_file() -> PathBuf {
     runtime_root().join("tray_action")
 }
 
+/// Location for transient daemon toggle requests.
+/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+pub fn daemon_command_file() -> PathBuf {
+    runtime_root().join("daemon_command.json")
+}
+
+/// Location for queued daemon toggle requests.
+/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+pub fn daemon_command_dir() -> PathBuf {
+    runtime_root().join("daemon-commands")
+}
+
+/// Location for the running daemon PID.
+/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+pub fn daemon_pid_file() -> PathBuf {
+    runtime_root().join("wayscriber.pid")
+}
+
 /// Location for persistent logs.
 #[allow(dead_code)]
 pub fn log_dir() -> PathBuf {

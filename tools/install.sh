@@ -10,6 +10,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 INSTALL_DIR="${WAYSCRIBER_INSTALL_DIR:-/usr/bin}"
 BINARY_NAME="wayscriber"
+INSTALLED_BINARY="$INSTALL_DIR/$BINARY_NAME"
+BIND_COMMAND="$INSTALL_DIR/$BINARY_NAME --daemon-toggle"
 CONFIG_DIR="$HOME/.config/wayscriber"
 HYPR_CONFIG="$HOME/.config/hypr/hyprland.conf"
 
@@ -94,18 +96,18 @@ echo "  Setup Instructions"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "1. Test the installation:"
-echo "   $BINARY_NAME --help"
+echo "   $INSTALLED_BINARY --help"
 echo ""
 echo "2. Run in daemon mode (recommended):"
-echo "   $BINARY_NAME --daemon &"
+echo "   $INSTALLED_BINARY --daemon &"
 echo ""
 echo "3. For Hyprland integration, add to $HYPR_CONFIG:"
 echo ""
 echo "   # Autostart wayscriber daemon"
-echo "   exec-once = $INSTALL_DIR/$BINARY_NAME --daemon"
+echo "   exec-once = $INSTALLED_BINARY --daemon"
 echo ""
 echo "   # Toggle overlay with Super+D"
-echo "   bind = SUPER, D, exec, pkill -SIGUSR1 $BINARY_NAME"
+echo "   bind = SUPER, D, exec, $BIND_COMMAND"
 echo ""
 
 # Setup autostart options
@@ -155,7 +157,7 @@ case $REPLY in
                 ensure_replacement \
                     "$TARGET_SERVICE" \
                     "ExecStart=/usr/bin/wayscriber --daemon" \
-                    "ExecStart=$INSTALL_DIR/$BINARY_NAME --daemon" \
+                    "ExecStart=$INSTALLED_BINARY --daemon" \
                     "ExecStart override"
 
                 ensure_replacement \
@@ -192,12 +194,14 @@ case $REPLY in
             read -p "Add Super+D keybind to Hyprland config? (y/n) " -n 1 -r
             echo ""
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                if grep -q "pkill -SIGUSR1 $BINARY_NAME" "$HYPR_CONFIG"; then
+                if grep -Fq "pkill -SIGUSR1 $BINARY_NAME" "$HYPR_CONFIG" \
+                    || grep -Fq "$BINARY_NAME --daemon-toggle" "$HYPR_CONFIG" \
+                    || grep -Fq "$BIND_COMMAND" "$HYPR_CONFIG"; then
                     echo "⚠️  Keybind already configured"
                 else
                     echo "" >> "$HYPR_CONFIG"
                     echo "# wayscriber toggle keybind" >> "$HYPR_CONFIG"
-                    echo "bind = SUPER, D, exec, pkill -SIGUSR1 $BINARY_NAME" >> "$HYPR_CONFIG"
+                    echo "bind = SUPER, D, exec, $BIND_COMMAND" >> "$HYPR_CONFIG"
                     echo "✅ Keybind added to Hyprland config"
                     echo ""
                     echo "Reload Hyprland: hyprctl reload"
@@ -215,8 +219,8 @@ case $REPLY in
             else
                 echo "" >> "$HYPR_CONFIG"
                 echo "# wayscriber - Screen annotation tool" >> "$HYPR_CONFIG"
-                echo "exec-once = $INSTALL_DIR/$BINARY_NAME --daemon" >> "$HYPR_CONFIG"
-                echo "bind = SUPER, D, exec, pkill -SIGUSR1 $BINARY_NAME" >> "$HYPR_CONFIG"
+                echo "exec-once = $INSTALLED_BINARY --daemon" >> "$HYPR_CONFIG"
+                echo "bind = SUPER, D, exec, $BIND_COMMAND" >> "$HYPR_CONFIG"
                 echo "✅ Added to Hyprland config"
             fi
             echo ""
@@ -225,14 +229,14 @@ case $REPLY in
         else
             echo "⚠️  Hyprland config not found at $HYPR_CONFIG"
             echo "Add these lines manually to your Hyprland config:"
-            echo "  exec-once = $INSTALL_DIR/$BINARY_NAME --daemon"
-            echo "  bind = SUPER, D, exec, pkill -SIGUSR1 $BINARY_NAME"
+            echo "  exec-once = $INSTALLED_BINARY --daemon"
+            echo "  bind = SUPER, D, exec, $BIND_COMMAND"
         fi
         ;;
 
     3)
         echo "Skipping autostart setup."
-        echo "To start manually: $BINARY_NAME --daemon &"
+        echo "To start manually: $INSTALLED_BINARY --daemon &"
         ;;
 
     *)

@@ -168,6 +168,15 @@ pub(crate) fn print_usage() {
     println!(
         "  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)"
     );
+    println!(
+        "  wayscriber --daemon --freeze-on-show  Run daemon with frozen activation by default"
+    );
+    println!(
+        "  wayscriber --daemon-toggle [--freeze] [--mode MODE]  Toggle running daemon with launch args"
+    );
+    println!(
+        "             [--exit-after-capture|--no-exit-after-capture] [--resume-session|--no-resume-session]"
+    );
     println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
     println!("  wayscriber --freeze          Start overlay already frozen");
     println!(
@@ -186,11 +195,11 @@ pub(crate) fn print_usage() {
     println!();
     println!("Daemon mode (recommended). Example Hyprland setup:");
     println!("  1. Run: wayscriber --daemon");
+    println!("     Optional: wayscriber --daemon --freeze-on-show");
     println!("  2. Add to Hyprland config:");
     println!("     exec-once = wayscriber --daemon");
-    println!(
-        "     bind = SUPER, D, exec, bash -lc \"kill -USR1 $(pgrep -fo 'wayscriber --daemon')\""
-    );
+    println!("     bind = SUPER, D, exec, wayscriber --daemon-toggle");
+    println!("     bind = SUPER SHIFT, D, exec, wayscriber --daemon-toggle --freeze");
     println!("  3. Press your bound shortcut (e.g. Super+D) to toggle overlay on/off");
     println!();
     println!("Requirements:");

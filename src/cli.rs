@@ -11,6 +11,22 @@ pub struct Cli {
     #[arg(long, short = 'd', action = ArgAction::SetTrue)]
     pub daemon: bool,
 
+    /// Send a toggle request to the running daemon (supports --mode/--freeze/exit/session overrides)
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "active",
+            "no_tray",
+            "freeze_on_show",
+            "clear_session",
+            "session_info",
+            "about"
+        ]
+    )]
+    pub daemon_toggle: bool,
+
     /// Start active (show overlay immediately, one-shot mode)
     #[arg(long, short = 'a', action = ArgAction::SetTrue)]
     pub active: bool,
@@ -22,6 +38,15 @@ pub struct Cli {
     /// Disable system tray (run daemon without a tray icon)
     #[arg(long, action = ArgAction::SetTrue)]
     pub no_tray: bool,
+
+    /// Start daemon activations with frozen mode active (same compositor support as --freeze)
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        requires = "daemon",
+        conflicts_with_all = ["active", "freeze", "clear_session", "session_info"]
+    )]
+    pub freeze_on_show: bool,
 
     /// Delete persisted session data and backups
     #[arg(
@@ -76,9 +101,11 @@ pub struct Cli {
         action = ArgAction::SetTrue,
         conflicts_with_all = [
             "daemon",
+            "daemon_toggle",
             "active",
             "mode",
             "no_tray",
+            "freeze_on_show",
             "clear_session",
             "session_info",
             "freeze",
@@ -102,11 +129,46 @@ mod tests {
     }
 
     #[test]
+    fn daemon_mode_accepts_freeze_on_show() {
+        let cli = Cli::try_parse_from(["wayscriber", "--daemon", "--freeze-on-show"]).unwrap();
+        assert!(cli.daemon);
+        assert!(cli.freeze_on_show);
+    }
+
+    #[test]
+    fn daemon_toggle_accepts_overlay_launch_args() {
+        let cli = Cli::try_parse_from([
+            "wayscriber",
+            "--daemon-toggle",
+            "--freeze",
+            "--mode",
+            "whiteboard",
+            "--exit-after-capture",
+            "--resume-session",
+        ])
+        .unwrap();
+        assert!(cli.daemon_toggle);
+        assert!(cli.freeze);
+        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
+        assert!(cli.exit_after_capture);
+        assert!(cli.resume_session);
+    }
+
+    #[test]
     fn cli_conflicting_flags_fail() {
         let result = Cli::try_parse_from(["wayscriber", "--active", "--clear-session"]);
         assert!(
             result.is_err(),
             "expected conflicting flags (--active and --clear-session) to error"
+        );
+    }
+
+    #[test]
+    fn freeze_on_show_requires_daemon() {
+        let result = Cli::try_parse_from(["wayscriber", "--freeze-on-show"]);
+        assert!(
+            result.is_err(),
+            "expected --freeze-on-show without --daemon to error"
         );
     }
 }

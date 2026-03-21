@@ -42,6 +42,15 @@ fn wayscriber_help_prints_usage() {
 }
 
 #[test]
+fn bare_usage_mentions_freeze_on_show() {
+    wayscriber_cmd()
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--freeze-on-show"))
+        .stdout(predicate::str::contains("--daemon-toggle"));
+}
+
+#[test]
 fn active_mode_requires_wayland_env() {
     wayscriber_cmd()
         .env_remove("WAYLAND_DISPLAY")
