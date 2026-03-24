@@ -68,6 +68,35 @@ if [[ -z "$VERSION" ]]; then
     VERSION="$(jq -r '.version' "$MANIFEST")"
 fi
 
+read_pkgver_from_pkgbuild() {
+    awk -F= '/^pkgver=/{print $2; exit}' "$1"
+}
+
+read_pkgrel_from_pkgbuild() {
+    local value
+    value="$(awk -F= '/^pkgrel=/{print $2; exit}' "$1")"
+    if [[ -z "$value" || ! "$value" =~ ^[0-9]+$ ]]; then
+        echo 0
+    else
+        echo "$value"
+    fi
+}
+
+next_pkgrel() {
+    local dir="$1"
+    local pkgfile="$dir/PKGBUILD"
+    local current_pkgver current_pkgrel
+
+    current_pkgver="$(read_pkgver_from_pkgbuild "$pkgfile")"
+    current_pkgrel="$(read_pkgrel_from_pkgbuild "$pkgfile")"
+
+    if [[ "$current_pkgver" == "$VERSION" ]]; then
+        echo $((current_pkgrel + 1))
+    else
+        echo 1
+    fi
+}
+
 sha_for() {
     local name="$1"
     jq -r --arg n "$name" '.artifacts[] | select(.name==$n) | .sha256' "$MANIFEST"
@@ -88,19 +117,21 @@ PY
 
 update_bin() {
     local dir="$1"
+    local pkgrel
     [[ -d "$dir" ]] || { echo "Skip bin: $dir not found" >&2; return; }
     local sha
     sha="$(sha_for "wayscriber-v${VERSION}-linux-x86_64.tar.gz")"
     [[ -n "$sha" && "$sha" != "null" ]] || { echo "Bin checksum missing in manifest" >&2; exit 1; }
+    pkgrel="$(next_pkgrel "$dir")"
 
     pushd "$dir" >/dev/null
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
-    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=1"
+    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_line PKGBUILD '^source_x86_64=.*' "source_x86_64=(\"wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz\")"
     replace_line PKGBUILD '^sha256sums_x86_64=.*' "sha256sums_x86_64=('${sha}')"
 
     replace_line .SRCINFO '^\s*pkgver = .*' "pkgver = ${VERSION}"
-    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = 1"
+    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = ${pkgrel}"
     replace_line .SRCINFO '^\s*source_x86_64 = .*' "source_x86_64 = wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz"
     replace_line .SRCINFO '^\s*sha256sums_x86_64 = .*' "sha256sums_x86_64 = ${sha}"
 
@@ -115,13 +146,15 @@ update_bin() {
 
 update_source() {
     local dir="$1"
+    local pkgrel
     [[ -d "$dir" ]] || { echo "Skip source: $dir not found" >&2; return; }
     pushd "$dir" >/dev/null
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
-    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=1"
+    pkgrel="$(next_pkgrel "$dir")"
+    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
 
     replace_line .SRCINFO '^\s*pkgver = .*' "pkgver = ${VERSION}"
-    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = 1"
+    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = ${pkgrel}"
 
     git status --short
     if [[ "$DO_PUSH" -eq 1 && -n "$(git status --porcelain)" ]]; then
@@ -134,15 +167,17 @@ update_source() {
 
 update_configurator() {
     local dir="$1"
+    local pkgrel
     [[ -d "$dir" ]] || { echo "Skip configurator: $dir not found" >&2; return; }
     pushd "$dir" >/dev/null
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
-    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=1"
+    pkgrel="$(next_pkgrel "$dir")"
+    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
     replace_line PKGBUILD '^source=.*' "source=(\"git+https://github.com/devmobasa/wayscriber.git#tag=v${VERSION}\")"
     replace_line PKGBUILD '^sha256sums=.*' "sha256sums=('SKIP')"
 
     replace_line .SRCINFO '^\s*pkgver = .*' "pkgver = ${VERSION}"
-    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = 1"
+    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = ${pkgrel}"
     replace_line .SRCINFO '^\s*source = .*' "source = git+https://github.com/devmobasa/wayscriber.git#tag=v${VERSION}"
     replace_line .SRCINFO '^\s*sha256sums = .*' "sha256sums = SKIP"
 
