@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::models::DesktopEnvironment;
 use wayscriber::systemd_user_service::{
     USER_SERVICE_NAME, escape_systemd_env_value as shared_escape_systemd_env_value,
     portal_shortcut_dropin_path as shared_portal_shortcut_dropin_path, render_user_service_unit,
@@ -119,6 +120,32 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     }
 
     Ok(service_path)
+}
+
+pub(super) fn remove_portal_shortcut_dropin_if_gnome(
+    desktop: DesktopEnvironment,
+) -> Result<bool, String> {
+    if desktop != DesktopEnvironment::Gnome {
+        return Ok(false);
+    }
+    remove_portal_shortcut_dropin()
+}
+
+pub(super) fn remove_portal_shortcut_dropin() -> Result<bool, String> {
+    let Some(path) = portal_shortcut_dropin_path() else {
+        return Ok(false);
+    };
+    if !path.exists() {
+        return Ok(false);
+    }
+    fs::remove_file(&path).map_err(|err| {
+        format!(
+            "Failed to remove portal shortcut drop-in {}: {}",
+            path.display(),
+            err
+        )
+    })?;
+    Ok(true)
 }
 
 fn package_service_paths() -> Vec<PathBuf> {

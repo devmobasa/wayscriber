@@ -9,9 +9,10 @@ use crate::models::{
 use command::command_available;
 use service::{
     SERVICE_NAME, detect_service_unit_path, install_or_update_user_service, query_service_active,
-    query_service_enabled, require_systemctl_available, run_systemctl_user,
+    query_service_enabled, remove_portal_shortcut_dropin_if_gnome, require_systemctl_available,
+    run_systemctl_user,
 };
-use shortcut::{apply_shortcut, read_configured_shortcut};
+use shortcut::{apply_shortcut, read_configured_shortcut, read_portal_shortcut_dropin_state};
 
 pub(super) async fn load_daemon_runtime_status() -> Result<DaemonRuntimeStatus, String> {
     load_daemon_runtime_status_sync()
@@ -33,10 +34,23 @@ fn perform_daemon_action_sync(
     match action {
         DaemonAction::RefreshStatus => Ok("Daemon status refreshed.".to_string()),
         DaemonAction::InstallOrUpdateService => {
+            let desktop = DesktopEnvironment::detect_current();
             let service_path = install_or_update_user_service()?;
+            let removed_dropin = remove_portal_shortcut_dropin_if_gnome(desktop)?;
+            if command_available("systemctl") && removed_dropin {
+                run_systemctl_user(&["daemon-reload"])?;
+                if query_service_active() {
+                    run_systemctl_user(&["restart", SERVICE_NAME])?;
+                }
+            }
             Ok(format!(
-                "Installed/updated user service at {}",
-                service_path.display()
+                "Installed/updated user service at {}{}",
+                service_path.display(),
+                if removed_dropin {
+                    "; removed stale GNOME portal shortcut drop-in"
+                } else {
+                    ""
+                }
             ))
         }
         DaemonAction::EnableAndStartService => {
@@ -64,7 +78,12 @@ fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {
     let systemctl_available = command_available("systemctl");
     let gsettings_available = command_available("gsettings");
     let shortcut_backend =
-        ShortcutBackend::from_environment(desktop, gsettings_available, systemctl_available);
+        ShortcutBackend::from_runtime_inputs(desktop, read_portal_shortcut_dropin_state());
+    let shortcut_apply_capability = crate::models::ShortcutApplyCapability::from_environment(
+        desktop,
+        gsettings_available,
+        systemctl_available,
+    );
     let service_unit_path = detect_service_unit_path(systemctl_available);
     let service_installed = service_unit_path.is_some();
     let service_enabled = if systemctl_available {
@@ -82,6 +101,7 @@ fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {
     Ok(DaemonRuntimeStatus {
         desktop,
         shortcut_backend,
+        shortcut_apply_capability,
         systemctl_available,
         gsettings_available,
         service_installed,

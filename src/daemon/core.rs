@@ -18,6 +18,7 @@ use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
+use wayscriber::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 
 use super::control::DaemonToggleRequest;
 use super::global_shortcuts::start_global_shortcuts_listener;
@@ -309,13 +310,25 @@ impl Daemon {
             info!("System tray disabled; running daemon without tray");
         }
 
-        self.global_shortcuts_thread = start_global_shortcuts_listener(
-            self.toggle_requested.clone(),
-            self.should_quit.clone(),
-            self.portal_activation_token_slot.clone(),
-        );
-        if self.global_shortcuts_thread.is_some() {
-            info!("Global shortcuts portal listener started");
+        match current_shortcut_runtime_backend() {
+            ShortcutRuntimeBackend::PortalGlobalShortcuts => {
+                self.global_shortcuts_thread = start_global_shortcuts_listener(
+                    self.toggle_requested.clone(),
+                    self.should_quit.clone(),
+                    self.portal_activation_token_slot.clone(),
+                );
+                if self.global_shortcuts_thread.is_some() {
+                    info!("Global shortcuts portal listener started");
+                }
+            }
+            ShortcutRuntimeBackend::GnomeCustomShortcut => {
+                info!(
+                    "Global shortcuts portal listener skipped on GNOME; using GNOME shortcut backend"
+                );
+            }
+            ShortcutRuntimeBackend::Manual => {
+                info!("Global shortcuts portal listener skipped; portal runtime unavailable");
+            }
         }
 
         info!("Daemon ready - waiting for toggle signal");

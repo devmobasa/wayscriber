@@ -1,9 +1,41 @@
+use std::fs;
+
+use crate::systemd_user_service::portal_shortcut_dropin_path;
+
 pub const GNOME_MEDIA_KEYS_SCHEMA: &str = "org.gnome.settings-daemon.plugins.media-keys";
 pub const GNOME_MEDIA_KEYS_KEY: &str = "custom-keybindings";
 pub const GNOME_CUSTOM_KEYBINDING_SCHEMA: &str =
     "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
 pub const GNOME_WAYSCRIBER_KEYBINDING_PATH: &str =
     "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/wayscriber-toggle/";
+pub const PORTAL_SHORTCUT_ENV: &str = "WAYSCRIBER_PORTAL_SHORTCUT";
+pub const PORTAL_APP_ID_ENV: &str = "WAYSCRIBER_PORTAL_APP_ID";
+pub const PORTAL_SHORTCUT_OPT_IN_ENV: &str = "WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PortalShortcutDropInState {
+    pub portal_shortcut_present: bool,
+    pub portal_app_id_present: bool,
+    pub explicit_portal_opt_in_present: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShortcutRuntimeInputs {
+    pub gnome_desktop: bool,
+    pub portal_runtime_supported: bool,
+    pub portal_dropin_state: PortalShortcutDropInState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutRuntimeBackend {
+    GnomeCustomShortcut,
+    PortalGlobalShortcuts,
+    Manual,
+}
+
+pub const fn portal_runtime_supported() -> bool {
+    cfg!(feature = "portal")
+}
 
 pub fn gnome_shortcut_schema_with_path() -> String {
     format!("{GNOME_CUSTOM_KEYBINDING_SCHEMA}:{GNOME_WAYSCRIBER_KEYBINDING_PATH}")
@@ -12,6 +44,32 @@ pub fn gnome_shortcut_schema_with_path() -> String {
 pub fn is_gnome_desktop(current: &str, session: &str) -> bool {
     let combined = format!("{current};{session}").to_lowercase();
     combined.contains("gnome")
+}
+
+pub fn resolve_shortcut_runtime_backend(inputs: ShortcutRuntimeInputs) -> ShortcutRuntimeBackend {
+    if inputs.gnome_desktop {
+        if inputs.portal_runtime_supported
+            && inputs.portal_dropin_state.explicit_portal_opt_in_present
+        {
+            return ShortcutRuntimeBackend::PortalGlobalShortcuts;
+        }
+        return ShortcutRuntimeBackend::GnomeCustomShortcut;
+    }
+    if inputs.portal_runtime_supported {
+        ShortcutRuntimeBackend::PortalGlobalShortcuts
+    } else {
+        ShortcutRuntimeBackend::Manual
+    }
+}
+
+pub fn current_shortcut_runtime_backend() -> ShortcutRuntimeBackend {
+    let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+    let session = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
+    resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
+        gnome_desktop: is_gnome_desktop(&current, &session),
+        portal_runtime_supported: portal_runtime_supported(),
+        portal_dropin_state: read_portal_shortcut_dropin_state(),
+    })
 }
 
 pub fn normalize_shortcut_hint(value: Option<&str>) -> Option<String> {
@@ -70,6 +128,45 @@ pub fn parse_gsettings_path_list(raw: &str) -> Result<Vec<String>, String> {
     Ok(values)
 }
 
+pub fn read_portal_shortcut_dropin_state() -> PortalShortcutDropInState {
+    portal_shortcut_dropin_path()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .map(|content| parse_portal_shortcut_dropin_state(&content))
+        .unwrap_or_default()
+}
+
+pub fn parse_portal_shortcut_dropin_state(content: &str) -> PortalShortcutDropInState {
+    let mut state = PortalShortcutDropInState::default();
+    for line in content.lines() {
+        let Some((name, value)) = parse_systemd_environment_assignment(line) else {
+            continue;
+        };
+        match name.as_str() {
+            PORTAL_SHORTCUT_ENV => {
+                state.portal_shortcut_present = normalize_shortcut_hint(Some(&value)).is_some();
+            }
+            PORTAL_APP_ID_ENV => {
+                state.portal_app_id_present = normalize_shortcut_hint(Some(&value)).is_some();
+            }
+            PORTAL_SHORTCUT_OPT_IN_ENV => {
+                state.explicit_portal_opt_in_present = value.trim() == "1";
+            }
+            _ => {}
+        }
+    }
+    state
+}
+
+pub fn parse_portal_shortcut_from_dropin(content: &str) -> Option<String> {
+    content.lines().find_map(|line| {
+        let (name, value) = parse_systemd_environment_assignment(line)?;
+        if name != PORTAL_SHORTCUT_ENV {
+            return None;
+        }
+        normalize_shortcut_hint(Some(&value))
+    })
+}
+
 pub fn gnome_effective_shortcut(custom_keybindings_raw: &str, binding_raw: &str) -> Option<String> {
     let configured_paths = parse_gsettings_path_list(custom_keybindings_raw).ok()?;
     if !configured_paths
@@ -97,6 +194,42 @@ pub fn resolve_toggle_shortcut_hint(
     let custom_keybindings = gnome_custom_keybindings_raw?;
     let binding = gnome_binding_raw?;
     gnome_effective_shortcut(custom_keybindings, binding)
+}
+
+fn parse_systemd_environment_assignment(line: &str) -> Option<(String, String)> {
+    let trimmed = line.trim();
+    let raw_assignment = trimmed.strip_prefix("Environment=")?;
+    let assignment = if let Some(quoted_assignment) = raw_assignment
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+    {
+        unescape_systemd_env_assignment(quoted_assignment)
+    } else {
+        raw_assignment.to_string()
+    };
+    let (name, value) = assignment.split_once('=')?;
+    Some((name.trim().to_string(), value.trim().to_string()))
+}
+
+fn unescape_systemd_env_assignment(value: &str) -> String {
+    let mut unescaped = String::with_capacity(value.len());
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            unescaped.push(ch);
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        unescaped.push(ch);
+    }
+    if escaped {
+        unescaped.push('\\');
+    }
+    unescaped
 }
 
 #[cfg(test)]
@@ -209,6 +342,64 @@ mod tests {
                 Some("'<Super>g'"),
             ),
             None
+        );
+    }
+
+    #[test]
+    fn parse_portal_shortcut_dropin_state_handles_legacy_gnome_dropin() {
+        let content = "[Service]\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=<Super>g\"\nEnvironment=\"WAYSCRIBER_PORTAL_APP_ID=com.devmobasa.wayscriber\"\n";
+        assert_eq!(
+            parse_portal_shortcut_dropin_state(content),
+            PortalShortcutDropInState {
+                portal_shortcut_present: true,
+                portal_app_id_present: true,
+                explicit_portal_opt_in_present: false,
+            }
+        );
+        assert_eq!(
+            resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
+                gnome_desktop: true,
+                portal_runtime_supported: true,
+                portal_dropin_state: parse_portal_shortcut_dropin_state(content),
+            }),
+            ShortcutRuntimeBackend::GnomeCustomShortcut
+        );
+    }
+
+    #[test]
+    fn parse_portal_shortcut_dropin_state_handles_explicit_opt_in() {
+        let content = "[Service]\nEnvironment=\"WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1\"\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=<Ctrl><Shift>g\"\nEnvironment=\"WAYSCRIBER_PORTAL_APP_ID=wayscriber\"\n";
+        assert_eq!(
+            parse_portal_shortcut_dropin_state(content),
+            PortalShortcutDropInState {
+                portal_shortcut_present: true,
+                portal_app_id_present: true,
+                explicit_portal_opt_in_present: true,
+            }
+        );
+        assert_eq!(
+            parse_portal_shortcut_from_dropin(content),
+            Some("<Ctrl><Shift>g".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_shortcut_runtime_backend_preserves_non_gnome_portal_default() {
+        assert_eq!(
+            resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
+                gnome_desktop: false,
+                portal_runtime_supported: true,
+                portal_dropin_state: PortalShortcutDropInState::default(),
+            }),
+            ShortcutRuntimeBackend::PortalGlobalShortcuts
+        );
+        assert_eq!(
+            resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
+                gnome_desktop: false,
+                portal_runtime_supported: false,
+                portal_dropin_state: PortalShortcutDropInState::default(),
+            }),
+            ShortcutRuntimeBackend::Manual
         );
     }
 }

@@ -1,6 +1,11 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+
+#[cfg(feature = "portal")]
+use std::sync::atomic::Ordering;
+#[cfg(feature = "portal")]
+use wayscriber::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
 
 #[cfg(feature = "portal")]
 use anyhow::{Context, Result, anyhow};
@@ -17,7 +22,9 @@ use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 #[cfg(feature = "portal")]
 use zbus::{Connection, proxy};
 
+#[cfg(feature = "portal")]
 const DEFAULT_PREFERRED_TRIGGER: &str = "<Ctrl><Shift>g";
+#[cfg(feature = "portal")]
 const DEFAULT_PORTAL_APP_ID: &str = "wayscriber";
 
 #[cfg(feature = "portal")]
@@ -35,11 +42,11 @@ pub(super) fn start_global_shortcuts_listener(
     #[cfg(feature = "portal")]
     {
         let listener_quit_flag = quit_flag.clone();
-        let preferred_trigger = std::env::var("WAYSCRIBER_PORTAL_SHORTCUT")
+        let preferred_trigger = std::env::var(PORTAL_SHORTCUT_ENV)
             .ok()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| DEFAULT_PREFERRED_TRIGGER.to_string());
-        let portal_app_id = std::env::var("WAYSCRIBER_PORTAL_APP_ID")
+        let portal_app_id = std::env::var(PORTAL_APP_ID_ENV)
             .ok()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| DEFAULT_PORTAL_APP_ID.to_string());
@@ -238,6 +245,11 @@ async fn run_listener(
                 }
             }
         }
+    }
+
+    if quit_flag.load(Ordering::Acquire) {
+        debug!("Skipping GlobalShortcuts session close during shutdown");
+        return Ok(());
     }
 
     if let Err(err) = close_global_shortcuts_session(&connection, &session_handle).await {

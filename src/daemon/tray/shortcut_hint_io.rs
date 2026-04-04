@@ -4,31 +4,32 @@ use std::env;
 use std::process::Command;
 #[cfg(feature = "tray")]
 use wayscriber::shortcut_hint::{
-    GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, gnome_shortcut_schema_with_path,
-    is_gnome_desktop, normalize_shortcut_hint, resolve_toggle_shortcut_hint,
+    GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, PORTAL_SHORTCUT_ENV, ShortcutRuntimeBackend,
+    current_shortcut_runtime_backend, gnome_shortcut_schema_with_path, is_gnome_desktop,
+    normalize_shortcut_hint, resolve_toggle_shortcut_hint,
 };
 
 #[cfg(feature = "tray")]
 pub(super) fn configured_toggle_shortcut_hint() -> Option<String> {
-    let portal_shortcut_env = env::var("WAYSCRIBER_PORTAL_SHORTCUT").ok();
-    if let Some(shortcut) = normalize_shortcut_hint(portal_shortcut_env.as_deref()) {
-        return Some(shortcut);
-    }
-    let gnome_desktop = current_desktop_is_gnome();
-    let (custom_keybindings_raw, binding_raw) = if gnome_desktop {
-        match read_gnome_shortcut_outputs() {
-            Some((custom_keybindings, binding)) => (Some(custom_keybindings), Some(binding)),
-            None => (None, None),
+    match current_shortcut_runtime_backend() {
+        ShortcutRuntimeBackend::PortalGlobalShortcuts => {
+            let portal_shortcut_env = env::var(PORTAL_SHORTCUT_ENV).ok();
+            normalize_shortcut_hint(portal_shortcut_env.as_deref())
         }
-    } else {
-        (None, None)
-    };
-    resolve_toggle_shortcut_hint(
-        portal_shortcut_env.as_deref(),
-        gnome_desktop,
-        custom_keybindings_raw.as_deref(),
-        binding_raw.as_deref(),
-    )
+        ShortcutRuntimeBackend::GnomeCustomShortcut => {
+            if !current_desktop_is_gnome() {
+                return None;
+            }
+            let (custom_keybindings_raw, binding_raw) = read_gnome_shortcut_outputs()?;
+            resolve_toggle_shortcut_hint(
+                None,
+                true,
+                Some(custom_keybindings_raw.as_str()),
+                Some(binding_raw.as_str()),
+            )
+        }
+        ShortcutRuntimeBackend::Manual => None,
+    }
 }
 
 #[cfg(feature = "tray")]
