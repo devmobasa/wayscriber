@@ -4,7 +4,8 @@ version = "0.9.13"
 edition = "2024"
 
 [dependencies]
-wayscriber = { path = "..", default-features = false }
+# Keep configurator-side runtime/status logic aligned with the daemon's portal-capable builds.
+wayscriber = { path = "..", default-features = false, features = ["portal"] }
 iced = { version = "0.12", features = ["tokio", "canvas"] }
 
 [features]

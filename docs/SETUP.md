@@ -23,7 +23,8 @@ If you installed `wayscriber-configurator`, you can set this up entirely in GUI:
 
 Desktop-specific shortcut handling:
 - GNOME: creates/updates a GNOME custom shortcut that runs `pkill -SIGUSR1 wayscriber`.
-- KDE/Plasma: writes a systemd user drop-in with `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcut handling.
+- GNOME migrations: `Install/Update Service` and `Apply Shortcut` remove stale `~/.config/systemd/user/wayscriber.service.d/shortcut.conf` files so old portal settings do not override GNOME behavior.
+- KDE/Plasma: writes a systemd user drop-in with `WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1` and `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcut handling.
 
 ### Quick Install
 

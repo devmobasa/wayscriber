@@ -12,7 +12,8 @@ pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
 pub use color_picker::{ColorPickerId, ColorPickerValue};
 pub use config::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft};
 pub use daemon::{
-    DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment, ShortcutBackend,
+    DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment,
+    ShortcutApplyCapability, ShortcutBackend,
 };
 pub use fields::{
     DragToolField, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,

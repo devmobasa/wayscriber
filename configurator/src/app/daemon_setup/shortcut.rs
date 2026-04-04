@@ -1,16 +1,18 @@
 use std::fs;
 
-use crate::models::{DesktopEnvironment, ShortcutBackend};
+use crate::models::{DesktopEnvironment, ShortcutApplyCapability, ShortcutBackend};
 use wayscriber::shortcut_hint::{
     GNOME_MEDIA_KEYS_KEY, GNOME_MEDIA_KEYS_SCHEMA, GNOME_WAYSCRIBER_KEYBINDING_PATH,
-    gnome_effective_shortcut, gnome_shortcut_schema_with_path, normalize_shortcut_hint,
-    parse_gsettings_path_list,
+    PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV, PORTAL_SHORTCUT_OPT_IN_ENV, PortalShortcutDropInState,
+    gnome_effective_shortcut, gnome_shortcut_schema_with_path, parse_gsettings_path_list,
+    parse_portal_shortcut_dropin_state,
+    parse_portal_shortcut_from_dropin as shared_parse_portal_shortcut_from_dropin,
 };
 
 use super::command::{command_available, run_command, run_command_checked};
 use super::service::{
     escape_systemd_env_value, portal_shortcut_dropin_path, query_service_active,
-    require_systemctl_available, run_systemctl_user,
+    remove_portal_shortcut_dropin_if_gnome, require_systemctl_available, run_systemctl_user,
 };
 
 const PORTAL_APP_ID: &str = "wayscriber";
@@ -25,21 +27,38 @@ pub(super) fn read_configured_shortcut(backend: ShortcutBackend) -> Option<Strin
     }
 }
 
+pub(super) fn read_portal_shortcut_dropin_state() -> PortalShortcutDropInState {
+    let Some(path) = portal_shortcut_dropin_path() else {
+        return PortalShortcutDropInState::default();
+    };
+    let Ok(content) = fs::read_to_string(path) else {
+        return PortalShortcutDropInState::default();
+    };
+    parse_portal_shortcut_dropin_state(&content)
+}
+
 pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
     let desktop = DesktopEnvironment::detect_current();
-    let backend = ShortcutBackend::from_environment(
+    let apply_capability = ShortcutApplyCapability::from_environment(
         desktop,
         command_available("gsettings"),
         command_available("systemctl"),
     );
 
-    match backend {
-        ShortcutBackend::GnomeCustomShortcut => {
+    match apply_capability {
+        ShortcutApplyCapability::GnomeCustomShortcut => {
             let normalized = normalize_shortcut_for_gnome(shortcut_input)?;
             apply_gnome_custom_shortcut(&normalized)?;
+            let removed_dropin = remove_portal_shortcut_dropin_if_gnome(desktop)?;
+            if command_available("systemctl") {
+                run_systemctl_user(&["daemon-reload"])?;
+                if removed_dropin && query_service_active() {
+                    run_systemctl_user(&["restart", "wayscriber.service"])?;
+                }
+            }
             Ok(format!("Configured GNOME shortcut: {normalized}"))
         }
-        ShortcutBackend::PortalServiceDropIn => {
+        ShortcutApplyCapability::PortalServiceDropIn => {
             require_systemctl_available()?;
             let normalized = normalize_shortcut_for_portal(shortcut_input)?;
             let dropin_path = write_portal_shortcut_dropin(&normalized)?;
@@ -52,7 +71,7 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
                 dropin_path.display()
             ))
         }
-        ShortcutBackend::Manual => Err(
+        ShortcutApplyCapability::Manual => Err(
             "Automatic shortcut setup is not available in this desktop session; bind `pkill -SIGUSR1 wayscriber` manually."
                 .to_string(),
         ),
@@ -160,9 +179,7 @@ fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, St
 
     let escaped_shortcut = escape_systemd_env_value(shortcut);
     let escaped_app_id = escape_systemd_env_value(PORTAL_APP_ID);
-    let contents = format!(
-        "[Service]\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT={escaped_shortcut}\"\nEnvironment=\"WAYSCRIBER_PORTAL_APP_ID={escaped_app_id}\"\n"
-    );
+    let contents = render_portal_shortcut_dropin(&escaped_shortcut, &escaped_app_id);
     fs::write(&dropin_path, contents).map_err(|err| {
         format!(
             "Failed to write portal shortcut drop-in {}: {}",
@@ -173,6 +190,12 @@ fn write_portal_shortcut_dropin(shortcut: &str) -> Result<std::path::PathBuf, St
     Ok(dropin_path)
 }
 
+fn render_portal_shortcut_dropin(escaped_shortcut: &str, escaped_app_id: &str) -> String {
+    format!(
+        "[Service]\nEnvironment=\"{PORTAL_SHORTCUT_OPT_IN_ENV}=1\"\nEnvironment=\"{PORTAL_SHORTCUT_ENV}={escaped_shortcut}\"\nEnvironment=\"{PORTAL_APP_ID_ENV}={escaped_app_id}\"\n"
+    )
+}
+
 fn read_portal_shortcut_from_dropin() -> Option<String> {
     let path = portal_shortcut_dropin_path()?;
     let content = fs::read_to_string(path).ok()?;
@@ -180,16 +203,7 @@ fn read_portal_shortcut_from_dropin() -> Option<String> {
 }
 
 fn parse_portal_shortcut_from_dropin(content: &str) -> Option<String> {
-    content.lines().find_map(|line| {
-        let trimmed = line.trim();
-        let prefix = "Environment=\"WAYSCRIBER_PORTAL_SHORTCUT=";
-        if !trimmed.starts_with(prefix) || !trimmed.ends_with('"') {
-            return None;
-        }
-        let inner = &trimmed[prefix.len()..trimmed.len() - 1];
-        let unescaped = inner.replace("\\\"", "\"").replace("\\\\", "\\");
-        normalize_shortcut_hint(Some(&unescaped))
-    })
+    shared_parse_portal_shortcut_from_dropin(content)
 }
 
 fn serialize_gsettings_path_list(paths: &[String]) -> String {
@@ -341,6 +355,14 @@ mod tests {
     fn parse_portal_shortcut_ignores_blank_value() {
         let content = "[Service]\nEnvironment=\"WAYSCRIBER_PORTAL_SHORTCUT=   \"\n";
         assert_eq!(parse_portal_shortcut_from_dropin(content), None);
+    }
+
+    #[test]
+    fn render_portal_shortcut_dropin_includes_explicit_opt_in_marker() {
+        let rendered = render_portal_shortcut_dropin("<Ctrl><Shift>g", PORTAL_APP_ID);
+        assert!(rendered.contains("Environment=\"WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1\""));
+        assert!(rendered.contains("Environment=\"WAYSCRIBER_PORTAL_SHORTCUT=<Ctrl><Shift>g\""));
+        assert!(rendered.contains("Environment=\"WAYSCRIBER_PORTAL_APP_ID=wayscriber\""));
     }
 
     #[test]

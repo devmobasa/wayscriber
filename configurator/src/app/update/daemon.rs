@@ -159,7 +159,7 @@ fn action_pending_message(action: DaemonAction) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{DesktopEnvironment, ShortcutBackend};
+    use crate::models::{DesktopEnvironment, ShortcutApplyCapability, ShortcutBackend};
 
     #[test]
     fn daemon_status_loaded_sets_default_shortcut_when_missing() {
@@ -168,6 +168,7 @@ mod tests {
         let status = DaemonRuntimeStatus {
             desktop: DesktopEnvironment::Kde,
             shortcut_backend: ShortcutBackend::PortalServiceDropIn,
+            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
             systemctl_available: true,
             gsettings_available: false,
             service_installed: false,
@@ -208,6 +209,7 @@ mod tests {
         let status = DaemonRuntimeStatus {
             desktop: DesktopEnvironment::Kde,
             shortcut_backend: ShortcutBackend::PortalServiceDropIn,
+            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
             systemctl_available: true,
             gsettings_available: false,
             service_installed: false,
@@ -235,6 +237,7 @@ mod tests {
         let status = DaemonRuntimeStatus {
             desktop: DesktopEnvironment::Kde,
             shortcut_backend: ShortcutBackend::PortalServiceDropIn,
+            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
             systemctl_available: true,
             gsettings_available: false,
             service_installed: false,
@@ -264,6 +267,7 @@ mod tests {
         let stale_status = DaemonRuntimeStatus {
             desktop: DesktopEnvironment::Kde,
             shortcut_backend: ShortcutBackend::PortalServiceDropIn,
+            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
             systemctl_available: true,
             gsettings_available: false,
             service_installed: false,
@@ -305,6 +309,7 @@ mod tests {
         let old_status = DaemonRuntimeStatus {
             desktop: DesktopEnvironment::Kde,
             shortcut_backend: ShortcutBackend::PortalServiceDropIn,
+            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
             systemctl_available: true,
             gsettings_available: false,
             service_installed: false,
@@ -316,6 +321,7 @@ mod tests {
         let new_status = DaemonRuntimeStatus {
             desktop: DesktopEnvironment::Kde,
             shortcut_backend: ShortcutBackend::PortalServiceDropIn,
+            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
             systemctl_available: true,
             gsettings_available: false,
             service_installed: true,

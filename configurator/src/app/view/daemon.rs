@@ -3,7 +3,7 @@ use iced::theme;
 use iced::widget::{button, column, horizontal_rule, row, scrollable, text, text_input};
 
 use crate::messages::Message;
-use crate::models::{DaemonAction, ShortcutBackend};
+use crate::models::{DaemonAction, ShortcutApplyCapability};
 
 use super::super::state::ConfiguratorApp;
 
@@ -157,14 +157,20 @@ impl ConfiguratorApp {
             .into();
         }
 
-        let placeholder = match self.daemon_status.as_ref().map(|s| s.shortcut_backend) {
-            Some(ShortcutBackend::GnomeCustomShortcut) => "e.g. Super+G or <Super>g",
-            Some(ShortcutBackend::PortalServiceDropIn) => "e.g. Ctrl+Shift+G or <Ctrl><Shift>g",
+        let apply_capability = self
+            .daemon_status
+            .as_ref()
+            .map(|s| s.shortcut_apply_capability);
+        let placeholder = match apply_capability {
+            Some(ShortcutApplyCapability::GnomeCustomShortcut) => "e.g. Super+G or <Super>g",
+            Some(ShortcutApplyCapability::PortalServiceDropIn) => {
+                "e.g. Ctrl+Shift+G or <Ctrl><Shift>g"
+            }
             _ => "e.g. Ctrl+Shift+G",
         };
 
         let mut shortcut_button = button("Apply Shortcut").style(theme::Button::Primary);
-        if !busy {
+        if !busy && apply_capability != Some(ShortcutApplyCapability::Manual) {
             shortcut_button = shortcut_button
                 .on_press(Message::DaemonActionRequested(DaemonAction::ApplyShortcut));
         }
@@ -189,6 +195,14 @@ impl ConfiguratorApp {
                 text(format!("Current shortcut: {configured}"))
                     .size(12)
                     .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            );
+        }
+
+        if apply_capability == Some(ShortcutApplyCapability::Manual) {
+            step = step.push(
+                text("Automatic shortcut setup is unavailable here. Add a manual keybind for `pkill -SIGUSR1 wayscriber`.")
+                    .size(12)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.8, 0.3))),
             );
         }
 
@@ -290,6 +304,11 @@ impl ConfiguratorApp {
 
             details = details.push(
                 text(status.shortcut_backend.friendly_label())
+                    .size(12)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            );
+            details = details.push(
+                text(status.shortcut_apply_capability.friendly_label())
                     .size(12)
                     .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             );
