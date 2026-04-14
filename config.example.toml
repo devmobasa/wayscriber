@@ -822,12 +822,12 @@ custom_redo_steps = 5
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABLET / STYLUS INPUT (Wayland tablet-unstable-v2)
-# Build with `--features tablet-input` and enable below to use
+# Build with `--features tablet-input` to use
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [tablet]
-# Enable tablet/stylus input at runtime
-enabled = false
+# Enable tablet/stylus input at runtime (set false to opt out)
+enabled = true
 
 # Map pressure to thickness
 pressure_enabled = true

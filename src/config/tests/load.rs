@@ -58,3 +58,20 @@ fn ui_defaults_follow_desktop_for_xdg_focus_loss() {
 
     assert_eq!(Config::default().ui.xdg_focus_loss_behavior, expected);
 }
+
+#[cfg(tablet)]
+#[test]
+fn load_defaults_tablet_input_to_enabled_when_section_is_missing() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        fs::write(
+            primary_dir.join("config.toml"),
+            "[drawing]\ndefault_color = 'red'\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds");
+        assert!(loaded.config.tablet.enabled);
+    });
+}

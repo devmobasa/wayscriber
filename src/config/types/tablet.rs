@@ -46,7 +46,7 @@ pub struct TabletInputConfig {
 impl Default for TabletInputConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             pressure_enabled: true,
             min_thickness: 1.0,
             max_thickness: 8.0,
@@ -60,7 +60,7 @@ impl Default for TabletInputConfig {
 }
 
 fn default_tablet_enabled() -> bool {
-    false
+    true
 }
 
 fn default_tablet_pressure_enabled() -> bool {

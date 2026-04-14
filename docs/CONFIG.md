@@ -623,7 +623,7 @@ Runtime toggles for tablet/stylus input (Wayland `zwp_tablet_v2`).
 
 ```toml
 [tablet]
-enabled = false
+enabled = true
 pressure_enabled = true
 min_thickness = 1.0
 max_thickness = 8.0
@@ -631,7 +631,7 @@ max_thickness = 8.0
 
 **Notes:**
 - Requires the `tablet-input` feature at build time (enabled in default release builds).
-- Set `enabled = true` to activate tablet input at runtime.
+- Tablet input is enabled by default when the feature is compiled in; set `enabled = false` to opt out.
 
 ### `[session]` - Session Persistence
 
