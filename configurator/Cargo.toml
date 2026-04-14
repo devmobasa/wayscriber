@@ -1,6 +1,6 @@
 [package]
 name = "wayscriber-configurator"
-version = "0.9.13"
+version = "0.9.14"
 edition = "2024"
 
 [dependencies]
