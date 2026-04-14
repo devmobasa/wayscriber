@@ -4242,7 +4242,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber"
-version = "0.9.14"
+version = "0.9.15"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -4283,7 +4283,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber-configurator"
-version = "0.9.14"
+version = "0.9.15"
 dependencies = [
  "iced",
  "wayscriber",
