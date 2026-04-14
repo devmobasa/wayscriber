@@ -51,6 +51,7 @@ pub enum Action {
     SelectRectTool,
     SelectEllipseTool,
     SelectArrowTool,
+    SelectBlurTool,
     SelectHighlightTool,
     IncreaseFontSize,
     DecreaseFontSize,

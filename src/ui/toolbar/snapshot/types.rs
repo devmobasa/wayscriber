@@ -108,6 +108,18 @@ impl ToolContext {
                 show_marker_opacity: false,
                 show_font_controls: false,
             },
+            Tool::Blur => Self {
+                needs_color: false,
+                needs_thickness: true,
+                tool_options_kind: ToolOptionsKind::Stroke,
+                thickness_label: "Blur",
+                show_fill_toggle: false,
+                show_arrow_labels: false,
+                show_step_counter: false,
+                show_eraser_mode: false,
+                show_marker_opacity: false,
+                show_font_controls: false,
+            },
             Tool::Marker => Self {
                 needs_color: true,
                 needs_thickness: true,

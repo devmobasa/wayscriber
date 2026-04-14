@@ -24,6 +24,7 @@ impl InputState {
                         | Shape::Rect { .. }
                         | Shape::Ellipse { .. }
                         | Shape::Arrow { .. }
+                        | Shape::BlurRect { .. }
                         | Shape::MarkerStroke { .. }
                 ) || (pressure_editable && matches!(shape, Shape::FreehandPressure { .. }))
             },
@@ -33,6 +34,9 @@ impl InputState {
                 | Shape::Rect { thick, .. }
                 | Shape::Ellipse { thick, .. }
                 | Shape::Arrow { thick, .. }
+                | Shape::BlurRect {
+                    strength: thick, ..
+                }
                 | Shape::MarkerStroke { thick, .. } => {
                     let next = (*thick + delta).clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
                     if (next - *thick).abs() > f64::EPSILON {

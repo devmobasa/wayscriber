@@ -56,6 +56,7 @@ pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
         Tool::Rect => Some(Action::SelectRectTool),
         Tool::Ellipse => Some(Action::SelectEllipseTool),
         Tool::Arrow => Some(Action::SelectArrowTool),
+        Tool::Blur => Some(Action::SelectBlurTool),
         Tool::Marker => Some(Action::SelectMarkerTool),
         Tool::StepMarker => Some(Action::SelectStepMarkerTool),
         Tool::Highlight => Some(Action::SelectHighlightTool),

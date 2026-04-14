@@ -167,6 +167,10 @@ pub(super) fn build_main_sections(
                 action_label(Action::SelectArrowTool),
             ),
             row(
+                binding_or_fallback(bindings, Action::SelectBlurTool, NOT_BOUND_LABEL),
+                action_label(Action::SelectBlurTool),
+            ),
+            row(
                 binding_or_fallback(bindings, Action::ToggleHighlightTool, NOT_BOUND_LABEL),
                 action_label(Action::ToggleHighlightTool),
             ),

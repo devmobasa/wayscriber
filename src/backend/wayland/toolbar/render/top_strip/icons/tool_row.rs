@@ -54,6 +54,7 @@ pub(super) fn draw_tool_row(
             (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn),
             (Tool::Ellipse, toolbar_icons::draw_icon_circle as IconFn),
             (Tool::Arrow, toolbar_icons::draw_icon_arrow as IconFn),
+            (Tool::Blur, toolbar_icons::draw_icon_blur as IconFn),
         ]
     };
 
@@ -113,6 +114,7 @@ pub(super) fn draw_tool_row(
             Tool::Rect => toolbar_icons::draw_icon_rect(layout.ctx, icon_x, icon_y, icon_size),
             Tool::Ellipse => toolbar_icons::draw_icon_circle(layout.ctx, icon_x, icon_y, icon_size),
             Tool::Arrow => toolbar_icons::draw_icon_arrow(layout.ctx, icon_x, icon_y, icon_size),
+            Tool::Blur => toolbar_icons::draw_icon_blur(layout.ctx, icon_x, icon_y, icon_size),
             _ => toolbar_icons::draw_icon_rect(layout.ctx, icon_x, icon_y, icon_size),
         }
         layout.hits.push(HitRegion {

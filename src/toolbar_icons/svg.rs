@@ -163,6 +163,7 @@ svg_icon!(LINE, "../../assets/icons/minus.svg");
 svg_icon!(RECT, "../../assets/icons/rectangle-horizontal.svg");
 svg_icon!(CIRCLE, "../../assets/icons/circle.svg");
 svg_icon!(ARROW, "../../assets/icons/arrow-up-right.svg");
+svg_icon!(BLUR, "../../assets/icons/blur.svg");
 svg_icon!(ERASER, "../../assets/icons/eraser.svg");
 svg_icon!(TEXT, "../../assets/icons/type.svg");
 svg_icon!(NOTE, "../../assets/icons/sticky-note.svg");
@@ -193,6 +194,10 @@ pub fn render_circle(ctx: &Context, x: f64, y: f64, size: f64) {
 
 pub fn render_arrow(ctx: &Context, x: f64, y: f64, size: f64) {
     ARROW.render(ctx, x, y, size);
+}
+
+pub fn render_blur(ctx: &Context, x: f64, y: f64, size: f64) {
+    BLUR.render(ctx, x, y, size);
 }
 
 pub fn render_eraser(ctx: &Context, x: f64, y: f64, size: f64) {
@@ -241,13 +246,14 @@ mod tests {
 
     #[test]
     fn embedded_icons_render_non_empty_alpha() {
-        let icons: [(&str, &SvgIcon); 12] = [
+        let icons: [(&str, &SvgIcon); 13] = [
             ("select", &*SELECT),
             ("pen", &*PEN),
             ("line", &*LINE),
             ("rect", &*RECT),
             ("circle", &*CIRCLE),
             ("arrow", &*ARROW),
+            ("blur", &*BLUR),
             ("eraser", &*ERASER),
             ("text", &*TEXT),
             ("note", &*NOTE),

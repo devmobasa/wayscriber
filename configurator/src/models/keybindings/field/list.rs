@@ -44,6 +44,7 @@ impl KeybindingField {
             Self::SelectRectTool,
             Self::SelectEllipseTool,
             Self::SelectArrowTool,
+            Self::SelectBlurTool,
             Self::SelectHighlightTool,
             Self::IncreaseFontSize,
             Self::DecreaseFontSize,

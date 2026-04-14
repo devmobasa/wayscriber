@@ -1,3 +1,4 @@
+use super::blur::render_blur_placeholder;
 use super::highlight::render_click_highlight;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_rect};
 use super::strokes::{
@@ -119,6 +120,15 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                     );
                 }
             }
+        }
+        Shape::BlurRect {
+            x,
+            y,
+            w,
+            h,
+            strength: _,
+        } => {
+            render_blur_placeholder(ctx, *x, *y, *w, *h, false);
         }
         Shape::Text {
             x,

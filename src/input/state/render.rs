@@ -80,6 +80,25 @@ impl InputState {
                     head_at_end: self.arrow_head_at_end,
                     label: self.next_arrow_label(),
                 }),
+                Tool::Blur => {
+                    let (x, w) = if current_x >= *start_x {
+                        (*start_x, current_x - start_x)
+                    } else {
+                        (current_x, start_x - current_x)
+                    };
+                    let (y, h) = if current_y >= *start_y {
+                        (*start_y, current_y - start_y)
+                    } else {
+                        (current_y, start_y - current_y)
+                    };
+                    Some(Shape::BlurRect {
+                        x,
+                        y,
+                        w,
+                        h,
+                        strength: self.current_thickness,
+                    })
+                }
                 Tool::StepMarker => Some(Shape::StepMarker {
                     x: current_x,
                     y: current_y,

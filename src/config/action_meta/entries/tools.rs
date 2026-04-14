@@ -82,6 +82,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        SelectBlurTool,
+        "Blur Tool",
+        Some("Blur"),
+        "Blur sensitive regions on captured backgrounds",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         SelectHighlightTool,
         "Highlight Tool",
         Some("Highlight"),

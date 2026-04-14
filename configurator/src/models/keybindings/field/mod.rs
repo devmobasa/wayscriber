@@ -46,6 +46,7 @@ pub enum KeybindingField {
     SelectRectTool,
     SelectEllipseTool,
     SelectArrowTool,
+    SelectBlurTool,
     SelectHighlightTool,
     IncreaseFontSize,
     DecreaseFontSize,

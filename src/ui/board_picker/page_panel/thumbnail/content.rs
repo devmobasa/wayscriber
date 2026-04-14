@@ -65,10 +65,14 @@ fn render_frame_shapes(
 ) {
     let eraser_ctx = EraserReplayContext {
         pattern: None,
+        surface: None,
+        backdrop_cache_key: None,
         bg_color: match background {
             BoardBackground::Solid(color) => Some(*color),
             BoardBackground::Transparent => None,
         },
+        logical_to_image_scale_x: 1.0,
+        logical_to_image_scale_y: 1.0,
     };
 
     for drawn in &frame.shapes {

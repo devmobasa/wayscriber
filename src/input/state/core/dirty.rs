@@ -1,7 +1,7 @@
 use super::base::{DrawingState, InputState, TextInputMode};
 use crate::draw::shape::{
-    bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_eraser,
-    bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
+    bounding_box_for_arrow, bounding_box_for_blur, bounding_box_for_ellipse,
+    bounding_box_for_eraser, bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
     bounding_box_for_sticky_note, bounding_box_for_text, step_marker_bounds,
 };
 use crate::input::tool::Tool;
@@ -100,6 +100,19 @@ impl InputState {
                         self.arrow_head_at_end,
                         label.as_ref(),
                     )
+                }
+                Tool::Blur => {
+                    let (x, w) = if current_x >= *start_x {
+                        (*start_x, current_x - start_x)
+                    } else {
+                        (current_x, start_x - current_x)
+                    };
+                    let (y, h) = if current_y >= *start_y {
+                        (*start_y, current_y - start_y)
+                    } else {
+                        (current_y, start_y - current_y)
+                    };
+                    bounding_box_for_blur(x, y, w, h)
                 }
                 Tool::StepMarker => {
                     let label = self.next_step_marker_label();

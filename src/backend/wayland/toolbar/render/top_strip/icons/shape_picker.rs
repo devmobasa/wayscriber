@@ -25,6 +25,7 @@ pub(super) fn draw_shape_picker_row(
         (Tool::Rect, toolbar_icons::draw_icon_rect),
         (Tool::Ellipse, toolbar_icons::draw_icon_circle),
         (Tool::Arrow, toolbar_icons::draw_icon_arrow),
+        (Tool::Blur, toolbar_icons::draw_icon_blur),
     ];
     for (tool, icon_fn) in shapes {
         let is_active =

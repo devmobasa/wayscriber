@@ -120,6 +120,25 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             head_at_end: state.arrow_head_at_end,
             label,
         },
+        Tool::Blur => {
+            let (left, width) = if end_x >= start_x {
+                (start_x, end_x - start_x)
+            } else {
+                (end_x, start_x - end_x)
+            };
+            let (top, height) = if end_y >= start_y {
+                (start_y, end_y - start_y)
+            } else {
+                (end_y, start_y - end_y)
+            };
+            Shape::BlurRect {
+                x: left,
+                y: top,
+                w: width,
+                h: height,
+                strength: state.current_thickness,
+            }
+        }
         Tool::Marker => Shape::MarkerStroke {
             points,
             color: state.marker_color(),

@@ -59,6 +59,18 @@ pub(crate) fn bounding_box_for_rect(x: i32, y: i32, w: i32, h: i32, thick: f64) 
     ensure_positive_rect(min_x, min_y, max_x, max_y)
 }
 
+pub(crate) fn bounding_box_for_blur(x: i32, y: i32, w: i32, h: i32) -> Option<Rect> {
+    let x2 = x + w;
+    let y2 = y + h;
+    let padding = 1;
+    ensure_positive_rect(
+        x.min(x2) - padding,
+        y.min(y2) - padding,
+        x.max(x2) + padding,
+        y.max(y2) + padding,
+    )
+}
+
 pub(crate) fn bounding_box_for_ellipse(
     cx: i32,
     cy: i32,
@@ -234,5 +246,17 @@ mod tests {
         assert_eq!(stroke_padding(0.0), 1);
         assert_eq!(stroke_padding(1.1), 1);
         assert_eq!(stroke_padding(2.1), 2);
+    }
+
+    #[test]
+    fn bounding_box_for_blur_includes_outline_stroke() {
+        assert_eq!(
+            bounding_box_for_blur(10, 20, 30, 40),
+            Rect::new(9, 19, 32, 42)
+        );
+        assert_eq!(
+            bounding_box_for_blur(10, 20, -4, -6),
+            Rect::new(5, 13, 6, 8)
+        );
     }
 }

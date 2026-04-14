@@ -71,6 +71,10 @@ impl InputState {
                 *y1 += dy;
                 *y2 += dy;
             }
+            Shape::BlurRect { x, y, .. } => {
+                *x += dx;
+                *y += dy;
+            }
             Shape::Text { x, y, .. } => {
                 *x += dx;
                 *y += dy;

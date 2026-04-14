@@ -20,8 +20,15 @@ const TOOL_BUTTONS_FULL: &[Tool] = &[
     Tool::Rect,
     Tool::Ellipse,
     Tool::Arrow,
+    Tool::Blur,
 ];
-const SHAPE_BUTTONS: &[Tool] = &[Tool::Line, Tool::Rect, Tool::Ellipse, Tool::Arrow];
+const SHAPE_BUTTONS: &[Tool] = &[
+    Tool::Line,
+    Tool::Rect,
+    Tool::Ellipse,
+    Tool::Arrow,
+    Tool::Blur,
+];
 
 pub fn build_top_hits(
     width: f64,

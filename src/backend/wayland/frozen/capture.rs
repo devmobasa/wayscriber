@@ -265,7 +265,7 @@ impl FrozenState {
 
         capture.frame.destroy();
 
-        self.image = Some(FrozenImage {
+        self.set_image(FrozenImage {
             width: capture.width,
             height: capture.height,
             stride: (capture.width * 4) as i32,

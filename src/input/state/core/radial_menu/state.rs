@@ -217,6 +217,9 @@ impl InputState {
                     1 => {
                         self.set_tool_override(Some(Tool::Ellipse));
                     }
+                    2 => {
+                        self.set_tool_override(Some(Tool::Blur));
+                    }
                     _ => {}
                 }
             }
