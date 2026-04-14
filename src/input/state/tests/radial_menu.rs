@@ -1,5 +1,6 @@
 use super::helpers::create_test_input_state_with_keybindings;
 use super::*;
+use crate::input::BOARD_ID_WHITEBOARD;
 use std::f64::consts::PI;
 
 fn point_at(cx: f64, cy: f64, radius: f64, degrees: f64) -> (f64, f64) {
@@ -168,6 +169,40 @@ fn right_click_when_radial_open_opens_context_menu() {
 
     assert!(!state.is_radial_menu_open());
     assert!(state.is_context_menu_open());
+}
+
+#[test]
+fn right_click_when_radial_open_on_panned_board_uses_canvas_hit_testing() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    assert!(state.boards.active_frame_mut().set_view_offset(100, 50));
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Line {
+        x1: 140,
+        y1: 90,
+        x2: 180,
+        y2: 90,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.open_radial_menu(50.0, 40.0);
+    assert!(state.is_radial_menu_open());
+
+    state.on_mouse_press_with_canvas(MouseButton::Right, 50, 40, 150, 90);
+
+    assert!(!state.is_radial_menu_open());
+    match &state.context_menu_state {
+        ContextMenuState::Open {
+            kind,
+            shape_ids,
+            hovered_shape_id,
+            ..
+        } => {
+            assert_eq!(*kind, ContextMenuKind::Shape);
+            assert_eq!(shape_ids.as_slice(), &[shape_id]);
+            assert_eq!(*hovered_shape_id, Some(shape_id));
+        }
+        ContextMenuState::Hidden => panic!("context menu should be open"),
+    }
 }
 
 #[test]

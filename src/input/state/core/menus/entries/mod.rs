@@ -3,6 +3,7 @@ mod canvas;
 mod page;
 mod pages;
 mod shape;
+mod zoom;
 
 use super::super::base::InputState;
 use super::types::{ContextMenuEntry, ContextMenuKind, ContextMenuState};
@@ -20,6 +21,7 @@ impl InputState {
             } => match kind {
                 ContextMenuKind::Canvas => self.canvas_menu_entries(),
                 ContextMenuKind::Shape => self.shape_menu_entries(shape_ids, *hovered_shape_id),
+                ContextMenuKind::Zoom => self.zoom_menu_entries(),
                 ContextMenuKind::Pages => self.pages_menu_entries(),
                 ContextMenuKind::Boards => self.boards_menu_entries(),
                 ContextMenuKind::Page => self.page_context_menu_entries(),

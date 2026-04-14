@@ -51,7 +51,8 @@ impl WaylandState {
             {
                 self.set_current_mouse(sx as i32, sy as i32);
                 let (wx, wy) = self.zoomed_world_coords(sx, sy);
-                self.input_state.update_pointer_position(wx, wy);
+                self.input_state
+                    .update_pointer_positions(sx as i32, sy as i32, wx, wy);
             }
             let evt = self.toolbar.pointer_motion(&event.surface, event.position);
             if self.toolbar_dragging() {
@@ -77,7 +78,12 @@ impl WaylandState {
         if self.pointer_over_toolbar() {
             self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
-            self.input_state.update_pointer_position(wx, wy);
+            self.input_state.update_pointer_positions(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+                wx,
+                wy,
+            );
             let evt = self.toolbar.pointer_motion(&event.surface, event.position);
             if self.toolbar_dragging() {
                 // Use move_drag_intent if pointer_motion didn't return an intent
@@ -118,8 +124,29 @@ impl WaylandState {
                 .update_pan_position(event.position.0, event.position.1);
             self.zoom
                 .pan_by_screen_delta(dx, dy, self.surface.width(), self.surface.height());
+            self.sync_input_zoom_state();
+            let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+            self.input_state.update_pointer_positions(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+                wx,
+                wy,
+            );
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
+            return;
+        }
+        if self.board_panning_active() {
+            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+            let (dx, dy) = self.update_board_pan_position(event.position.0, event.position.1);
+            let _ = self.pan_board_by_screen_delta(dx, dy);
+            let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
+            self.input_state.update_pointer_positions(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+                wx,
+                wy,
+            );
             return;
         }
         self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
@@ -128,7 +155,17 @@ impl WaylandState {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
-        self.input_state.update_pointer_position(wx, wy);
-        self.input_state.on_mouse_motion(wx, wy);
+        self.input_state.update_pointer_positions(
+            event.position.0.round() as i32,
+            event.position.1.round() as i32,
+            wx,
+            wy,
+        );
+        self.input_state.on_mouse_motion_with_canvas(
+            event.position.0.round() as i32,
+            event.position.1.round() as i32,
+            wx,
+            wy,
+        );
     }
 }

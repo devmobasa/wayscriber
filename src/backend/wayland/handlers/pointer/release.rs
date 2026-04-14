@@ -96,6 +96,11 @@ impl WaylandState {
             }
             return;
         }
+        if button == BTN_LEFT && self.board_panning_active() {
+            self.stop_board_pan();
+            self.input_state.needs_redraw = true;
+            return;
+        }
 
         let mb = match button {
             BTN_LEFT => MouseButton::Left,
@@ -117,8 +122,11 @@ impl WaylandState {
             }
         }
 
+        let screen_x = event.position.0.round() as i32;
+        let screen_y = event.position.1.round() as i32;
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
-        self.input_state.on_mouse_release(mb, wx, wy);
+        self.input_state
+            .on_mouse_release_with_canvas(mb, screen_x, screen_y, wx, wy);
         self.input_state.needs_redraw = true;
     }
 }

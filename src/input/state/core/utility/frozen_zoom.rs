@@ -28,14 +28,24 @@ impl InputState {
     }
 
     /// Updates cached zoom status and triggers a redraw when it changes.
-    pub fn set_zoom_status(&mut self, active: bool, locked: bool, scale: f64) {
+    pub fn set_zoom_status(
+        &mut self,
+        active: bool,
+        locked: bool,
+        scale: f64,
+        view_offset: (f64, f64),
+    ) {
         let changed = self.zoom_active != active
             || self.zoom_locked != locked
-            || (self.zoom_scale - scale).abs() > f64::EPSILON;
+            || (self.zoom_scale - scale).abs() > f64::EPSILON
+            || (self.zoom_view_offset.0 - view_offset.0).abs() > f64::EPSILON
+            || (self.zoom_view_offset.1 - view_offset.1).abs() > f64::EPSILON;
         if changed {
             self.zoom_active = active;
             self.zoom_locked = locked;
             self.zoom_scale = scale;
+            self.zoom_view_offset = view_offset;
+            self.sync_canvas_pointer_to_current_transform();
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
@@ -132,14 +142,14 @@ mod tests {
         let mut state = make_state();
         state.needs_redraw = false;
 
-        state.set_zoom_status(true, true, 2.0);
+        state.set_zoom_status(true, true, 2.0, (40.0, 60.0));
         assert!(state.zoom_active());
         assert!(state.zoom_locked());
         assert_eq!(state.zoom_scale(), 2.0);
         assert!(state.needs_redraw);
 
         state.needs_redraw = false;
-        state.set_zoom_status(true, true, 2.0);
+        state.set_zoom_status(true, true, 2.0, (40.0, 60.0));
         assert!(!state.needs_redraw);
     }
 }

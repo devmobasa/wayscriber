@@ -121,6 +121,20 @@ fn move_page_between_boards_copy_preserves_source_and_adds_page_to_target() {
 }
 
 #[test]
+fn reset_active_canvas_position_clears_view_offset_on_solid_board() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    assert!(state.boards.active_frame_mut().set_view_offset(180, -90));
+
+    assert!(state.reset_active_canvas_position());
+    assert_eq!(state.boards.active_frame().view_offset(), (0, 0));
+    assert_eq!(
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Canvas position reset.")
+    );
+}
+
+#[test]
 fn move_page_between_boards_move_removes_source_page_and_activates_target_copy() {
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);

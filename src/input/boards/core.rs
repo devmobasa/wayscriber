@@ -54,6 +54,14 @@ impl BoardManager {
         self.show_badge
     }
 
+    pub fn pan_enabled(&self) -> bool {
+        self.pan_enabled
+    }
+
+    pub fn show_pan_badge(&self) -> bool {
+        self.show_pan_badge
+    }
+
     pub fn max_count(&self) -> usize {
         self.max_count
     }

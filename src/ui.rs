@@ -26,8 +26,8 @@ pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboar
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub use status::{
-    render_editing_badge, render_frozen_badge, render_page_badge, render_status_bar,
-    render_zoom_badge,
+    render_editing_badge, render_frozen_badge, render_page_badge, render_pan_badge,
+    render_status_bar, render_zoom_badge,
 };
 pub use toasts::{render_blocked_feedback, render_preset_toast, render_ui_toast};
 pub use tour::render_tour;

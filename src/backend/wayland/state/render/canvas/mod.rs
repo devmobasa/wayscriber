@@ -18,7 +18,8 @@ impl WaylandState {
         now: Instant,
         damage_world: &[crate::util::Rect],
     ) -> Result<()> {
-        let zoom_transform_active = self.zoom.active;
+        let canvas_transform_active = self.canvas_transform_active();
+        let (canvas_origin_x, canvas_origin_y) = self.canvas_view_origin();
         let eraser_ctx = self.render_canvas_background(ctx, scale, phys_width, phys_height)?;
 
         // Scale subsequent drawing to logical coordinates
@@ -27,10 +28,12 @@ impl WaylandState {
             ctx.scale(scale as f64, scale as f64);
         }
 
-        if zoom_transform_active {
+        if canvas_transform_active {
             let _ = ctx.save();
-            ctx.scale(self.zoom.scale, self.zoom.scale);
-            ctx.translate(-self.zoom.view_offset.0, -self.zoom.view_offset.1);
+            if self.zoom.active {
+                ctx.scale(self.zoom.scale, self.zoom.scale);
+            }
+            ctx.translate(-canvas_origin_x, -canvas_origin_y);
         }
 
         // Render all completed shapes from active frame
@@ -86,7 +89,7 @@ impl WaylandState {
             let safe_y = bounds.y.saturating_sub(margin);
             let safe_width = bounds.width.saturating_add(margin * 2);
             let safe_height = bounds.height.saturating_add(margin * 2);
-            let safe_bounds = if zoom_transform_active {
+            let safe_bounds = if canvas_transform_active {
                 crate::util::Rect::new(safe_x, safe_y, safe_width, safe_height)
             } else {
                 // Clamp to logical surface bounds to avoid negative coords or overflow.
@@ -136,11 +139,8 @@ impl WaylandState {
 
         self.render_selection_overlays(ctx);
 
-        let (mx, my) = if zoom_transform_active {
-            self.zoomed_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64)
-        } else {
-            self.current_mouse()
-        };
+        let (mx, my) =
+            self.canvas_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64);
 
         self.render_eraser_hover_halos(ctx, mx, my);
 
@@ -158,7 +158,7 @@ impl WaylandState {
         // Render click highlight overlays before UI so status/help remain legible
         self.input_state.render_click_highlights(ctx, now);
 
-        if zoom_transform_active {
+        if canvas_transform_active {
             let _ = ctx.restore();
         }
 

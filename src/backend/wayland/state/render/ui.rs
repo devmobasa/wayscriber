@@ -50,6 +50,20 @@ impl WaylandState {
                 );
                 top_badge_offset += 42.0; // Space below zoom badge
             }
+            if self.input_state.boards.pan_enabled()
+                && self.input_state.boards.show_pan_badge()
+                && !self.input_state.board_is_transparent()
+                && !self.input_state.show_status_bar
+            {
+                crate::ui::render_pan_badge(
+                    ctx,
+                    width,
+                    height,
+                    self.input_state.boards.active_frame().view_offset() != (0, 0),
+                    top_badge_offset,
+                );
+                top_badge_offset += 42.0;
+            }
             // Render editing badge when in text edit mode
             if matches!(self.input_state.state, DrawingState::TextInput { .. })
                 && self.input_state.text_edit_target.is_some()

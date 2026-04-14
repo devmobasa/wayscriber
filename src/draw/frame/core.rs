@@ -9,6 +9,8 @@ pub struct Frame {
     pub shapes: Vec<DrawnShape>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_name: Option<String>,
+    #[serde(default, skip_serializing_if = "is_origin_offset")]
+    pub view_offset: (i32, i32),
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) undo_stack: Vec<UndoAction>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -29,6 +31,7 @@ impl Frame {
         Self {
             shapes: Vec::new(),
             page_name: None,
+            view_offset: (0, 0),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             next_shape_id: 1,
@@ -41,6 +44,7 @@ impl Frame {
         self.shapes.clear();
         self.undo_stack.clear();
         self.redo_stack.clear();
+        self.view_offset = (0, 0);
         self.next_shape_id = 1;
     }
 
@@ -49,6 +53,7 @@ impl Frame {
         let mut frame = Frame::new();
         frame.shapes = self.shapes.clone();
         frame.page_name = self.page_name.clone();
+        frame.view_offset = self.view_offset;
         frame.rebuild_next_id();
         frame
     }
@@ -85,8 +90,28 @@ impl Frame {
     pub fn has_persistable_data(&self) -> bool {
         !self.shapes.is_empty()
             || self.page_name.is_some()
+            || self.view_offset != (0, 0)
             || !self.undo_stack.is_empty()
             || !self.redo_stack.is_empty()
+    }
+
+    pub fn view_offset(&self) -> (i32, i32) {
+        self.view_offset
+    }
+
+    pub fn set_view_offset(&mut self, x: i32, y: i32) -> bool {
+        let next = (x, y);
+        if self.view_offset == next {
+            return false;
+        }
+        self.view_offset = next;
+        true
+    }
+
+    pub fn pan_view_by(&mut self, dx: i32, dy: i32) -> bool {
+        let next_x = self.view_offset.0.saturating_add(dx);
+        let next_y = self.view_offset.1.saturating_add(dy);
+        self.set_view_offset(next_x, next_y)
     }
 
     /// Adds a shape at the end of the stack and returns its identifier.
@@ -195,4 +220,8 @@ impl Frame {
 
         self.next_shape_id = shapes_max.max(history_max).saturating_add(1);
     }
+}
+
+fn is_origin_offset(offset: &(i32, i32)) -> bool {
+    *offset == (0, 0)
 }

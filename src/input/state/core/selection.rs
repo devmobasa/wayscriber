@@ -113,4 +113,9 @@ impl InputState {
             None
         }
     }
+
+    pub(crate) fn selection_screen_bounding_box(&self, ids: &[ShapeId]) -> Option<Rect> {
+        self.selection_bounding_box(ids)
+            .and_then(|bounds| self.screen_rect_for_canvas(bounds))
+    }
 }

@@ -75,6 +75,23 @@ impl InputState {
             false,
             Some(MenuCommand::Properties),
         ));
+        if self.boards.pan_enabled() && !self.board_is_transparent() {
+            let reset_disabled = self.boards.active_frame().view_offset() == (0, 0);
+            entries.push(ContextMenuEntry::new(
+                "Reset Canvas Position",
+                Some("Space+Drag"),
+                false,
+                reset_disabled,
+                Some(MenuCommand::ResetCanvasPosition),
+            ));
+        }
+        entries.push(ContextMenuEntry::new(
+            "Zoom",
+            None::<String>,
+            true,
+            false,
+            Some(MenuCommand::OpenZoomMenu),
+        ));
         entries.push(ContextMenuEntry::new(
             "Radial Menu",
             self.shortcut_for_action(Action::ToggleRadialMenu),

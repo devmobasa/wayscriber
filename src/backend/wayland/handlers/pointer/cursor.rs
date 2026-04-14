@@ -112,6 +112,12 @@ impl WaylandState {
         if self.toolbar_dragging() {
             return CursorIcon::Grabbing;
         }
+        if self.board_panning_active() {
+            return CursorIcon::Grabbing;
+        }
+        if self.board_pan_key_held() && self.can_start_board_pan() {
+            return CursorIcon::Grab;
+        }
 
         // Inline toolbar cursor hints (when using inline mode)
         if self.inline_toolbars_active()
@@ -183,8 +189,8 @@ impl WaylandState {
         }
 
         // Check if hovering over selection handles
-        let (mx, my) = self.current_mouse();
-        if let Some(handle) = self.input_state.hit_selection_handle(mx, my) {
+        let (canvas_x, canvas_y) = self.input_state.canvas_pointer_position();
+        if let Some(handle) = self.input_state.hit_selection_handle(canvas_x, canvas_y) {
             return match handle {
                 SelectionHandle::TopLeft | SelectionHandle::BottomRight => CursorIcon::NwseResize,
                 SelectionHandle::TopRight | SelectionHandle::BottomLeft => CursorIcon::NeswResize,
@@ -194,12 +200,16 @@ impl WaylandState {
         }
 
         // Check if hovering over text resize handle
-        if self.input_state.hit_text_resize_handle(mx, my).is_some() {
+        if self
+            .input_state
+            .hit_text_resize_handle(canvas_x, canvas_y)
+            .is_some()
+        {
             return CursorIcon::SeResize;
         }
 
         // Check if hovering over a selected shape (for move)
-        if let Some(hit_id) = self.input_state.hit_test_at(mx, my)
+        if let Some(hit_id) = self.input_state.hit_test_at(canvas_x, canvas_y)
             && self
                 .input_state
                 .selected_shape_ids_set()

@@ -196,6 +196,7 @@ impl InputState {
             board_picker_layout: None,
             spatial_index: None,
             last_pointer_position: (0, 0),
+            last_canvas_pointer_position: (0, 0),
             pending_menu_hover_recalc: false,
             shape_properties_panel: None,
             properties_panel_layout: None,
@@ -206,6 +207,7 @@ impl InputState {
             zoom_active: false,
             zoom_locked: false,
             zoom_scale: 1.0,
+            zoom_view_offset: (0.0, 0.0),
             show_more_colors: false,
             show_actions_section: true, // Show by default
             show_actions_advanced: false,

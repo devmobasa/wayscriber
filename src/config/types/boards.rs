@@ -18,6 +18,14 @@ pub struct BoardsConfig {
     #[serde(default = "default_boards_show_badge")]
     pub show_board_badge: bool,
 
+    /// Enable panning on solid-color boards.
+    #[serde(default = "default_boards_pan_enabled")]
+    pub pan_enabled: bool,
+
+    /// Show a pan hint badge for solid-color boards.
+    #[serde(default = "default_boards_show_pan_badge")]
+    pub show_pan_badge: bool,
+
     /// Persist runtime edits (name/color) back to config.
     #[serde(default = "default_boards_persist_customizations")]
     pub persist_customizations: bool,
@@ -37,6 +45,8 @@ impl Default for BoardsConfig {
             max_count: default_boards_max_count(),
             auto_create: default_boards_auto_create(),
             show_board_badge: default_boards_show_badge(),
+            pan_enabled: default_boards_pan_enabled(),
+            show_pan_badge: default_boards_show_pan_badge(),
             persist_customizations: default_boards_persist_customizations(),
             default_board: default_boards_default_board(),
             items: Self::default_items(),
@@ -89,6 +99,8 @@ impl BoardsConfig {
             max_count: default_boards_max_count(),
             auto_create: default_boards_auto_create(),
             show_board_badge: default_boards_show_badge(),
+            pan_enabled: default_boards_pan_enabled(),
+            show_pan_badge: default_boards_show_pan_badge(),
             persist_customizations: default_boards_persist_customizations(),
             default_board: legacy.default_mode.clone(),
             items,
@@ -170,6 +182,14 @@ fn default_boards_show_badge() -> bool {
 }
 
 fn default_boards_persist_customizations() -> bool {
+    true
+}
+
+fn default_boards_pan_enabled() -> bool {
+    true
+}
+
+fn default_boards_show_pan_badge() -> bool {
     true
 }
 

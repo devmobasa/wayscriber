@@ -32,6 +32,23 @@ impl InputState {
             clear_disabled,
             Some(MenuCommand::ClearAll),
         ));
+        if self.boards.pan_enabled() && !self.board_is_transparent() {
+            let reset_disabled = self.boards.active_frame().view_offset() == (0, 0);
+            entries.push(ContextMenuEntry::new(
+                "Reset Canvas Position",
+                Some("Space+Drag"),
+                false,
+                reset_disabled,
+                Some(MenuCommand::ResetCanvasPosition),
+            ));
+        }
+        entries.push(ContextMenuEntry::new(
+            "Zoom",
+            None::<String>,
+            true,
+            false,
+            Some(MenuCommand::OpenZoomMenu),
+        ));
         entries.push(ContextMenuEntry::new(
             "Toggle Highlight (tool + click)",
             self.shortcut_for_action(Action::ToggleHighlightTool),

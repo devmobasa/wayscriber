@@ -103,6 +103,18 @@ pub fn render_status_bar(
     } else {
         String::new()
     };
+    let pan_badge = if input_state.boards.pan_enabled()
+        && input_state.boards.show_pan_badge()
+        && !input_state.board_is_transparent()
+    {
+        if input_state.boards.active_frame().view_offset() == (0, 0) {
+            "[PAN Space+Drag] ".to_string()
+        } else {
+            "[PANNED Space+Drag] ".to_string()
+        }
+    } else {
+        String::new()
+    };
 
     let selection_badge = if let Some(bounds) = input_state.selection_bounds() {
         let count = input_state.selected_shape_ids().len();
@@ -116,9 +128,10 @@ pub fn render_status_bar(
     };
 
     let status_text = format!(
-        "{}{}{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
+        "{}{}{}{}{}{}{}[{}] [{}px] [{}] [Text {}px]{}{}  {}={}",
         frozen_badge,
         zoom_badge,
+        pan_badge,
         selection_badge,
         output_badge,
         board_badge,

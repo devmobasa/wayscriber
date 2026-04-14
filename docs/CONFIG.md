@@ -509,6 +509,8 @@ Configure multiple boards (each with its own pages) plus the special transparent
 max_count = 9
 auto_create = true
 show_board_badge = true
+pan_enabled = true
+show_pan_badge = true
 persist_customizations = true
 default_board = "transparent"
 
@@ -549,6 +551,8 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 - `max_count` — hard cap on total boards.
 - `auto_create` — create a board when switching to an empty slot.
 - `show_board_badge` — show board name/slot in the status bar.
+- `pan_enabled` — allow panning on solid-color boards with <kbd>Space</kbd> + left-drag.
+- `show_pan_badge` — show the pan hint in the status bar or as a floating badge.
 - `persist_customizations` — runtime edits (rename/background) are written back to config.
 - `default_board` — board id to activate on startup.
 - `items` — ordered list of boards; each board has:
@@ -570,6 +574,11 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 **Board Picker:**
 - Modal list for switching, renaming, and recoloring boards.
 - Inline edits persist immediately when `persist_customizations = true`.
+
+**Solid-board pan:**
+- Hold <kbd>Space</kbd> and drag with the left mouse button to pan whiteboards and other solid-color boards.
+- The canvas context menu includes **Reset Canvas Position** when board panning is enabled.
+- Pan offsets are stored per page, so each page keeps its own position.
 
 **CLI Override:**
 Use a board id with `--mode`:
