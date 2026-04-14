@@ -295,6 +295,9 @@ impl InputState {
         }
 
         let tool = self.active_tool();
+        if tool == Tool::Blur && !self.frozen_active() && !self.pending_frozen_toggle() {
+            self.request_frozen_toggle();
+        }
         if tool != Tool::Highlight && tool != Tool::Select {
             self.state = DrawingState::Drawing {
                 tool,

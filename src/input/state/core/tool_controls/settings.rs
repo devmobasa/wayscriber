@@ -1,4 +1,6 @@
-use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use super::super::base::{
+    DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, UiToastKind,
+};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{
     modifiers::DragToolBindings,
@@ -23,6 +25,11 @@ impl InputState {
 
         self.tool_override = tool;
         self.active_preset_slot = None;
+
+        if tool == Some(Tool::Blur) && !self.frozen_active && !self.pending_frozen_toggle {
+            self.request_frozen_toggle();
+            self.set_ui_toast(UiToastKind::Info, "Capturing background for blur...");
+        }
 
         // Ensure we are not mid-drawing with a stale tool
         if !matches!(

@@ -115,7 +115,7 @@ impl ZoomState {
                         portal_output_matches(target_output, self.active_output_id);
 
                     if output_matches {
-                        self.image = Some(image);
+                        self.set_image(image);
                     } else {
                         warn!("Portal zoom capture for inactive output discarded");
                     }

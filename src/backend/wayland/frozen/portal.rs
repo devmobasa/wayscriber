@@ -113,7 +113,7 @@ impl FrozenState {
                         portal_output_matches(target_output, self.active_output_id);
 
                     if output_matches {
-                        self.image = Some(image);
+                        self.set_image(image);
                         input_state.set_frozen_active(true);
                         input_state.dirty_tracker.mark_full();
                         input_state.needs_redraw = true;

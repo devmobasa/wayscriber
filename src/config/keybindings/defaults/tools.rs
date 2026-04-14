@@ -54,6 +54,10 @@ pub(crate) fn default_select_arrow_tool() -> Vec<String> {
     Vec::new()
 }
 
+pub(crate) fn default_select_blur_tool() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_select_highlight_tool() -> Vec<String> {
     Vec::new()
 }

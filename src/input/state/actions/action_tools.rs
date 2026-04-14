@@ -75,6 +75,9 @@ impl InputState {
             Action::SelectArrowTool => {
                 self.set_tool_override(Some(Tool::Arrow));
             }
+            Action::SelectBlurTool => {
+                self.set_tool_override(Some(Tool::Blur));
+            }
             Action::SelectHighlightTool => {
                 self.set_highlight_tool(true);
                 self.set_tool_override(Some(Tool::Highlight));

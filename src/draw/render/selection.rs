@@ -106,6 +106,22 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
                 *head_at_end,
             );
         }
+        Shape::BlurRect { .. } => {
+            if let Some(bounds) = drawn.shape.bounding_box() {
+                let padding = 3.0;
+                let x = bounds.x as f64 - padding;
+                let y = bounds.y as f64 - padding;
+                let w = bounds.width as f64 + padding * 2.0;
+                let h = bounds.height as f64 + padding * 2.0;
+                ctx.set_source_rgba(glow.r, glow.g, glow.b, glow.a * 0.5);
+                ctx.rectangle(x, y, w, h);
+                let _ = ctx.fill();
+                ctx.set_source_rgba(glow.r, glow.g, glow.b, glow.a);
+                ctx.set_line_width(2.0);
+                ctx.rectangle(x, y, w, h);
+                let _ = ctx.stroke();
+            }
+        }
         Shape::MarkerStroke { points, thick, .. } => {
             render_freehand_borrowed(ctx, points, glow, thick + outline_width);
         }

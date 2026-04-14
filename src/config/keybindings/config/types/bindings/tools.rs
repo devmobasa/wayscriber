@@ -47,6 +47,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_select_arrow_tool")]
     pub select_arrow_tool: Vec<String>,
 
+    #[serde(default = "default_select_blur_tool")]
+    pub select_blur_tool: Vec<String>,
+
     #[serde(default = "default_select_highlight_tool")]
     pub select_highlight_tool: Vec<String>,
 
@@ -83,6 +86,7 @@ impl Default for ToolKeybindingsConfig {
             select_rect_tool: default_select_rect_tool(),
             select_ellipse_tool: default_select_ellipse_tool(),
             select_arrow_tool: default_select_arrow_tool(),
+            select_blur_tool: default_select_blur_tool(),
             select_highlight_tool: default_select_highlight_tool(),
             toggle_highlight_tool: default_toggle_highlight_tool(),
             increase_font_size: default_increase_font_size(),

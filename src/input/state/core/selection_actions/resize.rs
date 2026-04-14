@@ -196,6 +196,24 @@ impl InputState {
                     label: label.clone(),
                 }
             }
+            Shape::BlurRect {
+                x,
+                y,
+                w,
+                h,
+                strength,
+            } => {
+                let (nx, ny) = Self::scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
+                let nw = Self::scale_size(*w, scale_x);
+                let nh = Self::scale_size(*h, scale_y);
+                Shape::BlurRect {
+                    x: nx,
+                    y: ny,
+                    w: nw.max(1),
+                    h: nh.max(1),
+                    strength: *strength,
+                }
+            }
             Shape::Freehand {
                 points,
                 color,

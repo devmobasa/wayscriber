@@ -1,6 +1,6 @@
 use super::bounds::{
-    bounding_box_for_arrow, bounding_box_for_ellipse, bounding_box_for_eraser,
-    bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
+    bounding_box_for_arrow, bounding_box_for_blur, bounding_box_for_ellipse,
+    bounding_box_for_eraser, bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
 };
 use super::step_marker::step_marker_bounds;
 use super::text::{bounding_box_for_sticky_note, bounding_box_for_text};
@@ -144,6 +144,19 @@ pub enum Shape {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<ArrowLabel>,
     },
+    /// Rectangular blur region over the captured background.
+    BlurRect {
+        /// Top-left X coordinate
+        x: i32,
+        /// Top-left Y coordinate
+        y: i32,
+        /// Width in pixels
+        w: i32,
+        /// Height in pixels
+        h: i32,
+        /// Blur strength, reusing the tool size slider semantics
+        strength: f64,
+    },
     /// Numbered step marker bubble.
     StepMarker {
         /// Center X coordinate
@@ -286,6 +299,7 @@ impl Shape {
                 *head_at_end,
                 label.as_ref(),
             ),
+            Shape::BlurRect { x, y, w, h, .. } => bounding_box_for_blur(*x, *y, *w, *h),
             Shape::Text {
                 x,
                 y,
@@ -332,6 +346,7 @@ impl Shape {
             Shape::Rect { .. } => "Rectangle",
             Shape::Ellipse { .. } => "Ellipse",
             Shape::Arrow { .. } => "Arrow",
+            Shape::BlurRect { .. } => "Blur",
             Shape::Text { .. } => "Text",
             Shape::StickyNote { .. } => "Sticky Note",
             Shape::MarkerStroke { .. } => "Marker",

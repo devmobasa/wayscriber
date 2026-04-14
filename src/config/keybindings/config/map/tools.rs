@@ -33,6 +33,7 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.tools.select_rect_tool, Action::SelectRectTool)?;
         inserter.insert_all(&self.tools.select_ellipse_tool, Action::SelectEllipseTool)?;
         inserter.insert_all(&self.tools.select_arrow_tool, Action::SelectArrowTool)?;
+        inserter.insert_all(&self.tools.select_blur_tool, Action::SelectBlurTool)?;
         inserter.insert_all(
             &self.tools.select_highlight_tool,
             Action::SelectHighlightTool,

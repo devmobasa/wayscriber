@@ -291,7 +291,7 @@ fn tool_segment_matches(idx: u8, tool: Tool, input_state: &InputState) -> bool {
         1 => tool == Tool::Marker,
         2 => tool == Tool::Line,
         3 => tool == Tool::Arrow,
-        4 => tool == Tool::Rect || tool == Tool::Ellipse,
+        4 => tool == Tool::Rect || tool == Tool::Ellipse || tool == Tool::Blur,
         5 => {
             matches!(
                 input_state.state,
@@ -319,6 +319,7 @@ fn active_tool_short_label(tool: Tool, input_state: &InputState) -> &'static str
         Tool::Arrow => "Arrow",
         Tool::Rect => "Rect",
         Tool::Ellipse => "Ellipse",
+        Tool::Blur => "Blur",
         Tool::Eraser => "Eraser",
         Tool::Select => "Select",
         Tool::Highlight => "Highlight",

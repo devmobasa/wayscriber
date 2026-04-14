@@ -22,6 +22,8 @@ pub enum Tool {
     Ellipse,
     /// Arrow with directional head (Ctrl+Shift)
     Arrow,
+    /// Privacy blur rectangle over the captured background
+    Blur,
     /// Semi-transparent marker stroke for highlighting text
     Marker,
     /// Highlight-only tool (no drawing, emits click highlight)

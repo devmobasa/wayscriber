@@ -106,11 +106,13 @@ pub fn render_top_strip(
         Some(Tool::Rect) => Some(Tool::Rect),
         Some(Tool::Ellipse) => Some(Tool::Ellipse),
         Some(Tool::Arrow) => Some(Tool::Arrow),
+        Some(Tool::Blur) => Some(Tool::Blur),
         _ => match snapshot.active_tool {
             Tool::Line => Some(Tool::Line),
             Tool::Rect => Some(Tool::Rect),
             Tool::Ellipse => Some(Tool::Ellipse),
             Tool::Arrow => Some(Tool::Arrow),
+            Tool::Blur => Some(Tool::Blur),
             _ => None,
         },
     };

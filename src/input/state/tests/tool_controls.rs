@@ -41,6 +41,15 @@ fn set_tool_override_preserves_text_input_state() {
 }
 
 #[test]
+fn blur_tool_override_requests_frozen_capture_when_needed() {
+    let mut state = create_test_input_state();
+
+    assert!(state.set_tool_override(Some(Tool::Blur)));
+    assert_eq!(state.tool_override(), Some(Tool::Blur));
+    assert!(state.take_pending_frozen_toggle());
+}
+
+#[test]
 fn presenter_locked_mode_rejects_non_highlight_tool_override() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Highlight)));

@@ -30,6 +30,11 @@ pub fn draw_icon_arrow(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_arrow(ctx, x, y, size);
 }
 
+/// Draw a blur tool icon
+pub fn draw_icon_blur(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_blur(ctx, x, y, size);
+}
+
 /// Draw an eraser tool icon
 #[allow(dead_code)]
 pub fn draw_icon_eraser(ctx: &Context, x: f64, y: f64, size: f64) {

@@ -49,6 +49,15 @@ impl WaylandState {
             crate::draw::Shape::EraserStroke { points, brush } => {
                 crate::draw::render_eraser_stroke(ctx, points, brush, &replay_ctx);
             }
+            crate::draw::Shape::BlurRect {
+                x,
+                y,
+                w,
+                h,
+                strength,
+            } => {
+                crate::draw::render_blur_rect(ctx, *x, *y, *w, *h, *strength, &replay_ctx, true);
+            }
             other => {
                 crate::draw::render_shape(ctx, other);
             }
@@ -144,9 +153,40 @@ impl WaylandState {
 
         self.render_eraser_hover_halos(ctx, mx, my);
 
-        // Render provisional shape if actively drawing
-        // Use optimized method that avoids cloning for freehand
-        if self.input_state.render_provisional_shape(ctx, mx, my) {
+        // Render provisional shape if actively drawing.
+        let rendered_provisional = if let crate::input::DrawingState::Drawing {
+            tool: crate::input::Tool::Blur,
+            start_x,
+            start_y,
+            ..
+        } = &self.input_state.state
+        {
+            let (x, w) = if mx >= *start_x {
+                (*start_x, mx - start_x)
+            } else {
+                (mx, start_x - mx)
+            };
+            let (y, h) = if my >= *start_y {
+                (*start_y, my - start_y)
+            } else {
+                (my, start_y - my)
+            };
+            crate::draw::render_blur_rect(
+                ctx,
+                x,
+                y,
+                w,
+                h,
+                self.input_state.current_thickness,
+                &replay_ctx,
+                false,
+            );
+            true
+        } else {
+            // Use optimized method that avoids cloning for freehand
+            self.input_state.render_provisional_shape(ctx, mx, my)
+        };
+        if rendered_provisional {
             debug!("Rendered provisional shape");
         }
 

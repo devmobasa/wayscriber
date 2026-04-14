@@ -13,6 +13,10 @@ impl InputState {
         pending
     }
 
+    pub(crate) fn pending_frozen_toggle(&self) -> bool {
+        self.pending_frozen_toggle
+    }
+
     /// Updates the cached frozen-mode status and triggers a redraw when it changes.
     pub fn set_frozen_active(&mut self, active: bool) {
         if self.frozen_active != active {

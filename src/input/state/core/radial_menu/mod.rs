@@ -63,7 +63,7 @@ pub const TOOL_SEGMENT_COUNT: usize = 9;
 pub const COLOR_SEGMENT_COUNT: usize = 8;
 
 /// Sub-ring children for the Shapes segment (index 4).
-pub const SHAPES_CHILDREN: &[&str] = &["Rect", "Ellipse"];
+pub const SHAPES_CHILDREN: &[&str] = &["Rect", "Ellipse", "Blur"];
 /// Sub-ring children for the Text segment (index 5).
 pub const TEXT_CHILDREN: &[&str] = &["Text", "Sticky", "Step"];
 /// Sub-ring children for the Actions segment (index 8).

@@ -71,6 +71,29 @@ fn custom_drag_bindings_remap_default_and_modifier_tools() {
 }
 
 #[test]
+fn blur_drag_requests_frozen_capture_on_press() {
+    let mut state = create_test_input_state();
+    assert!(state.set_drag_tool_bindings(DragToolBindings {
+        drag: Tool::Blur,
+        shift_drag: Tool::Line,
+        ctrl_drag: Tool::Rect,
+        ctrl_shift_drag: Tool::Arrow,
+        tab_drag: Tool::Ellipse,
+    }));
+
+    state.on_mouse_press(MouseButton::Left, 12, 14);
+
+    assert!(state.take_pending_frozen_toggle());
+    assert!(matches!(
+        state.state,
+        DrawingState::Drawing {
+            tool: Tool::Blur,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn drag_mapped_highlight_reports_highlight_active() {
     let mut state = create_test_input_state();
     assert!(state.set_drag_tool_bindings(DragToolBindings {

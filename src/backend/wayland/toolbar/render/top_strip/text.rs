@@ -59,6 +59,7 @@ pub(super) fn draw_text_strip(
             Tool::Rect,
             Tool::Ellipse,
             Tool::Arrow,
+            Tool::Blur,
         ]
     };
 
@@ -245,7 +246,13 @@ pub(super) fn draw_text_strip(
     if is_simple && snapshot.shape_picker_open {
         let shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
         let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + gap;
-        let shapes: &[Tool] = &[Tool::Line, Tool::Rect, Tool::Ellipse, Tool::Arrow];
+        let shapes: &[Tool] = &[
+            Tool::Line,
+            Tool::Rect,
+            Tool::Ellipse,
+            Tool::Arrow,
+            Tool::Blur,
+        ];
         for tool in shapes {
             let label = tool_label(*tool);
             let tooltip_label = tool_tooltip_label(*tool);

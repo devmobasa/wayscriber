@@ -87,6 +87,9 @@ pub(super) fn shape_thickness(shape: &Shape) -> Option<f64> {
         | Shape::Rect { thick, .. }
         | Shape::Ellipse { thick, .. }
         | Shape::Arrow { thick, .. }
+        | Shape::BlurRect {
+            strength: thick, ..
+        }
         | Shape::MarkerStroke { thick, .. } => Some(*thick),
         _ => None,
     }

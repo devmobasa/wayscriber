@@ -16,6 +16,7 @@ pub struct ZoomState {
     pub(super) active_geometry: Option<OutputGeometry>,
     pub(super) capture: Option<CaptureSession>,
     pub(super) image: Option<FrozenImage>,
+    image_generation: u64,
     pub(super) portal_rx: Option<PortalCaptureRx>,
     pub(super) portal_in_progress: bool,
     pub(super) portal_target_output_id: Option<u32>,
@@ -40,6 +41,7 @@ impl ZoomState {
             active_geometry: None,
             capture: None,
             image: None,
+            image_generation: 0,
             portal_rx: None,
             portal_in_progress: false,
             portal_target_output_id: None,
@@ -77,9 +79,20 @@ impl ZoomState {
         self.image.as_ref()
     }
 
+    pub fn image_generation(&self) -> u64 {
+        self.image_generation
+    }
+
+    pub fn set_image(&mut self, image: FrozenImage) {
+        self.image = Some(image);
+        self.bump_image_generation();
+    }
+
     pub fn clear_image(&mut self) -> bool {
-        let had_image = self.image.is_some();
-        self.image = None;
+        let had_image = self.image.take().is_some();
+        if had_image {
+            self.bump_image_generation();
+        }
         had_image
     }
 
@@ -166,11 +179,15 @@ impl ZoomState {
             self.active = false;
             self.locked = false;
             self.reset_view();
-            self.image = None;
+            self.clear_image();
         }
 
         input_state.set_zoom_status(self.active, self.locked, self.scale);
         input_state.dirty_tracker.mark_full();
         input_state.needs_redraw = true;
+    }
+
+    fn bump_image_generation(&mut self) {
+        self.image_generation = self.image_generation.wrapping_add(1).max(1);
     }
 }
