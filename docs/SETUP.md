@@ -22,7 +22,7 @@ If you installed `wayscriber-configurator`, you can set this up entirely in GUI:
 5. Set your shortcut and click `Apply Shortcut`.
 
 Desktop-specific shortcut handling:
-- GNOME: creates/updates a GNOME custom shortcut that runs `pkill -SIGUSR1 wayscriber`.
+- GNOME: creates/updates a GNOME custom shortcut that runs `wayscriber --daemon-toggle`.
 - GNOME migrations: `Install/Update Service` and `Apply Shortcut` remove stale `~/.config/systemd/user/wayscriber.service.d/shortcut.conf` files so old portal settings do not override GNOME behavior.
 - KDE/Plasma: writes a systemd user drop-in with `WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1` and `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcut handling.
 
@@ -67,8 +67,11 @@ Add the toggle keybinding to `~/.config/hypr/hyprland.conf`:
 
 ```conf
 # wayscriber - Screen annotation daemon (Super+D to toggle)
-bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
+bind = SUPER, D, exec, wayscriber --daemon-toggle
 ```
+
+Use only one toggle binding. Duplicate `SUPER+D` entries can fire twice and immediately undo the toggle.
+If your shortcut environment does not resolve `wayscriber` from `PATH`, use the absolute path from `command -v wayscriber`.
 
 ### Method 2: Daemon autostart via compositor (no systemd)
 
@@ -77,7 +80,7 @@ Add to `~/.config/hypr/hyprland.conf`:
 ```conf
 # wayscriber - Screen annotation daemon (Super+D to toggle)
 exec-once = wayscriber --daemon
-bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
+bind = SUPER, D, exec, wayscriber --daemon-toggle
 ```
 
 Then reload:
@@ -147,7 +150,9 @@ Press <kbd>Escape</kbd> (should hide overlay)
 **Keybind not working?**
 - Check `hyprctl reload` was run
 - Check for conflicts: `hyprctl binds | grep "SUPER, D"`
+- Make sure you only defined the toggle once
 - Try a different key combo
+- If `wayscriber` is not found from the compositor, use the absolute path from `command -v wayscriber`
 
 **Binary not found?**
 - Check PATH: `echo $PATH | grep .local/bin`
@@ -176,7 +181,7 @@ rm ~/.local/bin/wayscriber
 2. Add to hyprland.conf:
    ```conf
    exec-once = wayscriber --daemon
-   bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
+   bind = SUPER, D, exec, wayscriber --daemon-toggle
    ```
 3. Reload: `hyprctl reload`
 4. Use: Press <kbd>Super+D</kbd> to toggle overlay

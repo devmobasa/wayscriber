@@ -12,11 +12,11 @@ use wayscriber::shortcut_hint::{
 use super::command::{command_available, run_command, run_command_checked};
 use super::service::{
     escape_systemd_env_value, portal_shortcut_dropin_path, query_service_active,
-    remove_portal_shortcut_dropin_if_gnome, require_systemctl_available, run_systemctl_user,
+    remove_portal_shortcut_dropin_if_gnome, require_systemctl_available,
+    resolve_wayscriber_binary_path, run_systemctl_user,
 };
 
 const PORTAL_APP_ID: &str = "wayscriber";
-const TOGGLE_COMMAND: &str = "pkill -SIGUSR1 wayscriber";
 const GNOME_SHORTCUT_NAME: &str = "Wayscriber Toggle";
 
 pub(super) fn read_configured_shortcut(backend: ShortcutBackend) -> Option<String> {
@@ -72,7 +72,7 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
             ))
         }
         ShortcutApplyCapability::Manual => Err(
-            "Automatic shortcut setup is not available in this desktop session; bind `pkill -SIGUSR1 wayscriber` manually."
+            "Automatic shortcut setup is not available in this desktop session; bind `wayscriber --daemon-toggle` manually."
                 .to_string(),
         ),
     }
@@ -80,6 +80,7 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
 
 fn apply_gnome_custom_shortcut(binding: &str) -> Result<(), String> {
     require_gsettings_available()?;
+    let toggle_command = render_toggle_command()?;
 
     let mut bindings = read_gnome_custom_keybinding_paths()?;
     if !bindings
@@ -108,7 +109,7 @@ fn apply_gnome_custom_shortcut(binding: &str) -> Result<(), String> {
         "set",
         &schema_with_path,
         "command",
-        &gvariant_string_literal(TOGGLE_COMMAND),
+        &gvariant_string_literal(&toggle_command),
     ])?;
     run_gsettings_command(&[
         "set",
@@ -118,6 +119,14 @@ fn apply_gnome_custom_shortcut(binding: &str) -> Result<(), String> {
     ])?;
 
     Ok(())
+}
+
+fn render_toggle_command() -> Result<String, String> {
+    let binary_path = resolve_wayscriber_binary_path()?;
+    Ok(format!(
+        "{} --daemon-toggle",
+        shell_quote(binary_path.to_string_lossy().as_ref())
+    ))
 }
 
 fn read_gnome_custom_keybinding_paths() -> Result<Vec<String>, String> {
@@ -223,6 +232,28 @@ fn serialize_gsettings_path_list(paths: &[String]) -> String {
 fn gvariant_string_literal(value: &str) -> String {
     let escaped = value.replace('\\', "\\\\").replace('\'', "\\'");
     format!("'{escaped}'")
+}
+
+fn shell_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    if value.bytes().all(
+        |byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'/' | b'.' | b'_' | b'-'),
+    ) {
+        return value.to_string();
+    }
+
+    let mut quoted = String::from("'");
+    for character in value.chars() {
+        if character == '\'' {
+            quoted.push_str("'\\''");
+        } else {
+            quoted.push(character);
+        }
+    }
+    quoted.push('\'');
+    quoted
 }
 
 fn resolve_gnome_shortcut_from_gsettings(
@@ -418,5 +449,18 @@ mod tests {
         let error =
             normalize_shortcut_for_portal("Hyper+G").expect_err("expected invalid shortcut");
         assert!(error.contains("Unsupported modifier"));
+    }
+
+    #[test]
+    fn shell_quote_leaves_simple_paths_unquoted() {
+        assert_eq!(shell_quote("/usr/bin/wayscriber"), "/usr/bin/wayscriber");
+    }
+
+    #[test]
+    fn shell_quote_escapes_spaces_and_single_quotes() {
+        assert_eq!(
+            shell_quote("/tmp/My App/way'scriber"),
+            "'/tmp/My App/way'\\''scriber'"
+        );
     }
 }

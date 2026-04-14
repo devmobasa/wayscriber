@@ -200,7 +200,7 @@ impl ConfiguratorApp {
 
         if apply_capability == Some(ShortcutApplyCapability::Manual) {
             step = step.push(
-                text("Automatic shortcut setup is unavailable here. Add a manual keybind for `pkill -SIGUSR1 wayscriber`.")
+                text("Automatic shortcut setup is unavailable here. Add a manual keybind for `wayscriber --daemon-toggle`.")
                     .size(12)
                     .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.8, 0.3))),
             );

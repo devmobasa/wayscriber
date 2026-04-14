@@ -24,7 +24,7 @@ This document explains how the application boots, how user input travels through
 
 **Files:** `src/daemon.rs`, `src/backend/mod.rs`, `src/backend/wayland/*`
 
-1. `Daemon::run` starts signal handlers (SIGUSR1 toggles overlay, SIGTERM/SIGINT exit).
+1. `Daemon::run` starts signal handlers (legacy SIGUSR1 toggle, SIGTERM/SIGINT exit).
 2. Spawns a status tray (`ksni`) for manual toggle/quit/configurator actions.
 3. Maintains two atomics:
    - `toggle_requested`: set by signals or tray to show/hide overlay.
@@ -35,7 +35,7 @@ This document explains how the application boots, how user input travels through
 5. On exit:
    - Signals the backend to shut down and joins the tray thread.
 
-Daemon mode therefore provides a persistent background service that reacts to user keybinds (typically configured in the compositor to send SIGUSR1) or to tray actions.
+Daemon mode therefore provides a persistent background service that reacts to user keybinds (preferably configured to run `wayscriber --daemon-toggle`, which forwards to the daemon) or to tray actions.
 
 ---
 

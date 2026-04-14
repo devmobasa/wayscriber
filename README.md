@@ -364,15 +364,18 @@ No-CLI setup path:
 - Go to the `Daemon` tab
 - Click `Install/Update Service`, then `Enable + Start`
 - Set a shortcut and click `Apply Shortcut`
-  - GNOME: writes a GNOME custom shortcut (`pkill -SIGUSR1 wayscriber`)
+  - GNOME: writes a GNOME custom shortcut (`wayscriber --daemon-toggle`)
   - KDE/Plasma: writes systemd drop-in env (`WAYSCRIBER_PORTAL_SHORTCUT`) for portal global shortcuts
 
 Add keybinding:
 
 Hyprland:
 ```conf
-bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
+bind = SUPER, D, exec, wayscriber --daemon-toggle
 ```
+
+Use only one toggle binding. Duplicate `SUPER+D` entries can fire twice and immediately undo the toggle.
+If your compositor shortcut environment does not resolve `wayscriber` from `PATH`, use the absolute path from `command -v wayscriber` instead.
 
 Reload your config:
 ```bash
@@ -383,18 +386,18 @@ GNOME (Ubuntu/Debian/Fedora):
 1. Open `Settings -> Keyboard -> Keyboard Shortcuts`.
 2. Scroll down to `Custom Shortcuts`, click `+`.
 3. Name: `Wayscriber Toggle`.
-4. Command: `pkill -SIGUSR1 wayscriber`.
+4. Command: `wayscriber --daemon-toggle`.
 5. Set a shortcut key (recommended on Ubuntu GNOME: <kbd>Super+G</kbd>; <kbd>Super+D</kbd> is often already in use).
 
 KDE Plasma:
 1. Open `Settings -> Keyboard -> Shortcuts`.
 2. Add new `Command or Script`.
 3. Name: `Wayscriber Toggle`.
-4. Command: `pkill -SIGUSR1 wayscriber`.
+4. Command: `wayscriber --daemon-toggle`.
 5. Assign a key (for example <kbd>Meta+Shift+D</kbd>).
 
 Other desktops/window managers:
-- Bind `pkill -SIGUSR1 wayscriber` to any global shortcut key you prefer.
+- Bind `wayscriber --daemon-toggle` to any global shortcut key you prefer.
 
 Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; otherwise right-click the tray icon for options:
 - Toggle overlay visibility
@@ -412,7 +415,7 @@ Troubleshooting tray icons:
 **Alternative** — use compositor autostart instead of systemd:
 ```conf
 exec-once = wayscriber --daemon
-bind = SUPER, D, exec, pkill -SIGUSR1 wayscriber
+bind = SUPER, D, exec, wayscriber --daemon-toggle
 ```
 
 **Service commands:**

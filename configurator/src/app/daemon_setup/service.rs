@@ -156,7 +156,7 @@ fn package_service_paths() -> Vec<PathBuf> {
     ]
 }
 
-fn resolve_wayscriber_binary_path() -> Result<PathBuf, String> {
+pub(super) fn resolve_wayscriber_binary_path() -> Result<PathBuf, String> {
     if let Some(path) = env::var_os("WAYSCRIBER_BIN").map(PathBuf::from)
         && path.exists()
     {
