@@ -10,7 +10,10 @@ use smithay_client_toolkit::{
     shell::{WaylandSurface, wlr_layer::LayerSurface, xdg::window::Window},
     shm::{Shm, slot::SlotPool},
 };
-use wayland_client::protocol::{wl_output, wl_surface};
+use wayland_client::{
+    Proxy,
+    protocol::{wl_output, wl_surface},
+};
 
 /// The active shell role for the surface.
 pub enum SurfaceKind {
@@ -84,6 +87,14 @@ impl SurfaceState {
     /// Returns the active wl_surface, if initialized.
     pub fn wl_surface(&self) -> Option<&wl_surface::WlSurface> {
         self.wl_surface.as_ref()
+    }
+
+    /// Returns true if the provided wl_surface belongs to this overlay surface state.
+    pub fn is_surface(&self, surface: &wl_surface::WlSurface) -> bool {
+        self.wl_surface
+            .as_ref()
+            .map(|current| current.id() == surface.id())
+            .unwrap_or(false)
     }
 
     /// Returns the mutable layer surface, if initialized.

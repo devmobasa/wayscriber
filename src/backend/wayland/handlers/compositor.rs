@@ -15,9 +15,13 @@ impl CompositorHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         new_factor: i32,
     ) {
+        if !self.surface.is_surface(surface) {
+            return;
+        }
+
         let scale = new_factor.max(1);
         debug!("Scale factor changed to {}", scale);
         self.surface.set_scale(scale);
@@ -37,9 +41,13 @@ impl CompositorHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         _new_transform: wl_output::Transform,
     ) {
+        if !self.surface.is_surface(surface) {
+            return;
+        }
+
         debug!("Transform changed");
     }
 
@@ -47,9 +55,13 @@ impl CompositorHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         time: u32,
     ) {
+        if !self.surface.is_surface(surface) {
+            return;
+        }
+
         debug!(
             "Frame callback received (time: {}ms), clearing frame_callback_pending",
             time
@@ -92,9 +104,13 @@ impl CompositorHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         output: &wl_output::WlOutput,
     ) {
+        if !self.surface.is_surface(surface) {
+            return;
+        }
+
         debug!("Surface entered output");
 
         let previous_output = self.surface.current_output();
@@ -226,9 +242,13 @@ impl CompositorHandler for WaylandState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         output: &wl_output::WlOutput,
     ) {
+        if !self.surface.is_surface(surface) {
+            return;
+        }
+
         debug!("Surface left output");
         self.surface.clear_output(output);
         if self.surface.current_output().is_none() {
