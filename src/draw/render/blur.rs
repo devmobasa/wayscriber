@@ -8,6 +8,8 @@ const PLACEHOLDER_FILL: (f64, f64, f64, f64) = (0.12, 0.15, 0.2, 0.82);
 const PLACEHOLDER_STROKE: (f64, f64, f64, f64) = (0.92, 0.94, 0.98, 0.35);
 const BLUR_CACHE_MAX_ENTRIES: usize = 8;
 const BLUR_CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
+type Rgba = (f64, f64, f64, f64);
+type OverlayPalette = (Rgba, Rgba);
 
 #[derive(Clone, Copy, Debug)]
 struct BlurRecipe {
@@ -23,6 +25,16 @@ struct BlurSurfaceStats {
     green: f64,
     blue: f64,
     luminance: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BlurRectParams {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+    pub strength: f64,
+    pub cacheable: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -270,10 +282,7 @@ fn average_surface_stats(surface: &mut cairo::ImageSurface) -> Option<BlurSurfac
     })
 }
 
-fn blur_overlay_palette(
-    stats: BlurSurfaceStats,
-    alpha: f64,
-) -> ((f64, f64, f64, f64), (f64, f64, f64, f64)) {
+fn blur_overlay_palette(stats: BlurSurfaceStats, alpha: f64) -> OverlayPalette {
     let fill = (stats.red, stats.green, stats.blue, alpha);
 
     if stats.luminance > 0.62 {
@@ -367,14 +376,17 @@ fn render_blur_region(
 
 pub fn render_blur_rect(
     ctx: &cairo::Context,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    strength: f64,
+    params: BlurRectParams,
     replay_ctx: &EraserReplayContext<'_>,
-    cacheable: bool,
 ) {
+    let BlurRectParams {
+        x,
+        y,
+        w,
+        h,
+        strength,
+        cacheable,
+    } = params;
     let Some((left, top, width, height)) = normalize_rect(x, y, w, h) else {
         return;
     };

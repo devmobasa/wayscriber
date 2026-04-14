@@ -56,7 +56,18 @@ impl WaylandState {
                 h,
                 strength,
             } => {
-                crate::draw::render_blur_rect(ctx, *x, *y, *w, *h, *strength, &replay_ctx, true);
+                crate::draw::render_blur_rect(
+                    ctx,
+                    crate::draw::BlurRectParams {
+                        x: *x,
+                        y: *y,
+                        w: *w,
+                        h: *h,
+                        strength: *strength,
+                        cacheable: true,
+                    },
+                    &replay_ctx,
+                );
             }
             other => {
                 crate::draw::render_shape(ctx, other);
@@ -173,13 +184,15 @@ impl WaylandState {
             };
             crate::draw::render_blur_rect(
                 ctx,
-                x,
-                y,
-                w,
-                h,
-                self.input_state.current_thickness,
+                crate::draw::BlurRectParams {
+                    x,
+                    y,
+                    w,
+                    h,
+                    strength: self.input_state.current_thickness,
+                    cacheable: false,
+                },
                 &replay_ctx,
-                false,
             );
             true
         } else {

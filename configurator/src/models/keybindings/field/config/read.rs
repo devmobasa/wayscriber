@@ -49,6 +49,7 @@ impl KeybindingField {
             Self::SelectRectTool => &config.tools.select_rect_tool,
             Self::SelectEllipseTool => &config.tools.select_ellipse_tool,
             Self::SelectArrowTool => &config.tools.select_arrow_tool,
+            Self::SelectBlurTool => &config.tools.select_blur_tool,
             Self::SelectHighlightTool => &config.tools.select_highlight_tool,
             Self::IncreaseFontSize => &config.tools.increase_font_size,
             Self::DecreaseFontSize => &config.tools.decrease_font_size,

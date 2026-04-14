@@ -11,7 +11,7 @@ mod text;
 mod types;
 
 pub use background::{fill_transparent, render_board_background};
-pub use blur::render_blur_rect;
+pub use blur::{BlurRectParams, render_blur_rect};
 pub use highlight::render_click_highlight;
 pub use selection::{render_selection_halo, render_selection_handles, selection_handle_rects};
 pub use shapes::render_shape;
