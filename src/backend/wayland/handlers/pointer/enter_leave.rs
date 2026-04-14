@@ -29,7 +29,8 @@ impl WaylandState {
             {
                 self.set_current_mouse(sx as i32, sy as i32);
                 let (wx, wy) = self.zoomed_world_coords(sx, sy);
-                self.input_state.update_pointer_position(wx, wy);
+                self.input_state
+                    .update_pointer_positions(sx as i32, sy as i32, wx, wy);
             } else {
                 self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
             }
@@ -39,7 +40,12 @@ impl WaylandState {
         if !on_toolbar {
             self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
-            self.input_state.update_pointer_position(wx, wy);
+            self.input_state.update_pointer_positions(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+                wx,
+                wy,
+            );
             if self.input_state.eraser_mode == EraserMode::Stroke
                 && self.input_state.active_tool() == Tool::Eraser
             {

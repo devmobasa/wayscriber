@@ -42,7 +42,8 @@ impl InputState {
         let panel = (|| {
             let ids = self.selected_shape_ids();
             let frame = self.boards.active_frame();
-            let anchor_rect = self.selection_bounding_box(ids);
+            let canvas_bounds = self.selection_bounding_box(ids);
+            let anchor_rect = self.selection_screen_bounding_box(ids);
             let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
             let entries = self.build_selection_property_entries(ids);
 
@@ -57,7 +58,7 @@ impl InputState {
                 if locked > 0 {
                     lines.push(format!("Locked: {locked}/{total}"));
                 }
-                if let Some(bounds) = anchor_rect {
+                if let Some(bounds) = canvas_bounds {
                     lines.push(format!(
                         "Bounds: {}×{} px",
                         bounds.width.max(0),
@@ -124,7 +125,8 @@ impl InputState {
 
             let entries = self.build_selection_property_entries(ids);
             let frame = self.boards.active_frame();
-            let anchor_rect = self.selection_bounding_box(ids);
+            let canvas_bounds = self.selection_bounding_box(ids);
+            let anchor_rect = self.selection_screen_bounding_box(ids);
             let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
 
             let (title, lines, multiple_selection) = if ids.len() > 1 {
@@ -138,7 +140,7 @@ impl InputState {
                 if locked > 0 {
                     lines.push(format!("Locked: {locked}/{total}"));
                 }
-                if let Some(bounds) = anchor_rect {
+                if let Some(bounds) = canvas_bounds {
                     lines.push(format!(
                         "Bounds: {}×{} px",
                         bounds.width.max(0),

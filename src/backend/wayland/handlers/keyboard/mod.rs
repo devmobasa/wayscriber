@@ -62,6 +62,8 @@ impl KeyboardHandler for WaylandState {
         // and breaking shortcuts/tools, aggressively reset our modifier state on
         // focus loss.
         self.input_state.reset_modifiers();
+        self.set_board_pan_key_held(false);
+        self.stop_board_pan();
 
         if self.surface.is_xdg_window() && self.focus_exit_suppressed() {
             warn!("Keyboard focus lost in xdg fallback; suppressing exit after clipboard action");
@@ -112,6 +114,11 @@ impl KeyboardHandler for WaylandState {
         if self.try_handle_first_run_background_mode_choice(key) {
             return;
         }
+        if matches!(key, Key::Space) && self.should_capture_space_for_board_pan() {
+            self.set_board_pan_key_held(true);
+            self.input_state.needs_redraw = true;
+            return;
+        }
         if self.zoom.is_engaged() {
             match key {
                 Key::Escape => {
@@ -143,6 +150,7 @@ impl KeyboardHandler for WaylandState {
                         self.surface.width(),
                         self.surface.height(),
                     );
+                    self.sync_input_zoom_state();
                     self.input_state.dirty_tracker.mark_full();
                     self.input_state.needs_redraw = true;
                     return;
@@ -180,6 +188,11 @@ impl KeyboardHandler for WaylandState {
     ) {
         let key = keysym_to_key(event.keysym);
         debug!("Key released: {:?}", key);
+        if matches!(key, Key::Space) && self.board_pan_key_held() {
+            self.set_board_pan_key_held(false);
+            self.input_state.needs_redraw = true;
+            return;
+        }
         self.input_state.on_key_release(key);
     }
 
@@ -216,6 +229,9 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         let key = keysym_to_key(event.keysym);
+        if matches!(key, Key::Space) && self.board_pan_key_held() {
+            return;
+        }
         if self.zoom.active {
             match key {
                 Key::Up | Key::Down | Key::Left | Key::Right => {
@@ -240,6 +256,7 @@ impl KeyboardHandler for WaylandState {
                         self.surface.width(),
                         self.surface.height(),
                     );
+                    self.sync_input_zoom_state();
                     self.input_state.dirty_tracker.mark_full();
                     self.input_state.needs_redraw = true;
                     return;

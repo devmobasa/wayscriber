@@ -17,7 +17,7 @@ impl InputState {
 
     /// Enables or disables the persistent highlight ring.
     pub fn set_highlight_tool_ring_enabled(&mut self, enabled: bool) -> bool {
-        let (x, y) = self.last_pointer_position;
+        let (x, y) = self.last_canvas_pointer_position;
         if self.click_highlight.set_show_on_highlight_tool(
             enabled,
             self.highlight_tool_active(),

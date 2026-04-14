@@ -123,6 +123,8 @@ impl Config {
                 max_count: boards.max_count,
                 auto_create: boards.auto_create,
                 show_board_badge: boards.show_board_badge,
+                pan_enabled: boards.pan_enabled,
+                show_pan_badge: boards.show_pan_badge,
                 persist_customizations: boards.persist_customizations,
                 default_board: boards.default_board.clone(),
                 ..BoardsConfig::default()

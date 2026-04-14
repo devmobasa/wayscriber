@@ -180,6 +180,9 @@ mod tests {
         config.ui.show_floating_badge_always = true;
         config.ui.active_output_badge = true;
         config.ui.command_palette_toast_duration_ms = 1234;
+        let boards = config.boards.as_mut().expect("boards config");
+        boards.pan_enabled = false;
+        boards.show_pan_badge = false;
 
         let input = build_input_state(&config);
 
@@ -189,6 +192,8 @@ mod tests {
         assert!(input.show_floating_badge_always);
         assert!(input.show_active_output_badge);
         assert_eq!(input.command_palette_toast_duration_ms, 1234);
+        assert!(!input.boards.pan_enabled());
+        assert!(!input.boards.show_pan_badge());
     }
 
     #[test]

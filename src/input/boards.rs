@@ -53,6 +53,8 @@ pub struct BoardManager {
     max_count: usize,
     auto_create: bool,
     show_badge: bool,
+    pan_enabled: bool,
+    show_pan_badge: bool,
     persist_customizations: bool,
     default_board_id: String,
     template: BoardSpec,

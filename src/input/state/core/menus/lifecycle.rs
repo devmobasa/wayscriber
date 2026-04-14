@@ -122,7 +122,7 @@ impl InputState {
     }
 
     fn keyboard_shape_menu_anchor(&self, ids: &[ShapeId]) -> (i32, i32) {
-        if let Some(bounds) = self.selection_bounding_box(ids) {
+        if let Some(bounds) = self.selection_screen_bounding_box(ids) {
             (bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
         } else {
             let (px, py) = self.last_pointer_position;

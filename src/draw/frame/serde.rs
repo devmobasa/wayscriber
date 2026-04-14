@@ -60,6 +60,8 @@ impl<'de> Deserialize<'de> for Frame {
             #[serde(default)]
             page_name: Option<String>,
             #[serde(default)]
+            view_offset: (i32, i32),
+            #[serde(default)]
             undo_stack: Vec<UndoAction>,
             #[serde(default)]
             redo_stack: Vec<UndoAction>,
@@ -69,6 +71,7 @@ impl<'de> Deserialize<'de> for Frame {
         let mut frame = Frame {
             shapes: helper.shapes,
             page_name: helper.page_name,
+            view_offset: helper.view_offset,
             undo_stack: helper.undo_stack,
             redo_stack: helper.redo_stack,
             next_shape_id: 1,

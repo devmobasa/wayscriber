@@ -1,6 +1,15 @@
 use super::*;
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn sync_input_zoom_state(&mut self) {
+        self.input_state.set_zoom_status(
+            self.zoom.active,
+            self.zoom.locked,
+            self.zoom.scale,
+            self.zoom.view_offset,
+        );
+    }
+
     pub(in crate::backend::wayland) fn sync_zoom_board_mode(&mut self) {
         let board_is_transparent = self.input_state.board_is_transparent();
         if !board_is_transparent {
@@ -13,8 +22,7 @@ impl WaylandState {
             }
             if self.zoom.is_engaged() && !self.zoom.active {
                 self.zoom.activate_without_capture();
-                self.input_state
-                    .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
+                self.sync_input_zoom_state();
             }
             if self.zoom.clear_image() {
                 self.input_state.dirty_tracker.mark_full();
@@ -39,12 +47,7 @@ impl WaylandState {
         screen_x: f64,
         screen_y: f64,
     ) -> (i32, i32) {
-        if self.zoom.active {
-            let (wx, wy) = self.zoom.screen_to_world(screen_x, screen_y);
-            (wx.round() as i32, wy.round() as i32)
-        } else {
-            (screen_x.round() as i32, screen_y.round() as i32)
-        }
+        self.canvas_world_coords(screen_x, screen_y)
     }
 
     pub(in crate::backend::wayland) fn handle_zoom_action(&mut self, action: ZoomAction) {
@@ -67,11 +70,7 @@ impl WaylandState {
                     if self.zoom.locked && self.zoom.panning {
                         self.zoom.stop_pan();
                     }
-                    self.input_state.set_zoom_status(
-                        self.zoom.active,
-                        self.zoom.locked,
-                        self.zoom.scale,
-                    );
+                    self.sync_input_zoom_state();
                 }
             }
             ZoomAction::RefreshCapture => {
@@ -153,23 +152,20 @@ impl WaylandState {
             self.input_state.close_properties_panel();
             if board_zoom {
                 self.zoom.activate_without_capture();
-                self.input_state
-                    .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
+                self.sync_input_zoom_state();
             } else {
                 self.zoom.request_activation();
             }
         } else if board_zoom && !self.zoom.active {
             self.zoom.activate_without_capture();
-            self.input_state
-                .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
+            self.sync_input_zoom_state();
         }
 
         let changed = self
             .zoom
             .zoom_at_screen_point(factor, screen_x, screen_y, screen_w, screen_h);
         if self.zoom.active && changed {
-            self.input_state
-                .set_zoom_status(true, self.zoom.locked, self.zoom.scale);
+            self.sync_input_zoom_state();
         }
 
         if self.zoom.is_engaged()

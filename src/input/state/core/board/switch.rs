@@ -190,6 +190,7 @@ impl InputState {
 
         // Reset drawing state to prevent partial shapes crossing modes
         self.state = super::super::base::DrawingState::Idle;
+        self.sync_canvas_pointer_to_current_transform();
 
         // Trigger redraw
         self.dirty_tracker.mark_full();
@@ -228,6 +229,7 @@ impl InputState {
         self.clear_selection();
         self.close_context_menu();
         self.invalidate_hit_cache();
+        self.sync_canvas_pointer_to_current_transform();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();

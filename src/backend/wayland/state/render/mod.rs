@@ -47,7 +47,7 @@ impl WaylandState {
         let input_damage = self.input_state.take_dirty_regions();
         let logical_width = width.min(i32::MAX as u32) as i32;
         let logical_height = height.min(i32::MAX as u32) as i32;
-        let force_full_damage = self.zoom.active
+        let force_full_damage = self.canvas_transform_active()
             || ui_toast_active
             || preset_feedback_active
             || blocked_feedback_active
@@ -108,15 +108,23 @@ impl WaylandState {
             self.buffer_damage.mark_all_full();
         }
         let damage_screen = logical_damage;
-        let damage_world = if self.zoom.active {
-            let scale = self.zoom.scale.max(f64::MIN_POSITIVE);
+        let damage_world = if self.canvas_transform_active() {
+            let scale = if self.zoom.active {
+                self.zoom.scale.max(f64::MIN_POSITIVE)
+            } else {
+                1.0
+            };
             let view_width = ((width as f64) / scale).ceil() as i32;
             let view_height = ((height as f64) / scale).ceil() as i32;
-            let view_x = self.zoom.view_offset.0.floor() as i32;
-            let view_y = self.zoom.view_offset.1.floor() as i32;
-            crate::util::Rect::new(view_x, view_y, view_width, view_height)
-                .map(|rect| vec![rect])
-                .unwrap_or_default()
+            let (view_x, view_y) = self.canvas_view_origin();
+            crate::util::Rect::new(
+                view_x.floor() as i32,
+                view_y.floor() as i32,
+                view_width,
+                view_height,
+            )
+            .map(|rect| vec![rect])
+            .unwrap_or_default()
         } else {
             damage_screen.clone()
         };

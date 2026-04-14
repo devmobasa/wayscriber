@@ -82,6 +82,49 @@ pub fn render_zoom_badge(
     layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
 }
 
+/// Render a small badge indicating canvas pan is available on the active solid board.
+pub fn render_pan_badge(
+    ctx: &cairo::Context,
+    screen_width: u32,
+    _screen_height: u32,
+    panned: bool,
+    offset_y: f64,
+) {
+    let label = if panned {
+        "PANNED SPACE+DRAG"
+    } else {
+        "PAN SPACE+DRAG"
+    };
+    let padding = 12.0;
+    let radius = 8.0;
+    let font_size = 14.0;
+    let layout = text_layout(
+        ctx,
+        UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        },
+        label,
+        None,
+    );
+    let extents = layout.ink_extents();
+
+    let width = extents.width() + padding * 1.4;
+    let height = extents.height() + padding;
+
+    let x = screen_width as f64 - width - padding;
+    let y = padding + offset_y + height;
+
+    ctx.set_source_rgba(0.33, 0.44, 0.24, 0.92);
+    draw_rounded_rect(ctx, x, y - height, width, height, radius);
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    layout.show_at_baseline(ctx, x + (padding * 0.7), y - (padding * 0.35));
+}
+
 /// Render a small badge indicating text edit mode is active.
 pub fn render_editing_badge(
     ctx: &cairo::Context,

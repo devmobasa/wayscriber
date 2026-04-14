@@ -1,6 +1,6 @@
 use super::*;
 use crate::draw::{BoardPages, Frame};
-use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT};
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
 
 fn board_index(state: &InputState, id: &str) -> usize {
     state
@@ -90,6 +90,37 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
             .any(|entry| entry.label == "Select This Shape"),
         "Expected Select This Shape entry even for single selection"
     );
+}
+
+#[test]
+fn shape_menu_includes_reset_canvas_position_on_solid_boards() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 10,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.set_selection(vec![shape_id]);
+    state.open_context_menu(
+        (0, 0),
+        vec![shape_id],
+        ContextMenuKind::Shape,
+        Some(shape_id),
+    );
+
+    let entries = state.context_menu_entries();
+    let entry = entries
+        .iter()
+        .find(|entry| entry.label == "Reset Canvas Position")
+        .expect("reset canvas position entry should exist on solid-board shape menus");
+    assert_eq!(entry.shortcut.as_deref(), Some("Space+Drag"));
+    assert!(entry.disabled);
 }
 
 #[test]
@@ -225,6 +256,20 @@ fn context_menu_includes_radial_menu_entry() {
 }
 
 #[test]
+fn context_menu_includes_zoom_submenu_entry() {
+    let mut state = create_test_input_state();
+    state.toggle_context_menu_via_keyboard();
+
+    let zoom_entry = state
+        .context_menu_entries()
+        .into_iter()
+        .find(|entry| entry.label == "Zoom")
+        .expect("zoom submenu entry should exist in context menu");
+    assert_eq!(zoom_entry.command, Some(MenuCommand::OpenZoomMenu));
+    assert!(zoom_entry.has_submenu);
+}
+
+#[test]
 fn context_menu_radial_entry_shows_default_mouse_shortcut() {
     let mut state = create_test_input_state();
     state.toggle_context_menu_via_keyboard();
@@ -283,6 +328,56 @@ fn context_menu_radial_entry_shows_keyboard_shortcut_when_mouse_binding_disabled
         .find(|entry| entry.label == "Radial Menu")
         .expect("radial menu entry should exist in context menu");
     assert_eq!(radial_entry.shortcut.as_deref(), Some("Ctrl+R"));
+}
+
+#[test]
+fn open_zoom_menu_command_switches_to_zoom_submenu_with_actionable_focus() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Canvas, None);
+
+    state.execute_menu_command(MenuCommand::OpenZoomMenu);
+
+    let focus_index = match &state.context_menu_state {
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Zoom,
+            keyboard_focus,
+            ..
+        } => keyboard_focus.expect("zoom submenu focus"),
+        _ => panic!("expected zoom submenu to be open"),
+    };
+    let entries = state.context_menu_entries();
+    assert!(!entries[focus_index].disabled);
+    assert!(entries[focus_index].command.is_some());
+}
+
+#[test]
+fn zoom_menu_disables_out_and_reset_when_zoom_is_inactive() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Zoom, None);
+
+    let entries = state.context_menu_entries();
+    let zoom_out = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::ZoomOut))
+        .expect("zoom out entry");
+    let reset_zoom = entries
+        .iter()
+        .find(|entry| entry.command == Some(MenuCommand::ResetZoom))
+        .expect("reset zoom entry");
+
+    assert!(zoom_out.disabled);
+    assert!(reset_zoom.disabled);
+}
+
+#[test]
+fn zoom_in_command_queues_zoom_action_and_closes_menu() {
+    let mut state = create_test_input_state();
+    state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Zoom, None);
+
+    state.execute_menu_command(MenuCommand::ZoomIn);
+
+    assert_eq!(state.take_pending_zoom_action(), Some(ZoomAction::In));
+    assert!(!state.is_context_menu_open());
 }
 
 #[test]
@@ -456,6 +551,35 @@ fn open_boards_menu_command_switches_to_boards_submenu_with_actionable_focus() {
     let entries = state.context_menu_entries();
     assert!(!entries[focus_index].disabled);
     assert!(entries[focus_index].command.is_some());
+}
+
+#[test]
+fn keyboard_shape_menu_anchor_tracks_panned_board_view_offset() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    assert!(state.boards.active_frame_mut().set_view_offset(100, 50));
+    state.update_pointer_position(400, 300);
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 140,
+        y: 90,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![shape_id]);
+
+    state.toggle_context_menu_via_keyboard();
+
+    match state.context_menu_state {
+        ContextMenuState::Open {
+            kind: ContextMenuKind::Shape,
+            anchor,
+            ..
+        } => assert_eq!(anchor, (50, 50)),
+        _ => panic!("expected keyboard shape context menu"),
+    }
 }
 
 #[test]

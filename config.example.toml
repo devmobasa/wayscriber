@@ -519,6 +519,12 @@ auto_create = true
 # Show board name/slot in the status bar
 show_board_badge = true
 
+# Allow panning on solid-color boards with Space + left-drag
+pan_enabled = true
+
+# Show the pan hint in the status bar or as a floating badge
+show_pan_badge = true
+
 # Persist runtime edits (rename/background) back to config
 persist_customizations = true
 

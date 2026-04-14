@@ -59,6 +59,8 @@ impl BoardManager {
             max_count: config.max_count,
             auto_create: config.auto_create,
             show_badge: config.show_board_badge,
+            pan_enabled: config.pan_enabled,
+            show_pan_badge: config.show_pan_badge,
             persist_customizations: config.persist_customizations,
             default_board_id: config.default_board,
             template,
@@ -70,6 +72,8 @@ impl BoardManager {
             max_count: self.max_count,
             auto_create: self.auto_create,
             show_board_badge: self.show_badge,
+            pan_enabled: self.pan_enabled,
+            show_pan_badge: self.show_pan_badge,
             persist_customizations: self.persist_customizations,
             default_board: self.default_board_id.clone(),
             items: self

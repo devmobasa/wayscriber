@@ -299,8 +299,10 @@ pub struct InputState {
     pub board_picker_layout: Option<BoardPickerLayout>,
     /// Optional spatial index for accelerating hit-testing when many shapes are present
     pub(in crate::input::state::core) spatial_index: Option<SpatialGrid>,
-    /// Last known pointer position (for keyboard anchors and hover refresh)
+    /// Last known pointer position in screen coordinates (for overlays and hover refresh)
     pub(in crate::input::state::core) last_pointer_position: (i32, i32),
+    /// Last known pointer position in canvas/world coordinates
+    pub(in crate::input::state::core) last_canvas_pointer_position: (i32, i32),
     /// Recompute hover next time layout is available
     pub(in crate::input::state::core) pending_menu_hover_recalc: bool,
     /// Optional properties panel describing the current selection
@@ -321,6 +323,8 @@ pub struct InputState {
     pub(in crate::input::state::core) zoom_locked: bool,
     /// Current zoom scale (1.0 = no zoom)
     pub(in crate::input::state::core) zoom_scale: f64,
+    /// Current zoom view offset in canvas/world space
+    pub(in crate::input::state::core) zoom_view_offset: (f64, f64),
     /// Whether to show extended color palette
     pub show_more_colors: bool,
     /// Whether to show the Actions section (undo all, redo all, etc.)

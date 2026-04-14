@@ -3,6 +3,21 @@ use crate::draw::Color;
 use crate::input::BoardBackground;
 
 impl InputState {
+    pub(crate) fn reset_active_canvas_position(&mut self) -> bool {
+        if self.board_is_transparent() || !self.boards.pan_enabled() {
+            return false;
+        }
+        if !self.boards.active_frame_mut().set_view_offset(0, 0) {
+            return false;
+        }
+        self.sync_canvas_pointer_to_current_transform();
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.mark_session_dirty();
+        self.set_ui_toast(UiToastKind::Info, "Canvas position reset.");
+        true
+    }
+
     pub(crate) fn set_board_name(&mut self, index: usize, name: String) -> bool {
         let Some(board) = self.boards.board_state_mut(index) else {
             return false;

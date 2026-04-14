@@ -89,6 +89,40 @@ impl InputState {
                 self.clear_all();
                 self.close_context_menu();
             }
+            MenuCommand::ResetCanvasPosition => {
+                self.reset_active_canvas_position();
+                self.close_context_menu();
+            }
+            MenuCommand::OpenZoomMenu => {
+                let anchor = if let Some(layout) = self.context_menu_layout {
+                    (
+                        (layout.origin_x + layout.width + 8.0).round() as i32,
+                        layout.origin_y.round() as i32,
+                    )
+                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
+                    *anchor
+                } else {
+                    self.last_pointer_position
+                };
+                self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Zoom, None);
+                self.pending_menu_hover_recalc = false;
+                self.set_context_menu_focus(None);
+                self.focus_first_context_menu_entry();
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+            }
+            MenuCommand::ZoomIn => {
+                self.request_zoom_action(crate::input::ZoomAction::In);
+                self.close_context_menu();
+            }
+            MenuCommand::ZoomOut => {
+                self.request_zoom_action(crate::input::ZoomAction::Out);
+                self.close_context_menu();
+            }
+            MenuCommand::ResetZoom => {
+                self.request_zoom_action(crate::input::ZoomAction::Reset);
+                self.close_context_menu();
+            }
             MenuCommand::ToggleHighlightTool => {
                 self.toggle_all_highlights();
                 self.close_context_menu();

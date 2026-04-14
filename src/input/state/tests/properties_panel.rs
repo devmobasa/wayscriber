@@ -1,4 +1,6 @@
 use super::*;
+use crate::input::BOARD_ID_WHITEBOARD;
+use crate::util::Rect;
 
 fn add_rect(state: &mut InputState, x: i32, y: i32, w: i32, h: i32) -> crate::draw::ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -81,6 +83,21 @@ fn close_properties_panel_clears_panel_and_requests_redraw() {
     assert!(state.properties_panel().is_none());
     assert!(state.properties_panel_layout().is_none());
     assert!(state.needs_redraw);
+}
+
+#[test]
+fn show_properties_panel_anchors_to_screen_space_on_panned_boards() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    assert!(state.boards.active_frame_mut().set_view_offset(100, 50));
+    state.update_pointer_position(400, 300);
+    let shape_id = add_rect(&mut state, 140, 90, 20, 20);
+    state.set_selection(vec![shape_id]);
+
+    assert!(state.show_properties_panel());
+
+    let panel = state.properties_panel().expect("properties panel");
+    assert_eq!(panel.anchor_rect, Rect::new(38, 38, 24, 24));
 }
 
 #[test]

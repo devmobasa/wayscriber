@@ -84,6 +84,18 @@ fn frame_with_history_is_persistable_even_without_shapes() {
 }
 
 #[test]
+fn frame_with_view_offset_is_persistable_even_without_shapes() {
+    let mut frame = Frame::new();
+
+    assert!(frame.set_view_offset(240, -180));
+    assert!(frame.has_persistable_data());
+
+    let json = serde_json::to_string(&frame).expect("serialize frame");
+    let restored: Frame = serde_json::from_str(&json).expect("deserialize frame");
+    assert_eq!(restored.view_offset(), (240, -180));
+}
+
+#[test]
 fn try_add_shape_respects_limit() {
     let mut frame = Frame::new();
     assert!(frame.try_add_shape(

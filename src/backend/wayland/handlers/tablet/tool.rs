@@ -144,11 +144,16 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.current_mouse().0,
                     state.current_mouse().1
                 );
-                let (wx, wy) = state.zoomed_world_coords(
-                    state.current_mouse().0 as f64,
-                    state.current_mouse().1 as f64,
+                let screen_x = state.current_mouse().0;
+                let screen_y = state.current_mouse().1;
+                let (wx, wy) = state.zoomed_world_coords(screen_x as f64, screen_y as f64);
+                state.input_state.on_mouse_press_with_canvas(
+                    MouseButton::Left,
+                    screen_x,
+                    screen_y,
+                    wx,
+                    wy,
                 );
-                state.input_state.on_mouse_press(MouseButton::Left, wx, wy);
                 state.input_state.needs_redraw = true;
             }
             Event::Up => {
@@ -186,13 +191,16 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.current_mouse().0,
                     state.current_mouse().1
                 );
-                let (wx, wy) = state.zoomed_world_coords(
-                    state.current_mouse().0 as f64,
-                    state.current_mouse().1 as f64,
+                let screen_x = state.current_mouse().0;
+                let screen_y = state.current_mouse().1;
+                let (wx, wy) = state.zoomed_world_coords(screen_x as f64, screen_y as f64);
+                state.input_state.on_mouse_release_with_canvas(
+                    MouseButton::Left,
+                    screen_x,
+                    screen_y,
+                    wx,
+                    wy,
                 );
-                state
-                    .input_state
-                    .on_mouse_release(MouseButton::Left, wx, wy);
                 state.input_state.needs_redraw = true;
             }
             Event::Motion { x, y } => {
@@ -255,7 +263,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.current_mouse().0 as f64,
                     state.current_mouse().1 as f64,
                 );
-                state.input_state.on_mouse_motion(wx, wy);
+                state.input_state.on_mouse_motion_with_canvas(
+                    x.round() as i32,
+                    y.round() as i32,
+                    wx,
+                    wy,
+                );
                 if state.stylus_tip_down {
                     state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
                     state.record_stylus_peak(state.input_state.current_thickness);

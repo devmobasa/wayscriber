@@ -102,7 +102,7 @@ impl ZoomState {
                 self.active = false;
             }
             self.pending_activation = false;
-            input_state.set_zoom_status(self.active, self.locked, self.scale);
+            input_state.set_zoom_status(self.active, self.locked, self.scale, self.view_offset);
             input_state.needs_redraw = true;
             self.capture_done = true;
             return;
@@ -132,7 +132,12 @@ impl ZoomState {
                         self.active = false;
                     }
                     self.pending_activation = false;
-                    input_state.set_zoom_status(self.active, self.locked, self.scale);
+                    input_state.set_zoom_status(
+                        self.active,
+                        self.locked,
+                        self.scale,
+                        self.view_offset,
+                    );
                     input_state.dirty_tracker.mark_full();
                     input_state.needs_redraw = true;
                     self.capture_done = true;
@@ -147,7 +152,12 @@ impl ZoomState {
                         self.active = false;
                     }
                     self.pending_activation = false;
-                    input_state.set_zoom_status(self.active, self.locked, self.scale);
+                    input_state.set_zoom_status(
+                        self.active,
+                        self.locked,
+                        self.scale,
+                        self.view_offset,
+                    );
                     input_state.needs_redraw = true;
                     self.capture_done = true;
                 }
@@ -162,7 +172,12 @@ impl ZoomState {
                         self.active = false;
                     }
                     self.pending_activation = false;
-                    input_state.set_zoom_status(self.active, self.locked, self.scale);
+                    input_state.set_zoom_status(
+                        self.active,
+                        self.locked,
+                        self.scale,
+                        self.view_offset,
+                    );
                     input_state.needs_redraw = true;
                     self.capture_done = true;
                 }

@@ -94,6 +94,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 ### Boards
 - Named boards with transparent overlay or custom backgrounds
 - Isolated pages per board with auto-contrast pens
+- Pan solid boards with <kbd>Space</kbd> + left-drag; reset from the context menu
 - Jump slots: <kbd>Ctrl+Shift+1..9</kbd>
 - Toggle whiteboard/blackboard
 - Board picker: <kbd>Ctrl+Shift+B</kbd>
@@ -142,6 +143,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
   - Reset: <kbd>Ctrl+Alt+0</kbd>
   - Lock view: <kbd>Ctrl+Alt+L</kbd>
   - Pan: middle drag or arrow keys
+  - Right-click menu: <kbd>Zoom</kbd> → Zoom In / Zoom Out / Reset Zoom
 
 ---
 
@@ -524,6 +526,8 @@ Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_
 | New board | <kbd>Ctrl+Shift+N</kbd> |
 | Delete board | <kbd>Ctrl+Shift+Delete</kbd> |
 | Board picker | <kbd>Ctrl+Shift+B</kbd> |
+| Pan solid boards | Hold <kbd>Space</kbd> + left-drag |
+| Reset solid-board pan | <kbd>Right-click</kbd> → Reset Canvas Position |
 
 </details>
 

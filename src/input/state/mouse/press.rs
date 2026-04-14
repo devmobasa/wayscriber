@@ -22,8 +22,8 @@ impl InputState {
             && self.is_radial_menu_toggle_button(button)
     }
 
-    fn handle_right_click(&mut self, x: i32, y: i32) {
-        self.update_pointer_position(x, y);
+    fn handle_right_click(&mut self, screen_x: i32, screen_y: i32, canvas_x: i32, canvas_y: i32) {
+        self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
         self.last_text_click = None;
         if !matches!(self.state, DrawingState::Idle) {
             match &self.state {
@@ -70,7 +70,7 @@ impl InputState {
             return;
         }
 
-        let hit_shape = self.hit_test_at(x, y);
+        let hit_shape = self.hit_test_at(canvas_x, canvas_y);
         let mut focus_edit = false;
         if let Some(id) = hit_shape {
             if self.modifiers.shift {
@@ -88,13 +88,23 @@ impl InputState {
                         matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
                     })
                     .unwrap_or(false);
-            self.open_context_menu((x, y), selection, ContextMenuKind::Shape, hit_shape);
+            self.open_context_menu(
+                (screen_x, screen_y),
+                selection,
+                ContextMenuKind::Shape,
+                hit_shape,
+            );
         } else {
             self.clear_selection();
-            self.open_context_menu((x, y), Vec::new(), ContextMenuKind::Canvas, None);
+            self.open_context_menu(
+                (screen_x, screen_y),
+                Vec::new(),
+                ContextMenuKind::Canvas,
+                None,
+            );
         }
 
-        self.update_context_menu_hover_from_pointer(x, y);
+        self.update_context_menu_hover_from_pointer(screen_x, screen_y);
         if focus_edit {
             self.focus_context_menu_command(MenuCommand::EditText);
         }
@@ -128,20 +138,33 @@ impl InputState {
     /// - Left click while Idle: Starts drawing with the current tool (based on modifiers)
     /// - Left click during TextInput: Updates text position
     /// - Right click: Cancels current action
+    #[allow(dead_code)] // Retained for older callers that only have canvas coordinates.
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
-        if self.handle_radial_menu_press(button, x, y) {
+        let (screen_x, screen_y) = self.screen_coords_for_canvas(x, y);
+        self.on_mouse_press_with_canvas(button, screen_x, screen_y, x, y);
+    }
+
+    pub fn on_mouse_press_with_canvas(
+        &mut self,
+        button: MouseButton,
+        screen_x: i32,
+        screen_y: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
+        if self.handle_radial_menu_press(button, screen_x, screen_y, canvas_x, canvas_y) {
             return;
         }
 
-        if self.handle_color_picker_press(button, x, y) {
+        if self.handle_color_picker_press(button, screen_x, screen_y) {
             return;
         }
 
-        if self.handle_board_picker_press(button, x, y) {
+        if self.handle_board_picker_press(button, screen_x, screen_y) {
             return;
         }
 
-        if self.handle_properties_panel_press(button, x, y) {
+        if self.handle_properties_panel_press(button, screen_x, screen_y) {
             return;
         }
 
@@ -149,19 +172,19 @@ impl InputState {
         match button {
             MouseButton::Right => {
                 if self.should_toggle_radial_menu_from_mouse(MouseButton::Right) {
-                    self.toggle_radial_menu(x as f64, y as f64);
+                    self.toggle_radial_menu(screen_x as f64, screen_y as f64);
                 } else {
-                    self.handle_right_click(x, y);
+                    self.handle_right_click(screen_x, screen_y, canvas_x, canvas_y);
                 }
             }
             MouseButton::Left => {
-                self.update_pointer_position(x, y);
-                self.trigger_click_highlight(x, y);
+                self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
+                self.trigger_click_highlight(canvas_x, canvas_y);
 
                 if self.is_context_menu_open() {
                     self.last_text_click = None;
-                    if self.is_point_in_context_menu(x, y) {
-                        self.update_context_menu_hover_from_pointer(x, y);
+                    if self.is_point_in_context_menu(screen_x, screen_y) {
+                        self.update_context_menu_hover_from_pointer(screen_x, screen_y);
                     } else {
                         self.close_context_menu();
                         self.needs_redraw = true;
@@ -170,10 +193,10 @@ impl InputState {
                 }
 
                 match &mut self.state {
-                    DrawingState::Idle => self.handle_idle_left_click(x, y),
+                    DrawingState::Idle => self.handle_idle_left_click(canvas_x, canvas_y),
                     DrawingState::TextInput { x: tx, y: ty, .. } => {
-                        *tx = x;
-                        *ty = y;
+                        *tx = canvas_x;
+                        *ty = canvas_y;
                         self.update_text_preview_dirty();
                         self.needs_redraw = true;
                     }
@@ -187,7 +210,7 @@ impl InputState {
             }
             MouseButton::Middle => {
                 if self.should_toggle_radial_menu_from_mouse(MouseButton::Middle) {
-                    self.toggle_radial_menu(x as f64, y as f64);
+                    self.toggle_radial_menu(screen_x as f64, screen_y as f64);
                 }
             }
         }
@@ -309,15 +332,22 @@ impl InputState {
         }
     }
 
-    fn handle_radial_menu_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+    fn handle_radial_menu_press(
+        &mut self,
+        button: MouseButton,
+        screen_x: i32,
+        screen_y: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) -> bool {
         if !self.is_radial_menu_open() {
             return false;
         }
-        self.update_pointer_position(x, y);
+        self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
         match button {
             MouseButton::Left => {
                 // Update hover at exact click position before selecting
-                self.update_radial_menu_hover(x as f64, y as f64);
+                self.update_radial_menu_hover(screen_x as f64, screen_y as f64);
                 self.radial_menu_select_hovered();
             }
             MouseButton::Right => {
@@ -325,7 +355,7 @@ impl InputState {
                 if !self.is_radial_menu_toggle_button(MouseButton::Right) {
                     // Keep right-click context-menu flow when right button is not the
                     // configured radial-menu trigger.
-                    self.handle_right_click(x, y);
+                    self.handle_right_click(screen_x, screen_y, canvas_x, canvas_y);
                 }
             }
             MouseButton::Middle => {
