@@ -617,7 +617,7 @@ Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_
 
 </details>
 
-Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>. Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`). Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`.
+Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>. Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`). Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`. Blur has no default keyboard shortcut; bind `select_blur_tool` in `config.toml` if you want direct keyboard access.
 
 ---
 

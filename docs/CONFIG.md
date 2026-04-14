@@ -759,6 +759,7 @@ select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []
 select_arrow_tool = []
+select_blur_tool = []
 select_highlight_tool = []
 toggle_highlight_tool = ["Ctrl+Alt+H"]
 
