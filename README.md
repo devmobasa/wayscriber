@@ -679,7 +679,7 @@ Notes:
 
 ### Tablet/Stylus Support
 
-Tablet support (`zwp_tablet_v2`) ships in default builds but is disabled at runtime by default:
+Tablet support (`zwp_tablet_v2`) ships in default builds and is enabled at runtime by default:
 
 ```toml
 [tablet]
@@ -689,7 +689,7 @@ min_thickness = 1.0
 max_thickness = 8.0
 ```
 
-Enable it in `config.toml` and restart wayscriber. To build without tablet support: `cargo build --release --no-default-features` (or remove the `tablet-input` feature).
+It works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support: `cargo build --release --no-default-features` (or remove the `tablet-input` feature).
 
 See https://wayscriber.com/docs/ for the full reference.
 
