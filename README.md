@@ -724,6 +724,30 @@ journalctl --user -u wayscriber.service -f
 systemctl --user restart wayscriber.service
 ```
 
+### Overlay is blurry/non-transparent on KDE Plasma
+
+If the overlay appears blurry instead of transparent on KDE Plasma:
+
+**Cause:** The "Better Blur DX" effect (or similar blur effects) may blur wayscriber's transparent overlay.
+
+**Solution (Option 1 - Configure Better Blur DX):**
+1. Open **System Settings** → **Window Management** → **Desktop Effects**
+2. Click the configure button next to "Better Blur DX"
+4. Go to the **Force Blur** tab
+5. Add `wayscriber` to the window class list
+6. Make sure `Blur all except matching` is selected
+7. Click **Apply**
+
+**Solution (Option 2 - Use standard blur):**
+1. Disable "Better Blur DX" in **Desktop Effects**
+2. Enable the standard "Blur" effect instead
+
+Note: To find wayscriber's window class:
+```bash
+sleep 2; qdbus org.kde.KWin /KWin queryWindowInfo | grep resourceClass
+```
+Then open wayscriber before the sleep ends.
+
 ### Overlay not appearing
 
 1. Verify Wayland session: `echo $WAYLAND_DISPLAY`
