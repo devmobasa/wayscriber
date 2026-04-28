@@ -161,8 +161,12 @@ impl WaylandState {
 
         let (mx, my) =
             self.canvas_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64);
+        let (hover_mx, hover_my) = self
+            .stylus_hover_cursor_position()
+            .map(|(x, y)| self.canvas_world_coords(x, y))
+            .unwrap_or((mx, my));
 
-        self.render_eraser_hover_halos(ctx, mx, my);
+        self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
 
         // Render provisional shape if actively drawing.
         let rendered_provisional = if let crate::input::DrawingState::Drawing {

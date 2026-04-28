@@ -1,4 +1,4 @@
-use super::tool_preview::draw_tool_preview;
+use super::tool_preview::{draw_stylus_hover_cursor, draw_tool_preview};
 use super::*;
 
 impl WaylandState {
@@ -11,22 +11,37 @@ impl WaylandState {
     ) {
         if render_ui {
             if self.input_state.show_tool_preview
-                && self.has_pointer_focus()
-                && !self.pointer_over_toolbar()
+                && self.has_cursor_focus()
+                && !self.cursor_blocked_by_toolbar()
                 && matches!(
                     self.input_state.state,
                     DrawingState::Idle | DrawingState::PendingTextClick { .. }
                 )
             {
-                let (cursor_x, cursor_y) = self.current_mouse();
+                let (cursor_x, cursor_y) =
+                    self.stylus_hover_cursor_position().unwrap_or_else(|| {
+                        let (x, y) = self.current_mouse();
+                        (x as f64, y as f64)
+                    });
                 draw_tool_preview(
                     ctx,
                     self.input_state.active_tool(),
                     self.input_state.current_color,
-                    cursor_x as f64,
-                    cursor_y as f64,
+                    cursor_x,
+                    cursor_y,
                     width as f64,
                     height as f64,
+                );
+            }
+            if let Some((cursor_x, cursor_y)) = self.stylus_hover_cursor_position()
+                && !self.cursor_blocked_by_toolbar()
+            {
+                draw_stylus_hover_cursor(
+                    ctx,
+                    self.input_state.active_tool(),
+                    self.input_state.current_color,
+                    cursor_x,
+                    cursor_y,
                 );
             }
             // Render frozen badge even if status bar is hidden

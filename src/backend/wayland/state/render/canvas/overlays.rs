@@ -61,8 +61,8 @@ impl WaylandState {
             && !eraser_drawing
             && self.input_state.active_tool() == Tool::Eraser
             && matches!(self.input_state.state, DrawingState::Idle)
-            && self.has_pointer_focus()
-            && !self.pointer_over_toolbar();
+            && self.has_cursor_focus()
+            && !self.cursor_blocked_by_toolbar();
         if eraser_stroke && (eraser_drawing || eraser_hover) {
             self.input_state.ensure_spatial_index_for_active_frame();
             let ids = if eraser_drawing {

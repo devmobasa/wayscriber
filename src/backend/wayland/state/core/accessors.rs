@@ -27,6 +27,41 @@ impl WaylandState {
         self.data.has_pointer_focus
     }
 
+    pub(in crate::backend::wayland) fn has_cursor_focus(&self) -> bool {
+        self.has_pointer_focus() || self.stylus_hover_cursor_visible()
+    }
+
+    pub(in crate::backend::wayland) fn cursor_blocked_by_toolbar(&self) -> bool {
+        self.stylus_hover_cursor_position().is_none() && self.pointer_over_toolbar()
+    }
+
+    #[cfg(tablet)]
+    pub(in crate::backend::wayland) fn stylus_hover_cursor_visible(&self) -> bool {
+        self.stylus_on_overlay
+            && !self.stylus_on_toolbar
+            && !self.stylus_tip_down
+            && self.stylus_last_pos.is_some()
+    }
+
+    #[cfg(tablet)]
+    pub(in crate::backend::wayland) fn stylus_hover_cursor_position(&self) -> Option<(f64, f64)> {
+        if self.stylus_hover_cursor_visible() {
+            self.stylus_last_pos
+        } else {
+            None
+        }
+    }
+
+    #[cfg(not(tablet))]
+    pub(in crate::backend::wayland) fn stylus_hover_cursor_visible(&self) -> bool {
+        false
+    }
+
+    #[cfg(not(tablet))]
+    pub(in crate::backend::wayland) fn stylus_hover_cursor_position(&self) -> Option<(f64, f64)> {
+        None
+    }
+
     pub(in crate::backend::wayland) fn set_pointer_focus(&mut self, value: bool) {
         self.data.has_pointer_focus = value;
     }
