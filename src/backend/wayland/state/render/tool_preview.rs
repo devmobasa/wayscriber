@@ -62,3 +62,41 @@ pub(super) fn draw_tool_preview(
     }
     let _ = ctx.restore();
 }
+
+pub(super) fn draw_stylus_hover_cursor(
+    ctx: &cairo::Context,
+    tool: Tool,
+    color: Color,
+    x: f64,
+    y: f64,
+) {
+    let (r, g, b, radius) = match tool {
+        Tool::Eraser | Tool::Select => (0.96, 0.96, 0.98, 4.0),
+        _ => (color.r, color.g, color.b, 3.5),
+    };
+
+    let _ = ctx.save();
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
+    ctx.arc(
+        x + 1.0,
+        y + 1.0,
+        radius + 2.0,
+        0.0,
+        std::f64::consts::PI * 2.0,
+    );
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+    ctx.arc(x, y, radius + 1.4, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(r, g, b, 0.95);
+    ctx.arc(x, y, radius, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.fill();
+
+    ctx.set_source_rgba(0.0, 0.0, 0.0, 0.72);
+    ctx.set_line_width(1.0);
+    ctx.arc(x, y, radius + 1.4, 0.0, std::f64::consts::PI * 2.0);
+    let _ = ctx.stroke();
+    let _ = ctx.restore();
+}

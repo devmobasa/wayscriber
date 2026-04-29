@@ -3,9 +3,96 @@ use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2;
 
 use crate::backend::wayland::toolbar_intent::intent_to_event;
-use crate::input::{MouseButton, Tool};
+use crate::{
+    input::{DrawingState, EraserMode, MouseButton, Tool},
+    util::Rect,
+};
 
 use crate::backend::wayland::state::WaylandState;
+
+const STYLUS_CURSOR_DAMAGE_RADIUS: i32 = 64;
+
+impl WaylandState {
+    fn stylus_hover_cursor_pos(&self) -> Option<(f64, f64)> {
+        self.stylus_hover_cursor_position()
+    }
+
+    fn stylus_hover_needs_full_damage(
+        &self,
+        previous: Option<(f64, f64)>,
+        next: Option<(f64, f64)>,
+    ) -> bool {
+        if previous.is_none() && next.is_none() {
+            return false;
+        }
+
+        self.stylus_hover_eraser_needs_full_damage() || self.stylus_hover_ui_needs_full_damage()
+    }
+
+    fn stylus_hover_eraser_needs_full_damage(&self) -> bool {
+        self.input_state.eraser_mode == EraserMode::Stroke
+            && self.input_state.active_tool() == Tool::Eraser
+            && matches!(self.input_state.state, DrawingState::Idle)
+    }
+
+    fn stylus_hover_ui_needs_full_damage(&self) -> bool {
+        self.input_state.is_radial_menu_open()
+            || self.input_state.is_color_picker_popup_open()
+            || self.input_state.is_board_picker_open()
+            || self.input_state.is_properties_panel_open()
+            || self.input_state.is_context_menu_open()
+            || (self.inline_toolbars_active() && self.toolbar.is_visible())
+    }
+
+    fn mark_stylus_hover_cursor_dirty(
+        &mut self,
+        previous: Option<(f64, f64)>,
+        next: Option<(f64, f64)>,
+    ) {
+        if previous.is_none() && next.is_none() {
+            return;
+        }
+
+        if self.stylus_hover_needs_full_damage(previous, next) {
+            self.input_state.dirty_tracker.mark_full();
+            self.input_state.needs_redraw = true;
+            return;
+        }
+
+        let width = self.surface.width().min(i32::MAX as u32) as i32;
+        let height = self.surface.height().min(i32::MAX as u32) as i32;
+        for pos in [previous, next].into_iter().flatten() {
+            if let Some(rect) = stylus_cursor_damage_rect(pos, width, height) {
+                self.input_state.dirty_tracker.mark_rect(rect);
+            } else if width <= 0 || height <= 0 {
+                self.input_state.dirty_tracker.mark_full();
+            }
+        }
+        self.input_state.needs_redraw = true;
+    }
+}
+
+fn stylus_cursor_damage_rect(pos: (f64, f64), width: i32, height: i32) -> Option<Rect> {
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+
+    let x = pos.0.round() as i32;
+    let y = pos.1.round() as i32;
+    let min_x = x
+        .saturating_sub(STYLUS_CURSOR_DAMAGE_RADIUS)
+        .clamp(0, width);
+    let min_y = y
+        .saturating_sub(STYLUS_CURSOR_DAMAGE_RADIUS)
+        .clamp(0, height);
+    let max_x = x
+        .saturating_add(STYLUS_CURSOR_DAMAGE_RADIUS)
+        .clamp(0, width);
+    let max_y = y
+        .saturating_add(STYLUS_CURSOR_DAMAGE_RADIUS)
+        .clamp(0, height);
+    Rect::from_min_max(min_x, min_y, max_x, max_y)
+}
 
 impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
     fn event(
@@ -72,6 +159,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     "Tablet proximity out: tool {:?}, type: {:?}",
                     tool_id, tool_type
                 );
+                let hover_cursor_pos = state.stylus_hover_cursor_pos();
                 state.stylus_tip_down = false;
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
@@ -86,6 +174,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
                 state.stylus_pressure_thickness = None;
                 state.stylus_last_pos = None;
+                state.mark_stylus_hover_cursor_dirty(hover_cursor_pos, None);
 
                 // Restore previous tool if we auto-switched to eraser
                 if state.stylus_auto_switched_to_eraser {
@@ -135,7 +224,9 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 if !state.stylus_on_overlay {
                     return;
                 }
+                let hover_cursor_pos = state.stylus_hover_cursor_pos();
                 state.stylus_tip_down = true;
+                state.mark_stylus_hover_cursor_dirty(hover_cursor_pos, None);
                 state.stylus_base_thickness = Some(state.input_state.current_thickness);
                 state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
                 state.record_stylus_peak(state.input_state.current_thickness);
@@ -201,6 +292,8 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     wx,
                     wy,
                 );
+                let hover_cursor_pos = state.stylus_hover_cursor_pos();
+                state.mark_stylus_hover_cursor_dirty(None, hover_cursor_pos);
                 state.input_state.needs_redraw = true;
             }
             Event::Motion { x, y } => {
@@ -219,6 +312,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.set_current_mouse(x as i32, y as i32);
                     return;
                 }
+                let previous_hover_cursor_pos = state.stylus_hover_cursor_pos();
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if state.stylus_on_toolbar {
                     let xf = x;
@@ -247,6 +341,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.stylus_last_pos = Some((x, y));
                     if state.inline_toolbar_motion((x, y)) {
                         state.stylus_on_toolbar = true;
+                        state.mark_stylus_hover_cursor_dirty(previous_hover_cursor_pos, None);
                         return;
                     } else {
                         state.stylus_on_toolbar = false;
@@ -268,6 +363,11 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     y.round() as i32,
                     wx,
                     wy,
+                );
+                let next_hover_cursor_pos = state.stylus_hover_cursor_pos();
+                state.mark_stylus_hover_cursor_dirty(
+                    previous_hover_cursor_pos,
+                    next_hover_cursor_pos,
                 );
                 if state.stylus_tip_down {
                     state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
@@ -306,5 +406,42 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 debug!("Unhandled tablet tool event: {:?}", other);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stylus_cursor_damage_rect_covers_cursor_area() {
+        let rect = stylus_cursor_damage_rect((100.2, 80.7), 400, 300).expect("rect");
+
+        assert_eq!(
+            rect,
+            Rect::new(
+                100 - STYLUS_CURSOR_DAMAGE_RADIUS,
+                81 - STYLUS_CURSOR_DAMAGE_RADIUS,
+                STYLUS_CURSOR_DAMAGE_RADIUS * 2,
+                STYLUS_CURSOR_DAMAGE_RADIUS * 2,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn stylus_cursor_damage_rect_clamps_to_surface() {
+        let rect = stylus_cursor_damage_rect((4.0, 3.0), 400, 300).expect("rect");
+
+        assert_eq!(rect.x, 0);
+        assert_eq!(rect.y, 0);
+        assert_eq!(rect.width, 68);
+        assert_eq!(rect.height, 67);
+    }
+
+    #[test]
+    fn stylus_cursor_damage_rect_ignores_empty_surface() {
+        assert_eq!(stylus_cursor_damage_rect((10.0, 10.0), 0, 300), None);
+        assert_eq!(stylus_cursor_damage_rect((10.0, 10.0), 400, 0), None);
     }
 }
