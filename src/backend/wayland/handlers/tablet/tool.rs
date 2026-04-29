@@ -120,6 +120,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_surface = Some(surface.clone());
                 state.stylus_on_overlay = on_overlay;
                 state.stylus_on_toolbar = on_toolbar;
+                state.set_pointer_over_toolbar(on_toolbar);
                 state.set_toolbar_dragging(false);
                 state.stylus_tip_down = false;
                 state.stylus_base_thickness = Some(state.input_state.current_thickness);
@@ -151,6 +152,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 } else {
                     debug!("Tablet proximity in on non-overlay surface");
                 }
+                state.update_pointer_cursor(on_toolbar, _conn);
             }
             Event::ProximityOut => {
                 let tool_id = _proxy.id();
@@ -163,6 +165,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.stylus_tip_down = false;
                 state.stylus_on_overlay = false;
                 state.stylus_on_toolbar = false;
+                state.set_pointer_over_toolbar(false);
                 state.set_toolbar_dragging(false);
                 state.end_toolbar_move_drag();
                 if let Some(surf) = state.stylus_surface.take()
@@ -218,6 +221,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                         state.toolbar.mark_dirty();
                         state.input_state.needs_redraw = true;
                         state.refresh_keyboard_interactivity();
+                        state.update_pointer_cursor(true, _conn);
                     }
                     return;
                 }
@@ -246,6 +250,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     wy,
                 );
                 state.input_state.needs_redraw = true;
+                state.update_pointer_cursor(false, _conn);
             }
             Event::Up => {
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
@@ -253,13 +258,17 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     let (mx, my) = state.current_mouse();
                     state.inline_toolbar_release((mx as f64, my as f64));
                     state.stylus_on_toolbar = false;
+                    state.set_pointer_over_toolbar(false);
                     state.set_toolbar_dragging(false);
                     state.end_toolbar_move_drag();
+                    state.update_pointer_cursor(false, _conn);
                     return;
                 }
                 if state.stylus_on_toolbar {
+                    state.set_pointer_over_toolbar(true);
                     state.set_toolbar_dragging(false);
                     state.end_toolbar_move_drag();
+                    state.update_pointer_cursor(true, _conn);
                     return;
                 }
                 if !state.stylus_on_overlay {
@@ -295,6 +304,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 let hover_cursor_pos = state.stylus_hover_cursor_pos();
                 state.mark_stylus_hover_cursor_dirty(None, hover_cursor_pos);
                 state.input_state.needs_redraw = true;
+                state.update_pointer_cursor(false, _conn);
             }
             Event::Motion { x, y } => {
                 if state.is_move_dragging()
@@ -310,6 +320,8 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.toolbar.mark_dirty();
                     state.input_state.needs_redraw = true;
                     state.set_current_mouse(x as i32, y as i32);
+                    state.set_pointer_over_toolbar(state.stylus_on_toolbar);
+                    state.update_pointer_cursor(state.stylus_on_toolbar, _conn);
                     return;
                 }
                 let previous_hover_cursor_pos = state.stylus_hover_cursor_pos();
@@ -318,8 +330,23 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     let xf = x;
                     let yf = y;
                     state.stylus_last_pos = Some((xf, yf));
-                    if let Some(surface) = state.stylus_surface.as_ref() {
-                        let evt = state.toolbar.pointer_motion(surface, (xf, yf));
+                    if let Some(surface) = state.stylus_surface.clone() {
+                        state.set_pointer_over_toolbar(true);
+                        if let Some((sx, sy)) =
+                            state.toolbar_surface_screen_coords(&surface, (xf, yf))
+                        {
+                            state.set_current_mouse(sx as i32, sy as i32);
+                            let (wx, wy) = state.zoomed_world_coords(sx, sy);
+                            state.input_state.update_pointer_positions(
+                                sx.round() as i32,
+                                sy.round() as i32,
+                                wx,
+                                wy,
+                            );
+                        } else {
+                            state.set_current_mouse(x as i32, y as i32);
+                        }
+                        let evt = state.toolbar.pointer_motion(&surface, (xf, yf));
                         if state.toolbar_dragging() {
                             // Use move_drag_intent if pointer_motion didn't return an intent
                             // This allows dragging to continue when stylus moves outside hit region
@@ -334,22 +361,26 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                         state.input_state.needs_redraw = true;
                         state.refresh_keyboard_interactivity();
                     }
-                    state.set_current_mouse(x as i32, y as i32);
+                    state.update_pointer_cursor(true, _conn);
                     return;
                 }
                 if inline_active {
                     state.stylus_last_pos = Some((x, y));
                     if state.inline_toolbar_motion((x, y)) {
                         state.stylus_on_toolbar = true;
+                        state.set_pointer_over_toolbar(true);
                         state.mark_stylus_hover_cursor_dirty(previous_hover_cursor_pos, None);
+                        state.update_pointer_cursor(true, _conn);
                         return;
                     } else {
                         state.stylus_on_toolbar = false;
+                        state.set_pointer_over_toolbar(false);
                     }
                 }
                 if !state.stylus_on_overlay {
                     return;
                 }
+                state.set_pointer_over_toolbar(false);
                 state.set_current_mouse(x as i32, y as i32);
                 let xf = x;
                 let yf = y;
@@ -369,6 +400,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     previous_hover_cursor_pos,
                     next_hover_cursor_pos,
                 );
+                state.update_pointer_cursor(false, _conn);
                 if state.stylus_tip_down {
                     state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
                     state.record_stylus_peak(state.input_state.current_thickness);

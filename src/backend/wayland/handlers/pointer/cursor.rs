@@ -10,7 +10,11 @@ use crate::input::{
 };
 
 impl WaylandState {
-    pub(super) fn update_pointer_cursor(&mut self, toolbar_hover: bool, conn: &Connection) {
+    pub(in crate::backend::wayland) fn update_pointer_cursor(
+        &mut self,
+        toolbar_hover: bool,
+        conn: &Connection,
+    ) {
         if self.toolbar_dragging() && self.pointer_lock_active() {
             self.hide_pointer_cursor();
             return;
