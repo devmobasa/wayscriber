@@ -1,6 +1,6 @@
 use super::create_test_input_state;
-use crate::config::{ColorSpec, ToolPresetConfig};
-use crate::input::Tool;
+use crate::config::{ColorSpec, PresenterToolBehavior, ToolPresetConfig};
+use crate::input::{DragBinding, DragToolBindings, MouseButton, Tool};
 use crate::ui::toolbar::ToolbarEvent;
 
 #[test]
@@ -37,6 +37,7 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
         arrow_angle: None,
         arrow_head_at_end: None,
         show_status_bar: Some(true),
+        drag_tools: None,
     };
     state.presets[0] = Some(preset);
 
@@ -69,6 +70,23 @@ fn presenter_mode_closes_help_overlay_and_switches_to_highlight_tool() {
 
     assert!(state.presenter_mode);
     assert!(!state.show_help);
+    assert_eq!(state.tool_override(), Some(Tool::Highlight));
+}
+
+#[test]
+fn presenter_locked_mode_blocks_non_left_drag_bindings() {
+    let mut state = create_test_input_state();
+    let mut bindings = DragToolBindings::default();
+    bindings.right.drag = DragBinding::from_tool(Tool::Pen);
+    assert!(state.set_drag_tool_bindings(bindings));
+    state.presenter_mode_config.tool_behavior = PresenterToolBehavior::ForceHighlightLocked;
+
+    state.toggle_presenter_mode();
+    state.on_mouse_press(MouseButton::Right, 0, 0);
+    state.on_mouse_motion(10, 10);
+    state.on_mouse_release(MouseButton::Right, 10, 10);
+
+    assert!(state.boards.active_frame().shapes.is_empty());
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
 }
 

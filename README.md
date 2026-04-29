@@ -508,7 +508,7 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_tool`, `shift_drag_tool`, `ctrl_drag_tool`, `ctrl_shift_drag_tool`, `tab_drag_tool`) or in the configurator Drawing tab.
+Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_tool`, `shift_drag_tool`, `ctrl_drag_tool`, `ctrl_shift_drag_tool`, `tab_drag_tool`) or in the configurator Drawing tab. For per-button workflows, use `[drawing.drag_tools.left]`, `[drawing.drag_tools.right]`, and `[drawing.drag_tools.middle]`; each binding can set a tool and optional color.
 
 </details>
 
@@ -646,6 +646,10 @@ wayscriber-configurator   # or press F11
 [drawing]
 default_color = "red"
 default_thickness = 3.0
+
+[drawing.drag_tools.right]
+drag_tool = "pen"
+drag_color = "blue"
 
 [presets]
 # slot_count: 3-5

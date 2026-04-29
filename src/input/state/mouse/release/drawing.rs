@@ -14,6 +14,7 @@ pub(super) struct DrawingRelease {
 }
 
 pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: DrawingRelease) {
+    let drawing_color = state.active_drag_color_or_current();
     let (start_x, start_y) = release.start;
     let (end_x, end_y) = release.end;
     let DrawingRelease {
@@ -57,12 +58,12 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
 
                 Shape::FreehandPressure {
                     points: points_with_pressure,
-                    color: state.current_color,
+                    color: drawing_color,
                 }
             } else {
                 Shape::Freehand {
                     points,
-                    color: state.current_color,
+                    color: drawing_color,
                     thick: state.current_thickness,
                 }
             }
@@ -72,7 +73,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             y1: start_y,
             x2: end_x,
             y2: end_y,
-            color: state.current_color,
+            color: drawing_color,
             thick: state.current_thickness,
         },
         Tool::Rect => {
@@ -92,7 +93,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
                 w: width,
                 h: height,
                 fill: state.fill_enabled,
-                color: state.current_color,
+                color: drawing_color,
                 thick: state.current_thickness,
             }
         }
@@ -104,7 +105,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
                 rx,
                 ry,
                 fill: state.fill_enabled,
-                color: state.current_color,
+                color: drawing_color,
                 thick: state.current_thickness,
             }
         }
@@ -113,7 +114,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             y1: start_y,
             x2: end_x,
             y2: end_y,
-            color: state.current_color,
+            color: drawing_color,
             thick: state.current_thickness,
             arrow_length: state.arrow_length,
             arrow_angle: state.arrow_angle,
@@ -141,13 +142,13 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         }
         Tool::Marker => Shape::MarkerStroke {
             points,
-            color: state.marker_color(),
+            color: state.marker_color_for(drawing_color),
             thick: state.current_thickness,
         },
         Tool::StepMarker => Shape::StepMarker {
             x: end_x,
             y: end_y,
-            color: state.current_color,
+            color: drawing_color,
             label: step_label.unwrap_or_else(|| state.next_step_marker_label()),
         },
         Tool::Eraser => {

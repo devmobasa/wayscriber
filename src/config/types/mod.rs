@@ -25,7 +25,7 @@ pub use boards::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, Board
 pub use capture::CaptureConfig;
 pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;
-pub use drawing::DrawingConfig;
+pub use drawing::{DragButtonConfig, DrawingConfig, MouseDragToolsConfig};
 pub use help_overlay::HelpOverlayStyle;
 pub use history::HistoryConfig;
 pub use performance::PerformanceConfig;

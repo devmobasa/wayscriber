@@ -128,6 +128,7 @@ impl InputState {
             && let Some(Action::Exit) = self.find_action("Escape")
         {
             self.state = DrawingState::Idle;
+            self.end_pointer_drag();
             self.needs_redraw = true;
             return;
         }

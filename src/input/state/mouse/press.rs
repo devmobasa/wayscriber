@@ -1,6 +1,6 @@
 use crate::draw::Shape;
 use crate::draw::frame::ShapeSnapshot;
-use crate::input::{Tool, events::MouseButton};
+use crate::input::{DragTool, Tool, events::MouseButton};
 use std::sync::Arc;
 
 use super::super::core::MenuCommand;
@@ -61,6 +61,7 @@ impl InputState {
                     self.needs_redraw = true;
                 }
             }
+            self.end_pointer_drag();
             return;
         }
         if self.zoom_active() {
@@ -168,7 +169,29 @@ impl InputState {
             return;
         }
 
+        if button == MouseButton::Left && self.is_context_menu_open() {
+            self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
+            self.trigger_click_highlight(canvas_x, canvas_y);
+            self.handle_context_menu_press(screen_x, screen_y);
+            return;
+        }
+
         self.close_properties_panel();
+
+        let binding = self.drag_binding_for_button(button);
+        if let Some(tool) = self.tool_for_button_press(button, binding.tool) {
+            self.handle_tool_button_press(
+                button,
+                tool,
+                binding.color,
+                screen_x,
+                screen_y,
+                canvas_x,
+                canvas_y,
+            );
+            return;
+        }
+
         match button {
             MouseButton::Right => {
                 if self.should_toggle_radial_menu_from_mouse(MouseButton::Right) {
@@ -181,19 +204,12 @@ impl InputState {
                 self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
                 self.trigger_click_highlight(canvas_x, canvas_y);
 
-                if self.is_context_menu_open() {
-                    self.last_text_click = None;
-                    if self.is_point_in_context_menu(screen_x, screen_y) {
-                        self.update_context_menu_hover_from_pointer(screen_x, screen_y);
-                    } else {
-                        self.close_context_menu();
-                        self.needs_redraw = true;
-                    }
+                if self.handle_context_menu_press(screen_x, screen_y) {
                     return;
                 }
 
                 match &mut self.state {
-                    DrawingState::Idle => self.handle_idle_left_click(canvas_x, canvas_y),
+                    DrawingState::Idle => {}
                     DrawingState::TextInput { x: tx, y: ty, .. } => {
                         *tx = canvas_x;
                         *ty = canvas_y;
@@ -216,8 +232,75 @@ impl InputState {
         }
     }
 
-    fn handle_idle_left_click(&mut self, x: i32, y: i32) {
-        let selection_click = self.modifiers.alt || self.active_tool() == Tool::Select;
+    fn tool_for_button_press(&self, button: MouseButton, binding_tool: DragTool) -> Option<Tool> {
+        let configured_tool = binding_tool.as_tool();
+        if configured_tool.is_some()
+            && self.presenter_mode
+            && matches!(
+                self.presenter_mode_config.tool_behavior,
+                crate::config::PresenterToolBehavior::ForceHighlightLocked
+            )
+        {
+            return Some(Tool::Highlight);
+        }
+
+        if button == MouseButton::Left {
+            if let Some(override_tool) = self.tool_override()
+                && (matches!(override_tool, Tool::Highlight | Tool::Eraser)
+                    || !self.modifiers.active_drag_modifier().is_active())
+            {
+                return Some(self.active_tool());
+            }
+        }
+        configured_tool
+    }
+
+    fn handle_tool_button_press(
+        &mut self,
+        button: MouseButton,
+        tool: Tool,
+        color: Option<crate::draw::Color>,
+        screen_x: i32,
+        screen_y: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
+        self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
+        self.trigger_click_highlight(canvas_x, canvas_y);
+
+        if self.handle_context_menu_press(screen_x, screen_y) {
+            return;
+        }
+
+        match &mut self.state {
+            DrawingState::Idle => {
+                self.handle_idle_tool_click(button, tool, color, canvas_x, canvas_y)
+            }
+            DrawingState::TextInput { x: tx, y: ty, .. } if button == MouseButton::Left => {
+                *tx = canvas_x;
+                *ty = canvas_y;
+                self.update_text_preview_dirty();
+                self.needs_redraw = true;
+            }
+            DrawingState::TextInput { .. }
+            | DrawingState::Drawing { .. }
+            | DrawingState::MovingSelection { .. }
+            | DrawingState::Selecting { .. }
+            | DrawingState::PendingTextClick { .. }
+            | DrawingState::ResizingText { .. }
+            | DrawingState::ResizingSelection { .. } => {}
+        }
+    }
+
+    fn handle_idle_tool_click(
+        &mut self,
+        button: MouseButton,
+        tool: Tool,
+        color: Option<crate::draw::Color>,
+        x: i32,
+        y: i32,
+    ) {
+        let selection_click = self.modifiers.alt || tool == Tool::Select;
         let hit_id = self.hit_test_at(x, y);
 
         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
@@ -235,6 +318,7 @@ impl InputState {
                     _ => return,
                 };
                 self.last_text_click = None;
+                self.begin_pointer_drag(button, color);
                 self.state = DrawingState::ResizingText {
                     shape_id,
                     snapshot,
@@ -251,6 +335,7 @@ impl InputState {
             let snapshots = self.capture_resize_selection_snapshots();
             if !snapshots.is_empty() {
                 self.last_text_click = None;
+                self.begin_pointer_drag(button, color);
                 self.state = DrawingState::ResizingSelection {
                     handle,
                     original_bounds,
@@ -273,10 +358,11 @@ impl InputState {
                 })
                 .unwrap_or(false);
             if is_text {
+                self.begin_pointer_drag(button, color);
                 self.state = DrawingState::PendingTextClick {
                     x,
                     y,
-                    tool: self.active_tool(),
+                    tool,
                     shape_id: hit_id,
                 };
                 return;
@@ -296,6 +382,7 @@ impl InputState {
 
                 let snapshots = self.capture_movable_selection_snapshots();
                 if !snapshots.is_empty() {
+                    self.begin_pointer_drag(button, color);
                     self.state = DrawingState::MovingSelection {
                         last_x: x,
                         last_y: y,
@@ -305,6 +392,7 @@ impl InputState {
                     return;
                 }
             } else {
+                self.begin_pointer_drag(button, color);
                 self.state = DrawingState::Selecting {
                     start_x: x,
                     start_y: y,
@@ -317,11 +405,11 @@ impl InputState {
             }
         }
 
-        let tool = self.active_tool();
         if tool == Tool::Blur && !self.frozen_active() && !self.pending_frozen_toggle() {
             self.request_frozen_toggle();
         }
         if tool != Tool::Highlight && tool != Tool::Select {
+            self.begin_pointer_drag(button, color);
             self.state = DrawingState::Drawing {
                 tool,
                 start_x: x,
@@ -333,6 +421,21 @@ impl InputState {
             self.update_provisional_dirty(x, y);
             self.needs_redraw = true;
         }
+    }
+
+    fn handle_context_menu_press(&mut self, screen_x: i32, screen_y: i32) -> bool {
+        if !self.is_context_menu_open() {
+            return false;
+        }
+
+        self.last_text_click = None;
+        if self.is_point_in_context_menu(screen_x, screen_y) {
+            self.update_context_menu_hover_from_pointer(screen_x, screen_y);
+        } else {
+            self.close_context_menu();
+            self.needs_redraw = true;
+        }
+        true
     }
 
     fn handle_radial_menu_press(

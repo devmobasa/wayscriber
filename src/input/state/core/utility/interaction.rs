@@ -170,6 +170,9 @@ impl InputState {
             }
             DrawingState::Idle => {}
         }
+        if matches!(self.state, DrawingState::Idle) {
+            self.end_pointer_drag();
+        }
     }
 
     /// Drains pending dirty rectangles for the current surface size.

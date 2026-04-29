@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::config::{Action, Config, KeyBinding, KeybindingsConfig};
 use crate::draw::FontDescriptor;
-use crate::input::{ClickHighlightSettings, InputState, modifiers::DragToolBindings};
+use crate::input::{ClickHighlightSettings, DragToolBindings, InputState};
 
 pub(super) fn build_input_state(config: &Config) -> InputState {
     let font_descriptor = FontDescriptor::new(
@@ -43,13 +43,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.presenter_mode.clone(),
     );
     input_state.set_action_bindings(action_bindings);
-    input_state.set_drag_tool_bindings(DragToolBindings {
-        drag: config.drawing.drag_tool,
-        shift_drag: config.drawing.shift_drag_tool,
-        ctrl_drag: config.drawing.ctrl_drag_tool,
-        ctrl_shift_drag: config.drawing.ctrl_shift_drag_tool,
-        tab_drag: config.drawing.tab_drag_tool,
-    });
+    input_state.set_drag_tool_bindings(build_drag_tool_bindings(config));
 
     input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
     input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
@@ -95,6 +89,11 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.init_presets_from_config(&config.presets);
 
     input_state
+}
+
+fn build_drag_tool_bindings(config: &Config) -> DragToolBindings {
+    let drag_tools = config.drawing.effective_drag_tools();
+    DragToolBindings::from_config(&drag_tools)
 }
 
 fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
@@ -209,12 +208,41 @@ mod tests {
         assert_eq!(
             input.drag_tool_bindings,
             crate::input::DragToolBindings {
-                drag: crate::input::Tool::Arrow,
-                shift_drag: crate::input::Tool::Eraser,
-                ctrl_drag: crate::input::Tool::Pen,
-                ctrl_shift_drag: crate::input::Tool::Rect,
-                tab_drag: crate::input::Tool::Ellipse,
-            }
+                left: crate::input::DragButtonBindings {
+                    drag: crate::input::DragBinding::from_tool(crate::input::Tool::Arrow),
+                    shift_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Eraser),
+                    ctrl_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Pen),
+                    ctrl_shift_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Rect,),
+                    tab_drag: crate::input::DragBinding::from_tool(crate::input::Tool::Ellipse),
+                },
+                right: crate::input::DragButtonBindings::button_default(),
+                middle: crate::input::DragButtonBindings::button_default(),
+            },
+        );
+    }
+
+    #[test]
+    fn build_input_state_applies_mouse_button_drag_tool_bindings() {
+        let mut config = Config::default();
+        let mut drag_tools = config.drawing.effective_drag_tools();
+        drag_tools.left.drag_tool = crate::input::DragTool::Line;
+        drag_tools.right.drag_tool = crate::input::DragTool::Pen;
+        drag_tools.right.drag_color = Some(crate::config::ColorSpec::Name("blue".to_string()));
+        config.drawing.drag_tools = Some(drag_tools);
+
+        let input = build_input_state(&config);
+
+        assert_eq!(
+            input.drag_tool_bindings.left.drag.tool,
+            crate::input::DragTool::Line
+        );
+        assert_eq!(
+            input.drag_tool_bindings.right.drag.tool,
+            crate::input::DragTool::Pen
+        );
+        assert_eq!(
+            input.drag_tool_bindings.right.drag.color,
+            Some(crate::config::ColorSpec::Name("blue".to_string()).to_color())
         );
     }
 }

@@ -2,6 +2,7 @@ use super::super::draft::ConfigDraft;
 use super::super::parse::{parse_field, parse_usize_field};
 use crate::models::error::FormError;
 use wayscriber::config::Config;
+use wayscriber::input::Tool;
 
 impl ConfigDraft {
     pub(super) fn apply_drawing(&self, config: &mut Config, errors: &mut Vec<FormError>) {
@@ -39,11 +40,18 @@ impl ConfigDraft {
         config.drawing.font_style = self.drawing_font_style.clone();
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
-        config.drawing.drag_tool = self.drawing_drag_tool.to_tool();
-        config.drawing.shift_drag_tool = self.drawing_shift_drag_tool.to_tool();
-        config.drawing.ctrl_drag_tool = self.drawing_ctrl_drag_tool.to_tool();
-        config.drawing.ctrl_shift_drag_tool = self.drawing_ctrl_shift_drag_tool.to_tool();
-        config.drawing.tab_drag_tool = self.drawing_tab_drag_tool.to_tool();
+        config.drawing.drag_tool = legacy_tool(self.drawing_drag_tools.left.drag_tool, Tool::Pen);
+        config.drawing.shift_drag_tool =
+            legacy_tool(self.drawing_drag_tools.left.shift_drag_tool, Tool::Line);
+        config.drawing.ctrl_drag_tool =
+            legacy_tool(self.drawing_drag_tools.left.ctrl_drag_tool, Tool::Rect);
+        config.drawing.ctrl_shift_drag_tool = legacy_tool(
+            self.drawing_drag_tools.left.ctrl_shift_drag_tool,
+            Tool::Arrow,
+        );
+        config.drawing.tab_drag_tool =
+            legacy_tool(self.drawing_drag_tools.left.tab_drag_tool, Tool::Ellipse);
+        config.drawing.drag_tools = Some(self.drawing_drag_tools.clone());
         parse_field(
             &self.drawing_hit_test_tolerance,
             "drawing.hit_test_tolerance",
@@ -71,4 +79,8 @@ impl ConfigDraft {
         });
         config.arrow.head_at_end = self.arrow_head_at_end;
     }
+}
+
+fn legacy_tool(tool: wayscriber::input::DragTool, fallback: Tool) -> Tool {
+    tool.as_tool().unwrap_or(fallback)
 }

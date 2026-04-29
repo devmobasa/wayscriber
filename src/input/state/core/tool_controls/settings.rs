@@ -3,6 +3,7 @@ use super::super::base::{
 };
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{
+    DragBinding, MouseButton,
     modifiers::DragToolBindings,
     tool::{EraserMode, Tool},
 };
@@ -37,6 +38,7 @@ impl InputState {
             DrawingState::Idle | DrawingState::TextInput { .. }
         ) {
             self.state = DrawingState::Idle;
+            self.end_pointer_drag();
         }
 
         self.dirty_tracker.mark_full();
@@ -72,6 +74,35 @@ impl InputState {
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
+    }
+
+    pub fn drag_binding_for_button(&self, button: MouseButton) -> DragBinding {
+        self.drag_tool_bindings
+            .binding_for_button_modifier(button, self.modifiers.active_drag_modifier())
+    }
+
+    pub(crate) fn active_drag_color_or_current(&self) -> Color {
+        self.active_drag_color.unwrap_or(self.current_color)
+    }
+
+    pub(crate) fn marker_color_for(&self, color: Color) -> Color {
+        // Keep a minimum alpha so the marker remains visible even if a fully transparent color was set.
+        let alpha = (color.a * self.marker_opacity).clamp(0.05, 0.9);
+        Color { a: alpha, ..color }
+    }
+
+    pub(crate) fn begin_pointer_drag(&mut self, button: MouseButton, color: Option<Color>) {
+        self.active_drag_button = Some(button);
+        self.active_drag_color = color;
+    }
+
+    pub(crate) fn end_pointer_drag(&mut self) {
+        self.active_drag_button = None;
+        self.active_drag_color = None;
+    }
+
+    pub(crate) fn pointer_drag_button_matches(&self, button: MouseButton) -> bool {
+        self.active_drag_button == Some(button)
     }
 
     /// Sets thickness or eraser size depending on the active tool.

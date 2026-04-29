@@ -68,6 +68,20 @@ shift_drag_tool = "line"
 ctrl_drag_tool = "rect"
 ctrl_shift_drag_tool = "arrow"
 tab_drag_tool = "ellipse"
+
+# Optional per-button override. Right/middle keep their built-in behavior
+# unless configured. Use "default" for a button's built-in behavior.
+[drawing.drag_tools.left]
+drag_tool = "pen"
+shift_drag_tool = "pen"
+shift_drag_color = "red"
+
+[drawing.drag_tools.right]
+drag_tool = "pen"
+drag_color = "blue"
+
+[drawing.drag_tools.middle]
+drag_tool = "default"
 ```
 
 **Color Options:**
@@ -141,7 +155,7 @@ show_status_bar = true
 ```
 
 **Required fields:** `tool`, `color`, `size`  
-**Optional fields:** `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `show_status_bar`
+**Optional fields:** `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `show_status_bar`, `drag_tools`
 
 ### `[history]` - Undo/Redo Playback
 

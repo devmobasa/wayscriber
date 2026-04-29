@@ -56,7 +56,20 @@ impl InputState {
             }
         }
 
-        if button != MouseButton::Left {
+        if matches!(
+            self.state,
+            DrawingState::Drawing { .. }
+                | DrawingState::MovingSelection { .. }
+                | DrawingState::Selecting { .. }
+                | DrawingState::PendingTextClick { .. }
+                | DrawingState::ResizingText { .. }
+                | DrawingState::ResizingSelection { .. }
+        ) && !self.pointer_drag_button_matches(button)
+        {
+            return;
+        }
+
+        if button != MouseButton::Left && self.active_drag_button.is_none() {
             return;
         }
 
@@ -108,6 +121,9 @@ impl InputState {
             other_state => {
                 self.state = other_state;
             }
+        }
+        if matches!(self.state, DrawingState::Idle) {
+            self.end_pointer_drag();
         }
     }
 }

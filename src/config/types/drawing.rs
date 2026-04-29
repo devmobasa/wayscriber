@@ -1,5 +1,5 @@
 use crate::config::enums::ColorSpec;
-use crate::input::{EraserMode, Tool};
+use crate::input::{DragTool, EraserMode, Tool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -70,6 +70,13 @@ pub struct DrawingConfig {
     #[serde(default = "default_tab_drag_tool")]
     pub tab_drag_tool: Tool,
 
+    /// Optional per-mouse-button drag tool mapping.
+    ///
+    /// When omitted, the legacy drag-tool fields above apply to left-button
+    /// drags and right/middle buttons keep their built-in behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drag_tools: Option<MouseDragToolsConfig>,
+
     /// Font family name for text rendering (e.g., "Sans", "Monospace", "JetBrains Mono")
     /// Falls back to "Sans" if the specified font is not available
     /// Note: Install fonts system-wide and reference by family name
@@ -108,10 +115,265 @@ impl Default for DrawingConfig {
             ctrl_drag_tool: default_ctrl_drag_tool(),
             ctrl_shift_drag_tool: default_ctrl_shift_drag_tool(),
             tab_drag_tool: default_tab_drag_tool(),
+            drag_tools: None,
             font_family: default_font_family(),
             font_weight: default_font_weight(),
             font_style: default_font_style(),
             text_background_enabled: default_text_background(),
+        }
+    }
+}
+
+/// Drag bindings for all supported mouse buttons.
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+pub struct MouseDragToolsConfig {
+    /// Left mouse button drag bindings.
+    #[serde(default = "default_left_drag_button")]
+    pub left: DragButtonConfig,
+
+    /// Right mouse button drag bindings.
+    #[serde(default = "default_button_behavior_drag_button")]
+    pub right: DragButtonConfig,
+
+    /// Middle mouse button drag bindings.
+    #[serde(default = "default_button_behavior_drag_button")]
+    pub middle: DragButtonConfig,
+
+    /// Whether the left table was present in the user's config.
+    #[serde(skip)]
+    #[schemars(skip)]
+    left_explicit: bool,
+}
+
+impl MouseDragToolsConfig {
+    pub fn from_legacy(
+        drag_tool: Tool,
+        shift_drag_tool: Tool,
+        ctrl_drag_tool: Tool,
+        ctrl_shift_drag_tool: Tool,
+        tab_drag_tool: Tool,
+    ) -> Self {
+        Self {
+            left: DragButtonConfig::from_legacy(
+                drag_tool,
+                shift_drag_tool,
+                ctrl_drag_tool,
+                ctrl_shift_drag_tool,
+                tab_drag_tool,
+            ),
+            right: DragButtonConfig::button_behavior(),
+            middle: DragButtonConfig::button_behavior(),
+            left_explicit: false,
+        }
+    }
+
+    pub fn from_buttons(
+        left: DragButtonConfig,
+        right: DragButtonConfig,
+        middle: DragButtonConfig,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            middle,
+            left_explicit: true,
+        }
+    }
+
+    pub fn left_explicit(&self) -> bool {
+        self.left_explicit
+    }
+
+    pub fn resolve_with_left_defaults(mut self, left_defaults: &DragButtonConfig) -> Self {
+        if self.left_explicit() {
+            self.left.apply_defaults_from(left_defaults);
+        } else {
+            self.left = left_defaults.clone();
+        }
+        self.left_explicit = true;
+        self
+    }
+}
+
+impl<'de> Deserialize<'de> for MouseDragToolsConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct MouseDragToolsConfigFields {
+            left: Option<DragButtonConfig>,
+            right: Option<DragButtonConfig>,
+            middle: Option<DragButtonConfig>,
+        }
+
+        let fields = MouseDragToolsConfigFields::deserialize(deserializer)?;
+        let left_explicit = fields.left.is_some();
+        Ok(Self {
+            left: fields.left.unwrap_or_else(default_left_drag_button),
+            right: fields
+                .right
+                .unwrap_or_else(default_button_behavior_drag_button),
+            middle: fields
+                .middle
+                .unwrap_or_else(default_button_behavior_drag_button),
+            left_explicit,
+        })
+    }
+}
+
+impl Default for MouseDragToolsConfig {
+    fn default() -> Self {
+        Self::from_legacy(
+            default_drag_tool(),
+            default_shift_drag_tool(),
+            default_ctrl_drag_tool(),
+            default_ctrl_shift_drag_tool(),
+            default_tab_drag_tool(),
+        )
+    }
+}
+
+/// Drag bindings for one mouse button.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct DragButtonConfig {
+    /// Tool/action used for drag with no modifier.
+    #[serde(default = "default_button_behavior_drag_tool")]
+    pub drag_tool: DragTool,
+    /// Optional color used for drag with no modifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drag_color: Option<ColorSpec>,
+
+    /// Tool/action used for Shift+drag.
+    #[serde(default = "default_button_behavior_drag_tool")]
+    pub shift_drag_tool: DragTool,
+    /// Optional color used for Shift+drag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_drag_color: Option<ColorSpec>,
+
+    /// Tool/action used for Ctrl+drag.
+    #[serde(default = "default_button_behavior_drag_tool")]
+    pub ctrl_drag_tool: DragTool,
+    /// Optional color used for Ctrl+drag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ctrl_drag_color: Option<ColorSpec>,
+
+    /// Tool/action used for Ctrl+Shift+drag.
+    #[serde(default = "default_button_behavior_drag_tool")]
+    pub ctrl_shift_drag_tool: DragTool,
+    /// Optional color used for Ctrl+Shift+drag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ctrl_shift_drag_color: Option<ColorSpec>,
+
+    /// Tool/action used for Tab+drag.
+    #[serde(default = "default_button_behavior_drag_tool")]
+    pub tab_drag_tool: DragTool,
+    /// Optional color used for Tab+drag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tab_drag_color: Option<ColorSpec>,
+}
+
+impl DragButtonConfig {
+    pub fn from_legacy(
+        drag_tool: Tool,
+        shift_drag_tool: Tool,
+        ctrl_drag_tool: Tool,
+        ctrl_shift_drag_tool: Tool,
+        tab_drag_tool: Tool,
+    ) -> Self {
+        Self {
+            drag_tool: DragTool::from_tool(drag_tool),
+            drag_color: None,
+            shift_drag_tool: DragTool::from_tool(shift_drag_tool),
+            shift_drag_color: None,
+            ctrl_drag_tool: DragTool::from_tool(ctrl_drag_tool),
+            ctrl_drag_color: None,
+            ctrl_shift_drag_tool: DragTool::from_tool(ctrl_shift_drag_tool),
+            ctrl_shift_drag_color: None,
+            tab_drag_tool: DragTool::from_tool(tab_drag_tool),
+            tab_drag_color: None,
+        }
+    }
+
+    pub fn button_behavior() -> Self {
+        Self {
+            drag_tool: DragTool::Default,
+            drag_color: None,
+            shift_drag_tool: DragTool::Default,
+            shift_drag_color: None,
+            ctrl_drag_tool: DragTool::Default,
+            ctrl_drag_color: None,
+            ctrl_shift_drag_tool: DragTool::Default,
+            ctrl_shift_drag_color: None,
+            tab_drag_tool: DragTool::Default,
+            tab_drag_color: None,
+        }
+    }
+
+    fn apply_defaults_from(&mut self, defaults: &Self) {
+        if self.drag_tool == DragTool::Default {
+            self.drag_tool = defaults.drag_tool;
+            if self.drag_color.is_none() {
+                self.drag_color = defaults.drag_color.clone();
+            }
+        }
+        if self.shift_drag_tool == DragTool::Default {
+            self.shift_drag_tool = defaults.shift_drag_tool;
+            if self.shift_drag_color.is_none() {
+                self.shift_drag_color = defaults.shift_drag_color.clone();
+            }
+        }
+        if self.ctrl_drag_tool == DragTool::Default {
+            self.ctrl_drag_tool = defaults.ctrl_drag_tool;
+            if self.ctrl_drag_color.is_none() {
+                self.ctrl_drag_color = defaults.ctrl_drag_color.clone();
+            }
+        }
+        if self.ctrl_shift_drag_tool == DragTool::Default {
+            self.ctrl_shift_drag_tool = defaults.ctrl_shift_drag_tool;
+            if self.ctrl_shift_drag_color.is_none() {
+                self.ctrl_shift_drag_color = defaults.ctrl_shift_drag_color.clone();
+            }
+        }
+        if self.tab_drag_tool == DragTool::Default {
+            self.tab_drag_tool = defaults.tab_drag_tool;
+            if self.tab_drag_color.is_none() {
+                self.tab_drag_color = defaults.tab_drag_color.clone();
+            }
+        }
+    }
+}
+
+impl Default for DragButtonConfig {
+    fn default() -> Self {
+        Self::button_behavior()
+    }
+}
+
+impl DrawingConfig {
+    pub fn effective_drag_tools(&self) -> MouseDragToolsConfig {
+        match self.drag_tools.clone() {
+            Some(drag_tools) => {
+                let legacy_left = DragButtonConfig::from_legacy(
+                    self.drag_tool,
+                    self.shift_drag_tool,
+                    self.ctrl_drag_tool,
+                    self.ctrl_shift_drag_tool,
+                    self.tab_drag_tool,
+                );
+                drag_tools.resolve_with_left_defaults(&legacy_left)
+            }
+            None => MouseDragToolsConfig::from_buttons(
+                DragButtonConfig::from_legacy(
+                    self.drag_tool,
+                    self.shift_drag_tool,
+                    self.ctrl_drag_tool,
+                    self.ctrl_shift_drag_tool,
+                    self.tab_drag_tool,
+                ),
+                DragButtonConfig::button_behavior(),
+                DragButtonConfig::button_behavior(),
+            ),
         }
     }
 }
@@ -190,4 +452,22 @@ fn default_ctrl_shift_drag_tool() -> Tool {
 
 fn default_tab_drag_tool() -> Tool {
     Tool::Ellipse
+}
+
+fn default_button_behavior_drag_tool() -> DragTool {
+    DragTool::Default
+}
+
+fn default_left_drag_button() -> DragButtonConfig {
+    DragButtonConfig::from_legacy(
+        default_drag_tool(),
+        default_shift_drag_tool(),
+        default_ctrl_drag_tool(),
+        default_ctrl_shift_drag_tool(),
+        default_tab_drag_tool(),
+    )
+}
+
+fn default_button_behavior_drag_button() -> DragButtonConfig {
+    DragButtonConfig::button_behavior()
 }

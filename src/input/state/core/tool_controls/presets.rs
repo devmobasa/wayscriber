@@ -108,6 +108,14 @@ impl InputState {
             self.needs_redraw = true;
             self.mark_session_dirty();
         }
+        if let Some(drag_tools) = preset.drag_tools.as_ref() {
+            let left_defaults = self.drag_tool_bindings.to_config().left;
+            let drag_tools = drag_tools
+                .clone()
+                .resolve_with_left_defaults(&left_defaults);
+            let _ = self
+                .set_drag_tool_bindings(crate::input::DragToolBindings::from_config(&drag_tools));
+        }
 
         self.active_preset_slot = Some(slot);
         self.set_preset_feedback(slot, PresetFeedbackKind::Apply);
@@ -235,6 +243,7 @@ impl InputState {
             arrow_angle: Some(self.arrow_angle),
             arrow_head_at_end: Some(self.arrow_head_at_end),
             show_status_bar: Some(self.show_status_bar),
+            drag_tools: Some(self.drag_tool_bindings.to_config()),
         }
     }
 }

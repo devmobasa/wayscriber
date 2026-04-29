@@ -46,3 +46,13 @@ fn session_storage_and_compression_round_trip() {
         SessionCompression::On
     ));
 }
+
+#[test]
+fn drag_tool_options_match_button_capabilities() {
+    let left = DragToolOption::list_for_button(DragMouseButton::Left);
+    assert!(!left.contains(&DragToolOption::Default));
+
+    let right = DragToolOption::list_for_button(DragMouseButton::Right);
+    assert!(right.contains(&DragToolOption::Default));
+    assert_eq!(right, DragToolOption::list());
+}

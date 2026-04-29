@@ -27,6 +27,7 @@ use crate::input::BoardManager;
 use crate::input::boards::BoardState;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
+    MouseButton,
     modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, Tool},
 };
@@ -95,6 +96,10 @@ pub struct InputState {
     pub modifiers: Modifiers,
     /// Tool mapping for drag gestures with modifier keys
     pub drag_tool_bindings: DragToolBindings,
+    /// Mouse button that started the active pointer drag, if any.
+    pub(crate) active_drag_button: Option<MouseButton>,
+    /// Per-drag color override, if the current drag binding configured one.
+    pub(crate) active_drag_color: Option<Color>,
     /// Current drawing mode state machine
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
