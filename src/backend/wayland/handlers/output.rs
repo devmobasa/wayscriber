@@ -43,6 +43,7 @@ impl OutputHandler for WaylandState {
                 info.logical_size,
                 (self.surface.width(), self.surface.height()),
                 info.scale_factor.max(1),
+                info.transform,
             ) {
                 self.frozen.set_active_geometry(Some(geo.clone()));
                 self.frozen
