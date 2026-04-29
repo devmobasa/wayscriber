@@ -145,6 +145,7 @@ impl CompositorHandler for WaylandState {
                     logical_width: logical_w.max(0) as u32,
                     logical_height: logical_h.max(0) as u32,
                     scale,
+                    transform: info.transform,
                 },
             ));
             self.frozen
@@ -156,6 +157,7 @@ impl CompositorHandler for WaylandState {
                     logical_width: logical_w.max(0) as u32,
                     logical_height: logical_h.max(0) as u32,
                     scale,
+                    transform: info.transform,
                 },
             ));
             self.zoom

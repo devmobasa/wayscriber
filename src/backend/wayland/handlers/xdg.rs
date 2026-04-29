@@ -115,11 +115,19 @@ impl WindowHandler for WaylandState {
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
 
+        let output_transform = self
+            .surface
+            .current_output()
+            .as_ref()
+            .and_then(|output| self.output_state.info(output))
+            .map(|info| info.transform)
+            .unwrap_or(wayland_client::protocol::wl_output::Transform::Normal);
         if let Some(geo) = crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
             None, // logical position is not available here
             Some((self.surface.width() as i32, self.surface.height() as i32)),
             (self.surface.width(), self.surface.height()),
             self.surface.scale(),
+            output_transform,
         ) {
             self.frozen.set_active_geometry(Some(geo.clone()));
             self.zoom.set_active_geometry(Some(geo));

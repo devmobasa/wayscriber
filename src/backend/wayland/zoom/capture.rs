@@ -4,7 +4,10 @@ use smithay_client_toolkit::shm::{
     Shm,
     slot::{Buffer, SlotPool},
 };
-use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::wl_shm};
+use wayland_client::{
+    Dispatch, QueueHandle, WEnum,
+    protocol::{wl_output, wl_shm},
+};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
     Event as FrameEvent, Flags, ZwlrScreencopyFrameV1,
 };
@@ -260,12 +263,21 @@ impl ZoomState {
 
         capture.frame.destroy();
 
-        self.set_image(FrozenImage {
-            width: capture.width,
-            height: capture.height,
-            stride: (capture.width * 4) as i32,
-            data,
-        });
+        let output_transform = self
+            .active_geometry
+            .as_ref()
+            .map(|geo| geo.transform)
+            .unwrap_or(wl_output::Transform::Normal);
+
+        self.set_image(
+            FrozenImage {
+                width: capture.width,
+                height: capture.height,
+                stride: (capture.width * 4) as i32,
+                data,
+            }
+            .with_output_transform(output_transform),
+        );
 
         Ok(())
     }
