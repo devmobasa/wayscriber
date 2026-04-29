@@ -54,13 +54,9 @@ impl InputState {
             |shape| match shape {
                 Shape::Text {
                     background_enabled, ..
-                } => {
-                    if *background_enabled != target {
-                        *background_enabled = target;
-                        true
-                    } else {
-                        false
-                    }
+                } if *background_enabled != target => {
+                    *background_enabled = target;
+                    true
                 }
                 _ => false,
             },

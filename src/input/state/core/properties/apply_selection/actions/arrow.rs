@@ -27,13 +27,9 @@ impl InputState {
         let result = self.apply_selection_change(
             |shape| matches!(shape, Shape::Arrow { .. }),
             |shape| match shape {
-                Shape::Arrow { head_at_end, .. } => {
-                    if *head_at_end != target {
-                        *head_at_end = target;
-                        true
-                    } else {
-                        false
-                    }
+                Shape::Arrow { head_at_end, .. } if *head_at_end != target => {
+                    *head_at_end = target;
+                    true
                 }
                 _ => false,
             },

@@ -246,7 +246,7 @@ impl InputState {
                     .into_iter()
                     .filter_map(|id| index_map.get(&id).map(|&idx| (idx, id)))
                     .collect();
-                sorted_candidates.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+                sorted_candidates.sort_unstable_by_key(|candidate| std::cmp::Reverse(candidate.0));
 
                 for (_, id) in sorted_candidates {
                     if self.hit_test_by_id(id, x, y, tolerance) {

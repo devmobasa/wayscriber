@@ -30,13 +30,11 @@ impl InputState {
                 | Shape::Ellipse { color, .. }
                 | Shape::Arrow { color, .. }
                 | Shape::Text { color, .. }
-                | Shape::StepMarker { color, .. } => {
-                    if *color != target {
-                        *color = target;
-                        true
-                    } else {
-                        false
-                    }
+                | Shape::StepMarker { color, .. }
+                    if *color != target =>
+                {
+                    *color = target;
+                    true
                 }
                 Shape::MarkerStroke { color, .. } => {
                     let new_color = Color {
@@ -50,13 +48,9 @@ impl InputState {
                         false
                     }
                 }
-                Shape::StickyNote { background, .. } => {
-                    if *background != target {
-                        *background = target;
-                        true
-                    } else {
-                        false
-                    }
+                Shape::StickyNote { background, .. } if *background != target => {
+                    *background = target;
+                    true
                 }
                 _ => false,
             },
@@ -99,13 +93,11 @@ impl InputState {
                 | Shape::Ellipse { color, .. }
                 | Shape::Arrow { color, .. }
                 | Shape::Text { color, .. }
-                | Shape::StepMarker { color, .. } => {
-                    if *color != target {
-                        *color = target;
-                        true
-                    } else {
-                        false
-                    }
+                | Shape::StepMarker { color, .. }
+                    if *color != target =>
+                {
+                    *color = target;
+                    true
                 }
                 Shape::MarkerStroke { color, .. } => {
                     let new_color = Color {
@@ -119,13 +111,9 @@ impl InputState {
                         false
                     }
                 }
-                Shape::StickyNote { background, .. } => {
-                    if *background != target {
-                        *background = target;
-                        true
-                    } else {
-                        false
-                    }
+                Shape::StickyNote { background, .. } if *background != target => {
+                    *background = target;
+                    true
                 }
                 _ => false,
             },
