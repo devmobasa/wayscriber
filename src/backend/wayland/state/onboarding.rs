@@ -243,10 +243,7 @@ impl WaylandState {
                 changed = true;
             }
 
-            loop {
-                let Some(step) = state.active_step else {
-                    break;
-                };
+            while let Some(step) = state.active_step {
                 match step {
                     FirstRunStep::BackgroundModeSetup => {
                         if !state.first_run_background_mode_prompted {

@@ -27,17 +27,14 @@ impl InputState {
                 self.toggle_help_overlay();
                 true
             }
-            Key::Backspace => {
-                if !self.help_overlay_search.is_empty() {
-                    self.help_overlay_search.pop();
-                    self.help_overlay_scroll = 0.0;
-                    self.dirty_tracker.mark_full();
-                    self.needs_redraw = true;
-                    true
-                } else {
-                    false
-                }
+            Key::Backspace if !self.help_overlay_search.is_empty() => {
+                self.help_overlay_search.pop();
+                self.help_overlay_scroll = 0.0;
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                true
             }
+            Key::Backspace => false,
             Key::Space => {
                 if search_active {
                     self.help_overlay_search.push(' ');
@@ -47,17 +44,14 @@ impl InputState {
                 }
                 true
             }
-            Key::Char(ch) => {
-                if !ch.is_control() {
-                    self.help_overlay_search.push(ch);
-                    self.help_overlay_scroll = 0.0;
-                    self.dirty_tracker.mark_full();
-                    self.needs_redraw = true;
-                    true
-                } else {
-                    false
-                }
+            Key::Char(ch) if !ch.is_control() => {
+                self.help_overlay_search.push(ch);
+                self.help_overlay_scroll = 0.0;
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                true
             }
+            Key::Char(_) => false,
             // Disable page navigation while search is active
             Key::Left | Key::Right | Key::PageUp | Key::PageDown | Key::Home | Key::End
                 if search_active =>
@@ -66,17 +60,14 @@ impl InputState {
             }
             Key::Left | Key::PageUp if !search_active => self.help_overlay_prev_page(),
             Key::Right | Key::PageDown if !search_active => self.help_overlay_next_page(),
-            Key::Home if !search_active => {
-                if self.help_overlay_page != 0 {
-                    self.help_overlay_page = 0;
-                    self.help_overlay_scroll = 0.0;
-                    self.dirty_tracker.mark_full();
-                    self.needs_redraw = true;
-                    true
-                } else {
-                    false
-                }
+            Key::Home if !search_active && self.help_overlay_page != 0 => {
+                self.help_overlay_page = 0;
+                self.help_overlay_scroll = 0.0;
+                self.dirty_tracker.mark_full();
+                self.needs_redraw = true;
+                true
             }
+            Key::Home if !search_active => false,
             Key::End if !search_active => {
                 // Use the max page constant; actual page count is computed during render
                 // and the page index will be clamped appropriately.

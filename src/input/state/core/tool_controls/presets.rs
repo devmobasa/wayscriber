@@ -140,7 +140,10 @@ impl InputState {
             *slot_ref = Some(preset.clone());
         }
         self.set_preset_feedback(slot, PresetFeedbackKind::Save);
-        self.pending_preset_action = Some(super::super::base::PresetAction::Save { slot, preset });
+        self.pending_preset_action = Some(super::super::base::PresetAction::Save {
+            slot,
+            preset: Box::new(preset),
+        });
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true

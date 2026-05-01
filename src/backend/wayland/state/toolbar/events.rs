@@ -240,7 +240,7 @@ impl WaylandState {
     ) {
         match action {
             crate::input::state::PresetAction::Save { slot, preset } => {
-                self.config.presets.set_slot(slot, Some(preset));
+                self.config.presets.set_slot(slot, Some(*preset));
                 if let Err(err) = self.config.save() {
                     log::warn!("Failed to save preset slot {}: {}", slot, err);
                 }

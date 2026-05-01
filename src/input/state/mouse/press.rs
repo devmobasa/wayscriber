@@ -6,6 +6,14 @@ use std::sync::Arc;
 use super::super::core::MenuCommand;
 use super::super::{ContextMenuKind, DrawingState, InputState};
 
+#[derive(Clone, Copy)]
+struct PressCoords {
+    screen_x: i32,
+    screen_y: i32,
+    canvas_x: i32,
+    canvas_y: i32,
+}
+
 impl InputState {
     fn is_radial_menu_toggle_button(&self, button: MouseButton) -> bool {
         use crate::config::RadialMenuMouseBinding;
@@ -180,15 +188,13 @@ impl InputState {
 
         let binding = self.drag_binding_for_button(button);
         if let Some(tool) = self.tool_for_button_press(button, binding.tool) {
-            self.handle_tool_button_press(
-                button,
-                tool,
-                binding.color,
+            let coords = PressCoords {
                 screen_x,
                 screen_y,
                 canvas_x,
                 canvas_y,
-            );
+            };
+            self.handle_tool_button_press(button, tool, binding.color, coords);
             return;
         }
 
@@ -244,13 +250,12 @@ impl InputState {
             return Some(Tool::Highlight);
         }
 
-        if button == MouseButton::Left {
-            if let Some(override_tool) = self.tool_override()
-                && (matches!(override_tool, Tool::Highlight | Tool::Eraser)
-                    || !self.modifiers.active_drag_modifier().is_active())
-            {
-                return Some(self.active_tool());
-            }
+        if button == MouseButton::Left
+            && let Some(override_tool) = self.tool_override()
+            && (matches!(override_tool, Tool::Highlight | Tool::Eraser)
+                || !self.modifiers.active_drag_modifier().is_active())
+        {
+            return Some(self.active_tool());
         }
         configured_tool
     }
@@ -260,25 +265,27 @@ impl InputState {
         button: MouseButton,
         tool: Tool,
         color: Option<crate::draw::Color>,
-        screen_x: i32,
-        screen_y: i32,
-        canvas_x: i32,
-        canvas_y: i32,
+        coords: PressCoords,
     ) {
-        self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
-        self.trigger_click_highlight(canvas_x, canvas_y);
+        self.update_pointer_positions(
+            coords.screen_x,
+            coords.screen_y,
+            coords.canvas_x,
+            coords.canvas_y,
+        );
+        self.trigger_click_highlight(coords.canvas_x, coords.canvas_y);
 
-        if self.handle_context_menu_press(screen_x, screen_y) {
+        if self.handle_context_menu_press(coords.screen_x, coords.screen_y) {
             return;
         }
 
         match &mut self.state {
             DrawingState::Idle => {
-                self.handle_idle_tool_click(button, tool, color, canvas_x, canvas_y)
+                self.handle_idle_tool_click(button, tool, color, coords.canvas_x, coords.canvas_y)
             }
             DrawingState::TextInput { x: tx, y: ty, .. } if button == MouseButton::Left => {
-                *tx = canvas_x;
-                *ty = canvas_y;
+                *tx = coords.canvas_x;
+                *ty = coords.canvas_y;
                 self.update_text_preview_dirty();
                 self.needs_redraw = true;
             }

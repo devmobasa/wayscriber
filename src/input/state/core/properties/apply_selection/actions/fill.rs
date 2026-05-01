@@ -23,13 +23,9 @@ impl InputState {
         let result = self.apply_selection_change(
             |shape| matches!(shape, Shape::Rect { .. } | Shape::Ellipse { .. }),
             |shape| match shape {
-                Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } => {
-                    if *fill != target {
-                        *fill = target;
-                        true
-                    } else {
-                        false
-                    }
+                Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } if *fill != target => {
+                    *fill = target;
+                    true
                 }
                 _ => false,
             },

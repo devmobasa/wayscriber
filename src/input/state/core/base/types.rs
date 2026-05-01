@@ -187,7 +187,7 @@ impl ToolbarDrawerTab {
 pub enum PresetAction {
     Save {
         slot: usize,
-        preset: ToolPresetConfig,
+        preset: Box<ToolPresetConfig>,
     },
     Clear {
         slot: usize,
