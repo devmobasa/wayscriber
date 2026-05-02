@@ -27,10 +27,12 @@ impl InputState {
         self.close_properties_panel();
         self.close_board_picker();
 
-        let color = self.current_color;
+        let tool = self.active_tool();
+        let color = self.color_for_tool(tool);
         let hex = color_to_hex(color);
 
         self.color_picker_popup_state = ColorPickerPopupState::Open {
+            tool,
             original_color: color,
             current_color: color,
             hex_editing: false,
@@ -46,11 +48,18 @@ impl InputState {
 
     /// Closes the color picker popup, optionally restoring the original color.
     pub fn close_color_picker_popup(&mut self, restore_original: bool) {
-        if let ColorPickerPopupState::Open { original_color, .. } = &self.color_picker_popup_state
+        let mut restored_color = None;
+        if let ColorPickerPopupState::Open {
+            tool,
+            original_color,
+            ..
+        } = &self.color_picker_popup_state
             && restore_original
         {
-            self.current_color = *original_color;
-            self.sync_highlight_color();
+            restored_color = Some((*tool, *original_color));
+        }
+        if let Some((tool, color)) = restored_color {
+            let _ = self.preview_color_for_tool(tool, color);
         }
         self.color_picker_popup_state = ColorPickerPopupState::Hidden;
         self.color_picker_popup_layout = None;
@@ -60,9 +69,22 @@ impl InputState {
 
     /// Applies the current color and closes the popup.
     pub fn apply_color_picker_popup(&mut self) {
-        if let ColorPickerPopupState::Open { current_color, .. } = &self.color_picker_popup_state {
-            self.current_color = *current_color;
-            self.sync_highlight_color();
+        let mut applied_color = None;
+        if let ColorPickerPopupState::Open {
+            tool,
+            original_color,
+            current_color,
+            ..
+        } = &self.color_picker_popup_state
+        {
+            applied_color = Some((*tool, *original_color, *current_color));
+        }
+        if let Some((tool, original_color, color)) = applied_color
+            && original_color != color
+        {
+            let _ = self.preview_color_for_tool(tool, color);
+            self.active_preset_slot = None;
+            self.mark_session_dirty();
         }
         self.color_picker_popup_state = ColorPickerPopupState::Hidden;
         self.color_picker_popup_layout = None;
@@ -104,7 +126,9 @@ impl InputState {
         let value = (1.0 - norm_y).clamp(0.0, 1.0);
         let color = hsv_to_rgb(hue, 1.0, value);
 
+        let mut live_color = None;
         if let ColorPickerPopupState::Open {
+            tool,
             current_color,
             hex_buffer,
             ..
@@ -112,9 +136,10 @@ impl InputState {
         {
             *current_color = color;
             *hex_buffer = color_to_hex(color);
-            // Live update the drawing color
-            self.current_color = color;
-            self.sync_highlight_color();
+            live_color = Some((*tool, color));
+        }
+        if let Some((tool, color)) = live_color {
+            let _ = self.preview_color_for_tool(tool, color);
         }
         self.needs_redraw = true;
     }
@@ -184,114 +209,132 @@ impl InputState {
 
     /// Appends a character to the hex input buffer.
     pub fn color_picker_popup_hex_append(&mut self, ch: char) {
-        let ColorPickerPopupState::Open {
-            hex_buffer,
-            hex_editing,
-            hex_selected,
-            current_color,
-            ..
-        } = &mut self.color_picker_popup_state
-        else {
-            return;
-        };
+        let mut live_color = None;
+        {
+            let ColorPickerPopupState::Open {
+                tool,
+                hex_buffer,
+                hex_editing,
+                hex_selected,
+                current_color,
+                ..
+            } = &mut self.color_picker_popup_state
+            else {
+                return;
+            };
 
-        if !*hex_editing {
-            return;
-        }
-
-        // If text is selected, first keystroke clears the buffer (replaces all)
-        if *hex_selected {
-            hex_buffer.clear();
-            *hex_selected = false;
-        }
-
-        // Handle # prefix
-        if ch == '#' && hex_buffer.is_empty() {
-            hex_buffer.push(ch);
-            self.needs_redraw = true;
-            return;
-        }
-
-        // Max length is 7 with # prefix or 6 without
-        let max_len = if hex_buffer.starts_with('#') { 7 } else { 6 };
-        if hex_buffer.len() >= max_len {
-            return;
-        }
-
-        // Only allow hex digits
-        if ch.is_ascii_hexdigit() {
-            hex_buffer.push(ch.to_ascii_uppercase());
-            self.needs_redraw = true;
-
-            // Try to parse and update color live
-            if let Some(color) = parse_hex_color(hex_buffer) {
-                *current_color = color;
-                // Live update the drawing color
-                self.current_color = color;
-                self.sync_highlight_color();
+            if !*hex_editing {
+                return;
             }
+
+            // If text is selected, first keystroke clears the buffer (replaces all)
+            if *hex_selected {
+                hex_buffer.clear();
+                *hex_selected = false;
+            }
+
+            // Handle # prefix
+            if ch == '#' && hex_buffer.is_empty() {
+                hex_buffer.push(ch);
+                self.needs_redraw = true;
+                return;
+            }
+
+            // Max length is 7 with # prefix or 6 without
+            let max_len = if hex_buffer.starts_with('#') { 7 } else { 6 };
+            if hex_buffer.len() >= max_len {
+                return;
+            }
+
+            // Only allow hex digits
+            if ch.is_ascii_hexdigit() {
+                hex_buffer.push(ch.to_ascii_uppercase());
+                self.needs_redraw = true;
+
+                // Try to parse and update color live
+                if let Some(color) = parse_hex_color(hex_buffer) {
+                    *current_color = color;
+                    live_color = Some((*tool, color));
+                }
+            }
+        }
+        if let Some((tool, color)) = live_color {
+            let _ = self.preview_color_for_tool(tool, color);
         }
     }
 
     /// Removes the last character from the hex input buffer.
     pub fn color_picker_popup_hex_backspace(&mut self) {
-        if let ColorPickerPopupState::Open {
-            hex_buffer,
-            hex_editing,
-            hex_selected,
-            current_color,
-            ..
-        } = &mut self.color_picker_popup_state
-            && *hex_editing
+        let mut live_color = None;
         {
-            // If text is selected, backspace clears all
-            if *hex_selected {
-                hex_buffer.clear();
-                *hex_selected = false;
-            } else if !hex_buffer.is_empty() {
-                hex_buffer.pop();
-            }
-            self.needs_redraw = true;
+            if let ColorPickerPopupState::Open {
+                tool,
+                hex_buffer,
+                hex_editing,
+                hex_selected,
+                current_color,
+                ..
+            } = &mut self.color_picker_popup_state
+                && *hex_editing
+            {
+                // If text is selected, backspace clears all
+                if *hex_selected {
+                    hex_buffer.clear();
+                    *hex_selected = false;
+                } else if !hex_buffer.is_empty() {
+                    hex_buffer.pop();
+                }
+                self.needs_redraw = true;
 
-            // Try to parse and update color live
-            if let Some(color) = parse_hex_color(hex_buffer) {
-                *current_color = color;
-                self.current_color = color;
-                self.sync_highlight_color();
+                // Try to parse and update color live
+                if let Some(color) = parse_hex_color(hex_buffer) {
+                    *current_color = color;
+                    live_color = Some((*tool, color));
+                }
             }
+        }
+        if let Some((tool, color)) = live_color {
+            let _ = self.preview_color_for_tool(tool, color);
         }
     }
 
     /// Commits the hex input (parses and applies the color).
     pub fn color_picker_popup_commit_hex(&mut self) -> bool {
-        let ColorPickerPopupState::Open {
-            hex_buffer,
-            hex_editing,
-            current_color,
-            ..
-        } = &mut self.color_picker_popup_state
-        else {
-            return false;
+        let parsed_color = {
+            let ColorPickerPopupState::Open {
+                tool,
+                hex_buffer,
+                hex_editing,
+                current_color,
+                ..
+            } = &mut self.color_picker_popup_state
+            else {
+                return false;
+            };
+
+            if !*hex_editing {
+                return false;
+            }
+
+            if let Some(color) = parse_hex_color(hex_buffer) {
+                *current_color = color;
+                *hex_buffer = color_to_hex(color);
+                *hex_editing = false;
+                self.needs_redraw = true;
+                Some((*tool, color))
+            } else {
+                // Reset buffer to current color
+                *hex_buffer = color_to_hex(*current_color);
+                *hex_editing = false;
+                self.needs_redraw = true;
+                None
+            }
         };
 
-        if !*hex_editing {
-            return false;
-        }
-
-        if let Some(color) = parse_hex_color(hex_buffer) {
-            *current_color = color;
-            *hex_buffer = color_to_hex(color);
-            *hex_editing = false;
-            // Live update the drawing color
-            self.current_color = color;
-            self.sync_highlight_color();
-            self.needs_redraw = true;
+        if let Some((tool, color)) = parsed_color {
+            let _ = self.preview_color_for_tool(tool, color);
             true
         } else {
-            // Reset buffer to current color
-            *hex_buffer = color_to_hex(*current_color);
-            *hex_editing = false;
-            self.needs_redraw = true;
             false
         }
     }

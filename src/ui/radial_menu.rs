@@ -40,6 +40,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     let color_offset = -PI / 2.0 - color_seg_angle / 2.0;
 
     let active_tool = input_state.active_tool();
+    let active_color = input_state.color_for_tool(active_tool);
 
     // ── Color ring (outermost) ──
     for i in 0..RADIAL_COLOR_SEGMENT_COUNT {
@@ -49,7 +50,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
 
         let c = radial_color_for_index(i as u8);
         // Check if this color matches current
-        let is_active = colors_match(&input_state.current_color, &c);
+        let is_active = colors_match(&active_color, &c);
 
         draw_annular_sector(
             ctx,
@@ -175,12 +176,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     let _ = ctx.fill_preserve();
 
     // Color indicator ring around center
-    ctx.set_source_rgba(
-        input_state.current_color.r,
-        input_state.current_color.g,
-        input_state.current_color.b,
-        0.9,
-    );
+    ctx.set_source_rgba(active_color.r, active_color.g, active_color.b, 0.9);
     ctx.set_line_width(3.0);
     let _ = ctx.stroke();
 

@@ -227,9 +227,6 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 let hover_cursor_pos = state.stylus_hover_cursor_pos();
                 state.stylus_tip_down = true;
                 state.mark_stylus_hover_cursor_dirty(hover_cursor_pos, None);
-                state.stylus_base_thickness = Some(state.input_state.current_thickness);
-                state.stylus_pressure_thickness = Some(state.input_state.current_thickness);
-                state.record_stylus_peak(state.input_state.current_thickness);
                 info!(
                     "✏️  Stylus DOWN at ({}, {})",
                     state.current_mouse().0,
@@ -245,6 +242,10 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     wx,
                     wy,
                 );
+                let base_thickness = state.input_state.current_thickness;
+                state.stylus_base_thickness = Some(base_thickness);
+                state.stylus_pressure_thickness = Some(base_thickness);
+                state.record_stylus_peak(base_thickness);
                 state.input_state.needs_redraw = true;
             }
             Event::Up => {
@@ -272,7 +273,9 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     .or(state.stylus_base_thickness);
                 if let Some(thick) = final_thick {
                     // Keep the pressure-adjusted (peak) thickness for subsequent strokes
-                    state.input_state.current_thickness = thick;
+                    state
+                        .input_state
+                        .set_pressure_thickness_for_active_tool(thick);
                     state.stylus_base_thickness = Some(thick);
                 }
                 state.stylus_pressure_thickness = None;

@@ -11,3 +11,4 @@ mod step_markers;
 mod toasts;
 
 pub use help_overlay::HelpOverlayCursorHint;
+pub(crate) use step_markers::default_step_marker_size;

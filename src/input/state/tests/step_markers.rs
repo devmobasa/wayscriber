@@ -51,14 +51,26 @@ fn sync_step_marker_counter_uses_max_across_boards() {
 #[test]
 fn next_step_marker_label_clamps_size() {
     let mut state = create_test_input_state();
+    state.set_tool_override(Some(Tool::StepMarker));
 
-    state.current_font_size = 10.0;
+    assert!(state.set_thickness(1.0));
     let label = state.next_step_marker_label();
     assert_eq!(label.size, 12.0);
 
-    state.current_font_size = 100.0;
+    assert!(state.set_thickness(50.0));
     let label = state.next_step_marker_label();
     assert_eq!(label.size, 36.0);
+}
+
+#[test]
+fn next_step_marker_label_uses_step_marker_tool_size() {
+    let mut state = create_test_input_state();
+    state.set_tool_override(Some(Tool::StepMarker));
+
+    assert!(state.set_thickness(24.0));
+
+    let label = state.next_step_marker_label();
+    assert_eq!(label.size, 24.0);
 }
 
 #[test]
@@ -76,6 +88,7 @@ fn toolbar_reset_step_marker_counter_resets_to_one() {
 fn drawing_step_marker_increments_counter() {
     let mut state = create_test_input_state();
     state.set_tool_override(Some(Tool::StepMarker));
+    assert!(state.set_thickness(24.0));
 
     state.on_mouse_press(MouseButton::Left, 10, 10);
     state.on_mouse_release(MouseButton::Left, 10, 10);
@@ -86,7 +99,10 @@ fn drawing_step_marker_increments_counter() {
     assert_eq!(shapes.len(), 2);
 
     let first_value = match &shapes[0].shape {
-        Shape::StepMarker { label, .. } => label.value,
+        Shape::StepMarker { label, .. } => {
+            assert_eq!(label.size, 24.0);
+            label.value
+        }
         _ => panic!("expected step marker for first shape"),
     };
     let second_value = match &shapes[1].shape {

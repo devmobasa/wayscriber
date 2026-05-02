@@ -124,6 +124,7 @@ impl InputState {
         }
         if matches!(self.state, DrawingState::Idle) {
             self.end_pointer_drag();
+            self.sync_current_settings_from_active_tool();
         }
     }
 }

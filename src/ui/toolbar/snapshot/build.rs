@@ -49,7 +49,7 @@ impl ToolbarSnapshot {
         let thickness_value = if thickness_targets_eraser {
             state.eraser_size
         } else {
-            state.current_thickness
+            state.thickness_for_tool(active_tool)
         };
         let presets = state
             .presets
@@ -106,7 +106,7 @@ impl ToolbarSnapshot {
         Self {
             active_tool,
             tool_override: state.tool_override(),
-            color: state.current_color,
+            color: state.color_for_tool(active_tool),
             thickness: thickness_value,
             eraser_size: state.eraser_size,
             thickness_targets_eraser,

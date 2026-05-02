@@ -203,8 +203,10 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn save_drawing_preferences(&mut self) {
-        self.config.drawing.default_color = ColorSpec::from(self.input_state.current_color);
-        self.config.drawing.default_thickness = self.input_state.current_thickness;
+        self.config.drawing.default_color =
+            ColorSpec::from(self.input_state.color_for_tool(crate::input::Tool::Pen));
+        self.config.drawing.default_thickness =
+            self.input_state.thickness_for_tool(crate::input::Tool::Pen);
         self.config.drawing.default_eraser_mode = self.input_state.eraser_mode;
         self.config.drawing.default_fill_enabled = self.input_state.fill_enabled;
         self.config.drawing.default_font_size = self.input_state.current_font_size;

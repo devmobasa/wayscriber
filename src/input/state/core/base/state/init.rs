@@ -14,7 +14,7 @@ use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState
 use crate::input::{
     BoardManager,
     modifiers::{DragToolBindings, Modifiers},
-    tool::EraserMode,
+    tool::{EraserMode, PerToolDrawingSettings},
 };
 use std::collections::HashMap;
 
@@ -68,10 +68,14 @@ impl InputState {
         presenter_mode_config: crate::config::PresenterModeConfig,
     ) -> Self {
         let clamped_eraser = eraser_size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        let mut tool_settings = PerToolDrawingSettings::new(color, thickness);
+        tool_settings.step_marker.thickness =
+            super::super::super::utility::default_step_marker_size(font_size);
         let mut state = Self {
             boards: BoardManager::from_config(boards_config),
             current_color: color,
             current_thickness: thickness,
+            tool_settings,
             pressure_variation_threshold: 0.1,
             pressure_thickness_edit_mode: PressureThicknessEditMode::Disabled,
             pressure_thickness_entry_mode: PressureThicknessEntryMode::PressureOnly,

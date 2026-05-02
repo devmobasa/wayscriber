@@ -14,7 +14,8 @@ pub(super) struct DrawingRelease {
 }
 
 pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: DrawingRelease) {
-    let drawing_color = state.active_drag_color_or_current();
+    let drawing_color = state.active_drag_color_or_tool(tool);
+    let drawing_thickness = state.thickness_for_tool(tool);
     let (start_x, start_y) = release.start;
     let (end_x, end_y) = release.end;
     let DrawingRelease {
@@ -64,7 +65,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
                 Shape::Freehand {
                     points,
                     color: drawing_color,
-                    thick: state.current_thickness,
+                    thick: drawing_thickness,
                 }
             }
         }
@@ -74,7 +75,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             x2: end_x,
             y2: end_y,
             color: drawing_color,
-            thick: state.current_thickness,
+            thick: drawing_thickness,
         },
         Tool::Rect => {
             let (left, width) = if end_x >= start_x {
@@ -94,7 +95,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
                 h: height,
                 fill: state.fill_enabled,
                 color: drawing_color,
-                thick: state.current_thickness,
+                thick: drawing_thickness,
             }
         }
         Tool::Ellipse => {
@@ -106,7 +107,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
                 ry,
                 fill: state.fill_enabled,
                 color: drawing_color,
-                thick: state.current_thickness,
+                thick: drawing_thickness,
             }
         }
         Tool::Arrow => Shape::Arrow {
@@ -115,7 +116,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             x2: end_x,
             y2: end_y,
             color: drawing_color,
-            thick: state.current_thickness,
+            thick: drawing_thickness,
             arrow_length: state.arrow_length,
             arrow_angle: state.arrow_angle,
             head_at_end: state.arrow_head_at_end,
@@ -137,13 +138,13 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
                 y: top,
                 w: width,
                 h: height,
-                strength: state.current_thickness,
+                strength: drawing_thickness,
             }
         }
         Tool::Marker => Shape::MarkerStroke {
             points,
             color: state.marker_color_for(drawing_color),
-            thick: state.current_thickness,
+            thick: drawing_thickness,
         },
         Tool::StepMarker => Shape::StepMarker {
             x: end_x,

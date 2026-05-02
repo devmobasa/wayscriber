@@ -26,7 +26,8 @@ impl WaylandState {
                 draw_tool_preview(
                     ctx,
                     self.input_state.active_tool(),
-                    self.input_state.current_color,
+                    self.input_state
+                        .color_for_tool(self.input_state.active_tool()),
                     cursor_x,
                     cursor_y,
                     width as f64,
@@ -39,7 +40,8 @@ impl WaylandState {
                 draw_stylus_hover_cursor(
                     ctx,
                     self.input_state.active_tool(),
-                    self.input_state.current_color,
+                    self.input_state
+                        .color_for_tool(self.input_state.active_tool()),
                     cursor_x,
                     cursor_y,
                 );

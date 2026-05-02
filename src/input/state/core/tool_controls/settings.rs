@@ -5,10 +5,96 @@ use crate::draw::{Color, FontDescriptor};
 use crate::input::{
     DragBinding, MouseButton,
     modifiers::DragToolBindings,
-    tool::{EraserMode, Tool},
+    tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
 
 impl InputState {
+    /// Returns the stored drawing color for a tool.
+    pub fn color_for_tool(&self, tool: Tool) -> Color {
+        self.tool_settings.get(tool).color
+    }
+
+    /// Returns the drawing color for the currently active tool.
+    pub fn color_for_active_tool(&self) -> Color {
+        self.color_for_tool(self.active_tool())
+    }
+
+    /// Returns the stored size for a tool, using eraser size for the eraser.
+    pub fn thickness_for_tool(&self, tool: Tool) -> f64 {
+        match tool {
+            Tool::Eraser => self.eraser_size,
+            _ => self.tool_settings.get(tool).thickness,
+        }
+    }
+
+    /// Returns the stored size for the currently active tool.
+    pub fn thickness_for_active_tool(&self) -> f64 {
+        self.thickness_for_tool(self.active_tool())
+    }
+
+    /// Replaces all per-tool settings and refreshes the visible active values.
+    pub(crate) fn replace_tool_settings(&mut self, settings: PerToolDrawingSettings) {
+        self.tool_settings = settings;
+        self.sync_current_settings_from_active_tool();
+        self.sync_highlight_color();
+    }
+
+    /// Updates the compatibility current_* fields from the active tool settings.
+    pub(crate) fn sync_current_settings_from_active_tool(&mut self) {
+        let tool = self.active_tool();
+        self.current_color = self.color_for_tool(tool);
+        if tool != Tool::Eraser {
+            self.current_thickness = self.thickness_for_tool(tool);
+        }
+    }
+
+    pub(crate) fn sync_current_settings_for_tool(&mut self, tool: Tool) {
+        self.current_color = self.color_for_tool(tool);
+        if tool != Tool::Eraser {
+            self.current_thickness = self.thickness_for_tool(tool);
+        }
+    }
+
+    pub(crate) fn set_pen_color_from_board(&mut self, color: Color) {
+        self.tool_settings.pen.color = color;
+        if matches!(
+            self.active_tool(),
+            Tool::Pen | Tool::Select | Tool::Highlight | Tool::Eraser
+        ) {
+            self.current_color = color;
+        }
+        self.sync_highlight_color();
+    }
+
+    pub(crate) fn preview_color_for_tool(&mut self, tool: Tool, color: Color) -> bool {
+        if self.color_for_tool(tool) == color {
+            return false;
+        }
+        self.tool_settings.get_mut(tool).color = color;
+        if PerToolDrawingSettings::settings_tool(self.active_tool())
+            == PerToolDrawingSettings::settings_tool(tool)
+        {
+            self.current_color = color;
+        }
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.sync_highlight_color();
+        true
+    }
+
+    /// Updates the active drawing thickness from tablet pressure without
+    /// treating every pressure sample as a persisted user preference edit.
+    pub(crate) fn set_pressure_thickness_for_active_tool(&mut self, thickness: f64) -> f64 {
+        let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        let tool = self.active_tool();
+        if tool != Tool::Eraser {
+            self.tool_settings.get_mut(tool).thickness = clamped;
+        }
+        self.current_thickness = clamped;
+        self.needs_redraw = true;
+        clamped
+    }
+
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
     pub fn set_tool_override(&mut self, tool: Option<Tool>) -> bool {
         if self.presenter_mode
@@ -41,6 +127,7 @@ impl InputState {
             self.end_pointer_drag();
         }
 
+        self.sync_current_settings_from_active_tool();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -82,7 +169,13 @@ impl InputState {
     }
 
     pub(crate) fn active_drag_color_or_current(&self) -> Color {
-        self.active_drag_color.unwrap_or(self.current_color)
+        self.active_drag_color
+            .unwrap_or_else(|| self.color_for_active_tool())
+    }
+
+    pub(crate) fn active_drag_color_or_tool(&self, tool: Tool) -> Color {
+        self.active_drag_color
+            .unwrap_or_else(|| self.color_for_tool(tool))
     }
 
     pub(crate) fn marker_color_for(&self, color: Color) -> Color {
@@ -117,24 +210,24 @@ impl InputState {
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
         match self.active_tool() {
             Tool::Eraser => self.set_eraser_size(self.eraser_size + delta),
-            _ => self.set_thickness(self.current_thickness + delta),
+            tool => self.set_thickness(self.thickness_for_tool(tool) + delta),
         }
     }
 
     /// Returns the current size value for the active tool.
     pub fn size_for_active_tool(&self) -> f64 {
-        match self.active_tool() {
-            Tool::Eraser => self.eraser_size,
-            _ => self.current_thickness,
-        }
+        self.thickness_for_active_tool()
     }
 
     /// Updates the current drawing color to an arbitrary value. Returns true if changed.
     pub fn set_color(&mut self, color: Color) -> bool {
-        if self.current_color == color {
+        let tool = self.active_tool();
+        let current = self.color_for_tool(tool);
+        if current == color {
             return false;
         }
 
+        self.tool_settings.get_mut(tool).color = color;
         self.current_color = color;
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
@@ -147,10 +240,13 @@ impl InputState {
     /// Sets the absolute thickness (px), clamped to valid bounds. Returns true if changed.
     pub fn set_thickness(&mut self, thickness: f64) -> bool {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-        if (clamped - self.current_thickness).abs() < f64::EPSILON {
+        let tool = self.active_tool();
+        let current = self.tool_settings.get(tool).thickness;
+        if (clamped - current).abs() < f64::EPSILON {
             return false;
         }
 
+        self.tool_settings.get_mut(tool).thickness = clamped;
         self.current_thickness = clamped;
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();

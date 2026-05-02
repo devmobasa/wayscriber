@@ -1,5 +1,5 @@
 use crate::draw::{Color, EraserKind, Frame};
-use crate::input::{EraserMode, InputState, Tool};
+use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
 pub(super) const CURRENT_VERSION: u32 = 5;
@@ -68,13 +68,15 @@ pub struct ToolStateSnapshot {
     pub arrow_label_enabled: Option<bool>,
     pub board_previous_color: Option<Color>,
     pub show_status_bar: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_settings: Option<PerToolDrawingSettings>,
 }
 
 impl ToolStateSnapshot {
     pub(super) fn from_input_state(input: &InputState) -> Self {
         Self {
-            current_color: input.current_color,
-            current_thickness: input.current_thickness,
+            current_color: input.color_for_tool(input.active_tool()),
+            current_thickness: input.thickness_for_active_tool(),
             eraser_size: input.eraser_size,
             eraser_kind: input.eraser_kind,
             eraser_mode: input.eraser_mode,
@@ -89,6 +91,7 @@ impl ToolStateSnapshot {
             arrow_label_enabled: Some(input.arrow_label_enabled),
             board_previous_color: input.board_previous_color,
             show_status_bar: input.show_status_bar,
+            tool_settings: Some(input.tool_settings.clone()),
         }
     }
 }

@@ -193,7 +193,9 @@ impl WaylandState {
                     y,
                     w,
                     h,
-                    strength: self.input_state.current_thickness,
+                    strength: self
+                        .input_state
+                        .thickness_for_tool(crate::input::Tool::Blur),
                     cacheable: false,
                 },
                 &replay_ctx,

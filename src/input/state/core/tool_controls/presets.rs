@@ -234,7 +234,7 @@ impl InputState {
         ToolPresetConfig {
             name: None,
             tool: active_tool,
-            color: self.current_color.into(),
+            color: self.color_for_tool(active_tool).into(),
             size,
             eraser_kind: Some(self.eraser_kind),
             eraser_mode: Some(self.eraser_mode),

@@ -22,6 +22,7 @@ impl InputState {
         } = &self.state
         {
             let drawing_color = self.active_drag_color_or_current();
+            let drawing_thickness = self.thickness_for_tool(*tool);
             match tool {
                 // Pen, Marker, Eraser are handled by render_provisional_shape() directly
                 // with borrowed rendering - never call this method for those tools.
@@ -32,7 +33,7 @@ impl InputState {
                     x2: current_x,
                     y2: current_y,
                     color: drawing_color,
-                    thick: self.current_thickness,
+                    thick: drawing_thickness,
                 }),
                 Tool::Rect => {
                     // Normalize rectangle to handle dragging in any direction
@@ -53,7 +54,7 @@ impl InputState {
                         h,
                         fill: self.fill_enabled,
                         color: drawing_color,
-                        thick: self.current_thickness,
+                        thick: drawing_thickness,
                     })
                 }
                 Tool::Ellipse => {
@@ -66,7 +67,7 @@ impl InputState {
                         ry,
                         fill: self.fill_enabled,
                         color: drawing_color,
-                        thick: self.current_thickness,
+                        thick: drawing_thickness,
                     })
                 }
                 Tool::Arrow => Some(Shape::Arrow {
@@ -75,7 +76,7 @@ impl InputState {
                     x2: current_x,
                     y2: current_y,
                     color: drawing_color,
-                    thick: self.current_thickness,
+                    thick: drawing_thickness,
                     arrow_length: self.arrow_length,
                     arrow_angle: self.arrow_angle,
                     head_at_end: self.arrow_head_at_end,
@@ -97,7 +98,7 @@ impl InputState {
                         y,
                         w,
                         h,
-                        strength: self.current_thickness,
+                        strength: drawing_thickness,
                     })
                 }
                 Tool::StepMarker => Some(Shape::StepMarker {
@@ -159,7 +160,7 @@ impl InputState {
                             ctx,
                             points,
                             drawing_color,
-                            self.current_thickness,
+                            self.thickness_for_tool(*tool),
                         );
                     }
                     true
@@ -170,7 +171,7 @@ impl InputState {
                         ctx,
                         points,
                         self.marker_color_for(self.active_drag_color_or_current()),
-                        self.current_thickness,
+                        self.thickness_for_tool(*tool),
                     );
                     true
                 }

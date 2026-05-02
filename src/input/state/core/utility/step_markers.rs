@@ -1,9 +1,14 @@
 use super::super::base::InputState;
 use crate::draw::{Shape, StepMarkerLabel};
+use crate::input::tool::Tool;
 
 const STEP_MARKER_FONT_SCALE: f64 = 0.6;
 const STEP_MARKER_MIN_SIZE: f64 = 12.0;
 const STEP_MARKER_MAX_SIZE: f64 = 36.0;
+
+pub(crate) fn default_step_marker_size(font_size: f64) -> f64 {
+    (font_size * STEP_MARKER_FONT_SCALE).clamp(STEP_MARKER_MIN_SIZE, STEP_MARKER_MAX_SIZE)
+}
 
 impl InputState {
     pub(crate) fn next_step_marker_label(&self) -> StepMarkerLabel {
@@ -43,7 +48,7 @@ impl InputState {
     }
 
     fn step_marker_size(&self) -> f64 {
-        (self.current_font_size * STEP_MARKER_FONT_SCALE)
+        self.thickness_for_tool(Tool::StepMarker)
             .clamp(STEP_MARKER_MIN_SIZE, STEP_MARKER_MAX_SIZE)
     }
 }

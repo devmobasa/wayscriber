@@ -17,6 +17,9 @@ impl InputState {
             Key::Tab => self.modifiers.tab = true,
             _ => return false,
         }
+        if matches!(self.state, DrawingState::Idle) {
+            self.sync_current_settings_from_active_tool();
+        }
         true
     }
 

@@ -55,7 +55,10 @@ impl InputState {
     }
 
     pub fn sync_highlight_color(&mut self) {
-        if self.click_highlight.apply_pen_color(self.current_color) {
+        if self
+            .click_highlight
+            .apply_pen_color(self.color_for_tool(Tool::Pen))
+        {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }

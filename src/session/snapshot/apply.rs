@@ -1,7 +1,7 @@
 use super::types::{BoardPagesSnapshot, SessionSnapshot};
 use crate::draw::BoardPages;
-use crate::input::InputState;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::input::{InputState, PerToolDrawingSettings};
 use crate::session::options::SessionOptions;
 
 /// Apply a session snapshot to the live [`InputState`].
@@ -53,12 +53,19 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
                 tool_state.board_previous_color,
                 tool_state.arrow_label_enabled
             );
-            let _ = input.set_color(tool_state.current_color);
-            let _ = input.set_thickness(
-                tool_state
-                    .current_thickness
-                    .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS),
-            );
+            let current_thickness = tool_state
+                .current_thickness
+                .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            let tool_settings = tool_state.tool_settings.unwrap_or_else(|| {
+                let mut settings =
+                    PerToolDrawingSettings::new(tool_state.current_color, current_thickness);
+                settings.step_marker.thickness =
+                    crate::input::state::default_step_marker_size(tool_state.current_font_size);
+                settings
+            });
+            let tool_settings =
+                tool_settings.clamp_thicknesses(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            input.replace_tool_settings(tool_settings);
             let _ = input.set_eraser_size(
                 tool_state
                     .eraser_size
