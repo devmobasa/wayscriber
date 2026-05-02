@@ -1,12 +1,12 @@
 use super::super::color::ColorInput;
 use super::super::fields::{
-    FontWeightOption, QuadField, SessionStorageModeOption, TextField, ToggleField, ToolOption,
-    TripletField,
+    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, QuadField,
+    SessionStorageModeOption, TextField, ToggleField, ToolOption, TripletField,
 };
 use super::super::{ColorMode, NamedColorOption};
 use super::ConfigDraft;
 use wayscriber::config::{ColorSpec, Config, ToolPresetConfig, XdgFocusLossBehavior};
-use wayscriber::input::Tool;
+use wayscriber::input::{DragTool, Tool};
 
 #[test]
 fn config_draft_to_config_reports_errors() {
@@ -64,6 +64,20 @@ fn setters_update_draft_state() {
     draft.set_toggle(ToggleField::ArrowHeadAtEnd, true);
     assert!(draft.boards.auto_create);
     assert!(draft.arrow_head_at_end);
+
+    draft.set_mouse_drag_tool(
+        DragMouseButton::Left,
+        DragToolField::Drag,
+        DragToolOption::Default,
+    );
+    assert_eq!(draft.drawing_drag_tools.left.drag_tool, DragTool::Pen);
+
+    draft.set_mouse_drag_tool(
+        DragMouseButton::Right,
+        DragToolField::Drag,
+        DragToolOption::Pen,
+    );
+    assert_eq!(draft.drawing_drag_tools.right.drag_tool, DragTool::Pen);
 }
 
 #[test]
@@ -93,6 +107,7 @@ fn config_draft_round_trips_presets_and_history() {
         arrow_angle: Some(30.0),
         arrow_head_at_end: Some(true),
         show_status_bar: Some(false),
+        drag_tools: None,
     };
     config.presets.set_slot(1, Some(preset));
 
@@ -141,6 +156,11 @@ fn config_draft_round_trips_drag_tool_mapping() {
     config.drawing.ctrl_drag_tool = Tool::Pen;
     config.drawing.ctrl_shift_drag_tool = Tool::Rect;
     config.drawing.tab_drag_tool = Tool::Ellipse;
+    let mut drag_tools = config.drawing.effective_drag_tools();
+    drag_tools.right.drag_tool = DragTool::Pen;
+    drag_tools.right.drag_color = Some(ColorSpec::Name("blue".to_string()));
+    drag_tools.middle.drag_tool = DragTool::Eraser;
+    config.drawing.drag_tools = Some(drag_tools.clone());
 
     let draft = ConfigDraft::from_config(&config);
     assert_eq!(draft.drawing_drag_tool, ToolOption::Arrow);
@@ -169,6 +189,7 @@ fn config_draft_round_trips_drag_tool_mapping() {
         round_trip.drawing.tab_drag_tool,
         config.drawing.tab_drag_tool
     );
+    assert_eq!(round_trip.drawing.drag_tools, Some(drag_tools));
 }
 
 #[test]

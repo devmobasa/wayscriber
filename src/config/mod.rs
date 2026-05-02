@@ -39,11 +39,11 @@ pub use types::TabletInputConfig;
 #[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig,
-    BoardsConfig, CaptureConfig, ClickHighlightConfig, DrawingConfig, HelpOverlayStyle,
-    HistoryConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PerformanceConfig, PresenterModeConfig,
-    PresenterToolBehavior, PresetSlotsConfig, SessionCompression, SessionConfig,
-    SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig, ToolbarLayoutMode,
-    ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
+    BoardsConfig, CaptureConfig, ClickHighlightConfig, DragButtonConfig, DrawingConfig,
+    HelpOverlayStyle, HistoryConfig, MouseDragToolsConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN,
+    PerformanceConfig, PresenterModeConfig, PresenterToolBehavior, PresetSlotsConfig,
+    SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle, ToolPresetConfig,
+    ToolbarConfig, ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)

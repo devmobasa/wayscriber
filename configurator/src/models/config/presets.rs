@@ -6,7 +6,8 @@ use super::super::fields::{
 use super::super::util::format_float;
 use super::parse::{parse_optional_f64, parse_required_f64};
 use wayscriber::config::{
-    Config, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig, ToolPresetConfig,
+    Config, MouseDragToolsConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig,
+    ToolPresetConfig,
 };
 use wayscriber::input::Tool;
 
@@ -27,6 +28,7 @@ pub struct PresetSlotDraft {
     pub arrow_angle: String,
     pub arrow_head_at_end: OverrideOption,
     pub show_status_bar: OverrideOption,
+    pub drag_tools: Option<MouseDragToolsConfig>,
 }
 
 impl PresetSlotDraft {
@@ -50,6 +52,7 @@ impl PresetSlotDraft {
                 arrow_angle: preset.arrow_angle.map(format_float).unwrap_or_default(),
                 arrow_head_at_end: OverrideOption::from_option(preset.arrow_head_at_end),
                 show_status_bar: OverrideOption::from_option(preset.show_status_bar),
+                drag_tools: preset.drag_tools.clone(),
             },
             None => {
                 let mut slot = Self::default_from_config(defaults);
@@ -76,6 +79,7 @@ impl PresetSlotDraft {
             arrow_angle: String::new(),
             arrow_head_at_end: OverrideOption::Default,
             show_status_bar: OverrideOption::Default,
+            drag_tools: None,
         }
     }
 
@@ -146,6 +150,7 @@ impl PresetSlotDraft {
             arrow_angle,
             arrow_head_at_end: self.arrow_head_at_end.to_option(),
             show_status_bar: self.show_status_bar.to_option(),
+            drag_tools: self.drag_tools.clone(),
         })
     }
 }

@@ -21,6 +21,7 @@ impl InputState {
             ..
         } = &self.state
         {
+            let drawing_color = self.active_drag_color_or_current();
             match tool {
                 // Pen, Marker, Eraser are handled by render_provisional_shape() directly
                 // with borrowed rendering - never call this method for those tools.
@@ -30,7 +31,7 @@ impl InputState {
                     y1: *start_y,
                     x2: current_x,
                     y2: current_y,
-                    color: self.current_color,
+                    color: drawing_color,
                     thick: self.current_thickness,
                 }),
                 Tool::Rect => {
@@ -51,7 +52,7 @@ impl InputState {
                         w,
                         h,
                         fill: self.fill_enabled,
-                        color: self.current_color,
+                        color: drawing_color,
                         thick: self.current_thickness,
                     })
                 }
@@ -64,7 +65,7 @@ impl InputState {
                         rx,
                         ry,
                         fill: self.fill_enabled,
-                        color: self.current_color,
+                        color: drawing_color,
                         thick: self.current_thickness,
                     })
                 }
@@ -73,7 +74,7 @@ impl InputState {
                     y1: *start_y,
                     x2: current_x,
                     y2: current_y,
-                    color: self.current_color,
+                    color: drawing_color,
                     thick: self.current_thickness,
                     arrow_length: self.arrow_length,
                     arrow_angle: self.arrow_angle,
@@ -102,7 +103,7 @@ impl InputState {
                 Tool::StepMarker => Some(Shape::StepMarker {
                     x: current_x,
                     y: current_y,
-                    color: self.current_color,
+                    color: drawing_color,
                     label: self.next_step_marker_label(),
                 }),
             }
@@ -138,6 +139,7 @@ impl InputState {
                 point_thicknesses,
             } => match tool {
                 Tool::Pen => {
+                    let drawing_color = self.active_drag_color_or_current();
                     // Render freehand without cloning - just borrow the points
                     // Check if we have pressure data available for this stroke
                     let use_pressure =
@@ -150,13 +152,13 @@ impl InputState {
                             ctx,
                             points,
                             point_thicknesses,
-                            self.current_color,
+                            drawing_color,
                         );
                     } else {
                         render_freehand_borrowed(
                             ctx,
                             points,
-                            self.current_color,
+                            drawing_color,
                             self.current_thickness,
                         );
                     }
@@ -167,7 +169,7 @@ impl InputState {
                     render_marker_stroke_borrowed(
                         ctx,
                         points,
-                        self.marker_color(),
+                        self.marker_color_for(self.active_drag_color_or_current()),
                         self.current_thickness,
                     );
                     true
@@ -224,15 +226,6 @@ impl InputState {
                 true
             }
             _ => false,
-        }
-    }
-
-    pub(crate) fn marker_color(&self) -> Color {
-        // Keep a minimum alpha so the marker remains visible even if a fully transparent color was set.
-        let alpha = (self.current_color.a * self.marker_opacity).clamp(0.05, 0.9);
-        Color {
-            a: alpha,
-            ..self.current_color
         }
     }
 }

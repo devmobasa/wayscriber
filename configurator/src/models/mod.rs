@@ -16,11 +16,11 @@ pub use daemon::{
     ShortcutApplyCapability, ShortcutBackend,
 };
 pub use fields::{
-    DragToolField, EraserModeOption, FontStyleOption, FontWeightOption, OverrideOption,
-    PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
-    PresetToggleField, QuadField, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, TripletField,
+    DragColorOption, DragMouseButton, DragToolField, DragToolOption, EraserModeOption,
+    FontStyleOption, FontWeightOption, OverrideOption, PresenterToolBehaviorOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

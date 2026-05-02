@@ -46,6 +46,9 @@ impl InputState {
                         self.should_exit = true;
                     }
                 }
+                if matches!(self.state, DrawingState::Idle) {
+                    self.end_pointer_drag();
+                }
                 true
             }
             Action::EnterTextMode => {

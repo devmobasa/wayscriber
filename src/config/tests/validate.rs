@@ -108,6 +108,7 @@ fn validate_clamps_preset_fields() {
         arrow_angle: Some(5.0),
         arrow_head_at_end: None,
         show_status_bar: None,
+        drag_tools: None,
     });
 
     config.validate_and_clamp();

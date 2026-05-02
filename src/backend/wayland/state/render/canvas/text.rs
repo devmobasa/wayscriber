@@ -69,20 +69,18 @@ impl WaylandState {
                 font_descriptor,
                 background_enabled,
                 wrap_width,
-            } => {
-                if !text.is_empty() {
-                    crate::draw::render_text(
-                        ctx,
-                        *x,
-                        *y,
-                        text,
-                        *color,
-                        *size,
-                        font_descriptor,
-                        *background_enabled,
-                        *wrap_width,
-                    );
-                }
+            } if !text.is_empty() => {
+                crate::draw::render_text(
+                    ctx,
+                    *x,
+                    *y,
+                    text,
+                    *color,
+                    *size,
+                    font_descriptor,
+                    *background_enabled,
+                    *wrap_width,
+                );
             }
             Shape::StickyNote {
                 x,
@@ -92,23 +90,20 @@ impl WaylandState {
                 size,
                 font_descriptor,
                 wrap_width,
-            } => {
-                if !text.is_empty() {
-                    crate::draw::render_sticky_note(
-                        ctx,
-                        *x,
-                        *y,
-                        text,
-                        *background,
-                        *size,
-                        font_descriptor,
-                        *wrap_width,
-                    );
-                }
+            } if !text.is_empty() => {
+                crate::draw::render_sticky_note(
+                    ctx,
+                    *x,
+                    *y,
+                    text,
+                    *background,
+                    *size,
+                    font_descriptor,
+                    *wrap_width,
+                );
             }
             _ => {}
         }
-
         let _ = ctx.pop_group_to_source();
         // Render the ghost with increased opacity (was 0.25, now 0.40)
         let _ = ctx.paint_with_alpha(0.40);

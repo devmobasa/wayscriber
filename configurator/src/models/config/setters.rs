@@ -1,6 +1,7 @@
 use super::super::fields::{
-    DragToolField, FontStyleOption, FontWeightOption, OverrideOption, QuadField, TextField,
-    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    DragColorOption, DragMouseButton, DragToolField, DragToolOption, FontStyleOption,
+    FontWeightOption, OverrideOption, QuadField, TextField, ToggleField, ToolbarLayoutModeOption,
+    ToolbarOverrideField, TripletField,
 };
 use super::draft::ConfigDraft;
 
@@ -30,14 +31,79 @@ impl ConfigDraft {
             .set(field, value);
     }
 
-    pub fn set_drag_tool(&mut self, field: DragToolField, value: ToolOption) {
+    pub fn set_mouse_drag_tool(
+        &mut self,
+        button: DragMouseButton,
+        field: DragToolField,
+        value: DragToolOption,
+    ) {
+        let value = supported_drag_tool_option(button, field, value);
+        let button_config = match button {
+            DragMouseButton::Left => &mut self.drawing_drag_tools.left,
+            DragMouseButton::Right => &mut self.drawing_drag_tools.right,
+            DragMouseButton::Middle => &mut self.drawing_drag_tools.middle,
+        };
         match field {
-            DragToolField::Drag => self.drawing_drag_tool = value,
-            DragToolField::ShiftDrag => self.drawing_shift_drag_tool = value,
-            DragToolField::CtrlDrag => self.drawing_ctrl_drag_tool = value,
-            DragToolField::CtrlShiftDrag => self.drawing_ctrl_shift_drag_tool = value,
-            DragToolField::TabDrag => self.drawing_tab_drag_tool = value,
+            DragToolField::Drag => button_config.drag_tool = value.to_drag_tool(),
+            DragToolField::ShiftDrag => button_config.shift_drag_tool = value.to_drag_tool(),
+            DragToolField::CtrlDrag => button_config.ctrl_drag_tool = value.to_drag_tool(),
+            DragToolField::CtrlShiftDrag => {
+                button_config.ctrl_shift_drag_tool = value.to_drag_tool();
+            }
+            DragToolField::TabDrag => button_config.tab_drag_tool = value.to_drag_tool(),
         }
+
+        if button == DragMouseButton::Left {
+            match field {
+                DragToolField::Drag => {
+                    if let Some(tool) = value.to_tool_option() {
+                        self.drawing_drag_tool = tool;
+                    }
+                }
+                DragToolField::ShiftDrag => {
+                    if let Some(tool) = value.to_tool_option() {
+                        self.drawing_shift_drag_tool = tool;
+                    }
+                }
+                DragToolField::CtrlDrag => {
+                    if let Some(tool) = value.to_tool_option() {
+                        self.drawing_ctrl_drag_tool = tool;
+                    }
+                }
+                DragToolField::CtrlShiftDrag => {
+                    if let Some(tool) = value.to_tool_option() {
+                        self.drawing_ctrl_shift_drag_tool = tool;
+                    }
+                }
+                DragToolField::TabDrag => {
+                    if let Some(tool) = value.to_tool_option() {
+                        self.drawing_tab_drag_tool = tool;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn set_mouse_drag_color(
+        &mut self,
+        button: DragMouseButton,
+        field: DragToolField,
+        value: DragColorOption,
+    ) {
+        let button_config = match button {
+            DragMouseButton::Left => &mut self.drawing_drag_tools.left,
+            DragMouseButton::Right => &mut self.drawing_drag_tools.right,
+            DragMouseButton::Middle => &mut self.drawing_drag_tools.middle,
+        };
+        let color_slot = match field {
+            DragToolField::Drag => &mut button_config.drag_color,
+            DragToolField::ShiftDrag => &mut button_config.shift_drag_color,
+            DragToolField::CtrlDrag => &mut button_config.ctrl_drag_color,
+            DragToolField::CtrlShiftDrag => &mut button_config.ctrl_shift_drag_color,
+            DragToolField::TabDrag => &mut button_config.tab_drag_color,
+        };
+        let existing = color_slot.clone();
+        *color_slot = value.to_color_spec(existing);
     }
 
     pub fn set_toggle(&mut self, field: ToggleField, value: bool) {
@@ -261,5 +327,22 @@ impl ConfigDraft {
                 .click_highlight_outline_color
                 .set_component(index, value),
         }
+    }
+}
+
+fn supported_drag_tool_option(
+    button: DragMouseButton,
+    field: DragToolField,
+    value: DragToolOption,
+) -> DragToolOption {
+    match (button, value) {
+        (DragMouseButton::Left, DragToolOption::Default) => match field {
+            DragToolField::Drag => DragToolOption::Pen,
+            DragToolField::ShiftDrag => DragToolOption::Line,
+            DragToolField::CtrlDrag => DragToolOption::Rect,
+            DragToolField::CtrlShiftDrag => DragToolOption::Arrow,
+            DragToolField::TabDrag => DragToolOption::Ellipse,
+        },
+        _ => value,
     }
 }

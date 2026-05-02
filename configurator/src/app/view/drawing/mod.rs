@@ -5,7 +5,11 @@ use iced::widget::{column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
 use crate::messages::Message;
-use crate::models::{DragToolField, EraserModeOption, TextField, ToggleField, ToolOption};
+use crate::models::{
+    DragColorOption, DragMouseButton, DragToolField, DragToolOption, EraserModeOption, TextField,
+    ToggleField,
+};
+use wayscriber::config::DragButtonConfig;
 
 use self::color::drawing_color_block;
 use self::font::font_controls;
@@ -22,12 +26,35 @@ impl ConfiguratorApp {
             Some(self.draft.drawing_default_eraser_mode),
             Message::EraserModeChanged,
         );
-        let drag_tool_pick = |field: DragToolField, selected: ToolOption| {
-            pick_list(ToolOption::list(), Some(selected), move |option| {
-                Message::DrawingDragToolChanged(field, option)
-            })
-            .width(Length::Fill)
-        };
+        let drag_button_controls =
+            |button: DragMouseButton, current: &DragButtonConfig, defaults: &DragButtonConfig| {
+                column![
+                    text(button.label()).size(14),
+                    row![
+                        drag_binding_control(button, DragToolField::Drag, current, defaults,),
+                        drag_binding_control(button, DragToolField::ShiftDrag, current, defaults,)
+                    ]
+                    .spacing(12),
+                    row![
+                        drag_binding_control(button, DragToolField::CtrlDrag, current, defaults,),
+                        drag_binding_control(
+                            button,
+                            DragToolField::CtrlShiftDrag,
+                            current,
+                            defaults,
+                        )
+                    ]
+                    .spacing(12),
+                    row![drag_binding_control(
+                        button,
+                        DragToolField::TabDrag,
+                        current,
+                        defaults,
+                    )]
+                    .spacing(12)
+                ]
+                .spacing(8)
+            };
 
         let column = column![
             text("Drawing Defaults").size(20),
@@ -73,53 +100,21 @@ impl ConfiguratorApp {
             ]
             .spacing(12),
             text("Drag Tool Mapping").size(16),
-            row![
-                labeled_control(
-                    DragToolField::Drag.label(),
-                    drag_tool_pick(DragToolField::Drag, self.draft.drawing_drag_tool).into(),
-                    self.defaults.drawing_drag_tool.label().to_string(),
-                    self.draft.drawing_drag_tool != self.defaults.drawing_drag_tool,
-                ),
-                labeled_control(
-                    DragToolField::ShiftDrag.label(),
-                    drag_tool_pick(DragToolField::ShiftDrag, self.draft.drawing_shift_drag_tool)
-                        .into(),
-                    self.defaults.drawing_shift_drag_tool.label().to_string(),
-                    self.draft.drawing_shift_drag_tool != self.defaults.drawing_shift_drag_tool,
-                )
-            ]
-            .spacing(12),
-            row![
-                labeled_control(
-                    DragToolField::CtrlDrag.label(),
-                    drag_tool_pick(DragToolField::CtrlDrag, self.draft.drawing_ctrl_drag_tool)
-                        .into(),
-                    self.defaults.drawing_ctrl_drag_tool.label().to_string(),
-                    self.draft.drawing_ctrl_drag_tool != self.defaults.drawing_ctrl_drag_tool,
-                ),
-                labeled_control(
-                    DragToolField::CtrlShiftDrag.label(),
-                    drag_tool_pick(
-                        DragToolField::CtrlShiftDrag,
-                        self.draft.drawing_ctrl_shift_drag_tool,
-                    )
-                    .into(),
-                    self.defaults
-                        .drawing_ctrl_shift_drag_tool
-                        .label()
-                        .to_string(),
-                    self.draft.drawing_ctrl_shift_drag_tool
-                        != self.defaults.drawing_ctrl_shift_drag_tool,
-                )
-            ]
-            .spacing(12),
-            row![labeled_control(
-                DragToolField::TabDrag.label(),
-                drag_tool_pick(DragToolField::TabDrag, self.draft.drawing_tab_drag_tool).into(),
-                self.defaults.drawing_tab_drag_tool.label().to_string(),
-                self.draft.drawing_tab_drag_tool != self.defaults.drawing_tab_drag_tool,
-            )]
-            .spacing(12),
+            drag_button_controls(
+                DragMouseButton::Left,
+                &self.draft.drawing_drag_tools.left,
+                &self.defaults.drawing_drag_tools.left,
+            ),
+            drag_button_controls(
+                DragMouseButton::Right,
+                &self.draft.drawing_drag_tools.right,
+                &self.defaults.drawing_drag_tools.right,
+            ),
+            drag_button_controls(
+                DragMouseButton::Middle,
+                &self.draft.drawing_drag_tools.middle,
+                &self.defaults.drawing_drag_tools.middle,
+            ),
             row![
                 labeled_input_with_feedback(
                     "Marker opacity (0.05-0.9)",
@@ -176,5 +171,65 @@ impl ConfiguratorApp {
         .width(Length::Fill);
 
         scrollable(column).into()
+    }
+}
+
+fn drag_binding_control<'a>(
+    button: DragMouseButton,
+    field: DragToolField,
+    current: &DragButtonConfig,
+    defaults: &DragButtonConfig,
+) -> Element<'a, Message> {
+    let selected = drag_tool_for_field(current, field);
+    let default = drag_tool_for_field(defaults, field);
+    let color = drag_color_for_field(current, field);
+    let default_color = drag_color_for_field(defaults, field);
+    column![
+        labeled_control(
+            field.label(),
+            pick_list(
+                DragToolOption::list_for_button(button),
+                Some(selected),
+                move |option| { Message::DrawingMouseDragToolChanged(button, field, option) }
+            )
+            .width(Length::Fill)
+            .into(),
+            default.label().to_string(),
+            selected != default,
+        ),
+        labeled_control(
+            "Color",
+            pick_list(DragColorOption::list(), Some(color), move |option| {
+                Message::DrawingMouseDragColorChanged(button, field, option)
+            })
+            .width(Length::Fill)
+            .into(),
+            default_color.label().to_string(),
+            color != default_color,
+        )
+    ]
+    .spacing(6)
+    .into()
+}
+
+fn drag_tool_for_field(config: &DragButtonConfig, field: DragToolField) -> DragToolOption {
+    match field {
+        DragToolField::Drag => DragToolOption::from_drag_tool(config.drag_tool),
+        DragToolField::ShiftDrag => DragToolOption::from_drag_tool(config.shift_drag_tool),
+        DragToolField::CtrlDrag => DragToolOption::from_drag_tool(config.ctrl_drag_tool),
+        DragToolField::CtrlShiftDrag => DragToolOption::from_drag_tool(config.ctrl_shift_drag_tool),
+        DragToolField::TabDrag => DragToolOption::from_drag_tool(config.tab_drag_tool),
+    }
+}
+
+fn drag_color_for_field(config: &DragButtonConfig, field: DragToolField) -> DragColorOption {
+    match field {
+        DragToolField::Drag => DragColorOption::from_color(config.drag_color.as_ref()),
+        DragToolField::ShiftDrag => DragColorOption::from_color(config.shift_drag_color.as_ref()),
+        DragToolField::CtrlDrag => DragColorOption::from_color(config.ctrl_drag_color.as_ref()),
+        DragToolField::CtrlShiftDrag => {
+            DragColorOption::from_color(config.ctrl_shift_drag_color.as_ref())
+        }
+        DragToolField::TabDrag => DragColorOption::from_color(config.tab_drag_color.as_ref()),
     }
 }

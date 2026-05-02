@@ -1,4 +1,4 @@
-use crate::config::enums::ColorSpec;
+use crate::config::{MouseDragToolsConfig, enums::ColorSpec};
 use crate::draw::EraserKind;
 use crate::input::{EraserMode, Tool};
 use schemars::JsonSchema;
@@ -62,6 +62,10 @@ pub struct ToolPresetConfig {
     /// Optional status bar visibility override.
     #[serde(default)]
     pub show_status_bar: Option<bool>,
+
+    /// Optional per-button drag tool bindings to apply with this preset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drag_tools: Option<MouseDragToolsConfig>,
 }
 
 /// Preset slot configuration for quick tool switching.

@@ -2,10 +2,11 @@ use iced::Command;
 
 use crate::messages::Message;
 use crate::models::{
-    ColorMode, ColorPickerId, DragToolField, EraserModeOption, FontStyleOption, FontWeightOption,
-    KeybindingField, NamedColorOption, OverrideOption, PresenterToolBehaviorOption, QuadField,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField, NamedColorOption,
+    OverrideOption, PresenterToolBehaviorOption, QuadField, SessionCompressionOption,
+    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField,
+    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -105,13 +106,26 @@ impl ConfiguratorApp {
         Command::none()
     }
 
-    pub(super) fn handle_drawing_drag_tool_changed(
+    pub(super) fn handle_drawing_mouse_drag_tool_changed(
         &mut self,
+        button: DragMouseButton,
         field: DragToolField,
-        option: ToolOption,
+        option: DragToolOption,
     ) -> Command<Message> {
         self.status = StatusMessage::idle();
-        self.draft.set_drag_tool(field, option);
+        self.draft.set_mouse_drag_tool(button, field, option);
+        self.refresh_dirty_flag();
+        Command::none()
+    }
+
+    pub(super) fn handle_drawing_mouse_drag_color_changed(
+        &mut self,
+        button: DragMouseButton,
+        field: DragToolField,
+        option: DragColorOption,
+    ) -> Command<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.set_mouse_drag_color(button, field, option);
         self.refresh_dirty_flag();
         Command::none()
     }

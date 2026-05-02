@@ -688,6 +688,23 @@ ctrl_drag_tool = "rect"
 ctrl_shift_drag_tool = "arrow"
 tab_drag_tool = "ellipse"
 
+# Optional per-mouse-button drag mapping. These override the flat drag_tool
+# fields above when present. Right/middle default to their built-in behavior
+# unless configured here. Use "default" for a button's built-in behavior.
+# Colors are optional and can be names or RGB arrays.
+#
+# [drawing.drag_tools.left]
+# drag_tool = "pen"
+# shift_drag_tool = "pen"
+# shift_drag_color = "red"
+#
+# [drawing.drag_tools.right]
+# drag_tool = "pen"
+# drag_color = "blue"
+#
+# [drawing.drag_tools.middle]
+# drag_tool = "default"
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Font Configuration (Pango-based text rendering)
 # ───────────────────────────────────────────────────────────────────────────────

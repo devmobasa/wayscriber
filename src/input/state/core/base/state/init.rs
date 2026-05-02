@@ -93,6 +93,8 @@ impl InputState {
             step_marker_counter: 1,
             modifiers: Modifiers::new(),
             drag_tool_bindings: DragToolBindings::default(),
+            active_drag_button: None,
+            active_drag_color: None,
             state: DrawingState::Idle,
             should_exit: false,
             needs_redraw: true,

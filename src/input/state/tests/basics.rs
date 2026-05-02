@@ -1,4 +1,6 @@
 use super::*;
+use crate::config::{DragButtonConfig, MouseDragToolsConfig};
+use crate::input::{DragBinding, DragTool, DragToolBindings};
 
 #[test]
 fn test_adjust_font_size_increase() {
@@ -29,6 +31,7 @@ fn apply_preset_updates_tool_and_settings() {
         arrow_angle: Some(45.0),
         arrow_head_at_end: Some(true),
         show_status_bar: Some(false),
+        drag_tools: None,
     });
 
     assert!(state.apply_preset(1));
@@ -48,6 +51,57 @@ fn apply_preset_updates_tool_and_settings() {
     assert_eq!(state.eraser_kind, EraserKind::Rect);
     assert_eq!(state.eraser_mode, EraserMode::Stroke);
     assert!(!state.show_status_bar);
+}
+
+#[test]
+fn apply_preset_merges_partial_left_drag_tool_bindings() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+
+    let mut existing_bindings = DragToolBindings::default();
+    existing_bindings.left.shift_drag = DragBinding::from_tool(Tool::Eraser);
+    assert!(state.set_drag_tool_bindings(existing_bindings));
+
+    let mut left = DragButtonConfig::button_behavior();
+    left.drag_tool = DragTool::Marker;
+
+    state.presets[0] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::Marker,
+        color: ColorSpec::Name("blue".to_string()),
+        size: 12.0,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+        drag_tools: Some(MouseDragToolsConfig::from_buttons(
+            left,
+            DragButtonConfig::button_behavior(),
+            DragButtonConfig::button_behavior(),
+        )),
+    });
+
+    assert!(state.apply_preset(1));
+    assert_eq!(state.drag_tool_bindings.left.drag.tool, DragTool::Marker);
+    assert_eq!(
+        state.drag_tool_bindings.left.shift_drag.tool,
+        DragTool::Eraser
+    );
+    assert_eq!(state.drag_tool_bindings.left.ctrl_drag.tool, DragTool::Rect);
+    assert_eq!(
+        state.drag_tool_bindings.left.ctrl_shift_drag.tool,
+        DragTool::Arrow
+    );
+    assert_eq!(
+        state.drag_tool_bindings.left.tab_drag.tool,
+        DragTool::Ellipse
+    );
 }
 
 #[test]

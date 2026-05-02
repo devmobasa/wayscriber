@@ -21,6 +21,7 @@ impl ConfigDraft {
         let (style_option, style_value) = FontStyleOption::from_value(&config.drawing.font_style);
         let (weight_option, weight_value) =
             FontWeightOption::from_value(&config.drawing.font_weight);
+        let drawing_drag_tools = config.drawing.effective_drag_tools();
         Self {
             drawing_color: ColorInput::from_color(&config.drawing.default_color),
             drawing_default_thickness: format_float(config.drawing.default_thickness),
@@ -45,6 +46,7 @@ impl ConfigDraft {
                 config.drawing.ctrl_shift_drag_tool,
             ),
             drawing_tab_drag_tool: ToolOption::from_tool(config.drawing.tab_drag_tool),
+            drawing_drag_tools,
             drawing_font_style_option: style_option,
             drawing_font_weight_option: weight_option,
 

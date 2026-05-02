@@ -12,6 +12,7 @@ use super::super::keybindings::KeybindingsDraft;
 use super::boards::BoardsDraft;
 use super::presets::PresetsDraft;
 use super::toolbar_overrides::ToolbarModeOverridesDraft;
+use wayscriber::config::MouseDragToolsConfig;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigDraft {
@@ -34,6 +35,7 @@ pub struct ConfigDraft {
     pub drawing_ctrl_drag_tool: ToolOption,
     pub drawing_ctrl_shift_drag_tool: ToolOption,
     pub drawing_tab_drag_tool: ToolOption,
+    pub drawing_drag_tools: MouseDragToolsConfig,
     pub drawing_font_style_option: FontStyleOption,
     pub drawing_font_weight_option: FontWeightOption,
 

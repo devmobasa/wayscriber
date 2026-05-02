@@ -42,14 +42,14 @@ impl Program<Message> for SvCanvas {
             canvas::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
                 state.dragging = false;
             }
-            canvas::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                if state.dragging {
-                    let pos = clamp_point(position, bounds);
-                    return (
-                        canvas::event::Status::Captured,
-                        Some(self.message_from_position(bounds, pos)),
-                    );
-                }
+            canvas::Event::Mouse(iced::mouse::Event::CursorMoved { position })
+                if state.dragging =>
+            {
+                let pos = clamp_point(position, bounds);
+                return (
+                    canvas::event::Status::Captured,
+                    Some(self.message_from_position(bounds, pos)),
+                );
             }
             _ => {}
         }
@@ -169,14 +169,14 @@ impl Program<Message> for HueCanvas {
             canvas::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
                 state.dragging = false;
             }
-            canvas::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                if state.dragging {
-                    let pos = clamp_point(position, bounds);
-                    return (
-                        canvas::event::Status::Captured,
-                        Some(self.message_from_position(bounds, pos)),
-                    );
-                }
+            canvas::Event::Mouse(iced::mouse::Event::CursorMoved { position })
+                if state.dragging =>
+            {
+                let pos = clamp_point(position, bounds);
+                return (
+                    canvas::event::Status::Captured,
+                    Some(self.message_from_position(bounds, pos)),
+                );
             }
             _ => {}
         }
