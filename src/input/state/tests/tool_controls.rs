@@ -1,5 +1,6 @@
 use super::*;
-use crate::config::PresenterToolBehavior;
+use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
+use crate::input::PerToolDrawingSettings;
 
 #[test]
 fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
@@ -101,7 +102,10 @@ fn tool_color_and_thickness_are_independent_between_pen_and_marker() {
 
     assert_eq!(state.color_for_tool(Tool::Marker), marker_color);
     assert_eq!(state.thickness_for_tool(Tool::Marker), 24.0);
-    assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
+    assert_eq!(
+        state.color_for_tool(Tool::Pen),
+        ColorSpec::from(pen_color).to_color()
+    );
     assert_eq!(state.thickness_for_tool(Tool::Pen), pen_thickness);
 
     assert!(state.set_tool_override(Some(Tool::Pen)));
@@ -263,7 +267,10 @@ fn color_picker_cancel_restores_opening_modifier_tool_after_modifier_release() {
     assert_eq!(state.current_color, pen_color);
 
     state.close_color_picker_popup(true);
-    assert_eq!(state.color_for_tool(Tool::Line), line_color);
+    assert_eq!(
+        state.color_for_tool(Tool::Line),
+        ColorSpec::from(line_color).to_color()
+    );
     assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
     assert_eq!(state.current_color, pen_color);
 }
@@ -296,6 +303,200 @@ fn color_picker_apply_updates_opening_modifier_tool_after_modifier_release() {
     assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
     assert_eq!(state.current_color, pen_color);
     assert!(state.session_dirty);
+}
+
+#[test]
+fn save_preset_captures_all_tool_settings() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+    let pen_color = Color {
+        r: 0.1,
+        g: 0.2,
+        b: 0.3,
+        a: 1.0,
+    };
+    let line_color = Color {
+        r: 0.4,
+        g: 0.5,
+        b: 0.6,
+        a: 1.0,
+    };
+    let marker_color = Color {
+        r: 0.7,
+        g: 0.8,
+        b: 0.1,
+        a: 1.0,
+    };
+    let step_color = Color {
+        r: 0.2,
+        g: 0.7,
+        b: 0.9,
+        a: 1.0,
+    };
+
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    assert!(state.set_color(pen_color));
+    assert!(state.set_thickness(4.0));
+    assert!(state.set_tool_override(Some(Tool::Line)));
+    assert!(state.set_color(line_color));
+    assert!(state.set_thickness(14.0));
+    assert!(state.set_tool_override(Some(Tool::Marker)));
+    assert!(state.set_color(marker_color));
+    assert!(state.set_thickness(24.0));
+    assert!(state.set_tool_override(Some(Tool::StepMarker)));
+    assert!(state.set_color(step_color));
+    assert!(state.set_thickness(30.0));
+    assert!(state.set_tool_override(Some(Tool::Eraser)));
+    assert!(state.set_eraser_size(33.0));
+    assert!(state.set_tool_override(Some(Tool::Line)));
+
+    assert!(state.save_preset(1));
+    let preset = state.presets[0].as_ref().expect("saved preset");
+    let tool_settings = preset.tool_settings.as_ref().expect("tool settings");
+
+    assert_eq!(preset.tool, Tool::Line);
+    assert_eq!(preset.color, ColorSpec::from(line_color));
+    assert_eq!(preset.size, 14.0);
+    assert_eq!(tool_settings.pen.color, ColorSpec::from(pen_color));
+    assert_eq!(tool_settings.pen.size, 4.0);
+    assert_eq!(tool_settings.line.color, ColorSpec::from(line_color));
+    assert_eq!(tool_settings.line.size, 14.0);
+    assert_eq!(tool_settings.marker.color, ColorSpec::from(marker_color));
+    assert_eq!(tool_settings.marker.size, 24.0);
+    assert_eq!(tool_settings.step_marker.color, ColorSpec::from(step_color));
+    assert_eq!(tool_settings.step_marker.size, 30.0);
+    assert_eq!(tool_settings.eraser_size, 33.0);
+}
+
+#[test]
+fn apply_full_preset_restores_all_tool_settings() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+    let pen_color = Color {
+        r: 0.1,
+        g: 0.2,
+        b: 0.3,
+        a: 1.0,
+    };
+    let line_color = Color {
+        r: 0.4,
+        g: 0.5,
+        b: 0.6,
+        a: 1.0,
+    };
+    let marker_color = Color {
+        r: 0.7,
+        g: 0.8,
+        b: 0.1,
+        a: 1.0,
+    };
+    let step_color = Color {
+        r: 0.2,
+        g: 0.7,
+        b: 0.9,
+        a: 1.0,
+    };
+    let mut settings = PerToolDrawingSettings::new(pen_color, 4.0);
+    settings.line.color = line_color;
+    settings.line.thickness = 14.0;
+    settings.marker.color = marker_color;
+    settings.marker.thickness = 24.0;
+    settings.step_marker.color = step_color;
+    settings.step_marker.thickness = 30.0;
+    let tool_settings = PresetToolStatesConfig::from_runtime(&settings, 33.0);
+
+    state.presets[0] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::Marker,
+        color: ColorSpec::from(marker_color),
+        size: 24.0,
+        tool_settings: Some(tool_settings),
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+        drag_tools: None,
+    });
+
+    assert!(state.apply_preset(1));
+
+    assert_eq!(state.active_tool(), Tool::Marker);
+    assert_eq!(
+        state.color_for_tool(Tool::Pen),
+        ColorSpec::from(pen_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::Pen), 4.0);
+    assert_eq!(
+        state.color_for_tool(Tool::Line),
+        ColorSpec::from(line_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::Line), 14.0);
+    assert_eq!(
+        state.color_for_tool(Tool::Marker),
+        ColorSpec::from(marker_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::Marker), 24.0);
+    assert_eq!(
+        state.color_for_tool(Tool::StepMarker),
+        ColorSpec::from(step_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::StepMarker), 30.0);
+    assert_eq!(state.eraser_size, 33.0);
+    assert_eq!(
+        state.current_color,
+        ColorSpec::from(marker_color).to_color()
+    );
+    assert_eq!(state.current_thickness, 24.0);
+}
+
+#[test]
+fn legacy_preset_changes_only_selected_tool_settings() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+    let pen_color = state.color_for_tool(Tool::Pen);
+    let pen_thickness = state.thickness_for_tool(Tool::Pen);
+    let line_color = Color {
+        r: 0.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    let marker_color = state.color_for_tool(Tool::Marker);
+    let marker_thickness = state.thickness_for_tool(Tool::Marker);
+
+    state.presets[0] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::Line,
+        color: ColorSpec::from(line_color),
+        size: 16.0,
+        tool_settings: None,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+        drag_tools: None,
+    });
+
+    assert!(state.apply_preset(1));
+
+    assert_eq!(state.color_for_tool(Tool::Line), line_color);
+    assert_eq!(state.thickness_for_tool(Tool::Line), 16.0);
+    assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
+    assert_eq!(state.thickness_for_tool(Tool::Pen), pen_thickness);
+    assert_eq!(state.color_for_tool(Tool::Marker), marker_color);
+    assert_eq!(state.thickness_for_tool(Tool::Marker), marker_thickness);
 }
 
 #[test]

@@ -58,8 +58,8 @@ impl ToolbarSnapshot {
                 preset.as_ref().map(|preset| PresetSlotSnapshot {
                     name: preset.name.clone(),
                     tool: preset.tool,
-                    color: preset.color.to_color(),
-                    size: preset.size,
+                    color: preset.preview_color(),
+                    size: preset.preview_size(),
                     eraser_kind: preset.eraser_kind,
                     eraser_mode: preset.eraser_mode,
                     marker_opacity: preset.marker_opacity,

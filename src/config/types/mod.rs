@@ -30,7 +30,10 @@ pub use help_overlay::HelpOverlayStyle;
 pub use history::HistoryConfig;
 pub use performance::PerformanceConfig;
 pub use presenter_mode::{PresenterModeConfig, PresenterToolBehavior};
-pub use presets::{PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig, ToolPresetConfig};
+pub use presets::{
+    PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig, PresetToolSettingConfig,
+    PresetToolStatesConfig, ToolPresetConfig,
+};
 pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
 pub use status_bar::StatusBarStyle;
 #[cfg(tablet)]

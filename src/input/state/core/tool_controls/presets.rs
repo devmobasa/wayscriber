@@ -2,7 +2,9 @@ use super::super::base::{
     DrawingState, InputState, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
     PresetFeedbackKind, PresetFeedbackState,
 };
-use crate::config::{PRESET_SLOTS_MAX, PresetSlotsConfig, ToolPresetConfig};
+use crate::config::{
+    PRESET_SLOTS_MAX, PresetSlotsConfig, PresetToolStatesConfig, ToolPresetConfig,
+};
 use crate::input::tool::Tool;
 use std::time::{Duration, Instant};
 
@@ -32,17 +34,18 @@ impl InputState {
             self.cancel_text_input();
         }
 
-        if preset.tool == Tool::Highlight {
-            self.set_highlight_tool(true);
+        if let Some(tool_settings) = preset.tool_settings.as_ref() {
+            self.apply_full_preset_tool_settings(tool_settings);
+            self.activate_preset_tool(preset.tool);
+            self.sync_current_settings_from_active_tool();
         } else {
-            self.set_tool_override(Some(preset.tool));
-        }
-
-        let _ = self.set_color(preset.color.to_color());
-        if preset.tool == Tool::Eraser {
-            let _ = self.set_eraser_size(preset.size);
-        } else {
-            let _ = self.set_thickness(preset.size);
+            self.activate_preset_tool(preset.tool);
+            let _ = self.set_color(preset.color.to_color());
+            if preset.tool == Tool::Eraser {
+                let _ = self.set_eraser_size(preset.size);
+            } else {
+                let _ = self.set_thickness(preset.size);
+            }
         }
 
         if let Some(kind) = preset.eraser_kind
@@ -228,6 +231,32 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    fn activate_preset_tool(&mut self, tool: Tool) {
+        if tool == Tool::Highlight {
+            self.set_highlight_tool(true);
+        } else {
+            self.set_tool_override(Some(tool));
+        }
+    }
+
+    fn apply_full_preset_tool_settings(&mut self, settings: &PresetToolStatesConfig) {
+        let tool_settings = settings.to_runtime();
+        if self.tool_settings != tool_settings {
+            self.tool_settings = tool_settings;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        if (self.eraser_size - settings.eraser_size).abs() > f64::EPSILON {
+            self.eraser_size = settings.eraser_size;
+            self.active_preset_slot = None;
+            self.dirty_tracker.mark_full();
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        }
+        self.sync_highlight_color();
+    }
+
     fn capture_current_preset(&self) -> ToolPresetConfig {
         let active_tool = self.active_tool();
         let size = self.size_for_active_tool();
@@ -236,6 +265,10 @@ impl InputState {
             tool: active_tool,
             color: self.color_for_tool(active_tool).into(),
             size,
+            tool_settings: Some(PresetToolStatesConfig::from_runtime(
+                &self.tool_settings,
+                self.eraser_size,
+            )),
             eraser_kind: Some(self.eraser_kind),
             eraser_mode: Some(self.eraser_mode),
             marker_opacity: Some(self.marker_opacity),

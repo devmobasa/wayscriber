@@ -27,6 +27,7 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
         tool: Tool::Pen,
         color: ColorSpec::Name("red".to_string()),
         size: 5.0,
+        tool_settings: None,
         eraser_kind: None,
         eraser_mode: None,
         marker_opacity: None,

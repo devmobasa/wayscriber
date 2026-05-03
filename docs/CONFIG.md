@@ -152,10 +152,51 @@ arrow_length = 20.0
 arrow_angle = 30.0
 arrow_head_at_end = true
 show_status_bar = true
+
+# Optional full per-tool profile captured by newly saved presets.
+[presets.slot_1.tool_settings]
+eraser_size = 18.0
+
+[presets.slot_1.tool_settings.pen]
+color = "red"
+size = 3.0
+
+[presets.slot_1.tool_settings.line]
+color = "green"
+size = 6.0
+
+[presets.slot_1.tool_settings.rect]
+color = "blue"
+size = 4.0
+
+[presets.slot_1.tool_settings.ellipse]
+color = "orange"
+size = 4.0
+
+[presets.slot_1.tool_settings.arrow]
+color = "yellow"
+size = 5.0
+
+[presets.slot_1.tool_settings.blur]
+color = "black"
+size = 12.0
+
+[presets.slot_1.tool_settings.marker]
+color = "yellow"
+size = 20.0
+
+[presets.slot_1.tool_settings.step_marker]
+color = "white"
+size = 28.0
 ```
 
 **Required fields:** `tool`, `color`, `size`  
-**Optional fields:** `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `show_status_bar`, `drag_tools`
+**Optional fields:** `tool_settings`, `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `show_status_bar`, `drag_tools`
+
+When `tool_settings` is present, applying the preset restores the full drawing profile for all
+tools, including StepMarker size and Eraser size, then activates `tool`. Legacy presets without
+`tool_settings` keep the old behavior and apply only `color`/`size` to the selected `tool`.
+The top-level `color` and `size` are retained for compatibility, readability, and toolbar previews.
 
 ### `[history]` - Undo/Redo Playback
 

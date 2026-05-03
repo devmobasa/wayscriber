@@ -19,6 +19,20 @@ impl Config {
         }
 
         let clamp_preset = |slot: usize, preset: &mut ToolPresetConfig| {
+            let clamp_size = |value: &mut f64, label: &str| {
+                if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(&*value) {
+                    log::warn!(
+                        "Invalid preset {} {:.1} in slot {}, clamping to {:.1}-{:.1} range",
+                        label,
+                        *value,
+                        slot,
+                        MIN_STROKE_THICKNESS,
+                        MAX_STROKE_THICKNESS
+                    );
+                    *value = value.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+                }
+            };
+
             if !(MIN_STROKE_THICKNESS..=MAX_STROKE_THICKNESS).contains(&preset.size) {
                 log::warn!(
                     "Invalid preset size {:.1} in slot {}, clamping to {:.1}-{:.1} range",
@@ -30,6 +44,18 @@ impl Config {
                 preset.size = preset
                     .size
                     .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+            }
+
+            if let Some(tool_settings) = preset.tool_settings.as_mut() {
+                clamp_size(&mut tool_settings.pen.size, "pen size");
+                clamp_size(&mut tool_settings.line.size, "line size");
+                clamp_size(&mut tool_settings.rect.size, "rect size");
+                clamp_size(&mut tool_settings.ellipse.size, "ellipse size");
+                clamp_size(&mut tool_settings.arrow.size, "arrow size");
+                clamp_size(&mut tool_settings.blur.size, "blur size");
+                clamp_size(&mut tool_settings.marker.size, "marker size");
+                clamp_size(&mut tool_settings.step_marker.size, "step marker size");
+                clamp_size(&mut tool_settings.eraser_size, "eraser size");
             }
 
             if let Some(opacity) = preset.marker_opacity.as_mut()
