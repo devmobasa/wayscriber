@@ -105,11 +105,11 @@ fn validate_clamps_preset_fields() {
         tool_settings: Some(PresetToolStatesConfig {
             pen: tool_setting(-10.0),
             line: tool_setting(120.0),
-            rect: tool_setting(3.0),
-            ellipse: tool_setting(4.0),
-            arrow: tool_setting(5.0),
-            blur: tool_setting(6.0),
-            marker: tool_setting(7.0),
+            rect: tool_setting(-10.0),
+            ellipse: tool_setting(120.0),
+            arrow: tool_setting(-10.0),
+            blur: tool_setting(120.0),
+            marker: tool_setting(-10.0),
             step_marker: tool_setting(120.0),
             eraser_size: -10.0,
         }),
@@ -134,6 +134,11 @@ fn validate_clamps_preset_fields() {
     let tool_settings = preset.tool_settings.as_ref().expect("tool settings");
     assert_eq!(tool_settings.pen.size, MIN_STROKE_THICKNESS);
     assert_eq!(tool_settings.line.size, MAX_STROKE_THICKNESS);
+    assert_eq!(tool_settings.rect.size, MIN_STROKE_THICKNESS);
+    assert_eq!(tool_settings.ellipse.size, MAX_STROKE_THICKNESS);
+    assert_eq!(tool_settings.arrow.size, MIN_STROKE_THICKNESS);
+    assert_eq!(tool_settings.blur.size, MAX_STROKE_THICKNESS);
+    assert_eq!(tool_settings.marker.size, MIN_STROKE_THICKNESS);
     assert_eq!(tool_settings.step_marker.size, MAX_STROKE_THICKNESS);
     assert_eq!(tool_settings.eraser_size, MIN_STROKE_THICKNESS);
     assert_eq!(preset.marker_opacity, Some(0.9));

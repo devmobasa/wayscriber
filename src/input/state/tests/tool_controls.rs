@@ -321,6 +321,30 @@ fn save_preset_captures_all_tool_settings() {
         b: 0.6,
         a: 1.0,
     };
+    let rect_color = Color {
+        r: 0.9,
+        g: 0.1,
+        b: 0.2,
+        a: 1.0,
+    };
+    let ellipse_color = Color {
+        r: 0.2,
+        g: 0.9,
+        b: 0.4,
+        a: 1.0,
+    };
+    let arrow_color = Color {
+        r: 0.8,
+        g: 0.3,
+        b: 0.7,
+        a: 1.0,
+    };
+    let blur_color = Color {
+        r: 0.3,
+        g: 0.3,
+        b: 0.3,
+        a: 1.0,
+    };
     let marker_color = Color {
         r: 0.7,
         g: 0.8,
@@ -340,6 +364,18 @@ fn save_preset_captures_all_tool_settings() {
     assert!(state.set_tool_override(Some(Tool::Line)));
     assert!(state.set_color(line_color));
     assert!(state.set_thickness(14.0));
+    assert!(state.set_tool_override(Some(Tool::Rect)));
+    assert!(state.set_color(rect_color));
+    assert!(state.set_thickness(16.0));
+    assert!(state.set_tool_override(Some(Tool::Ellipse)));
+    assert!(state.set_color(ellipse_color));
+    assert!(state.set_thickness(18.0));
+    assert!(state.set_tool_override(Some(Tool::Arrow)));
+    assert!(state.set_color(arrow_color));
+    assert!(state.set_thickness(20.0));
+    assert!(state.set_tool_override(Some(Tool::Blur)));
+    assert!(state.set_color(blur_color));
+    assert!(state.set_thickness(22.0));
     assert!(state.set_tool_override(Some(Tool::Marker)));
     assert!(state.set_color(marker_color));
     assert!(state.set_thickness(24.0));
@@ -361,6 +397,14 @@ fn save_preset_captures_all_tool_settings() {
     assert_eq!(tool_settings.pen.size, 4.0);
     assert_eq!(tool_settings.line.color, ColorSpec::from(line_color));
     assert_eq!(tool_settings.line.size, 14.0);
+    assert_eq!(tool_settings.rect.color, ColorSpec::from(rect_color));
+    assert_eq!(tool_settings.rect.size, 16.0);
+    assert_eq!(tool_settings.ellipse.color, ColorSpec::from(ellipse_color));
+    assert_eq!(tool_settings.ellipse.size, 18.0);
+    assert_eq!(tool_settings.arrow.color, ColorSpec::from(arrow_color));
+    assert_eq!(tool_settings.arrow.size, 20.0);
+    assert_eq!(tool_settings.blur.color, ColorSpec::from(blur_color));
+    assert_eq!(tool_settings.blur.size, 22.0);
     assert_eq!(tool_settings.marker.color, ColorSpec::from(marker_color));
     assert_eq!(tool_settings.marker.size, 24.0);
     assert_eq!(tool_settings.step_marker.color, ColorSpec::from(step_color));
@@ -384,6 +428,30 @@ fn apply_full_preset_restores_all_tool_settings() {
         b: 0.6,
         a: 1.0,
     };
+    let rect_color = Color {
+        r: 0.9,
+        g: 0.1,
+        b: 0.2,
+        a: 1.0,
+    };
+    let ellipse_color = Color {
+        r: 0.2,
+        g: 0.9,
+        b: 0.4,
+        a: 1.0,
+    };
+    let arrow_color = Color {
+        r: 0.8,
+        g: 0.3,
+        b: 0.7,
+        a: 1.0,
+    };
+    let blur_color = Color {
+        r: 0.3,
+        g: 0.3,
+        b: 0.3,
+        a: 1.0,
+    };
     let marker_color = Color {
         r: 0.7,
         g: 0.8,
@@ -399,6 +467,14 @@ fn apply_full_preset_restores_all_tool_settings() {
     let mut settings = PerToolDrawingSettings::new(pen_color, 4.0);
     settings.line.color = line_color;
     settings.line.thickness = 14.0;
+    settings.rect.color = rect_color;
+    settings.rect.thickness = 16.0;
+    settings.ellipse.color = ellipse_color;
+    settings.ellipse.thickness = 18.0;
+    settings.arrow.color = arrow_color;
+    settings.arrow.thickness = 20.0;
+    settings.blur.color = blur_color;
+    settings.blur.thickness = 22.0;
     settings.marker.color = marker_color;
     settings.marker.thickness = 24.0;
     settings.step_marker.color = step_color;
@@ -438,6 +514,26 @@ fn apply_full_preset_restores_all_tool_settings() {
     );
     assert_eq!(state.thickness_for_tool(Tool::Line), 14.0);
     assert_eq!(
+        state.color_for_tool(Tool::Rect),
+        ColorSpec::from(rect_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::Rect), 16.0);
+    assert_eq!(
+        state.color_for_tool(Tool::Ellipse),
+        ColorSpec::from(ellipse_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::Ellipse), 18.0);
+    assert_eq!(
+        state.color_for_tool(Tool::Arrow),
+        ColorSpec::from(arrow_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::Arrow), 20.0);
+    assert_eq!(
+        state.color_for_tool(Tool::Blur),
+        ColorSpec::from(blur_color).to_color()
+    );
+    assert_eq!(state.thickness_for_tool(Tool::Blur), 22.0);
+    assert_eq!(
         state.color_for_tool(Tool::Marker),
         ColorSpec::from(marker_color).to_color()
     );
@@ -453,6 +549,67 @@ fn apply_full_preset_restores_all_tool_settings() {
         ColorSpec::from(marker_color).to_color()
     );
     assert_eq!(state.current_thickness, 24.0);
+}
+
+#[test]
+fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+    let top_level_color = ColorSpec::Rgb([255, 0, 0]);
+    let pen_color = ColorSpec::Rgb([10, 20, 30]);
+    let marker_color = ColorSpec::Rgb([200, 180, 20]);
+    let mut settings = PerToolDrawingSettings::new(pen_color.to_color(), 3.0);
+    settings.marker.color = marker_color.to_color();
+    settings.marker.thickness = 22.0;
+    let tool_settings = PresetToolStatesConfig::from_runtime(&settings, 18.0);
+
+    state.presets[0] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::Marker,
+        color: top_level_color.clone(),
+        size: 4.0,
+        tool_settings: Some(tool_settings.clone()),
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+        drag_tools: None,
+    });
+    state.presets[1] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::Eraser,
+        color: top_level_color,
+        size: 4.0,
+        tool_settings: Some(tool_settings),
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: None,
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+        drag_tools: None,
+    });
+
+    let snapshot = crate::ui::toolbar::ToolbarSnapshot::from_input(&state);
+    let preset = snapshot.presets[0].as_ref().expect("preset preview");
+    let eraser_preset = snapshot.presets[1].as_ref().expect("eraser preset preview");
+
+    assert_eq!(preset.tool, Tool::Marker);
+    assert_eq!(preset.color, marker_color.to_color());
+    assert_eq!(preset.size, 22.0);
+    assert_eq!(eraser_preset.tool, Tool::Eraser);
+    assert_eq!(eraser_preset.color, pen_color.to_color());
+    assert_eq!(eraser_preset.size, 18.0);
 }
 
 #[test]
