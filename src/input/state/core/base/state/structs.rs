@@ -29,7 +29,7 @@ use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     MouseButton,
     modifiers::{DragToolBindings, Modifiers},
-    tool::{EraserMode, Tool},
+    tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
 use crate::util::Rect;
 use std::collections::HashMap;
@@ -54,6 +54,8 @@ pub struct InputState {
     pub current_color: Color,
     /// Current pen/line thickness in pixels (changed with +/- keys)
     pub current_thickness: f64,
+    /// Independent color/thickness values for drawing tools.
+    pub(crate) tool_settings: PerToolDrawingSettings,
     /// Threshold (in pixels) before storing pressure-sensitive strokes.
     pub(crate) pressure_variation_threshold: f64,
     /// How selection thickness edits apply to pressure-sensitive strokes.

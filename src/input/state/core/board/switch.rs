@@ -95,8 +95,7 @@ impl InputState {
             let target_auto =
                 current_spec.auto_adjust_pen && !current_spec.background.is_transparent();
             if target_auto && let Some(default_color) = current_spec.effective_pen_color() {
-                self.current_color = default_color;
-                self.sync_highlight_color();
+                self.set_pen_color_from_board(default_color);
             }
 
             // Reset drawing state
@@ -155,22 +154,19 @@ impl InputState {
 
         match (current_auto, target_auto) {
             (false, true) => {
-                self.board_previous_color = Some(self.current_color);
+                self.board_previous_color = Some(self.color_for_tool(crate::input::Tool::Pen));
                 if let Some(default_color) = target_spec.effective_pen_color() {
-                    self.current_color = default_color;
-                    self.sync_highlight_color();
+                    self.set_pen_color_from_board(default_color);
                 }
             }
             (true, false) => {
                 if let Some(prev_color) = self.board_previous_color.take() {
-                    self.current_color = prev_color;
-                    self.sync_highlight_color();
+                    self.set_pen_color_from_board(prev_color);
                 }
             }
             (true, true) => {
                 if let Some(default_color) = target_spec.effective_pen_color() {
-                    self.current_color = default_color;
-                    self.sync_highlight_color();
+                    self.set_pen_color_from_board(default_color);
                 }
             }
             _ => {}

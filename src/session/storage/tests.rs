@@ -110,6 +110,7 @@ fn inspect_session_reports_counts_and_flags() {
             arrow_label_enabled: Some(false),
             board_previous_color: None,
             show_status_bar: true,
+            tool_settings: None,
         }),
     };
 

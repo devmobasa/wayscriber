@@ -78,7 +78,7 @@ impl ConfiguratorApp {
     ) -> Command<Message> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
-            slot.tool = tool;
+            slot.set_tool(tool);
         }
         self.refresh_dirty_flag();
         Command::none()

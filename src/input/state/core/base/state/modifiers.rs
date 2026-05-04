@@ -1,3 +1,4 @@
+use super::super::types::DrawingState;
 use super::structs::InputState;
 
 impl InputState {
@@ -12,6 +13,9 @@ impl InputState {
         self.modifiers.ctrl = false;
         self.modifiers.alt = false;
         self.modifiers.tab = false;
+        if matches!(self.state, DrawingState::Idle) {
+            self.sync_current_settings_from_active_tool();
+        }
     }
 
     /// Synchronize modifier state from backend-provided values (e.g. compositor).
@@ -23,5 +27,8 @@ impl InputState {
         self.modifiers.ctrl = ctrl;
         self.modifiers.alt = alt;
         // Tab has no direct compositor flag; leave it unchanged.
+        if matches!(self.state, DrawingState::Idle) {
+            self.sync_current_settings_from_active_tool();
+        }
     }
 }

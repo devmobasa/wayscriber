@@ -41,6 +41,7 @@ fn save_snapshot_skips_when_payload_exceeds_max_file_size() {
             arrow_label_enabled: Some(false),
             board_previous_color: None,
             show_status_bar: true,
+            tool_settings: None,
         }),
     };
 

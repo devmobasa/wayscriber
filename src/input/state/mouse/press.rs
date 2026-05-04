@@ -416,13 +416,15 @@ impl InputState {
             self.request_frozen_toggle();
         }
         if tool != Tool::Highlight && tool != Tool::Select {
+            self.sync_current_settings_for_tool(tool);
+            let drawing_thickness = self.thickness_for_tool(tool);
             self.begin_pointer_drag(button, color);
             self.state = DrawingState::Drawing {
                 tool,
                 start_x: x,
                 start_y: y,
                 points: vec![(x, y)],
-                point_thicknesses: vec![self.current_thickness as f32],
+                point_thicknesses: vec![drawing_thickness as f32],
             };
             self.last_provisional_bounds = None;
             self.update_provisional_dirty(x, y);

@@ -53,12 +53,12 @@ impl InputState {
                             point_thicknesses.iter().fold(0.0f32, |a, &b| a.max(b)) as f64;
                         bounding_box_for_points(points, max_thick)
                     } else {
-                        bounding_box_for_points(points, self.current_thickness)
+                        bounding_box_for_points(points, self.thickness_for_tool(*tool))
                     }
                 }
                 Tool::Marker => {
-                    let inflated =
-                        (self.current_thickness * 1.35).max(self.current_thickness + 1.0);
+                    let thickness = self.thickness_for_tool(*tool);
+                    let inflated = (thickness * 1.35).max(thickness + 1.0);
                     bounding_box_for_points(points, inflated)
                 }
                 Tool::Eraser => bounding_box_for_eraser(points, self.eraser_size),
@@ -67,7 +67,7 @@ impl InputState {
                     *start_y,
                     current_x,
                     current_y,
-                    self.current_thickness,
+                    self.thickness_for_tool(*tool),
                 ),
                 Tool::Rect => {
                     let (x, w) = if current_x >= *start_x {
@@ -80,12 +80,12 @@ impl InputState {
                     } else {
                         (current_y, start_y - current_y)
                     };
-                    bounding_box_for_rect(x, y, w, h, self.current_thickness)
+                    bounding_box_for_rect(x, y, w, h, self.thickness_for_tool(*tool))
                 }
                 Tool::Ellipse => {
                     let (cx, cy, rx, ry) =
                         util::ellipse_bounds(*start_x, *start_y, current_x, current_y);
-                    bounding_box_for_ellipse(cx, cy, rx, ry, self.current_thickness)
+                    bounding_box_for_ellipse(cx, cy, rx, ry, self.thickness_for_tool(*tool))
                 }
                 Tool::Arrow => {
                     let label = self.next_arrow_label();
@@ -94,7 +94,7 @@ impl InputState {
                         *start_y,
                         current_x,
                         current_y,
-                        self.current_thickness,
+                        self.thickness_for_tool(*tool),
                         self.arrow_length,
                         self.arrow_angle,
                         self.arrow_head_at_end,

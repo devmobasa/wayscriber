@@ -51,12 +51,14 @@ impl InputState {
         }
 
         board.spec.background = BoardBackground::Solid(color);
-        if board.spec.auto_adjust_pen {
+        let active_pen_color = if board.spec.auto_adjust_pen {
             board.spec.default_pen_color = Some(super::contrast_color(color));
-            if is_active {
-                self.current_color = board.spec.effective_pen_color().unwrap_or(color);
-                self.sync_highlight_color();
-            }
+            is_active.then(|| board.spec.effective_pen_color().unwrap_or(color))
+        } else {
+            None
+        };
+        if let Some(color) = active_pen_color {
+            self.set_pen_color_from_board(color);
         }
         self.queue_board_config_save();
         self.dirty_tracker.mark_full();

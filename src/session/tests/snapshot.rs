@@ -1,7 +1,8 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::{Color, Frame, Shape};
-use crate::input::{EraserMode, Tool};
+use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
 use std::path::PathBuf;
 
 #[test]
@@ -60,6 +61,7 @@ fn apply_snapshot_restores_tool_state() {
         b: 0.6,
         a: 1.0,
     };
+    let _ = input.set_tool_override(Some(Tool::Rect));
     let _ = input.set_color(desired_color);
     let _ = input.set_thickness(18.0);
     let _ = input.set_eraser_size(22.0);
@@ -67,7 +69,6 @@ fn apply_snapshot_restores_tool_state() {
     let _ = input.set_marker_opacity(0.55);
     let _ = input.set_fill_enabled(true);
     let _ = input.set_font_size(48.0);
-    let _ = input.set_tool_override(Some(Tool::Rect));
     input.text_background_enabled = true;
     input.arrow_length = 40.0;
     input.arrow_angle = 45.0;
@@ -109,6 +110,97 @@ fn apply_snapshot_restores_tool_state() {
         })
     );
     assert!(!restored.show_status_bar);
+}
+
+#[test]
+fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-tool-clamp");
+    options.restore_tool_state = true;
+
+    let desired_color = Color {
+        r: 0.2,
+        g: 0.4,
+        b: 0.6,
+        a: 1.0,
+    };
+    let mut tool_settings = PerToolDrawingSettings::new(desired_color, 3.0);
+    tool_settings.pen.thickness = MAX_STROKE_THICKNESS + 100.0;
+    tool_settings.marker.thickness = MIN_STROKE_THICKNESS - 100.0;
+
+    let snapshot = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: vec![],
+        tool_state: Some(ToolStateSnapshot {
+            current_color: desired_color,
+            current_thickness: 3.0,
+            eraser_size: 12.0,
+            eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_mode: EraserMode::Brush,
+            marker_opacity: Some(0.32),
+            fill_enabled: Some(false),
+            tool_override: Some(Tool::Pen),
+            current_font_size: 32.0,
+            text_background_enabled: false,
+            arrow_length: 20.0,
+            arrow_angle: 30.0,
+            arrow_head_at_end: Some(false),
+            arrow_label_enabled: Some(false),
+            board_previous_color: None,
+            show_status_bar: true,
+            tool_settings: Some(tool_settings),
+        }),
+    };
+
+    let mut restored = dummy_input_state();
+    apply_snapshot(&mut restored, snapshot, &options);
+
+    assert_eq!(restored.thickness_for_tool(Tool::Pen), MAX_STROKE_THICKNESS);
+    assert_eq!(
+        restored.thickness_for_tool(Tool::Marker),
+        MIN_STROKE_THICKNESS
+    );
+}
+
+#[test]
+fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-legacy-step-size");
+    options.restore_tool_state = true;
+
+    let color = Color {
+        r: 0.2,
+        g: 0.4,
+        b: 0.6,
+        a: 1.0,
+    };
+    let snapshot = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: vec![],
+        tool_state: Some(ToolStateSnapshot {
+            current_color: color,
+            current_thickness: 3.0,
+            eraser_size: 12.0,
+            eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_mode: EraserMode::Brush,
+            marker_opacity: Some(0.32),
+            fill_enabled: Some(false),
+            tool_override: Some(Tool::StepMarker),
+            current_font_size: 48.0,
+            text_background_enabled: false,
+            arrow_length: 20.0,
+            arrow_angle: 30.0,
+            arrow_head_at_end: Some(false),
+            arrow_label_enabled: Some(false),
+            board_previous_color: None,
+            show_status_bar: true,
+            tool_settings: None,
+        }),
+    };
+
+    let mut restored = dummy_input_state();
+    apply_snapshot(&mut restored, snapshot, &options);
+
+    assert!((restored.thickness_for_tool(Tool::StepMarker) - 28.8).abs() < 1e-9);
+    assert!((restored.next_step_marker_label().size - 28.8).abs() < 1e-9);
 }
 
 #[test]

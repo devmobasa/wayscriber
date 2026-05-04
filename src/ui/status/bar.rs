@@ -30,12 +30,12 @@ pub fn render_status_bar(
     screen_width: u32,
     screen_height: u32,
 ) {
-    let color = &input_state.current_color;
     let tool = input_state.active_tool();
+    let color = input_state.color_for_tool(tool);
     let thickness = input_state.size_for_active_tool();
 
     let tool_name = tool_display_name(input_state, tool);
-    let color_name = crate::util::color_to_name(color);
+    let color_name = crate::util::color_to_name(&color);
 
     let board_badge = if input_state.show_status_board_badge && input_state.boards.show_badge() {
         let board_index = input_state.boards.active_index() + 1;

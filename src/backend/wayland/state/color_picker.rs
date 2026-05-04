@@ -17,7 +17,9 @@ use wl_clipboard_rs::paste::{
 impl WaylandState {
     /// Copies the current color as hex to the clipboard.
     pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self) {
-        let color = self.input_state.current_color;
+        let color = self
+            .input_state
+            .color_for_tool(self.input_state.active_tool());
         let hex = color_to_hex(color);
         log::info!("Hex copy requested: {}", hex);
         self.suppress_focus_exit_for(Duration::from_millis(1500));

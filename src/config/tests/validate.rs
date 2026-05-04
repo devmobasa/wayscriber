@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::input::state::MAX_STROKE_THICKNESS;
+use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 #[test]
 fn validate_and_clamp_clamps_out_of_range_values() {
@@ -93,11 +93,26 @@ fn validate_clamps_history_delays() {
 fn validate_clamps_preset_fields() {
     let mut config = Config::default();
     config.presets.slot_count = 1;
+    let tool_setting = |size| PresetToolSettingConfig {
+        color: ColorSpec::Name("red".to_string()),
+        size,
+    };
     config.presets.slot_1 = Some(ToolPresetConfig {
         name: None,
         tool: crate::input::Tool::Pen,
         color: ColorSpec::Name("red".to_string()),
         size: 120.0,
+        tool_settings: Some(PresetToolStatesConfig {
+            pen: tool_setting(-10.0),
+            line: tool_setting(120.0),
+            rect: tool_setting(-10.0),
+            ellipse: tool_setting(120.0),
+            arrow: tool_setting(-10.0),
+            blur: tool_setting(120.0),
+            marker: tool_setting(-10.0),
+            step_marker: tool_setting(120.0),
+            eraser_size: -10.0,
+        }),
         eraser_kind: None,
         eraser_mode: None,
         marker_opacity: Some(1.2),
@@ -116,6 +131,16 @@ fn validate_clamps_preset_fields() {
     assert_eq!(config.presets.slot_count, PRESET_SLOTS_MIN);
     let preset = config.presets.slot_1.as_ref().expect("slot_1 preset");
     assert_eq!(preset.size, MAX_STROKE_THICKNESS);
+    let tool_settings = preset.tool_settings.as_ref().expect("tool settings");
+    assert_eq!(tool_settings.pen.size, MIN_STROKE_THICKNESS);
+    assert_eq!(tool_settings.line.size, MAX_STROKE_THICKNESS);
+    assert_eq!(tool_settings.rect.size, MIN_STROKE_THICKNESS);
+    assert_eq!(tool_settings.ellipse.size, MAX_STROKE_THICKNESS);
+    assert_eq!(tool_settings.arrow.size, MIN_STROKE_THICKNESS);
+    assert_eq!(tool_settings.blur.size, MAX_STROKE_THICKNESS);
+    assert_eq!(tool_settings.marker.size, MIN_STROKE_THICKNESS);
+    assert_eq!(tool_settings.step_marker.size, MAX_STROKE_THICKNESS);
+    assert_eq!(tool_settings.eraser_size, MIN_STROKE_THICKNESS);
     assert_eq!(preset.marker_opacity, Some(0.9));
     assert_eq!(preset.font_size, Some(8.0));
     assert_eq!(preset.arrow_length, Some(50.0));

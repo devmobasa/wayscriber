@@ -244,7 +244,7 @@ fn highlight_tool_prevents_drawing() {
 fn sync_highlight_color_marks_dirty_when_pen_color_changes() {
     let mut state = create_test_input_state();
     state.needs_redraw = false;
-    state.current_color = Color {
+    state.tool_settings.pen.color = Color {
         r: 0.25,
         g: 0.5,
         b: 0.75,

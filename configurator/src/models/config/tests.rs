@@ -5,8 +5,10 @@ use super::super::fields::{
 };
 use super::super::{ColorMode, NamedColorOption};
 use super::ConfigDraft;
-use wayscriber::config::{ColorSpec, Config, ToolPresetConfig, XdgFocusLossBehavior};
-use wayscriber::input::{DragTool, Tool};
+use wayscriber::config::{
+    ColorSpec, Config, PresetToolStatesConfig, ToolPresetConfig, XdgFocusLossBehavior,
+};
+use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
 #[test]
 fn config_draft_to_config_reports_errors() {
@@ -92,11 +94,17 @@ fn config_draft_round_trips_presets_and_history() {
     config.history.custom_redo_steps = 9;
 
     config.presets.slot_count = 3;
+    let mut tool_settings =
+        PerToolDrawingSettings::new(ColorSpec::Name("black".to_string()).to_color(), 3.0);
+    tool_settings.line.color = ColorSpec::Name("blue".to_string()).to_color();
+    tool_settings.line.thickness = 9.0;
+    let line_color = ColorSpec::from(tool_settings.line.color);
     let preset = ToolPresetConfig {
         name: Some("Primary".to_string()),
-        tool: Tool::Pen,
-        color: ColorSpec::Name("blue".to_string()),
-        size: 5.0,
+        tool: Tool::Line,
+        color: line_color,
+        size: 9.0,
+        tool_settings: Some(PresetToolStatesConfig::from_runtime(&tool_settings, 18.0)),
         eraser_kind: None,
         eraser_mode: None,
         marker_opacity: Some(0.5),
@@ -146,6 +154,117 @@ fn config_draft_round_trips_presets_and_history() {
     );
     assert_eq!(round_trip.presets.slot_count, config.presets.slot_count);
     assert_eq!(round_trip.presets.get_slot(1), config.presets.get_slot(1));
+}
+
+#[test]
+fn preset_tool_change_loads_selected_tool_profile_values() {
+    let mut config = Config::default();
+    config.presets.slot_count = 3;
+    let pen_color = ColorSpec::Rgb([10, 20, 30]);
+    let marker_color = ColorSpec::Rgb([200, 180, 20]);
+    let mut tool_settings = PerToolDrawingSettings::new(pen_color.to_color(), 3.0);
+    tool_settings.marker.color = marker_color.to_color();
+    tool_settings.marker.thickness = 22.0;
+    config.presets.set_slot(
+        1,
+        Some(ToolPresetConfig {
+            name: Some("Profile".to_string()),
+            tool: Tool::Pen,
+            color: pen_color.clone(),
+            size: 3.0,
+            tool_settings: Some(PresetToolStatesConfig::from_runtime(&tool_settings, 18.0)),
+            eraser_kind: None,
+            eraser_mode: None,
+            marker_opacity: None,
+            fill_enabled: None,
+            font_size: None,
+            text_background_enabled: None,
+            arrow_length: None,
+            arrow_angle: None,
+            arrow_head_at_end: None,
+            show_status_bar: None,
+            drag_tools: None,
+        }),
+    );
+
+    let mut draft = ConfigDraft::from_config(&config);
+    draft
+        .presets
+        .slot_mut(1)
+        .expect("slot")
+        .set_tool(ToolOption::Marker);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    let preset = round_trip.presets.get_slot(1).expect("preset");
+    let settings = preset.tool_settings.as_ref().expect("tool settings");
+
+    assert_eq!(preset.tool, Tool::Marker);
+    assert_eq!(preset.color, marker_color);
+    assert_eq!(preset.size, 22.0);
+    assert_eq!(settings.pen.color, pen_color);
+    assert_eq!(settings.pen.size, 3.0);
+    assert_eq!(settings.marker.color, marker_color);
+    assert_eq!(settings.marker.size, 22.0);
+}
+
+#[test]
+fn preset_visible_edits_update_selected_tool_profile_only() {
+    let mut config = Config::default();
+    config.presets.slot_count = 3;
+    let pen_color = ColorSpec::Rgb([10, 20, 30]);
+    let line_color = ColorSpec::Rgb([40, 50, 60]);
+    let marker_color = ColorSpec::Rgb([200, 180, 20]);
+    let updated_marker_color = ColorSpec::Rgb([12, 34, 56]);
+    let mut tool_settings = PerToolDrawingSettings::new(pen_color.to_color(), 3.0);
+    tool_settings.line.color = line_color.to_color();
+    tool_settings.line.thickness = 9.0;
+    tool_settings.marker.color = marker_color.to_color();
+    tool_settings.marker.thickness = 22.0;
+    config.presets.set_slot(
+        1,
+        Some(ToolPresetConfig {
+            name: Some("Profile".to_string()),
+            tool: Tool::Marker,
+            color: marker_color,
+            size: 22.0,
+            tool_settings: Some(PresetToolStatesConfig::from_runtime(&tool_settings, 18.0)),
+            eraser_kind: None,
+            eraser_mode: None,
+            marker_opacity: None,
+            fill_enabled: None,
+            font_size: None,
+            text_background_enabled: None,
+            arrow_length: None,
+            arrow_angle: None,
+            arrow_head_at_end: None,
+            show_status_bar: None,
+            drag_tools: None,
+        }),
+    );
+
+    let mut draft = ConfigDraft::from_config(&config);
+    let slot = draft.presets.slot_mut(1).expect("slot");
+    slot.color = ColorInput::from_color(&updated_marker_color);
+    slot.size = "28".to_string();
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    let preset = round_trip.presets.get_slot(1).expect("preset");
+    let settings = preset.tool_settings.as_ref().expect("tool settings");
+
+    assert_eq!(preset.tool, Tool::Marker);
+    assert_eq!(preset.color, updated_marker_color);
+    assert_eq!(preset.size, 28.0);
+    assert_eq!(settings.pen.color, pen_color);
+    assert_eq!(settings.pen.size, 3.0);
+    assert_eq!(settings.line.color, line_color);
+    assert_eq!(settings.line.size, 9.0);
+    assert_eq!(settings.marker.color, updated_marker_color);
+    assert_eq!(settings.marker.size, 28.0);
+    assert_eq!(settings.eraser_size, 18.0);
 }
 
 #[test]

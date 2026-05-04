@@ -90,11 +90,12 @@ impl InputState {
             if dx.abs() >= TEXT_CLICK_DRAG_THRESHOLD || dy.abs() >= TEXT_CLICK_DRAG_THRESHOLD {
                 let tool = *tool;
                 if tool != Tool::Highlight && tool != Tool::Select {
+                    let drawing_thickness = self.thickness_for_tool(tool);
                     let mut points = vec![(*start_x, *start_y)];
-                    let mut point_thicknesses = vec![self.current_thickness as f32];
+                    let mut point_thicknesses = vec![drawing_thickness as f32];
                     if tool == Tool::Pen || tool == Tool::Marker || tool == Tool::Eraser {
                         points.push((canvas_x, canvas_y));
-                        point_thicknesses.push(self.current_thickness as f32);
+                        point_thicknesses.push(drawing_thickness as f32);
                     }
                     self.state = DrawingState::Drawing {
                         tool,
@@ -170,7 +171,11 @@ impl InputState {
         {
             if *tool == Tool::Pen || *tool == Tool::Marker || *tool == Tool::Eraser {
                 points.push((canvas_x, canvas_y));
-                point_thicknesses.push(self.current_thickness as f32);
+                let thickness = match *tool {
+                    Tool::Eraser => self.eraser_size,
+                    _ => self.tool_settings.get(*tool).thickness,
+                };
+                point_thicknesses.push(thickness as f32);
             }
             drawing = true;
         }

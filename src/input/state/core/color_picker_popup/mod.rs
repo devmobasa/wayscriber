@@ -6,6 +6,7 @@
 mod state;
 
 use crate::draw::Color;
+use crate::input::Tool;
 
 /// Width of the popup panel.
 pub const POPUP_WIDTH: f64 = 300.0;
@@ -38,6 +39,8 @@ pub enum ColorPickerPopupState {
     Hidden,
     /// Popup is open with current editing state.
     Open {
+        /// Tool whose color is being edited.
+        tool: Tool,
         /// Original color when popup was opened (for cancel restoration).
         original_color: Color,
         /// Currently selected color (live updates).

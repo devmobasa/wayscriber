@@ -49,16 +49,15 @@ pub fn apply_pressure_to_state(pressure01: f64, state: &mut InputState, settings
         );
     }
 
-    state.current_thickness = new_thickness;
-    state.needs_redraw = true;
+    state.set_pressure_thickness_for_active_tool(new_thickness);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
+    use crate::draw::{Color, FontDescriptor, Shape};
+    use crate::input::{ClickHighlightSettings, EraserMode, MouseButton, Tool};
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
@@ -142,11 +141,13 @@ mod tests {
 
         apply_pressure_to_state(-1.0, &mut state, settings);
         assert_eq!(state.current_thickness, 2.0);
+        assert_eq!(state.thickness_for_tool(Tool::Pen), 2.0);
         assert!(state.needs_redraw);
 
         state.needs_redraw = false;
         apply_pressure_to_state(2.0, &mut state, settings);
         assert_eq!(state.current_thickness, 6.0);
+        assert_eq!(state.thickness_for_tool(Tool::Pen), 6.0);
         assert!(state.needs_redraw);
     }
 
@@ -163,6 +164,33 @@ mod tests {
         apply_pressure_to_state(1.0, &mut state, settings);
 
         assert_eq!(state.current_thickness, MAX_STROKE_THICKNESS);
+        assert_eq!(state.thickness_for_tool(Tool::Pen), MAX_STROKE_THICKNESS);
         assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn pressure_samples_are_recorded_in_drawn_stroke_widths() {
+        let mut state = make_state();
+        let settings = TabletSettings {
+            enabled: true,
+            pressure_enabled: true,
+            min_thickness: 2.0,
+            max_thickness: 6.0,
+        };
+
+        state.set_tool_override(Some(Tool::Pen));
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        apply_pressure_to_state(0.0, &mut state, settings);
+        state.on_mouse_motion(10, 0);
+        apply_pressure_to_state(1.0, &mut state, settings);
+        state.on_mouse_motion(20, 0);
+        state.on_mouse_release(MouseButton::Left, 20, 0);
+
+        let shape = &state.boards.active_frame().shapes[0].shape;
+        let Shape::FreehandPressure { points, .. } = shape else {
+            panic!("expected pressure-sensitive stroke");
+        };
+        let widths: Vec<f32> = points.iter().map(|(_, _, width)| *width).collect();
+        assert_eq!(widths, vec![4.0, 2.0, 6.0]);
     }
 }

@@ -7,7 +7,7 @@ use super::super::util::format_float;
 use super::parse::{parse_optional_f64, parse_required_f64};
 use wayscriber::config::{
     Config, MouseDragToolsConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig,
-    ToolPresetConfig,
+    PresetToolStatesConfig, ToolPresetConfig,
 };
 use wayscriber::input::Tool;
 
@@ -29,6 +29,7 @@ pub struct PresetSlotDraft {
     pub arrow_head_at_end: OverrideOption,
     pub show_status_bar: OverrideOption,
     pub drag_tools: Option<MouseDragToolsConfig>,
+    pub tool_settings: Option<PresetToolStatesConfig>,
 }
 
 impl PresetSlotDraft {
@@ -38,8 +39,8 @@ impl PresetSlotDraft {
                 enabled: true,
                 name: preset.name.clone().unwrap_or_default(),
                 tool: ToolOption::from_tool(preset.tool),
-                color: ColorInput::from_color(&preset.color),
-                size: format_float(preset.size),
+                color: ColorInput::from_color(&preset.preview_color_spec()),
+                size: format_float(preset.preview_size()),
                 eraser_kind: PresetEraserKindOption::from_option(preset.eraser_kind),
                 eraser_mode: PresetEraserModeOption::from_option(preset.eraser_mode),
                 marker_opacity: preset.marker_opacity.map(format_float).unwrap_or_default(),
@@ -53,6 +54,7 @@ impl PresetSlotDraft {
                 arrow_head_at_end: OverrideOption::from_option(preset.arrow_head_at_end),
                 show_status_bar: OverrideOption::from_option(preset.show_status_bar),
                 drag_tools: preset.drag_tools.clone(),
+                tool_settings: preset.tool_settings.clone(),
             },
             None => {
                 let mut slot = Self::default_from_config(defaults);
@@ -80,6 +82,24 @@ impl PresetSlotDraft {
             arrow_head_at_end: OverrideOption::Default,
             show_status_bar: OverrideOption::Default,
             drag_tools: None,
+            tool_settings: None,
+        }
+    }
+
+    pub(crate) fn set_tool(&mut self, tool: ToolOption) {
+        if let Some(tool_settings) = self.tool_settings.as_mut() {
+            if let Ok(color) = self.color.to_color_spec()
+                && let Ok(size) = self.size.trim().parse::<f64>()
+            {
+                tool_settings.set_preview_tool(self.tool.to_tool(), color, size);
+            }
+
+            self.tool = tool;
+            let selected_tool = self.tool.to_tool();
+            self.color = ColorInput::from_color(&tool_settings.color_spec_for_tool(selected_tool));
+            self.size = format_float(tool_settings.size_for_tool(selected_tool));
+        } else {
+            self.tool = tool;
         }
     }
 
@@ -135,11 +155,18 @@ impl PresetSlotDraft {
         let color = color?;
         let size = size?;
 
+        let tool = self.tool.to_tool();
+        let mut tool_settings = self.tool_settings.clone();
+        if let Some(tool_settings) = tool_settings.as_mut() {
+            tool_settings.set_preview_tool(tool, color.clone(), size);
+        }
+
         Some(ToolPresetConfig {
             name,
-            tool: self.tool.to_tool(),
+            tool,
             color,
             size,
+            tool_settings,
             eraser_kind: self.eraser_kind.to_option(),
             eraser_mode: self.eraser_mode.to_option(),
             marker_opacity,

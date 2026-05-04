@@ -49,7 +49,7 @@ impl ToolbarSnapshot {
         let thickness_value = if thickness_targets_eraser {
             state.eraser_size
         } else {
-            state.current_thickness
+            state.thickness_for_tool(active_tool)
         };
         let presets = state
             .presets
@@ -58,8 +58,8 @@ impl ToolbarSnapshot {
                 preset.as_ref().map(|preset| PresetSlotSnapshot {
                     name: preset.name.clone(),
                     tool: preset.tool,
-                    color: preset.color.to_color(),
-                    size: preset.size,
+                    color: preset.preview_color(),
+                    size: preset.preview_size(),
                     eraser_kind: preset.eraser_kind,
                     eraser_mode: preset.eraser_mode,
                     marker_opacity: preset.marker_opacity,
@@ -106,7 +106,7 @@ impl ToolbarSnapshot {
         Self {
             active_tool,
             tool_override: state.tool_override(),
-            color: state.current_color,
+            color: state.color_for_tool(active_tool),
             thickness: thickness_value,
             eraser_size: state.eraser_size,
             thickness_targets_eraser,

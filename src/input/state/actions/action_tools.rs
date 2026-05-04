@@ -2,41 +2,17 @@ use crate::config::Action;
 use crate::input::tool::Tool;
 use log::info;
 
-use super::super::{InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use super::super::InputState;
 
 impl InputState {
     pub(super) fn handle_tool_action(&mut self, action: Action) -> bool {
         match action {
-            Action::IncreaseThickness => match self.active_tool() {
-                Tool::Eraser => {
-                    self.set_eraser_size(self.eraser_size + 1.0);
-                }
-                Tool::Marker => {
-                    self.set_marker_opacity(self.marker_opacity + 0.05);
-                }
-                _ => {
-                    self.current_thickness =
-                        (self.current_thickness + 1.0).min(MAX_STROKE_THICKNESS);
-                    self.dirty_tracker.mark_full();
-                    self.needs_redraw = true;
-                    self.mark_session_dirty();
-                }
-            },
-            Action::DecreaseThickness => match self.active_tool() {
-                Tool::Eraser => {
-                    self.set_eraser_size(self.eraser_size - 1.0);
-                }
-                Tool::Marker => {
-                    self.set_marker_opacity(self.marker_opacity - 0.05);
-                }
-                _ => {
-                    self.current_thickness =
-                        (self.current_thickness - 1.0).max(MIN_STROKE_THICKNESS);
-                    self.dirty_tracker.mark_full();
-                    self.needs_redraw = true;
-                    self.mark_session_dirty();
-                }
-            },
+            Action::IncreaseThickness => {
+                self.nudge_thickness_for_active_tool(1.0);
+            }
+            Action::DecreaseThickness => {
+                self.nudge_thickness_for_active_tool(-1.0);
+            }
             Action::IncreaseMarkerOpacity => {
                 self.set_marker_opacity(self.marker_opacity + 0.05);
             }
