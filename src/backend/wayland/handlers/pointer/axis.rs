@@ -100,26 +100,18 @@ impl WaylandState {
 
         match scroll_direction.cmp(&0) {
             std::cmp::Ordering::Greater if self.input_state.modifiers.shift => {
-                let prev_font_size = self.input_state.current_font_size;
                 self.input_state.adjust_font_size(-2.0);
                 debug!(
                     "Font size decreased: {:.1}px",
                     self.input_state.current_font_size
                 );
-                if (self.input_state.current_font_size - prev_font_size).abs() > f64::EPSILON {
-                    self.save_drawing_preferences();
-                }
             }
             std::cmp::Ordering::Less if self.input_state.modifiers.shift => {
-                let prev_font_size = self.input_state.current_font_size;
                 self.input_state.adjust_font_size(2.0);
                 debug!(
                     "Font size increased: {:.1}px",
                     self.input_state.current_font_size
                 );
-                if (self.input_state.current_font_size - prev_font_size).abs() > f64::EPSILON {
-                    self.save_drawing_preferences();
-                }
             }
             std::cmp::Ordering::Greater | std::cmp::Ordering::Less => {
                 let delta = if scroll_direction > 0 { -1.0 } else { 1.0 };
@@ -154,7 +146,6 @@ impl WaylandState {
                     "Thickness adjusted: {:.0}px",
                     self.input_state.current_thickness
                 );
-                self.save_drawing_preferences();
             }
         }
 

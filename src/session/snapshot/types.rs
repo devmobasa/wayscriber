@@ -1,4 +1,4 @@
-use crate::draw::{Color, EraserKind, Frame};
+use crate::draw::{Color, EraserKind, FontDescriptor, Frame};
 use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
@@ -59,6 +59,8 @@ pub struct ToolStateSnapshot {
     #[serde(default)]
     pub tool_override: Option<Tool>,
     pub current_font_size: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_descriptor: Option<FontDescriptor>,
     pub text_background_enabled: bool,
     pub arrow_length: f64,
     pub arrow_angle: f64,
@@ -84,6 +86,7 @@ impl ToolStateSnapshot {
             fill_enabled: Some(input.fill_enabled),
             tool_override: input.tool_override(),
             current_font_size: input.current_font_size,
+            font_descriptor: Some(input.font_descriptor.clone()),
             text_background_enabled: input.text_background_enabled,
             arrow_length: input.arrow_length,
             arrow_angle: input.arrow_angle,

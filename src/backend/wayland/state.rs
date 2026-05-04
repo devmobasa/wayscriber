@@ -49,7 +49,7 @@ use crate::{
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },
-    config::{Action, ColorSpec, Config},
+    config::{Action, Config},
     input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},

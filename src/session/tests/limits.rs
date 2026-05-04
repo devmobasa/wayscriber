@@ -1,6 +1,6 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
-use crate::draw::{Color, Shape};
+use crate::draw::{Color, FontDescriptor, Shape};
 use crate::input::EraserMode;
 use std::fs;
 
@@ -34,6 +34,7 @@ fn save_snapshot_skips_when_payload_exceeds_max_file_size() {
             fill_enabled: Some(false),
             tool_override: None,
             current_font_size: 24.0,
+            font_descriptor: Some(FontDescriptor::default()),
             text_background_enabled: false,
             arrow_length: 20.0,
             arrow_angle: 30.0,

@@ -1,5 +1,36 @@
 use super::*;
 
+fn toolbar_event_saves_config(event: &ToolbarEvent) -> bool {
+    matches!(
+        event,
+        ToolbarEvent::PinTopToolbar(_)
+            | ToolbarEvent::PinSideToolbar(_)
+            | ToolbarEvent::ToggleIconMode(_)
+            | ToolbarEvent::ToggleMoreColors(_)
+            | ToolbarEvent::ToggleActionsSection(_)
+            | ToolbarEvent::ToggleActionsAdvanced(_)
+            | ToolbarEvent::ToggleZoomActions(_)
+            | ToolbarEvent::TogglePagesSection(_)
+            | ToolbarEvent::ToggleBoardsSection(_)
+            | ToolbarEvent::TogglePresets(_)
+            | ToolbarEvent::ToggleStepSection(_)
+            | ToolbarEvent::ToggleTextControls(_)
+            | ToolbarEvent::ToggleContextAwareUi(_)
+            | ToolbarEvent::TogglePresetToasts(_)
+            | ToolbarEvent::ToggleToolPreview(_)
+            | ToolbarEvent::ToggleDelaySliders(_)
+            | ToolbarEvent::ToggleCustomSection(_)
+            | ToolbarEvent::SetToolbarLayoutMode(_)
+    )
+}
+
+fn toolbar_event_saves_click_highlight_config(event: &ToolbarEvent) -> bool {
+    matches!(
+        event,
+        ToolbarEvent::ToggleAllHighlight(_) | ToolbarEvent::ToggleHighlightToolRing(_)
+    )
+}
+
 impl WaylandState {
     /// Returns a snapshot of the current input state for toolbar UI consumption.
     pub(in crate::backend::wayland) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
@@ -65,44 +96,8 @@ impl WaylandState {
             ToolbarEvent::SetThickness(_) | ToolbarEvent::NudgeThickness(_)
         );
 
-        // Check if this is a toolbar config event that needs saving
-        let needs_config_save = matches!(
-            event,
-            ToolbarEvent::PinTopToolbar(_)
-                | ToolbarEvent::PinSideToolbar(_)
-                | ToolbarEvent::ToggleIconMode(_)
-                | ToolbarEvent::ToggleMoreColors(_)
-                | ToolbarEvent::ToggleActionsSection(_)
-                | ToolbarEvent::ToggleActionsAdvanced(_)
-                | ToolbarEvent::ToggleZoomActions(_)
-                | ToolbarEvent::TogglePagesSection(_)
-                | ToolbarEvent::ToggleBoardsSection(_)
-                | ToolbarEvent::TogglePresets(_)
-                | ToolbarEvent::ToggleStepSection(_)
-                | ToolbarEvent::ToggleTextControls(_)
-                | ToolbarEvent::ToggleContextAwareUi(_)
-                | ToolbarEvent::TogglePresetToasts(_)
-                | ToolbarEvent::ToggleToolPreview(_)
-                | ToolbarEvent::ToggleDelaySliders(_)
-                | ToolbarEvent::ToggleCustomSection(_)
-                | ToolbarEvent::SetToolbarLayoutMode(_)
-        );
-
-        let persist_drawing = matches!(
-            event,
-            ToolbarEvent::SetColor(_)
-                | ToolbarEvent::SetThickness(_)
-                | ToolbarEvent::SetMarkerOpacity(_)
-                | ToolbarEvent::SetEraserMode(_)
-                | ToolbarEvent::SetFont(_)
-                | ToolbarEvent::SetFontSize(_)
-                | ToolbarEvent::ToggleFill(_)
-                | ToolbarEvent::ApplyPreset(_)
-        );
-        let persist_click_highlight = matches!(
-            event,
-            ToolbarEvent::ToggleAllHighlight(_) | ToolbarEvent::ToggleHighlightToolRing(_)
-        );
+        let needs_config_save = toolbar_event_saves_config(&event);
+        let persist_click_highlight = toolbar_event_saves_click_highlight_config(&event);
 
         if self.input_state.apply_toolbar_event(event) {
             self.toolbar.mark_dirty();
@@ -121,10 +116,6 @@ impl WaylandState {
             // Save config when pin state changes
             if needs_config_save {
                 self.save_toolbar_pin_config();
-            }
-
-            if persist_drawing {
-                self.save_drawing_preferences();
             }
 
             if persist_click_highlight {
@@ -188,6 +179,7 @@ impl WaylandState {
         self.config.ui.toolbar.show_marker_opacity_section =
             self.input_state.show_marker_opacity_section;
         self.config.ui.toolbar.show_preset_toasts = self.input_state.show_preset_toasts;
+        self.config.ui.toolbar.show_tool_preview = self.input_state.show_tool_preview;
         self.config.ui.toolbar.top_offset = self.data.toolbar_top_offset;
         self.config.ui.toolbar.top_offset_y = self.data.toolbar_top_offset_y;
         self.config.ui.toolbar.side_offset = self.data.toolbar_side_offset;
@@ -199,24 +191,6 @@ impl WaylandState {
             log::warn!("Failed to save toolbar config: {}", err);
         } else {
             log::debug!("Saved toolbar config");
-        }
-    }
-
-    pub(in crate::backend::wayland) fn save_drawing_preferences(&mut self) {
-        self.config.drawing.default_color =
-            ColorSpec::from(self.input_state.color_for_tool(crate::input::Tool::Pen));
-        self.config.drawing.default_thickness =
-            self.input_state.thickness_for_tool(crate::input::Tool::Pen);
-        self.config.drawing.default_eraser_mode = self.input_state.eraser_mode;
-        self.config.drawing.default_fill_enabled = self.input_state.fill_enabled;
-        self.config.drawing.default_font_size = self.input_state.current_font_size;
-        self.config.drawing.font_family = self.input_state.font_descriptor.family.clone();
-        self.config.drawing.font_weight = self.input_state.font_descriptor.weight.clone();
-        self.config.drawing.font_style = self.input_state.font_descriptor.style.clone();
-        self.config.drawing.marker_opacity = self.input_state.marker_opacity;
-
-        if let Err(err) = self.config.save() {
-            log::warn!("Failed to persist drawing preferences: {}", err);
         }
     }
 
@@ -253,6 +227,105 @@ impl WaylandState {
                     log::warn!("Failed to clear preset slot {}: {}", slot, err);
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ToolbarLayoutMode;
+    use crate::draw::{Color, FontDescriptor};
+    use crate::input::{EraserMode, Tool};
+
+    #[test]
+    fn runtime_toolbar_events_do_not_save_static_config() {
+        let events = vec![
+            ToolbarEvent::SelectTool(Tool::Line),
+            ToolbarEvent::SetColor(Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            }),
+            ToolbarEvent::SetThickness(8.0),
+            ToolbarEvent::NudgeThickness(1.0),
+            ToolbarEvent::SetMarkerOpacity(0.5),
+            ToolbarEvent::NudgeMarkerOpacity(0.1),
+            ToolbarEvent::SetEraserMode(EraserMode::Stroke),
+            ToolbarEvent::SetFont(FontDescriptor::new(
+                "Monospace".to_string(),
+                "normal".to_string(),
+                "italic".to_string(),
+            )),
+            ToolbarEvent::SetFontSize(44.0),
+            ToolbarEvent::ToggleFill(true),
+            ToolbarEvent::ApplyPreset(1),
+        ];
+
+        for event in events {
+            assert!(
+                !toolbar_event_saves_config(&event),
+                "{event:?} should not save toolbar config"
+            );
+            assert!(
+                !toolbar_event_saves_click_highlight_config(&event),
+                "{event:?} should not save click-highlight config"
+            );
+        }
+    }
+
+    #[test]
+    fn toolbar_preference_events_save_static_config() {
+        let events = vec![
+            ToolbarEvent::PinTopToolbar(true),
+            ToolbarEvent::PinSideToolbar(true),
+            ToolbarEvent::ToggleIconMode(true),
+            ToolbarEvent::ToggleMoreColors(true),
+            ToolbarEvent::ToggleActionsSection(true),
+            ToolbarEvent::ToggleActionsAdvanced(true),
+            ToolbarEvent::ToggleZoomActions(true),
+            ToolbarEvent::TogglePagesSection(true),
+            ToolbarEvent::ToggleBoardsSection(true),
+            ToolbarEvent::TogglePresets(true),
+            ToolbarEvent::ToggleStepSection(true),
+            ToolbarEvent::ToggleTextControls(true),
+            ToolbarEvent::ToggleContextAwareUi(true),
+            ToolbarEvent::TogglePresetToasts(true),
+            ToolbarEvent::ToggleToolPreview(true),
+            ToolbarEvent::ToggleDelaySliders(true),
+            ToolbarEvent::ToggleCustomSection(true),
+            ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
+        ];
+
+        for event in events {
+            assert!(
+                toolbar_event_saves_config(&event),
+                "{event:?} should save toolbar config"
+            );
+            assert!(
+                !toolbar_event_saves_click_highlight_config(&event),
+                "{event:?} should not save click-highlight config"
+            );
+        }
+    }
+
+    #[test]
+    fn click_highlight_toolbar_events_are_explicit_config_exceptions() {
+        let events = vec![
+            ToolbarEvent::ToggleAllHighlight(true),
+            ToolbarEvent::ToggleHighlightToolRing(true),
+        ];
+
+        for event in events {
+            assert!(
+                !toolbar_event_saves_config(&event),
+                "{event:?} should not save toolbar config"
+            );
+            assert!(
+                toolbar_event_saves_click_highlight_config(&event),
+                "{event:?} should save click-highlight config"
+            );
         }
     }
 }

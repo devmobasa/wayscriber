@@ -290,15 +290,6 @@ impl WaylandState {
     fn apply_input_key(&mut self, key: Key) {
         #[cfg(tablet)]
         let prev_thickness = self.input_state.current_thickness;
-        let prefs_before = (
-            self.input_state.current_color,
-            self.input_state.current_thickness,
-            self.input_state.eraser_mode,
-            self.input_state.marker_opacity,
-            self.input_state.current_font_size,
-            self.input_state.font_descriptor.clone(),
-            self.input_state.fill_enabled,
-        );
         let highlight_before = (
             self.input_state.click_highlight_enabled(),
             self.input_state.highlight_tool_ring_enabled(),
@@ -306,16 +297,6 @@ impl WaylandState {
         );
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
-        let prefs_changed = prefs_before.0 != self.input_state.current_color
-            || (prefs_before.1 - self.input_state.current_thickness).abs() > f64::EPSILON
-            || prefs_before.2 != self.input_state.eraser_mode
-            || (prefs_before.3 - self.input_state.marker_opacity).abs() > f64::EPSILON
-            || (prefs_before.4 - self.input_state.current_font_size).abs() > f64::EPSILON
-            || prefs_before.5 != self.input_state.font_descriptor
-            || prefs_before.6 != self.input_state.fill_enabled;
-        if prefs_changed {
-            self.save_drawing_preferences();
-        }
         let highlight_after = (
             self.input_state.click_highlight_enabled(),
             self.input_state.highlight_tool_ring_enabled(),

@@ -769,6 +769,29 @@ fn set_font_size_clamps_and_reports_noop_after_reaching_target() {
 }
 
 #[test]
+fn set_font_descriptor_marks_session_dirty_and_reports_noop_when_unchanged() {
+    let mut state = create_test_input_state();
+    let font = FontDescriptor::new(
+        "Monospace".to_string(),
+        "normal".to_string(),
+        "italic".to_string(),
+    );
+    state.needs_redraw = false;
+    state.session_dirty = false;
+
+    assert!(state.set_font_descriptor(font.clone()));
+    assert_eq!(state.font_descriptor, font);
+    assert!(state.needs_redraw);
+    assert!(state.session_dirty);
+
+    state.needs_redraw = false;
+    state.session_dirty = false;
+    assert!(!state.set_font_descriptor(font));
+    assert!(!state.needs_redraw);
+    assert!(!state.session_dirty);
+}
+
+#[test]
 fn set_marker_opacity_clamps_and_reports_noop_after_reaching_target() {
     let mut state = create_test_input_state();
     state.needs_redraw = false;

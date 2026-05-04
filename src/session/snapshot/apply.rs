@@ -80,6 +80,9 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
                 let _ = input.set_fill_enabled(fill_enabled);
             }
             let _ = input.set_tool_override(tool_state.tool_override);
+            if let Some(font_descriptor) = tool_state.font_descriptor {
+                let _ = input.set_font_descriptor(font_descriptor);
+            }
             let _ = input.set_font_size(tool_state.current_font_size.clamp(8.0, 72.0));
             input.text_background_enabled = tool_state.text_background_enabled;
             input.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
