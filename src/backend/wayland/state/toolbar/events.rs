@@ -31,6 +31,10 @@ fn toolbar_event_saves_click_highlight_config(event: &ToolbarEvent) -> bool {
     )
 }
 
+fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) -> bool {
+    presenter_restore.unwrap_or(current)
+}
+
 impl WaylandState {
     /// Returns a snapshot of the current input state for toolbar UI consumption.
     pub(in crate::backend::wayland) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
@@ -179,7 +183,13 @@ impl WaylandState {
         self.config.ui.toolbar.show_marker_opacity_section =
             self.input_state.show_marker_opacity_section;
         self.config.ui.toolbar.show_preset_toasts = self.input_state.show_preset_toasts;
-        self.config.ui.toolbar.show_tool_preview = self.input_state.show_tool_preview;
+        self.config.ui.toolbar.show_tool_preview = persisted_tool_preview_value(
+            self.input_state.show_tool_preview,
+            self.input_state
+                .presenter_restore
+                .as_ref()
+                .and_then(|restore| restore.show_tool_preview),
+        );
         self.config.ui.toolbar.top_offset = self.data.toolbar_top_offset;
         self.config.ui.toolbar.top_offset_y = self.data.toolbar_top_offset_y;
         self.config.ui.toolbar.side_offset = self.data.toolbar_side_offset;
@@ -327,5 +337,13 @@ mod tests {
                 "{event:?} should save click-highlight config"
             );
         }
+    }
+
+    #[test]
+    fn tool_preview_config_preserves_presenter_mode_restore_value() {
+        assert!(persisted_tool_preview_value(false, Some(true)));
+        assert!(!persisted_tool_preview_value(false, Some(false)));
+        assert!(persisted_tool_preview_value(true, None));
+        assert!(!persisted_tool_preview_value(false, None));
     }
 }
