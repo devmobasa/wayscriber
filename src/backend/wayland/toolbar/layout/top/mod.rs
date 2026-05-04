@@ -10,11 +10,18 @@ use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 mod icons;
 mod text;
 
-const TOOL_BUTTONS_SIMPLE: &[Tool] = &[Tool::Select, Tool::Pen, Tool::Marker, Tool::Eraser];
+const TOOL_BUTTONS_SIMPLE: &[Tool] = &[
+    Tool::Select,
+    Tool::Pen,
+    Tool::Marker,
+    Tool::StepMarker,
+    Tool::Eraser,
+];
 const TOOL_BUTTONS_FULL: &[Tool] = &[
     Tool::Select,
     Tool::Pen,
     Tool::Marker,
+    Tool::StepMarker,
     Tool::Eraser,
     Tool::Line,
     Tool::Rect,

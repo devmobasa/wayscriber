@@ -12,10 +12,16 @@ use crate::app::state::ConfiguratorApp;
 impl ConfiguratorApp {
     pub(super) fn preset_slot_tool_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         let tool_picker = pick_list(ToolOption::list(), Some(slot.tool), move |opt| {
@@ -45,10 +51,16 @@ impl ConfiguratorApp {
 
     pub(super) fn preset_slot_size_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         row![
@@ -75,10 +87,16 @@ impl ConfiguratorApp {
 
     pub(super) fn preset_slot_eraser_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         row![
@@ -113,10 +131,16 @@ impl ConfiguratorApp {
 
     pub(super) fn preset_slot_fill_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         row![
@@ -141,10 +165,16 @@ impl ConfiguratorApp {
 
     pub(super) fn preset_slot_font_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         row![
@@ -171,10 +201,16 @@ impl ConfiguratorApp {
 
     pub(super) fn preset_slot_arrow_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         row![
@@ -200,10 +236,16 @@ impl ConfiguratorApp {
 
     pub(super) fn preset_slot_status_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         row![preset_override_control(

@@ -1,5 +1,5 @@
+use crate::app::view::theme;
 use iced::alignment::Horizontal;
-use iced::theme;
 use iced::widget::{Column, Row, button, column, container, row, scrollable, text, text_input};
 use iced::{Element, Length};
 
@@ -12,7 +12,7 @@ use super::widgets::{LABEL_COLUMN_WIDTH, default_value_text};
 impl ConfiguratorApp {
     pub(super) fn keybindings_tab(&self) -> Element<'_, Message> {
         let tab_bar = KeybindingsTabId::ALL.iter().fold(
-            Row::new().spacing(8).align_items(iced::Alignment::Center),
+            Row::new().spacing(8).align_y(iced::Alignment::Center),
             |row, tab| {
                 let label = tab.title();
                 let button = button(label)
@@ -58,13 +58,13 @@ impl ConfiguratorApp {
                             })
                             .width(Length::Fill),
                         row![default_value_text(default_value.to_string(), changed)]
-                            .align_items(iced::Alignment::Center)
+                            .align_y(iced::Alignment::Center)
                     ]
                     .spacing(4)
                     .width(Length::Fill)
                 ]
                 .spacing(12)
-                .align_items(iced::Alignment::Center),
+                .align_y(iced::Alignment::Center),
             );
         }
 

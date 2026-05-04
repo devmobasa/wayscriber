@@ -1,4 +1,4 @@
-use iced::Command;
+use iced::Task;
 
 use crate::messages::Message;
 use crate::models::{
@@ -8,7 +8,7 @@ use crate::models::{
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
-    pub(super) fn handle_boards_add_item(&mut self) -> Command<Message> {
+    pub(super) fn handle_boards_add_item(&mut self) -> Task<Message> {
         self.status = StatusMessage::idle();
         let new_item = self.draft.boards.new_item();
         self.draft.boards.items.push(new_item);
@@ -16,10 +16,10 @@ impl ConfiguratorApp {
         self.clear_board_color_pickers();
         self.draft.boards.ensure_default_exists();
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_boards_remove_item(&mut self, index: usize) -> Command<Message> {
+    pub(super) fn handle_boards_remove_item(&mut self, index: usize) -> Task<Message> {
         self.status = StatusMessage::idle();
         if index < self.draft.boards.items.len() {
             self.draft.boards.items.remove(index);
@@ -30,23 +30,23 @@ impl ConfiguratorApp {
             self.draft.boards.ensure_default_exists();
             self.refresh_dirty_flag();
         }
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_boards_move_item(&mut self, index: usize, up: bool) -> Command<Message> {
+    pub(super) fn handle_boards_move_item(&mut self, index: usize, up: bool) -> Task<Message> {
         self.status = StatusMessage::idle();
         let len = self.draft.boards.items.len();
         if len <= 1 {
-            return Command::none();
+            return Task::none();
         }
         let target = if up {
             if index == 0 {
-                return Command::none();
+                return Task::none();
             }
             index - 1
         } else {
             if index + 1 >= len {
-                return Command::none();
+                return Task::none();
             }
             index + 1
         };
@@ -56,10 +56,10 @@ impl ConfiguratorApp {
         }
         self.clear_board_color_pickers();
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_boards_duplicate_item(&mut self, index: usize) -> Command<Message> {
+    pub(super) fn handle_boards_duplicate_item(&mut self, index: usize) -> Task<Message> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get(index).cloned() {
             let mut duplicate = item;
@@ -74,21 +74,21 @@ impl ConfiguratorApp {
             self.draft.boards.ensure_default_exists();
             self.refresh_dirty_flag();
         }
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_boards_collapse_toggled(&mut self, index: usize) -> Command<Message> {
+    pub(super) fn handle_boards_collapse_toggled(&mut self, index: usize) -> Task<Message> {
         if let Some(value) = self.boards_collapsed.get_mut(index) {
             *value = !*value;
         }
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_boards_default_changed(&mut self, value: String) -> Command<Message> {
+    pub(super) fn handle_boards_default_changed(&mut self, value: String) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.boards.default_board = value;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_boards_item_text_changed(
@@ -96,7 +96,7 @@ impl ConfiguratorApp {
         index: usize,
         field: BoardItemTextField,
         value: String,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         let old_effective_id = self.draft.boards.effective_id_for_index(index);
         if let Some(item) = self.draft.boards.items.get_mut(index) {
@@ -122,20 +122,20 @@ impl ConfiguratorApp {
         }
         self.draft.boards.ensure_default_exists();
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_boards_background_kind_changed(
         &mut self,
         index: usize,
         value: BoardBackgroundOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.background_kind = value;
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_boards_background_color_changed(
@@ -143,27 +143,27 @@ impl ConfiguratorApp {
         index: usize,
         component: usize,
         value: String,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.background_color.set_component(component, value);
         }
         self.sync_color_picker_hex_for_id(ColorPickerId::BoardBackground(index));
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_boards_default_pen_enabled_changed(
         &mut self,
         index: usize,
         value: bool,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.default_pen_color.enabled = value;
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_boards_default_pen_color_changed(
@@ -171,14 +171,14 @@ impl ConfiguratorApp {
         index: usize,
         component: usize,
         value: String,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.default_pen_color.color.set_component(component, value);
         }
         self.sync_color_picker_hex_for_id(ColorPickerId::BoardPen(index));
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_boards_item_toggle_changed(
@@ -186,7 +186,7 @@ impl ConfiguratorApp {
         index: usize,
         field: BoardItemToggleField,
         value: bool,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             match field {
@@ -196,7 +196,7 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     fn clear_board_color_pickers(&mut self) {

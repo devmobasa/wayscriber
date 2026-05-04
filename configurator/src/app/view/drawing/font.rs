@@ -17,7 +17,7 @@ pub(super) fn font_controls(app: &ConfiguratorApp) -> Element<'_, Message> {
             )
         ]
         .spacing(DEFAULT_LABEL_GAP)
-        .align_items(Alignment::Center),
+        .align_y(Alignment::Center),
         pick_list(
             FontWeightOption::list(),
             Some(app.draft.drawing_font_weight_option),
@@ -42,7 +42,7 @@ pub(super) fn font_controls(app: &ConfiguratorApp) -> Element<'_, Message> {
             )
         ]
         .spacing(DEFAULT_LABEL_GAP)
-        .align_items(Alignment::Center),
+        .align_y(Alignment::Center),
         pick_list(
             FontStyleOption::list(),
             Some(app.draft.drawing_font_style_option),

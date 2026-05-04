@@ -143,7 +143,7 @@ impl ConfiguratorApp {
             text("Mode overrides").size(16),
             row![text("Edit mode:"), override_mode_pick]
                 .spacing(12)
-                .align_items(iced::Alignment::Center),
+                .align_y(iced::Alignment::Center),
             text("Default keeps the mode preset.").size(12),
             override_row(ToolbarOverrideField::ShowPresets, overrides.show_presets),
             override_row(

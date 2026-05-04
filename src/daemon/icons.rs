@@ -6,9 +6,9 @@ use png::Decoder;
 #[cfg(feature = "tray")]
 pub(crate) fn decode_tray_icon_png() -> Option<Vec<ksni::Icon>> {
     const ICON_BYTES: &[u8] = include_bytes!("../../assets/tray_icon.png");
-    let decoder = Decoder::new(ICON_BYTES);
+    let decoder = Decoder::new(std::io::Cursor::new(ICON_BYTES));
     let mut reader = decoder.read_info().ok()?;
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
     let bytes = &buf[..info.buffer_size()];
     let mut data = Vec::with_capacity(bytes.len());

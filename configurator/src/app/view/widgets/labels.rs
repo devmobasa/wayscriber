@@ -1,4 +1,4 @@
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::text;
 
 pub(in crate::app::view) fn default_label_color(changed: bool) -> iced::Color {

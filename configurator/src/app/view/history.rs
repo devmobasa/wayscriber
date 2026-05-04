@@ -1,5 +1,5 @@
+use crate::app::view::theme;
 use iced::Element;
-use iced::theme;
 use iced::widget::{column, container, row, scrollable, text};
 
 use crate::messages::Message;

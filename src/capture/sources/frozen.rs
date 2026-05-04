@@ -8,7 +8,10 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
         .read_info()
         .map_err(|e| CaptureError::ImageError(format!("Decode error: {}", e)))?;
 
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let output_size = reader
+        .output_buffer_size()
+        .ok_or_else(|| CaptureError::ImageError("PNG output buffer too large".to_string()))?;
+    let mut buf = vec![0; output_size];
     let info = reader
         .next_frame(&mut buf)
         .map_err(|e| CaptureError::ImageError(format!("Decode error: {}", e)))?;

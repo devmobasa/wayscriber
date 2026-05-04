@@ -1,4 +1,4 @@
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::{button, checkbox, column, container, pick_list, row, text, text_input};
 use iced::{Element, Length};
 
@@ -43,7 +43,7 @@ impl ConfiguratorApp {
             .spacing(6),
         ]
         .spacing(12)
-        .align_items(iced::Alignment::Center);
+        .align_y(iced::Alignment::Center);
 
         if is_collapsed {
             return container(column![header].spacing(8))
@@ -92,11 +92,12 @@ impl ConfiguratorApp {
         };
 
         let pen_override = row![
-            checkbox("Override default pen color", item.default_pen_color.enabled,)
+            checkbox(item.default_pen_color.enabled)
+                .label("Override default pen color")
                 .on_toggle(move |value| Message::BoardsDefaultPenEnabledChanged(index, value)),
         ]
         .spacing(8)
-        .align_items(iced::Alignment::Center);
+        .align_y(iced::Alignment::Center);
 
         let pen_color_row = if item.default_pen_color.enabled {
             let picker_id = ColorPickerId::BoardPen(index);
@@ -125,18 +126,28 @@ impl ConfiguratorApp {
         };
 
         let flags_row = row![
-            checkbox("Auto-adjust pen", item.auto_adjust_pen).on_toggle(move |value| {
-                Message::BoardsItemToggleChanged(index, BoardItemToggleField::AutoAdjustPen, value)
-            }),
-            checkbox("Persist", item.persist).on_toggle(move |value| {
-                Message::BoardsItemToggleChanged(index, BoardItemToggleField::Persist, value)
-            }),
-            checkbox("Pinned", item.pinned).on_toggle(move |value| {
-                Message::BoardsItemToggleChanged(index, BoardItemToggleField::Pinned, value)
-            }),
+            checkbox(item.auto_adjust_pen)
+                .label("Auto-adjust pen")
+                .on_toggle(move |value| {
+                    Message::BoardsItemToggleChanged(
+                        index,
+                        BoardItemToggleField::AutoAdjustPen,
+                        value,
+                    )
+                }),
+            checkbox(item.persist)
+                .label("Persist")
+                .on_toggle(move |value| {
+                    Message::BoardsItemToggleChanged(index, BoardItemToggleField::Persist, value)
+                }),
+            checkbox(item.pinned)
+                .label("Pinned")
+                .on_toggle(move |value| {
+                    Message::BoardsItemToggleChanged(index, BoardItemToggleField::Pinned, value)
+                }),
         ]
         .spacing(12)
-        .align_items(iced::Alignment::Center);
+        .align_y(iced::Alignment::Center);
 
         let section = column![
             header,

@@ -1,4 +1,4 @@
-use iced::Command;
+use iced::Task;
 
 use crate::messages::Message;
 use crate::models::{KeybindingsTabId, TabId, UiTabId};
@@ -6,21 +6,21 @@ use crate::models::{KeybindingsTabId, TabId, UiTabId};
 use super::super::state::ConfiguratorApp;
 
 impl ConfiguratorApp {
-    pub(super) fn handle_tab_selected(&mut self, tab: TabId) -> Command<Message> {
+    pub(super) fn handle_tab_selected(&mut self, tab: TabId) -> Task<Message> {
         self.active_tab = tab;
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_ui_tab_selected(&mut self, tab: UiTabId) -> Command<Message> {
+    pub(super) fn handle_ui_tab_selected(&mut self, tab: UiTabId) -> Task<Message> {
         self.active_ui_tab = tab;
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_keybindings_tab_selected(
         &mut self,
         tab: KeybindingsTabId,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.active_keybindings_tab = tab;
-        Command::none()
+        Task::none()
     }
 }

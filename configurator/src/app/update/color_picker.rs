@@ -1,4 +1,4 @@
-use iced::Command;
+use iced::Task;
 
 use crate::messages::Message;
 use crate::models::color::{
@@ -10,35 +10,35 @@ use crate::models::{ColorPickerId, ColorPickerValue, QuadField};
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
-    pub(super) fn handle_color_picker_toggled(&mut self, id: ColorPickerId) -> Command<Message> {
+    pub(super) fn handle_color_picker_toggled(&mut self, id: ColorPickerId) -> Task<Message> {
         if self.color_picker_open == Some(id) {
             self.color_picker_open = None;
-            return Command::none();
+            return Task::none();
         }
 
         self.color_picker_open = Some(id);
         self.sync_color_picker_hex_for_id(id);
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_color_picker_advanced_toggled(
         &mut self,
         id: ColorPickerId,
         value: bool,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         if value {
             self.color_picker_advanced.insert(id);
         } else {
             self.color_picker_advanced.remove(&id);
         }
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_color_picker_hex_changed(
         &mut self,
         id: ColorPickerId,
         value: String,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.color_picker_hex.insert(id, value.clone());
 
@@ -52,18 +52,18 @@ impl ConfiguratorApp {
         }
 
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_color_picker_changed(
         &mut self,
         id: ColorPickerId,
         value: ColorPickerValue,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.apply_color_picker_value(id, value.rgb, value.alpha);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn sync_color_picker_hex_for_id(&mut self, id: ColorPickerId) {

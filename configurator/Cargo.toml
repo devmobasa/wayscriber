@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 # Keep configurator-side runtime/status logic aligned with the daemon's portal-capable builds.
 wayscriber = { path = "..", default-features = false, features = ["portal"] }
-iced = { version = "0.12", features = ["tokio", "canvas"] }
+iced = { version = "0.14", features = ["tokio", "canvas"] }
 
 [features]
 default = ["tablet-input"]
