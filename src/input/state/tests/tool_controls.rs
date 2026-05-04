@@ -657,6 +657,78 @@ fn legacy_preset_changes_only_selected_tool_settings() {
 }
 
 #[test]
+fn legacy_step_marker_preset_uses_font_derived_size() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+    state.set_tool_override(Some(Tool::StepMarker));
+    assert!(state.set_thickness(30.0));
+    state.set_tool_override(Some(Tool::Pen));
+
+    state.presets[0] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::StepMarker,
+        color: ColorSpec::Name("blue".to_string()),
+        size: 3.0,
+        tool_settings: None,
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: Some(48.0),
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+        drag_tools: None,
+    });
+
+    assert!(state.apply_preset(1));
+
+    assert_eq!(state.active_tool(), Tool::StepMarker);
+    assert_eq!(state.current_font_size, 48.0);
+    assert!((state.thickness_for_tool(Tool::StepMarker) - 28.8).abs() < 1e-9);
+    assert!((state.next_step_marker_label().size - 28.8).abs() < 1e-9);
+}
+
+#[test]
+fn full_step_marker_preset_uses_captured_profile_size() {
+    let mut state = create_test_input_state();
+    state.preset_slot_count = 3;
+    let color = ColorSpec::Rgb([20, 40, 60]);
+    let mut settings = PerToolDrawingSettings::new(ColorSpec::Rgb([255, 0, 0]).to_color(), 4.0);
+    settings.step_marker.color = color.to_color();
+    settings.step_marker.thickness = 30.0;
+
+    state.presets[0] = Some(ToolPresetConfig {
+        name: None,
+        tool: Tool::StepMarker,
+        color: ColorSpec::Name("blue".to_string()),
+        size: 3.0,
+        tool_settings: Some(PresetToolStatesConfig::from_runtime(&settings, 18.0)),
+        eraser_kind: None,
+        eraser_mode: None,
+        marker_opacity: None,
+        fill_enabled: None,
+        font_size: Some(48.0),
+        text_background_enabled: None,
+        arrow_length: None,
+        arrow_angle: None,
+        arrow_head_at_end: None,
+        show_status_bar: None,
+        drag_tools: None,
+    });
+
+    assert!(state.apply_preset(1));
+
+    assert_eq!(state.active_tool(), Tool::StepMarker);
+    assert_eq!(state.current_font_size, 48.0);
+    assert_eq!(state.color_for_tool(Tool::StepMarker), color.to_color());
+    assert_eq!(state.thickness_for_tool(Tool::StepMarker), 30.0);
+    assert_eq!(state.next_step_marker_label().size, 30.0);
+}
+
+#[test]
 fn nudge_thickness_for_active_tool_clamps_eraser_size() {
     let mut state = create_test_input_state();
     state.set_tool_override(Some(Tool::Eraser));

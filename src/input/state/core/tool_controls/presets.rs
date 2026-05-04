@@ -2,6 +2,7 @@ use super::super::base::{
     DrawingState, InputState, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
     PresetFeedbackKind, PresetFeedbackState,
 };
+use super::super::default_step_marker_size;
 use crate::config::{
     PRESET_SLOTS_MAX, PresetSlotsConfig, PresetToolStatesConfig, ToolPresetConfig,
 };
@@ -34,6 +35,9 @@ impl InputState {
             self.cancel_text_input();
         }
 
+        let legacy_step_marker_preset =
+            preset.tool_settings.is_none() && preset.tool == Tool::StepMarker;
+
         if let Some(tool_settings) = preset.tool_settings.as_ref() {
             self.apply_full_preset_tool_settings(tool_settings);
             self.activate_preset_tool(preset.tool);
@@ -43,7 +47,7 @@ impl InputState {
             let _ = self.set_color(preset.color.to_color());
             if preset.tool == Tool::Eraser {
                 let _ = self.set_eraser_size(preset.size);
-            } else {
+            } else if !legacy_step_marker_preset {
                 let _ = self.set_thickness(preset.size);
             }
         }
@@ -67,6 +71,9 @@ impl InputState {
         }
         if let Some(font_size) = preset.font_size {
             let _ = self.set_font_size(font_size);
+        }
+        if legacy_step_marker_preset {
+            let _ = self.set_thickness(default_step_marker_size(self.current_font_size));
         }
         if let Some(text_background_enabled) = preset.text_background_enabled
             && self.text_background_enabled != text_background_enabled
