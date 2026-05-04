@@ -1,6 +1,6 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
-use crate::draw::{Color, Frame, Shape};
+use crate::draw::{Color, FontDescriptor, Frame, Shape};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
 use std::path::PathBuf;
@@ -68,6 +68,12 @@ fn apply_snapshot_restores_tool_state() {
     let _ = input.set_eraser_mode(EraserMode::Stroke);
     let _ = input.set_marker_opacity(0.55);
     let _ = input.set_fill_enabled(true);
+    let desired_font = FontDescriptor::new(
+        "Monospace".to_string(),
+        "normal".to_string(),
+        "italic".to_string(),
+    );
+    let _ = input.set_font_descriptor(desired_font.clone());
     let _ = input.set_font_size(48.0);
     input.text_background_enabled = true;
     input.arrow_length = 40.0;
@@ -83,6 +89,13 @@ fn apply_snapshot_restores_tool_state() {
     input.show_status_bar = false;
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+    assert_eq!(
+        snapshot
+            .tool_state
+            .as_ref()
+            .and_then(|state| state.font_descriptor.as_ref()),
+        Some(&desired_font)
+    );
 
     let mut restored = dummy_input_state();
     apply_snapshot(&mut restored, snapshot, &options);
@@ -93,6 +106,7 @@ fn apply_snapshot_restores_tool_state() {
     assert_eq!(restored.eraser_mode, EraserMode::Stroke);
     assert_eq!(restored.marker_opacity, 0.55);
     assert!(restored.fill_enabled);
+    assert_eq!(restored.font_descriptor, desired_font);
     assert_eq!(restored.current_font_size, 48.0);
     assert_eq!(restored.tool_override(), Some(Tool::Rect));
     assert!(restored.text_background_enabled);
@@ -110,6 +124,55 @@ fn apply_snapshot_restores_tool_state() {
         })
     );
     assert!(!restored.show_status_bar);
+}
+
+#[test]
+fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-legacy-font");
+    options.restore_tool_state = true;
+
+    let config_font = FontDescriptor::new(
+        "JetBrains Mono".to_string(),
+        "medium".to_string(),
+        "normal".to_string(),
+    );
+    let snapshot = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: vec![],
+        tool_state: Some(ToolStateSnapshot {
+            current_color: Color {
+                r: 0.0,
+                g: 1.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            current_thickness: 4.0,
+            eraser_size: 12.0,
+            eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_mode: EraserMode::Brush,
+            marker_opacity: Some(0.32),
+            fill_enabled: Some(false),
+            tool_override: None,
+            current_font_size: 40.0,
+            font_descriptor: None,
+            text_background_enabled: false,
+            arrow_length: 20.0,
+            arrow_angle: 30.0,
+            arrow_head_at_end: Some(false),
+            arrow_label_enabled: Some(false),
+            board_previous_color: None,
+            show_status_bar: true,
+            tool_settings: None,
+        }),
+    };
+
+    let mut restored = dummy_input_state();
+    let _ = restored.set_font_descriptor(config_font.clone());
+
+    apply_snapshot(&mut restored, snapshot, &options);
+
+    assert_eq!(restored.font_descriptor, config_font);
+    assert_eq!(restored.current_font_size, 40.0);
 }
 
 #[test]
@@ -140,6 +203,7 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             fill_enabled: Some(false),
             tool_override: Some(Tool::Pen),
             current_font_size: 32.0,
+            font_descriptor: Some(FontDescriptor::default()),
             text_background_enabled: false,
             arrow_length: 20.0,
             arrow_angle: 30.0,
@@ -185,6 +249,7 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             fill_enabled: Some(false),
             tool_override: Some(Tool::StepMarker),
             current_font_size: 48.0,
+            font_descriptor: None,
             text_background_enabled: false,
             arrow_length: 20.0,
             arrow_angle: 30.0,

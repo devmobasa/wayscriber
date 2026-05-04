@@ -1,5 +1,5 @@
 use super::{clear_session, inspect_session};
-use crate::draw::{Color, Frame, Shape};
+use crate::draw::{Color, FontDescriptor, Frame, Shape};
 use crate::session::snapshot::{BoardPagesSnapshot, BoardSnapshot};
 use crate::session::{
     CompressionMode, SessionOptions, SessionSnapshot, ToolStateSnapshot, save_snapshot,
@@ -103,6 +103,7 @@ fn inspect_session_reports_counts_and_flags() {
             fill_enabled: Some(false),
             tool_override: None,
             current_font_size: 24.0,
+            font_descriptor: Some(FontDescriptor::default()),
             text_background_enabled: false,
             arrow_length: 20.0,
             arrow_angle: 30.0,

@@ -106,7 +106,6 @@ impl WaylandState {
             let hex = color_to_hex(color);
             self.input_state
                 .set_ui_toast(UiToastKind::Info, format!("Pasted {}", hex));
-            self.save_drawing_preferences();
         } else {
             self.input_state.set_ui_toast(
                 UiToastKind::Warning,
