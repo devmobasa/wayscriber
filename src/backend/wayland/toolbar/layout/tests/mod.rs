@@ -59,11 +59,11 @@ fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (863, 72));
+    assert_eq!(top_size(&snapshot), (914, 72));
 
     state.toolbar_use_icons = false;
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(top_size(&snapshot), (980, 60));
+    assert_eq!(top_size(&snapshot), (1045, 60));
 }
 
 #[test]
@@ -79,6 +79,10 @@ fn build_top_hits_includes_toggle_and_pin() {
         hits.iter()
             .any(|hit| matches!(hit.event, ToolbarEvent::ToggleIconMode(false)))
     );
+    assert!(hits.iter().any(|hit| matches!(
+        hit.event,
+        ToolbarEvent::SelectTool(crate::input::Tool::StepMarker)
+    )));
     assert!(
         hits.iter()
             .any(|hit| matches!(hit.event, ToolbarEvent::PinTopToolbar(_)))
@@ -87,6 +91,45 @@ fn build_top_hits_includes_toggle_and_pin() {
         hits.iter()
             .any(|hit| matches!(hit.event, ToolbarEvent::CloseTopToolbar))
     );
+}
+
+#[test]
+fn top_size_keeps_toggle_and_window_controls_separate() {
+    let mut state = create_test_input_state();
+
+    for use_icons in [true, false] {
+        state.toolbar_use_icons = use_icons;
+        let snapshot = snapshot_from_state(&state);
+        let (w, h) = top_size(&snapshot);
+        let mut hits = Vec::new();
+        build_top_hits(w as f64, h as f64, &snapshot, &mut hits);
+
+        let toggle = hits
+            .iter()
+            .find(|hit| matches!(hit.event, ToolbarEvent::ToggleIconMode(_)))
+            .expect("icon/text toggle hit");
+        let pin = hits
+            .iter()
+            .find(|hit| matches!(hit.event, ToolbarEvent::PinTopToolbar(_)))
+            .expect("pin hit");
+        let close = hits
+            .iter()
+            .find(|hit| matches!(hit.event, ToolbarEvent::CloseTopToolbar))
+            .expect("close hit");
+
+        assert!(
+            toggle.rect.0 + toggle.rect.2 + ToolbarLayoutSpec::TOP_GAP <= pin.rect.0,
+            "icon/text toggle should not overlap the pin button"
+        );
+        assert!(
+            pin.rect.0 + pin.rect.2 <= close.rect.0,
+            "pin and close buttons should not overlap"
+        );
+        assert!(
+            close.rect.0 + close.rect.2 <= w as f64,
+            "close button should fit inside the top toolbar"
+        );
+    }
 }
 
 #[test]

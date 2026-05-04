@@ -55,7 +55,7 @@ impl ToolbarLayoutSpec {
         let tool_count = if self.layout_mode == ToolbarLayoutMode::Simple {
             5
         } else {
-            9
+            10
         };
         let mut x = Self::TOP_START_X + Self::TOP_HANDLE_SIZE + gap;
         x += tool_count as f64 * (btn_w + gap);
