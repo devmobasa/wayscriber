@@ -1,6 +1,6 @@
+use crate::app::view::theme;
 use iced::Element;
-use iced::theme;
-use iced::widget::{button, column, horizontal_rule, row, scrollable, text, text_input};
+use iced::widget::{button, column, row, rule, scrollable, text, text_input};
 
 use crate::messages::Message;
 use crate::models::{DaemonAction, ShortcutApplyCapability};
@@ -52,19 +52,19 @@ impl ConfiguratorApp {
             return scrollable(content).into();
         }
 
-        content = content.push(horizontal_rule(1));
+        content = content.push(rule::horizontal(1));
 
         // ── Step 1: Install the service ──
         content = content.push(self.daemon_step_install(busy));
-        content = content.push(horizontal_rule(1));
+        content = content.push(rule::horizontal(1));
 
         // ── Step 2: Set your shortcut ──
         content = content.push(self.daemon_step_shortcut(busy, service_installed));
-        content = content.push(horizontal_rule(1));
+        content = content.push(rule::horizontal(1));
 
         // ── Step 3: Start the service ──
         content = content.push(self.daemon_step_start(busy, service_installed));
-        content = content.push(horizontal_rule(1));
+        content = content.push(rule::horizontal(1));
 
         // ── Technical details (bottom) ──
         content = content.push(self.daemon_technical_details(busy));

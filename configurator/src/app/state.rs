@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
-use iced::Command;
+use iced::Task;
 use wayscriber::config::{Config, PRESET_SLOTS_MAX};
 
 use crate::messages::Message;
@@ -72,7 +72,7 @@ impl StatusMessage {
 }
 
 impl ConfiguratorApp {
-    pub(crate) fn new_app() -> (Self, Command<Message>) {
+    pub(crate) fn new_app() -> (Self, Task<Message>) {
         let default_config = Config::default();
         let defaults = ConfigDraft::from_config(&default_config);
         let baseline = defaults.clone();
@@ -114,9 +114,9 @@ impl ConfiguratorApp {
         app.sync_all_color_picker_hex();
 
         let initial_status_request_id = app.daemon_latest_status_request_id;
-        let command = Command::batch(vec![
-            Command::perform(load_config_from_disk(), Message::ConfigLoaded),
-            Command::perform(load_daemon_runtime_status(), move |result| {
+        let command = Task::batch(vec![
+            Task::perform(load_config_from_disk(), Message::ConfigLoaded),
+            Task::perform(load_daemon_runtime_status(), move |result| {
                 Message::DaemonStatusLoaded(initial_status_request_id, result)
             }),
         ]);

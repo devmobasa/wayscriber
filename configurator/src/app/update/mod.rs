@@ -6,14 +6,14 @@ mod fields;
 mod presets;
 mod tabs;
 
-use iced::Command;
+use iced::Task;
 
 use crate::messages::Message;
 
 use super::state::ConfiguratorApp;
 
 impl ConfiguratorApp {
-    pub(super) fn update_message(&mut self, message: Message) -> Command<Message> {
+    pub(crate) fn update_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ConfigLoaded(result) => self.handle_config_loaded(result),
             Message::ReloadRequested => self.handle_reload_requested(),

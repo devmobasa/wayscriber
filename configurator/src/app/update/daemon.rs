@@ -1,4 +1,4 @@
-use iced::Command;
+use iced::Task;
 
 use crate::messages::Message;
 use crate::models::{DaemonAction, DaemonActionResult, DaemonRuntimeStatus};
@@ -11,9 +11,9 @@ impl ConfiguratorApp {
         &mut self,
         request_id: u64,
         result: Result<DaemonRuntimeStatus, String>,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         if request_id != self.daemon_latest_status_request_id {
-            return Command::none();
+            return Task::none();
         }
         let preserve_feedback = self.daemon_preserve_feedback_status_request_id == Some(request_id);
         if preserve_feedback {
@@ -44,29 +44,23 @@ impl ConfiguratorApp {
                 }
             }
         }
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_daemon_shortcut_input_changed(
-        &mut self,
-        value: String,
-    ) -> Command<Message> {
+    pub(super) fn handle_daemon_shortcut_input_changed(&mut self, value: String) -> Task<Message> {
         self.daemon_shortcut_input = value;
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_daemon_action_requested(
-        &mut self,
-        action: DaemonAction,
-    ) -> Command<Message> {
+    pub(super) fn handle_daemon_action_requested(&mut self, action: DaemonAction) -> Task<Message> {
         if self.daemon_busy {
-            return Command::none();
+            return Task::none();
         }
         self.invalidate_pending_daemon_status_requests();
         self.daemon_busy = true;
         self.daemon_feedback = Some(action_pending_message(action));
         let shortcut_input = self.daemon_shortcut_input.clone();
-        Command::perform(
+        Task::perform(
             perform_daemon_action(action, shortcut_input),
             Message::DaemonActionCompleted,
         )
@@ -75,13 +69,13 @@ impl ConfiguratorApp {
     pub(super) fn handle_daemon_action_completed(
         &mut self,
         result: Result<DaemonActionResult, String>,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.daemon_busy = false;
         match result {
             Ok(output) => {
                 self.apply_daemon_status(output.status);
                 self.daemon_feedback = Some(output.message);
-                Command::none()
+                Task::none()
             }
             Err(err) => {
                 self.daemon_feedback = Some(format!("Background setup action failed: {err}"));
@@ -99,14 +93,14 @@ impl ConfiguratorApp {
         self.daemon_status = Some(status);
     }
 
-    fn schedule_daemon_status_reload(&mut self, preserve_feedback: bool) -> Command<Message> {
+    fn schedule_daemon_status_reload(&mut self, preserve_feedback: bool) -> Task<Message> {
         let request_id = self.daemon_next_status_request_id;
         self.daemon_next_status_request_id = self.daemon_next_status_request_id.saturating_add(1);
         self.daemon_latest_status_request_id = request_id;
         if preserve_feedback {
             self.daemon_preserve_feedback_status_request_id = Some(request_id);
         }
-        Command::perform(load_daemon_runtime_status(), move |result| {
+        Task::perform(load_daemon_runtime_status(), move |result| {
             Message::DaemonStatusLoaded(request_id, result)
         })
     }

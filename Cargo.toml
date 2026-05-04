@@ -19,16 +19,16 @@ smithay-client-toolkit = { version = "0.20", default-features = false, features 
 calloop = "0.14"
 
 # Cairo for drawing
-cairo-rs = { version = "0.21", features = ["png"] }
-cairo-sys-rs = "0.21"
+cairo-rs = { version = "0.22", features = ["png"] }
+cairo-sys-rs = "0.22"
 
 # SVG icon rendering
-resvg = "0.44"
-tiny-skia = "0.11"
+resvg = "0.47"
+tiny-skia = "0.12"
 
 # Pango for advanced text rendering and font support
-pango = "0.21"
-pangocairo = "0.21"
+pango = "0.22"
+pangocairo = "0.22"
 
 # Utils
 thiserror = "2.0"
@@ -36,16 +36,16 @@ log = "0.4"
 env_logger = { version = "0.11", default-features = false }
 clap = { version = "4.5", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 anyhow = "1.0"
-toml = "0.9"
+toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 async-trait = "0.1"
-schemars = { version = "0.9", features = ["derive"] }
+schemars = { version = "1.2", features = ["derive"] }
 libc = "0.2"
 flate2 = "1.0"
 time = { version = "0.3", features = ["formatting", "parsing", "local-offset"] }
 
 # Daemon mode
-signal-hook = "0.3"
+signal-hook = "0.4"
 ksni = { version = "0.3", optional = true }
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
 
@@ -54,7 +54,7 @@ zbus = { version = "5.0", optional = true, default-features = false, features = 
 wl-clipboard-rs = "0.9.2"
 futures = "0.3"
 serde_json = "1.0"
-png = "0.17"
+png = "0.18"
 
 [build-dependencies]
 cfg_aliases = "0.2"

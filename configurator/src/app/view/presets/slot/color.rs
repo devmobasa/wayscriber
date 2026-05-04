@@ -1,4 +1,4 @@
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::{Column, Space, button, column, pick_list, row, text, text_input};
 use iced::{Element, Length};
 
@@ -13,10 +13,16 @@ use crate::app::state::ConfiguratorApp;
 impl ConfiguratorApp {
     pub(super) fn preset_slot_color_block(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         let color_mode_picker = row![
@@ -51,7 +57,7 @@ impl ConfiguratorApp {
 
                 let picker_row = row![picker, color_preview_labeled(slot.color.preview_color()),]
                     .spacing(8)
-                    .align_items(iced::Alignment::Center);
+                    .align_y(iced::Alignment::Center);
 
                 let mut column = Column::new().spacing(8).push(picker_row);
 
@@ -93,7 +99,7 @@ impl ConfiguratorApp {
                     color_preview_labeled(slot.color.preview_color()),
                 ]
                 .spacing(8)
-                .align_items(iced::Alignment::Center);
+                .align_y(iced::Alignment::Center);
 
                 let mut column = Column::new().spacing(8).push(rgb_inputs);
 
@@ -120,7 +126,7 @@ impl ConfiguratorApp {
                 ),
             ]
             .spacing(DEFAULT_LABEL_GAP)
-            .align_items(iced::Alignment::Center),
+            .align_y(iced::Alignment::Center),
             color_mode_picker,
             color_section
         ]

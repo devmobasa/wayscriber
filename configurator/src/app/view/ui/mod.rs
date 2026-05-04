@@ -4,8 +4,8 @@ mod presenter_mode;
 mod status_bar;
 mod toolbar;
 
+use crate::app::view::theme;
 use iced::Element;
-use iced::theme;
 use iced::widget::{Row, button, column, text};
 
 use crate::app::state::ConfiguratorApp;
@@ -17,7 +17,7 @@ use super::widgets::{labeled_input, toggle_row};
 impl ConfiguratorApp {
     pub(super) fn ui_tab(&self) -> Element<'_, Message> {
         let tab_bar = UiTabId::ALL.iter().fold(
-            Row::new().spacing(8).align_items(iced::Alignment::Center),
+            Row::new().spacing(8).align_y(iced::Alignment::Center),
             |row, tab| {
                 let label = tab.title();
                 let button = button(label)

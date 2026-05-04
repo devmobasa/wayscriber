@@ -1,4 +1,4 @@
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::{Column, Row, button, column, pick_list, row, text, text_input};
 use iced::{Alignment, Element, Length};
 
@@ -46,7 +46,7 @@ pub(super) fn drawing_color_block(app: &ConfiguratorApp) -> Element<'_, Message>
             ),
         ]
         .spacing(DEFAULT_LABEL_GAP)
-        .align_items(Alignment::Center),
+        .align_y(Alignment::Center),
         color_mode_picker,
         color_section
     ]
@@ -67,7 +67,7 @@ fn named_color_section(app: &ConfiguratorApp) -> Element<'_, Message> {
         color_preview_labeled(app.draft.drawing_color.preview_color()),
     ]
     .spacing(8)
-    .align_items(Alignment::Center);
+    .align_y(Alignment::Center);
 
     let mut column = Column::new().spacing(8).push(picker_row);
 
@@ -103,7 +103,7 @@ fn rgb_color_section(app: &ConfiguratorApp) -> Element<'_, Message> {
         color_preview_labeled(app.draft.drawing_color.preview_color()),
     ]
     .spacing(8)
-    .align_items(Alignment::Center);
+    .align_y(Alignment::Center);
 
     let mut column = Column::new().spacing(8).push(rgb_inputs);
 

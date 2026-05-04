@@ -1,4 +1,4 @@
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::{Row, Space, button, checkbox, row, text};
 use iced::{Element, Length};
 use wayscriber::config::PRESET_SLOTS_MAX;
@@ -11,14 +11,21 @@ use crate::app::state::ConfiguratorApp;
 impl ConfiguratorApp {
     pub(super) fn preset_slot_enabled_row(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         let Some(default_slot) = self.defaults.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
 
         let enabled_row = row![
-            checkbox("Enabled", slot.enabled)
+            checkbox(slot.enabled)
+                .label("Enabled")
                 .on_toggle(move |val| Message::PresetSlotEnabledChanged(slot_index, val)),
             default_value_text(
                 bool_label(default_slot.enabled),
@@ -26,7 +33,7 @@ impl ConfiguratorApp {
             ),
         ]
         .spacing(DEFAULT_LABEL_GAP)
-        .align_items(iced::Alignment::Center);
+        .align_y(iced::Alignment::Center);
 
         enabled_row.into()
     }
@@ -51,9 +58,9 @@ impl ConfiguratorApp {
 
         let slot_header = Row::new()
             .spacing(8)
-            .align_items(iced::Alignment::Center)
+            .align_y(iced::Alignment::Center)
             .push(text(format!("Slot {slot_index} settings")).size(18))
-            .push(Space::new(Length::Fill, Length::Shrink))
+            .push(Space::new().width(Length::Fill).height(Length::Shrink))
             .push(collapse_button)
             .push(reset_button)
             .push(duplicate_button);

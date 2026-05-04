@@ -38,11 +38,12 @@ pub(in crate::app::view) fn color_triplet_picker<'a>(
             "Pick"
         })
         .on_press(Message::ColorPickerToggled(picker.id)),
-        checkbox("Advanced", picker.show_advanced)
+        checkbox(picker.show_advanced)
+            .label("Advanced")
             .on_toggle(move |value| { Message::ColorPickerAdvancedToggled(picker.id, value) }),
     ]
     .spacing(8)
-    .align_items(Alignment::Center);
+    .align_y(Alignment::Center);
 
     let picker_panel: Element<'a, Message> = if picker.is_open {
         picker_panel(picker.id, hue, saturation, value, rgb, None)
@@ -57,7 +58,7 @@ pub(in crate::app::view) fn color_triplet_picker<'a>(
             input("B", &triplet.components[2]).on_input(move |val| on_component(index, 2, val)),
         ]
         .spacing(8)
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .into()
     } else {
         column![].into()
@@ -90,7 +91,7 @@ pub(in crate::app::view) fn color_quad_picker<'a>(
         default_value_text(default.summary(), changed),
     ]
     .spacing(DEFAULT_LABEL_GAP)
-    .align_items(Alignment::Center);
+    .align_y(Alignment::Center);
 
     let header = row![
         color_preview_badge(Some(preview)),
@@ -103,11 +104,12 @@ pub(in crate::app::view) fn color_quad_picker<'a>(
             "Pick"
         })
         .on_press(Message::ColorPickerToggled(picker.id)),
-        checkbox("Advanced", picker.show_advanced)
+        checkbox(picker.show_advanced)
+            .label("Advanced")
             .on_toggle(move |value| { Message::ColorPickerAdvancedToggled(picker.id, value) }),
     ]
     .spacing(8)
-    .align_items(Alignment::Center);
+    .align_y(Alignment::Center);
 
     let picker_panel: Element<'a, Message> = if picker.is_open {
         picker_panel(
@@ -134,7 +136,7 @@ pub(in crate::app::view) fn color_quad_picker<'a>(
                 .on_input(move |val| Message::QuadChanged(field, 3, val)),
         ]
         .spacing(8)
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .into()
     } else {
         column![].into()

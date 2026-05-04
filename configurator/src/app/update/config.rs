@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use iced::Command;
+use iced::Task;
 use wayscriber::config::Config;
 
 use crate::messages::Message;
@@ -14,7 +14,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_config_loaded(
         &mut self,
         result: Result<Arc<Config>, String>,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.is_loading = false;
         match result {
             Ok(config) => {
@@ -38,20 +38,20 @@ impl ConfiguratorApp {
             }
         }
 
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_reload_requested(&mut self) -> Command<Message> {
+    pub(super) fn handle_reload_requested(&mut self) -> Task<Message> {
         if !self.is_loading && !self.is_saving {
             self.is_loading = true;
             self.status = StatusMessage::info("Reloading configuration...");
-            return Command::perform(load_config_from_disk(), Message::ConfigLoaded);
+            return Task::perform(load_config_from_disk(), Message::ConfigLoaded);
         }
 
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_reset_to_defaults(&mut self) -> Command<Message> {
+    pub(super) fn handle_reset_to_defaults(&mut self) -> Task<Message> {
         if !self.is_loading {
             self.draft = self.defaults.clone();
             self.override_mode = self.draft.ui_toolbar_layout_mode;
@@ -64,17 +64,17 @@ impl ConfiguratorApp {
             self.refresh_dirty_flag();
         }
 
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_save_requested(&mut self) -> Command<Message> {
+    pub(super) fn handle_save_requested(&mut self) -> Task<Message> {
         if self.is_saving {
-            return Command::none();
+            return Task::none();
         }
         if self.config_changed_on_disk() {
             self.status =
                 StatusMessage::error("Configuration changed on disk. Reload before saving.");
-            return Command::none();
+            return Task::none();
         }
 
         match self.draft.to_config(self.base_config.as_ref()) {
@@ -82,7 +82,7 @@ impl ConfiguratorApp {
                 config.validate_and_clamp();
                 self.is_saving = true;
                 self.status = StatusMessage::info("Saving configuration...");
-                Command::perform(save_config_to_disk(config), Message::ConfigSaved)
+                Task::perform(save_config_to_disk(config), Message::ConfigSaved)
             }
             Err(errors) => {
                 let message = errors
@@ -93,7 +93,7 @@ impl ConfiguratorApp {
                 self.status = StatusMessage::error(format!(
                     "Cannot save due to validation errors:\n{message}"
                 ));
-                Command::none()
+                Task::none()
             }
         }
     }
@@ -101,7 +101,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_config_saved(
         &mut self,
         result: Result<(Option<PathBuf>, Arc<Config>), String>,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.is_saving = false;
         match result {
             Ok((backup, saved_config)) => {
@@ -128,7 +128,7 @@ impl ConfiguratorApp {
             }
         }
 
-        Command::none()
+        Task::none()
     }
 }
 

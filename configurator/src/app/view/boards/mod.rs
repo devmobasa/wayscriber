@@ -1,6 +1,6 @@
 mod item;
 
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::{button, column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 

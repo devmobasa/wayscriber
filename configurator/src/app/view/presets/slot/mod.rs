@@ -2,7 +2,7 @@ mod color;
 mod header;
 mod rows;
 
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::{Column, Space, container, text};
 use iced::{Element, Length};
 
@@ -13,13 +13,22 @@ use crate::app::state::ConfiguratorApp;
 impl ConfiguratorApp {
     pub(super) fn preset_slot_section(&self, slot_index: usize) -> Element<'_, Message> {
         let Some(slot) = self.draft.presets.slot(slot_index) else {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         };
         if self.defaults.presets.slot(slot_index).is_none() {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         }
         if slot_index > self.draft.presets.slot_count {
-            return Space::new(Length::Shrink, Length::Shrink).into();
+            return Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into();
         }
 
         let enabled_row = self.preset_slot_enabled_row(slot_index);

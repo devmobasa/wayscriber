@@ -32,7 +32,7 @@ pub(in crate::app::view) fn labeled_input_with_feedback<'a>(
     let mut column = column![
         row![text(label).size(14), default_value_text(default, changed)]
             .spacing(DEFAULT_LABEL_GAP)
-            .align_items(iced::Alignment::Center),
+            .align_y(iced::Alignment::Center),
         input
     ]
     .spacing(4)
@@ -66,7 +66,7 @@ pub(in crate::app::view) fn labeled_input_state<'a>(
     let mut column = column![
         row![text(label).size(14), default_value_text(default, changed)]
             .spacing(DEFAULT_LABEL_GAP)
-            .align_items(iced::Alignment::Center),
+            .align_y(iced::Alignment::Center),
         input
     ]
     .spacing(4)
@@ -90,7 +90,7 @@ pub(in crate::app::view) fn labeled_control<'a>(
     column![
         row![text(label).size(14), default_value_text(default, changed)]
             .spacing(DEFAULT_LABEL_GAP)
-            .align_items(iced::Alignment::Center),
+            .align_y(iced::Alignment::Center),
         control
     ]
     .spacing(4)
@@ -119,7 +119,7 @@ pub(in crate::app::view) fn preset_input<'a>(
             default_value_text(default_label, changed)
         ]
         .spacing(DEFAULT_LABEL_GAP)
-        .align_items(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center),
         text_input(label, value)
             .on_input(move |val| Message::PresetTextChanged(slot_index, field, val))
     ]
@@ -155,7 +155,7 @@ pub(in crate::app::view) fn override_row<'a>(
         .width(Length::Fixed(SMALL_PICKER_WIDTH)),
     ]
     .spacing(12)
-    .align_items(iced::Alignment::Center)
+    .align_y(iced::Alignment::Center)
     .into()
 }
 
@@ -171,10 +171,12 @@ pub(in crate::app::view) fn toggle_row<'a>(
 ) -> Element<'a, Message> {
     let changed = value != default;
     row![
-        checkbox(label, value).on_toggle(move |val| Message::ToggleChanged(field, val)),
+        checkbox(value)
+            .label(label)
+            .on_toggle(move |val| Message::ToggleChanged(field, val)),
         default_value_text(bool_label(default), changed),
     ]
     .spacing(DEFAULT_LABEL_GAP)
-    .align_items(iced::Alignment::Center)
+    .align_y(iced::Alignment::Center)
     .into()
 }

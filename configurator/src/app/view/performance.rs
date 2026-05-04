@@ -22,7 +22,7 @@ impl ConfiguratorApp {
             text(self.draft.performance_buffer_count.to_string())
         ]
         .spacing(12)
-        .align_items(iced::Alignment::Center)
+        .align_y(iced::Alignment::Center)
         .into();
 
         scrollable(

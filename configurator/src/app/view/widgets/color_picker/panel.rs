@@ -1,4 +1,4 @@
-use iced::theme;
+use crate::app::view::theme;
 use iced::widget::canvas::Canvas;
 use iced::widget::{column, container, row, slider, text};
 use iced::{Alignment, Element, Length};
@@ -40,7 +40,7 @@ pub(super) fn picker_panel<'a>(
         sv,
         row![text("Hue").size(12), hue_slider]
             .spacing(8)
-            .align_items(Alignment::Center),
+            .align_y(Alignment::Center),
     ]
     .spacing(8);
 
@@ -59,7 +59,7 @@ pub(super) fn picker_panel<'a>(
         column = column.push(
             row![text("Alpha").size(12), slider]
                 .spacing(8)
-                .align_items(Alignment::Center),
+                .align_y(Alignment::Center),
         );
     }
 

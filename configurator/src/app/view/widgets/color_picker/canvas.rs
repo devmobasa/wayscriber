@@ -1,3 +1,4 @@
+use iced::widget::Action;
 use iced::widget::canvas::{self, Frame, Path, Program, Stroke};
 use iced::{Color, Point, Rectangle, Size};
 
@@ -25,17 +26,16 @@ impl Program<Message> for SvCanvas {
     fn update(
         &self,
         state: &mut Self::State,
-        event: canvas::Event,
+        event: &canvas::Event,
         bounds: Rectangle,
         cursor: iced::mouse::Cursor,
-    ) -> (canvas::event::Status, Option<Message>) {
+    ) -> Option<Action<Message>> {
         match event {
             canvas::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
                 if let Some(pos) = cursor.position_over(bounds) {
                     state.dragging = true;
-                    return (
-                        canvas::event::Status::Captured,
-                        Some(self.message_from_position(bounds, pos)),
+                    return Some(
+                        Action::publish(self.message_from_position(bounds, pos)).and_capture(),
                     );
                 }
             }
@@ -45,16 +45,15 @@ impl Program<Message> for SvCanvas {
             canvas::Event::Mouse(iced::mouse::Event::CursorMoved { position })
                 if state.dragging =>
             {
-                let pos = clamp_point(position, bounds);
-                return (
-                    canvas::event::Status::Captured,
-                    Some(self.message_from_position(bounds, pos)),
+                let pos = clamp_point(*position, bounds);
+                return Some(
+                    Action::publish(self.message_from_position(bounds, pos)).and_capture(),
                 );
             }
             _ => {}
         }
 
-        (canvas::event::Status::Ignored, None)
+        None
     }
 
     fn draw(
@@ -152,17 +151,16 @@ impl Program<Message> for HueCanvas {
     fn update(
         &self,
         state: &mut Self::State,
-        event: canvas::Event,
+        event: &canvas::Event,
         bounds: Rectangle,
         cursor: iced::mouse::Cursor,
-    ) -> (canvas::event::Status, Option<Message>) {
+    ) -> Option<Action<Message>> {
         match event {
             canvas::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
                 if let Some(pos) = cursor.position_over(bounds) {
                     state.dragging = true;
-                    return (
-                        canvas::event::Status::Captured,
-                        Some(self.message_from_position(bounds, pos)),
+                    return Some(
+                        Action::publish(self.message_from_position(bounds, pos)).and_capture(),
                     );
                 }
             }
@@ -172,16 +170,15 @@ impl Program<Message> for HueCanvas {
             canvas::Event::Mouse(iced::mouse::Event::CursorMoved { position })
                 if state.dragging =>
             {
-                let pos = clamp_point(position, bounds);
-                return (
-                    canvas::event::Status::Captured,
-                    Some(self.message_from_position(bounds, pos)),
+                let pos = clamp_point(*position, bounds);
+                return Some(
+                    Action::publish(self.message_from_position(bounds, pos)).and_capture(),
                 );
             }
             _ => {}
         }
 
-        (canvas::event::Status::Ignored, None)
+        None
     }
 
     fn draw(

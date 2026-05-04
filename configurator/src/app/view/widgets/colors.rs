@@ -1,8 +1,7 @@
+use crate::app::view::theme;
 use iced::border::Radius;
-use iced::theme::{self, Theme};
-use iced::widget::container::Appearance;
 use iced::widget::{Space, column, container, text};
-use iced::{Background, Border, Element, Length};
+use iced::{Background, Border, Element, Length, alignment};
 
 use crate::messages::Message;
 
@@ -15,7 +14,10 @@ pub(in crate::app::view) fn color_preview_badge<'a>(
     };
 
     let content: Element<'_, Message> = if is_valid {
-        Space::new(Length::Shrink, Length::Shrink).into()
+        Space::new()
+            .width(Length::Shrink)
+            .height(Length::Shrink)
+            .into()
     } else {
         text("?")
             .size(14)
@@ -26,12 +28,12 @@ pub(in crate::app::view) fn color_preview_badge<'a>(
     container(content)
         .width(Length::Fixed(24.0))
         .height(Length::Fixed(24.0))
-        .center_x()
-        .center_y()
-        .style(theme::Container::Custom(Box::new(ColorPreviewStyle {
+        .align_x(alignment::Horizontal::Center)
+        .align_y(alignment::Vertical::Center)
+        .style(color_preview_style(ColorPreviewStyle {
             color: preview_color,
             is_invalid: !is_valid,
-        })))
+        }))
         .into()
 }
 
@@ -40,7 +42,7 @@ pub(in crate::app::view) fn color_preview_labeled<'a>(
 ) -> Element<'a, Message> {
     column![text("Preview").size(12), color_preview_badge(color)]
         .spacing(2)
-        .align_items(iced::Alignment::Center)
+        .align_x(iced::Alignment::Center)
         .into()
 }
 
@@ -50,23 +52,20 @@ struct ColorPreviewStyle {
     is_invalid: bool,
 }
 
-impl container::StyleSheet for ColorPreviewStyle {
-    type Style = Theme;
-
-    fn appearance(&self, _style: &Self::Style) -> Appearance {
-        Appearance {
-            background: Some(Background::Color(self.color)),
-            text_color: None,
-            border: Border {
-                color: if self.is_invalid {
-                    iced::Color::from_rgb(0.9, 0.4, 0.4)
-                } else {
-                    iced::Color::from_rgb(0.4, 0.4, 0.4)
-                },
-                width: 1.0,
-                radius: Radius::from(6.0),
+fn color_preview_style(style: ColorPreviewStyle) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(style.color)),
+        text_color: None,
+        border: Border {
+            color: if style.is_invalid {
+                iced::Color::from_rgb(0.9, 0.4, 0.4)
+            } else {
+                iced::Color::from_rgb(0.4, 0.4, 0.4)
             },
-            shadow: Default::default(),
-        }
+            width: 1.0,
+            radius: Radius::from(6.0),
+        },
+        shadow: Default::default(),
+        snap: true,
     }
 }

@@ -1,4 +1,4 @@
-use iced::Command;
+use iced::Task;
 
 use crate::messages::Message;
 use crate::models::{
@@ -18,22 +18,18 @@ impl ConfiguratorApp {
         &mut self,
         field: ToggleField,
         value: bool,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_toggle(field, value);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_text_changed(
-        &mut self,
-        field: TextField,
-        value: String,
-    ) -> Command<Message> {
+    pub(super) fn handle_text_changed(&mut self, field: TextField, value: String) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_text(field, value);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_triplet_changed(
@@ -41,11 +37,11 @@ impl ConfiguratorApp {
         field: TripletField,
         index: usize,
         value: String,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_triplet(field, index, value);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_quad_changed(
@@ -53,17 +49,17 @@ impl ConfiguratorApp {
         field: QuadField,
         index: usize,
         value: String,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_quad(field, index, value);
         if let Some(id) = quad_field_picker_id(field) {
             self.sync_color_picker_hex_for_id(id);
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_color_mode_changed(&mut self, mode: ColorMode) -> Command<Message> {
+    pub(super) fn handle_color_mode_changed(&mut self, mode: ColorMode) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.drawing_color.mode = mode;
         if matches!(mode, ColorMode::Named) {
@@ -80,30 +76,27 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_named_color_selected(
         &mut self,
         option: NamedColorOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.drawing_color.selected_named = option;
         if option != NamedColorOption::Custom {
             self.draft.drawing_color.name = option.as_value().to_string();
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_eraser_mode_changed(
-        &mut self,
-        option: EraserModeOption,
-    ) -> Command<Message> {
+    pub(super) fn handle_eraser_mode_changed(&mut self, option: EraserModeOption) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.drawing_default_eraser_mode = option;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_drawing_mouse_drag_tool_changed(
@@ -111,11 +104,11 @@ impl ConfiguratorApp {
         button: DragMouseButton,
         field: DragToolField,
         option: DragToolOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_mouse_drag_tool(button, field, option);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_drawing_mouse_drag_color_changed(
@@ -123,147 +116,147 @@ impl ConfiguratorApp {
         button: DragMouseButton,
         field: DragToolField,
         option: DragColorOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_mouse_drag_color(button, field, option);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_status_position_changed(
         &mut self,
         option: StatusPositionOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.ui_status_position = option;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_toolbar_layout_mode_changed(
         &mut self,
         option: ToolbarLayoutModeOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.apply_toolbar_layout_mode(option);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_toolbar_override_mode_changed(
         &mut self,
         option: ToolbarLayoutModeOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.override_mode = option;
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_toolbar_override_changed(
         &mut self,
         field: ToolbarOverrideField,
         option: OverrideOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft
             .set_toolbar_override(self.override_mode, field, option);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_session_storage_mode_changed(
         &mut self,
         option: SessionStorageModeOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.session_storage_mode = option;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_session_compression_changed(
         &mut self,
         option: SessionCompressionOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.session_compression = option;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_presenter_tool_behavior_changed(
         &mut self,
         option: PresenterToolBehaviorOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.presenter_tool_behavior = option;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
-    pub(super) fn handle_buffer_count_changed(&mut self, count: u32) -> Command<Message> {
+    pub(super) fn handle_buffer_count_changed(&mut self, count: u32) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.performance_buffer_count = count;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_keybinding_changed(
         &mut self,
         field: KeybindingField,
         value: String,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.keybindings.set(field, value);
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_font_style_option_selected(
         &mut self,
         option: FontStyleOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.drawing_font_style_option = option;
         if option != FontStyleOption::Custom {
             self.draft.drawing_font_style = option.canonical_value().to_string();
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     pub(super) fn handle_font_weight_option_selected(
         &mut self,
         option: FontWeightOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.drawing_font_weight_option = option;
         if option != FontWeightOption::Custom {
             self.draft.drawing_font_weight = option.canonical_value().to_string();
         }
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     #[cfg(feature = "tablet-input")]
     pub(super) fn handle_tablet_pressure_edit_mode_changed(
         &mut self,
         option: PressureThicknessEditModeOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.tablet_pressure_thickness_edit_mode = option;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 
     #[cfg(feature = "tablet-input")]
     pub(super) fn handle_tablet_pressure_entry_mode_changed(
         &mut self,
         option: PressureThicknessEntryModeOption,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.tablet_pressure_thickness_entry_mode = option;
         self.refresh_dirty_flag();
-        Command::none()
+        Task::none()
     }
 }
 

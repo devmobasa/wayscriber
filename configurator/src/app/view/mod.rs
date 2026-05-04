@@ -10,11 +10,11 @@ mod presets;
 mod session;
 #[cfg(feature = "tablet-input")]
 mod tablet;
+pub(crate) mod theme;
 mod ui;
 mod widgets;
 
-use iced::theme;
-use iced::widget::{Column, Row, Space, button, column, container, horizontal_rule, row, text};
+use iced::widget::{Column, Row, Space, button, column, container, row, rule, text};
 use iced::{Element, Length};
 
 use crate::messages::Message;
@@ -24,7 +24,7 @@ use self::widgets::{default_label_color, feedback_text};
 use super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
-    pub(super) fn view(&self) -> Element<'_, Message> {
+    pub(crate) fn view(&self) -> Element<'_, Message> {
         let header = self.header_view();
         let content = self.tab_view();
         let footer = self.footer_view();
@@ -50,7 +50,7 @@ impl ConfiguratorApp {
 
         let mut toolbar = Row::new()
             .spacing(12)
-            .align_items(iced::Alignment::Center)
+            .align_y(iced::Alignment::Center)
             .push(reload_button)
             .push(defaults_button)
             .push(save_button);
@@ -72,7 +72,10 @@ impl ConfiguratorApp {
         };
 
         let banner: Element<'_, Message> = match &self.status {
-            StatusMessage::Idle => Space::new(Length::Shrink, Length::Shrink).into(),
+            StatusMessage::Idle => Space::new()
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into(),
             StatusMessage::Info(message) => container(text(message))
                 .padding(8)
                 .style(theme::Container::Box)
@@ -96,7 +99,7 @@ impl ConfiguratorApp {
 
     fn tab_view(&self) -> Element<'_, Message> {
         let tab_bar = TabId::ALL.iter().fold(
-            Row::new().spacing(8).align_items(iced::Alignment::Center),
+            Row::new().spacing(8).align_y(iced::Alignment::Center),
             |row, tab| {
                 let label = tab.title();
                 let button = button(label)
@@ -129,7 +132,7 @@ impl ConfiguratorApp {
 
         let legend = self.defaults_legend();
 
-        column![tab_bar, horizontal_rule(2), legend, content]
+        column![tab_bar, rule::horizontal(2), legend, content]
             .spacing(12)
             .into()
     }
@@ -158,7 +161,7 @@ impl ConfiguratorApp {
                 .style(theme::Text::Color(default_label_color(true))),
         ]
         .spacing(12)
-        .align_items(iced::Alignment::Center);
+        .align_y(iced::Alignment::Center);
 
         let hint = feedback_text(
             "Tip: use Tab/Shift+Tab to move between fields; Enter activates buttons.",
