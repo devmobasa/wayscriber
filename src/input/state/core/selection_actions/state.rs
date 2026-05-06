@@ -37,11 +37,7 @@ impl InputState {
             };
 
             if let Some((before, after, shape_for_dirty)) = result {
-                actions.push(UndoAction::Modify {
-                    shape_id: id,
-                    before,
-                    after,
-                });
+                actions.push(UndoAction::modify_from_snapshots(id, before, after));
                 self.dirty_tracker.mark_shape(&shape_for_dirty);
                 self.invalidate_hit_cache_for(id);
             }

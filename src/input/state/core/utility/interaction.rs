@@ -1,4 +1,4 @@
-use super::super::base::{DrawingState, InputState};
+use super::super::base::{DrawingState, InputState, PasteAnchor};
 use crate::util::Rect;
 
 impl InputState {
@@ -76,6 +76,42 @@ impl InputState {
         self.last_canvas_pointer_position
     }
 
+    pub(crate) fn paste_anchor(&self) -> PasteAnchor {
+        if self.pointer_seen {
+            let (x, y) = self.last_canvas_pointer_position;
+            PasteAnchor::Pointer { x, y }
+        } else {
+            let (x, y) = self.visible_canvas_center();
+            PasteAnchor::VisibleCenter { x, y }
+        }
+    }
+
+    pub(crate) fn visible_canvas_rect(&self) -> Rect {
+        let (x1, y1) = self.canvas_coords_for_screen(0, 0);
+        let (x2, y2) = self.canvas_coords_for_screen(
+            self.screen_width.min(i32::MAX as u32) as i32,
+            self.screen_height.min(i32::MAX as u32) as i32,
+        );
+        let min_x = x1.min(x2);
+        let min_y = y1.min(y2);
+        let max_x = x1.max(x2).max(min_x + 1);
+        let max_y = y1.max(y2).max(min_y + 1);
+        Rect::from_min_max(min_x, min_y, max_x, max_y).unwrap_or(Rect {
+            x: min_x,
+            y: min_y,
+            width: 1,
+            height: 1,
+        })
+    }
+
+    fn visible_canvas_center(&self) -> (i32, i32) {
+        let rect = self.visible_canvas_rect();
+        (
+            rect.x.saturating_add(rect.width / 2),
+            rect.y.saturating_add(rect.height / 2),
+        )
+    }
+
     /// Updates the cached pointer location.
     pub fn update_pointer_position(&mut self, x: i32, y: i32) {
         let (canvas_x, canvas_y) = self.canvas_coords_for_screen(x, y);
@@ -92,6 +128,7 @@ impl InputState {
     ) {
         self.last_pointer_position = (screen_x, screen_y);
         self.last_canvas_pointer_position = (canvas_x, canvas_y);
+        self.pointer_seen = true;
         if self.click_highlight.update_tool_ring(
             self.highlight_tool_active(),
             canvas_x,

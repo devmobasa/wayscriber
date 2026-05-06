@@ -102,6 +102,8 @@ impl WaylandState {
             buffer_damage: BufferDamageTracker::new(buffer_count),
             config,
             input_state,
+            clipboard_publish_rx: None,
+            clipboard_paste_rx: None,
             onboarding,
             ui_animation_next_tick: None,
             ui_animation_interval,

@@ -11,12 +11,12 @@ use super::super::super::{
     selection::SelectionState,
 };
 use super::super::types::{
-    BlockedActionFeedback, BoardPickerClickState, CompositorCapabilities, DelayedHistory,
-    DrawingState, OutputFocusAction, PendingBoardDelete, PendingClipboardFallback,
-    PendingOnboardingUsage, PendingPageDelete, PresetAction, PresetFeedbackState,
-    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, StatusChangeHighlight,
-    TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab, UiToastState,
-    ZoomAction,
+    BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
+    DelayedHistory, DrawingState, OutputFocusAction, PendingBoardDelete, PendingClipboardFallback,
+    PendingOnboardingUsage, PendingPageDelete, PendingSelectionClipboardPublish, PresetAction,
+    PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
+    SelectionPublishState, StatusChangeHighlight, TextClickState, TextEditEntryFeedback,
+    TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
 };
 use crate::config::{
     Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding, ToolPresetConfig,
@@ -286,6 +286,22 @@ pub struct InputState {
     pub(crate) ui_toast_bounds: Option<(f64, f64, f64, f64)>,
     /// Copied selection shapes for paste operations
     pub(in crate::input::state::core) selection_clipboard: Option<Vec<Shape>>,
+    /// Local clipboard generation for the copied shape selection.
+    pub(in crate::input::state::core) selection_clipboard_generation: u64,
+    /// System clipboard publication state for the current local selection.
+    pub(in crate::input::state::core) selection_publish_state: SelectionPublishState,
+    /// Per-process id embedded in private Wayscriber clipboard payloads.
+    pub(in crate::input::state::core) clipboard_app_instance_id: String,
+    /// Pending private selection clipboard publish request for the backend.
+    pub(in crate::input::state::core) pending_selection_clipboard_publish:
+        Option<PendingSelectionClipboardPublish>,
+    /// Pending system clipboard paste request for the backend.
+    pub(in crate::input::state::core) pending_clipboard_paste_request:
+        Option<ClipboardPasteRequest>,
+    /// Monotonic id source for paste requests.
+    pub(in crate::input::state::core) clipboard_paste_request_counter: u64,
+    /// Latest paste request id whose completion should still be accepted.
+    pub(in crate::input::state::core) active_clipboard_paste_request_id: Option<u64>,
     /// Offset applied to successive paste operations
     pub(in crate::input::state::core) clipboard_paste_offset: i32,
     /// Last capture path (for quick open-folder action)
@@ -310,6 +326,8 @@ pub struct InputState {
     pub(in crate::input::state::core) last_pointer_position: (i32, i32),
     /// Last known pointer position in canvas/world coordinates
     pub(in crate::input::state::core) last_canvas_pointer_position: (i32, i32),
+    /// Whether a real pointer position has been observed.
+    pub(in crate::input::state::core) pointer_seen: bool,
     /// Recompute hover next time layout is available
     pub(in crate::input::state::core) pending_menu_hover_recalc: bool,
     /// Optional properties panel describing the current selection

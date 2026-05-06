@@ -1,5 +1,5 @@
-use super::EraserBrush;
 use super::types::Shape;
+use super::{EmbeddedImage, EraserBrush};
 use crate::draw::{EraserKind, FontDescriptor, StepMarkerLabel, color::WHITE};
 use crate::util;
 
@@ -203,4 +203,52 @@ fn eraser_bounding_box_tracks_diameter() {
     assert_eq!(rect.y, 2);
     assert_eq!(rect.width, 6);
     assert_eq!(rect.height, 6);
+}
+
+#[test]
+fn image_bounding_box_and_kind_name_use_display_bounds() {
+    let shape = Shape::Image {
+        x: 12,
+        y: 24,
+        w: 80,
+        h: 45,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 2,
+            height: 1,
+            bytes: vec![1, 2, 3],
+        },
+    };
+
+    let rect = shape.bounding_box().expect("image should have bounds");
+    assert_eq!((rect.x, rect.y, rect.width, rect.height), (12, 24, 80, 45));
+    assert_eq!(shape.kind_name(), "Image");
+}
+
+#[test]
+fn image_serialization_uses_base64_bytes() {
+    let shape = Shape::Image {
+        x: 1,
+        y: 2,
+        w: 3,
+        h: 4,
+        data: EmbeddedImage {
+            mime_type: "image/jpeg".to_string(),
+            width: 3,
+            height: 4,
+            bytes: vec![1, 2, 3, 4],
+        },
+    };
+
+    let json = serde_json::to_string(&shape).expect("serialize image shape");
+    assert!(json.contains("\"bytes\":\"AQIDBA==\""));
+
+    let restored: Shape = serde_json::from_str(&json).expect("deserialize image shape");
+    match restored {
+        Shape::Image { data, .. } => {
+            assert_eq!(data.mime_type, "image/jpeg");
+            assert_eq!(data.bytes, vec![1, 2, 3, 4]);
+        }
+        other => panic!("expected image shape, got {:?}", other),
+    }
 }

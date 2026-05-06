@@ -1,5 +1,6 @@
 use super::blur::render_blur_placeholder;
 use super::highlight::render_click_highlight;
+use super::image::render_image_shape;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_rect};
 use super::strokes::{
     render_freehand_borrowed, render_freehand_pressure_borrowed, render_marker_stroke_borrowed,
@@ -253,6 +254,9 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
         }
         Shape::EraserStroke { .. } => {
             // Eraser strokes require an eraser replay context; ignore in generic rendering.
+        }
+        Shape::Image { x, y, w, h, data } => {
+            render_image_shape(ctx, *x, *y, *w, *h, data);
         }
     }
 }

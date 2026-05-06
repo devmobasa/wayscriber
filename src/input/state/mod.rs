@@ -30,6 +30,11 @@ pub(crate) use core::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, default_step_marker_size,
 };
+#[allow(unused_imports)]
+pub(crate) use core::{
+    ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingSelectionClipboardPublish,
+    SelectionPublishState, WayscriberClipboardSelection,
+};
 pub use highlight::ClickHighlightSettings;
 
 #[cfg(test)]

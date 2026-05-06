@@ -43,6 +43,8 @@ schemars = { version = "1.2", features = ["derive"] }
 libc = "0.2"
 flate2 = "1.0"
 time = { version = "0.3", features = ["formatting", "parsing", "local-offset"] }
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 # Daemon mode
 signal-hook = "0.4"

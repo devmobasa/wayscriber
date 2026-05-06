@@ -12,5 +12,6 @@ mod tests;
 pub use core::Frame;
 #[allow(unused_imports)]
 pub use types::{
-    DrawnShape, HistoryTrimStats, MAX_COMPOUND_DEPTH, ShapeId, ShapeSnapshot, UndoAction,
+    DrawnShape, HistoryTrimStats, ImageBoundsSnapshot, MAX_COMPOUND_DEPTH, ShapeId, ShapeSnapshot,
+    UndoAction,
 };

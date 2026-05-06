@@ -1,6 +1,10 @@
-use super::super::base::{InputState, OutputFocusAction, PresetAction, ZoomAction};
+use super::super::base::{
+    ClipboardFingerprint, ClipboardPasteRequest, InputState, OutputFocusAction,
+    PendingSelectionClipboardPublish, PresetAction, SelectionPublishState, ZoomAction,
+};
 use crate::config::{Action, BoardsConfig};
 
+#[allow(dead_code)]
 impl InputState {
     /// Takes and clears any pending capture action.
     pub fn take_pending_capture_action(&mut self) -> Option<Action> {
@@ -40,6 +44,46 @@ impl InputState {
     /// Takes and clears any pending board config update.
     pub fn take_pending_board_config(&mut self) -> Option<BoardsConfig> {
         self.pending_board_config.take()
+    }
+
+    pub(crate) fn take_pending_selection_clipboard_publish(
+        &mut self,
+    ) -> Option<PendingSelectionClipboardPublish> {
+        self.pending_selection_clipboard_publish.take()
+    }
+
+    pub(crate) fn complete_selection_clipboard_publish(
+        &mut self,
+        generation: u64,
+        fingerprint_at_failure: Option<ClipboardFingerprint>,
+        succeeded: bool,
+    ) -> bool {
+        if generation != self.selection_clipboard_generation {
+            return false;
+        }
+        self.selection_publish_state = if succeeded {
+            SelectionPublishState::Published { generation }
+        } else {
+            SelectionPublishState::Failed {
+                generation,
+                clipboard_fingerprint_at_failure: fingerprint_at_failure,
+            }
+        };
+        true
+    }
+
+    pub(crate) fn take_pending_clipboard_paste_request(&mut self) -> Option<ClipboardPasteRequest> {
+        self.pending_clipboard_paste_request.take()
+    }
+
+    pub(crate) fn active_clipboard_paste_request_id(&self) -> Option<u64> {
+        self.active_clipboard_paste_request_id
+    }
+
+    pub(crate) fn finish_clipboard_paste_request(&mut self, id: u64) {
+        if self.active_clipboard_paste_request_id == Some(id) {
+            self.active_clipboard_paste_request_id = None;
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 use super::*;
 use crate::draw::{
-    ArrowLabel, BLACK, DrawnShape, EraserBrush, EraserKind, FontDescriptor, Shape, StepMarkerLabel,
+    ArrowLabel, BLACK, DrawnShape, EmbeddedImage, EraserBrush, EraserKind, FontDescriptor, Shape,
+    StepMarkerLabel,
 };
 
 #[test]
@@ -193,6 +194,30 @@ fn step_marker_hit_detects_center_and_rejects_outside_point() {
         !hit_test(&drawn, (outside_x, 60), 0.1),
         "point outside radius should miss step marker"
     );
+}
+
+#[test]
+fn image_hit_test_uses_display_rectangle() {
+    let drawn = DrawnShape {
+        id: 5,
+        shape: Shape::Image {
+            x: 10,
+            y: 20,
+            w: 40,
+            h: 30,
+            data: EmbeddedImage {
+                mime_type: "image/png".to_string(),
+                width: 4,
+                height: 3,
+                bytes: vec![1, 2, 3],
+            },
+        },
+        created_at: 0,
+        locked: false,
+    };
+
+    assert!(hit_test(&drawn, (20, 30), 0.0));
+    assert!(!hit_test(&drawn, (60, 60), 0.0));
 }
 
 #[test]

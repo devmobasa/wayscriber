@@ -75,6 +75,10 @@ impl InputState {
                 *x += dx;
                 *y += dy;
             }
+            Shape::Image { x, y, .. } => {
+                *x += dx;
+                *y += dy;
+            }
             Shape::Text { x, y, .. } => {
                 *x += dx;
                 *y += dy;

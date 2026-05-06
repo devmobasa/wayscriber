@@ -8,7 +8,7 @@ mod text_cache;
 mod types;
 
 pub use text_cache::invalidate_text_cache;
-pub use types::{ArrowLabel, EraserBrush, EraserKind, Shape, StepMarkerLabel};
+pub use types::{ArrowLabel, EmbeddedImage, EraserBrush, EraserKind, Shape, StepMarkerLabel};
 
 pub(crate) use arrow_label::{ARROW_LABEL_BACKGROUND, arrow_label_layout};
 pub(crate) use bounds::{

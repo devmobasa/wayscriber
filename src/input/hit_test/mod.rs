@@ -128,7 +128,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
                 false
             }
         }
-        Shape::Text { .. } | Shape::StickyNote { .. } => {
+        Shape::Text { .. } | Shape::StickyNote { .. } | Shape::Image { .. } => {
             if let Some(bounds) = shape.shape.bounding_box() {
                 let inflate = tolerance.ceil() as i32;
                 bounds

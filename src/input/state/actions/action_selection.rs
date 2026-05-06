@@ -27,13 +27,8 @@ impl InputState {
                 true
             }
             Action::PasteSelection => {
-                let pasted = self.paste_selection();
-                if pasted > 0 {
-                    info!("Pasted selection ({} shape(s))", pasted);
-                } else if self.selection_clipboard_is_empty() {
-                    self.set_ui_toast(UiToastKind::Warning, "Clipboard is empty.");
-                    self.trigger_blocked_feedback();
-                }
+                self.request_clipboard_paste();
+                info!("Requested clipboard paste");
                 true
             }
             Action::SelectAll => {

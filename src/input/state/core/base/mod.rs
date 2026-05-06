@@ -12,7 +12,9 @@ pub use types::{
     TextInputMode, ToolbarDrawerTab, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use types::{
-    BlockedActionFeedback, BoardPickerClickState, DelayedHistory, HistoryMode, PendingBoardDelete,
-    PendingClipboardFallback, PendingPageDelete, PresetFeedbackState, TextClickState,
-    TextEditEntryFeedback, ToastAction, UiToastState,
+    BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
+    DelayedHistory, HistoryMode, PasteAnchor, PendingBoardDelete, PendingClipboardFallback,
+    PendingPageDelete, PendingSelectionClipboardPublish, PresetFeedbackState,
+    SelectionPublishState, TextClickState, TextEditEntryFeedback, ToastAction, UiToastState,
+    WayscriberClipboardSelection,
 };

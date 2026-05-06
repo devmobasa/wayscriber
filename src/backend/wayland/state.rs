@@ -55,6 +55,7 @@ use crate::{
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
 
+use self::clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion};
 use self::data::{MoveDrag, StateData};
 pub use self::data::{MoveDragKind, OverlaySuppression};
 use super::{
@@ -77,6 +78,7 @@ mod activation;
 mod boards;
 mod buffer_damage;
 mod capture;
+mod clipboard;
 mod color_picker;
 mod core;
 mod data;
@@ -158,6 +160,8 @@ pub(super) struct WaylandState {
 
     // Input state
     pub(super) input_state: InputState,
+    pub(super) clipboard_publish_rx: Option<std::sync::mpsc::Receiver<ClipboardPublishCompletion>>,
+    pub(super) clipboard_paste_rx: Option<std::sync::mpsc::Receiver<ClipboardPasteCompletion>>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,
     // Next scheduled tick for UI animations (toasts/highlights/preset feedback).
     pub(super) ui_animation_next_tick: Option<Instant>,

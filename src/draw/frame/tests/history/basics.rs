@@ -1,5 +1,5 @@
-use crate::draw::frame::{Frame, UndoAction};
-use crate::draw::{Shape, color::BLACK};
+use crate::draw::frame::{Frame, ImageBoundsSnapshot, UndoAction};
+use crate::draw::{EmbeddedImage, Shape, color::BLACK};
 
 #[test]
 fn undo_and_redo_cycle_shapes() {
@@ -70,4 +70,65 @@ fn adding_new_shape_clears_redo_stack() {
     };
     frame.add_shape(second);
     assert_eq!(frame.redo_stack_len(), 0);
+}
+
+#[test]
+fn modify_image_bounds_undo_redo_changes_geometry_without_replacing_payload() {
+    let mut frame = Frame::new();
+    let id = frame.add_shape(Shape::Image {
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 8,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 10,
+            height: 8,
+            bytes: vec![1, 2, 3, 4],
+        },
+    });
+    if let Shape::Image { x, y, w, h, .. } = &mut frame.shape_mut(id).unwrap().shape {
+        *x = 20;
+        *y = 30;
+        *w = 40;
+        *h = 32;
+    }
+    frame.push_undo_action(
+        UndoAction::ModifyImageBounds {
+            shape_id: id,
+            before: ImageBoundsSnapshot {
+                x: 0,
+                y: 0,
+                w: 10,
+                h: 8,
+                locked: false,
+            },
+            after: ImageBoundsSnapshot {
+                x: 20,
+                y: 30,
+                w: 40,
+                h: 32,
+                locked: false,
+            },
+        },
+        10,
+    );
+
+    frame.undo_last();
+    match &frame.shape(id).unwrap().shape {
+        Shape::Image { x, y, w, h, data } => {
+            assert_eq!((*x, *y, *w, *h), (0, 0, 10, 8));
+            assert_eq!(data.bytes, vec![1, 2, 3, 4]);
+        }
+        _ => panic!("expected image"),
+    }
+
+    frame.redo_last();
+    match &frame.shape(id).unwrap().shape {
+        Shape::Image { x, y, w, h, data } => {
+            assert_eq!((*x, *y, *w, *h), (20, 30, 40, 32));
+            assert_eq!(data.bytes, vec![1, 2, 3, 4]);
+        }
+        _ => panic!("expected image"),
+    }
 }

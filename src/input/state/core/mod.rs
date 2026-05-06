@@ -25,6 +25,10 @@ pub use base::{
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use base::{BoardPickerClickState, TextClickState};
+pub(crate) use base::{
+    ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingSelectionClipboardPublish,
+    SelectionPublishState, WayscriberClipboardSelection,
+};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub use color_picker_popup::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
