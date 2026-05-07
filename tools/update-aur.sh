@@ -111,6 +111,7 @@ echo -e "${GREEN}Copied $SOURCE_FILE to $AUR_DIR/PKGBUILD${NC}"
 
 # Update version in PKGBUILD
 cd "$AUR_DIR"
+rm -f wayscriber.install
 if grep -q '^pkgver=' PKGBUILD; then
     sed -i "s/^pkgver=.*/pkgver=$RELEASE_VERSION/" PKGBUILD
 fi
@@ -119,6 +120,16 @@ if grep -q '^pkgrel=' PKGBUILD; then
 fi
 
 echo -e "${GREEN}✅ Updated PKGBUILD: pkgver=$RELEASE_VERSION, pkgrel=1${NC}"
+echo ""
+
+echo "Fetching source archive checksum..."
+SOURCE_ARCHIVE_URL="https://github.com/devmobasa/wayscriber/archive/refs/tags/v${RELEASE_VERSION}.tar.gz"
+SOURCE_ARCHIVE_TMP="$(mktemp)"
+trap 'rm -f "$SOURCE_ARCHIVE_TMP"' EXIT
+curl -fsSL "$SOURCE_ARCHIVE_URL" -o "$SOURCE_ARCHIVE_TMP"
+SOURCE_ARCHIVE_SHA="$(sha256sum "$SOURCE_ARCHIVE_TMP" | awk '{print $1}')"
+sed -i "0,/sha256sums=('[^']*'/s//sha256sums=('${SOURCE_ARCHIVE_SHA}'/" PKGBUILD
+echo -e "${GREEN}✅ Updated source checksum: $SOURCE_ARCHIVE_SHA${NC}"
 echo ""
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -162,16 +173,22 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Show git status
-echo "Files to be committed:"
+echo "Working tree changes:"
+echo "Only PKGBUILD, .SRCINFO, and the wayscriber.install deletion will be committed."
 git status --short
 echo ""
 
 read -p "Push to AUR? (y/n) " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Add and commit
-    git add PKGBUILD .SRCINFO .gitignore 2>/dev/null || git add PKGBUILD .SRCINFO
-    git commit -m "Update to v$RELEASE_VERSION"
+    # Add and commit only package metadata, leaving makepkg outputs untracked.
+    commit_paths=(PKGBUILD .SRCINFO)
+    git add PKGBUILD .SRCINFO
+    if git ls-files --error-unmatch wayscriber.install >/dev/null 2>&1; then
+        git rm -f --ignore-unmatch wayscriber.install
+        commit_paths+=(wayscriber.install)
+    fi
+    git commit -m "Update to v$RELEASE_VERSION" -- "${commit_paths[@]}"
 
     # Push
     if git push origin master 2>/dev/null; then
@@ -202,6 +219,7 @@ else
     echo "To push manually later:"
     echo "  cd $AUR_DIR"
     echo "  git add PKGBUILD .SRCINFO"
+    echo "  git rm -f --ignore-unmatch wayscriber.install"
     echo "  git commit -m 'Update to v$RELEASE_VERSION'"
     echo "  git push origin master"
 fi
