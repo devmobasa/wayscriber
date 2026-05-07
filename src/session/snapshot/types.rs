@@ -76,15 +76,16 @@ pub struct ToolStateSnapshot {
 
 impl ToolStateSnapshot {
     pub(super) fn from_input_state(input: &InputState) -> Self {
+        let active_tool = input.session_active_tool();
         Self {
-            current_color: input.color_for_tool(input.active_tool()),
-            current_thickness: input.thickness_for_active_tool(),
+            current_color: input.color_for_tool(active_tool),
+            current_thickness: input.thickness_for_tool(active_tool),
             eraser_size: input.eraser_size,
             eraser_kind: input.eraser_kind,
             eraser_mode: input.eraser_mode,
             marker_opacity: Some(input.marker_opacity),
             fill_enabled: Some(input.fill_enabled),
-            tool_override: input.tool_override(),
+            tool_override: input.session_tool_override(),
             current_font_size: input.current_font_size,
             font_descriptor: Some(input.font_descriptor.clone()),
             text_background_enabled: input.text_background_enabled,
@@ -93,7 +94,7 @@ impl ToolStateSnapshot {
             arrow_head_at_end: Some(input.arrow_head_at_end),
             arrow_label_enabled: Some(input.arrow_label_enabled),
             board_previous_color: input.board_previous_color,
-            show_status_bar: input.show_status_bar,
+            show_status_bar: input.session_show_status_bar(),
             tool_settings: Some(input.tool_settings.clone()),
         }
     }

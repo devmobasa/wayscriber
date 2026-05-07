@@ -47,6 +47,17 @@ pub(crate) struct PresenterRestore {
     pub(crate) tool_override: Option<Option<Tool>>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LightModeRestore {
+    pub(crate) show_status_bar: bool,
+    pub(crate) show_tool_preview: bool,
+    pub(crate) toolbar_visible: bool,
+    pub(crate) toolbar_top_visible: bool,
+    pub(crate) toolbar_side_visible: bool,
+    pub(crate) click_highlight_enabled: bool,
+    pub(crate) tool_override: Option<Tool>,
+}
+
 pub struct InputState {
     /// Multi-board canvas management
     pub boards: BoardManager,
@@ -150,6 +161,12 @@ pub struct InputState {
     pub presenter_mode_config: PresenterModeConfig,
     /// Previous UI state to restore after presenter mode exits
     pub(crate) presenter_restore: Option<PresenterRestore>,
+    /// Whether passthrough light mode is currently enabled
+    pub light_mode: bool,
+    /// Whether light mode is temporarily accepting drawing input
+    pub light_mode_drawing: bool,
+    /// Previous UI state to restore after light mode exits
+    pub(crate) light_mode_restore: Option<LightModeRestore>,
     /// Whether both toolbars are visible (combined flag, prefer top/side specific)
     pub toolbar_visible: bool,
     /// Whether the top toolbar panel is visible

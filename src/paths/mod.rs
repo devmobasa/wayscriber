@@ -73,6 +73,12 @@ pub fn tray_action_file() -> PathBuf {
     runtime_root().join("tray_action")
 }
 
+/// Location for queued transient tray commands.
+/// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
+pub fn tray_action_dir() -> PathBuf {
+    runtime_root().join("tray-actions")
+}
+
 /// Location for transient daemon toggle requests.
 /// Uses XDG_RUNTIME_DIR when available; falls back to data/home/temp.
 pub fn daemon_command_file() -> PathBuf {

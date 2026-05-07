@@ -92,6 +92,13 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if let Some(action) = cli.daemon_action.as_deref() {
+        let action = crate::tray_action::TrayAction::parse(action)
+            .ok_or_else(|| anyhow::anyhow!("unknown daemon action '{}'", action))?;
+        crate::daemon::send_daemon_overlay_action(action)?;
+        return Ok(());
+    }
+
     if cli.daemon_toggle {
         let request = DaemonToggleRequest {
             mode: cli.mode,
@@ -100,6 +107,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             no_exit_after_capture: cli.no_exit_after_capture,
             resume_session: cli.resume_session,
             no_resume_session: cli.no_resume_session,
+            overlay_action: None,
         };
         crate::daemon::send_daemon_toggle_request(&request)?;
         return Ok(());

@@ -300,6 +300,7 @@ impl WaylandState {
 
         self.surface.set_layer_surface(layer_surface);
         self.set_current_keyboard_interactivity(Some(desired_keyboard_mode));
+        self.force_sync_overlay_interactivity();
         self.buffer_damage.mark_all_full();
         self.set_toolbar_needs_recreate(true);
     }

@@ -296,15 +296,19 @@ impl WaylandState {
             self.input_state.click_highlight_enabled(),
             self.input_state.highlight_tool_ring_enabled(),
             self.input_state.presenter_mode,
+            self.input_state.light_mode,
         );
         self.input_state.on_key_press(key);
         self.input_state.needs_redraw = true;
+        self.sync_overlay_interactivity();
         let highlight_after = (
             self.input_state.click_highlight_enabled(),
             self.input_state.highlight_tool_ring_enabled(),
             self.input_state.presenter_mode,
+            self.input_state.light_mode,
         );
         if highlight_before.2 == highlight_after.2
+            && highlight_before.3 == highlight_after.3
             && (highlight_before.0 != highlight_after.0 || highlight_before.1 != highlight_after.1)
         {
             self.save_click_highlight_preferences();

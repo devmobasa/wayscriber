@@ -16,6 +16,7 @@ mod boards;
 mod delete_restore;
 mod drawing;
 mod erase;
+mod light_mode;
 mod menus;
 mod pages;
 mod presenter_mode;

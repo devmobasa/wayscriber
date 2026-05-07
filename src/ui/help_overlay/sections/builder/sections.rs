@@ -355,6 +355,14 @@ pub(super) fn build_main_sections(
             action_label(Action::TogglePresenterMode),
         ),
         row(
+            binding_or_fallback(bindings, Action::ToggleLightMode, NOT_BOUND_LABEL),
+            action_label(Action::ToggleLightMode),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ToggleLightModeDrawing, NOT_BOUND_LABEL),
+            action_label(Action::ToggleLightModeDrawing),
+        ),
+        row(
             binding_or_fallback(bindings, Action::OpenConfigurator, NOT_BOUND_LABEL),
             action_label(Action::OpenConfigurator),
         ),

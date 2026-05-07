@@ -60,6 +60,22 @@ impl InputState {
                 );
                 true
             }
+            Action::ToggleLightMode => {
+                let enabled = self.toggle_light_mode();
+                info!(
+                    "Light mode {}",
+                    if enabled { "enabled" } else { "disabled" }
+                );
+                true
+            }
+            Action::ToggleLightModeDrawing => {
+                let drawing = self.toggle_light_mode_drawing();
+                info!(
+                    "Light mode drawing {}",
+                    if drawing { "enabled" } else { "disabled" }
+                );
+                true
+            }
             Action::ToggleRadialMenu => {
                 if self.is_radial_menu_open() {
                     self.close_radial_menu();

@@ -133,6 +133,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - Click highlights with configurable colors/radius/duration
 - Persistent ring while click highlight tool is active
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
+- Light passthrough mode (<kbd>Ctrl+Shift+L</kbd>, layer-shell): ignore normal input until quick drawing is toggled
 - Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause display while apps run
 
 ### Callouts & Zoom
@@ -611,6 +612,7 @@ Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
 | Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
+| Toggle light passthrough | <kbd>Ctrl+Shift+L</kbd> |
 | Reset arrow labels | <kbd>Ctrl+Shift+R</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
 | Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt++</kbd> / <kbd>Ctrl+Alt+-</kbd> |

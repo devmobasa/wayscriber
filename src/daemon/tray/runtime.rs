@@ -20,14 +20,11 @@ use std::time::Duration;
 use zbus::{Connection, Proxy};
 
 #[cfg(feature = "tray")]
-use crate::config::Config;
-#[cfg(feature = "tray")]
-use crate::paths::tray_action_file;
-
-#[cfg(feature = "tray")]
 use super::super::types::TrayStatusShared;
 #[cfg(feature = "tray")]
 use super::WayscriberTray;
+#[cfg(feature = "tray")]
+use crate::config::Config;
 
 #[cfg(feature = "tray")]
 const TRAY_START_TIMEOUT: Duration = Duration::from_secs(5);
@@ -102,7 +99,6 @@ pub(crate) fn start_system_tray(
         configurator_binary,
         session_resume_enabled,
         overlay_pid,
-        tray_action_file(),
         tray_status.clone(),
     );
     let (ready_tx, ready_rx) = mpsc::channel::<Result<()>>();

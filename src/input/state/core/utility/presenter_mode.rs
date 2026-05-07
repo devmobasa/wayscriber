@@ -47,6 +47,10 @@ impl InputState {
             return self.presenter_mode;
         }
 
+        if self.light_mode {
+            self.exit_light_mode();
+        }
+
         let mut restore = PresenterRestore {
             show_status_bar: None,
             show_tool_preview: None,

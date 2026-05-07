@@ -27,6 +27,29 @@ pub struct Cli {
     )]
     pub daemon_toggle: bool,
 
+    /// Send an action to the active overlay through the running daemon
+    #[arg(
+        long,
+        value_name = "ACTION",
+        conflicts_with_all = [
+            "daemon",
+            "daemon_toggle",
+            "active",
+            "mode",
+            "no_tray",
+            "freeze_on_show",
+            "clear_session",
+            "session_info",
+            "freeze",
+            "exit_after_capture",
+            "no_exit_after_capture",
+            "resume_session",
+            "no_resume_session",
+            "about"
+        ]
+    )]
+    pub daemon_action: Option<String>,
+
     /// Start active (show overlay immediately, one-shot mode)
     #[arg(long, short = 'a', action = ArgAction::SetTrue)]
     pub active: bool,
@@ -102,6 +125,7 @@ pub struct Cli {
         conflicts_with_all = [
             "daemon",
             "daemon_toggle",
+            "daemon_action",
             "active",
             "mode",
             "no_tray",
@@ -152,6 +176,13 @@ mod tests {
         assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
         assert!(cli.exit_after_capture);
         assert!(cli.resume_session);
+    }
+
+    #[test]
+    fn daemon_action_accepts_light_mode_actions() {
+        let cli =
+            Cli::try_parse_from(["wayscriber", "--daemon-action", "light_draw_toggle"]).unwrap();
+        assert_eq!(cli.daemon_action.as_deref(), Some("light_draw_toggle"));
     }
 
     #[test]

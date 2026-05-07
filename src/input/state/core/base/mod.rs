@@ -2,7 +2,7 @@ mod state;
 mod types;
 
 pub use state::InputState;
-pub(crate) use state::PresenterRestore;
+pub(crate) use state::{LightModeRestore, PresenterRestore};
 pub use types::{
     BLOCKED_ACTION_DURATION_MS, BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS,
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
