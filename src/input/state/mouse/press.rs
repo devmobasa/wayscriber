@@ -33,43 +33,7 @@ impl InputState {
     fn handle_right_click(&mut self, screen_x: i32, screen_y: i32, canvas_x: i32, canvas_y: i32) {
         self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
         self.last_text_click = None;
-        if !matches!(self.state, DrawingState::Idle) {
-            match &self.state {
-                DrawingState::TextInput { .. } => {
-                    self.cancel_text_input();
-                }
-                DrawingState::MovingSelection { snapshots, .. } => {
-                    self.restore_selection_from_snapshots(snapshots.clone());
-                    self.state = DrawingState::Idle;
-                }
-                DrawingState::Selecting { .. } => {
-                    self.clear_provisional_dirty();
-                    self.last_provisional_bounds = None;
-                    self.state = DrawingState::Idle;
-                    self.needs_redraw = true;
-                }
-                DrawingState::ResizingText {
-                    shape_id, snapshot, ..
-                } => {
-                    self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
-                    self.state = DrawingState::Idle;
-                }
-                DrawingState::ResizingSelection { snapshots, .. } => {
-                    let snapshots = snapshots.clone();
-                    self.restore_resize_from_snapshots(snapshots.as_ref());
-                    self.state = DrawingState::Idle;
-                }
-                DrawingState::PendingTextClick { .. } => {
-                    self.state = DrawingState::Idle;
-                }
-                _ => {
-                    self.clear_provisional_dirty();
-                    self.last_provisional_bounds = None;
-                    self.state = DrawingState::Idle;
-                    self.needs_redraw = true;
-                }
-            }
-            self.end_pointer_drag();
+        if self.try_cancel_active_interaction() {
             return;
         }
         if self.zoom_active() {

@@ -132,6 +132,18 @@ impl InputState {
         self.needs_redraw = true;
     }
 
+    /// Cancels the current interaction when one is active.
+    ///
+    /// Returns `true` when an active interaction consumed the caller's event.
+    pub(crate) fn try_cancel_active_interaction(&mut self) -> bool {
+        if matches!(self.state, DrawingState::Idle) {
+            return false;
+        }
+
+        self.cancel_active_interaction();
+        true
+    }
+
     /// Cancels any in-progress interaction without exiting the application.
     pub(crate) fn cancel_active_interaction(&mut self) {
         match &self.state {
@@ -187,8 +199,9 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::BOARD_ID_WHITEBOARD;
+    use crate::input::events::MouseButton;
     use crate::input::state::test_support::make_test_input_state;
+    use crate::input::{BOARD_ID_WHITEBOARD, Tool};
 
     #[test]
     fn update_pointer_position_synthetic_updates_pointer_without_redraw() {
@@ -270,6 +283,37 @@ mod tests {
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(state.text_wrap_width.is_none());
+        assert!(state.needs_redraw);
+    }
+
+    #[test]
+    fn try_cancel_active_interaction_reports_false_when_idle() {
+        let mut state = make_test_input_state();
+        state.needs_redraw = false;
+
+        assert!(!state.try_cancel_active_interaction());
+
+        assert!(matches!(state.state, DrawingState::Idle));
+        assert!(!state.needs_redraw);
+    }
+
+    #[test]
+    fn try_cancel_active_interaction_cancels_drawing_and_ends_drag() {
+        let mut state = make_test_input_state();
+        state.state = DrawingState::Drawing {
+            tool: Tool::Pen,
+            start_x: 10,
+            start_y: 20,
+            points: vec![(10, 20), (30, 40)],
+            point_thicknesses: vec![1.0, 1.0],
+        };
+        state.begin_pointer_drag(MouseButton::Left, None);
+        state.needs_redraw = false;
+
+        assert!(state.try_cancel_active_interaction());
+
+        assert!(matches!(state.state, DrawingState::Idle));
+        assert!(state.active_drag_button.is_none());
         assert!(state.needs_redraw);
     }
 
