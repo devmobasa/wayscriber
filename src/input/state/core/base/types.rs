@@ -329,8 +329,9 @@ pub(crate) struct ClipboardFingerprint {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum SelectionPublishState {
+    #[default]
     NotAttempted,
     Published {
         generation: u64,
@@ -342,12 +343,6 @@ pub(crate) enum SelectionPublishState {
     Superseded {
         generation: u64,
     },
-}
-
-impl Default for SelectionPublishState {
-    fn default() -> Self {
-        Self::NotAttempted
-    }
 }
 
 #[allow(dead_code)]
