@@ -5,6 +5,9 @@
 # Requires:
 #   - jq
 #   - git
+#   - curl
+#   - sha256sum
+#   - perl
 #   - access to AUR clones (dirs provided via flags/env)
 #
 # Example (CI):
@@ -61,6 +64,9 @@ done
 need() { command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1" >&2; exit 1; }; }
 need jq
 need git
+need curl
+need sha256sum
+need perl
 
 [[ -f "$MANIFEST" ]] || { echo "Manifest not found: $MANIFEST" >&2; exit 1; }
 
@@ -102,18 +108,101 @@ sha_for() {
     jq -r --arg n "$name" '.artifacts[] | select(.name==$n) | .sha256' "$MANIFEST"
 }
 
+SOURCE_ARCHIVE_SHA=""
+
+source_archive_url() {
+    printf 'https://github.com/devmobasa/wayscriber/archive/refs/tags/v%s.tar.gz' "$VERSION"
+}
+
+source_archive_sha() {
+    if [[ -z "$SOURCE_ARCHIVE_SHA" ]]; then
+        local tmp
+        tmp="$(mktemp)"
+        curl -fsSL "$(source_archive_url)" -o "$tmp"
+        SOURCE_ARCHIVE_SHA="$(sha256sum "$tmp" | awk '{print $1}')"
+        rm -f "$tmp"
+    fi
+
+    printf '%s' "$SOURCE_ARCHIVE_SHA"
+}
+
 replace_line() {
     local file="$1" pattern="$2" replacement="$3"
-    python - "$file" "$pattern" "$replacement" <<'PY'
-import re, sys, pathlib
-path = pathlib.Path(sys.argv[1])
-pattern = sys.argv[2]
-replacement = sys.argv[3]
-data = path.read_text()
-data = re.sub(pattern, replacement, data, flags=re.MULTILINE)
-path.write_text(data)
-PY
+    perl -0pi -e 'BEGIN { our ($pattern, $replacement) = splice @ARGV, 0, 2 } s/$pattern/$replacement/mg' \
+        "$pattern" "$replacement" "$file"
 }
+
+replace_pkgbuild_array() {
+    local file="$1" array="$2" replacement="$3"
+    perl -0pi -e 'BEGIN { our ($array, $replacement) = splice @ARGV, 0, 2 } s/^\Q$array\E=\([^)]*\)/$replacement/ms' \
+        "$array" "$replacement" "$file"
+}
+
+set_srcinfo_field() {
+    local file="$1" field="$2" value="$3"
+    perl -0pi -e '
+        BEGIN { our ($field, $value) = splice @ARGV, 0, 2 }
+        my $line = "\t$field = $value\n";
+        my $seen = 0;
+        s{^[ \t]*\Q$field\E = .*\R?}{ $seen++ ? "" : $line }gme;
+        if (!$seen) {
+            s{\n(pkgname = )}{\n$line\n$1}m or $_ .= "\n$line";
+        }
+    ' "$field" "$value" "$file"
+}
+
+remove_pkgbuild_array_item() {
+    local file="$1" item="$2"
+    sed -i "/^[[:space:]]*'${item}'[[:space:]]*$/d" "$file"
+}
+
+remove_srcinfo_field_value() {
+    local file="$1" field="$2" value="$3"
+    sed -i "/^[[:space:]]*${field} = ${value}$/d" "$file"
+}
+
+remove_install_hook() {
+    local install_file="$1"
+    sed -i '/^install=/d' PKGBUILD
+    sed -i '/^[[:space:]]*install = /d' .SRCINFO
+    rm -f "$install_file"
+}
+
+rewrite_packaging_asset_paths() {
+    perl -0pi -e '
+        s{"\$srcdir/(wayscriber(?:-configurator)?\.desktop)"}{packaging/$1}g;
+        s{"\$srcdir/(wayscriber(?:-configurator)?-[0-9]+\.png)"}{packaging/icons/$1}g;
+    ' PKGBUILD
+}
+
+ensure_libxkbcommon_dependency() {
+    if ! grep -Eq "^[[:space:]]*'libxkbcommon'[[:space:]]*$" PKGBUILD; then
+        sed -i "/^[[:space:]]*'gcc-libs'/i\\    'libxkbcommon'" PKGBUILD
+    fi
+
+    if ! grep -Eq "^[[:space:]]*depends = libxkbcommon$" .SRCINFO; then
+        sed -i "/^[[:space:]]*depends = gcc-libs/i\\\tdepends = libxkbcommon" .SRCINFO
+    fi
+}
+
+commit_metadata_changes() {
+    local message="$1"
+    shift
+
+    local commit_paths=(PKGBUILD .SRCINFO)
+    git add PKGBUILD .SRCINFO
+
+    local deleted_file
+    for deleted_file in "$@"; do
+        if git ls-files --error-unmatch "$deleted_file" >/dev/null 2>&1; then
+            git rm -f --ignore-unmatch "$deleted_file"
+            commit_paths+=("$deleted_file")
+        fi
+    done
+
+    git commit -m "$message" -- "${commit_paths[@]}"
+}
+
 
 update_bin() {
     local dir="$1"
@@ -125,20 +214,21 @@ update_bin() {
     pkgrel="$(next_pkgrel "$dir")"
 
     pushd "$dir" >/dev/null
+    remove_install_hook "wayscriber-bin.install"
+    ensure_libxkbcommon_dependency
     replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
-    replace_line PKGBUILD '^source_x86_64=.*' "source_x86_64=(\"wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz\")"
-    replace_line PKGBUILD '^sha256sums_x86_64=.*' "sha256sums_x86_64=('${sha}')"
+    replace_pkgbuild_array PKGBUILD source_x86_64 "source_x86_64=(\"wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz\")"
+    replace_pkgbuild_array PKGBUILD sha256sums_x86_64 "sha256sums_x86_64=('${sha}')"
 
-    replace_line .SRCINFO '^\s*pkgver = .*' "pkgver = ${VERSION}"
-    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = ${pkgrel}"
-    replace_line .SRCINFO '^\s*source_x86_64 = .*' "source_x86_64 = wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz"
-    replace_line .SRCINFO '^\s*sha256sums_x86_64 = .*' "sha256sums_x86_64 = ${sha}"
+    set_srcinfo_field .SRCINFO pkgver "${VERSION}"
+    set_srcinfo_field .SRCINFO pkgrel "${pkgrel}"
+    set_srcinfo_field .SRCINFO source_x86_64 "wayscriber-v${VERSION}-linux-x86_64.tar.gz::https://github.com/devmobasa/wayscriber/releases/download/v${VERSION}/wayscriber-v${VERSION}-linux-x86_64.tar.gz"
+    set_srcinfo_field .SRCINFO sha256sums_x86_64 "${sha}"
 
     git status --short
     if [[ "$DO_PUSH" -eq 1 && -n "$(git status --porcelain)" ]]; then
-        git add PKGBUILD .SRCINFO
-        git commit -m "wayscriber-bin ${VERSION}"
+        commit_metadata_changes "wayscriber-bin ${VERSION}" "wayscriber-bin.install"
         git push
     fi
     popd >/dev/null
@@ -149,17 +239,30 @@ update_source() {
     local pkgrel
     [[ -d "$dir" ]] || { echo "Skip source: $dir not found" >&2; return; }
     pushd "$dir" >/dev/null
-    replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     pkgrel="$(next_pkgrel "$dir")"
-    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
+    local source_sha source_url
+    source_sha="$(source_archive_sha)"
+    source_url="$(source_archive_url)"
 
-    replace_line .SRCINFO '^\s*pkgver = .*' "pkgver = ${VERSION}"
-    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = ${pkgrel}"
+    remove_install_hook "wayscriber.install"
+    remove_pkgbuild_array_item PKGBUILD git
+    remove_srcinfo_field_value .SRCINFO makedepends git
+    ensure_libxkbcommon_dependency
+    replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
+    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
+    replace_pkgbuild_array PKGBUILD source 'source=("wayscriber-$pkgver.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v$pkgver.tar.gz")'
+    replace_pkgbuild_array PKGBUILD sha256sums "sha256sums=('${source_sha}')"
+    replace_line PKGBUILD 'cd "\$pkgname"' 'cd "$pkgname-$pkgver"'
+    rewrite_packaging_asset_paths
+
+    set_srcinfo_field .SRCINFO pkgver "${VERSION}"
+    set_srcinfo_field .SRCINFO pkgrel "${pkgrel}"
+    set_srcinfo_field .SRCINFO source "wayscriber-${VERSION}.tar.gz::${source_url}"
+    set_srcinfo_field .SRCINFO sha256sums "${source_sha}"
 
     git status --short
     if [[ "$DO_PUSH" -eq 1 && -n "$(git status --porcelain)" ]]; then
-        git add PKGBUILD .SRCINFO
-        git commit -m "wayscriber ${VERSION}"
+        commit_metadata_changes "wayscriber ${VERSION}" "wayscriber.install"
         git push
     fi
     popd >/dev/null
@@ -170,21 +273,29 @@ update_configurator() {
     local pkgrel
     [[ -d "$dir" ]] || { echo "Skip configurator: $dir not found" >&2; return; }
     pushd "$dir" >/dev/null
-    replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
     pkgrel="$(next_pkgrel "$dir")"
-    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
-    replace_line PKGBUILD '^source=.*' "source=(\"git+https://github.com/devmobasa/wayscriber.git#tag=v${VERSION}\")"
-    replace_line PKGBUILD '^sha256sums=.*' "sha256sums=('SKIP')"
+    local source_sha source_url
+    source_sha="$(source_archive_sha)"
+    source_url="$(source_archive_url)"
 
-    replace_line .SRCINFO '^\s*pkgver = .*' "pkgver = ${VERSION}"
-    replace_line .SRCINFO '^\s*pkgrel = .*' "pkgrel = ${pkgrel}"
-    replace_line .SRCINFO '^\s*source = .*' "source = git+https://github.com/devmobasa/wayscriber.git#tag=v${VERSION}"
-    replace_line .SRCINFO '^\s*sha256sums = .*' "sha256sums = SKIP"
+    remove_pkgbuild_array_item PKGBUILD git
+    remove_srcinfo_field_value .SRCINFO makedepends git
+    ensure_libxkbcommon_dependency
+    replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
+    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
+    replace_pkgbuild_array PKGBUILD source 'source=("wayscriber-$pkgver.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v$pkgver.tar.gz")'
+    replace_pkgbuild_array PKGBUILD sha256sums "sha256sums=('${source_sha}')"
+    replace_line PKGBUILD '^    cd wayscriber$' '    cd "wayscriber-$pkgver"'
+    rewrite_packaging_asset_paths
+
+    set_srcinfo_field .SRCINFO pkgver "${VERSION}"
+    set_srcinfo_field .SRCINFO pkgrel "${pkgrel}"
+    set_srcinfo_field .SRCINFO source "wayscriber-${VERSION}.tar.gz::${source_url}"
+    set_srcinfo_field .SRCINFO sha256sums "${source_sha}"
 
     git status --short
     if [[ "$DO_PUSH" -eq 1 && -n "$(git status --porcelain)" ]]; then
-        git add PKGBUILD .SRCINFO
-        git commit -m "wayscriber-configurator ${VERSION}"
+        commit_metadata_changes "wayscriber-configurator ${VERSION}"
         git push
     fi
     popd >/dev/null
