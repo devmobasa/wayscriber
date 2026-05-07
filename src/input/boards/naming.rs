@@ -1,6 +1,11 @@
 use super::{BOARD_ID_TRANSPARENT, BoardBackground, BoardManager, BoardSpec, BoardState};
 
 impl BoardManager {
+    pub fn can_switch_to_id(&self, id: &str) -> bool {
+        self.switch_to_id_target_index(id)
+            .is_some_and(|index| index != self.active_index)
+    }
+
     pub fn switch_to_id(&mut self, id: &str) -> bool {
         if let Some(index) = self.boards.iter().position(|board| board.spec.id == id) {
             self.active_index = index;
@@ -15,6 +20,11 @@ impl BoardManager {
             return false;
         };
         self.switch_to_slot(desired_slot)
+    }
+
+    pub fn can_switch_to_slot(&self, slot: usize) -> bool {
+        self.switch_to_slot_target_index(slot)
+            .is_some_and(|index| index != self.active_index)
     }
 
     pub fn switch_to_slot(&mut self, slot: usize) -> bool {
@@ -41,6 +51,29 @@ impl BoardManager {
 
         self.active_index = slot;
         true
+    }
+
+    fn switch_to_id_target_index(&self, id: &str) -> Option<usize> {
+        if let Some(index) = self.boards.iter().position(|board| board.spec.id == id) {
+            return Some(index);
+        }
+
+        if !self.auto_create {
+            return None;
+        }
+
+        self.switch_to_slot_target_index(parse_board_slot(id)?)
+    }
+
+    fn switch_to_slot_target_index(&self, slot: usize) -> Option<usize> {
+        if slot >= self.max_count {
+            return None;
+        }
+        if slot < self.boards.len() || self.auto_create {
+            Some(slot)
+        } else {
+            None
+        }
     }
 
     pub fn ensure_board(&mut self, id: &str) -> Option<&mut BoardState> {

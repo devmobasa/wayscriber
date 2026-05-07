@@ -1,5 +1,5 @@
 use super::*;
-use crate::draw::{Frame, PageDeleteOutcome};
+use crate::draw::{Frame, PageDeleteOutcome, ShapeId};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT};
 
 fn board_index(state: &InputState, id: &str) -> usize {
@@ -17,6 +17,31 @@ fn set_page_count(state: &mut InputState, board_index: usize, count: usize) {
         .pages_mut();
     pages.clear();
     pages.extend((0..count.max(1)).map(|_| Frame::new()));
+}
+
+fn add_text_shape(state: &mut InputState, text: &str) -> ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 40,
+        y: 80,
+        text: text.to_string(),
+        color: state.current_color,
+        size: state.current_font_size,
+        font_descriptor: state.font_descriptor.clone(),
+        background_enabled: state.text_background_enabled,
+        wrap_width: None,
+    })
+}
+
+fn assert_active_text(state: &InputState, shape_id: ShapeId, expected: &str) {
+    let shape = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("text shape");
+    match &shape.shape {
+        Shape::Text { text, .. } => assert_eq!(text, expected),
+        _ => panic!("Expected text shape"),
+    }
 }
 
 #[test]
@@ -51,6 +76,25 @@ fn delete_active_board_requires_confirmation_then_restore_recovers_board() {
         state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
         Some("Board restored: Blackboard")
     );
+}
+
+#[test]
+fn delete_active_board_restore_preserves_cancelled_text_edit() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    let shape_id = add_text_shape(&mut state, "Original");
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+    assert_active_text(&state, shape_id, "");
+
+    state.delete_active_board();
+    state.delete_active_board();
+    state.restore_deleted_board();
+
+    assert_eq!(state.board_id(), BOARD_ID_BLACKBOARD);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+    assert_active_text(&state, shape_id, "Original");
 }
 
 #[test]
@@ -96,6 +140,27 @@ fn page_delete_requires_confirmation_and_restore_recovers_deleted_page() {
         state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
         Some("Page restored (2/2)")
     );
+}
+
+#[test]
+fn page_delete_restore_preserves_cancelled_text_edit() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    set_page_count(&mut state, board, 2);
+    let shape_id = add_text_shape(&mut state, "Original");
+    state.set_selection(vec![shape_id]);
+    assert!(state.edit_selected_text());
+    assert_active_text(&state, shape_id, "");
+
+    assert_eq!(state.page_delete(), PageDeleteOutcome::Pending);
+    assert_eq!(state.page_delete(), PageDeleteOutcome::Removed);
+    state.restore_deleted_page();
+
+    assert_eq!(state.boards.active_page_index(), 1);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.text_edit_target.is_none());
+    assert_active_text(&state, shape_id, "Original");
 }
 
 #[test]
