@@ -148,7 +148,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             let outline = brush.size + outline_width;
             render_freehand_borrowed(ctx, points, glow, outline);
         }
-        Shape::Text { .. } => {
+        Shape::Text { .. } | Shape::Image { .. } => {
             if let Some(bounds) = drawn.shape.bounding_box() {
                 let padding = 4.0;
                 let x = bounds.x as f64 - padding;

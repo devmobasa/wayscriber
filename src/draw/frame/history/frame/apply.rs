@@ -22,6 +22,11 @@ impl Frame {
                     target.locked = after.locked;
                 }
             }
+            UndoAction::ModifyImageBounds {
+                shape_id, after, ..
+            } => {
+                self.apply_image_bounds(*shape_id, *after);
+            }
             UndoAction::Reorder {
                 shape_id,
                 from: _,
@@ -58,6 +63,11 @@ impl Frame {
                     target.locked = before.locked;
                 }
             }
+            UndoAction::ModifyImageBounds {
+                shape_id, before, ..
+            } => {
+                self.apply_image_bounds(*shape_id, *before);
+            }
             UndoAction::Reorder { shape_id, from, .. } => {
                 self.move_shape_to(*shape_id, *from);
             }
@@ -80,6 +90,22 @@ impl Frame {
                 insert_index -= 1;
             }
             self.shapes.insert(insert_index, shape);
+        }
+    }
+
+    fn apply_image_bounds(
+        &mut self,
+        shape_id: ShapeId,
+        bounds: super::super::super::types::ImageBoundsSnapshot,
+    ) {
+        if let Some(target) = self.shape_mut(shape_id)
+            && let crate::draw::shape::Shape::Image { x, y, w, h, .. } = &mut target.shape
+        {
+            *x = bounds.x;
+            *y = bounds.y;
+            *w = bounds.w;
+            *h = bounds.h;
+            target.locked = bounds.locked;
         }
     }
 }

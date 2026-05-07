@@ -53,6 +53,21 @@ fn copy_paste_selection_creates_offset_shape() {
     state.set_selection(vec![original_id]);
     state.handle_action(Action::CopySelection);
     state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+    let shapes = state
+        .local_selection_shapes_for_fallback(
+            request
+                .local_selection_fallback_generation
+                .expect("local fallback generation"),
+        )
+        .expect("local selection fallback");
+    assert_eq!(
+        state.paste_clipboard_shapes_from_request(&request, shapes),
+        1
+    );
+    state.finish_clipboard_paste_request(request.id);
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 2);
@@ -73,6 +88,526 @@ fn copy_paste_selection_creates_offset_shape() {
         }
         _ => panic!("Expected rectangles"),
     }
+}
+
+#[test]
+fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::CopySelection);
+    state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+    let shapes = state
+        .local_selection_shapes_for_pending_publish(request.local_selection_fallback_generation)
+        .expect("pending local publish selection");
+
+    assert_eq!(
+        state.paste_clipboard_shapes_from_request(&request, shapes),
+        1
+    );
+    state.finish_clipboard_paste_request(request.id);
+
+    assert_eq!(state.boards.active_frame().shapes.len(), 2);
+}
+
+#[test]
+fn stale_publish_completion_is_ignored_for_newer_copy() {
+    let mut state = create_test_input_state();
+    let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![first_id]);
+    state.handle_action(Action::CopySelection);
+    let first_publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending first private clipboard publish");
+
+    let second_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 200,
+        y: 220,
+        w: 90,
+        h: 70,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![second_id]);
+    state.handle_action(Action::CopySelection);
+    let second_publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending second private clipboard publish");
+
+    assert!(!state.complete_selection_clipboard_publish(first_publish.generation, None, false));
+    assert_eq!(
+        state.local_selection_fallback_generation(),
+        Some(second_publish.generation)
+    );
+    assert!(
+        state
+            .local_selection_shapes_for_pending_publish(Some(second_publish.generation))
+            .is_some()
+    );
+}
+
+#[test]
+fn failed_local_clipboard_precedence_clears_when_fingerprint_changes() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::CopySelection);
+    let publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending private clipboard publish");
+    let initial_fingerprint = ClipboardFingerprint {
+        offered_mime_types: vec!["image/png".to_string()],
+        selected_mime_type: Some("image/png".to_string()),
+        bounded_content_hash: Some(1),
+        bounded_content_len: Some(4096),
+        bounded_content_truncated: true,
+    };
+    state.complete_selection_clipboard_publish(
+        publish.generation,
+        Some(initial_fingerprint.clone()),
+        false,
+    );
+
+    assert!(
+        state
+            .failed_local_selection_after_fingerprint_probe(
+                Some(publish.generation),
+                Some(initial_fingerprint),
+            )
+            .is_some()
+    );
+
+    let changed_fingerprint = ClipboardFingerprint {
+        offered_mime_types: vec!["image/png".to_string()],
+        selected_mime_type: Some("image/png".to_string()),
+        bounded_content_hash: Some(2),
+        bounded_content_len: Some(4096),
+        bounded_content_truncated: true,
+    };
+    assert!(
+        state
+            .failed_local_selection_after_fingerprint_probe(
+                Some(publish.generation),
+                Some(changed_fingerprint),
+            )
+            .is_none()
+    );
+    assert!(!state.local_selection_fallback_allowed());
+    assert_eq!(state.local_selection_fallback_generation(), None);
+}
+
+#[test]
+fn failed_local_clipboard_without_failure_fingerprint_supersedes_when_current_is_readable() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::CopySelection);
+    let publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending private clipboard publish");
+    state.complete_selection_clipboard_publish(publish.generation, None, false);
+
+    let current_fingerprint = ClipboardFingerprint {
+        offered_mime_types: vec!["image/png".to_string()],
+        selected_mime_type: Some("image/png".to_string()),
+        bounded_content_hash: Some(1),
+        bounded_content_len: Some(4096),
+        bounded_content_truncated: true,
+    };
+    assert!(
+        state
+            .failed_local_selection_after_fingerprint_probe(
+                Some(publish.generation),
+                Some(current_fingerprint),
+            )
+            .is_none()
+    );
+    assert!(!state.local_selection_fallback_allowed());
+}
+
+#[test]
+fn failed_local_clipboard_without_current_fingerprint_does_not_fast_path() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::CopySelection);
+    let publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending private clipboard publish");
+    state.complete_selection_clipboard_publish(publish.generation, None, false);
+
+    assert!(
+        state
+            .failed_local_selection_after_fingerprint_probe(Some(publish.generation), None)
+            .is_none()
+    );
+    assert!(
+        state.local_selection_fallback_allowed(),
+        "transport failure fallback remains available after normal resolution"
+    );
+}
+
+#[test]
+fn published_selection_allows_local_fallback_until_superseded() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::CopySelection);
+    let publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending private clipboard publish");
+
+    state.complete_selection_clipboard_publish(publish.generation, None, true);
+    assert!(state.local_selection_fallback_allowed());
+    let generation = state
+        .local_selection_fallback_generation()
+        .expect("fallback generation");
+    assert!(
+        state
+            .local_selection_shapes_for_fallback(generation)
+            .is_some()
+    );
+
+    state.mark_selection_clipboard_superseded();
+    assert!(!state.local_selection_fallback_allowed());
+    assert!(
+        state
+            .local_selection_shapes_for_fallback(generation)
+            .is_none()
+    );
+}
+
+#[test]
+fn fallback_generation_rejects_newer_local_copy() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::CopySelection);
+    state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+    let request_generation = request
+        .local_selection_fallback_generation
+        .expect("fallback generation");
+
+    state.handle_action(Action::CopySelection);
+
+    assert_ne!(
+        Some(request_generation),
+        state.local_selection_fallback_generation()
+    );
+    assert!(
+        state
+            .local_selection_shapes_for_fallback(request_generation)
+            .is_none()
+    );
+}
+
+#[test]
+fn private_payload_for_request_rejects_newer_same_instance_generation() {
+    let mut state = create_test_input_state();
+    let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![first_id]);
+    state.handle_action(Action::CopySelection);
+    let _first_publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending first private clipboard publish");
+    state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+
+    let second_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 200,
+        y: 220,
+        w: 90,
+        h: 70,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![second_id]);
+    state.handle_action(Action::CopySelection);
+    let second_publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending second private clipboard publish");
+    let second_payload: WayscriberClipboardSelection =
+        serde_json::from_str(&second_publish.payload_json).expect("second payload json");
+
+    assert!(
+        state
+            .private_payload_shapes_for_request(&request, second_payload)
+            .is_none()
+    );
+}
+
+#[test]
+fn private_payload_for_request_uses_payload_when_current_generation_changed() {
+    let mut state = create_test_input_state();
+    let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![first_id]);
+    state.handle_action(Action::CopySelection);
+    let first_publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending first private clipboard publish");
+    let first_payload: WayscriberClipboardSelection =
+        serde_json::from_str(&first_publish.payload_json).expect("first payload json");
+    state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+
+    let second_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 200,
+        y: 220,
+        w: 90,
+        h: 70,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![second_id]);
+    state.handle_action(Action::CopySelection);
+
+    let shapes = state
+        .private_payload_shapes_for_request(&request, first_payload)
+        .expect("request-owned private payload shapes");
+    assert_eq!(shapes.len(), 1);
+    match &shapes[0] {
+        Shape::Rect { x, y, .. } => {
+            assert_eq!((*x, *y), (10, 20));
+        }
+        _ => panic!("Expected rectangle"),
+    }
+}
+
+#[test]
+fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
+    let mut state = create_test_input_state();
+    let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![original_id]);
+    state.handle_action(Action::CopySelection);
+    let publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending private clipboard publish");
+    let payload: WayscriberClipboardSelection =
+        serde_json::from_str(&publish.payload_json).expect("payload json");
+
+    state.mark_selection_clipboard_superseded();
+    state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+
+    assert_eq!(request.local_selection_fallback_generation, None);
+    assert_eq!(
+        request.selection_clipboard_generation_at_request,
+        payload.copy_generation
+    );
+    assert!(
+        state
+            .private_payload_shapes_for_request(&request, payload)
+            .is_some()
+    );
+}
+
+#[test]
+fn request_generation_supersede_ignores_newer_local_copy() {
+    let mut state = create_test_input_state();
+    let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![first_id]);
+    state.handle_action(Action::CopySelection);
+    state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+    let request_generation = request
+        .local_selection_fallback_generation
+        .expect("request generation");
+
+    let second_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 200,
+        y: 220,
+        w: 90,
+        h: 70,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![second_id]);
+    state.handle_action(Action::CopySelection);
+    let current_generation = state
+        .local_selection_fallback_generation()
+        .expect("current generation");
+
+    assert_ne!(request_generation, current_generation);
+    state.mark_selection_clipboard_superseded_for_generation(Some(request_generation));
+
+    assert_eq!(
+        state.local_selection_fallback_generation(),
+        Some(current_generation)
+    );
+    assert!(state.local_selection_fallback_allowed());
+}
+
+#[test]
+fn failed_local_fast_path_rejects_newer_generation() {
+    let mut state = create_test_input_state();
+    let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![first_id]);
+    state.handle_action(Action::CopySelection);
+    let first_publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending first private clipboard publish");
+    let fingerprint = ClipboardFingerprint {
+        offered_mime_types: vec!["image/png".to_string()],
+        selected_mime_type: Some("image/png".to_string()),
+        bounded_content_hash: Some(1),
+        bounded_content_len: Some(4096),
+        bounded_content_truncated: true,
+    };
+    state.complete_selection_clipboard_publish(
+        first_publish.generation,
+        Some(fingerprint.clone()),
+        false,
+    );
+    state.handle_action(Action::PasteSelection);
+    let request = state
+        .take_pending_clipboard_paste_request()
+        .expect("pending paste request");
+    let request_generation = request.local_selection_fallback_generation;
+
+    let second_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 200,
+        y: 220,
+        w: 90,
+        h: 70,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![second_id]);
+    state.handle_action(Action::CopySelection);
+    let second_publish = state
+        .take_pending_selection_clipboard_publish()
+        .expect("pending second private clipboard publish");
+    state.complete_selection_clipboard_publish(
+        second_publish.generation,
+        Some(fingerprint.clone()),
+        false,
+    );
+
+    assert!(!state.has_failed_local_selection_for_generation(request_generation));
+    assert!(
+        state
+            .failed_local_selection_after_fingerprint_probe(request_generation, Some(fingerprint))
+            .is_none()
+    );
+    assert_eq!(
+        state.local_selection_fallback_generation(),
+        Some(second_publish.generation)
+    );
 }
 
 #[test]

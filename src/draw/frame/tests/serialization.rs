@@ -1,5 +1,6 @@
-use crate::draw::frame::{Frame, UndoAction};
-use crate::draw::{Shape, color::BLACK};
+use crate::draw::frame::{Frame, ImageBoundsSnapshot, UndoAction};
+use crate::draw::{EmbeddedImage, Shape, color::BLACK};
+use base64::{Engine as _, engine::general_purpose};
 
 #[test]
 fn frame_serializes_history() {
@@ -120,4 +121,58 @@ fn try_add_shape_respects_limit() {
         },
         1
     ));
+}
+
+#[test]
+fn image_bounds_history_serializes_without_duplicate_image_payloads() {
+    let bytes = vec![42u8; 256];
+    let encoded = general_purpose::STANDARD.encode(&bytes);
+    let mut frame = Frame::new();
+    let id = frame.add_shape(Shape::Image {
+        x: 0,
+        y: 0,
+        w: 16,
+        h: 16,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 16,
+            height: 16,
+            bytes,
+        },
+    });
+    let index = frame.find_index(id).unwrap();
+    frame.push_undo_action(
+        UndoAction::Create {
+            shapes: vec![(index, frame.shape(id).unwrap().clone())],
+        },
+        100,
+    );
+    frame.push_undo_action(
+        UndoAction::ModifyImageBounds {
+            shape_id: id,
+            before: ImageBoundsSnapshot {
+                x: 0,
+                y: 0,
+                w: 16,
+                h: 16,
+                locked: false,
+            },
+            after: ImageBoundsSnapshot {
+                x: 4,
+                y: 5,
+                w: 32,
+                h: 32,
+                locked: false,
+            },
+        },
+        100,
+    );
+
+    let json = serde_json::to_string(&frame).expect("serialize frame with image history");
+    assert!(json.contains("\"kind\":\"modify_image_bounds\""));
+    assert_eq!(
+        json.matches(&encoded).count(),
+        2,
+        "visible shape plus create history should contain image bytes, bounds history should not"
+    );
 }

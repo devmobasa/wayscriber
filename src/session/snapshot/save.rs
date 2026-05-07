@@ -3,7 +3,7 @@ use super::types::{BoardFile, CURRENT_VERSION, SessionFile, SessionSnapshot};
 use crate::session::lock::{lock_exclusive, unlock};
 use crate::session::options::{CompressionMode, SessionOptions};
 use crate::time_utils::now_rfc3339;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -96,12 +96,11 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
         serde_json::to_vec_pretty(&file_payload).context("failed to serialise session payload")?;
 
     if json_bytes.len() as u64 > options.max_file_size_bytes {
-        warn!(
+        return Err(anyhow!(
             "Session data size {} bytes exceeds the configured limit of {} bytes; skipping save",
             json_bytes.len(),
             options.max_file_size_bytes
-        );
-        return Ok(());
+        ));
     }
 
     let should_compress = match options.compression {

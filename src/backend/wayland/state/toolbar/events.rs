@@ -137,6 +137,7 @@ impl WaylandState {
         if self.input_state.take_pending_paste_hex() {
             self.handle_paste_hex_color();
         }
+        self.drain_clipboard_requests();
         self.refresh_keyboard_interactivity();
     }
 

@@ -2,7 +2,7 @@ use crate::draw::{Color, EraserKind, FontDescriptor, Frame};
 use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
-pub(super) const CURRENT_VERSION: u32 = 5;
+pub(super) const CURRENT_VERSION: u32 = 6;
 
 /// Captured state suitable for serialisation or restoration.
 #[derive(Debug, Clone)]

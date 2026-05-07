@@ -83,6 +83,10 @@ impl BoardManager {
         self.active_pages().active_index()
     }
 
+    pub fn active_page_generation(&self) -> u64 {
+        self.active_pages().generation()
+    }
+
     pub fn next_page(&mut self) -> bool {
         self.active_pages_mut().next_page()
     }
@@ -188,6 +192,7 @@ impl BoardManager {
     pub fn set_board_pages(&mut self, id: &str, pages: BoardPages) -> bool {
         if let Some(board) = self.ensure_board(id) {
             board.pages = pages;
+            board.pages.bump_generation();
             return true;
         }
         false

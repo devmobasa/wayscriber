@@ -3,6 +3,7 @@
 mod background;
 mod blur;
 mod highlight;
+mod image;
 mod primitives;
 mod selection;
 mod shapes;

@@ -15,9 +15,10 @@ pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
 use crate::capture::file::FileSaveConfig;
 use crate::config::ToolPresetConfig;
-use crate::draw::ShapeId;
 use crate::draw::frame::ShapeSnapshot;
+use crate::draw::{Shape, ShapeId};
 use crate::input::tool::Tool;
+use crate::util::Rect;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -307,6 +308,76 @@ pub(crate) struct PendingClipboardFallback {
     pub save_config: FileSaveConfig,
     /// Whether to exit after successful fallback save (from exit-after-capture mode).
     pub exit_after_save: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct WayscriberClipboardSelection {
+    pub schema_version: u32,
+    pub app_version: String,
+    pub app_instance_id: String,
+    pub copy_generation: u64,
+    pub shapes: Vec<Shape>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ClipboardFingerprint {
+    pub offered_mime_types: Vec<String>,
+    pub selected_mime_type: Option<String>,
+    pub bounded_content_hash: Option<u64>,
+    pub bounded_content_len: Option<usize>,
+    pub bounded_content_truncated: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) enum SelectionPublishState {
+    #[default]
+    NotAttempted,
+    Published {
+        generation: u64,
+    },
+    Failed {
+        generation: u64,
+        clipboard_fingerprint_at_failure: Option<ClipboardFingerprint>,
+    },
+    Superseded {
+        generation: u64,
+    },
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub(crate) struct PendingSelectionClipboardPublish {
+    pub generation: u64,
+    pub payload_json: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PasteAnchor {
+    Pointer { x: i32, y: i32 },
+    VisibleCenter { x: i32, y: i32 },
+}
+
+impl PasteAnchor {
+    #[allow(dead_code)]
+    pub(crate) fn point(self) -> (i32, i32) {
+        match self {
+            PasteAnchor::Pointer { x, y } | PasteAnchor::VisibleCenter { x, y } => (x, y),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ClipboardPasteRequest {
+    pub id: u64,
+    pub target_board_id: String,
+    pub target_page_index: usize,
+    pub target_page_generation: u64,
+    pub anchor: PasteAnchor,
+    pub visible_canvas_rect: Rect,
+    pub screen_size: (u32, u32),
+    pub selection_clipboard_generation_at_request: u64,
+    pub local_selection_fallback_generation: Option<u64>,
 }
 
 /// Pending board deletion confirmation state.

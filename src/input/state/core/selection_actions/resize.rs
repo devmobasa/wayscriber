@@ -214,6 +214,18 @@ impl InputState {
                     strength: *strength,
                 }
             }
+            Shape::Image { x, y, w, h, data } => {
+                let (nx, ny) = Self::scale_point_i32(*x, *y, anchor_x, anchor_y, scale_x, scale_y);
+                let nw = Self::scale_size(*w, scale_x);
+                let nh = Self::scale_size(*h, scale_y);
+                Shape::Image {
+                    x: nx,
+                    y: ny,
+                    w: nw.max(1),
+                    h: nh.max(1),
+                    data: data.clone(),
+                }
+            }
             Shape::Freehand {
                 points,
                 color,

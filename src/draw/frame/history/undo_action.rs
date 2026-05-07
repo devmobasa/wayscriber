@@ -21,7 +21,8 @@ impl UndoAction {
             UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
                 shapes.iter().map(|(_, shape)| shape.id).max()
             }
-            UndoAction::Modify { shape_id, .. } => Some(*shape_id),
+            UndoAction::Modify { shape_id, .. }
+            | UndoAction::ModifyImageBounds { shape_id, .. } => Some(*shape_id),
             UndoAction::Reorder { shape_id, .. } => Some(*shape_id),
             UndoAction::Compound(actions) => actions
                 .iter()
@@ -36,9 +37,9 @@ impl UndoAction {
                 shapes.retain(|(_, shape)| !removed.contains(&shape.id));
                 !shapes.is_empty()
             }
-            UndoAction::Modify { shape_id, .. } | UndoAction::Reorder { shape_id, .. } => {
-                !removed.contains(shape_id)
-            }
+            UndoAction::Modify { shape_id, .. }
+            | UndoAction::ModifyImageBounds { shape_id, .. }
+            | UndoAction::Reorder { shape_id, .. } => !removed.contains(shape_id),
             UndoAction::Compound(actions) => {
                 actions.retain_mut(|action| action.prune_removed_shapes(removed));
                 !actions.is_empty()
@@ -49,9 +50,9 @@ impl UndoAction {
     pub(super) fn validate_against_shapes(&mut self, ids: &HashSet<ShapeId>) -> bool {
         match self {
             UndoAction::Create { .. } | UndoAction::Delete { .. } => true,
-            UndoAction::Modify { shape_id, .. } | UndoAction::Reorder { shape_id, .. } => {
-                ids.contains(shape_id)
-            }
+            UndoAction::Modify { shape_id, .. }
+            | UndoAction::ModifyImageBounds { shape_id, .. }
+            | UndoAction::Reorder { shape_id, .. } => ids.contains(shape_id),
             UndoAction::Compound(actions) => {
                 actions.retain_mut(|action| action.validate_against_shapes(ids));
                 !actions.is_empty()
@@ -66,7 +67,9 @@ impl UndoAction {
                     ids.insert(shape.id);
                 }
             }
-            UndoAction::Modify { shape_id, .. } | UndoAction::Reorder { shape_id, .. } => {
+            UndoAction::Modify { shape_id, .. }
+            | UndoAction::ModifyImageBounds { shape_id, .. }
+            | UndoAction::Reorder { shape_id, .. } => {
                 ids.insert(*shape_id);
             }
             UndoAction::Compound(actions) => {

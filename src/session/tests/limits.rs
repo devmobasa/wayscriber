@@ -5,7 +5,7 @@ use crate::input::EraserMode;
 use std::fs;
 
 #[test]
-fn save_snapshot_skips_when_payload_exceeds_max_file_size() {
+fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
     let temp = tempfile::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-too-big");
     options.persist_transparent = false;
@@ -46,7 +46,11 @@ fn save_snapshot_skips_when_payload_exceeds_max_file_size() {
         }),
     };
 
-    save_snapshot(&snapshot, &options).expect("save_snapshot should succeed even when skipping");
+    let err = save_snapshot(&snapshot, &options).expect_err("oversize snapshot should fail");
+    assert!(
+        err.to_string().contains("exceeds the configured limit"),
+        "unexpected error: {err:#}"
+    );
 
     let session_path = options.session_file_path();
     assert!(

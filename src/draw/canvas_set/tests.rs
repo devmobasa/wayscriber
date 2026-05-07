@@ -285,3 +285,20 @@ fn test_move_page_updates_active_and_order() {
         .collect();
     assert_eq!(ids, vec![3, 1, 2]);
 }
+
+#[test]
+fn page_generation_changes_on_identity_or_order_updates() {
+    let mut pages = BoardPages::new();
+    let start = pages.generation();
+
+    pages.new_page();
+    assert_ne!(pages.generation(), start);
+    let after_new = pages.generation();
+
+    assert!(pages.move_page(1, 0));
+    assert_ne!(pages.generation(), after_new);
+    let after_move = pages.generation();
+
+    let _ = pages.delete_page();
+    assert_ne!(pages.generation(), after_move);
+}

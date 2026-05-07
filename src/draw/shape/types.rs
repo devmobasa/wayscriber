@@ -7,8 +7,19 @@ use super::text::{bounding_box_for_sticky_note, bounding_box_for_text};
 use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
+use base64::{Engine as _, engine::general_purpose};
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+/// Encoded image payload stored directly on an image shape.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EmbeddedImage {
+    pub mime_type: String,
+    pub width: u32,
+    pub height: u32,
+    #[serde(with = "base64_bytes")]
+    pub bytes: Vec<u8>,
+}
 
 /// Brush options for eraser strokes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -222,6 +233,19 @@ pub enum Shape {
         /// Brush options (shape + diameter)
         brush: EraserBrush,
     },
+    /// Embedded raster image pasted from the clipboard.
+    Image {
+        /// Top-left X coordinate
+        x: i32,
+        /// Top-left Y coordinate
+        y: i32,
+        /// Display width in logical canvas pixels
+        w: i32,
+        /// Display height in logical canvas pixels
+        h: i32,
+        /// Original encoded image payload and natural dimensions
+        data: EmbeddedImage,
+    },
 }
 
 impl Shape {
@@ -335,6 +359,7 @@ impl Shape {
                 bounding_box_for_points(points, inflated)
             }
             Shape::EraserStroke { points, brush } => bounding_box_for_eraser(points, brush.size),
+            Shape::Image { x, y, w, h, .. } => normalized_rect(*x, *y, *w, *h),
         }
     }
 
@@ -352,10 +377,45 @@ impl Shape {
             Shape::MarkerStroke { .. } => "Marker",
             Shape::StepMarker { .. } => "Step Marker",
             Shape::EraserStroke { .. } => "Eraser",
+            Shape::Image { .. } => "Image",
         }
     }
 }
 
 const fn default_arrow_head_at_end() -> bool {
     true
+}
+
+fn normalized_rect(x: i32, y: i32, w: i32, h: i32) -> Option<Rect> {
+    let min_x = if w < 0 { x.saturating_add(w) } else { x };
+    let min_y = if h < 0 { y.saturating_add(h) } else { y };
+    Rect::new(
+        min_x,
+        min_y,
+        w.saturating_abs().max(1),
+        h.saturating_abs().max(1),
+    )
+}
+
+mod base64_bytes {
+    use super::*;
+
+    pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        general_purpose::STANDARD
+            .encode(bytes)
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let encoded = String::deserialize(deserializer)?;
+        general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(serde::de::Error::custom)
+    }
 }

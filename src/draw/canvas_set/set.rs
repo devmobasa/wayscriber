@@ -119,12 +119,19 @@ impl CanvasSet {
         match mode {
             BoardMode::Transparent => {
                 self.transparent = pages.unwrap_or_default();
+                self.transparent.bump_generation();
             }
             BoardMode::Whiteboard => {
-                self.whiteboard = pages;
+                self.whiteboard = pages.map(|mut pages| {
+                    pages.bump_generation();
+                    pages
+                });
             }
             BoardMode::Blackboard => {
-                self.blackboard = pages;
+                self.blackboard = pages.map(|mut pages| {
+                    pages.bump_generation();
+                    pages
+                });
             }
         }
     }

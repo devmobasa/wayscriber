@@ -27,6 +27,9 @@ pub(super) fn handle_pending_actions(
     qh: &wayland_client::QueueHandle<WaylandState>,
 ) {
     state.apply_capture_completion();
+    state.poll_clipboard_publish_completion();
+    state.poll_clipboard_paste_completion();
+    state.drain_clipboard_requests();
     handle_frozen_toggle(state);
 
     if let Some(action) = state.input_state.take_pending_output_focus_action() {

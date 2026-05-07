@@ -31,6 +31,15 @@ impl InputState {
                 self.dirty_tracker.mark_shape(&after.shape);
                 self.invalidate_hit_cache_for(*shape_id);
             }
+            UndoAction::ModifyImageBounds {
+                shape_id,
+                before,
+                after,
+            } => {
+                self.dirty_tracker.mark_optional_rect(before.bounding_box());
+                self.dirty_tracker.mark_optional_rect(after.bounding_box());
+                self.invalidate_hit_cache_for(*shape_id);
+            }
             UndoAction::Reorder { shape_id, .. } => {
                 if let Some(shape) = self.boards.active_frame().shape(*shape_id) {
                     self.dirty_tracker.mark_shape(&shape.shape);
@@ -52,7 +61,8 @@ impl InputState {
                     self.invalidate_hit_cache_for(shape.id);
                 }
             }
-            UndoAction::Modify { shape_id, .. } => {
+            UndoAction::Modify { shape_id, .. }
+            | UndoAction::ModifyImageBounds { shape_id, .. } => {
                 self.invalidate_hit_cache_for(*shape_id);
             }
             UndoAction::Reorder { shape_id, .. } => {

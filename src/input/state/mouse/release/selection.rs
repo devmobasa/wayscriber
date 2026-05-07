@@ -97,11 +97,11 @@ pub(super) fn finish_selection_resize(
             let after_bounds = after_snapshot.shape.bounding_box();
             if before_bounds != after_bounds {
                 frame.push_undo_action(
-                    UndoAction::Modify {
-                        shape_id: *shape_id,
-                        before: before_snapshot.clone(),
-                        after: after_snapshot,
-                    },
+                    UndoAction::modify_from_snapshots(
+                        *shape_id,
+                        before_snapshot.clone(),
+                        after_snapshot,
+                    ),
                     state.undo_stack_limit,
                 );
                 has_changes = true;

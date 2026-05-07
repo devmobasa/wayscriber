@@ -86,8 +86,14 @@ pub(super) fn run_event_loop(
         let animation_timeout = state.ui_animation_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
         let focus_exit_timeout = state.focus_exit_timeout(now);
+        let clipboard_timeout = (state.clipboard_paste_rx.is_some()
+            || state.clipboard_publish_rx.is_some())
+        .then_some(Duration::from_millis(25));
         let timeout = if should_block {
-            min_timeout(autosave_timeout, focus_exit_timeout)
+            min_timeout(
+                clipboard_timeout,
+                min_timeout(autosave_timeout, focus_exit_timeout),
+            )
         } else if !vsync_enabled && state.input_state.needs_redraw {
             // When VSync is off and we need to redraw, wake up when frame budget allows
             let frame_cap_timeout = render::frame_rate_cap_timeout(
@@ -101,11 +107,17 @@ pub(super) fn run_event_loop(
                 (Some(fc), None) => Some(fc),
                 (None, _) => Some(Duration::ZERO),
             };
-            min_timeout(merged, min_timeout(autosave_timeout, focus_exit_timeout))
+            min_timeout(
+                clipboard_timeout,
+                min_timeout(merged, min_timeout(autosave_timeout, focus_exit_timeout)),
+            )
         } else {
             min_timeout(
-                animation_timeout,
-                min_timeout(autosave_timeout, focus_exit_timeout),
+                clipboard_timeout,
+                min_timeout(
+                    animation_timeout,
+                    min_timeout(autosave_timeout, focus_exit_timeout),
+                ),
             )
         };
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {

@@ -5,6 +5,7 @@ use super::super::Frame;
 pub struct BoardPages {
     pages: Vec<Frame>,
     active: usize,
+    generation: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +29,7 @@ impl BoardPages {
         Self {
             pages: vec![Frame::new()],
             active: 0,
+            generation: 0,
         }
     }
 
@@ -36,7 +38,11 @@ impl BoardPages {
             pages.push(Frame::new());
         }
         let active = active.min(pages.len() - 1);
-        Self { pages, active }
+        Self {
+            pages,
+            active,
+            generation: 0,
+        }
     }
 
     pub fn page_count(&self) -> usize {
@@ -47,12 +53,24 @@ impl BoardPages {
         self.active
     }
 
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn bump_generation(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+    }
+
     pub fn active_frame(&self) -> &Frame {
         &self.pages[self.active]
     }
 
     pub fn active_frame_mut(&mut self) -> &mut Frame {
         &mut self.pages[self.active]
+    }
+
+    pub fn frame_mut(&mut self, index: usize) -> Option<&mut Frame> {
+        self.pages.get_mut(index)
     }
 
     pub fn next_page(&mut self) -> bool {
@@ -85,12 +103,14 @@ impl BoardPages {
     pub fn new_page(&mut self) {
         self.pages.push(Frame::new());
         self.active = self.pages.len() - 1;
+        self.bump_generation();
     }
 
     pub fn duplicate_page(&mut self) {
         let cloned = self.active_frame().clone_without_history();
         self.pages.push(cloned);
         self.active = self.pages.len() - 1;
+        self.bump_generation();
     }
 
     pub fn duplicate_page_at(&mut self, index: usize) -> Option<usize> {
@@ -101,6 +121,7 @@ impl BoardPages {
         let insert_at = (index + 1).min(self.pages.len());
         self.pages.insert(insert_at, cloned);
         self.active = insert_at;
+        self.bump_generation();
         Some(insert_at)
     }
 
@@ -109,17 +130,20 @@ impl BoardPages {
         let insert_at = (self.active + 1).min(self.pages.len());
         self.pages.insert(insert_at, page);
         self.active = insert_at;
+        self.bump_generation();
     }
 
     pub fn delete_page(&mut self) -> PageDeleteOutcome {
         if self.pages.len() == 1 {
             self.pages[0].clear();
+            self.bump_generation();
             PageDeleteOutcome::Cleared
         } else {
             self.pages.remove(self.active);
             if self.active >= self.pages.len() {
                 self.active = self.pages.len() - 1;
             }
+            self.bump_generation();
             PageDeleteOutcome::Removed
         }
     }
@@ -133,6 +157,7 @@ impl BoardPages {
         if len == 1 {
             self.pages[0].clear();
             self.active = 0;
+            self.bump_generation();
             return PageDeleteOutcome::Cleared;
         }
         self.pages.remove(index);
@@ -143,6 +168,7 @@ impl BoardPages {
         } else if self.active > index {
             self.active = self.active.saturating_sub(1);
         }
+        self.bump_generation();
         PageDeleteOutcome::Removed
     }
 
@@ -155,6 +181,7 @@ impl BoardPages {
         if len == 1 {
             let page = std::mem::take(&mut self.pages[0]);
             self.active = 0;
+            self.bump_generation();
             return Some(page);
         }
         let page = self.pages.remove(index);
@@ -165,6 +192,7 @@ impl BoardPages {
         } else if self.active > index {
             self.active = self.active.saturating_sub(1);
         }
+        self.bump_generation();
         Some(page)
     }
 
@@ -172,6 +200,7 @@ impl BoardPages {
     pub fn push_page(&mut self, page: Frame) -> usize {
         self.pages.push(page);
         self.active = self.pages.len() - 1;
+        self.bump_generation();
         self.active
     }
 
@@ -196,11 +225,13 @@ impl BoardPages {
             self.active = (self.active + 1).min(self.pages.len().saturating_sub(1));
         }
 
+        self.bump_generation();
         true
     }
 
     #[allow(dead_code)]
     pub fn trim_trailing_empty_pages(&mut self) {
+        let mut removed = false;
         while self.pages.len() > 1
             && self
                 .pages
@@ -208,9 +239,13 @@ impl BoardPages {
                 .is_some_and(|frame| !frame.has_persistable_data())
         {
             self.pages.pop();
+            removed = true;
             if self.active >= self.pages.len() {
                 self.active = self.pages.len() - 1;
             }
+        }
+        if removed {
+            self.bump_generation();
         }
     }
 

@@ -17,6 +17,7 @@ use crate::input::{
     tool::{EraserMode, PerToolDrawingSettings},
 };
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 impl InputState {
     /// Creates a new InputState with specified defaults.
@@ -191,6 +192,13 @@ impl InputState {
             ui_toast: None,
             ui_toast_bounds: None,
             selection_clipboard: None,
+            selection_clipboard_generation: 0,
+            selection_publish_state: super::super::types::SelectionPublishState::NotAttempted,
+            clipboard_app_instance_id: new_clipboard_app_instance_id(),
+            pending_selection_clipboard_publish: None,
+            pending_clipboard_paste_request: None,
+            clipboard_paste_request_counter: 0,
+            active_clipboard_paste_request_id: None,
             clipboard_paste_offset: 0,
             last_capture_path: None,
             last_text_click: None,
@@ -203,6 +211,7 @@ impl InputState {
             spatial_index: None,
             last_pointer_position: (0, 0),
             last_canvas_pointer_position: (0, 0),
+            pointer_seen: false,
             pending_menu_hover_recalc: false,
             shape_properties_panel: None,
             properties_panel_layout: None,
@@ -249,4 +258,12 @@ impl InputState {
 
         state
     }
+}
+
+fn new_clipboard_app_instance_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("{}-{}", std::process::id(), millis)
 }
