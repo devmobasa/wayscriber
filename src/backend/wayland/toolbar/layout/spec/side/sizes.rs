@@ -1,5 +1,8 @@
 use crate::config::ToolbarLayoutMode;
 use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui::toolbar::model::{
+    ToolbarActionsModel, ToolbarCommandGroupKind, toolbar_boards_model, toolbar_pages_model,
+};
 use crate::ui::toolbar::snapshot::ToolContext;
 
 use super::super::ToolbarLayoutSpec;
@@ -12,16 +15,9 @@ impl ToolbarLayoutSpec {
         let base_height = self.side_content_start_y();
         let tool_context = ToolContext::from_snapshot(snapshot);
 
-        let show_drawer_view =
-            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
-        let show_advanced = snapshot.show_actions_advanced && show_drawer_view;
-        let show_actions = snapshot.show_actions_section || show_advanced;
-        let show_pages = snapshot.show_pages_section
-            && snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
-        let show_boards = snapshot.show_boards_section
-            && snapshot.drawer_open
-            && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
+        let show_actions = ToolbarActionsModel::from_snapshot(snapshot).is_some();
+        let show_pages = toolbar_pages_model(snapshot).is_some();
+        let show_boards = toolbar_boards_model(snapshot).is_some();
         let show_presets =
             snapshot.show_presets && snapshot.preset_slot_count.min(snapshot.presets.len()) > 0;
         let show_step_section = snapshot.show_step_section
@@ -88,9 +84,7 @@ impl ToolbarLayoutSpec {
         }
 
         if show_actions {
-            let mut actions_snapshot = snapshot.clone();
-            actions_snapshot.show_actions_advanced = show_advanced;
-            let actions_card_h = self.side_actions_height(&actions_snapshot);
+            let actions_card_h = self.side_actions_height(snapshot);
             add_section(actions_card_h, &mut height);
         }
 
@@ -154,24 +148,8 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        let show_drawer_view =
-            snapshot.drawer_open && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::View;
-        let show_actions_section = snapshot.show_actions_section;
-        let show_actions_advanced = snapshot.show_actions_advanced && show_drawer_view;
-        let show_view_actions = show_drawer_view
-            && snapshot.show_zoom_actions
-            && (show_actions_section || snapshot.show_actions_advanced);
-        if !show_actions_section && !show_actions_advanced {
+        let Some(model) = ToolbarActionsModel::from_snapshot(snapshot) else {
             return 0.0;
-        }
-
-        let basic_count: usize = if show_actions_section { 3 } else { 0 };
-        let view_count: usize = if show_view_actions { 4 } else { 0 };
-        let show_delay_actions = snapshot.delay_actions_enabled;
-        let advanced_count: usize = if show_actions_advanced {
-            if show_delay_actions { 5 } else { 3 }
-        } else {
-            0
         };
 
         if self.use_icons {
@@ -179,24 +157,24 @@ impl ToolbarLayoutSpec {
             let icon_gap = Self::SIDE_ACTION_BUTTON_GAP;
             let mut height = 0.0;
             let mut has_group = false;
-            if basic_count > 0 {
-                height += icon_btn;
-                has_group = true;
-            }
-            if view_count > 0 {
+            for group in model.groups() {
+                if group.buttons.is_empty() {
+                    continue;
+                }
                 if has_group {
                     height += icon_gap;
                 }
-                let rows = view_count.div_ceil(5);
+                let columns = match group.kind {
+                    ToolbarCommandGroupKind::BasicActions => group.buttons.len(),
+                    ToolbarCommandGroupKind::ViewActions
+                    | ToolbarCommandGroupKind::AdvancedActions => 5,
+                    ToolbarCommandGroupKind::Pages | ToolbarCommandGroupKind::Boards => {
+                        group.buttons.len()
+                    }
+                };
+                let rows = group.buttons.len().div_ceil(columns);
                 height += icon_btn * rows as f64 + icon_gap * (rows as f64 - 1.0);
                 has_group = true;
-            }
-            if advanced_count > 0 {
-                if has_group {
-                    height += icon_gap;
-                }
-                let rows = advanced_count.div_ceil(5);
-                height += icon_btn * rows as f64 + icon_gap * (rows as f64 - 1.0);
             }
             height
         } else {
@@ -204,24 +182,24 @@ impl ToolbarLayoutSpec {
             let action_gap = Self::SIDE_ACTION_CONTENT_GAP_TEXT;
             let mut height = 0.0;
             let mut has_group = false;
-            if basic_count > 0 {
-                height += action_h * basic_count as f64 + action_gap * (basic_count as f64 - 1.0);
-                has_group = true;
-            }
-            if view_count > 0 {
+            for group in model.groups() {
+                if group.buttons.is_empty() {
+                    continue;
+                }
                 if has_group {
                     height += Self::SIDE_ACTION_BUTTON_GAP;
                 }
-                let rows = view_count.div_ceil(2);
+                let columns = match group.kind {
+                    ToolbarCommandGroupKind::BasicActions => 1,
+                    ToolbarCommandGroupKind::ViewActions
+                    | ToolbarCommandGroupKind::AdvancedActions => 2,
+                    ToolbarCommandGroupKind::Pages | ToolbarCommandGroupKind::Boards => {
+                        group.buttons.len().max(1)
+                    }
+                };
+                let rows = group.buttons.len().div_ceil(columns);
                 height += action_h * rows as f64 + action_gap * (rows as f64 - 1.0);
                 has_group = true;
-            }
-            if advanced_count > 0 {
-                if has_group {
-                    height += Self::SIDE_ACTION_BUTTON_GAP;
-                }
-                let rows = advanced_count.div_ceil(2);
-                height += action_h * rows as f64 + action_gap * (rows as f64 - 1.0);
             }
             height
         }
@@ -253,30 +231,38 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        if !snapshot.show_pages_section {
+        let Some(pages) = toolbar_pages_model(snapshot) else {
             return 0.0;
-        }
+        };
         let btn_h = if self.use_icons {
             Self::SIDE_ACTION_BUTTON_HEIGHT_ICON
         } else {
             Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT
         };
-        Self::SIDE_SECTION_TOGGLE_OFFSET_Y + btn_h + Self::SIDE_ACTION_BUTTON_GAP
+        let columns = pages.buttons.len().max(1);
+        let rows = pages.buttons.len().div_ceil(columns);
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
+            + btn_h * rows as f64
+            + Self::SIDE_ACTION_BUTTON_GAP * rows as f64
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_boards_height(
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
-        if !snapshot.show_boards_section {
+        let Some(boards) = toolbar_boards_model(snapshot) else {
             return 0.0;
-        }
+        };
         let btn_h = if self.use_icons {
             Self::SIDE_ACTION_BUTTON_HEIGHT_ICON
         } else {
             Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT
         };
-        Self::SIDE_SECTION_TOGGLE_OFFSET_Y + btn_h + Self::SIDE_ACTION_BUTTON_GAP
+        let columns = boards.buttons.len().min(5).max(1);
+        let rows = boards.buttons.len().div_ceil(columns);
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
+            + btn_h * rows as f64
+            + Self::SIDE_ACTION_BUTTON_GAP * rows as f64
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_step_height(
