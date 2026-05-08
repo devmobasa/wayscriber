@@ -47,12 +47,20 @@ impl InputState {
             return;
         }
 
-        self.switch_board_with(|boards| boards.switch_to_id(&target_id), &current_id);
+        self.switch_board_with(
+            |boards| boards.can_switch_to_id(&target_id),
+            |boards| boards.switch_to_id(&target_id),
+            &current_id,
+        );
     }
 
     pub fn create_board(&mut self) -> bool {
         let current_id = self.boards.active_board_id().to_string();
-        let created = self.switch_board_with(|boards| boards.create_board(), &current_id);
+        let created = self.switch_board_with(
+            |boards| boards.board_count() < boards.max_count(),
+            |boards| boards.create_board(),
+            &current_id,
+        );
         if created {
             let name = self.boards.active_board_name().to_string();
             self.queue_board_config_save();
@@ -63,17 +71,29 @@ impl InputState {
 
     pub fn switch_board_slot(&mut self, slot: usize) {
         let current_id = self.boards.active_board_id().to_string();
-        self.switch_board_with(|boards| boards.switch_to_slot(slot), &current_id);
+        self.switch_board_with(
+            |boards| boards.can_switch_to_slot(slot),
+            |boards| boards.switch_to_slot(slot),
+            &current_id,
+        );
     }
 
     pub fn switch_board_next(&mut self) {
         let current_id = self.boards.active_board_id().to_string();
-        self.switch_board_with(|boards| boards.next_board(), &current_id);
+        self.switch_board_with(
+            |boards| boards.board_count() > 1,
+            |boards| boards.next_board(),
+            &current_id,
+        );
     }
 
     pub fn switch_board_prev(&mut self) {
         let current_id = self.boards.active_board_id().to_string();
-        self.switch_board_with(|boards| boards.prev_board(), &current_id);
+        self.switch_board_with(
+            |boards| boards.board_count() > 1,
+            |boards| boards.prev_board(),
+            &current_id,
+        );
     }
 
     /// Duplicate the active board.
@@ -84,6 +104,12 @@ impl InputState {
         }
 
         let current_id = self.boards.active_board_id().to_string();
+        if self.boards.board_count() >= self.boards.max_count() {
+            self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
+            return;
+        }
+
+        self.cancel_active_interaction();
         if let Some(new_id) = self.boards.duplicate_active_board() {
             self.record_board_recent(&new_id);
             self.queue_board_config_save();
@@ -98,11 +124,7 @@ impl InputState {
                 self.set_pen_color_from_board(default_color);
             }
 
-            // Reset drawing state
-            self.state = super::super::base::DrawingState::Idle;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            self.mark_session_dirty();
+            self.finish_active_board_transition();
 
             log::info!("Duplicated board '{}' to '{}'", current_id, new_id);
         } else {
@@ -129,16 +151,25 @@ impl InputState {
 
     pub(super) fn switch_board_with(
         &mut self,
+        can_switch: impl FnOnce(&crate::input::BoardManager) -> bool,
         switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,
         current_id: &str,
     ) -> bool {
+        if !can_switch(&self.boards) {
+            return false;
+        }
+
         let current_spec = self.boards.active_board().spec.clone();
         let prev_count = self.boards.board_count();
-        if !switch(&mut self.boards) {
+        self.cancel_active_interaction();
+        let switched = switch(&mut self.boards);
+        debug_assert!(switched, "preflighted board transition failed on apply");
+        if !switched {
             return false;
         }
 
         let target_spec = self.boards.active_board().spec.clone();
+        debug_assert_ne!(target_spec.id, current_id);
         if target_spec.id == current_id {
             return false;
         }
@@ -184,14 +215,7 @@ impl InputState {
             }
         }
 
-        // Reset drawing state to prevent partial shapes crossing modes
-        self.state = super::super::base::DrawingState::Idle;
-        self.sync_canvas_pointer_to_current_transform();
-
-        // Trigger redraw
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.finish_active_board_transition();
 
         log::info!(
             "Switched from '{}' to '{}' board",
@@ -213,6 +237,21 @@ impl InputState {
         self.board_recent.retain(|id| id != board_id);
     }
 
+    pub(super) fn mark_board_surface_dirty(&mut self) {
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    pub(super) fn mark_board_surface_changed(&mut self) {
+        self.mark_board_surface_dirty();
+        self.mark_session_dirty();
+    }
+
+    fn finish_active_board_transition(&mut self) {
+        self.sync_canvas_pointer_to_current_transform();
+        self.mark_board_surface_changed();
+    }
+
     pub(crate) fn queue_board_config_save(&mut self) {
         if !self.boards.persist_customizations() {
             return;
@@ -226,8 +265,6 @@ impl InputState {
         self.close_context_menu();
         self.invalidate_hit_cache();
         self.sync_canvas_pointer_to_current_transform();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.mark_board_surface_changed();
     }
 }

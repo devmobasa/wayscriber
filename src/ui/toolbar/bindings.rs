@@ -4,7 +4,12 @@ use crate::config::{Action, action_label, action_meta_iter, action_short_label};
 use crate::input::{InputState, Tool};
 use crate::label_format::join_binding_labels;
 
-use super::events::ToolbarEvent;
+use super::events::{
+    ToolbarEvent, action_for_apply_preset as event_action_for_apply_preset,
+    action_for_clear_preset as event_action_for_clear_preset,
+    action_for_save_preset as event_action_for_save_preset,
+    action_for_tool as event_action_for_tool,
+};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ToolbarBindingHints {
@@ -49,19 +54,7 @@ impl ToolbarBindingHints {
 }
 
 pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
-    match tool {
-        Tool::Select => Some(Action::SelectSelectionTool),
-        Tool::Pen => Some(Action::SelectPenTool),
-        Tool::Line => Some(Action::SelectLineTool),
-        Tool::Rect => Some(Action::SelectRectTool),
-        Tool::Ellipse => Some(Action::SelectEllipseTool),
-        Tool::Arrow => Some(Action::SelectArrowTool),
-        Tool::Blur => Some(Action::SelectBlurTool),
-        Tool::Marker => Some(Action::SelectMarkerTool),
-        Tool::StepMarker => Some(Action::SelectStepMarkerTool),
-        Tool::Highlight => Some(Action::SelectHighlightTool),
-        Tool::Eraser => Some(Action::SelectEraserTool),
-    }
+    event_action_for_tool(tool)
 }
 
 #[allow(dead_code)]
@@ -77,76 +70,19 @@ pub(crate) fn tool_tooltip_label(tool: Tool) -> &'static str {
 }
 
 pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
-    match event {
-        ToolbarEvent::SelectTool(tool) => action_for_tool(*tool),
-        ToolbarEvent::EnterTextMode => Some(Action::EnterTextMode),
-        ToolbarEvent::EnterStickyNoteMode => Some(Action::EnterStickyNoteMode),
-        ToolbarEvent::ToggleFill(_) => Some(Action::ToggleFill),
-        ToolbarEvent::Undo => Some(Action::Undo),
-        ToolbarEvent::Redo => Some(Action::Redo),
-        ToolbarEvent::UndoAll => Some(Action::UndoAll),
-        ToolbarEvent::RedoAll => Some(Action::RedoAll),
-        ToolbarEvent::UndoAllDelayed => Some(Action::UndoAllDelayed),
-        ToolbarEvent::RedoAllDelayed => Some(Action::RedoAllDelayed),
-        ToolbarEvent::ClearCanvas => Some(Action::ClearCanvas),
-        ToolbarEvent::PagePrev => Some(Action::PagePrev),
-        ToolbarEvent::PageNext => Some(Action::PageNext),
-        ToolbarEvent::PageNew => Some(Action::PageNew),
-        ToolbarEvent::PageDuplicate => Some(Action::PageDuplicate),
-        ToolbarEvent::PageDelete => Some(Action::PageDelete),
-        ToolbarEvent::BoardPrev => Some(Action::BoardPrev),
-        ToolbarEvent::BoardNext => Some(Action::BoardNext),
-        ToolbarEvent::BoardNew => Some(Action::BoardNew),
-        ToolbarEvent::BoardDelete => Some(Action::BoardDelete),
-        ToolbarEvent::BoardDuplicate => Some(Action::BoardDuplicate),
-        ToolbarEvent::BoardRename => Some(Action::BoardPicker),
-        ToolbarEvent::ToggleBoardPicker => Some(Action::BoardPicker),
-        ToolbarEvent::ToggleAllHighlight(_) => Some(Action::ToggleHighlightTool),
-        ToolbarEvent::ToggleFreeze => Some(Action::ToggleFrozenMode),
-        ToolbarEvent::ZoomIn => Some(Action::ZoomIn),
-        ToolbarEvent::ZoomOut => Some(Action::ZoomOut),
-        ToolbarEvent::ResetZoom => Some(Action::ResetZoom),
-        ToolbarEvent::ResetStepMarkerCounter => Some(Action::ResetStepMarkerCounter),
-        ToolbarEvent::ToggleZoomLock => Some(Action::ToggleZoomLock),
-        ToolbarEvent::ApplyPreset(slot) => action_for_apply_preset(*slot),
-        ToolbarEvent::SavePreset(slot) => action_for_save_preset(*slot),
-        ToolbarEvent::ClearPreset(slot) => action_for_clear_preset(*slot),
-        ToolbarEvent::OpenConfigurator => Some(Action::OpenConfigurator),
-        _ => None,
-    }
+    event.action()
 }
 
 pub(crate) fn action_for_apply_preset(slot: usize) -> Option<Action> {
-    match slot {
-        1 => Some(Action::ApplyPreset1),
-        2 => Some(Action::ApplyPreset2),
-        3 => Some(Action::ApplyPreset3),
-        4 => Some(Action::ApplyPreset4),
-        5 => Some(Action::ApplyPreset5),
-        _ => None,
-    }
+    event_action_for_apply_preset(slot)
 }
 
 pub(crate) fn action_for_save_preset(slot: usize) -> Option<Action> {
-    match slot {
-        1 => Some(Action::SavePreset1),
-        2 => Some(Action::SavePreset2),
-        3 => Some(Action::SavePreset3),
-        4 => Some(Action::SavePreset4),
-        5 => Some(Action::SavePreset5),
-        _ => None,
-    }
+    event_action_for_save_preset(slot)
 }
 
 pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
-    match slot {
-        1 => Some(Action::ClearPreset1),
-        2 => Some(Action::ClearPreset2),
-        3 => Some(Action::ClearPreset3),
-        4 => Some(Action::ClearPreset4),
-        5 => Some(Action::ClearPreset5),
-        _ => None,
-    }
+    event_action_for_clear_preset(slot)
 }
 
 #[cfg(test)]

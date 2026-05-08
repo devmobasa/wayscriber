@@ -76,11 +76,17 @@ impl InputState {
         }
         self.pending_board_delete = None;
 
-        // Save board state before deletion for potential undo
+        self.cancel_active_interaction();
+
+        // Save board state after cancellation for potential undo.
         let deleted_board = self.boards.active_board().clone();
         let deleted_name = deleted_board.spec.name.clone();
 
-        if self.switch_board_with(|boards| boards.remove_active_board(), &current_id) {
+        if self.switch_board_with(
+            |boards| boards.board_count() > 1,
+            |boards| boards.remove_active_board(),
+            &current_id,
+        ) {
             self.remove_board_recent(&current_id);
             self.queue_board_config_save();
 
@@ -102,7 +108,7 @@ impl InputState {
         // Expire old entries first
         self.expire_deleted_boards();
 
-        let Some((board, _timestamp)) = self.deleted_boards.pop() else {
+        let Some((board, timestamp)) = self.deleted_boards.pop() else {
             self.set_ui_toast(UiToastKind::Info, "No deleted board to restore.");
             return;
         };
@@ -111,12 +117,14 @@ impl InputState {
         let current_id = self.boards.active_board_id().to_string();
 
         if self.switch_board_with(
-            |boards| boards.insert_board(boards.board_count(), board),
+            |boards| boards.board_count() < boards.max_count(),
+            |boards| boards.insert_board(boards.board_count(), board.clone()),
             &current_id,
         ) {
             self.queue_board_config_save();
             self.set_ui_toast(UiToastKind::Info, format!("Board restored: {name}"));
         } else {
+            self.deleted_boards.push((board, timestamp));
             self.set_ui_toast(UiToastKind::Warning, "Board limit reached; cannot restore.");
         }
     }
@@ -135,6 +143,7 @@ impl InputState {
         board_index: usize,
         page_index: usize,
     ) -> crate::draw::PageDeleteOutcome {
+        let is_active_board = self.boards.active_index() == board_index;
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return crate::draw::PageDeleteOutcome::Pending;
         };
@@ -146,13 +155,17 @@ impl InputState {
         let board_id = board.spec.id.clone();
 
         if page_count <= 1 {
+            if is_active_board {
+                self.cancel_active_interaction();
+            }
+            let Some(board) = self.boards.board_state_mut(board_index) else {
+                return crate::draw::PageDeleteOutcome::Pending;
+            };
             let outcome = board.pages.delete_page_at(page_index);
-            if self.boards.active_index() == board_index {
+            if is_active_board {
                 self.prepare_page_switch();
             } else {
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.mark_session_dirty();
+                self.mark_board_surface_changed();
             }
             self.set_ui_toast(
                 UiToastKind::Info,
@@ -193,15 +206,19 @@ impl InputState {
         }
 
         self.pending_page_delete = None;
+        if is_active_board {
+            self.cancel_active_interaction();
+        }
+        let Some(board) = self.boards.board_state_mut(board_index) else {
+            return crate::draw::PageDeleteOutcome::Pending;
+        };
         let outcome = board.pages.delete_page_at(page_index);
         let new_page_num = board.pages.active_index() + 1;
         let new_page_count = board.pages.page_count();
-        if self.boards.active_index() == board_index {
+        if is_active_board {
             self.prepare_page_switch();
         } else {
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            self.mark_session_dirty();
+            self.mark_board_surface_changed();
         }
         if matches!(outcome, crate::draw::PageDeleteOutcome::Removed) {
             self.set_ui_toast(
@@ -221,6 +238,7 @@ impl InputState {
 
         // If this is the last page, skip confirmation (just clears)
         if page_count <= 1 {
+            self.cancel_active_interaction();
             let outcome = self.boards.delete_page();
             self.prepare_page_switch();
             self.set_ui_toast(UiToastKind::Info, "Page cleared (last page)");
@@ -269,7 +287,9 @@ impl InputState {
         // Confirmed: proceed with deletion
         self.pending_page_delete = None;
 
-        // Save page before deletion for undo
+        self.cancel_active_interaction();
+
+        // Save page after cancellation for undo.
         let deleted_page = self.boards.active_pages().active_frame().clone();
 
         let outcome = self.boards.delete_page();
@@ -312,6 +332,7 @@ impl InputState {
 
         if let Some(idx) = position {
             let (_, page, _) = self.deleted_pages.remove(idx);
+            self.cancel_active_interaction();
             self.boards.insert_page(page);
             self.prepare_page_switch();
             let page_num = self.boards.active_page_index() + 1;

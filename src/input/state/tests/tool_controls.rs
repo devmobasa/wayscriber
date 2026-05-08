@@ -1,6 +1,7 @@
 use super::*;
 use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
-use crate::input::PerToolDrawingSettings;
+use crate::input::{DragBinding, DragToolBindings, PerToolDrawingSettings};
+use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarSnapshot};
 
 #[test]
 fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
@@ -73,6 +74,217 @@ fn set_thickness_for_active_tool_updates_eraser_size_when_eraser_is_active() {
     assert!(state.set_thickness_for_active_tool(17.0));
     assert_eq!(state.eraser_size, 17.0);
     assert_eq!(state.current_thickness, 3.0);
+}
+
+#[test]
+fn toolbar_context_preserves_temporary_eraser_controls() {
+    let mut state = create_test_input_state();
+    let mut bindings = DragToolBindings::default();
+    bindings.left.shift_drag = DragBinding::from_tool(Tool::Eraser);
+    assert!(state.set_drag_tool_bindings(bindings));
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    state.eraser_size = 17.0;
+
+    state.on_key_press(Key::Shift);
+    let snapshot = ToolbarSnapshot::from_input(&state);
+    let context = ToolContext::from_snapshot(&snapshot);
+
+    assert_eq!(snapshot.active_tool, Tool::Eraser);
+    assert_eq!(snapshot.tool_override, Some(Tool::Pen));
+    assert!(snapshot.thickness_targets_eraser);
+    assert_eq!(snapshot.thickness, 17.0);
+    assert_eq!(context.tool_options_kind, ToolOptionsKind::Eraser);
+    assert_eq!(context.thickness_label, "Eraser size");
+    assert!(context.show_eraser_mode);
+}
+
+#[test]
+fn toolbar_context_matches_tool_profiles_for_each_tool() {
+    let mut state = create_test_input_state();
+    state.show_text_controls = false;
+    state.show_marker_opacity_section = false;
+
+    let cases = [
+        (
+            Tool::Select,
+            false,
+            false,
+            ToolOptionsKind::None,
+            "",
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::Pen,
+            true,
+            true,
+            ToolOptionsKind::Stroke,
+            "Thickness",
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::Line,
+            true,
+            true,
+            ToolOptionsKind::Stroke,
+            "Thickness",
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::Rect,
+            true,
+            true,
+            ToolOptionsKind::Shape,
+            "Thickness",
+            true,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::Ellipse,
+            true,
+            true,
+            ToolOptionsKind::Shape,
+            "Thickness",
+            true,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::Arrow,
+            true,
+            true,
+            ToolOptionsKind::Arrow,
+            "Thickness",
+            false,
+            true,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::Blur,
+            false,
+            true,
+            ToolOptionsKind::Stroke,
+            "Blur",
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::Marker,
+            true,
+            true,
+            ToolOptionsKind::Marker,
+            "Thickness",
+            false,
+            false,
+            false,
+            false,
+            true,
+        ),
+        (
+            Tool::Highlight,
+            false,
+            false,
+            ToolOptionsKind::None,
+            "",
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        (
+            Tool::StepMarker,
+            true,
+            true,
+            ToolOptionsKind::StepMarker,
+            "Size",
+            false,
+            false,
+            true,
+            false,
+            false,
+        ),
+        (
+            Tool::Eraser,
+            false,
+            true,
+            ToolOptionsKind::Eraser,
+            "Eraser size",
+            false,
+            false,
+            false,
+            true,
+            false,
+        ),
+    ];
+
+    for (
+        tool,
+        needs_color,
+        needs_thickness,
+        tool_options_kind,
+        thickness_label,
+        show_fill_toggle,
+        show_arrow_labels,
+        show_step_counter,
+        show_eraser_mode,
+        show_marker_opacity,
+    ) in cases
+    {
+        assert!(state.set_tool_override(Some(tool)));
+        let snapshot = ToolbarSnapshot::from_input(&state);
+        let context = ToolContext::from_snapshot(&snapshot);
+
+        assert_eq!(context.needs_color, needs_color, "{tool:?} color");
+        assert_eq!(
+            context.needs_thickness, needs_thickness,
+            "{tool:?} thickness"
+        );
+        assert_eq!(
+            context.tool_options_kind, tool_options_kind,
+            "{tool:?} options"
+        );
+        assert_eq!(context.thickness_label, thickness_label, "{tool:?} label");
+        assert_eq!(context.show_fill_toggle, show_fill_toggle, "{tool:?} fill");
+        assert_eq!(
+            context.show_arrow_labels, show_arrow_labels,
+            "{tool:?} arrow labels"
+        );
+        assert_eq!(
+            context.show_step_counter, show_step_counter,
+            "{tool:?} step counter"
+        );
+        assert_eq!(
+            context.show_eraser_mode, show_eraser_mode,
+            "{tool:?} eraser mode"
+        );
+        assert_eq!(
+            context.show_marker_opacity, show_marker_opacity,
+            "{tool:?} marker opacity"
+        );
+        assert!(!context.show_font_controls, "{tool:?} font controls");
+    }
 }
 
 #[test]

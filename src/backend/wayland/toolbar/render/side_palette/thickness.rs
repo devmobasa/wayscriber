@@ -11,7 +11,7 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::Action;
 use crate::input::EraserMode;
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolContext, ToolbarEvent};
 use crate::ui_text::UiTextStyle;
 
 pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -31,14 +31,11 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         weight: cairo::FontWeight::Bold,
         size: FONT_SIZE_LABEL,
     };
+    let tool_context = ToolContext::from_snapshot(snapshot);
 
     let slider_card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
     draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
-    let thickness_label = if snapshot.thickness_targets_eraser {
-        "Eraser size"
-    } else {
-        "Thickness"
-    };
+    let thickness_label = tool_context.thickness_label;
     draw_section_label(
         ctx,
         label_style,
@@ -151,7 +148,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     );
     *y += slider_card_h + section_gap;
 
-    if snapshot.thickness_targets_eraser {
+    if tool_context.show_eraser_mode {
         let eraser_card_h = ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT;
         let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
         let toggle_w = content_width;

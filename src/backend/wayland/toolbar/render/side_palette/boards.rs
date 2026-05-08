@@ -3,12 +3,10 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
-use crate::config::{action_label, action_short_label};
-use crate::input::ToolbarDrawerTab;
+use crate::backend::wayland::toolbar::rows::{capped_grid_columns, grid_layout, row_item_width};
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
-use crate::ui::toolbar::bindings::action_for_event;
+use crate::ui::toolbar::model::toolbar_boards_model;
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
@@ -32,12 +30,9 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         size: FONT_SIZE_LABEL,
     };
 
-    if !snapshot.show_boards_section
-        || !snapshot.drawer_open
-        || snapshot.drawer_tab != ToolbarDrawerTab::View
-    {
+    let Some(model) = toolbar_boards_model(snapshot) else {
         return;
-    }
+    };
 
     let boards_card_h = layout.spec.side_boards_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, boards_card_h);
@@ -71,37 +66,7 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
     };
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-    let can_cycle = snapshot.board_count > 1;
-    let can_duplicate = !snapshot.is_transparent;
-    let buttons = [
-        (
-            ToolbarEvent::BoardPrev,
-            toolbar_icons::draw_icon_chevron_left as fn(&cairo::Context, f64, f64, f64),
-            can_cycle,
-        ),
-        (
-            ToolbarEvent::BoardNext,
-            toolbar_icons::draw_icon_chevron_right as fn(&cairo::Context, f64, f64, f64),
-            can_cycle,
-        ),
-        (
-            ToolbarEvent::BoardNew,
-            toolbar_icons::draw_icon_plus as fn(&cairo::Context, f64, f64, f64),
-            true,
-        ),
-        (
-            ToolbarEvent::BoardDuplicate,
-            toolbar_icons::draw_icon_copy as fn(&cairo::Context, f64, f64, f64),
-            can_duplicate,
-        ),
-        (
-            ToolbarEvent::BoardDelete,
-            toolbar_icons::draw_icon_clear as fn(&cairo::Context, f64, f64, f64),
-            true,
-        ),
-    ];
-
-    let cols = buttons.len().min(5);
+    let cols = capped_grid_columns(model.buttons.len(), 5);
     let btn_w = row_item_width(content_width, cols, btn_gap);
     let layout = grid_layout(
         x,
@@ -110,19 +75,19 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         btn_h,
         btn_gap,
         btn_gap,
-        buttons.len(),
+        model.buttons.len(),
         cols,
     );
-    for (item, (evt, icon_fn, enabled)) in layout.items.iter().zip(buttons.iter()) {
-        let label = button_label(evt);
+    for (item, button) in layout.items.iter().zip(model.buttons.iter()) {
+        let label = button.short_label(snapshot, "Board");
         let bx = item.x;
         let by = item.y;
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, bx, by, btn_w, btn_h))
             .unwrap_or(false);
-        draw_button(ctx, bx, by, btn_w, btn_h, *enabled, is_hover);
+        draw_button(ctx, bx, by, btn_w, btn_h, button.enabled, is_hover);
         if use_icons {
-            if *enabled {
+            if button.enabled {
                 set_icon_color(ctx, is_hover);
             } else {
                 ctx.set_source_rgba(0.5, 0.5, 0.55, 0.5);
@@ -130,18 +95,18 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
             let icon_size = ToolbarLayoutSpec::SIDE_ACTION_ICON_SIZE;
             let icon_x = bx + (btn_w - icon_size) / 2.0;
             let icon_y = by + (btn_h - icon_size) / 2.0;
-            icon_fn(ctx, icon_x, icon_y, icon_size);
+            board_icon(&button.event)(ctx, icon_x, icon_y, icon_size);
         } else {
             draw_label_center(ctx, label_style, bx, by, btn_w, btn_h, label);
         }
-        if *enabled {
+        if button.enabled {
             hits.push(HitRegion {
                 rect: (bx, by, btn_w, btn_h),
-                event: evt.clone(),
+                event: button.event.clone(),
                 kind: HitKind::Click,
                 tooltip: Some(format_binding_label(
-                    tooltip_label(evt),
-                    snapshot.binding_hints.binding_for_event(evt),
+                    button.tooltip_label(snapshot, "Board"),
+                    button.binding_hint(snapshot),
                 )),
             });
         }
@@ -150,12 +115,13 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     *y += boards_card_h + section_gap;
 }
 
-fn button_label(event: &ToolbarEvent) -> &'static str {
-    action_for_event(event)
-        .map(action_short_label)
-        .unwrap_or("Board")
-}
-
-fn tooltip_label(event: &ToolbarEvent) -> &'static str {
-    action_for_event(event).map(action_label).unwrap_or("Board")
+fn board_icon(event: &ToolbarEvent) -> fn(&cairo::Context, f64, f64, f64) {
+    match event {
+        ToolbarEvent::BoardPrev => toolbar_icons::draw_icon_chevron_left,
+        ToolbarEvent::BoardNext => toolbar_icons::draw_icon_chevron_right,
+        ToolbarEvent::BoardNew => toolbar_icons::draw_icon_plus,
+        ToolbarEvent::BoardDuplicate => toolbar_icons::draw_icon_copy,
+        ToolbarEvent::BoardDelete => toolbar_icons::draw_icon_clear,
+        _ => toolbar_icons::draw_icon_clear,
+    }
 }

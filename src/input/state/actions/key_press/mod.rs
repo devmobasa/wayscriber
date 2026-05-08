@@ -130,9 +130,7 @@ impl InputState {
             && let DrawingState::Drawing { .. } = &self.state
             && let Some(Action::Exit) = self.find_action("Escape")
         {
-            self.state = DrawingState::Idle;
-            self.end_pointer_drag();
-            self.needs_redraw = true;
+            self.try_cancel_active_interaction();
             return;
         }
 

@@ -2,8 +2,6 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::rows::{centered_grid_layout, grid_layout};
-use crate::config::{Action, action_label, action_short_label};
-use crate::ui::toolbar::bindings::action_for_event;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui_text::UiTextStyle;
 
@@ -169,47 +167,11 @@ pub(super) fn render_text_action_group(
 }
 
 pub(super) fn button_label(event: &ToolbarEvent, snapshot: &ToolbarSnapshot) -> &'static str {
-    match event {
-        ToolbarEvent::ToggleFreeze => {
-            if snapshot.frozen_active {
-                "Unfreeze"
-            } else {
-                action_short_label(Action::ToggleFrozenMode)
-            }
-        }
-        ToolbarEvent::ToggleZoomLock => {
-            if snapshot.zoom_locked {
-                "Unlock Zoom"
-            } else {
-                action_short_label(Action::ToggleZoomLock)
-            }
-        }
-        _ => action_for_event(event)
-            .map(action_short_label)
-            .unwrap_or("Action"),
-    }
+    event.short_label(snapshot, "Action")
 }
 
 fn tooltip_label(event: &ToolbarEvent, snapshot: &ToolbarSnapshot) -> &'static str {
-    match event {
-        ToolbarEvent::ToggleFreeze => {
-            if snapshot.frozen_active {
-                "Unfreeze"
-            } else {
-                action_label(Action::ToggleFrozenMode)
-            }
-        }
-        ToolbarEvent::ToggleZoomLock => {
-            if snapshot.zoom_locked {
-                "Unlock Zoom"
-            } else {
-                action_label(Action::ToggleZoomLock)
-            }
-        }
-        _ => action_for_event(event)
-            .map(action_label)
-            .unwrap_or("Action"),
-    }
+    event.tooltip_label(snapshot, "Action")
 }
 
 fn render_icon_action_button(

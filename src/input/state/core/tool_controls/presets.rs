@@ -45,7 +45,7 @@ impl InputState {
         } else {
             self.activate_preset_tool(preset.tool);
             let _ = self.set_color(preset.color.to_color());
-            if preset.tool == Tool::Eraser {
+            if preset.tool.uses_eraser_size() {
                 let _ = self.set_eraser_size(preset.size);
             } else if !legacy_step_marker_preset {
                 let _ = self.set_thickness(preset.size);

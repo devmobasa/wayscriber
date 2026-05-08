@@ -6,50 +6,13 @@ impl InputState {
     pub(super) fn handle_core_action(&mut self, action: Action) -> bool {
         match action {
             Action::Exit => {
-                // Exit drawing mode or cancel current action
-                match &self.state {
-                    DrawingState::TextInput { .. } => {
-                        self.cancel_text_input();
-                    }
-                    DrawingState::PendingTextClick { .. } => {
-                        self.state = DrawingState::Idle;
-                    }
-                    DrawingState::Drawing { .. } => {
-                        self.clear_provisional_dirty();
-                        self.last_provisional_bounds = None;
-                        self.state = DrawingState::Idle;
-                        self.needs_redraw = true;
-                    }
-                    DrawingState::MovingSelection { snapshots, .. } => {
-                        self.restore_selection_from_snapshots(snapshots.clone());
-                        self.state = DrawingState::Idle;
-                    }
-                    DrawingState::Selecting { .. } => {
-                        self.clear_provisional_dirty();
-                        self.last_provisional_bounds = None;
-                        self.state = DrawingState::Idle;
-                        self.needs_redraw = true;
-                    }
-                    DrawingState::ResizingText {
-                        shape_id, snapshot, ..
-                    } => {
-                        self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
-                        self.state = DrawingState::Idle;
-                    }
-                    DrawingState::ResizingSelection { snapshots, .. } => {
-                        let snapshots = snapshots.clone();
-                        self.restore_resize_from_snapshots(snapshots.as_ref());
-                        self.state = DrawingState::Idle;
-                    }
-                    DrawingState::Idle => {
-                        // Exit application
-                        self.should_exit = true;
-                    }
-                }
-                if matches!(self.state, DrawingState::Idle) {
+                if self.try_cancel_active_interaction() {
+                    true
+                } else {
+                    self.should_exit = true;
                     self.end_pointer_drag();
+                    true
                 }
-                true
             }
             Action::EnterTextMode => {
                 if matches!(self.state, DrawingState::Idle) {

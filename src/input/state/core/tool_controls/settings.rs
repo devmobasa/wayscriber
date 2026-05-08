@@ -21,9 +21,10 @@ impl InputState {
 
     /// Returns the stored size for a tool, using eraser size for the eraser.
     pub fn thickness_for_tool(&self, tool: Tool) -> f64 {
-        match tool {
-            Tool::Eraser => self.eraser_size,
-            _ => self.tool_settings.get(tool).thickness,
+        if tool.uses_eraser_size() {
+            self.eraser_size
+        } else {
+            self.tool_settings.get(tool).thickness
         }
     }
 
@@ -43,24 +44,21 @@ impl InputState {
     pub(crate) fn sync_current_settings_from_active_tool(&mut self) {
         let tool = self.active_tool();
         self.current_color = self.color_for_tool(tool);
-        if tool != Tool::Eraser {
+        if tool.uses_drawing_thickness() {
             self.current_thickness = self.thickness_for_tool(tool);
         }
     }
 
     pub(crate) fn sync_current_settings_for_tool(&mut self, tool: Tool) {
         self.current_color = self.color_for_tool(tool);
-        if tool != Tool::Eraser {
+        if tool.uses_drawing_thickness() {
             self.current_thickness = self.thickness_for_tool(tool);
         }
     }
 
     pub(crate) fn set_pen_color_from_board(&mut self, color: Color) {
         self.tool_settings.pen.color = color;
-        if matches!(
-            self.active_tool(),
-            Tool::Pen | Tool::Select | Tool::Highlight | Tool::Eraser
-        ) {
+        if PerToolDrawingSettings::settings_tool(self.active_tool()) == Tool::Pen {
             self.current_color = color;
         }
         self.sync_highlight_color();
@@ -71,9 +69,7 @@ impl InputState {
             return false;
         }
         self.tool_settings.get_mut(tool).color = color;
-        if PerToolDrawingSettings::settings_tool(self.active_tool())
-            == PerToolDrawingSettings::settings_tool(tool)
-        {
+        if self.active_tool().settings_slot() == tool.settings_slot() {
             self.current_color = color;
         }
         self.dirty_tracker.mark_full();
@@ -87,7 +83,7 @@ impl InputState {
     pub(crate) fn set_pressure_thickness_for_active_tool(&mut self, thickness: f64) -> f64 {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let tool = self.active_tool();
-        if tool != Tool::Eraser {
+        if tool.uses_drawing_thickness() {
             self.tool_settings.get_mut(tool).thickness = clamped;
         }
         self.current_thickness = clamped;
@@ -200,17 +196,20 @@ impl InputState {
 
     /// Sets thickness or eraser size depending on the active tool.
     pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
-        match self.active_tool() {
-            Tool::Eraser => self.set_eraser_size(value),
-            _ => self.set_thickness(value),
+        if self.active_tool().uses_eraser_size() {
+            self.set_eraser_size(value)
+        } else {
+            self.set_thickness(value)
         }
     }
 
     /// Nudges thickness or eraser size depending on the active tool.
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
-        match self.active_tool() {
-            Tool::Eraser => self.set_eraser_size(self.eraser_size + delta),
-            tool => self.set_thickness(self.thickness_for_tool(tool) + delta),
+        let tool = self.active_tool();
+        if tool.uses_eraser_size() {
+            self.set_eraser_size(self.eraser_size + delta)
+        } else {
+            self.set_thickness(self.thickness_for_tool(tool) + delta)
         }
     }
 
