@@ -8,7 +8,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolContext, ToolbarEvent};
 use crate::ui_text::UiTextStyle;
 
 pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -28,9 +28,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         size: FONT_SIZE_LABEL,
     };
 
-    let show_marker_opacity =
-        snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
-    if !show_marker_opacity {
+    if !ToolContext::from_snapshot(snapshot).show_marker_opacity {
         return;
     }
 

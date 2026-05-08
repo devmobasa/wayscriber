@@ -1,6 +1,7 @@
 use super::*;
 use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
-use crate::input::PerToolDrawingSettings;
+use crate::input::{DragBinding, DragToolBindings, PerToolDrawingSettings};
+use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarSnapshot};
 
 #[test]
 fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
@@ -73,6 +74,28 @@ fn set_thickness_for_active_tool_updates_eraser_size_when_eraser_is_active() {
     assert!(state.set_thickness_for_active_tool(17.0));
     assert_eq!(state.eraser_size, 17.0);
     assert_eq!(state.current_thickness, 3.0);
+}
+
+#[test]
+fn toolbar_context_preserves_temporary_eraser_controls() {
+    let mut state = create_test_input_state();
+    let mut bindings = DragToolBindings::default();
+    bindings.left.shift_drag = DragBinding::from_tool(Tool::Eraser);
+    assert!(state.set_drag_tool_bindings(bindings));
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+    state.eraser_size = 17.0;
+
+    state.on_key_press(Key::Shift);
+    let snapshot = ToolbarSnapshot::from_input(&state);
+    let context = ToolContext::from_snapshot(&snapshot);
+
+    assert_eq!(snapshot.active_tool, Tool::Eraser);
+    assert_eq!(snapshot.tool_override, Some(Tool::Pen));
+    assert!(snapshot.thickness_targets_eraser);
+    assert_eq!(snapshot.thickness, 17.0);
+    assert_eq!(context.tool_options_kind, ToolOptionsKind::Eraser);
+    assert_eq!(context.thickness_label, "Eraser size");
+    assert!(context.show_eraser_mode);
 }
 
 #[test]

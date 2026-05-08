@@ -2,7 +2,7 @@ use crate::config::{MouseDragToolsConfig, enums::ColorSpec};
 use crate::draw::{Color, EraserKind};
 use crate::input::{
     EraserMode, Tool,
-    tool::{PerToolDrawingSettings, ToolDrawingSettings},
+    tool::{PerToolDrawingSettings, ToolDrawingSettings, ToolSettingsSlot, ToolSizeSource},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -158,71 +158,52 @@ impl PresetToolStatesConfig {
     }
 
     pub fn color_spec_for_tool(&self, tool: Tool) -> ColorSpec {
-        match tool {
-            Tool::Pen | Tool::Select | Tool::Highlight | Tool::Eraser => self.pen.color.clone(),
-            Tool::Line => self.line.color.clone(),
-            Tool::Rect => self.rect.color.clone(),
-            Tool::Ellipse => self.ellipse.color.clone(),
-            Tool::Arrow => self.arrow.color.clone(),
-            Tool::Blur => self.blur.color.clone(),
-            Tool::Marker => self.marker.color.clone(),
-            Tool::StepMarker => self.step_marker.color.clone(),
-        }
+        self.setting_for_slot(tool.settings_slot()).color.clone()
     }
 
     pub fn size_for_tool(&self, tool: Tool) -> f64 {
-        match tool {
-            Tool::Eraser => self.eraser_size,
-            Tool::Pen | Tool::Select | Tool::Highlight => self.pen.size,
-            Tool::Line => self.line.size,
-            Tool::Rect => self.rect.size,
-            Tool::Ellipse => self.ellipse.size,
-            Tool::Arrow => self.arrow.size,
-            Tool::Blur => self.blur.size,
-            Tool::Marker => self.marker.size,
-            Tool::StepMarker => self.step_marker.size,
+        let profile = tool.profile();
+        match profile.size_source {
+            ToolSizeSource::EraserSize => self.eraser_size,
+            ToolSizeSource::DrawingThickness => self.setting_for_slot(profile.settings_slot).size,
         }
     }
 
     #[allow(dead_code)]
     pub fn set_preview_tool(&mut self, tool: Tool, color: ColorSpec, size: f64) {
-        match tool {
-            Tool::Eraser => {
-                self.pen.color = color;
-                self.eraser_size = size;
+        let profile = tool.profile();
+        self.setting_for_slot_mut(profile.settings_slot).color = color;
+        match profile.size_source {
+            ToolSizeSource::EraserSize => self.eraser_size = size,
+            ToolSizeSource::DrawingThickness => {
+                self.setting_for_slot_mut(profile.settings_slot).size = size;
             }
-            Tool::Pen | Tool::Select | Tool::Highlight => {
-                self.pen.color = color;
-                self.pen.size = size;
-            }
-            Tool::Line => {
-                self.line.color = color;
-                self.line.size = size;
-            }
-            Tool::Rect => {
-                self.rect.color = color;
-                self.rect.size = size;
-            }
-            Tool::Ellipse => {
-                self.ellipse.color = color;
-                self.ellipse.size = size;
-            }
-            Tool::Arrow => {
-                self.arrow.color = color;
-                self.arrow.size = size;
-            }
-            Tool::Blur => {
-                self.blur.color = color;
-                self.blur.size = size;
-            }
-            Tool::Marker => {
-                self.marker.color = color;
-                self.marker.size = size;
-            }
-            Tool::StepMarker => {
-                self.step_marker.color = color;
-                self.step_marker.size = size;
-            }
+        }
+    }
+
+    fn setting_for_slot(&self, slot: ToolSettingsSlot) -> &PresetToolSettingConfig {
+        match slot {
+            ToolSettingsSlot::Pen => &self.pen,
+            ToolSettingsSlot::Line => &self.line,
+            ToolSettingsSlot::Rect => &self.rect,
+            ToolSettingsSlot::Ellipse => &self.ellipse,
+            ToolSettingsSlot::Arrow => &self.arrow,
+            ToolSettingsSlot::Blur => &self.blur,
+            ToolSettingsSlot::Marker => &self.marker,
+            ToolSettingsSlot::StepMarker => &self.step_marker,
+        }
+    }
+
+    fn setting_for_slot_mut(&mut self, slot: ToolSettingsSlot) -> &mut PresetToolSettingConfig {
+        match slot {
+            ToolSettingsSlot::Pen => &mut self.pen,
+            ToolSettingsSlot::Line => &mut self.line,
+            ToolSettingsSlot::Rect => &mut self.rect,
+            ToolSettingsSlot::Ellipse => &mut self.ellipse,
+            ToolSettingsSlot::Arrow => &mut self.arrow,
+            ToolSettingsSlot::Blur => &mut self.blur,
+            ToolSettingsSlot::Marker => &mut self.marker,
+            ToolSettingsSlot::StepMarker => &mut self.step_marker,
         }
     }
 }

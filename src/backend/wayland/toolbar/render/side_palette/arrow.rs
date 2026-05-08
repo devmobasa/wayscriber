@@ -6,8 +6,7 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::input::Tool;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolContext, ToolbarEvent};
 use crate::ui_text::{UiTextStyle, text_layout};
 
 pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -33,8 +32,7 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         size: FONT_SIZE_SMALL,
     };
 
-    let show_arrow_controls = snapshot.active_tool == Tool::Arrow || snapshot.arrow_label_enabled;
-    if !show_arrow_controls {
+    if !ToolContext::from_snapshot(snapshot).show_arrow_labels {
         return;
     }
 

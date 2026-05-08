@@ -36,6 +36,191 @@ pub enum Tool {
     // Note: Text mode uses DrawingState::TextInput instead of Tool::Text
 }
 
+/// The stored color/thickness slot used by a tool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolSettingsSlot {
+    Pen,
+    Line,
+    Rect,
+    Ellipse,
+    Arrow,
+    Blur,
+    Marker,
+    StepMarker,
+}
+
+impl ToolSettingsSlot {
+    pub(crate) const ALL: [Self; 8] = [
+        Self::Pen,
+        Self::Line,
+        Self::Rect,
+        Self::Ellipse,
+        Self::Arrow,
+        Self::Blur,
+        Self::Marker,
+        Self::StepMarker,
+    ];
+
+    pub(crate) fn representative_tool(self) -> Tool {
+        match self {
+            Self::Pen => Tool::Pen,
+            Self::Line => Tool::Line,
+            Self::Rect => Tool::Rect,
+            Self::Ellipse => Tool::Ellipse,
+            Self::Arrow => Tool::Arrow,
+            Self::Blur => Tool::Blur,
+            Self::Marker => Tool::Marker,
+            Self::StepMarker => Tool::StepMarker,
+        }
+    }
+}
+
+/// Where a tool's visible size value is stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolSizeSource {
+    DrawingThickness,
+    EraserSize,
+}
+
+/// Side-toolbar control family exposed by a tool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolControlGroup {
+    None,
+    Stroke,
+    Marker,
+    Eraser,
+    Shape,
+    Arrow,
+    StepMarker,
+}
+
+/// Catalog entry describing the settings and controls for one drawing tool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToolProfile {
+    pub(crate) settings_slot: ToolSettingsSlot,
+    pub(crate) size_source: ToolSizeSource,
+    pub(crate) control_group: ToolControlGroup,
+    pub(crate) needs_color: bool,
+    pub(crate) thickness_label: &'static str,
+}
+
+impl ToolProfile {
+    pub(crate) fn needs_thickness_control(self) -> bool {
+        !matches!(self.control_group, ToolControlGroup::None)
+    }
+
+    pub(crate) fn show_fill_toggle(self) -> bool {
+        matches!(self.control_group, ToolControlGroup::Shape)
+    }
+
+    pub(crate) fn show_arrow_labels(self) -> bool {
+        matches!(self.control_group, ToolControlGroup::Arrow)
+    }
+
+    pub(crate) fn show_step_counter(self) -> bool {
+        matches!(self.control_group, ToolControlGroup::StepMarker)
+    }
+
+    pub(crate) fn show_eraser_mode(self) -> bool {
+        matches!(self.control_group, ToolControlGroup::Eraser)
+    }
+
+    pub(crate) fn show_marker_opacity(self) -> bool {
+        matches!(self.control_group, ToolControlGroup::Marker)
+    }
+}
+
+impl Tool {
+    pub(crate) fn profile(self) -> ToolProfile {
+        match self {
+            Self::Select | Self::Highlight => ToolProfile {
+                settings_slot: ToolSettingsSlot::Pen,
+                size_source: ToolSizeSource::DrawingThickness,
+                control_group: ToolControlGroup::None,
+                needs_color: false,
+                thickness_label: "",
+            },
+            Self::Pen | Self::Line => ToolProfile {
+                settings_slot: if self == Self::Pen {
+                    ToolSettingsSlot::Pen
+                } else {
+                    ToolSettingsSlot::Line
+                },
+                size_source: ToolSizeSource::DrawingThickness,
+                control_group: ToolControlGroup::Stroke,
+                needs_color: true,
+                thickness_label: "Thickness",
+            },
+            Self::Blur => ToolProfile {
+                settings_slot: ToolSettingsSlot::Blur,
+                size_source: ToolSizeSource::DrawingThickness,
+                control_group: ToolControlGroup::Stroke,
+                needs_color: false,
+                thickness_label: "Blur",
+            },
+            Self::Marker => ToolProfile {
+                settings_slot: ToolSettingsSlot::Marker,
+                size_source: ToolSizeSource::DrawingThickness,
+                control_group: ToolControlGroup::Marker,
+                needs_color: true,
+                thickness_label: "Thickness",
+            },
+            Self::Eraser => ToolProfile {
+                settings_slot: ToolSettingsSlot::Pen,
+                size_source: ToolSizeSource::EraserSize,
+                control_group: ToolControlGroup::Eraser,
+                needs_color: false,
+                thickness_label: "Eraser Size",
+            },
+            Self::Rect | Self::Ellipse => ToolProfile {
+                settings_slot: if self == Self::Rect {
+                    ToolSettingsSlot::Rect
+                } else {
+                    ToolSettingsSlot::Ellipse
+                },
+                size_source: ToolSizeSource::DrawingThickness,
+                control_group: ToolControlGroup::Shape,
+                needs_color: true,
+                thickness_label: "Thickness",
+            },
+            Self::Arrow => ToolProfile {
+                settings_slot: ToolSettingsSlot::Arrow,
+                size_source: ToolSizeSource::DrawingThickness,
+                control_group: ToolControlGroup::Arrow,
+                needs_color: true,
+                thickness_label: "Thickness",
+            },
+            Self::StepMarker => ToolProfile {
+                settings_slot: ToolSettingsSlot::StepMarker,
+                size_source: ToolSizeSource::DrawingThickness,
+                control_group: ToolControlGroup::StepMarker,
+                needs_color: true,
+                thickness_label: "Size",
+            },
+        }
+    }
+
+    pub(crate) fn settings_slot(self) -> ToolSettingsSlot {
+        self.profile().settings_slot
+    }
+
+    pub(crate) fn settings_tool(self) -> Tool {
+        self.settings_slot().representative_tool()
+    }
+
+    pub(crate) fn uses_eraser_size(self) -> bool {
+        matches!(self.profile().size_source, ToolSizeSource::EraserSize)
+    }
+
+    pub(crate) fn uses_drawing_thickness(self) -> bool {
+        matches!(self.profile().size_source, ToolSizeSource::DrawingThickness)
+    }
+
+    pub(crate) fn uses_marker_opacity(self) -> bool {
+        self.profile().show_marker_opacity()
+    }
+}
+
 /// Color and thickness stored independently for a drawing tool.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ToolDrawingSettings {
@@ -78,47 +263,48 @@ impl PerToolDrawingSettings {
     }
 
     pub fn settings_tool(tool: Tool) -> Tool {
-        match tool {
-            Tool::Select | Tool::Highlight | Tool::Eraser => Tool::Pen,
-            _ => tool,
-        }
+        tool.settings_tool()
     }
 
     pub fn get(&self, tool: Tool) -> &ToolDrawingSettings {
-        match tool {
-            Tool::Pen | Tool::Select | Tool::Highlight | Tool::Eraser => &self.pen,
-            Tool::Line => &self.line,
-            Tool::Rect => &self.rect,
-            Tool::Ellipse => &self.ellipse,
-            Tool::Arrow => &self.arrow,
-            Tool::Blur => &self.blur,
-            Tool::Marker => &self.marker,
-            Tool::StepMarker => &self.step_marker,
-        }
+        self.get_slot(tool.settings_slot())
     }
 
     pub fn get_mut(&mut self, tool: Tool) -> &mut ToolDrawingSettings {
-        match tool {
-            Tool::Pen | Tool::Select | Tool::Highlight | Tool::Eraser => &mut self.pen,
-            Tool::Line => &mut self.line,
-            Tool::Rect => &mut self.rect,
-            Tool::Ellipse => &mut self.ellipse,
-            Tool::Arrow => &mut self.arrow,
-            Tool::Blur => &mut self.blur,
-            Tool::Marker => &mut self.marker,
-            Tool::StepMarker => &mut self.step_marker,
+        self.get_slot_mut(tool.settings_slot())
+    }
+
+    pub(crate) fn get_slot(&self, slot: ToolSettingsSlot) -> &ToolDrawingSettings {
+        match slot {
+            ToolSettingsSlot::Pen => &self.pen,
+            ToolSettingsSlot::Line => &self.line,
+            ToolSettingsSlot::Rect => &self.rect,
+            ToolSettingsSlot::Ellipse => &self.ellipse,
+            ToolSettingsSlot::Arrow => &self.arrow,
+            ToolSettingsSlot::Blur => &self.blur,
+            ToolSettingsSlot::Marker => &self.marker,
+            ToolSettingsSlot::StepMarker => &self.step_marker,
+        }
+    }
+
+    pub(crate) fn get_slot_mut(&mut self, slot: ToolSettingsSlot) -> &mut ToolDrawingSettings {
+        match slot {
+            ToolSettingsSlot::Pen => &mut self.pen,
+            ToolSettingsSlot::Line => &mut self.line,
+            ToolSettingsSlot::Rect => &mut self.rect,
+            ToolSettingsSlot::Ellipse => &mut self.ellipse,
+            ToolSettingsSlot::Arrow => &mut self.arrow,
+            ToolSettingsSlot::Blur => &mut self.blur,
+            ToolSettingsSlot::Marker => &mut self.marker,
+            ToolSettingsSlot::StepMarker => &mut self.step_marker,
         }
     }
 
     pub fn clamp_thicknesses(mut self, min: f64, max: f64) -> Self {
-        self.pen.thickness = self.pen.thickness.clamp(min, max);
-        self.line.thickness = self.line.thickness.clamp(min, max);
-        self.rect.thickness = self.rect.thickness.clamp(min, max);
-        self.ellipse.thickness = self.ellipse.thickness.clamp(min, max);
-        self.arrow.thickness = self.arrow.thickness.clamp(min, max);
-        self.blur.thickness = self.blur.thickness.clamp(min, max);
-        self.marker.thickness = self.marker.thickness.clamp(min, max);
-        self.step_marker.thickness = self.step_marker.thickness.clamp(min, max);
+        for slot in ToolSettingsSlot::ALL {
+            let settings = self.get_slot_mut(slot);
+            settings.thickness = settings.thickness.clamp(min, max);
+        }
         self
     }
 }
@@ -200,4 +386,59 @@ pub enum EraserMode {
     Brush,
     /// Stroke eraser that deletes any shape it touches.
     Stroke,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn color(r: f64) -> Color {
+        Color {
+            r,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }
+    }
+
+    #[test]
+    fn tool_profile_maps_compatibility_tools_to_pen_settings() {
+        assert_eq!(Tool::Select.settings_slot(), ToolSettingsSlot::Pen);
+        assert_eq!(Tool::Highlight.settings_slot(), ToolSettingsSlot::Pen);
+        assert_eq!(Tool::Eraser.settings_slot(), ToolSettingsSlot::Pen);
+        assert_eq!(
+            Tool::Eraser.profile().size_source,
+            ToolSizeSource::EraserSize
+        );
+
+        for slot in ToolSettingsSlot::ALL {
+            assert_eq!(slot.representative_tool().settings_slot(), slot);
+        }
+    }
+
+    #[test]
+    fn tool_profile_describes_toolbar_control_groups() {
+        assert!(!Tool::Select.profile().needs_thickness_control());
+        assert_eq!(Tool::Blur.profile().thickness_label, "Blur");
+        assert!(Tool::Marker.profile().show_marker_opacity());
+        assert!(Tool::Eraser.profile().show_eraser_mode());
+        assert!(Tool::Rect.profile().show_fill_toggle());
+        assert!(Tool::Arrow.profile().show_arrow_labels());
+        assert!(Tool::StepMarker.profile().show_step_counter());
+    }
+
+    #[test]
+    fn per_tool_settings_read_and_write_through_catalog_slot() {
+        let mut settings = PerToolDrawingSettings::new(color(1.0), 4.0);
+        settings.marker = ToolDrawingSettings::new(color(0.5), 12.0);
+
+        assert_eq!(settings.get(Tool::Eraser), &settings.pen);
+        assert_eq!(settings.get(Tool::Marker), &settings.marker);
+
+        settings.get_mut(Tool::Highlight).thickness = 8.0;
+        settings.get_mut(Tool::Marker).thickness = 16.0;
+
+        assert_eq!(settings.pen.thickness, 8.0);
+        assert_eq!(settings.marker.thickness, 16.0);
+    }
 }

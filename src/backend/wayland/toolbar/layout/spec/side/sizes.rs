@@ -47,7 +47,7 @@ impl ToolbarLayoutSpec {
         // Thickness/size slider: only when tool needs it
         if tool_context.needs_thickness {
             add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
-            if snapshot.thickness_targets_eraser {
+            if tool_context.show_eraser_mode {
                 add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
             }
         }
