@@ -44,7 +44,7 @@ pub fn build_side_hits(
     if tool_context.needs_thickness {
         y = sliders::push_thickness_hits(&ctx, y, hits);
 
-        if snapshot.thickness_targets_eraser {
+        if tool_context.show_eraser_mode {
             y += ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT + ctx.section_gap;
         }
     }

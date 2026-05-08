@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use crate::input::state::PRESET_FEEDBACK_DURATION_MS;
-use crate::input::{BoardBackground, InputState, Tool};
+use crate::input::{BoardBackground, InputState};
 
 use super::super::bindings::ToolbarBindingHints;
 use super::types::{PresetFeedbackSnapshot, PresetSlotSnapshot, ToolbarSnapshot};
@@ -40,10 +40,15 @@ impl ToolbarSnapshot {
             && state.text_input_mode == crate::input::TextInputMode::Plain;
         let note_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
             && state.text_input_mode == crate::input::TextInputMode::StickyNote;
-        let thickness_targets_eraser =
-            active_tool == Tool::Eraser || matches!(state.tool_override(), Some(Tool::Eraser));
-        let thickness_targets_marker =
-            active_tool == Tool::Marker || matches!(state.tool_override(), Some(Tool::Marker));
+        let override_tool = state.tool_override();
+        let thickness_targets_eraser = active_tool.uses_eraser_size()
+            || override_tool
+                .map(|tool| tool.uses_eraser_size())
+                .unwrap_or(false);
+        let thickness_targets_marker = active_tool.uses_marker_opacity()
+            || override_tool
+                .map(|tool| tool.uses_marker_opacity())
+                .unwrap_or(false);
         let eraser_kind = state.eraser_kind;
         let eraser_mode = state.eraser_mode;
         let thickness_value = if thickness_targets_eraser {

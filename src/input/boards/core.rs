@@ -200,10 +200,11 @@ impl BoardManager {
 
     /// Insert a board at the given index.
     /// Returns true if successful, false if the board limit is reached.
-    pub fn insert_board(&mut self, index: usize, board: BoardState) -> bool {
+    pub fn insert_board(&mut self, index: usize, mut board: BoardState) -> bool {
         if self.boards.len() >= self.max_count {
             return false;
         }
+        board.spec.id = self.unique_board_id(board.spec.id.clone());
         let insert_at = index.min(self.boards.len());
         self.boards.insert(insert_at, board);
         self.active_index = insert_at;

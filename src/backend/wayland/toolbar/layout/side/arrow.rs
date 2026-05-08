@@ -1,11 +1,9 @@
 use super::{SideLayoutContext, ToolbarLayoutSpec};
-use crate::input::Tool;
+use crate::ui::toolbar::ToolContext;
 
 // Arrow hit regions are built in render to avoid duplicate registrations.
 pub(super) fn advance_arrow_section(ctx: &SideLayoutContext<'_>, y: f64) -> f64 {
-    let show_arrow_controls =
-        ctx.snapshot.active_tool == Tool::Arrow || ctx.snapshot.arrow_label_enabled;
-    if !show_arrow_controls {
+    if !ToolContext::from_snapshot(ctx.snapshot).show_arrow_labels {
         return y;
     }
 

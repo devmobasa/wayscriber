@@ -6,8 +6,7 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::input::Tool;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolContext, ToolbarEvent};
 use crate::ui_text::{UiTextStyle, text_layout};
 
 pub(super) fn draw_step_marker_section(layout: &mut SidePaletteLayout, y: &mut f64) {
@@ -33,7 +32,7 @@ pub(super) fn draw_step_marker_section(layout: &mut SidePaletteLayout, y: &mut f
         size: FONT_SIZE_SMALL,
     };
 
-    if snapshot.active_tool != Tool::StepMarker {
+    if !ToolContext::from_snapshot(snapshot).show_step_counter {
         return;
     }
 

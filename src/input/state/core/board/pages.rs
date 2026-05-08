@@ -11,9 +11,7 @@ impl InputState {
             return false;
         }
         self.sync_canvas_pointer_to_current_transform();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-        self.mark_session_dirty();
+        self.mark_board_surface_changed();
         self.set_ui_toast(UiToastKind::Info, "Canvas position reset.");
         true
     }
@@ -32,8 +30,7 @@ impl InputState {
         }
         board.spec.name = trimmed.to_string();
         self.queue_board_config_save();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
+        self.mark_board_surface_dirty();
         true
     }
 
@@ -61,8 +58,7 @@ impl InputState {
             self.set_pen_color_from_board(color);
         }
         self.queue_board_config_save();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
+        self.mark_board_surface_dirty();
         true
     }
 
@@ -72,8 +68,7 @@ impl InputState {
         };
         board.spec.pinned = !board.spec.pinned;
         self.queue_board_config_save();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
+        self.mark_board_surface_dirty();
         true
     }
 
@@ -82,8 +77,7 @@ impl InputState {
             return false;
         }
         self.queue_board_config_save();
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
+        self.mark_board_surface_dirty();
         true
     }
 
@@ -102,9 +96,7 @@ impl InputState {
         if self.boards.active_index() == board_index {
             self.prepare_page_switch();
         } else {
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            self.mark_session_dirty();
+            self.mark_board_surface_changed();
         }
         true
     }
@@ -121,9 +113,7 @@ impl InputState {
         if self.boards.active_index() == board_index {
             self.prepare_page_switch();
         } else {
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            self.mark_session_dirty();
+            self.mark_board_surface_changed();
         }
         self.set_ui_toast(
             UiToastKind::Info,
@@ -150,9 +140,7 @@ impl InputState {
         if self.boards.active_index() == board_index {
             self.prepare_page_switch();
         } else {
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            self.mark_session_dirty();
+            self.mark_board_surface_changed();
         }
         self.set_ui_toast(
             UiToastKind::Info,
@@ -176,9 +164,7 @@ impl InputState {
         if self.boards.active_index() == board_index {
             self.prepare_page_switch();
         } else {
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            self.mark_session_dirty();
+            self.mark_board_surface_changed();
         }
         self.set_ui_toast(UiToastKind::Info, "Page renamed.");
         true
