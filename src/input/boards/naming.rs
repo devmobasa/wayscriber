@@ -139,7 +139,7 @@ impl BoardManager {
         Some(new_spec.id)
     }
 
-    fn unique_board_id(&self, base: String) -> String {
+    pub(super) fn unique_board_id(&self, base: String) -> String {
         if !self.boards.iter().any(|board| board.spec.id == base) {
             return base;
         }

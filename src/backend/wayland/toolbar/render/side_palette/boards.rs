@@ -66,7 +66,7 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
     };
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-    let cols = model.buttons.len().min(5).max(1);
+    let cols = model.buttons.len().clamp(1, 5);
     let btn_w = row_item_width(content_width, cols, btn_gap);
     let layout = grid_layout(
         x,

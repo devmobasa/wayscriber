@@ -98,6 +98,37 @@ fn delete_active_board_restore_preserves_cancelled_text_edit() {
 }
 
 #[test]
+fn restore_deleted_board_renames_reused_generated_id() {
+    let mut state = create_test_input_state();
+    let initial_count = state.boards.board_count();
+    assert!(state.create_board());
+    let deleted_id = state.board_id().to_string();
+
+    state.delete_active_board();
+    state.delete_active_board();
+    assert_eq!(state.boards.board_count(), initial_count);
+
+    assert!(state.create_board());
+    assert_eq!(state.board_id(), deleted_id);
+
+    state.restore_deleted_board();
+
+    assert_eq!(state.boards.board_count(), initial_count + 2);
+    assert_ne!(state.board_id(), deleted_id);
+    assert!(state.board_id().starts_with(&format!("{deleted_id}-")));
+
+    let mut ids: Vec<_> = state
+        .boards
+        .board_states()
+        .iter()
+        .map(|board| board.spec.id.as_str())
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), state.boards.board_count());
+}
+
+#[test]
 fn cancel_pending_board_delete_clears_confirmation_state() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);

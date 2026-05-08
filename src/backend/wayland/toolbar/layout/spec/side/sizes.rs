@@ -258,7 +258,7 @@ impl ToolbarLayoutSpec {
         } else {
             Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT
         };
-        let columns = boards.buttons.len().min(5).max(1);
+        let columns = boards.buttons.len().clamp(1, 5);
         let rows = boards.buttons.len().div_ceil(columns);
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y
             + btn_h * rows as f64

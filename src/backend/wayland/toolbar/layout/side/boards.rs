@@ -19,7 +19,7 @@ pub(super) fn push_boards_hits(
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
     };
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-    let cols = model.buttons.len().min(5).max(1);
+    let cols = model.buttons.len().clamp(1, 5);
     let btn_w = row_item_width(ctx.content_width, cols, btn_gap);
     let layout = grid_layout(
         ctx.x,
