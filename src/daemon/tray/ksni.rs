@@ -155,6 +155,24 @@ impl ksni::Tray for WayscriberTray {
             }
             .into(),
             StandardItem {
+                label: format_binding_label(action_label(Action::ToggleLightMode), None),
+                icon_name: menu_icon_name("input-tablet", use_theme_icons),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action(TrayAction::ToggleLightMode);
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: format_binding_label(action_label(Action::ToggleLightModeDrawing), None),
+                icon_name: menu_icon_name("draw-freehand", use_theme_icons),
+                activate: Box::new(|this: &mut Self| {
+                    this.dispatch_overlay_action(TrayAction::LightDrawToggle);
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
                 label: format_binding_label(action_label(Action::CaptureFullScreen), None),
                 icon_name: menu_icon_name("camera-photo", use_theme_icons),
                 activate: Box::new(|this: &mut Self| {

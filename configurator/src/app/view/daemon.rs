@@ -3,7 +3,7 @@ use iced::Element;
 use iced::widget::{button, column, row, rule, scrollable, text, text_input};
 
 use crate::messages::Message;
-use crate::models::{DaemonAction, ShortcutApplyCapability};
+use crate::models::{DaemonAction, LightShortcutApplyCapability, ShortcutApplyCapability};
 
 use super::super::state::ConfiguratorApp;
 
@@ -60,6 +60,10 @@ impl ConfiguratorApp {
 
         // ── Step 2: Set your shortcut ──
         content = content.push(self.daemon_step_shortcut(busy, service_installed));
+        content = content.push(rule::horizontal(1));
+
+        // ── Light passthrough controls ──
+        content = content.push(self.daemon_step_light_controls(busy, service_installed));
         content = content.push(rule::horizontal(1));
 
         // ── Step 3: Start the service ──
@@ -216,6 +220,81 @@ impl ConfiguratorApp {
         step.into()
     }
 
+    fn daemon_step_light_controls(
+        &self,
+        busy: bool,
+        service_installed: bool,
+    ) -> Element<'_, Message> {
+        let capability = self
+            .daemon_status
+            .as_ref()
+            .map(|s| s.light_shortcut_apply_capability)
+            .unwrap_or(LightShortcutApplyCapability::Manual);
+        let configured = self
+            .daemon_status
+            .as_ref()
+            .is_some_and(|s| s.light_controls_configured);
+
+        let status_indicator = if configured {
+            text("Configured \u{2713}")
+                .size(14)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.5, 0.9, 0.5)))
+        } else {
+            text("Not configured")
+                .size(14)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6)))
+        };
+
+        let mut step = column![
+            text("Light passthrough controls").size(16),
+            text("Install global controls for light passthrough and quick drawing.").size(14),
+        ]
+        .spacing(8);
+
+        if let Some(path) = self
+            .daemon_status
+            .as_ref()
+            .and_then(|s| s.light_controls_config_path.as_deref())
+        {
+            step = step.push(
+                text(format!("Hyprland include: {path}"))
+                    .size(12)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            );
+        }
+
+        match capability {
+            LightShortcutApplyCapability::HyprlandNative => {
+                let mut install_button =
+                    button("Install Hyprland Light Controls").style(theme::Button::Primary);
+                if !busy && service_installed {
+                    install_button = install_button.on_press(Message::DaemonActionRequested(
+                        DaemonAction::ApplyLightControls,
+                    ));
+                }
+
+                if !service_installed {
+                    step = step.push(
+                        text("Install the background service first so these bindings have a daemon to control.")
+                            .size(12)
+                            .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.8, 0.3))),
+                    );
+                }
+
+                step = step.push(row![status_indicator, install_button].spacing(12));
+            }
+            LightShortcutApplyCapability::Manual => {
+                step = step.push(
+                    text("Automatic light controls setup is unavailable here. Add compositor bindings for `wayscriber --light-toggle` and `wayscriber --light-draw-toggle`.")
+                        .size(12)
+                        .style(theme::Text::Color(iced::Color::from_rgb(0.95, 0.8, 0.3))),
+                );
+            }
+        }
+
+        step.into()
+    }
+
     fn daemon_step_start(&self, busy: bool, service_installed: bool) -> Element<'_, Message> {
         if !service_installed {
             return column![
@@ -312,10 +391,27 @@ impl ConfiguratorApp {
                     .size(12)
                     .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             );
+            details = details.push(
+                text(status.light_shortcut_apply_capability.friendly_label())
+                    .size(12)
+                    .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            );
 
             if let Some(path) = status.service_unit_path.as_deref() {
                 details = details.push(
                     text(format!("Service file: {path}"))
+                        .size(12)
+                        .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+                );
+            }
+            if let Some(path) = status.light_controls_config_path.as_deref() {
+                let label = if status.light_controls_configured {
+                    format!("Light controls: configured at {path}")
+                } else {
+                    format!("Light controls include: {path}")
+                };
+                details = details.push(
+                    text(label)
                         .size(12)
                         .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
                 );

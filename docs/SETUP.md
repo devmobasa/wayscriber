@@ -25,6 +25,7 @@ Desktop-specific shortcut handling:
 - GNOME: creates/updates a GNOME custom shortcut that runs `wayscriber --daemon-toggle`.
 - GNOME migrations: `Install/Update Service` and `Apply Shortcut` remove stale `~/.config/systemd/user/wayscriber.service.d/shortcut.conf` files so old portal settings do not override GNOME behavior.
 - KDE/Plasma: writes a systemd user drop-in with `WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1` and `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcut handling.
+- Hyprland: light passthrough controls use native Hyprland bindings, not the portal shortcut path.
 
 ### Quick Install
 
@@ -89,6 +90,26 @@ hyprctl reload
 ```
 
 Now press <kbd>Super+D</kbd> to toggle the overlay on/off!
+
+### Light passthrough controls on Hyprland
+
+Light passthrough needs compositor/global shortcuts because Wayscriber deliberately passes keyboard and pointer input to the app below while passthrough is active.
+
+The configurator can install a native Hyprland include file for this. Manual equivalent:
+
+```conf
+# wayscriber - light passthrough controls
+unbind = SUPER ALT, L
+bind = SUPER ALT, L, exec, wayscriber --light-toggle
+unbind = SUPER ALT, D
+bind = SUPER ALT, D, exec, wayscriber --light-draw-toggle
+unbind = SUPER ALT, F
+bind = SUPER ALT, F, exec, wayscriber --light-draw-on
+bindr = SUPER ALT, F, exec, wayscriber --light-draw-off
+```
+
+Use `--light-draw-on` on key/button press and `--light-draw-off` on release for draw-while-held.
+The `unbind` lines prevent duplicate manual bindings for these same keys from firing twice.
 
 ### Method 3: One-Shot Mode (Alternative)
 

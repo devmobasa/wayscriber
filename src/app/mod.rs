@@ -92,9 +92,10 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    if let Some(action) = cli.daemon_action.as_deref() {
-        let action = crate::tray_action::TrayAction::parse(action)
-            .ok_or_else(|| anyhow::anyhow!("unknown daemon action '{}'", action))?;
+    if let Some(action) = cli
+        .daemon_overlay_action()
+        .map_err(|err| anyhow::anyhow!(err))?
+    {
         crate::daemon::send_daemon_overlay_action(action)?;
         return Ok(());
     }

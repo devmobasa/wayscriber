@@ -177,6 +177,12 @@ pub(crate) fn print_usage() {
     println!(
         "             [--exit-after-capture|--no-exit-after-capture] [--resume-session|--no-resume-session]"
     );
+    println!(
+        "  wayscriber --light-toggle | --light-draw-toggle  Control light passthrough through the daemon"
+    );
+    println!(
+        "  wayscriber --light-draw-on | --light-draw-off    Press/release controls for hold-to-draw"
+    );
     println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
     println!("  wayscriber --freeze          Start overlay already frozen");
     println!(
@@ -200,6 +206,10 @@ pub(crate) fn print_usage() {
     println!("     exec-once = wayscriber --daemon");
     println!("     bind = SUPER, D, exec, wayscriber --daemon-toggle");
     println!("     bind = SUPER SHIFT, D, exec, wayscriber --daemon-toggle --freeze");
+    println!("     bind = SUPER ALT, L, exec, wayscriber --light-toggle");
+    println!("     bind = SUPER ALT, D, exec, wayscriber --light-draw-toggle");
+    println!("     bind = SUPER ALT, F, exec, wayscriber --light-draw-on");
+    println!("     bindr = SUPER ALT, F, exec, wayscriber --light-draw-off");
     println!("  3. Press your bound shortcut (e.g. Super+D) to toggle overlay on/off");
     println!();
     println!("Requirements:");

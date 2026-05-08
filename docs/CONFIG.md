@@ -425,13 +425,13 @@ Light mode hides UI chrome and sets the overlay to click-through passthrough unt
 For compositor/global shortcuts while passthrough is active, run:
 
 ```sh
-wayscriber --daemon-action light_draw_toggle
-wayscriber --daemon-action light_draw_on
-wayscriber --daemon-action light_draw_off
-wayscriber --daemon-action toggle_light_mode
+wayscriber --light-toggle
+wayscriber --light-draw-toggle
+wayscriber --light-draw-on
+wayscriber --light-draw-off
 ```
 
-Use `light_draw_on` on key/button press and `light_draw_off` on release for a non-sticky draw-while-held shortcut.
+Use `--light-draw-on` on key/button press and `--light-draw-off` on release for a non-sticky draw-while-held shortcut. The raw `--daemon-action` form remains available for scripts.
 
 ### `[ui.toolbar]` - Floating Toolbars
 

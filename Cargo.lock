@@ -4434,6 +4434,7 @@ name = "wayscriber-configurator"
 version = "0.9.17"
 dependencies = [
  "iced",
+ "tempfile",
  "wayscriber",
 ]
 
