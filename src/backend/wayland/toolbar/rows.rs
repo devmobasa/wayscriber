@@ -24,6 +24,13 @@ pub(in crate::backend::wayland::toolbar) fn row_item_width(
     (content_width - gap * (columns as f64 - 1.0)) / columns as f64
 }
 
+pub(in crate::backend::wayland::toolbar) fn capped_grid_columns(
+    item_count: usize,
+    max_columns: usize,
+) -> usize {
+    item_count.clamp(1, max_columns.max(1))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar) fn grid_layout(
     start_x: f64,
@@ -128,6 +135,14 @@ mod tests {
         assert_eq!(layout.rows, 3);
         assert_eq!(layout.items.len(), 7);
         assert!((layout.height - 36.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn capped_grid_columns_stays_between_one_and_limit() {
+        assert_eq!(capped_grid_columns(0, 5), 1);
+        assert_eq!(capped_grid_columns(1, 5), 1);
+        assert_eq!(capped_grid_columns(5, 5), 5);
+        assert_eq!(capped_grid_columns(6, 5), 5);
     }
 
     #[test]

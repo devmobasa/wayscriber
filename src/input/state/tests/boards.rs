@@ -162,6 +162,47 @@ fn switch_board_cancels_text_edit_on_source_board_before_switching() {
 }
 
 #[test]
+fn switch_board_cancels_selection_move_on_source_board_before_switching() {
+    let mut state = create_test_input_state();
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 40,
+        y: 80,
+        w: 30,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    state.set_selection(vec![shape_id]);
+    let snapshots = state.capture_movable_selection_snapshots();
+    assert!(state.apply_translation_to_selection(25, 35));
+    state.state = DrawingState::MovingSelection {
+        last_x: 25,
+        last_y: 35,
+        snapshots,
+        moved: true,
+    };
+    state.begin_pointer_drag(MouseButton::Left, None);
+
+    state.switch_board(BOARD_ID_WHITEBOARD);
+
+    assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert!(state.active_drag_button.is_none());
+
+    let source_index = board_index(&state, BOARD_ID_TRANSPARENT);
+    let source_shape = state.boards.board_states()[source_index]
+        .pages
+        .active_frame()
+        .shape(shape_id)
+        .expect("source shape");
+    match &source_shape.shape {
+        Shape::Rect { x, y, w, h, .. } => assert_eq!((*x, *y, *w, *h), (40, 80, 30, 20)),
+        _ => panic!("Expected rect shape"),
+    }
+}
+
+#[test]
 fn duplicate_board_from_transparent_shows_info_toast_without_creating_board() {
     let mut state = create_test_input_state();
     let initial_count = state.boards.board_count();

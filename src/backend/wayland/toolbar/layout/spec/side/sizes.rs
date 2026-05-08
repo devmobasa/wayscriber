@@ -1,3 +1,4 @@
+use crate::backend::wayland::toolbar::rows::capped_grid_columns;
 use crate::config::ToolbarLayoutMode;
 use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model::{
@@ -258,7 +259,7 @@ impl ToolbarLayoutSpec {
         } else {
             Self::SIDE_ACTION_BUTTON_HEIGHT_TEXT
         };
-        let columns = boards.buttons.len().clamp(1, 5);
+        let columns = capped_grid_columns(boards.buttons.len(), 5);
         let rows = boards.buttons.len().div_ceil(columns);
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y
             + btn_h * rows as f64

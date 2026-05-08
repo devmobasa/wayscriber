@@ -3,7 +3,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
+use crate::backend::wayland::toolbar::rows::{capped_grid_columns, grid_layout, row_item_width};
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::model::toolbar_boards_model;
@@ -66,7 +66,7 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_TEXT
     };
     let btn_gap = ToolbarLayoutSpec::SIDE_ACTION_BUTTON_GAP;
-    let cols = model.buttons.len().clamp(1, 5);
+    let cols = capped_grid_columns(model.buttons.len(), 5);
     let btn_w = row_item_width(content_width, cols, btn_gap);
     let layout = grid_layout(
         x,
