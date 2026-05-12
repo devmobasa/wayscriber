@@ -94,6 +94,7 @@ Now press <kbd>Super+D</kbd> to toggle the overlay on/off!
 ### Light passthrough controls on Hyprland
 
 Light passthrough needs compositor/global shortcuts because Wayscriber deliberately passes keyboard and pointer input to the app below while passthrough is active.
+The default <kbd>Ctrl+Shift+L</kbd> binding is a Wayscriber in-overlay shortcut, not an OS-level shortcut; use the bindings below for reliable control after passthrough starts.
 
 The configurator can install a native Hyprland include file for this. Manual equivalent for Arch + Hyprland:
 

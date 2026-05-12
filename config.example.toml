@@ -130,12 +130,14 @@ toggle_click_highlight = ["Ctrl+Shift+H"]
 # Toggle presenter mode
 toggle_presenter_mode = ["Ctrl+Shift+M"]
 
-# Toggle light passthrough mode
+# Toggle light passthrough mode while the overlay has focus.
+# Once passthrough is active, use compositor/global shortcuts that call
+# `wayscriber --light-toggle` for reliable control.
 toggle_light_mode = ["Ctrl+Shift+L"]
 
 # Optional in-overlay toggle between light drawing and passthrough.
-# In passthrough, use `wayscriber --daemon-action light_draw_toggle`
-# or light_draw_on/light_draw_off from a compositor shortcut.
+# In passthrough, use `wayscriber --light-draw-toggle`
+# or `--light-draw-on` / `--light-draw-off` from a compositor shortcut.
 toggle_light_mode_drawing = []
 
 # Toggle fill for rectangle/ellipse
@@ -482,10 +484,11 @@ tool_behavior = "force-highlight"
 # Show enter/exit toast notifications
 show_toast = true
 
-# Light passthrough mode requires layer-shell support and is controlled by keybindings and daemon actions:
-# - toggle_light_mode enters/exits a minimal click-through overlay.
-# - wayscriber --daemon-action light_draw_toggle switches between drawing and passthrough.
-# - wayscriber --daemon-action light_draw_on / light_draw_off support press/release shortcuts.
+# Light passthrough mode requires layer-shell support:
+# - toggle_light_mode enters a minimal click-through overlay while Wayscriber has focus.
+# - wayscriber --light-toggle is the reliable compositor/global toggle once passthrough is active.
+# - wayscriber --light-draw-toggle switches between drawing and passthrough.
+# - wayscriber --light-draw-on / --light-draw-off support press/release shortcuts.
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)
