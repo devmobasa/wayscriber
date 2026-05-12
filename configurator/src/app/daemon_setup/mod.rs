@@ -1,12 +1,18 @@
 mod command;
+mod hyprland;
 mod service;
 mod shortcut;
 
 use crate::models::{
-    DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment, ShortcutBackend,
+    DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment,
+    LightShortcutApplyCapability, ShortcutBackend,
 };
 
 use command::command_available;
+use hyprland::{
+    install_light_controls as install_hyprland_light_controls,
+    read_light_controls_status as read_hyprland_light_controls_status,
+};
 use service::{
     SERVICE_NAME, detect_service_unit_path, install_or_update_user_service, query_service_active,
     query_service_enabled, remove_portal_shortcut_dropin_if_gnome, require_systemctl_available,
@@ -70,6 +76,10 @@ fn perform_daemon_action_sync(
             Ok("Stopped and disabled wayscriber.service.".to_string())
         }
         DaemonAction::ApplyShortcut => apply_shortcut(shortcut_input),
+        DaemonAction::ApplyLightControls => {
+            let result = install_hyprland_light_controls()?;
+            Ok(result.summary())
+        }
     }
 }
 
@@ -97,11 +107,19 @@ fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {
         false
     };
     let configured_shortcut = read_configured_shortcut(shortcut_backend);
+    let light_shortcut_apply_capability = LightShortcutApplyCapability::from_environment(desktop);
+    let light_controls =
+        if light_shortcut_apply_capability == LightShortcutApplyCapability::HyprlandNative {
+            Some(read_hyprland_light_controls_status())
+        } else {
+            None
+        };
 
     Ok(DaemonRuntimeStatus {
         desktop,
         shortcut_backend,
         shortcut_apply_capability,
+        light_shortcut_apply_capability,
         systemctl_available,
         gsettings_available,
         service_installed,
@@ -109,5 +127,12 @@ fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {
         service_active,
         service_unit_path: service_unit_path.map(|path| path.display().to_string()),
         configured_shortcut,
+        light_controls_configured: light_controls
+            .as_ref()
+            .is_some_and(|status| status.configured()),
+        light_controls_config_path: light_controls
+            .as_ref()
+            .and_then(|status| status.include_path.as_ref())
+            .map(|path| path.display().to_string()),
     })
 }

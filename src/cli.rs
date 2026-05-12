@@ -1,5 +1,7 @@
 use clap::{ArgAction, Parser};
 
+use crate::tray_action::TrayAction;
+
 #[derive(Parser, Debug)]
 #[command(name = "wayscriber")]
 #[command(
@@ -26,6 +28,137 @@ pub struct Cli {
         ]
     )]
     pub daemon_toggle: bool,
+
+    /// Send an action to the active overlay through the running daemon
+    #[arg(
+        long,
+        value_name = "ACTION",
+        conflicts_with_all = [
+            "daemon",
+            "daemon_toggle",
+            "active",
+            "mode",
+            "no_tray",
+            "freeze_on_show",
+            "clear_session",
+            "session_info",
+            "freeze",
+            "exit_after_capture",
+            "no_exit_after_capture",
+            "resume_session",
+            "no_resume_session",
+            "about"
+        ]
+    )]
+    pub daemon_action: Option<String>,
+
+    /// Toggle light passthrough mode through the running daemon
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "daemon_toggle",
+            "daemon_action",
+            "light_draw_toggle",
+            "light_draw_on",
+            "light_draw_off",
+            "active",
+            "mode",
+            "no_tray",
+            "freeze_on_show",
+            "clear_session",
+            "session_info",
+            "freeze",
+            "exit_after_capture",
+            "no_exit_after_capture",
+            "resume_session",
+            "no_resume_session",
+            "about"
+        ]
+    )]
+    pub light_toggle: bool,
+
+    /// Toggle drawing while light passthrough mode is active
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "daemon_toggle",
+            "daemon_action",
+            "light_toggle",
+            "light_draw_on",
+            "light_draw_off",
+            "active",
+            "mode",
+            "no_tray",
+            "freeze_on_show",
+            "clear_session",
+            "session_info",
+            "freeze",
+            "exit_after_capture",
+            "no_exit_after_capture",
+            "resume_session",
+            "no_resume_session",
+            "about"
+        ]
+    )]
+    pub light_draw_toggle: bool,
+
+    /// Turn light-mode drawing on through the running daemon
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "daemon_toggle",
+            "daemon_action",
+            "light_toggle",
+            "light_draw_toggle",
+            "light_draw_off",
+            "active",
+            "mode",
+            "no_tray",
+            "freeze_on_show",
+            "clear_session",
+            "session_info",
+            "freeze",
+            "exit_after_capture",
+            "no_exit_after_capture",
+            "resume_session",
+            "no_resume_session",
+            "about"
+        ]
+    )]
+    pub light_draw_on: bool,
+
+    /// Turn light-mode drawing off through the running daemon
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with_all = [
+            "daemon",
+            "daemon_toggle",
+            "daemon_action",
+            "light_toggle",
+            "light_draw_toggle",
+            "light_draw_on",
+            "active",
+            "mode",
+            "no_tray",
+            "freeze_on_show",
+            "clear_session",
+            "session_info",
+            "freeze",
+            "exit_after_capture",
+            "no_exit_after_capture",
+            "resume_session",
+            "no_resume_session",
+            "about"
+        ]
+    )]
+    pub light_draw_off: bool,
 
     /// Start active (show overlay immediately, one-shot mode)
     #[arg(long, short = 'a', action = ArgAction::SetTrue)]
@@ -102,6 +235,7 @@ pub struct Cli {
         conflicts_with_all = [
             "daemon",
             "daemon_toggle",
+            "daemon_action",
             "active",
             "mode",
             "no_tray",
@@ -116,9 +250,33 @@ pub struct Cli {
     pub about: bool,
 }
 
+impl Cli {
+    pub(crate) fn daemon_overlay_action(&self) -> Result<Option<TrayAction>, String> {
+        if let Some(action) = self.daemon_action.as_deref() {
+            return TrayAction::parse(action)
+                .ok_or_else(|| format!("unknown daemon action '{action}'"))
+                .map(Some);
+        }
+
+        let action = if self.light_toggle {
+            Some(TrayAction::ToggleLightMode)
+        } else if self.light_draw_toggle {
+            Some(TrayAction::LightDrawToggle)
+        } else if self.light_draw_on {
+            Some(TrayAction::LightDrawOn)
+        } else if self.light_draw_off {
+            Some(TrayAction::LightDrawOff)
+        } else {
+            None
+        };
+        Ok(action)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Cli;
+    use crate::tray_action::TrayAction;
     use clap::Parser;
 
     #[test]
@@ -152,6 +310,58 @@ mod tests {
         assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
         assert!(cli.exit_after_capture);
         assert!(cli.resume_session);
+    }
+
+    #[test]
+    fn daemon_action_accepts_light_mode_actions() {
+        let cli =
+            Cli::try_parse_from(["wayscriber", "--daemon-action", "light_draw_toggle"]).unwrap();
+        assert_eq!(cli.daemon_action.as_deref(), Some("light_draw_toggle"));
+        assert_eq!(
+            cli.daemon_overlay_action().unwrap(),
+            Some(TrayAction::LightDrawToggle)
+        );
+    }
+
+    #[test]
+    fn friendly_light_aliases_resolve_to_tray_actions() {
+        let cases = [
+            ("--light-toggle", TrayAction::ToggleLightMode),
+            ("--light-draw-toggle", TrayAction::LightDrawToggle),
+            ("--light-draw-on", TrayAction::LightDrawOn),
+            ("--light-draw-off", TrayAction::LightDrawOff),
+        ];
+
+        for (flag, expected) in cases {
+            let cli = Cli::try_parse_from(["wayscriber", flag]).unwrap();
+            assert_eq!(cli.daemon_overlay_action().unwrap(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn friendly_light_aliases_conflict_with_raw_daemon_action() {
+        let result = Cli::try_parse_from([
+            "wayscriber",
+            "--daemon-action",
+            "toggle_light_mode",
+            "--light-toggle",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn friendly_light_aliases_conflict_with_each_other() {
+        let result = Cli::try_parse_from(["wayscriber", "--light-toggle", "--light-draw-toggle"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn raw_daemon_action_reports_unknown_action() {
+        let cli = Cli::try_parse_from(["wayscriber", "--daemon-action", "not_real"]).unwrap();
+        assert_eq!(
+            cli.daemon_overlay_action().unwrap_err(),
+            "unknown daemon action 'not_real'"
+        );
     }
 
     #[test]

@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::paths::{daemon_command_dir, daemon_command_file, daemon_lock_file, daemon_pid_file};
 use crate::session::try_lock_exclusive;
+use crate::tray_action::TrayAction;
 
 const MAX_DAEMON_TOGGLE_REQUEST_AGE: Duration = Duration::from_secs(5);
 
@@ -39,6 +40,8 @@ pub(crate) struct DaemonToggleRequest {
     pub(crate) resume_session: bool,
     #[serde(default)]
     pub(crate) no_resume_session: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) overlay_action: Option<TrayAction>,
 }
 
 impl DaemonToggleRequest {
@@ -49,6 +52,7 @@ impl DaemonToggleRequest {
             && !self.no_exit_after_capture
             && !self.resume_session
             && !self.no_resume_session
+            && self.overlay_action.is_none()
     }
 
     pub(crate) fn session_resume_override(&self) -> Option<bool> {
@@ -363,6 +367,13 @@ pub(crate) fn send_daemon_toggle_request(request: &DaemonToggleRequest) -> Resul
     Ok(())
 }
 
+pub(crate) fn send_daemon_overlay_action(action: TrayAction) -> Result<()> {
+    send_daemon_toggle_request(&DaemonToggleRequest {
+        overlay_action: Some(action),
+        ..Default::default()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +385,15 @@ mod tests {
     #[test]
     fn empty_toggle_request_reports_empty() {
         assert!(DaemonToggleRequest::default().is_empty());
+    }
+
+    #[test]
+    fn overlay_action_request_is_not_empty() {
+        let request = DaemonToggleRequest {
+            overlay_action: Some(TrayAction::LightDrawToggle),
+            ..Default::default()
+        };
+        assert!(!request.is_empty());
     }
 
     #[test]

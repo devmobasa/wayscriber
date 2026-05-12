@@ -3,4 +3,4 @@ mod modifiers;
 mod structs;
 
 pub use structs::InputState;
-pub(crate) use structs::PresenterRestore;
+pub(crate) use structs::{LightModeRestore, PresenterRestore};

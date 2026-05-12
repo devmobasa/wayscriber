@@ -133,6 +133,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - Click highlights with configurable colors/radius/duration
 - Persistent ring while click highlight tool is active
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
+- Light passthrough mode (layer-shell): <kbd>Ctrl+Shift+L</kbd> enters from the focused overlay; compositor/global shortcuts such as `wayscriber --light-toggle` keep control reliable while input is passed through
 - Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause display while apps run
 
 ### Callouts & Zoom
@@ -401,6 +402,11 @@ KDE Plasma:
 Other desktops/window managers:
 - Bind `wayscriber --daemon-toggle` to any global shortcut key you prefer.
 
+Light passthrough controls:
+- <kbd>Ctrl+Shift+L</kbd> is a Wayscriber in-overlay shortcut, not an OS/global shortcut. It works while the overlay is focused.
+- Once light passthrough is active, normal keyboard and pointer input goes to the app underneath. Bind compositor/global shortcuts to `wayscriber --light-toggle` and `wayscriber --light-draw-toggle` for reliable control.
+- Use `wayscriber --light-draw-on` on press and `wayscriber --light-draw-off` on release for draw-while-held shortcuts.
+
 Use `--no-tray` or `WAYSCRIBER_NO_TRAY=1` if you don't have a system tray; otherwise right-click the tray icon for options:
 - Toggle overlay visibility
 - Freeze/unfreeze the current overlay
@@ -611,6 +617,7 @@ Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_
 | Apply preset slot | <kbd>1</kbd> - <kbd>5</kbd> |
 | Save preset slot | <kbd>Shift+1</kbd> - <kbd>Shift+5</kbd> |
 | Toggle click highlight | <kbd>Ctrl+Shift+H</kbd> |
+| Toggle light passthrough (in-overlay) | <kbd>Ctrl+Shift+L</kbd> |
 | Reset arrow labels | <kbd>Ctrl+Shift+R</kbd> |
 | Toggle freeze | <kbd>Ctrl+Shift+F</kbd> |
 | Zoom in/out | <kbd>Ctrl+Alt</kbd> + scroll / <kbd>Ctrl+Alt++</kbd> / <kbd>Ctrl+Alt+-</kbd> |
@@ -620,6 +627,8 @@ Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_
 | Exit | <kbd>Escape</kbd> / <kbd>Ctrl+Q</kbd> |
 
 </details>
+
+For light passthrough, <kbd>Ctrl+Shift+L</kbd> is the default Wayscriber-level binding only while the overlay has focus. Use compositor/global shortcuts that run `wayscriber --light-toggle` and related light-draw commands once passthrough is active.
 
 Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>. Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`). Preset slots can be saved/cleared from the toolbar; edit names and advanced fields in `config.toml`. Blur has no default keyboard shortcut; bind `select_blur_tool` in `config.toml` if you want direct keyboard access.
 

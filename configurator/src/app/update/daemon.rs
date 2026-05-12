@@ -147,30 +147,44 @@ fn action_pending_message(action: DaemonAction) -> String {
             "Stopping and disabling background mode...".to_string()
         }
         DaemonAction::ApplyShortcut => "Applying desktop shortcut setup...".to_string(),
+        DaemonAction::ApplyLightControls => {
+            "Applying light passthrough controls setup...".to_string()
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{DesktopEnvironment, ShortcutApplyCapability, ShortcutBackend};
+    use crate::models::{
+        DesktopEnvironment, LightShortcutApplyCapability, ShortcutApplyCapability, ShortcutBackend,
+    };
 
-    #[test]
-    fn daemon_status_loaded_sets_default_shortcut_when_missing() {
-        let (mut app, _command) = ConfiguratorApp::new_app();
-        app.daemon_shortcut_input.clear();
-        let status = DaemonRuntimeStatus {
-            desktop: DesktopEnvironment::Kde,
+    fn test_status(desktop: DesktopEnvironment, shortcut: Option<String>) -> DaemonRuntimeStatus {
+        DaemonRuntimeStatus {
+            desktop,
             shortcut_backend: ShortcutBackend::PortalServiceDropIn,
             shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
+            light_shortcut_apply_capability: LightShortcutApplyCapability::from_environment(
+                desktop,
+            ),
             systemctl_available: true,
             gsettings_available: false,
             service_installed: false,
             service_enabled: false,
             service_active: false,
             service_unit_path: None,
-            configured_shortcut: None,
-        };
+            configured_shortcut: shortcut,
+            light_controls_configured: false,
+            light_controls_config_path: None,
+        }
+    }
+
+    #[test]
+    fn daemon_status_loaded_sets_default_shortcut_when_missing() {
+        let (mut app, _command) = ConfiguratorApp::new_app();
+        app.daemon_shortcut_input.clear();
+        let status = test_status(DesktopEnvironment::Kde, None);
 
         app.daemon_latest_status_request_id = 7;
         let _ = app.handle_daemon_status_loaded(7, Ok(status));
@@ -200,18 +214,7 @@ mod tests {
         let (mut app, _command) = ConfiguratorApp::new_app();
         app.daemon_busy = true;
         app.daemon_feedback = Some("Installing/updating background service...".to_string());
-        let status = DaemonRuntimeStatus {
-            desktop: DesktopEnvironment::Kde,
-            shortcut_backend: ShortcutBackend::PortalServiceDropIn,
-            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
-            systemctl_available: true,
-            gsettings_available: false,
-            service_installed: false,
-            service_enabled: false,
-            service_active: false,
-            service_unit_path: None,
-            configured_shortcut: None,
-        };
+        let status = test_status(DesktopEnvironment::Kde, None);
 
         app.daemon_latest_status_request_id = 9;
         let _ = app.handle_daemon_status_loaded(9, Ok(status));
@@ -228,18 +231,7 @@ mod tests {
         let (mut app, _command) = ConfiguratorApp::new_app();
         let _ = app.handle_daemon_action_completed(Err("boom".to_string()));
         let preserved_request_id = app.daemon_latest_status_request_id;
-        let status = DaemonRuntimeStatus {
-            desktop: DesktopEnvironment::Kde,
-            shortcut_backend: ShortcutBackend::PortalServiceDropIn,
-            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
-            systemctl_available: true,
-            gsettings_available: false,
-            service_installed: false,
-            service_enabled: false,
-            service_active: false,
-            service_unit_path: None,
-            configured_shortcut: None,
-        };
+        let status = test_status(DesktopEnvironment::Kde, None);
 
         let _ = app.handle_daemon_status_loaded(preserved_request_id, Ok(status));
 
@@ -258,18 +250,7 @@ mod tests {
         let _ = app.handle_daemon_action_completed(Err("boom".to_string()));
         let preserved_request_id = app.daemon_latest_status_request_id;
         let stale_request_id = preserved_request_id.saturating_sub(1);
-        let stale_status = DaemonRuntimeStatus {
-            desktop: DesktopEnvironment::Kde,
-            shortcut_backend: ShortcutBackend::PortalServiceDropIn,
-            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
-            systemctl_available: true,
-            gsettings_available: false,
-            service_installed: false,
-            service_enabled: false,
-            service_active: false,
-            service_unit_path: None,
-            configured_shortcut: None,
-        };
+        let stale_status = test_status(DesktopEnvironment::Kde, None);
         let _ = app.handle_daemon_status_loaded(stale_request_id, Ok(stale_status));
 
         assert_eq!(
@@ -300,30 +281,18 @@ mod tests {
     #[test]
     fn old_status_callback_after_newer_action_success_is_ignored() {
         let (mut app, _command) = ConfiguratorApp::new_app();
-        let old_status = DaemonRuntimeStatus {
-            desktop: DesktopEnvironment::Kde,
-            shortcut_backend: ShortcutBackend::PortalServiceDropIn,
-            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
-            systemctl_available: true,
-            gsettings_available: false,
-            service_installed: false,
-            service_enabled: false,
-            service_active: false,
-            service_unit_path: None,
-            configured_shortcut: Some("<Ctrl><Shift>old".to_string()),
-        };
-        let new_status = DaemonRuntimeStatus {
-            desktop: DesktopEnvironment::Kde,
-            shortcut_backend: ShortcutBackend::PortalServiceDropIn,
-            shortcut_apply_capability: ShortcutApplyCapability::PortalServiceDropIn,
-            systemctl_available: true,
-            gsettings_available: false,
-            service_installed: true,
-            service_enabled: true,
-            service_active: true,
-            service_unit_path: Some("/tmp/wayscriber.service".to_string()),
-            configured_shortcut: Some("<Ctrl><Shift>new".to_string()),
-        };
+        let old_status = test_status(
+            DesktopEnvironment::Kde,
+            Some("<Ctrl><Shift>old".to_string()),
+        );
+        let mut new_status = test_status(
+            DesktopEnvironment::Kde,
+            Some("<Ctrl><Shift>new".to_string()),
+        );
+        new_status.service_installed = true;
+        new_status.service_enabled = true;
+        new_status.service_active = true;
+        new_status.service_unit_path = Some("/tmp/wayscriber.service".to_string());
 
         let _ = app.handle_daemon_action_completed(Err("old failure".to_string()));
         let old_request_id = app.daemon_latest_status_request_id;

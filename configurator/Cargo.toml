@@ -11,3 +11,6 @@ iced = { version = "0.14", features = ["tokio", "canvas"] }
 [features]
 default = ["tablet-input"]
 tablet-input = ["wayscriber/tablet-input"]
+
+[dev-dependencies]
+tempfile = "3.10"

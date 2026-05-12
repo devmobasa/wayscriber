@@ -5,6 +5,7 @@ mod frozen_zoom;
 mod help_overlay;
 mod interaction;
 mod launcher;
+mod light_mode;
 mod pending;
 mod presenter_mode;
 mod step_markers;

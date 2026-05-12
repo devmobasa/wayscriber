@@ -14,8 +14,8 @@ mod tests;
 
 pub(crate) use control::{
     DaemonToggleRequest, clear_daemon_pid_file, clear_daemon_toggle_request_file,
-    generate_daemon_instance_token, send_daemon_toggle_request, take_daemon_toggle_requests,
-    write_daemon_pid_file,
+    generate_daemon_instance_token, send_daemon_overlay_action, send_daemon_toggle_request,
+    take_daemon_toggle_requests, write_daemon_pid_file,
 };
 pub use core::Daemon;
 pub use types::AlreadyRunningError;

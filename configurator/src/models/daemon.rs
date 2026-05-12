@@ -6,12 +6,16 @@ use wayscriber::shortcut_hint::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesktopEnvironment {
     Gnome,
+    Hyprland,
     Kde,
     Unknown,
 }
 
 impl DesktopEnvironment {
     pub fn detect_current() -> Self {
+        if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
+            return Self::Hyprland;
+        }
         let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
         let session = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
         Self::from_desktop_strings(&current, &session)
@@ -22,6 +26,9 @@ impl DesktopEnvironment {
             return Self::Gnome;
         }
         let combined = format!("{current};{session}").to_lowercase();
+        if combined.contains("hyprland") {
+            return Self::Hyprland;
+        }
         if combined.contains("kde") || combined.contains("plasma") {
             return Self::Kde;
         }
@@ -31,6 +38,7 @@ impl DesktopEnvironment {
     pub fn label(self) -> &'static str {
         match self {
             Self::Gnome => "GNOME",
+            Self::Hyprland => "Hyprland",
             Self::Kde => "KDE Plasma",
             Self::Unknown => "Unknown/Other",
         }
@@ -39,6 +47,7 @@ impl DesktopEnvironment {
     pub fn default_shortcut_input(self) -> &'static str {
         match self {
             Self::Gnome => "Super+G",
+            Self::Hyprland => "Super+D",
             Self::Kde | Self::Unknown => "Ctrl+Shift+G",
         }
     }
@@ -111,6 +120,29 @@ impl ShortcutApplyCapability {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LightShortcutApplyCapability {
+    HyprlandNative,
+    Manual,
+}
+
+impl LightShortcutApplyCapability {
+    pub fn from_environment(desktop: DesktopEnvironment) -> Self {
+        if desktop == DesktopEnvironment::Hyprland {
+            Self::HyprlandNative
+        } else {
+            Self::Manual
+        }
+    }
+
+    pub fn friendly_label(self) -> &'static str {
+        match self {
+            Self::HyprlandNative => "Light controls setup available via Hyprland native bindings",
+            Self::Manual => "Light controls setup requires manual compositor bindings",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DaemonAction {
     RefreshStatus,
     InstallOrUpdateService,
@@ -118,6 +150,7 @@ pub enum DaemonAction {
     RestartService,
     StopAndDisableService,
     ApplyShortcut,
+    ApplyLightControls,
 }
 
 #[derive(Debug, Clone)]
@@ -125,6 +158,7 @@ pub struct DaemonRuntimeStatus {
     pub desktop: DesktopEnvironment,
     pub shortcut_backend: ShortcutBackend,
     pub shortcut_apply_capability: ShortcutApplyCapability,
+    pub light_shortcut_apply_capability: LightShortcutApplyCapability,
     pub systemctl_available: bool,
     pub gsettings_available: bool,
     pub service_installed: bool,
@@ -132,6 +166,8 @@ pub struct DaemonRuntimeStatus {
     pub service_active: bool,
     pub service_unit_path: Option<String>,
     pub configured_shortcut: Option<String>,
+    pub light_controls_configured: bool,
+    pub light_controls_config_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -173,6 +209,30 @@ mod tests {
         assert_eq!(
             DesktopEnvironment::from_desktop_strings("plasma", ""),
             DesktopEnvironment::Kde
+        );
+    }
+
+    #[test]
+    fn detect_desktop_hyprland_variants() {
+        assert_eq!(
+            DesktopEnvironment::from_desktop_strings("Hyprland", ""),
+            DesktopEnvironment::Hyprland
+        );
+        assert_eq!(
+            DesktopEnvironment::from_desktop_strings("", "hyprland"),
+            DesktopEnvironment::Hyprland
+        );
+    }
+
+    #[test]
+    fn light_shortcut_capability_is_hyprland_native_only() {
+        assert_eq!(
+            LightShortcutApplyCapability::from_environment(DesktopEnvironment::Hyprland),
+            LightShortcutApplyCapability::HyprlandNative
+        );
+        assert_eq!(
+            LightShortcutApplyCapability::from_environment(DesktopEnvironment::Kde),
+            LightShortcutApplyCapability::Manual
         );
     }
 

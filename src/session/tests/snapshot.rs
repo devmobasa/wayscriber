@@ -1,5 +1,6 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
+use crate::config::Action;
 use crate::draw::{Color, FontDescriptor, Frame, Shape};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
@@ -47,6 +48,38 @@ fn snapshot_includes_frames_and_tool_state() {
             .any(|board| board.id == "transparent")
     );
     assert!(snapshot.tool_state.is_some());
+}
+
+#[test]
+fn snapshot_uses_pre_light_mode_tool_state() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-light");
+    options.restore_tool_state = true;
+
+    let mut input = dummy_input_state();
+    input.compositor_capabilities.layer_shell = true;
+    let desired_color = Color {
+        r: 0.1,
+        g: 0.2,
+        b: 0.7,
+        a: 1.0,
+    };
+    let _ = input.set_tool_override(Some(Tool::Marker));
+    let _ = input.set_color(desired_color);
+    let _ = input.set_thickness(14.0);
+    input.show_status_bar = true;
+
+    input.handle_action(Action::ToggleLightMode);
+    assert!(input.light_mode);
+    assert_eq!(input.tool_override(), Some(Tool::Pen));
+    assert!(!input.show_status_bar);
+
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+    let tool_state = snapshot.tool_state.expect("tool state present");
+
+    assert_eq!(tool_state.tool_override, Some(Tool::Marker));
+    assert_eq!(tool_state.current_color, desired_color);
+    assert_eq!(tool_state.current_thickness, 14.0);
+    assert!(tool_state.show_status_bar);
 }
 
 #[test]

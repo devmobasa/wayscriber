@@ -91,6 +91,18 @@ fn activate_menu_item(tray: &mut WayscriberTray, label: &str) {
 }
 
 #[cfg(feature = "tray")]
+fn menu_labels(tray: &WayscriberTray) -> Vec<String> {
+    tray.menu()
+        .into_iter()
+        .filter_map(|item| match item {
+            MenuItem::Standard(standard) => Some(standard.label),
+            MenuItem::Checkmark(check) => Some(check.label),
+            _ => None,
+        })
+        .collect()
+}
+
+#[cfg(feature = "tray")]
 #[test]
 fn tray_toggle_action_sets_flag() {
     let toggle = Arc::new(AtomicBool::new(false));
@@ -99,6 +111,20 @@ fn tray_toggle_action_sets_flag() {
 
     activate_menu_item(&mut tray, "Toggle Overlay");
     assert!(toggle.load(AtomicOrdering::SeqCst));
+}
+
+#[cfg(feature = "tray")]
+#[test]
+fn tray_menu_exposes_minimal_light_actions() {
+    let toggle = Arc::new(AtomicBool::new(false));
+    let quit = Arc::new(AtomicBool::new(false));
+    let tray = WayscriberTray::new_for_tests(toggle, quit, false);
+
+    let labels = menu_labels(&tray);
+    assert!(labels.iter().any(|label| label.contains("Light Mode")));
+    assert!(labels.iter().any(|label| label.contains("Light Drawing")));
+    assert!(!labels.iter().any(|label| label.contains("Light Draw On")));
+    assert!(!labels.iter().any(|label| label.contains("Light Draw Off")));
 }
 
 #[cfg(feature = "tray")]

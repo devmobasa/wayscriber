@@ -81,6 +81,7 @@ pub struct StateData {
     pub(super) xdg_fullscreen: bool,
     pub(super) main_surface_uses_overlay_layer: bool,
     pub(super) overlay_suppression: OverlaySuppression,
+    pub(super) overlay_clickthrough: bool,
     /// True when surface is configured and has keyboard focus; keys are blocked until ready.
     pub(super) overlay_ready: bool,
     /// Suppress the next pointer release after a modal click (e.g., command palette).
@@ -148,6 +149,7 @@ impl StateData {
             xdg_fullscreen: false,
             main_surface_uses_overlay_layer: false,
             overlay_suppression: OverlaySuppression::None,
+            overlay_clickthrough: false,
             overlay_ready: false,
             suppress_next_release: false,
             suppress_focus_exit_until: None,

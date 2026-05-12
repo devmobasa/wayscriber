@@ -25,6 +25,7 @@ Desktop-specific shortcut handling:
 - GNOME: creates/updates a GNOME custom shortcut that runs `wayscriber --daemon-toggle`.
 - GNOME migrations: `Install/Update Service` and `Apply Shortcut` remove stale `~/.config/systemd/user/wayscriber.service.d/shortcut.conf` files so old portal settings do not override GNOME behavior.
 - KDE/Plasma: writes a systemd user drop-in with `WAYSCRIBER_ENABLE_PORTAL_SHORTCUTS=1` and `WAYSCRIBER_PORTAL_SHORTCUT` for portal global shortcut handling.
+- Hyprland: light passthrough controls use native Hyprland bindings, not the portal shortcut path.
 
 ### Quick Install
 
@@ -89,6 +90,70 @@ hyprctl reload
 ```
 
 Now press <kbd>Super+D</kbd> to toggle the overlay on/off!
+
+### Light passthrough controls on Hyprland
+
+Light passthrough needs compositor/global shortcuts because Wayscriber deliberately passes keyboard and pointer input to the app below while passthrough is active.
+The default <kbd>Ctrl+Shift+L</kbd> binding is a Wayscriber in-overlay shortcut, not an OS-level shortcut; use the bindings below for reliable control after passthrough starts.
+
+The configurator can install a native Hyprland include file for this. Manual equivalent for Arch + Hyprland:
+
+```conf
+# wayscriber - light passthrough controls
+$wayscriber = wayscriber
+
+unbind = SUPER ALT, L
+bind = SUPER ALT, L, exec, $wayscriber --light-toggle
+unbind = SUPER ALT, D
+bind = SUPER ALT, D, exec, $wayscriber --light-draw-toggle
+unbind = SUPER ALT, F
+bind = SUPER ALT, F, exec, $wayscriber --light-draw-on
+bindr = SUPER ALT, F, exec, $wayscriber --light-draw-off
+
+# Optional: lower side mouse button (commonly mouse:275; verify on your mouse)
+bind = , mouse:275, exec, $wayscriber --light-toggle
+```
+
+Use `--light-draw-on` on key/button press and `--light-draw-off` on release for draw-while-held.
+The `unbind` lines prevent duplicate manual bindings for these same keys from firing twice.
+If your shortcut environment does not resolve `wayscriber`, replace it with the absolute path from `command -v wayscriber`.
+
+### Light passthrough on KDE Plasma / Fedora KDE
+
+Enable the daemon first:
+
+```bash
+systemctl --user enable --now wayscriber.service
+```
+
+The configurator can set up the main overlay toggle through the desktop portal. Light passthrough controls are manual for now: add global shortcuts in KDE System Settings that run these commands:
+
+```sh
+wayscriber --light-toggle
+wayscriber --light-draw-toggle
+wayscriber --light-draw-on
+wayscriber --light-draw-off
+```
+
+Use `--light-toggle` for passthrough on/off and `--light-draw-toggle` for sticky drawing. Draw-while-held needs a shortcut system that can run one command on press and another on release; if your KDE shortcut UI only supports activation commands, use the sticky draw toggle instead.
+
+Light passthrough still requires layer-shell support. If Wayscriber reports that light mode requires layer-shell, your session is using a fallback path where passthrough is not available.
+
+### GNOME: Fedora Workstation and Ubuntu GNOME
+
+GNOME setup works for the normal overlay toggle:
+
+```bash
+systemctl --user enable --now wayscriber.service
+```
+
+Then use the configurator's Daemon tab, or create a GNOME custom shortcut that runs:
+
+```sh
+wayscriber --daemon-toggle
+```
+
+Light passthrough mode is not currently available on GNOME sessions where Wayscriber uses the xdg-shell fallback. In that fallback, keyboard passthrough cannot be made reliable, so `--light-toggle` is intentionally disabled instead of pretending to pass input through.
 
 ### Method 3: One-Shot Mode (Alternative)
 

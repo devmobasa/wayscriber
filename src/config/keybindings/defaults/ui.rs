@@ -22,6 +22,14 @@ pub(crate) fn default_toggle_presenter_mode() -> Vec<String> {
     vec!["Ctrl+Shift+M".to_string()]
 }
 
+pub(crate) fn default_toggle_light_mode() -> Vec<String> {
+    vec!["Ctrl+Shift+L".to_string()]
+}
+
+pub(crate) fn default_toggle_light_mode_drawing() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_toggle_fill() -> Vec<String> {
     Vec::new()
 }

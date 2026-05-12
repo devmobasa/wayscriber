@@ -17,6 +17,7 @@ use std::time::Duration;
 use crate::SESSION_OVERRIDE_FOLLOW_CONFIG;
 use crate::paths::daemon_lock_file;
 use crate::session::try_lock_exclusive;
+use crate::tray_action::TrayAction;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
 use wayscriber::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 
@@ -138,7 +139,30 @@ impl Daemon {
         &mut self,
         request: Option<DaemonToggleRequest>,
         activation_token: Option<String>,
-    ) -> Result<()> {
+        suppress_overlay_action_signal: bool,
+    ) -> Result<bool> {
+        if let Some(action) = request.as_ref().and_then(|request| request.overlay_action) {
+            self.pending_activation_token = activation_token;
+            self.pending_toggle_request = request.filter(|request| !request.is_empty());
+            if self.overlay_state == OverlayState::Hidden
+                && matches!(action, TrayAction::LightDrawOff)
+            {
+                self.pending_activation_token = None;
+                self.pending_toggle_request = None;
+                return Ok(false);
+            }
+            let was_hidden = self.overlay_state == OverlayState::Hidden;
+            self.dispatch_overlay_action(action, !suppress_overlay_action_signal)?;
+            if self.overlay_state == OverlayState::Hidden {
+                self.show_overlay()?;
+                return Ok(was_hidden);
+            } else {
+                self.pending_activation_token = None;
+                self.pending_toggle_request = None;
+            }
+            return Ok(false);
+        }
+
         self.pending_activation_token = activation_token;
         self.pending_toggle_request = request.filter(|request| !request.is_empty());
         if let Err(err) = self.toggle_overlay() {
@@ -146,6 +170,41 @@ impl Daemon {
             self.pending_toggle_request = None;
             return Err(err);
         }
+        Ok(false)
+    }
+
+    fn dispatch_overlay_action(
+        &self,
+        action: TrayAction,
+        signal_visible_overlay: bool,
+    ) -> Result<()> {
+        let action_path = crate::tray_action::queue_action(action)?;
+
+        let pid = self.overlay_pid.load(Ordering::Acquire);
+        if signal_visible_overlay && self.overlay_state == OverlayState::Visible && pid != 0 {
+            #[cfg(unix)]
+            {
+                let pid = i32::try_from(pid).context("overlay pid does not fit into i32")?;
+                if unsafe { libc::kill(pid, libc::SIGUSR2) } != 0 {
+                    warn!(
+                        "Failed to signal overlay process {} for action {}: {}",
+                        pid,
+                        action.as_str(),
+                        std::io::Error::last_os_error()
+                    );
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                warn!("Overlay actions are only supported on Unix platforms");
+            }
+        }
+        log::debug!(
+            "Queued overlay action {} at {}",
+            action.as_str(),
+            action_path.display()
+        );
+
         Ok(())
     }
 
@@ -161,7 +220,7 @@ impl Daemon {
         };
 
         if !signal_toggle_requested || activation_token.is_some() {
-            self.process_single_toggle(None, activation_token)?;
+            self.process_single_toggle(None, activation_token, false)?;
         }
 
         if signal_toggle_requested {
@@ -171,8 +230,14 @@ impl Daemon {
                 queued_requests
             };
 
+            let mut suppress_overlay_action_signal = false;
             for request in requests {
-                self.process_single_toggle(Some(request), None)?;
+                let spawned_overlay = self.process_single_toggle(
+                    Some(request),
+                    None,
+                    suppress_overlay_action_signal,
+                )?;
+                suppress_overlay_action_signal |= spawned_overlay;
             }
         }
 
@@ -402,5 +467,38 @@ impl Daemon {
 impl Daemon {
     pub fn test_state(&self) -> OverlayState {
         self.overlay_state
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
+    #[test]
+    fn light_draw_off_request_does_not_show_hidden_overlay() {
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_clone = Arc::clone(&called);
+        let runner: Arc<BackendRunner> = Arc::new(move |_| {
+            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        });
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+
+        daemon
+            .process_single_toggle(
+                Some(DaemonToggleRequest {
+                    overlay_action: Some(TrayAction::LightDrawOff),
+                    ..Default::default()
+                }),
+                None,
+                false,
+            )
+            .unwrap();
+
+        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
+        assert!(daemon.pending_toggle_request.is_none());
+        assert!(daemon.pending_activation_token.is_none());
     }
 }

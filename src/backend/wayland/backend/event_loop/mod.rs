@@ -13,6 +13,8 @@ mod dispatch;
 mod render;
 mod session_save;
 
+const TRAY_ACTION_POLL_TIMEOUT: Duration = Duration::from_millis(50);
+
 pub(super) struct EventLoopOutcome {
     pub(super) loop_error: Option<anyhow::Error>,
 }
@@ -64,8 +66,9 @@ pub(super) fn run_event_loop(
             .as_ref()
             .map(|flag| flag.swap(false, Ordering::AcqRel))
             .unwrap_or(false)
+            && process_tray_action(state)
         {
-            process_tray_action(state);
+            state.sync_overlay_interactivity();
         }
 
         let capture_active = state.capture.is_in_progress()
@@ -120,10 +123,20 @@ pub(super) fn run_event_loop(
                 ),
             )
         };
+        let timeout = min_timeout(
+            timeout,
+            tray_action_flag.as_ref().map(|_| TRAY_ACTION_POLL_TIMEOUT),
+        );
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
             warn!("Event queue error: {}", e);
             loop_error = Some(e);
             break;
+        }
+
+        // The timeout above is also a fallback for action signals that arrive before
+        // the overlay has installed its signal handler or do not wake the Wayland poll.
+        if process_tray_action(state) {
+            state.sync_overlay_interactivity();
         }
 
         // Check immediately after dispatch returns.
@@ -187,6 +200,7 @@ pub(super) fn run_event_loop(
 
         capture::flush_if_capture_active(conn, capture_active);
         capture::handle_pending_actions(state, qh);
+        state.sync_overlay_interactivity();
         state.apply_onboarding_hints();
 
         if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {

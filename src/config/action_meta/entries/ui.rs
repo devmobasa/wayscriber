@@ -52,6 +52,28 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ToggleLightMode,
+        "Light Mode",
+        None,
+        "Toggle passthrough light mode",
+        UI,
+        true,
+        true,
+        false,
+        &["passthrough", "click through"]
+    ),
+    meta!(
+        ToggleLightModeDrawing,
+        "Light Drawing",
+        None,
+        "Toggle drawing while light mode is active",
+        UI,
+        true,
+        true,
+        false,
+        &["passthrough draw", "quick draw"]
+    ),
+    meta!(
         ToggleClickHighlight,
         "Click Highlight",
         None,

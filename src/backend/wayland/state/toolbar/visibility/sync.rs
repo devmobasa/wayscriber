@@ -4,7 +4,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
         &self,
     ) -> KeyboardInteractivity {
-        if self.overlay_suppressed() {
+        if self.overlay_passthrough_requested() {
             return KeyboardInteractivity::None;
         }
         desired_keyboard_interactivity_for(

@@ -418,6 +418,23 @@ show_toast = true
 - `"force-highlight"`: Switch to highlight on entry, allow tool changes
 - `"force-highlight-locked"`: Switch to highlight and lock tools while presenting
 
+### Light Passthrough Mode
+
+Light mode hides UI chrome and sets the overlay to click-through passthrough until drawing is explicitly enabled. `toggle_light_mode` defaults to <kbd>Ctrl+Shift+L</kbd>, but that is a Wayscriber in-overlay shortcut: it works while the overlay still has focus. Once passthrough is active, normal keyboard and pointer input goes to the app underneath, so compositor/global shortcuts should call the daemon commands below for reliable control.
+
+This mode requires layer-shell support; it is disabled on the xdg fallback because keyboard input cannot be passed through reliably there.
+
+For compositor/global shortcuts while passthrough is active, run:
+
+```sh
+wayscriber --light-toggle
+wayscriber --light-draw-toggle
+wayscriber --light-draw-on
+wayscriber --light-draw-off
+```
+
+Use `--light-draw-on` on key/button press and `--light-draw-off` on release for a non-sticky draw-while-held shortcut. The raw `--daemon-action` form remains available for scripts.
+
 ### `[ui.toolbar]` - Floating Toolbars
 
 Controls the top and side toolbars (toggle with <kbd>F2</kbd>/<kbd>F9</kbd>).
@@ -877,6 +894,14 @@ toggle_toolbar = ["F2", "F9"]
 
 # Toggle presenter mode
 toggle_presenter_mode = ["Ctrl+Shift+M"]
+
+# Toggle light passthrough mode while the overlay has focus
+toggle_light_mode = ["Ctrl+Shift+L"]
+
+# Optional in-overlay toggle between light drawing and passthrough.
+# Once passthrough is active, use compositor/global shortcuts that call
+# `wayscriber --light-draw-toggle`, `--light-draw-on`, or `--light-draw-off`.
+toggle_light_mode_drawing = []
 
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]

@@ -16,12 +16,30 @@ impl WaylandState {
         self.data.overlay_suppression == OverlaySuppression::Capture
     }
 
-    fn apply_overlay_clickthrough(&mut self, clickthrough: bool) {
+    pub(in crate::backend::wayland) fn overlay_passthrough_requested(&self) -> bool {
+        self.overlay_suppressed() || self.input_state.light_mode_passthrough()
+    }
+
+    fn set_overlay_clickthrough(&mut self, clickthrough: bool) {
+        if self.data.overlay_clickthrough == clickthrough {
+            return;
+        }
+        self.data.overlay_clickthrough = clickthrough;
         if let Some(wl_surface) = self.surface.wl_surface().cloned() {
             set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough);
         }
         self.toolbar
             .set_suppressed(&self.compositor_state, clickthrough);
+    }
+
+    pub(in crate::backend::wayland) fn sync_overlay_interactivity(&mut self) {
+        self.set_overlay_clickthrough(self.overlay_passthrough_requested());
+        self.refresh_keyboard_interactivity();
+    }
+
+    pub(in crate::backend::wayland) fn force_sync_overlay_interactivity(&mut self) {
+        self.data.overlay_clickthrough = !self.overlay_passthrough_requested();
+        self.sync_overlay_interactivity();
     }
 
     pub(in crate::backend::wayland) fn enter_overlay_suppression(
@@ -32,11 +50,7 @@ impl WaylandState {
             return;
         }
         self.data.overlay_suppression = reason;
-        self.apply_overlay_clickthrough(true);
-        if let Some(layer) = self.surface.layer_surface_mut() {
-            layer.set_keyboard_interactivity(KeyboardInteractivity::None);
-            self.set_current_keyboard_interactivity(Some(KeyboardInteractivity::None));
-        }
+        self.sync_overlay_interactivity();
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
     }
@@ -49,8 +63,7 @@ impl WaylandState {
             return;
         }
         self.data.overlay_suppression = OverlaySuppression::None;
-        self.apply_overlay_clickthrough(false);
-        self.refresh_keyboard_interactivity();
+        self.sync_overlay_interactivity();
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
     }
