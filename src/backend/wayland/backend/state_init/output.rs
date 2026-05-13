@@ -27,6 +27,7 @@ pub(super) fn resolve(config: &Config) -> OutputPreferences {
     let desktop_env = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
     let session_env = env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
     let desktop_session = env::var("DESKTOP_SESSION").unwrap_or_default();
+    let sway_sock = env::var("SWAYSOCK").unwrap_or_default();
     let force_fullscreen = env::var("WAYSCRIBER_XDG_FULLSCREEN_FORCE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -36,11 +37,15 @@ pub(super) fn resolve(config: &Config) -> OutputPreferences {
         );
         xdg_fullscreen = false;
     }
-    let main_surface_uses_overlay_layer =
-        main_surface_uses_overlay_layer_with_env(&desktop_env, &session_env, &desktop_session);
+    let main_surface_uses_overlay_layer = main_surface_uses_overlay_layer_with_env(
+        &desktop_env,
+        &session_env,
+        &desktop_session,
+        &sway_sock,
+    );
     if main_surface_uses_overlay_layer {
         info!(
-            "Niri detected; mapping the main overlay surface in the overlay layer so fullscreen windows cannot cover Wayscriber"
+            "Compositor requires fullscreen overlays above normal top-layer surfaces; mapping the main overlay surface in the overlay layer so fullscreen windows cannot cover Wayscriber"
         );
     }
 
@@ -55,10 +60,18 @@ fn main_surface_uses_overlay_layer_with_env(
     desktop_env: &str,
     session_env: &str,
     desktop_session: &str,
+    sway_sock: &str,
 ) -> bool {
-    desktop_matches(desktop_env, "niri")
-        || desktop_matches(session_env, "niri")
-        || desktop_matches(desktop_session, "niri")
+    desktop_matches_any(desktop_env)
+        || desktop_matches_any(session_env)
+        || desktop_matches_any(desktop_session)
+        || !sway_sock.trim().is_empty()
+}
+
+fn desktop_matches_any(value: &str) -> bool {
+    ["niri", "sway"]
+        .iter()
+        .any(|target| desktop_matches(value, target))
 }
 
 fn desktop_matches(value: &str, target: &str) -> bool {
@@ -74,9 +87,10 @@ mod tests {
 
     #[test]
     fn main_surface_uses_overlay_layer_for_niri_desktop() {
-        assert!(main_surface_uses_overlay_layer_with_env("niri", "", ""));
+        assert!(main_surface_uses_overlay_layer_with_env("niri", "", "", ""));
         assert!(main_surface_uses_overlay_layer_with_env(
             "Hyprland:Niri",
+            "",
             "",
             ""
         ));
@@ -84,21 +98,48 @@ mod tests {
 
     #[test]
     fn main_surface_uses_overlay_layer_for_niri_session() {
-        assert!(main_surface_uses_overlay_layer_with_env("", "NIRI", ""));
+        assert!(main_surface_uses_overlay_layer_with_env("", "NIRI", "", ""));
     }
 
     #[test]
     fn main_surface_uses_overlay_layer_for_niri_desktop_session() {
-        assert!(main_surface_uses_overlay_layer_with_env("", "", "niri"));
+        assert!(main_surface_uses_overlay_layer_with_env("", "", "niri", ""));
+    }
+
+    #[test]
+    fn main_surface_uses_overlay_layer_for_sway_desktop() {
+        assert!(main_surface_uses_overlay_layer_with_env("sway", "", "", ""));
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "wlroots:Sway",
+            "",
+            "",
+            ""
+        ));
+    }
+
+    #[test]
+    fn main_surface_uses_overlay_layer_for_sway_session() {
+        assert!(main_surface_uses_overlay_layer_with_env("", "SWAY", "", ""));
+        assert!(main_surface_uses_overlay_layer_with_env("", "", "sway", ""));
+    }
+
+    #[test]
+    fn main_surface_uses_overlay_layer_for_sway_socket() {
+        assert!(main_surface_uses_overlay_layer_with_env(
+            "",
+            "",
+            "",
+            "/run/user/1000/sway-ipc.sock"
+        ));
     }
 
     #[test]
     fn main_surface_stays_on_top_layer_for_other_desktops() {
         assert!(!main_surface_uses_overlay_layer_with_env(
-            "Hyprland", "", ""
+            "Hyprland", "", "", ""
         ));
         assert!(!main_surface_uses_overlay_layer_with_env(
-            "KDE", "plasma", ""
+            "KDE", "plasma", "", ""
         ));
     }
 }
