@@ -56,11 +56,12 @@ impl InputState {
         dy: i32,
         snapshots: &[(ShapeId, ShapeSnapshot)],
     ) {
-        if snapshots.is_empty() || (dx == 0 && dy == 0) {
+        if snapshots.is_empty() {
             return;
         }
 
-        self.mark_selection_dirty_region(Some(*original_bounds));
+        let previous_bounds = self.selection_bounds();
+        self.mark_selection_dirty_region(previous_bounds);
         // Calculate scale factors based on handle and delta
         let (scale_x, scale_y, anchor_x, anchor_y) =
             Self::compute_scale_factors(handle, original_bounds, dx, dy);
@@ -325,26 +326,22 @@ impl InputState {
 
     /// Restore shapes from snapshots (used for cancel).
     pub(crate) fn restore_resize_from_snapshots(&mut self, snapshots: &[(ShapeId, ShapeSnapshot)]) {
-        let mut dirty_rects: Vec<Option<Rect>> =
-            Vec::with_capacity(snapshots.len().saturating_mul(2));
+        let previous_bounds = self.selection_bounds();
         let mut ids_to_invalidate = Vec::with_capacity(snapshots.len());
 
         {
             let frame = self.boards.active_frame_mut();
             for (shape_id, snapshot) in snapshots {
                 if let Some(drawn) = frame.shape_mut(*shape_id) {
-                    dirty_rects.push(drawn.shape.bounding_box());
                     drawn.shape = snapshot.shape.clone();
                     drawn.locked = snapshot.locked;
-                    dirty_rects.push(drawn.shape.bounding_box());
                     ids_to_invalidate.push(*shape_id);
                 }
             }
         }
 
-        for rect in dirty_rects {
-            self.dirty_tracker.mark_optional_rect(rect);
-        }
+        self.mark_selection_dirty_region(previous_bounds);
+        self.mark_selection_dirty_region(self.selection_bounds());
         for shape_id in ids_to_invalidate {
             self.invalidate_hit_cache_for(shape_id);
         }
