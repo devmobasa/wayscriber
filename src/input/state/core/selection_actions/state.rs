@@ -2,7 +2,7 @@ use super::super::base::InputState;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::util::Rect;
 
-const SELECTION_HALO_PADDING: i32 = 6;
+const SELECTION_DAMAGE_PADDING: i32 = 8;
 
 impl InputState {
     pub(crate) fn set_selection_locked(&mut self, locked: bool) -> bool {
@@ -95,7 +95,7 @@ impl InputState {
             self.properties_panel_needs_refresh = true;
         }
         if let Some(rect) = rect {
-            if let Some(inflated) = rect.inflated(SELECTION_HALO_PADDING) {
+            if let Some(inflated) = rect.inflated(SELECTION_DAMAGE_PADDING) {
                 self.dirty_tracker.mark_rect(inflated);
             } else {
                 self.dirty_tracker.mark_rect(rect);
