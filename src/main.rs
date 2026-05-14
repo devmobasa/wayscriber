@@ -8,6 +8,7 @@ mod cli;
 mod config;
 mod daemon;
 mod draw;
+mod file_uri;
 mod image_decode;
 mod input;
 mod label_format;

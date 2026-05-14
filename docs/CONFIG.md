@@ -1038,7 +1038,8 @@ clear_canvas = ["X"]
 **Defaults:**
 Defaults match the original hardcoded keybindings where possible. Copy/paste selection uses
 <kbd>Ctrl+Alt+C</kbd>/<kbd>Ctrl+Alt+V</kbd>, so the clipboard-selection capture shortcut
-defaults to <kbd>Ctrl+Shift+C</kbd> to avoid conflicts.
+defaults to <kbd>Ctrl+Shift+C</kbd> to avoid conflicts. The paste action also accepts PNG/JPEG
+image data and local image files copied from a file manager.
 
 ## Creating Your Configuration
 

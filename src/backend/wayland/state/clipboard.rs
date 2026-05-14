@@ -2,7 +2,9 @@
 
 use super::WaylandState;
 use crate::draw::EmbeddedImage;
-use crate::image_decode::{decode_rgba, format_from_mime_or_bytes, image_dimensions};
+use crate::image_decode::{
+    EncodedImageFormat, decode_rgba, format_from_mime_or_bytes, image_dimensions,
+};
 use crate::input::state::{
     ClipboardFingerprint, ClipboardPasteRequest, UiToastKind, WayscriberClipboardSelection,
 };
@@ -14,6 +16,8 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 pub(super) const WAYSCRIBER_SELECTION_MIME: &str = "application/vnd.wayscriber.selection+json";
+
+mod file_list;
 
 // A pasted image is persisted in the visible frame and in the Create undo action.
 // Keep one accepted image comfortably below the default 10 MiB session JSON budget.
@@ -488,6 +492,10 @@ fn resolve_system_clipboard() -> ClipboardPasteResult {
             });
     }
 
+    if file_list::is_uri_list_mime(&mime_type) {
+        return file_list::decode_clipboard_uri_list(&mime_type, bytes, offered);
+    }
+
     decode_clipboard_image(&mime_type, bytes)
 }
 
@@ -519,7 +527,7 @@ fn clipboard_fingerprint() -> Option<ClipboardFingerprint> {
 }
 
 fn choose_supported_mime(offered: &[String]) -> Option<String> {
-    [
+    if let Some(mime) = [
         WAYSCRIBER_SELECTION_MIME,
         "image/png",
         "image/jpeg",
@@ -528,6 +536,14 @@ fn choose_supported_mime(offered: &[String]) -> Option<String> {
     .into_iter()
     .find(|candidate| offered.iter().any(|mime| mime == candidate))
     .map(ToString::to_string)
+    {
+        return Some(mime);
+    }
+
+    offered
+        .iter()
+        .find(|mime| file_list::is_uri_list_mime(mime))
+        .cloned()
 }
 
 fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResult {
@@ -550,15 +566,18 @@ fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResu
         return ClipboardPasteResult::DecodeFailed(err);
     }
     ClipboardPasteResult::Image(EmbeddedImage {
-        mime_type: if mime_type == "image/jpg" {
-            "image/jpeg".to_string()
-        } else {
-            mime_type.to_string()
-        },
+        mime_type: canonical_image_mime_type(format).to_string(),
         width: dimensions.0,
         height: dimensions.1,
         bytes,
     })
+}
+
+fn canonical_image_mime_type(format: EncodedImageFormat) -> &'static str {
+    match format {
+        EncodedImageFormat::Png => "image/png",
+        EncodedImageFormat::Jpeg => "image/jpeg",
+    }
 }
 
 fn list_mime_types() -> Result<Vec<String>, ClipboardReadError> {
