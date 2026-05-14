@@ -2,12 +2,10 @@
 
 use super::types::CaptureError;
 use std::process::{Command, Stdio};
-use wl_clipboard_rs::copy::{MimeType, Options, ServeRequests, Source};
 
 /// Copy image data to the Wayland clipboard.
 ///
-/// Attempts to use wl-copy first, falls back to wl-clipboard-rs
-/// if the command path fails.
+/// Uses `wl-copy`, which is already a packaged/runtime dependency.
 ///
 /// # Arguments
 /// * `image_data` - Raw PNG image bytes
@@ -20,58 +18,15 @@ pub fn copy_to_clipboard(image_data: &[u8]) -> Result<(), CaptureError> {
         image_data.len()
     );
 
-    copy_to_clipboard_with(image_data, copy_via_command, copy_via_library)
+    copy_to_clipboard_with(image_data, copy_via_command)
 }
 
-fn copy_to_clipboard_with<F, G>(
-    image_data: &[u8],
-    copy_cmd: F,
-    copy_lib: G,
-) -> Result<(), CaptureError>
+fn copy_to_clipboard_with<F>(image_data: &[u8], copy_cmd: F) -> Result<(), CaptureError>
 where
     F: FnOnce(&[u8]) -> Result<(), CaptureError>,
-    G: FnOnce(&[u8]) -> Result<(), CaptureError>,
 {
-    // Prefer wl-copy CLI; fall back to wl-clipboard-rs if needed.
-    match copy_cmd(image_data) {
-        Ok(()) => {
-            log::info!("Successfully copied to clipboard via wl-copy command");
-            Ok(())
-        }
-        Err(cmd_err) => {
-            log::warn!(
-                "wl-copy command path failed ({}). Falling back to wl-clipboard-rs",
-                cmd_err
-            );
-            match copy_lib(image_data) {
-                Ok(()) => {
-                    log::info!("Successfully copied to clipboard via wl-clipboard-rs fallback");
-                    Ok(())
-                }
-                Err(lib_err) => {
-                    let combined = format!(
-                        "wl-copy failed: {} ; wl-clipboard-rs failed: {}",
-                        cmd_err, lib_err
-                    );
-                    Err(CaptureError::ClipboardError(combined))
-                }
-            }
-        }
-    }
-}
-
-/// Copy to clipboard using wl-clipboard-rs library.
-fn copy_via_library(image_data: &[u8]) -> Result<(), CaptureError> {
-    let mut opts = Options::new();
-    // Serve requests until clipboard ownership changes.
-    opts.serve_requests(ServeRequests::Unlimited);
-
-    opts.copy(
-        Source::Bytes(image_data.into()),
-        MimeType::Specific("image/png".to_string()),
-    )
-    .map_err(|e| CaptureError::ClipboardError(format!("wl-clipboard-rs error: {}", e)))?;
-
+    copy_cmd(image_data)?;
+    log::info!("Successfully copied to clipboard via wl-copy command");
     Ok(())
 }
 
@@ -161,68 +116,43 @@ mod tests {
     }
 
     #[test]
-    fn copy_to_clipboard_prefers_command_success() {
+    fn copy_to_clipboard_uses_command_success() {
         let cmd_calls = Rc::new(Cell::new(0));
-        let lib_calls = Rc::new(Cell::new(0));
         let cmd_calls_handle = cmd_calls.clone();
-        let lib_calls_handle = lib_calls.clone();
 
-        let result = copy_to_clipboard_with(
-            b"data",
-            move |_| {
-                cmd_calls_handle.set(cmd_calls_handle.get() + 1);
-                Ok(())
-            },
-            move |_| {
-                lib_calls_handle.set(lib_calls_handle.get() + 1);
-                Ok(())
-            },
-        );
+        let result = copy_to_clipboard_with(b"data", move |_| {
+            cmd_calls_handle.set(cmd_calls_handle.get() + 1);
+            Ok(())
+        });
 
         assert!(result.is_ok());
         assert_eq!(cmd_calls.get(), 1);
-        assert_eq!(lib_calls.get(), 0);
     }
 
     #[test]
-    fn copy_to_clipboard_falls_back_when_command_fails() {
+    fn copy_to_clipboard_returns_command_error() {
         let cmd_calls = Rc::new(Cell::new(0));
-        let lib_calls = Rc::new(Cell::new(0));
         let cmd_calls_handle = cmd_calls.clone();
-        let lib_calls_handle = lib_calls.clone();
 
-        let result = copy_to_clipboard_with(
-            b"data",
-            move |_| {
-                cmd_calls_handle.set(cmd_calls_handle.get() + 1);
-                Err(CaptureError::ClipboardError("cmd failed".to_string()))
-            },
-            move |_| {
-                lib_calls_handle.set(lib_calls_handle.get() + 1);
-                Ok(())
-            },
-        );
+        let result = copy_to_clipboard_with(b"data", move |_| {
+            cmd_calls_handle.set(cmd_calls_handle.get() + 1);
+            Err(CaptureError::ClipboardError("cmd failed".to_string()))
+        });
 
-        assert!(result.is_ok());
+        assert!(result.is_err());
         assert_eq!(cmd_calls.get(), 1);
-        assert_eq!(lib_calls.get(), 1);
     }
 
     #[test]
-    fn copy_to_clipboard_combines_errors() {
-        let result = copy_to_clipboard_with(
-            b"data",
-            |_| Err(CaptureError::ClipboardError("cmd failed".to_string())),
-            |_| Err(CaptureError::ClipboardError("lib failed".to_string())),
-        )
+    fn copy_to_clipboard_preserves_command_error() {
+        let result = copy_to_clipboard_with(b"data", |_| {
+            Err(CaptureError::ClipboardError("cmd failed".to_string()))
+        })
         .expect_err("expected error");
 
         match result {
             CaptureError::ClipboardError(msg) => {
-                assert!(msg.contains("wl-copy failed"));
-                assert!(msg.contains("wl-clipboard-rs failed"));
                 assert!(msg.contains("cmd failed"));
-                assert!(msg.contains("lib failed"));
             }
             other => panic!("unexpected error variant: {other:?}"),
         }

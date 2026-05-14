@@ -16,15 +16,9 @@ wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 smithay-client-toolkit = { version = "0.20", default-features = false, features = ["calloop", "xkbcommon"] }
-calloop = "0.14"
 
 # Cairo for drawing
 cairo-rs = { version = "0.22", features = ["png"] }
-cairo-sys-rs = "0.22"
-
-# SVG icon rendering
-resvg = "0.47"
-tiny-skia = "0.12"
 
 # Pango for advanced text rendering and font support
 pango = "0.22"
@@ -53,7 +47,6 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "syn
 
 # Screenshot capture
 zbus = { version = "5.0", optional = true, default-features = false, features = ["tokio"] }
-wl-clipboard-rs = "0.9.2"
 futures = "0.3"
 serde_json = "1.0"
 png = "0.18"

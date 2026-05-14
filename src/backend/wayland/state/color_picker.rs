@@ -6,13 +6,6 @@ use crate::input::state::{color_to_hex, parse_hex_color};
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use wl_clipboard_rs::copy::{
-    MimeType as CopyMimeType, Options as CopyOptions, ServeRequests, Source,
-};
-use wl_clipboard_rs::paste::{
-    ClipboardType as PasteClipboardType, Error as PasteError, MimeType as PasteMimeType, Seat,
-    get_contents as get_clipboard_contents,
-};
 
 impl WaylandState {
     /// Copies the current color as hex to the clipboard.
@@ -28,16 +21,7 @@ impl WaylandState {
             Ok(()) => true,
             Err(err) => {
                 log::warn!("wl-copy failed for hex copy: {}", err);
-                match copy_hex_via_library(&hex) {
-                    Ok(()) => {
-                        log::info!("Copied hex via wl-clipboard-rs fallback");
-                        true
-                    }
-                    Err(lib_err) => {
-                        log::warn!("wl-clipboard-rs failed for hex copy: {}", lib_err);
-                        false
-                    }
-                }
+                false
             }
         }) {
             Ok(result) => result,
@@ -60,27 +44,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn handle_paste_hex_color(&mut self) {
         log::info!("Hex paste requested");
         self.suppress_focus_exit_for(Duration::from_millis(1500));
-        // Use wl-paste for Wayland clipboard
-        let clipboard = match std::panic::catch_unwind(|| {
-            let clipboard = match read_clipboard_text_via_command() {
-                Ok(text) => Some(text),
-                Err(err) => {
-                    log::warn!("wl-paste failed for hex paste: {}", err);
-                    None
-                }
-            };
-
-            Ok::<_, ClipboardTextError>(match clipboard {
-                Some(text) => text,
-                None => match read_clipboard_text_via_library() {
-                    Ok(text) => {
-                        log::info!("Pasted hex via wl-clipboard-rs fallback");
-                        text
-                    }
-                    Err(err) => return Err(err),
-                },
-            })
-        }) {
+        let clipboard = match std::panic::catch_unwind(read_clipboard_text_via_command) {
             Ok(Ok(text)) => text,
             Ok(Err(ClipboardTextError::Empty)) => {
                 self.input_state
@@ -88,7 +52,7 @@ impl WaylandState {
                 return;
             }
             Ok(Err(ClipboardTextError::Other(err))) => {
-                log::warn!("wl-clipboard-rs failed for hex paste: {}", err);
+                log::warn!("wl-paste failed for hex paste: {}", err);
                 self.input_state
                     .set_ui_toast(UiToastKind::Warning, "Failed to paste from clipboard");
                 return;
@@ -202,72 +166,31 @@ fn copy_hex_via_command(hex: &str) -> Result<(), String> {
     }
 }
 
-fn copy_hex_via_library(hex: &str) -> Result<(), String> {
-    let mut options = CopyOptions::new();
-    options.serve_requests(ServeRequests::Unlimited);
-    options
-        .copy(
-            Source::Bytes(hex.as_bytes().to_vec().into_boxed_slice()),
-            CopyMimeType::Text,
-        )
-        .map_err(|err| format!("wl-clipboard-rs error: {}", err))
-}
-
-fn read_clipboard_text_via_command() -> Result<String, String> {
+fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
     let output = Command::new("wl-paste")
         .arg("--no-newline")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .map_err(|err| format!("Failed to spawn wl-paste: {}", err))?;
+        .map_err(|err| ClipboardTextError::Other(format!("Failed to spawn wl-paste: {}", err)))?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.trim().is_empty() {
-            Err("wl-paste exited unsuccessfully".to_string())
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.to_ascii_lowercase().contains("nothing is copied")
+            || stderr.to_ascii_lowercase().contains("clipboard is empty")
+        {
+            Err(ClipboardTextError::Empty)
+        } else if stderr.is_empty() {
+            Err(ClipboardTextError::Other(
+                "wl-paste exited unsuccessfully".to_string(),
+            ))
         } else {
-            Err(format!("wl-paste exited unsuccessfully: {}", stderr.trim()))
+            Err(ClipboardTextError::Other(format!(
+                "wl-paste exited unsuccessfully: {}",
+                stderr
+            )))
         }
     }
-}
-
-fn read_clipboard_text_via_library() -> Result<String, ClipboardTextError> {
-    const TIMEOUT: Duration = Duration::from_millis(500);
-    read_clipboard_text_via_library_with_timeout(TIMEOUT)
-}
-
-fn read_clipboard_text_via_library_with_timeout(
-    timeout: Duration,
-) -> Result<String, ClipboardTextError> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(read_clipboard_text_via_library_inner());
-    });
-    match rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(_) => Err(ClipboardTextError::Other(
-            "Clipboard read timed out".to_string(),
-        )),
-    }
-}
-
-fn read_clipboard_text_via_library_inner() -> Result<String, ClipboardTextError> {
-    let (mut pipe, _mime) = get_clipboard_contents(
-        PasteClipboardType::Regular,
-        Seat::Unspecified,
-        PasteMimeType::Text,
-    )
-    .map_err(|err| match err {
-        PasteError::ClipboardEmpty | PasteError::NoMimeType | PasteError::NoSeats => {
-            ClipboardTextError::Empty
-        }
-        _ => ClipboardTextError::Other(format!("wl-clipboard-rs error: {}", err)),
-    })?;
-
-    let mut contents = String::new();
-    pipe.read_to_string(&mut contents)
-        .map_err(|err| ClipboardTextError::Other(format!("Failed to read clipboard: {}", err)))?;
-    Ok(contents)
 }
