@@ -29,7 +29,6 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
 use log::LevelFilter;
 
 pub use session_override::{
