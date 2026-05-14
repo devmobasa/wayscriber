@@ -26,10 +26,8 @@ pango = "0.22"
 pangocairo = "0.22"
 
 # Utils
-thiserror = "2.0"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false }
-clap = { version = "4.5", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 anyhow = "1.0"
 toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
@@ -37,9 +35,7 @@ async-trait = "0.1"
 schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
 flate2 = "1.0"
-time = { version = "0.3", features = ["formatting", "parsing", "local-offset"] }
 base64 = "0.22"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 zune-jpeg = "0.5"
 
 # Daemon mode
@@ -49,13 +45,11 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "syn
 
 # Screenshot capture
 zbus = { version = "5.0", optional = true, default-features = false, features = ["tokio"] }
-futures = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 serde_json = "1.0"
 png = "0.18"
 
 [build-dependencies]
-cfg_aliases = "0.2"
 
 [features]
 # Optional Wayland tablet/stylus input support (zwp_tablet_v2)
