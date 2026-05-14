@@ -1,13 +1,12 @@
-use cfg_aliases::cfg_aliases;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    cfg_aliases! {
-        // Single source of truth for feature aliases used in cfg attributes
-        tablet: { feature = "tablet-input" },
+    println!("cargo:rustc-check-cfg=cfg(tablet)");
+    if env::var_os("CARGO_FEATURE_TABLET_INPUT").is_some() {
+        println!("cargo:rustc-cfg=tablet");
     }
 
     println!("cargo:rerun-if-env-changed=WAYSCRIBER_RELEASE_VERSION");

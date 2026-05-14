@@ -1,10 +1,10 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Arrow drawing settings.
 ///
 /// Controls the appearance of arrowheads when using the arrow tool.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArrowConfig {
     /// Arrowhead length in pixels (valid range: 5.0 - 50.0)
     #[serde(default = "default_arrow_length")]

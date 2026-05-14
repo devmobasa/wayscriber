@@ -5,6 +5,7 @@ edition = "2024"
 description = "Screen annotation tool for Wayland compositors"
 homepage = "https://wayscriber.com"
 repository = "https://github.com/devmobasa/wayscriber"
+default-run = "wayscriber"
 
 [workspace]
 members = ["configurator"]
@@ -16,35 +17,26 @@ wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 smithay-client-toolkit = { version = "0.20", default-features = false, features = ["calloop", "xkbcommon"] }
-calloop = "0.14"
 
 # Cairo for drawing
 cairo-rs = { version = "0.22", features = ["png"] }
-cairo-sys-rs = "0.22"
-
-# SVG icon rendering
-resvg = "0.47"
-tiny-skia = "0.12"
 
 # Pango for advanced text rendering and font support
 pango = "0.22"
 pangocairo = "0.22"
 
 # Utils
-thiserror = "2.0"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false }
-clap = { version = "4.5", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 anyhow = "1.0"
 toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 async-trait = "0.1"
-schemars = { version = "1.2", features = ["derive"] }
+schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
 flate2 = "1.0"
-time = { version = "0.3", features = ["formatting", "parsing", "local-offset"] }
 base64 = "0.22"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+zune-jpeg = "0.5"
 
 # Daemon mode
 signal-hook = "0.4"
@@ -53,13 +45,11 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "syn
 
 # Screenshot capture
 zbus = { version = "5.0", optional = true, default-features = false, features = ["tokio"] }
-wl-clipboard-rs = "0.9.2"
-futures = "0.3"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 serde_json = "1.0"
 png = "0.18"
 
 [build-dependencies]
-cfg_aliases = "0.2"
 
 [features]
 # Optional Wayland tablet/stylus input support (zwp_tablet_v2)
@@ -68,7 +58,13 @@ tablet-input = []
 dbus = ["zbus"]
 portal = ["dbus"]
 tray = ["dbus", "ksni"]
+config-schema = ["dep:schemars"]
 default = ["tablet-input", "portal", "tray"]
+
+[[bin]]
+name = "dump_config_schema"
+path = "src/bin/dump_config_schema.rs"
+required-features = ["config-schema"]
 
 [dev-dependencies]
 tempfile = "3.10"

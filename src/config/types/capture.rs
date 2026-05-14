@@ -1,11 +1,11 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Screenshot capture configuration.
 ///
 /// Controls the behavior of screenshot capture features including file saving,
 /// clipboard integration, and capture shortcuts.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureConfig {
     /// Enable screenshot capture functionality
     #[serde(default = "default_capture_enabled")]

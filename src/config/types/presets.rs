@@ -4,14 +4,14 @@ use crate::input::{
     EraserMode, Tool,
     tool::{PerToolDrawingSettings, ToolDrawingSettings, ToolSettingsSlot, ToolSizeSource},
 };
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const PRESET_SLOTS_MIN: usize = 3;
 pub const PRESET_SLOTS_MAX: usize = 5;
 
 /// Tool preset configuration for quick slot switching.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolPresetConfig {
     /// Optional label for UI display.
     #[serde(default)]
@@ -96,7 +96,8 @@ impl ToolPresetConfig {
 }
 
 /// Color and size for one tool within a full preset profile.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PresetToolSettingConfig {
     pub color: ColorSpec,
     pub size: f64,
@@ -116,7 +117,8 @@ impl PresetToolSettingConfig {
 }
 
 /// Full drawing tool profile captured by a preset.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PresetToolStatesConfig {
     pub pen: PresetToolSettingConfig,
     pub line: PresetToolSettingConfig,
@@ -209,7 +211,8 @@ impl PresetToolStatesConfig {
 }
 
 /// Preset slot configuration for quick tool switching.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PresetSlotsConfig {
     /// Number of visible preset slots (3-5).
     #[serde(default = "default_preset_slot_count")]

@@ -8,10 +8,10 @@ mod tools;
 mod ui;
 mod zoom;
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KeybindingsConfig {
     #[serde(flatten, default)]
     pub core: CoreKeybindingsConfig,

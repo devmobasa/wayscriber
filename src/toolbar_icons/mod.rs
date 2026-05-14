@@ -1,8 +1,7 @@
 //! Icon drawing functions for the toolbar UI.
 //!
-//! Tool icons are rendered from embedded SVG files (see `svg` module).
-//! Other icons (actions, controls, history, zoom, security) still use
-//! procedural Cairo paths.
+//! All toolbar icons are procedural Cairo paths. The `svg` module name is kept
+//! for the tool icon call sites that used to render embedded SVG files.
 
 mod actions;
 mod controls;

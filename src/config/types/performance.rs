@@ -1,11 +1,11 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Performance tuning options.
 ///
 /// These settings control rendering performance and smoothness. Most users
 /// won't need to change these from their defaults.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceConfig {
     /// Number of buffers for buffering (valid range: 2 - 4)
     /// - 2 = double buffering (lower memory, potential tearing)

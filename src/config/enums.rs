@@ -2,13 +2,13 @@
 
 use crate::draw::{Color, color::*};
 use log::warn;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Status bar position on screen.
 ///
 /// Controls where the status bar appears relative to screen edges.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum StatusPosition {
     /// Top-left corner
@@ -22,7 +22,8 @@ pub enum StatusPosition {
 }
 
 /// Mouse button used to toggle the radial menu.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum RadialMenuMouseBinding {
     /// Toggle radial menu with middle click.
@@ -34,7 +35,8 @@ pub enum RadialMenuMouseBinding {
 }
 
 /// Behavior when the GNOME/xdg fallback overlay loses keyboard focus.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum XdgFocusLossBehavior {
     /// Close the overlay when focus moves away (legacy/default behavior).
@@ -54,7 +56,8 @@ pub enum XdgFocusLossBehavior {
 /// # Custom RGB color (0-255 per component)
 /// default_color = [255, 128, 0]  # Orange
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ColorSpec {
     /// Named color: red, green, blue, yellow, orange, pink, white, black

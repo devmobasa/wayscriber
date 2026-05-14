@@ -1,238 +1,310 @@
-//! SVG icon rendering via resvg.
+//! Tool icon drawing via local Cairo paths.
 //!
-//! SVG icons are embedded at compile time and lazily rasterized.
-//! Rendered surfaces are cached per pixel-size so only the first draw at a
-//! given size incurs the resvg rasterization cost.  Icons are painted via
-//! [`cairo::Context::mask_surface`] so they automatically inherit the callers
-//! current source color.
+//! These icons intentionally mirror the small Lucide-style assets used by the
+//! toolbar without depending on a full SVG parser and rasterizer.
 
-use cairo::{Context, Format, ImageSurface};
-use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
-use std::sync::LazyLock;
+use cairo::Context;
+use std::f64::consts::PI;
 
-const MAX_CACHED_SIZES: usize = 8;
+type IconDraw = fn(&Context);
 
-thread_local! {
-    static ICON_SURFACE_CACHE: RefCell<HashMap<usize, RenderCache>> = RefCell::new(HashMap::new());
+fn render_icon(ctx: &Context, x: f64, y: f64, size: f64, draw: IconDraw) {
+    if size <= 0.0 {
+        return;
+    }
+
+    let _ = ctx.save();
+    ctx.translate(x, y);
+    let scale = size / 24.0;
+    ctx.scale(scale, scale);
+    ctx.set_line_width(2.0);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    draw(ctx);
+    let _ = ctx.restore();
 }
 
-// LRU cache for rasterized icon sizes.
-struct RenderCache {
-    entries: HashMap<u32, ImageSurface>,
-    lru: VecDeque<u32>,
+fn stroke(ctx: &Context) {
+    let _ = ctx.stroke();
 }
 
-impl RenderCache {
-    fn new() -> Self {
-        Self {
-            entries: HashMap::new(),
-            lru: VecDeque::new(),
-        }
-    }
-
-    fn get(&mut self, px: u32) -> Option<ImageSurface> {
-        let surface = self.entries.get(&px)?.clone();
-        self.touch(px);
-        Some(surface)
-    }
-
-    fn insert(&mut self, px: u32, surface: ImageSurface) {
-        self.entries.insert(px, surface);
-        self.touch(px);
-        self.evict_oldest();
-    }
-
-    fn touch(&mut self, px: u32) {
-        self.lru.retain(|cached_px| *cached_px != px);
-        self.lru.push_back(px);
-    }
-
-    fn evict_oldest(&mut self) {
-        while self.entries.len() > MAX_CACHED_SIZES {
-            if let Some(oldest) = self.lru.pop_front() {
-                self.entries.remove(&oldest);
-            } else {
-                break;
-            }
-        }
-    }
+fn fill(ctx: &Context) {
+    let _ = ctx.fill();
 }
 
-// Parsed SVG icon
-struct SvgIcon {
-    tree: resvg::usvg::Tree,
+fn rounded_rect(ctx: &Context, x: f64, y: f64, width: f64, height: f64, radius: f64) {
+    let radius = radius.min(width / 2.0).min(height / 2.0).max(0.0);
+    ctx.new_path();
+    ctx.arc(x + width - radius, y + radius, radius, -PI / 2.0, 0.0);
+    ctx.arc(
+        x + width - radius,
+        y + height - radius,
+        radius,
+        0.0,
+        PI / 2.0,
+    );
+    ctx.arc(x + radius, y + height - radius, radius, PI / 2.0, PI);
+    ctx.arc(x + radius, y + radius, radius, PI, 3.0 * PI / 2.0);
+    ctx.close_path();
 }
 
-impl SvgIcon {
-    fn parse(svg_data: &str) -> Self {
-        let tree = resvg::usvg::Tree::from_str(svg_data, &resvg::usvg::Options::default())
-            .expect("embedded SVG must be valid");
-        Self { tree }
-    }
+fn circle(ctx: &Context, x: f64, y: f64, radius: f64) {
+    ctx.new_path();
+    ctx.arc(x, y, radius, 0.0, PI * 2.0);
+}
 
-    /// Render this icon into ctx at (`x`, `y`) with the given square
-    /// `size`. The icon is painted using the context's current source color
-    fn render(&self, ctx: &Context, x: f64, y: f64, size: f64) {
-        if size <= 0.0 {
-            return;
-        }
-        let px = size.ceil() as u32;
-        if let Some(surface) = self.surface_for(px) {
-            let _ = ctx.mask_surface(&surface, x, y);
-        }
-    }
+fn draw_select(ctx: &Context) {
+    ctx.move_to(12.6, 12.6);
+    ctx.line_to(19.0, 19.0);
+    stroke(ctx);
 
-    /// Return a Cairo [`ImageSurface`] for the requested pixel size, creating
-    /// and caching the rasterised data on first call
-    fn surface_for(&self, px: u32) -> Option<ImageSurface> {
-        let key = self.cache_key();
-        ICON_SURFACE_CACHE.with(|caches| {
-            let mut caches = caches.borrow_mut();
-            let cache = caches.entry(key).or_insert_with(RenderCache::new);
-            if let Some(surface) = cache.get(px) {
-                return Some(surface);
-            }
-            let surface = self.rasterize(px)?;
-            cache.insert(px, surface.clone());
-            Some(surface)
-        })
-    }
+    ctx.move_to(3.7, 3.0);
+    ctx.line_to(10.2, 19.0);
+    ctx.line_to(12.0, 13.5);
+    ctx.line_to(19.6, 10.5);
+    ctx.close_path();
+    stroke(ctx);
+}
 
-    /// Rasterize the SVG tree at `px x px` and convert the pixel data from
-    /// tiny-skia premultiplied RGBA to Cairo premultiplied ARGB32 (BGRA on
-    /// little-endian).
-    fn rasterize(&self, px: u32) -> Option<ImageSurface> {
-        let mut pixmap = tiny_skia::Pixmap::new(px, px)?;
+fn draw_pen(ctx: &Context) {
+    ctx.move_to(15.7, 21.3);
+    ctx.line_to(12.7, 18.3);
+    ctx.line_to(18.3, 12.7);
+    ctx.line_to(21.3, 15.7);
+    ctx.close_path();
+    stroke(ctx);
 
-        let sz = self.tree.size();
-        let sx = px as f32 / sz.width();
-        let sy = px as f32 / sz.height();
-        resvg::render(
-            &self.tree,
-            tiny_skia::Transform::from_scale(sx, sy),
-            &mut pixmap.as_mut(),
-        );
+    ctx.move_to(18.0, 13.0);
+    ctx.line_to(16.6, 6.1);
+    ctx.line_to(2.3, 2.3);
+    ctx.line_to(6.1, 16.6);
+    ctx.line_to(13.0, 18.0);
+    stroke(ctx);
 
-        let stride = Format::ARgb32.stride_for_width(px).ok()? as usize;
-        let w = px as usize;
-        let h = px as usize;
-        let src = pixmap.data();
-        let mut data = vec![0u8; stride * h];
+    ctx.move_to(2.3, 2.3);
+    ctx.line_to(9.6, 9.6);
+    stroke(ctx);
 
-        for row in 0..h {
-            for col in 0..w {
-                let si = (row * w + col) * 4;
-                let di = row * stride + col * 4;
-                // tiny-skia RGBA to Cairo ARGB32 little-endian (BGRA in memory)
-                data[di] = src[si + 2]; // B
-                data[di + 1] = src[si + 1]; // G
-                data[di + 2] = src[si]; // R
-                data[di + 3] = src[si + 3]; // A
-            }
-        }
+    circle(ctx, 11.0, 11.0, 2.0);
+    stroke(ctx);
+}
 
-        ImageSurface::create_for_data(data, Format::ARgb32, px as i32, px as i32, stride as i32)
-            .ok()
-    }
+fn draw_line(ctx: &Context) {
+    ctx.move_to(5.0, 12.0);
+    ctx.line_to(19.0, 12.0);
+    stroke(ctx);
+}
 
-    fn cache_key(&self) -> usize {
-        self as *const Self as usize
-    }
+fn draw_rect(ctx: &Context) {
+    rounded_rect(ctx, 2.0, 6.0, 20.0, 12.0, 2.0);
+    stroke(ctx);
+}
 
-    #[cfg(test)]
-    fn cache_len(&self) -> usize {
-        let key = self.cache_key();
-        ICON_SURFACE_CACHE.with(|caches| {
-            let caches = caches.borrow();
-            caches.get(&key).map_or(0, |cache| cache.entries.len())
-        })
+fn draw_circle(ctx: &Context) {
+    circle(ctx, 12.0, 12.0, 10.0);
+    stroke(ctx);
+}
+
+fn draw_arrow(ctx: &Context) {
+    ctx.move_to(7.0, 7.0);
+    ctx.line_to(17.0, 7.0);
+    ctx.line_to(17.0, 17.0);
+    stroke(ctx);
+
+    ctx.move_to(7.0, 17.0);
+    ctx.line_to(17.0, 7.0);
+    stroke(ctx);
+}
+
+fn draw_blur(ctx: &Context) {
+    rounded_rect(ctx, 4.0, 4.0, 16.0, 16.0, 3.0);
+    stroke(ctx);
+
+    for (x, y, radius) in [
+        (9.0, 9.0, 1.2),
+        (15.0, 9.0, 1.2),
+        (12.0, 12.0, 1.6),
+        (9.0, 15.0, 1.2),
+        (15.0, 15.0, 1.2),
+    ] {
+        circle(ctx, x, y, radius);
+        fill(ctx);
     }
 }
 
-// Embed SVG files and create lazy-parsed statics
-macro_rules! svg_icon {
-    ($name:ident, $path:expr) => {
-        static $name: LazyLock<SvgIcon> = LazyLock::new(|| SvgIcon::parse(include_str!($path)));
-    };
+fn draw_eraser(ctx: &Context) {
+    ctx.move_to(21.0, 21.0);
+    ctx.line_to(8.0, 21.0);
+    ctx.line_to(2.6, 15.6);
+    ctx.line_to(13.3, 4.9);
+    ctx.line_to(20.7, 12.3);
+    ctx.line_to(12.8, 21.0);
+    stroke(ctx);
+
+    ctx.move_to(5.1, 11.1);
+    ctx.line_to(13.9, 19.9);
+    stroke(ctx);
 }
 
-svg_icon!(SELECT, "../../assets/icons/mouse-pointer.svg");
-svg_icon!(PEN, "../../assets/icons/pen-tool.svg");
-svg_icon!(LINE, "../../assets/icons/minus.svg");
-svg_icon!(RECT, "../../assets/icons/rectangle-horizontal.svg");
-svg_icon!(CIRCLE, "../../assets/icons/circle.svg");
-svg_icon!(ARROW, "../../assets/icons/arrow-up-right.svg");
-svg_icon!(BLUR, "../../assets/icons/blur.svg");
-svg_icon!(ERASER, "../../assets/icons/eraser.svg");
-svg_icon!(TEXT, "../../assets/icons/type.svg");
-svg_icon!(NOTE, "../../assets/icons/sticky-note.svg");
-svg_icon!(HIGHLIGHT, "../../assets/icons/mouse-pointer-click.svg");
-svg_icon!(MARKER, "../../assets/icons/highlighter.svg");
-svg_icon!(STEP_MARKER, "../../assets/icons/list-ordered.svg");
+fn draw_text(ctx: &Context) {
+    ctx.move_to(12.0, 4.0);
+    ctx.line_to(12.0, 20.0);
+    stroke(ctx);
 
-// Render helpers, matching the draw_icon_* signatures
+    ctx.move_to(4.0, 7.0);
+    ctx.line_to(4.0, 5.0);
+    ctx.line_to(20.0, 5.0);
+    ctx.line_to(20.0, 7.0);
+    stroke(ctx);
+
+    ctx.move_to(9.0, 20.0);
+    ctx.line_to(15.0, 20.0);
+    stroke(ctx);
+}
+
+fn draw_note(ctx: &Context) {
+    ctx.move_to(21.0, 9.0);
+    ctx.line_to(21.0, 19.0);
+    ctx.line_to(19.0, 21.0);
+    ctx.line_to(5.0, 21.0);
+    ctx.line_to(3.0, 19.0);
+    ctx.line_to(3.0, 5.0);
+    ctx.line_to(5.0, 3.0);
+    ctx.line_to(15.0, 3.0);
+    ctx.line_to(21.0, 9.0);
+    stroke(ctx);
+
+    ctx.move_to(15.0, 3.0);
+    ctx.line_to(15.0, 8.0);
+    ctx.line_to(16.0, 9.0);
+    ctx.line_to(21.0, 9.0);
+    stroke(ctx);
+}
+
+fn draw_highlight(ctx: &Context) {
+    for (x1, y1, x2, y2) in [
+        (14.0, 4.1, 12.0, 6.0),
+        (5.1, 8.0, 2.2, 7.2),
+        (6.0, 12.0, 4.1, 14.0),
+        (7.2, 2.2, 8.0, 5.1),
+    ] {
+        ctx.move_to(x1, y1);
+        ctx.line_to(x2, y2);
+        stroke(ctx);
+    }
+
+    ctx.move_to(9.0, 9.7);
+    ctx.line_to(20.7, 14.0);
+    ctx.line_to(16.3, 15.5);
+    ctx.line_to(14.5, 20.7);
+    ctx.close_path();
+    stroke(ctx);
+}
+
+fn draw_marker(ctx: &Context) {
+    ctx.move_to(9.0, 11.0);
+    ctx.line_to(3.0, 17.0);
+    ctx.line_to(3.0, 20.0);
+    ctx.line_to(12.0, 20.0);
+    ctx.line_to(15.0, 17.0);
+    stroke(ctx);
+
+    ctx.move_to(22.0, 12.0);
+    ctx.line_to(17.4, 16.6);
+    ctx.line_to(14.6, 16.6);
+    ctx.line_to(9.4, 11.4);
+    ctx.line_to(9.4, 8.6);
+    ctx.line_to(14.0, 4.0);
+    stroke(ctx);
+}
+
+fn draw_step_marker(ctx: &Context) {
+    for y in [5.0, 12.0, 19.0] {
+        ctx.move_to(11.0, y);
+        ctx.line_to(21.0, y);
+        stroke(ctx);
+    }
+
+    ctx.move_to(4.0, 4.0);
+    ctx.line_to(5.0, 4.0);
+    ctx.line_to(5.0, 9.0);
+    stroke(ctx);
+
+    ctx.move_to(4.0, 9.0);
+    ctx.line_to(6.0, 9.0);
+    stroke(ctx);
+
+    ctx.move_to(3.4, 15.5);
+    ctx.curve_to(4.0, 14.5, 6.5, 14.7, 6.5, 16.5);
+    ctx.curve_to(6.5, 18.1, 3.9, 19.0, 3.4, 20.0);
+    ctx.line_to(6.5, 20.0);
+    stroke(ctx);
+}
+
 pub fn render_select(ctx: &Context, x: f64, y: f64, size: f64) {
-    SELECT.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_select);
 }
 
 pub fn render_pen(ctx: &Context, x: f64, y: f64, size: f64) {
-    PEN.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_pen);
 }
 
 pub fn render_line(ctx: &Context, x: f64, y: f64, size: f64) {
-    LINE.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_line);
 }
 
 pub fn render_rect(ctx: &Context, x: f64, y: f64, size: f64) {
-    RECT.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_rect);
 }
 
 pub fn render_circle(ctx: &Context, x: f64, y: f64, size: f64) {
-    CIRCLE.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_circle);
 }
 
 pub fn render_arrow(ctx: &Context, x: f64, y: f64, size: f64) {
-    ARROW.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_arrow);
 }
 
 pub fn render_blur(ctx: &Context, x: f64, y: f64, size: f64) {
-    BLUR.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_blur);
 }
 
 pub fn render_eraser(ctx: &Context, x: f64, y: f64, size: f64) {
-    ERASER.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_eraser);
 }
 
 pub fn render_text(ctx: &Context, x: f64, y: f64, size: f64) {
-    TEXT.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_text);
 }
 
 pub fn render_note(ctx: &Context, x: f64, y: f64, size: f64) {
-    NOTE.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_note);
 }
 
 pub fn render_highlight(ctx: &Context, x: f64, y: f64, size: f64) {
-    HIGHLIGHT.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_highlight);
 }
 
 pub fn render_marker(ctx: &Context, x: f64, y: f64, size: f64) {
-    MARKER.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_marker);
 }
 
 pub fn render_step_marker(ctx: &Context, x: f64, y: f64, size: f64) {
-    STEP_MARKER.render(ctx, x, y, size);
+    render_icon(ctx, x, y, size, draw_step_marker);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cairo::{Format, ImageSurface};
 
-    fn assert_icon_renders(name: &str, icon: &SvgIcon) {
+    type IconRenderFn = fn(&Context, f64, f64, f64);
+
+    fn assert_icon_renders(name: &str, draw: IconRenderFn) {
         let surface = ImageSurface::create(Format::ARgb32, 24, 24).expect("surface");
         let ctx = Context::new(&surface).expect("context");
         ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-        icon.render(&ctx, 0.0, 0.0, 24.0);
+        draw(&ctx, 0.0, 0.0, 24.0);
         surface.flush();
 
         let mut has_ink = false;
@@ -245,40 +317,25 @@ mod tests {
     }
 
     #[test]
-    fn embedded_icons_render_non_empty_alpha() {
-        let icons: [(&str, &SvgIcon); 13] = [
-            ("select", &*SELECT),
-            ("pen", &*PEN),
-            ("line", &*LINE),
-            ("rect", &*RECT),
-            ("circle", &*CIRCLE),
-            ("arrow", &*ARROW),
-            ("blur", &*BLUR),
-            ("eraser", &*ERASER),
-            ("text", &*TEXT),
-            ("note", &*NOTE),
-            ("highlight", &*HIGHLIGHT),
-            ("marker", &*MARKER),
-            ("step_marker", &*STEP_MARKER),
+    fn tool_icons_render_non_empty_alpha() {
+        let icons: [(&str, IconRenderFn); 13] = [
+            ("select", render_select),
+            ("pen", render_pen),
+            ("line", render_line),
+            ("rect", render_rect),
+            ("circle", render_circle),
+            ("arrow", render_arrow),
+            ("blur", render_blur),
+            ("eraser", render_eraser),
+            ("text", render_text),
+            ("note", render_note),
+            ("highlight", render_highlight),
+            ("marker", render_marker),
+            ("step_marker", render_step_marker),
         ];
 
-        for (name, icon) in icons {
-            assert_icon_renders(name, icon);
+        for (name, draw) in icons {
+            assert_icon_renders(name, draw);
         }
-    }
-
-    #[test]
-    fn icon_surface_cache_stays_bounded() {
-        let icon = &*SELECT;
-        for px in 8..(8 + MAX_CACHED_SIZES as u32 + 5) {
-            let _ = icon.surface_for(px).expect("surface for size");
-        }
-
-        assert!(
-            icon.cache_len() <= MAX_CACHED_SIZES,
-            "cache grew beyond limit: {} > {}",
-            icon.cache_len(),
-            MAX_CACHED_SIZES
-        );
     }
 }

@@ -1,7 +1,7 @@
 //! xdg-desktop-portal integration for screenshot capture.
 
 use super::types::{CaptureError, CaptureType};
-use futures::StreamExt;
+use futures_util::StreamExt;
 use std::collections::HashMap;
 use zbus::zvariant::OwnedValue;
 use zbus::{Connection, proxy};

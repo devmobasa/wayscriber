@@ -8,7 +8,6 @@ use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
 use base64::{Engine as _, engine::general_purpose};
-use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Encoded image payload stored directly on an image shape.
@@ -31,7 +30,8 @@ pub struct EraserBrush {
 }
 
 /// Shape of the eraser brush.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EraserKind {
     Circle,
     Rect,

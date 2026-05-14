@@ -8,6 +8,7 @@ mod cli;
 mod config;
 mod daemon;
 mod draw;
+mod image_decode;
 mod input;
 mod label_format;
 mod notification;
@@ -28,7 +29,6 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
 use log::LevelFilter;
 
 pub use session_override::{

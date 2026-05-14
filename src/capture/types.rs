@@ -1,7 +1,7 @@
 //! Data types for screenshot capture functionality.
 
+use std::fmt;
 use std::path::PathBuf;
-use thiserror::Error;
 
 /// Type of screenshot capture to perform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,34 +51,66 @@ pub enum CaptureDestination {
 }
 
 /// Errors that can occur during screenshot capture.
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum CaptureError {
-    #[error("xdg-desktop-portal is not available")]
     #[allow(dead_code)] // Will be used in Phase 2 for capability checks
     PortalUnavailable,
 
     #[cfg_attr(not(feature = "portal"), allow(dead_code))]
-    #[error("Screenshot permission denied by user")]
     PermissionDenied,
 
     #[cfg(feature = "dbus")]
-    #[error("D-Bus communication error: {0}")]
-    DBusError(#[from] zbus::Error),
+    DBusError(zbus::Error),
 
-    #[error("Failed to save screenshot: {0}")]
-    SaveError(#[from] std::io::Error),
+    SaveError(std::io::Error),
 
-    #[error("Clipboard operation failed: {0}")]
     ClipboardError(String),
 
-    #[error("Image processing error: {0}")]
     ImageError(String),
 
-    #[error("Portal returned invalid response: {0}")]
     InvalidResponse(String),
 
-    #[error("Capture cancelled: {0}")]
     Cancelled(String),
+}
+
+impl fmt::Display for CaptureError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PortalUnavailable => write!(f, "xdg-desktop-portal is not available"),
+            Self::PermissionDenied => write!(f, "Screenshot permission denied by user"),
+            #[cfg(feature = "dbus")]
+            Self::DBusError(err) => write!(f, "D-Bus communication error: {err}"),
+            Self::SaveError(err) => write!(f, "Failed to save screenshot: {err}"),
+            Self::ClipboardError(err) => write!(f, "Clipboard operation failed: {err}"),
+            Self::ImageError(err) => write!(f, "Image processing error: {err}"),
+            Self::InvalidResponse(err) => write!(f, "Portal returned invalid response: {err}"),
+            Self::Cancelled(reason) => write!(f, "Capture cancelled: {reason}"),
+        }
+    }
+}
+
+impl std::error::Error for CaptureError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            #[cfg(feature = "dbus")]
+            Self::DBusError(err) => Some(err),
+            Self::SaveError(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "dbus")]
+impl From<zbus::Error> for CaptureError {
+    fn from(value: zbus::Error) -> Self {
+        Self::DBusError(value)
+    }
+}
+
+impl From<std::io::Error> for CaptureError {
+    fn from(value: std::io::Error) -> Self {
+        Self::SaveError(value)
+    }
 }
 
 /// Status of an ongoing capture operation.

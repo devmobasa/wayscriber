@@ -2,6 +2,7 @@
 
 use super::WaylandState;
 use crate::draw::EmbeddedImage;
+use crate::image_decode::{decode_rgba, format_from_mime_or_bytes, image_dimensions};
 use crate::input::state::{
     ClipboardFingerprint, ClipboardPasteRequest, UiToastKind, WayscriberClipboardSelection,
 };
@@ -11,13 +12,6 @@ use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
-use wl_clipboard_rs::copy::{
-    MimeType as CopyMimeType, Options as CopyOptions, ServeRequests, Source,
-};
-use wl_clipboard_rs::paste::{
-    ClipboardType as PasteClipboardType, Error as PasteError, MimeType as PasteMimeType, Seat,
-    get_contents as get_clipboard_contents, get_mime_types_ordered,
-};
 
 pub(super) const WAYSCRIBER_SELECTION_MIME: &str = "application/vnd.wayscriber.selection+json";
 
@@ -399,21 +393,7 @@ fn resolve_selection_clipboard_publish(
 }
 
 fn publish_selection_clipboard(payload_json: &str) -> Result<(), String> {
-    match publish_selection_via_command(payload_json) {
-        Ok(()) => Ok(()),
-        Err(command_err) => {
-            log::debug!(
-                "wl-copy failed for selection clipboard publish: {}; falling back to wl-clipboard-rs",
-                command_err
-            );
-            publish_selection_via_library(payload_json).map_err(|library_err| {
-                format!(
-                    "wl-copy failed: {}; wl-clipboard-rs failed: {}",
-                    command_err, library_err
-                )
-            })
-        }
-    }
+    publish_selection_via_command(payload_json)
 }
 
 fn publish_selection_via_command(payload_json: &str) -> Result<(), String> {
@@ -472,17 +452,6 @@ fn wait_for_wl_copy_publish(mut child: Child, timeout: Duration) -> Result<(), S
             Err(err) => return Err(format!("failed to poll wl-copy status: {}", err)),
         }
     }
-}
-
-fn publish_selection_via_library(payload_json: &str) -> Result<(), String> {
-    let mut options = CopyOptions::new();
-    options.serve_requests(ServeRequests::Unlimited);
-    options
-        .copy(
-            Source::Bytes(payload_json.as_bytes().to_vec().into_boxed_slice()),
-            CopyMimeType::Specific(WAYSCRIBER_SELECTION_MIME.to_string()),
-        )
-        .map_err(|err| format!("wl-clipboard-rs error: {}", err))
 }
 
 fn resolve_system_clipboard() -> ClipboardPasteResult {
@@ -562,20 +531,12 @@ fn choose_supported_mime(offered: &[String]) -> Option<String> {
 }
 
 fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResult {
-    let format = match mime_type {
-        "image/png" => ::image::ImageFormat::Png,
-        "image/jpeg" | "image/jpg" => ::image::ImageFormat::Jpeg,
-        _ => {
-            return ClipboardPasteResult::DecodeFailed(format!(
-                "unsupported MIME type {}",
-                mime_type
-            ));
-        }
+    let Some(format) = format_from_mime_or_bytes(mime_type, &bytes) else {
+        return ClipboardPasteResult::DecodeFailed(format!("unsupported MIME type {}", mime_type));
     };
-    let reader = ::image::ImageReader::with_format(std::io::Cursor::new(&bytes), format);
-    let dimensions = match reader.into_dimensions() {
+    let dimensions = match image_dimensions(format, &bytes) {
         Ok(dimensions) => dimensions,
-        Err(err) => return ClipboardPasteResult::DecodeFailed(err.to_string()),
+        Err(err) => return ClipboardPasteResult::DecodeFailed(err),
     };
     let pixels = dimensions.0 as u64 * dimensions.1 as u64;
     if pixels > MAX_CLIPBOARD_IMAGE_PIXELS {
@@ -585,8 +546,8 @@ fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResu
             limit: MAX_CLIPBOARD_IMAGE_PIXELS,
         };
     }
-    if let Err(err) = ::image::load_from_memory_with_format(&bytes, format) {
-        return ClipboardPasteResult::DecodeFailed(err.to_string());
+    if let Err(err) = decode_rgba(format, &bytes) {
+        return ClipboardPasteResult::DecodeFailed(err);
     }
     ClipboardPasteResult::Image(EmbeddedImage {
         mime_type: if mime_type == "image/jpg" {
@@ -601,13 +562,7 @@ fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResu
 }
 
 fn list_mime_types() -> Result<Vec<String>, ClipboardReadError> {
-    match list_mime_types_via_command() {
-        Ok(types) => Ok(types),
-        Err(command_err) => {
-            log::debug!("wl-paste --list-types failed: {:?}", command_err);
-            list_mime_types_via_library()
-        }
-    }
+    list_mime_types_via_command()
 }
 
 fn list_mime_types_via_command() -> Result<Vec<String>, ClipboardReadError> {
@@ -647,29 +602,12 @@ fn list_mime_types_via_command() -> Result<Vec<String>, ClipboardReadError> {
     }
 }
 
-fn list_mime_types_via_library() -> Result<Vec<String>, ClipboardReadError> {
-    get_mime_types_ordered(PasteClipboardType::Regular, Seat::Unspecified).map_err(
-        |err| match err {
-            PasteError::ClipboardEmpty | PasteError::NoMimeType | PasteError::NoSeats => {
-                ClipboardReadError::Empty
-            }
-            _ => ClipboardReadError::Unavailable(format!("wl-clipboard-rs error: {}", err)),
-        },
-    )
-}
-
 fn read_clipboard_mime(
     mime_type: &str,
     limit: usize,
     timeout: Duration,
 ) -> Result<Vec<u8>, ClipboardReadError> {
-    match read_clipboard_mime_via_command(mime_type, limit, timeout) {
-        Ok(bytes) => Ok(bytes),
-        Err(command_err) => {
-            log::debug!("wl-paste read failed for {}: {:?}", mime_type, command_err);
-            read_clipboard_mime_via_library(mime_type, limit, timeout)
-        }
-    }
+    read_clipboard_mime_via_command(mime_type, limit, timeout)
 }
 
 fn read_clipboard_mime_prefix(
@@ -677,17 +615,7 @@ fn read_clipboard_mime_prefix(
     limit: usize,
     timeout: Duration,
 ) -> Result<ClipboardPrefixRead, ClipboardReadError> {
-    match read_clipboard_mime_prefix_via_command(mime_type, limit, timeout) {
-        Ok(bytes) => Ok(bytes),
-        Err(command_err) => {
-            log::debug!(
-                "wl-paste fingerprint read failed for {}: {:?}",
-                mime_type,
-                command_err
-            );
-            read_clipboard_mime_prefix_via_library(mime_type, limit, timeout)
-        }
-    }
+    read_clipboard_mime_prefix_via_command(mime_type, limit, timeout)
 }
 
 fn read_clipboard_mime_via_command(
@@ -810,60 +738,6 @@ fn read_clipboard_mime_prefix_via_command(
             }
         }
     }
-}
-
-fn read_clipboard_mime_via_library(
-    mime_type: &str,
-    limit: usize,
-    timeout: Duration,
-) -> Result<Vec<u8>, ClipboardReadError> {
-    let mime_type = mime_type.to_string();
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let result = get_clipboard_contents(
-            PasteClipboardType::Regular,
-            Seat::Unspecified,
-            PasteMimeType::Specific(&mime_type),
-        )
-        .map_err(|err| match err {
-            PasteError::ClipboardEmpty | PasteError::NoMimeType | PasteError::NoSeats => {
-                ClipboardReadError::Empty
-            }
-            _ => ClipboardReadError::Unavailable(format!("wl-clipboard-rs error: {}", err)),
-        })
-        .and_then(|(pipe, _)| read_limited(pipe, limit));
-        let _ = tx.send(result);
-    });
-
-    rx.recv_timeout(timeout)
-        .map_err(|_| ClipboardReadError::TimedOut)?
-}
-
-fn read_clipboard_mime_prefix_via_library(
-    mime_type: &str,
-    limit: usize,
-    timeout: Duration,
-) -> Result<ClipboardPrefixRead, ClipboardReadError> {
-    let mime_type = mime_type.to_string();
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let result = get_clipboard_contents(
-            PasteClipboardType::Regular,
-            Seat::Unspecified,
-            PasteMimeType::Specific(&mime_type),
-        )
-        .map_err(|err| match err {
-            PasteError::ClipboardEmpty | PasteError::NoMimeType | PasteError::NoSeats => {
-                ClipboardReadError::Empty
-            }
-            _ => ClipboardReadError::Unavailable(format!("wl-clipboard-rs error: {}", err)),
-        })
-        .and_then(|(pipe, _)| read_prefix(pipe, limit));
-        let _ = tx.send(result);
-    });
-
-    rx.recv_timeout(timeout)
-        .map_err(|_| ClipboardReadError::TimedOut)?
 }
 
 fn read_pipe_with_timeout<R>(

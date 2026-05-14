@@ -10,7 +10,7 @@ use wayscriber::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
 #[cfg(feature = "portal")]
 use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "portal")]
-use futures::StreamExt;
+use futures_util::StreamExt;
 #[cfg(feature = "portal")]
 use log::{debug, info, warn};
 #[cfg(feature = "portal")]

@@ -1,9 +1,9 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::config::keybindings::defaults::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolKeybindingsConfig {
     #[serde(default = "default_increase_thickness")]
     pub increase_thickness: Vec<String>,

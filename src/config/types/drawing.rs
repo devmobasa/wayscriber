@@ -1,13 +1,13 @@
 use crate::config::enums::ColorSpec;
 use crate::input::{DragTool, EraserMode, Tool};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Drawing-related settings.
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
 /// Users can change these values at runtime using keybindings.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingConfig {
     /// Default pen color - either a named color (red, green, blue, yellow, orange, pink, white, black)
     /// or an RGB array like `[255, 0, 0]` for red
@@ -125,7 +125,8 @@ impl Default for DrawingConfig {
 }
 
 /// Drag bindings for all supported mouse buttons.
-#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MouseDragToolsConfig {
     /// Left mouse button drag bindings.
     #[serde(default = "default_left_drag_button")]
@@ -141,7 +142,7 @@ pub struct MouseDragToolsConfig {
 
     /// Whether the left table was present in the user's config.
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "config-schema", schemars(skip))]
     left_explicit: bool,
 }
 
@@ -235,7 +236,8 @@ impl Default for MouseDragToolsConfig {
 }
 
 /// Drag bindings for one mouse button.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DragButtonConfig {
     /// Tool/action used for drag with no modifier.
     #[serde(default = "default_button_behavior_drag_tool")]

@@ -38,7 +38,25 @@ fn wayscriber_help_prints_usage() {
         .success()
         .stdout(predicate::str::contains(
             "Screen annotation tool for Wayland compositors",
-        ));
+        ))
+        .stdout(predicate::str::contains(
+            "--light-toggle            Toggle light passthrough mode",
+        ))
+        .stdout(predicate::str::contains("--light-draw-toggle"))
+        .stdout(predicate::str::contains("--light-draw-on"))
+        .stdout(predicate::str::contains("--light-draw-off"));
+}
+
+#[test]
+fn wayscriber_version_prints_binary_name() {
+    for arg in ["--version", "-V"] {
+        wayscriber_cmd()
+            .arg(arg)
+            .assert()
+            .success()
+            .stdout(predicate::str::starts_with("wayscriber "))
+            .stdout(predicate::str::contains(wayscriber::build_info::version()));
+    }
 }
 
 #[test]
