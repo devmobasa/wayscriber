@@ -8,6 +8,8 @@ pub mod build_info;
 pub mod capture;
 pub mod config;
 pub mod draw;
+#[cfg(feature = "portal")]
+pub(crate) mod file_uri;
 pub(crate) mod image_decode;
 pub mod input;
 mod label_format;

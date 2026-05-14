@@ -1,10 +1,9 @@
 #![cfg(feature = "portal")]
-use std::path::PathBuf;
-use std::{fs, thread, time::Duration};
 
 use crate::capture::types::CaptureError;
-#[cfg(unix)]
-use std::os::unix::ffi::OsStringExt;
+use crate::file_uri;
+use std::path::PathBuf;
+use std::{fs, thread, time::Duration};
 
 /// Read image data from a file:// URI.
 ///
@@ -76,72 +75,7 @@ pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
 }
 
 fn decode_file_uri(uri: &str) -> Result<PathBuf, CaptureError> {
-    let raw = uri
-        .strip_prefix("file://")
-        .ok_or_else(|| CaptureError::InvalidResponse(format!("Invalid file URI '{}'", uri)))?;
-
-    // Allow optional host (empty or localhost)
-    let path_part = if raw.starts_with("localhost/") {
-        &raw["localhost".len()..]
-    } else if raw.starts_with('/') {
-        raw
-    } else {
-        return Err(CaptureError::InvalidResponse(format!(
-            "Unsupported file URI host in '{}'",
-            uri
-        )));
-    };
-
-    let decoded = percent_decode(path_part).map_err(|e| {
-        CaptureError::InvalidResponse(format!("Invalid percent-encoding in '{}': {}", uri, e))
-    })?;
-
-    #[cfg(unix)]
-    {
-        use std::ffi::OsString;
-        Ok(PathBuf::from(OsString::from_vec(decoded)))
-    }
-
-    #[cfg(not(unix))]
-    {
-        let path_str = String::from_utf8(decoded).map_err(|e| {
-            CaptureError::InvalidResponse(format!("Non-UTF8 path in URI '{}': {}", uri, e))
-        })?;
-        Ok(PathBuf::from(path_str))
-    }
-}
-
-fn percent_decode(input: &str) -> Result<Vec<u8>, &'static str> {
-    let bytes = input.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'%' => {
-                if i + 2 >= bytes.len() {
-                    return Err("truncated percent escape");
-                }
-                let hi = hex_value(bytes[i + 1]).ok_or("invalid hex digit")?;
-                let lo = hex_value(bytes[i + 2]).ok_or("invalid hex digit")?;
-                out.push((hi << 4) | lo);
-                i += 3;
-            }
-            b => {
-                out.push(b);
-                i += 1;
-            }
-        }
-    }
-    Ok(out)
-}
-
-fn hex_value(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(10 + b - b'a'),
-        b'A'..=b'F' => Some(10 + b - b'A'),
-        _ => None,
-    }
+    file_uri::decode_file_uri(uri).map_err(CaptureError::InvalidResponse)
 }
 
 #[cfg(test)]
@@ -171,44 +105,11 @@ mod tests {
     }
 
     #[test]
-    fn decode_file_uri_rejects_non_file_schemes() {
+    fn decode_file_uri_maps_errors_for_portal_reader() {
         let err = decode_file_uri("http://example.com/file.png").expect_err("expected error");
         match err {
-            CaptureError::InvalidResponse(msg) => {
-                assert!(msg.contains("Invalid file URI"));
-            }
+            CaptureError::InvalidResponse(msg) => assert!(msg.contains("Invalid file URI")),
             other => panic!("unexpected error variant: {other:?}"),
         }
-    }
-
-    #[test]
-    fn decode_file_uri_rejects_unsupported_hosts() {
-        let err = decode_file_uri("file://example.com/path.png").expect_err("expected error");
-        match err {
-            CaptureError::InvalidResponse(msg) => {
-                assert!(msg.contains("Unsupported file URI host"));
-            }
-            other => panic!("unexpected error variant: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn percent_decode_rejects_truncated_escape() {
-        let err = percent_decode("%").expect_err("expected error");
-        assert_eq!(err, "truncated percent escape");
-    }
-
-    #[test]
-    fn percent_decode_rejects_invalid_hex() {
-        let err = percent_decode("%ZZ").expect_err("expected error");
-        assert_eq!(err, "invalid hex digit");
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn decode_file_uri_accepts_localhost() {
-        let path = decode_file_uri("file://localhost/tmp/test.png")
-            .expect("decode_file_uri should accept localhost");
-        assert_eq!(path, PathBuf::from("/tmp/test.png"));
     }
 }

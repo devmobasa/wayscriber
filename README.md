@@ -569,7 +569,7 @@ Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_
 |--------|-----|
 | Duplicate selection | <kbd>Ctrl+D</kbd> |
 | Copy selection | <kbd>Ctrl+Alt+C</kbd> |
-| Paste selection | <kbd>Ctrl+Alt+V</kbd> |
+| Paste selection or copied PNG/JPEG image | <kbd>Ctrl+Alt+V</kbd> |
 | Delete selection | <kbd>Delete</kbd> |
 | Bring to front/back | <kbd>]</kbd> / <kbd>[</kbd> |
 | Nudge selection | Arrow keys (large: <kbd>PageUp</kbd>/<kbd>PageDown</kbd>) |
