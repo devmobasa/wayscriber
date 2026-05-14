@@ -2,6 +2,7 @@
 
 use super::WaylandState;
 use crate::draw::EmbeddedImage;
+use crate::image_decode::{decode_rgba, format_from_mime_or_bytes, image_dimensions};
 use crate::input::state::{
     ClipboardFingerprint, ClipboardPasteRequest, UiToastKind, WayscriberClipboardSelection,
 };
@@ -530,20 +531,12 @@ fn choose_supported_mime(offered: &[String]) -> Option<String> {
 }
 
 fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResult {
-    let format = match mime_type {
-        "image/png" => ::image::ImageFormat::Png,
-        "image/jpeg" | "image/jpg" => ::image::ImageFormat::Jpeg,
-        _ => {
-            return ClipboardPasteResult::DecodeFailed(format!(
-                "unsupported MIME type {}",
-                mime_type
-            ));
-        }
+    let Some(format) = format_from_mime_or_bytes(mime_type, &bytes) else {
+        return ClipboardPasteResult::DecodeFailed(format!("unsupported MIME type {}", mime_type));
     };
-    let reader = ::image::ImageReader::with_format(std::io::Cursor::new(&bytes), format);
-    let dimensions = match reader.into_dimensions() {
+    let dimensions = match image_dimensions(format, &bytes) {
         Ok(dimensions) => dimensions,
-        Err(err) => return ClipboardPasteResult::DecodeFailed(err.to_string()),
+        Err(err) => return ClipboardPasteResult::DecodeFailed(err),
     };
     let pixels = dimensions.0 as u64 * dimensions.1 as u64;
     if pixels > MAX_CLIPBOARD_IMAGE_PIXELS {
@@ -553,8 +546,8 @@ fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResu
             limit: MAX_CLIPBOARD_IMAGE_PIXELS,
         };
     }
-    if let Err(err) = ::image::load_from_memory_with_format(&bytes, format) {
-        return ClipboardPasteResult::DecodeFailed(err.to_string());
+    if let Err(err) = decode_rgba(format, &bytes) {
+        return ClipboardPasteResult::DecodeFailed(err);
     }
     ClipboardPasteResult::Image(EmbeddedImage {
         mime_type: if mime_type == "image/jpg" {

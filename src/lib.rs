@@ -8,6 +8,7 @@ pub mod build_info;
 pub mod capture;
 pub mod config;
 pub mod draw;
+pub(crate) mod image_decode;
 pub mod input;
 mod label_format;
 pub mod paths;

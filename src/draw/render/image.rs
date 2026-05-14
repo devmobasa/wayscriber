@@ -1,4 +1,5 @@
 use crate::draw::shape::EmbeddedImage;
+use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
 use cairo::{Format, ImageSurface};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque, hash_map::DefaultHasher};
@@ -109,26 +110,21 @@ fn cached_surface(data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
 }
 
 fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
-    let format = match data.mime_type.as_str() {
-        "image/png" => ::image::ImageFormat::Png,
-        "image/jpeg" | "image/jpg" => ::image::ImageFormat::Jpeg,
-        _ => ::image::guess_format(&data.bytes).ok()?,
-    };
-    let image = ::image::load_from_memory_with_format(&data.bytes, format)
-        .ok()?
-        .to_rgba8();
-    let (width, height) = image.dimensions();
+    let format = format_from_mime_or_bytes(&data.mime_type, &data.bytes)?;
+    let image = decode_rgba(format, &data.bytes).ok()?;
+    let width = image.width;
+    let height = image.height;
     if width == 0 || height == 0 {
         return None;
     }
 
     let stride = Format::ARgb32.stride_for_width(width).ok()? as usize;
     let mut pixels = vec![0u8; stride * height as usize];
-    for (row, source) in image.rows().enumerate() {
+    for (row, source) in image.rgba.chunks_exact(width as usize * 4).enumerate() {
         let offset = row * stride;
         let row_bytes = &mut pixels[offset..offset + width as usize * 4];
-        for (pixel, out) in source.zip(row_bytes.chunks_exact_mut(4)) {
-            let [r, g, b, a] = pixel.0;
+        for (pixel, out) in source.chunks_exact(4).zip(row_bytes.chunks_exact_mut(4)) {
+            let [r, g, b, a] = [pixel[0], pixel[1], pixel[2], pixel[3]];
             let premul =
                 |channel: u8| -> u8 { ((channel as u16 * a as u16 + 127) / 255).min(255) as u8 };
             let r = premul(r);

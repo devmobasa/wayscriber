@@ -39,6 +39,7 @@ flate2 = "1.0"
 time = { version = "0.3", features = ["formatting", "parsing", "local-offset"] }
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+zune-jpeg = "0.5"
 
 # Daemon mode
 signal-hook = "0.4"
