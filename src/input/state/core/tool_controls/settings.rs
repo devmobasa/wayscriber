@@ -80,6 +80,7 @@ impl InputState {
 
     /// Updates the active drawing thickness from tablet pressure without
     /// treating every pressure sample as a persisted user preference edit.
+    #[cfg_attr(not(tablet), allow(dead_code))]
     pub(crate) fn set_pressure_thickness_for_active_tool(&mut self, thickness: f64) -> f64 {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let tool = self.active_tool();
