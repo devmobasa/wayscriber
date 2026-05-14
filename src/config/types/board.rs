@@ -1,11 +1,11 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Board mode configuration for whiteboard/blackboard features.
 ///
 /// Controls the appearance and behavior of board modes, including background colors,
 /// default pen colors, and whether to auto-adjust colors when entering board modes.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardConfig {
     /// Enable board mode features (whiteboard/blackboard)
     #[serde(default = "default_board_enabled")]

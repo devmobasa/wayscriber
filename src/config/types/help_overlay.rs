@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Help overlay styling configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HelpOverlayStyle {
     /// Font size for help overlay text
     #[serde(default = "default_help_font_size")]

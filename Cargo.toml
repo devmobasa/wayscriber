@@ -5,6 +5,7 @@ edition = "2024"
 description = "Screen annotation tool for Wayland compositors"
 homepage = "https://wayscriber.com"
 repository = "https://github.com/devmobasa/wayscriber"
+default-run = "wayscriber"
 
 [workspace]
 members = ["configurator"]
@@ -33,7 +34,7 @@ anyhow = "1.0"
 toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 async-trait = "0.1"
-schemars = { version = "1.2", features = ["derive"] }
+schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
 flate2 = "1.0"
 time = { version = "0.3", features = ["formatting", "parsing", "local-offset"] }
@@ -62,7 +63,13 @@ tablet-input = []
 dbus = ["zbus"]
 portal = ["dbus"]
 tray = ["dbus", "ksni"]
+config-schema = ["dep:schemars"]
 default = ["tablet-input", "portal", "tray"]
+
+[[bin]]
+name = "dump_config_schema"
+path = "src/bin/dump_config_schema.rs"
+required-features = ["config-schema"]
 
 [dev-dependencies]
 tempfile = "3.10"

@@ -1,14 +1,14 @@
 //! Drawing tool selection.
 
 use crate::draw::Color;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Drawing tool selection.
 ///
 /// The active tool determines what shape is created when the user drags the mouse.
 /// Drag modifier mappings are configurable via `[drawing]` drag-tool fields.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Tool {
     /// Select/cursor tool - interact with UI without drawing
@@ -313,7 +313,8 @@ impl PerToolDrawingSettings {
 ///
 /// `Default` preserves a mouse button's built-in behavior, such as right-click
 /// context menus or middle-click radial menu toggles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DragTool {
     /// Preserve the button's built-in behavior.
@@ -378,7 +379,8 @@ impl DragTool {
 }
 
 /// Eraser behavior mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum EraserMode {
     /// Brush-style eraser that clears pixels along its stroke.

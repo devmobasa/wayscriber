@@ -1,4 +1,3 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{ToolbarLayoutMode, ToolbarModeOverrides};
@@ -7,7 +6,8 @@ use super::{ToolbarLayoutMode, ToolbarModeOverrides};
 ///
 /// Controls which toolbar panels are visible on startup and whether they
 /// remain pinned (saved to config) when closed.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolbarConfig {
     /// Toolbar layout preset (simple, regular, advanced)
     #[serde(default = "default_toolbar_layout_mode")]

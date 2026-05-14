@@ -1,10 +1,10 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::ToolbarLayoutMode;
 
 /// Optional per-mode overrides for toolbar sections.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct ToolbarModeOverride {
     /// Show the Actions section (undo/redo/clear)
     #[serde(default)]
@@ -44,7 +44,8 @@ pub struct ToolbarModeOverride {
 }
 
 /// Mode-specific overrides for toolbar layout presets.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ToolbarModeOverrides {
     #[serde(default)]
     pub simple: ToolbarModeOverride,

@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Undo/redo playback configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryConfig {
     /// Delay in milliseconds between steps when running "undo all by delay"
     #[serde(default = "default_undo_all_delay_ms")]

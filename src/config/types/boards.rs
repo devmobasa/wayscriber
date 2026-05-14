@@ -1,10 +1,10 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::board::BoardConfig;
 
 /// Configurable multi-board settings.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardsConfig {
     /// Maximum number of boards allowed.
     #[serde(default = "default_boards_max_count")]
@@ -109,7 +109,8 @@ impl BoardsConfig {
 }
 
 /// Single board definition.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardItemConfig {
     /// Stable board id (used for keybindings and persistence).
     pub id: String,
@@ -139,7 +140,8 @@ pub struct BoardItemConfig {
 }
 
 /// Background specification: "transparent" or an RGB color.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum BoardBackgroundConfig {
     Transparent(String),
@@ -153,7 +155,8 @@ impl BoardBackgroundConfig {
 }
 
 /// RGB color input, either as an array or `{ rgb = [..] }`.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum BoardColorConfig {
     Rgb([f64; 3]),

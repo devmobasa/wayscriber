@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// All possible actions that can be bound to keys.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Action {
     // Exit and cancellation

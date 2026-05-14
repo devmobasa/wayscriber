@@ -1,5 +1,4 @@
 use crate::config::enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -10,7 +9,8 @@ use super::{
 /// UI display preferences.
 ///
 /// Controls the visibility and positioning of on-screen UI elements.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiConfig {
     /// Show the status bar displaying current color, thickness, and tool
     #[serde(default = "default_show_status")]

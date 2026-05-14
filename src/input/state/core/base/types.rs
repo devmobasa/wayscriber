@@ -19,7 +19,6 @@ use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Shape, ShapeId};
 use crate::input::tool::Tool;
 use crate::util::Rect;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
@@ -130,7 +129,8 @@ pub enum TextInputMode {
     StickyNote,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PressureThicknessEditMode {
     #[default]
@@ -139,7 +139,8 @@ pub enum PressureThicknessEditMode {
     Scale,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PressureThicknessEntryMode {
     Never,

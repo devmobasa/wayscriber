@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Presenter mode customization options.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PresenterModeConfig {
     /// Hide the status bar while presenter mode is active.
     #[serde(default = "default_hide_status_bar")]
@@ -47,7 +47,8 @@ impl Default for PresenterModeConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum PresenterToolBehavior {
     /// Leave the active tool unchanged.

@@ -14,6 +14,7 @@ pub mod types;
 mod core;
 mod io;
 mod paths;
+#[cfg(feature = "config-schema")]
 mod schema;
 mod validate;
 

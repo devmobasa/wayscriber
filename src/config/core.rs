@@ -5,7 +5,6 @@ use super::types::{
     ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, HistoryConfig,
     PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, SessionConfig, UiConfig,
 };
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Main configuration structure containing all user settings.
@@ -38,7 +37,8 @@ use serde::{Deserialize, Serialize};
 /// exit = ["Escape", "Ctrl+Q"]
 /// undo = ["Ctrl+Z"]
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Drawing tool defaults (color, thickness, font size)
     #[serde(default)]

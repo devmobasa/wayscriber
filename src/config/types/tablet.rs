@@ -1,10 +1,10 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
 
 /// Tablet/stylus input configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TabletInputConfig {
     /// Enable tablet/stylus events at runtime (feature must be compiled in).
     #[serde(default = "default_tablet_enabled")]
