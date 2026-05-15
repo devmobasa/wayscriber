@@ -55,11 +55,11 @@ use crate::{
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
 
-use self::clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion};
 use self::data::{MoveDrag, StateData};
 pub use self::data::{MoveDragKind, OverlaySuppression};
 use super::{
     capture::CaptureState,
+    clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion},
     frozen::FrozenState,
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,

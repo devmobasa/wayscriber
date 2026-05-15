@@ -280,6 +280,24 @@ impl InputState {
         )
     }
 
+    pub(crate) fn failed_local_selection_probe_for_generation(
+        &self,
+        generation: Option<u64>,
+    ) -> Option<(u64, Option<ClipboardFingerprint>)> {
+        let request_generation = generation?;
+        let SelectionPublishState::Failed {
+            generation,
+            clipboard_fingerprint_at_failure,
+        } = &self.selection_publish_state
+        else {
+            return None;
+        };
+        (*generation == request_generation
+            && *generation == self.selection_clipboard_generation
+            && !self.selection_clipboard_is_empty())
+        .then(|| (*generation, clipboard_fingerprint_at_failure.clone()))
+    }
+
     pub(crate) fn failed_local_selection_after_fingerprint_probe(
         &mut self,
         request_generation: Option<u64>,
@@ -337,6 +355,13 @@ impl InputState {
     ) -> bool {
         payload.app_instance_id == self.clipboard_app_instance_id
             && request.local_selection_fallback_generation == Some(payload.copy_generation)
+    }
+
+    pub(crate) fn private_payload_is_same_instance(
+        &self,
+        payload: &WayscriberClipboardSelection,
+    ) -> bool {
+        payload.app_instance_id == self.clipboard_app_instance_id
     }
 
     pub(crate) fn private_payload_shapes_for_request(

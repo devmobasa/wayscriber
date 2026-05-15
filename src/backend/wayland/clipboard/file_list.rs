@@ -1,6 +1,6 @@
 use super::{
     CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError, MAX_CLIPBOARD_IMAGE_BYTES,
-    decode_clipboard_image, read_pipe_with_timeout,
+    image::decode_clipboard_image, system::read_pipe_with_timeout,
 };
 use crate::file_uri;
 #[cfg(unix)]
@@ -198,7 +198,7 @@ fn is_gnome_copied_files_mime(mime_type: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::wayland::state::clipboard::choose_supported_mime;
+    use crate::backend::wayland::clipboard::image::choose_supported_mime;
     use std::fs;
     use tempfile::TempDir;
 
