@@ -1,6 +1,7 @@
 use super::super::base::{
-    ClipboardFingerprint, ClipboardPasteRequest, InputState, PendingSelectionClipboardPublish,
-    SelectionPublishState, UiToastKind, WayscriberClipboardSelection,
+    ClipboardFingerprint, ClipboardPasteRequest, InputState, PasteAnchor,
+    PendingSelectionClipboardPublish, SelectionPublishState, UiToastKind,
+    WayscriberClipboardSelection,
 };
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
@@ -197,6 +198,13 @@ impl InputState {
     }
 
     pub(crate) fn request_clipboard_paste(&mut self) -> ClipboardPasteRequest {
+        self.request_clipboard_paste_at_anchor(self.paste_anchor())
+    }
+
+    pub(crate) fn request_clipboard_paste_at_anchor(
+        &mut self,
+        anchor: PasteAnchor,
+    ) -> ClipboardPasteRequest {
         self.clipboard_paste_request_counter = self.clipboard_paste_request_counter.wrapping_add(1);
         let id = self.clipboard_paste_request_counter;
         let request = ClipboardPasteRequest {
@@ -204,7 +212,7 @@ impl InputState {
             target_board_id: self.boards.active_board_id().to_string(),
             target_page_index: self.boards.active_page_index(),
             target_page_generation: self.boards.active_page_generation(),
-            anchor: self.paste_anchor(),
+            anchor,
             visible_canvas_rect: self.visible_canvas_rect(),
             screen_size: (self.screen_width, self.screen_height),
             selection_clipboard_generation_at_request: self.selection_clipboard_generation,

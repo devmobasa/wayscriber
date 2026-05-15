@@ -31,7 +31,7 @@ impl InputState {
         }
     }
 
-    fn canvas_coords_for_screen(&self, screen_x: i32, screen_y: i32) -> (i32, i32) {
+    pub(crate) fn canvas_coords_for_screen(&self, screen_x: i32, screen_y: i32) -> (i32, i32) {
         let scale = self.current_canvas_scale();
         let (origin_x, origin_y) = self.current_canvas_origin();
         (

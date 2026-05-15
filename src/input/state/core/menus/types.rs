@@ -29,6 +29,8 @@ pub enum ContextMenuState {
 /// Commands triggered by context menu selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuCommand {
+    Copy,
+    Paste,
     Delete,
     Duplicate,
     SelectHoveredShape,

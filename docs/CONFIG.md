@@ -652,6 +652,7 @@ default_pen_color = { rgb = [0.969, 0.890, 0.784] }
 - Transparent overlay does not pan; it stays anchored to the live screen.
 - The canvas context menu includes **Reset Canvas Position** when board panning is enabled.
 - The same right-click menu exposes **Zoom** → **Zoom In**, **Zoom Out**, and **Reset Zoom**.
+- Right-click menus expose **Paste**; shape menus also expose **Copy** for the selected annotations.
 - Pan offsets are stored per page, so each page keeps its own position.
 
 **CLI Override:**
