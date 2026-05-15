@@ -5,7 +5,7 @@ Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The appli
 ## Prerequisites
 
 - Rust toolchain (1.80 or newer recommended).
-- System dependencies required by `iced`/`wgpu` (Vulkan/Metal/DirectX drivers on the host platform).
+- System dependencies required by `iced`'s Wayland `tiny-skia` renderer.
 
 ## Run It
 
@@ -14,9 +14,9 @@ cd configurator
 cargo run
 ```
 
-On GNOME Wayland, the configurator forces the `tiny-skia` renderer by default to
-avoid wgpu dma-buf/present mode crashes. Override with
-`ICED_BACKEND=wgpu wayscriber-configurator` if desired.
+The configurator uses Iced's software `tiny-skia` renderer on Wayland. It does
+not compile the GPU renderer or portal D-Bus implementation into the
+configurator binary.
 
 The window loads the current config, lets you tweak values across the tabbed sections, and writes changes back via `Config::save_with_backup()`.
 

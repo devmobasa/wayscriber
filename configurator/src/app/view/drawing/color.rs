@@ -3,11 +3,12 @@ use iced::widget::{Column, Row, button, column, pick_list, row, text, text_input
 use iced::{Alignment, Element, Length};
 
 use crate::messages::Message;
-use crate::models::{ColorMode, NamedColorOption, TextField, TripletField};
+use crate::models::{ColorMode, ColorPickerId, NamedColorOption, TextField, TripletField};
 
 use super::super::super::state::ConfiguratorApp;
 use super::super::widgets::{
-    COLOR_PICKER_WIDTH, DEFAULT_LABEL_GAP, color_preview_labeled, default_value_text,
+    COLOR_PICKER_WIDTH, ColorPickerUi, DEFAULT_LABEL_GAP, color_preview_labeled,
+    color_rgb255_picker, default_value_text,
 };
 
 pub(super) fn drawing_color_block(app: &ConfiguratorApp) -> Element<'_, Message> {
@@ -93,19 +94,24 @@ fn named_color_section(app: &ConfiguratorApp) -> Element<'_, Message> {
 }
 
 fn rgb_color_section(app: &ConfiguratorApp) -> Element<'_, Message> {
-    let rgb_inputs = row![
-        text_input("R (0-255)", &app.draft.drawing_color.rgb[0])
-            .on_input(|value| { Message::TripletChanged(TripletField::DrawingColorRgb, 0, value) }),
-        text_input("G (0-255)", &app.draft.drawing_color.rgb[1])
-            .on_input(|value| { Message::TripletChanged(TripletField::DrawingColorRgb, 1, value) }),
-        text_input("B (0-255)", &app.draft.drawing_color.rgb[2])
-            .on_input(|value| { Message::TripletChanged(TripletField::DrawingColorRgb, 2, value) }),
-        color_preview_labeled(app.draft.drawing_color.preview_color()),
-    ]
-    .spacing(8)
-    .align_y(Alignment::Center);
+    let picker_id = ColorPickerId::DrawingColor;
+    let rgb_picker = color_rgb255_picker(
+        ColorPickerUi {
+            id: picker_id,
+            is_open: app.color_picker_open == Some(picker_id),
+            show_advanced: false,
+            hex_value: app
+                .color_picker_hex
+                .get(&picker_id)
+                .map(String::as_str)
+                .unwrap_or(""),
+        },
+        &app.draft.drawing_color.rgb,
+        app.draft.drawing_color.preview_color(),
+        TripletField::DrawingColorRgb,
+    );
 
-    let mut column = Column::new().spacing(8).push(rgb_inputs);
+    let mut column = Column::new().spacing(8).push(rgb_picker);
 
     if app.draft.drawing_color.preview_color().is_none()
         && app

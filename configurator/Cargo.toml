@@ -4,9 +4,9 @@ version = "0.9.18"
 edition = "2024"
 
 [dependencies]
-# Keep configurator-side runtime/status logic aligned with the daemon's portal-capable builds.
-wayscriber = { path = "..", default-features = false, features = ["portal"] }
-iced = { version = "0.14", features = ["tokio", "canvas"] }
+# The configurator edits config and service files; it does not call portal D-Bus APIs directly.
+wayscriber = { path = "..", default-features = false }
+iced = { version = "0.14", default-features = false, features = ["tokio", "tiny-skia", "wayland"] }
 
 [features]
 default = ["tablet-input"]

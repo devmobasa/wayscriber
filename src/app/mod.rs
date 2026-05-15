@@ -74,6 +74,16 @@ fn detach_from_tty() {
 }
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
+    if cli.runtime_capabilities {
+        print!(
+            "{}",
+            wayscriber::runtime_capabilities::render_runtime_capabilities(
+                wayscriber::runtime_capabilities::current_runtime_capabilities()
+            )
+        );
+        return Ok(());
+    }
+
     #[cfg(unix)]
     if std::env::var_os("WAYSCRIBER_DETACHED").is_some() {
         detach_from_tty();

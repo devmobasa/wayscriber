@@ -3,9 +3,9 @@ use iced::{Alignment, Color, Element, Length, Theme};
 
 use crate::messages::Message;
 use crate::models::color::{parse_quad_values, parse_triplet_values, rgb_to_hsv};
-use crate::models::{ColorQuadInput, ColorTripletInput, QuadField};
+use crate::models::{ColorQuadInput, ColorTripletInput, QuadField, TripletField};
 
-use super::super::colors::color_preview_badge;
+use super::super::colors::{color_preview_badge, color_preview_labeled};
 use super::super::constants::DEFAULT_LABEL_GAP;
 use super::super::labels::default_value_text;
 use super::ColorPickerUi;
@@ -65,6 +65,55 @@ pub(in crate::app::view) fn color_triplet_picker<'a>(
     };
 
     column![header, picker_panel, advanced_inputs]
+        .spacing(6)
+        .into()
+}
+
+pub(in crate::app::view) fn color_rgb255_picker<'a>(
+    picker: ColorPickerUi<'a>,
+    components: &'a [String; 3],
+    preview: Option<Color>,
+    field: TripletField,
+) -> Element<'a, Message> {
+    let rgb = parse_rgb255_values(components).unwrap_or([0.0, 0.0, 0.0]);
+    let (hue, saturation, value) = rgb_to_hsv(rgb);
+
+    let picker_row = row![
+        color_preview_labeled(preview),
+        input("HEX", picker.hex_value)
+            .on_input(move |val| Message::ColorPickerHexChanged(picker.id, val))
+            .width(Length::Fixed(120.0)),
+        button(if picker.is_open {
+            "Hide picker"
+        } else {
+            "Pick"
+        })
+        .on_press(Message::ColorPickerToggled(picker.id)),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+
+    let picker_panel: Element<'a, Message> = if picker.is_open {
+        picker_panel(picker.id, hue, saturation, value, rgb, None)
+    } else {
+        column![].into()
+    };
+
+    let component_row = row![
+        input("R (0-255)", &components[0])
+            .on_input(move |val| Message::TripletChanged(field, 0, val))
+            .width(Length::Fixed(110.0)),
+        input("G (0-255)", &components[1])
+            .on_input(move |val| Message::TripletChanged(field, 1, val))
+            .width(Length::Fixed(110.0)),
+        input("B (0-255)", &components[2])
+            .on_input(move |val| Message::TripletChanged(field, 2, val))
+            .width(Length::Fixed(110.0)),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+
+    column![picker_row, picker_panel, component_row]
         .spacing(6)
         .into()
 }
@@ -145,4 +194,16 @@ pub(in crate::app::view) fn color_quad_picker<'a>(
     column![label_row, header, picker_panel, advanced_inputs]
         .spacing(6)
         .into()
+}
+
+fn parse_rgb255_values(components: &[String; 3]) -> Option<[f64; 3]> {
+    let mut rgb = [0.0; 3];
+    for (index, component) in components.iter().enumerate() {
+        let parsed = component.trim().parse::<f64>().ok()?;
+        if !(0.0..=255.0).contains(&parsed) {
+            return None;
+        }
+        rgb[index] = parsed / 255.0;
+    }
+    Some(rgb)
 }

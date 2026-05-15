@@ -2,6 +2,7 @@ use assert_cmd::{Command, cargo::cargo_bin_cmd};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
+use wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG;
 
 fn write_session_config(temp: &TempDir, custom_dir: &std::path::Path) {
     let config_dir = temp.path().join("wayscriber");
@@ -57,6 +58,19 @@ fn wayscriber_version_prints_binary_name() {
             .stdout(predicate::str::starts_with("wayscriber "))
             .stdout(predicate::str::contains(wayscriber::build_info::version()));
     }
+}
+
+#[test]
+fn wayscriber_runtime_capabilities_reports_portal_feature() {
+    let expected = format!(
+        "portal={}\n",
+        wayscriber::shortcut_hint::portal_runtime_supported()
+    );
+    wayscriber_cmd()
+        .arg(RUNTIME_CAPABILITIES_FLAG)
+        .assert()
+        .success()
+        .stdout(predicate::eq(expected));
 }
 
 #[test]

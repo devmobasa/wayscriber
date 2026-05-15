@@ -17,7 +17,9 @@ impl ConfiguratorApp {
         match message {
             Message::ConfigLoaded(result) => self.handle_config_loaded(result),
             Message::ReloadRequested => self.handle_reload_requested(),
-            Message::ResetToDefaults => self.handle_reset_to_defaults(),
+            Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
+            Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
+            Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
             Message::SaveRequested => self.handle_save_requested(),
             Message::ConfigSaved(result) => self.handle_config_saved(result),
             Message::DaemonStatusLoaded(request_id, result) => {

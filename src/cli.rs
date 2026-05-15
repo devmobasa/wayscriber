@@ -60,6 +60,9 @@ pub struct Cli {
 
     /// Show the About window
     pub about: bool,
+
+    /// Print compiled runtime capabilities for companion tools
+    pub runtime_capabilities: bool,
 }
 
 impl Cli {
@@ -130,6 +133,9 @@ impl Cli {
                 "--resume-session" => cli.resume_session = true,
                 "--no-resume-session" => cli.no_resume_session = true,
                 "--about" => cli.about = true,
+                wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
+                    cli.runtime_capabilities = true;
+                }
                 _ if arg.starts_with("--daemon-action=") => {
                     cli.daemon_action = Some(value_from_equals(arg, "--daemon-action")?);
                 }
@@ -170,6 +176,30 @@ impl Cli {
     }
 
     fn validate(&self) -> Result<(), String> {
+        if self.runtime_capabilities
+            && (self.daemon
+                || self.daemon_toggle
+                || self.daemon_action.is_some()
+                || self.light_toggle
+                || self.light_draw_toggle
+                || self.light_draw_on
+                || self.light_draw_off
+                || self.active
+                || self.mode.is_some()
+                || self.no_tray
+                || self.freeze_on_show
+                || self.clear_session
+                || self.session_info
+                || self.freeze
+                || self.exit_after_capture
+                || self.no_exit_after_capture
+                || self.resume_session
+                || self.no_resume_session
+                || self.about)
+        {
+            return Err("--runtime-capabilities conflicts with launch flags".to_string());
+        }
+
         if self.exit_after_capture && self.no_exit_after_capture {
             return Err(conflict("--exit-after-capture", "--no-exit-after-capture"));
         }

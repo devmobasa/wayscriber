@@ -37,12 +37,18 @@ impl ConfiguratorApp {
 
     fn header_view(&self) -> Element<'_, Message> {
         let reload_button = button("Reload")
-            .style(theme::Button::Secondary)
+            .style(theme::Button::Subtle)
             .on_press(Message::ReloadRequested);
 
-        let defaults_button = button("Defaults")
-            .style(theme::Button::Secondary)
-            .on_press(Message::ResetToDefaults);
+        let defaults_button = if self.defaults_reset_pending {
+            button("Confirm Defaults")
+                .style(theme::Button::Warning)
+                .on_press(Message::ResetToDefaultsConfirmed)
+        } else {
+            button("Defaults")
+                .style(theme::Button::Warning)
+                .on_press(Message::ResetToDefaultsRequested)
+        };
 
         let save_button = button("Save")
             .style(theme::Button::Primary)
@@ -54,6 +60,14 @@ impl ConfiguratorApp {
             .push(reload_button)
             .push(defaults_button)
             .push(save_button);
+
+        if self.defaults_reset_pending {
+            toolbar = toolbar.push(
+                button("Cancel")
+                    .style(theme::Button::Subtle)
+                    .on_press(Message::ResetToDefaultsCanceled),
+            );
+        }
 
         toolbar = if self.is_saving {
             toolbar.push(text("Saving...").size(16))
@@ -70,6 +84,10 @@ impl ConfiguratorApp {
                     .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.8, 0.6))),
             )
         };
+
+        let toolbar = container(toolbar)
+            .padding([6, 8])
+            .style(theme::Container::ActionBar);
 
         let banner: Element<'_, Message> = match &self.status {
             StatusMessage::Idle => Space::new()
@@ -92,6 +110,10 @@ impl ConfiguratorApp {
             .padding(8)
             .style(theme::Container::Box)
             .into(),
+            StatusMessage::Warning(message) => container(text(message))
+                .padding(8)
+                .style(theme::Container::Warning)
+                .into(),
         };
 
         column![toolbar, banner].spacing(8).into()
@@ -105,9 +127,9 @@ impl ConfiguratorApp {
                 let button = button(label)
                     .padding([6, 12])
                     .style(if *tab == self.active_tab {
-                        theme::Button::Primary
+                        theme::Button::TabActive
                     } else {
-                        theme::Button::Secondary
+                        theme::Button::TabInactive
                     })
                     .on_press(Message::TabSelected(*tab));
                 row.push(button)

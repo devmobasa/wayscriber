@@ -20,7 +20,9 @@ use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeO
 pub enum Message {
     ConfigLoaded(Result<Arc<Config>, String>),
     ReloadRequested,
-    ResetToDefaults,
+    ResetToDefaultsRequested,
+    ResetToDefaultsConfirmed,
+    ResetToDefaultsCanceled,
     SaveRequested,
     ConfigSaved(Result<(Option<PathBuf>, Arc<Config>), String>),
     DaemonStatusLoaded(u64, Result<DaemonRuntimeStatus, String>),
