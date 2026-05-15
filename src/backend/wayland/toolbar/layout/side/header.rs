@@ -1,8 +1,10 @@
-use super::{
-    HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutMode, ToolbarLayoutSpec,
+use super::{HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec};
+use crate::ui::toolbar::model::{
+    SideHeaderModel, ToolbarControl, ToolbarControlKind, ToolbarSegmentedControl,
 };
 
 pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRegion>) {
+    let header_model = SideHeaderModel::from_snapshot(ctx.snapshot);
     let btn_size = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_SIZE;
     let btn_gap = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_GAP;
     let btn_margin = ToolbarLayoutSpec::SIDE_HEADER_BUTTON_MARGIN_RIGHT;
@@ -16,9 +18,9 @@ pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRe
     let drag_y = row1_y + (row1_h - drag_size) / 2.0;
     hits.push(HitRegion {
         rect: (ctx.x, drag_y, drag_size, drag_size),
-        event: ToolbarEvent::MoveSideToolbar { x: 0.0, y: 0.0 },
+        event: single_control_event(&header_model.drag),
         kind: HitKind::DragMoveSide,
-        tooltip: Some("Drag toolbar".to_string()),
+        tooltip: header_model.drag.presentation.tooltip.as_string(),
     });
 
     // Utility buttons: Pin, Close
@@ -34,35 +36,27 @@ pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRe
     let icons_y = row1_y + (row1_h - segment_h) / 2.0;
 
     hits.push(HitRegion {
-        rect: (icons_x, icons_y, icons_w / 2.0, segment_h),
-        event: ToolbarEvent::ToggleIconMode(true),
-        kind: HitKind::Click,
-        tooltip: Some("Icons mode".to_string()),
-    });
-    hits.push(HitRegion {
-        rect: (icons_x + icons_w / 2.0, icons_y, icons_w / 2.0, segment_h),
-        event: ToolbarEvent::ToggleIconMode(false),
-        kind: HitKind::Click,
-        tooltip: Some("Text mode".to_string()),
-    });
-
-    hits.push(HitRegion {
         rect: (pin_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::PinSideToolbar(!ctx.snapshot.side_pinned),
+        event: single_control_event(&header_model.pin),
         kind: HitKind::Click,
-        tooltip: Some(if ctx.snapshot.side_pinned {
-            "Unpin".to_string()
-        } else {
-            "Pin".to_string()
-        }),
+        tooltip: header_model.pin.presentation.tooltip.as_string(),
     });
 
     hits.push(HitRegion {
         rect: (close_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::CloseSideToolbar,
+        event: single_control_event(&header_model.close),
         kind: HitKind::Click,
-        tooltip: Some("Close".to_string()),
+        tooltip: header_model.close.presentation.tooltip.as_string(),
     });
+
+    push_segment_hits(
+        hits,
+        &header_model.icon_mode,
+        icons_x,
+        icons_y,
+        icons_w / 2.0,
+        segment_h,
+    );
 
     // ========== ROW 2: Simple/Full + More ==========
     let row2_y = ctx.spec.side_header_row2_y();
@@ -75,33 +69,19 @@ pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRe
     let more_x = ctx.x + ctx.content_width - btn_size;
     let more_y = row2_y + (row2_h - btn_size) / 2.0;
 
-    let full_mode = if ctx.snapshot.layout_mode == ToolbarLayoutMode::Advanced {
-        ToolbarLayoutMode::Advanced
-    } else {
-        ToolbarLayoutMode::Regular
-    };
-    hits.push(HitRegion {
-        rect: (layout_x, segment_y, layout_w / 2.0, segment_h),
-        event: ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Simple),
-        kind: HitKind::Click,
-        tooltip: Some("Simple mode".to_string()),
-    });
-    hits.push(HitRegion {
-        rect: (
-            layout_x + layout_w / 2.0,
-            segment_y,
-            layout_w / 2.0,
-            segment_h,
-        ),
-        event: ToolbarEvent::SetToolbarLayoutMode(full_mode),
-        kind: HitKind::Click,
-        tooltip: Some("Full mode".to_string()),
-    });
+    push_segment_hits(
+        hits,
+        &header_model.layout_mode,
+        layout_x,
+        segment_y,
+        layout_w / 2.0,
+        segment_h,
+    );
     hits.push(HitRegion {
         rect: (more_x, more_y, btn_size, btn_size),
-        event: ToolbarEvent::ToggleDrawer(!ctx.snapshot.drawer_open),
+        event: single_control_event(&header_model.drawer_more),
         kind: HitKind::Click,
-        tooltip: Some("More options".to_string()),
+        tooltip: header_model.drawer_more.presentation.tooltip.as_string(),
     });
 
     // ========== ROW 3: Board chip ==========
@@ -111,8 +91,43 @@ pub(super) fn push_header_hits(ctx: &SideLayoutContext<'_>, hits: &mut Vec<HitRe
     let chip_y = row3_y + (row3_h - chip_h) / 2.0;
     hits.push(HitRegion {
         rect: (ctx.x, chip_y, ctx.content_width, chip_h),
-        event: ToolbarEvent::ToggleBoardPicker,
+        event: single_control_event(&header_model.board_chip),
         kind: HitKind::Click,
-        tooltip: Some("Boards".to_string()),
+        tooltip: header_model.board_chip.presentation.tooltip.as_string(),
     });
+}
+
+fn single_control_event(control: &ToolbarControl) -> ToolbarEvent {
+    let ToolbarControlKind::Single(single) = &control.kind else {
+        return ToolbarEvent::CloseSideToolbar;
+    };
+    single.activation.compatibility_event()
+}
+
+fn segmented_control(control: &ToolbarControl) -> Option<&ToolbarSegmentedControl> {
+    match &control.kind {
+        ToolbarControlKind::Segmented(segmented) => Some(segmented),
+        ToolbarControlKind::Single(_) => None,
+    }
+}
+
+fn push_segment_hits(
+    hits: &mut Vec<HitRegion>,
+    control: &ToolbarControl,
+    x: f64,
+    y: f64,
+    segment_w: f64,
+    segment_h: f64,
+) {
+    let Some(segmented) = segmented_control(control) else {
+        return;
+    };
+    for (index, segment) in segmented.segments().iter().enumerate() {
+        hits.push(HitRegion {
+            rect: (x + segment_w * index as f64, y, segment_w, segment_h),
+            event: segment.activation.compatibility_event(),
+            kind: HitKind::Click,
+            tooltip: segment.tooltip.as_string(),
+        });
+    }
 }

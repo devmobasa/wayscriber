@@ -11,6 +11,7 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::Action;
 use crate::input::EraserMode;
 use crate::toolbar_icons;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 use crate::ui::toolbar::{ToolContext, ToolbarEvent};
 use crate::ui_text::UiTextStyle;
 
@@ -50,7 +51,9 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     let thickness_slider_row_y = *y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
     let track_h = ToolbarLayoutSpec::SIDE_TRACK_HEIGHT;
     let knob_r = ToolbarLayoutSpec::SIDE_TRACK_KNOB_RADIUS;
-    let (min_thick, max_thick, nudge_step) = (1.0, 50.0, 1.0);
+    let thickness_spec = ToolbarSliderSpec::THICKNESS;
+    let (min_thick, max_thick) = (thickness_spec.min, thickness_spec.max);
+    let nudge_step = thickness_spec.step.unwrap_or(1.0);
 
     let minus_x = x;
     let minus_hover = hover

@@ -2,7 +2,8 @@ use super::super::events::HitKind;
 use super::*;
 use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
-use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+use crate::input::{ClickHighlightSettings, EraserMode, InputState, ToolbarDrawerTab};
+use crate::ui::toolbar::model::{ToolbarActivation, ToolbarSettingsModel, ToolbarSliderSpec};
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
 fn create_test_input_state() -> InputState {
@@ -52,6 +53,14 @@ fn create_test_input_state() -> InputState {
 
 fn snapshot_from_state(state: &InputState) -> ToolbarSnapshot {
     ToolbarSnapshot::from_input_with_bindings(state, ToolbarBindingHints::default())
+}
+
+fn event_name(event: &ToolbarEvent) -> String {
+    format!("{event:?}")
+}
+
+fn activation_event_name(activation: &ToolbarActivation) -> String {
+    event_name(&activation.compatibility_event())
 }
 
 #[test]
@@ -160,6 +169,116 @@ fn build_side_hits_color_picker_height_tracks_palette_mode() {
         }
     });
     assert_eq!(picker_height, Some(54.0));
+}
+
+#[test]
+fn side_header_static_hits_match_render_time_header_hits() {
+    let mut state = create_test_input_state();
+    state.toolbar_drawer_open = true;
+    let snapshot = snapshot_from_state(&state);
+    let (w, h) = side_size(&snapshot);
+
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let mut render_hits = Vec::new();
+    crate::backend::wayland::toolbar::render_side_palette(
+        &ctx,
+        w as f64,
+        h as f64,
+        &snapshot,
+        &mut render_hits,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let mut static_hits = Vec::new();
+    build_side_hits(w as f64, h as f64, &snapshot, &mut static_hits);
+
+    let header_len = 9;
+    let render_header: Vec<_> = render_hits
+        .iter()
+        .take(header_len)
+        .map(|hit| (event_name(&hit.event), format!("{:?}", hit.kind)))
+        .collect();
+    let static_header: Vec<_> = static_hits
+        .iter()
+        .take(header_len)
+        .map(|hit| (event_name(&hit.event), format!("{:?}", hit.kind)))
+        .collect();
+
+    assert_eq!(static_header, render_header);
+    assert_eq!(render_header[0].1, format!("{:?}", HitKind::DragMoveSide));
+    assert!(
+        render_header
+            .iter()
+            .any(|(event, _)| event == "ToggleBoardPicker")
+    );
+}
+
+#[test]
+fn side_settings_static_hits_include_model_controls() {
+    let mut state = create_test_input_state();
+    state.toolbar_drawer_open = true;
+    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    state.show_settings_section = true;
+    state.toolbar_layout_mode = crate::config::ToolbarLayoutMode::Regular;
+    let snapshot = snapshot_from_state(&state);
+    let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings model");
+    let expected: Vec<_> = model
+        .toggles()
+        .iter()
+        .map(|toggle| activation_event_name(&toggle.activation))
+        .chain(
+            model
+                .buttons()
+                .iter()
+                .map(|button| event_name(&button.event)),
+        )
+        .collect();
+
+    let (w, h) = side_size(&snapshot);
+    let mut hits = Vec::new();
+    build_side_hits(w as f64, h as f64, &snapshot, &mut hits);
+    let hit_events: Vec<_> = hits.iter().map(|hit| event_name(&hit.event)).collect();
+
+    for expected_event in &expected {
+        assert!(
+            hit_events.contains(expected_event),
+            "missing settings hit {expected_event}"
+        );
+    }
+    assert!(hit_events.contains(&"ToggleContextAwareUi(false)".to_string()));
+}
+
+#[test]
+fn font_size_nudge_hits_use_slider_spec_step() {
+    let mut state = create_test_input_state();
+    state.show_text_controls = true;
+    state.current_font_size = 32.0;
+    let snapshot = snapshot_from_state(&state);
+    let (w, h) = side_size(&snapshot);
+
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let mut hits = Vec::new();
+    crate::backend::wayland::toolbar::render_side_palette(
+        &ctx, w as f64, h as f64, &snapshot, &mut hits, None, None,
+    )
+    .unwrap();
+
+    let step = ToolbarSliderSpec::FONT_SIZE.step.expect("font size step");
+    let expected_minus = snapshot.font_size - step;
+    let expected_plus = snapshot.font_size + step;
+
+    assert!(hits.iter().any(|hit| matches!(
+        hit.event,
+        ToolbarEvent::SetFontSize(value) if (value - expected_minus).abs() < f64::EPSILON
+    )));
+    assert!(hits.iter().any(|hit| matches!(
+        hit.event,
+        ToolbarEvent::SetFontSize(value) if (value - expected_plus).abs() < f64::EPSILON
+    )));
 }
 
 #[test]

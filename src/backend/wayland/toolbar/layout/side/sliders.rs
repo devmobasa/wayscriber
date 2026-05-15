@@ -1,4 +1,5 @@
 use super::{HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec};
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 pub(super) fn push_thickness_hits(
     ctx: &SideLayoutContext<'_>,
@@ -11,8 +12,8 @@ pub(super) fn push_thickness_hits(
         rect: (ctx.x, slider_row_y, ctx.content_width, slider_hit_h),
         event: ToolbarEvent::SetThickness(ctx.snapshot.thickness),
         kind: HitKind::DragSetThickness {
-            min: 1.0,
-            max: 50.0,
+            min: ToolbarSliderSpec::THICKNESS.min,
+            max: ToolbarSliderSpec::THICKNESS.max,
         },
         tooltip: None,
     });
@@ -23,7 +24,7 @@ pub(super) fn push_thickness_hits(
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
         ),
-        event: ToolbarEvent::NudgeThickness(-1.0),
+        event: ToolbarEvent::NudgeThickness(-ToolbarSliderSpec::THICKNESS.step.unwrap_or(1.0)),
         kind: HitKind::Click,
         tooltip: None,
     });
@@ -34,7 +35,7 @@ pub(super) fn push_thickness_hits(
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
             ToolbarLayoutSpec::SIDE_NUDGE_SIZE,
         ),
-        event: ToolbarEvent::NudgeThickness(1.0),
+        event: ToolbarEvent::NudgeThickness(ToolbarSliderSpec::THICKNESS.step.unwrap_or(1.0)),
         kind: HitKind::Click,
         tooltip: None,
     });

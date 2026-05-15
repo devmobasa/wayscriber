@@ -2,9 +2,12 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::config::ToolbarLayoutMode;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model::{
+    SideHeaderModel, ToolbarBoardChipPresentation, ToolbarControl, ToolbarControlKind,
+    ToolbarPresentationPayload, ToolbarSegmentedControl,
+};
 use crate::ui_text::{UiTextStyle, text_layout};
 
 use super::super::widgets::constants::{
@@ -27,6 +30,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         weight: cairo::FontWeight::Bold,
         size: FONT_SIZE_LABEL,
     };
+    let header_model = SideHeaderModel::from_snapshot(snapshot);
 
     let band_y = ToolbarLayoutSpec::SIDE_TOP_PADDING - 2.0;
     let band_h = ToolbarLayoutSpec::SIDE_HEADER_ROW1_HEIGHT
@@ -55,9 +59,9 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     draw_drag_handle(ctx, x, drag_y, drag_size, drag_size, drag_hover);
     hits.push(HitRegion {
         rect: (x, drag_y, drag_size, drag_size),
-        event: ToolbarEvent::MoveSideToolbar { x: 0.0, y: 0.0 },
+        event: single_control_event(&header_model.drag),
         kind: HitKind::DragMoveSide,
-        tooltip: Some("Drag toolbar".to_string()),
+        tooltip: header_model.drag.presentation.tooltip.as_string(),
     });
 
     // Utility buttons on right: [Pin] [Close]
@@ -72,7 +76,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let center_end = pin_x - 8.0;
     let icons_x = center_start + (center_end - center_start - icons_w) / 2.0;
     let icons_y = row1_y + (row1_h - segment_h) / 2.0;
-    let icons_active = if snapshot.use_icons { 0 } else { 1 };
+    let icons_active = active_segment_index(&header_model.icon_mode).unwrap_or(0);
     let icons_hover = hover.and_then(|(hx, hy)| {
         if point_in_rect(hx, hy, icons_x, icons_y, icons_w, segment_h) {
             Some(if hx < icons_x + icons_w / 2.0 { 0 } else { 1 })
@@ -86,7 +90,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         icons_y,
         icons_w,
         segment_h,
-        ("Ico", "Txt"),
+        segmented_labels(&header_model.icon_mode),
         icons_active,
         icons_hover,
         label_style,
@@ -99,13 +103,9 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     draw_pin_button(ctx, pin_x, btn_y, btn_size, snapshot.side_pinned, pin_hover);
     hits.push(HitRegion {
         rect: (pin_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
+        event: single_control_event(&header_model.pin),
         kind: HitKind::Click,
-        tooltip: Some(if snapshot.side_pinned {
-            "Pinned (click to unpin)".to_string()
-        } else {
-            "Pin toolbar".to_string()
-        }),
+        tooltip: header_model.pin.presentation.tooltip.as_string(),
     });
 
     // Close button
@@ -115,24 +115,20 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     draw_close_button(ctx, close_x, btn_y, btn_size, close_hover);
     hits.push(HitRegion {
         rect: (close_x, btn_y, btn_size, btn_size),
-        event: ToolbarEvent::CloseSideToolbar,
+        event: single_control_event(&header_model.close),
         kind: HitKind::Click,
-        tooltip: Some("Close".to_string()),
+        tooltip: header_model.close.presentation.tooltip.as_string(),
     });
 
     let icons_half_w = icons_w / 2.0;
-    hits.push(HitRegion {
-        rect: (icons_x, icons_y, icons_half_w, segment_h),
-        event: ToolbarEvent::ToggleIconMode(true),
-        kind: HitKind::Click,
-        tooltip: Some("Icons mode".to_string()),
-    });
-    hits.push(HitRegion {
-        rect: (icons_x + icons_half_w, icons_y, icons_half_w, segment_h),
-        event: ToolbarEvent::ToggleIconMode(false),
-        kind: HitKind::Click,
-        tooltip: Some("Text mode".to_string()),
-    });
+    push_segment_hits(
+        hits,
+        &header_model.icon_mode,
+        icons_x,
+        icons_y,
+        icons_half_w,
+        segment_h,
+    );
 
     // ========== ROW 2: Simple/Full + More ==========
     let row2_y = spec.side_header_row2_y();
@@ -144,10 +140,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     // Segmented control: [Simple | Full]
     let layout_w = ToolbarLayoutSpec::SIDE_MODE_LAYOUT_WIDTH;
     let layout_x = x;
-    let layout_active = match snapshot.layout_mode {
-        ToolbarLayoutMode::Simple => 0,
-        _ => 1,
-    };
+    let layout_active = active_segment_index(&header_model.layout_mode).unwrap_or(0);
     let layout_hover = hover.and_then(|(hx, hy)| {
         if point_in_rect(hx, hy, layout_x, segment_y, layout_w, segment_h) {
             Some(if hx < layout_x + layout_w / 2.0 { 0 } else { 1 })
@@ -161,7 +154,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         segment_y,
         layout_w,
         segment_h,
-        ("Simple", "Full"),
+        segmented_labels(&header_model.layout_mode),
         layout_active,
         layout_hover,
         label_style,
@@ -178,7 +171,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         more_y,
         btn_size,
         btn_size,
-        snapshot.drawer_open,
+        header_model.drawer_more.active,
         more_hover,
     );
     set_icon_color(ctx, more_hover);
@@ -186,7 +179,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let icon_x = more_x + (btn_size - icon_size) / 2.0;
     let icon_y = more_y + (btn_size - icon_size) / 2.0;
     toolbar_icons::draw_icon_more(ctx, icon_x, icon_y, icon_size);
-    if snapshot.show_drawer_hint {
+    if header_model.show_drawer_hint {
         let dot_radius = 4.0;
         let dot_x = more_x + btn_size - dot_radius - 2.0;
         let dot_y = more_y + dot_radius + 2.0;
@@ -196,28 +189,19 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     }
 
     let half_w = layout_w / 2.0;
-    let full_mode = if snapshot.layout_mode == ToolbarLayoutMode::Advanced {
-        ToolbarLayoutMode::Advanced
-    } else {
-        ToolbarLayoutMode::Regular
-    };
-    hits.push(HitRegion {
-        rect: (layout_x, segment_y, half_w, segment_h),
-        event: ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Simple),
-        kind: HitKind::Click,
-        tooltip: Some("Simple mode".to_string()),
-    });
-    hits.push(HitRegion {
-        rect: (layout_x + half_w, segment_y, half_w, segment_h),
-        event: ToolbarEvent::SetToolbarLayoutMode(full_mode),
-        kind: HitKind::Click,
-        tooltip: Some("Full mode".to_string()),
-    });
+    push_segment_hits(
+        hits,
+        &header_model.layout_mode,
+        layout_x,
+        segment_y,
+        half_w,
+        segment_h,
+    );
     hits.push(HitRegion {
         rect: (more_x, more_y, btn_size, btn_size),
-        event: ToolbarEvent::ToggleDrawer(!snapshot.drawer_open),
+        event: single_control_event(&header_model.drawer_more),
         kind: HitKind::Click,
-        tooltip: Some("More options".to_string()),
+        tooltip: header_model.drawer_more.presentation.tooltip.as_string(),
     });
 
     // ========== ROW 3: Board chip ==========
@@ -232,6 +216,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let chip_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, chip_x, chip_y, chip_w, chip_h))
         .unwrap_or(false);
+    let board_chip = board_chip_payload(&header_model);
     let chip_bg = if chip_hover { 0.28 } else { 0.22 };
     draw_round_rect(ctx, chip_x, chip_y, chip_w, chip_h, 6.0);
     ctx.set_source_rgba(chip_bg, chip_bg + 0.02, chip_bg + 0.06, 0.95);
@@ -246,7 +231,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let dot_size = ToolbarLayoutSpec::SIDE_BOARD_COLOR_DOT_SIZE;
     let dot_x = chip_x + 6.0;
     let dot_y = chip_y + (chip_h - dot_size) * 0.5;
-    if let Some(color) = snapshot.board_color {
+    if let Some(color) = board_chip.and_then(|chip| chip.color) {
         draw_swatch(ctx, dot_x, dot_y, dot_size, color, false);
     } else {
         ctx.set_source_rgba(0.62, 0.68, 0.76, 0.7);
@@ -271,8 +256,10 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     // Board label (truncated)
     let label_x = icon_x + icon_size + 5.0;
     let label_w = chevron_x - label_x - 4.0;
-    let label = board_chip_label(snapshot);
-    let display_label = ellipsize_to_width(ctx, label_style, &label, label_w);
+    let label = board_chip
+        .map(|chip| chip.label.as_str())
+        .unwrap_or(header_model.board_chip.presentation.label.as_ref());
+    let display_label = ellipsize_to_width(ctx, label_style, label, label_w);
     draw_label_left(
         ctx,
         label_style,
@@ -285,9 +272,9 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
 
     hits.push(HitRegion {
         rect: (chip_x, chip_y, chip_w, chip_h),
-        event: ToolbarEvent::ToggleBoardPicker,
+        event: single_control_event(&header_model.board_chip),
         kind: HitKind::Click,
-        tooltip: Some("Board settings".to_string()),
+        tooltip: header_model.board_chip.presentation.tooltip.as_string(),
     });
 
     spec.side_content_start_y()
@@ -307,26 +294,71 @@ fn draw_chevron_right(ctx: &cairo::Context, x: f64, y: f64, size: f64, hover: bo
     let _ = ctx.stroke();
 }
 
-fn board_chip_label(snapshot: &crate::ui::toolbar::ToolbarSnapshot) -> String {
-    let board_index = snapshot.board_index + 1;
-    let board_count = snapshot.board_count.max(1);
-    let name = snapshot.board_name.trim();
-    let board_label = if board_count > 1 {
-        if name.is_empty() {
-            format!("Boards · B{}/{}", board_index, board_count)
-        } else {
-            format!("Boards · B{}/{} {}", board_index, board_count, name)
-        }
-    } else if name.is_empty() {
-        "Boards".to_string()
-    } else {
-        format!("Boards · {}", name)
+fn single_control_event(control: &ToolbarControl) -> ToolbarEvent {
+    let ToolbarControlKind::Single(single) = &control.kind else {
+        return ToolbarEvent::CloseSideToolbar;
     };
-    let pages = snapshot.page_count.max(1);
-    if pages > 1 {
-        format!("{board_label} · {pages}p")
-    } else {
-        board_label
+    single.activation.compatibility_event()
+}
+
+fn segmented_labels(control: &ToolbarControl) -> (&str, &str) {
+    let Some(segmented) = segmented_control(control) else {
+        return ("", "");
+    };
+    let segments = segmented.segments();
+    (
+        segments
+            .first()
+            .map(|segment| segment.label.as_ref())
+            .unwrap_or(""),
+        segments
+            .get(1)
+            .map(|segment| segment.label.as_ref())
+            .unwrap_or(""),
+    )
+}
+
+fn active_segment_index(control: &ToolbarControl) -> Option<usize> {
+    let segmented = segmented_control(control)?;
+    let active = segmented.active_segment()?;
+    segmented
+        .segments()
+        .iter()
+        .position(|segment| segment.id == active)
+}
+
+fn segmented_control(control: &ToolbarControl) -> Option<&ToolbarSegmentedControl> {
+    match &control.kind {
+        ToolbarControlKind::Segmented(segmented) => Some(segmented),
+        ToolbarControlKind::Single(_) => None,
+    }
+}
+
+fn push_segment_hits(
+    hits: &mut Vec<HitRegion>,
+    control: &ToolbarControl,
+    x: f64,
+    y: f64,
+    segment_w: f64,
+    segment_h: f64,
+) {
+    let Some(segmented) = segmented_control(control) else {
+        return;
+    };
+    for (index, segment) in segmented.segments().iter().enumerate() {
+        hits.push(HitRegion {
+            rect: (x + segment_w * index as f64, y, segment_w, segment_h),
+            event: segment.activation.compatibility_event(),
+            kind: HitKind::Click,
+            tooltip: segment.tooltip.as_string(),
+        });
+    }
+}
+
+fn board_chip_payload(model: &SideHeaderModel) -> Option<&ToolbarBoardChipPresentation> {
+    match &model.board_chip.presentation.payload {
+        ToolbarPresentationPayload::BoardChip(chip) => Some(chip),
+        ToolbarPresentationPayload::None => None,
     }
 }
 

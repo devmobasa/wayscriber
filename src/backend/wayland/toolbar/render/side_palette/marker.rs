@@ -8,6 +8,7 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 use crate::ui::toolbar::{ToolContext, ToolbarEvent};
 use crate::ui_text::UiTextStyle;
 
@@ -69,9 +70,11 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         marker_slider_row_y + (btn_size - nudge_icon_size) / 2.0,
         nudge_icon_size,
     );
+    let opacity_spec = ToolbarSliderSpec::MARKER_OPACITY;
+    let opacity_step = opacity_spec.step.unwrap_or(0.05);
     hits.push(HitRegion {
         rect: (minus_x, marker_slider_row_y, btn_size, btn_size),
-        event: ToolbarEvent::NudgeMarkerOpacity(-0.05),
+        event: ToolbarEvent::NudgeMarkerOpacity(-opacity_step),
         kind: HitKind::Click,
         tooltip: Some("Decrease opacity".to_string()),
     });
@@ -98,7 +101,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     );
     hits.push(HitRegion {
         rect: (plus_x, marker_slider_row_y, btn_size, btn_size),
-        event: ToolbarEvent::NudgeMarkerOpacity(0.05),
+        event: ToolbarEvent::NudgeMarkerOpacity(opacity_step),
         kind: HitKind::Click,
         tooltip: Some("Increase opacity".to_string()),
     });
@@ -106,8 +109,8 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     let track_x = minus_x + btn_size + SPACING_STD;
     let track_w = plus_x - track_x - SPACING_STD;
     let marker_track_y = marker_slider_row_y + (btn_size - track_h) / 2.0;
-    let min_opacity = 0.05;
-    let max_opacity = 0.9;
+    let min_opacity = opacity_spec.min;
+    let max_opacity = opacity_spec.max;
     let t = ((snapshot.marker_opacity - min_opacity) / (max_opacity - min_opacity)).clamp(0.0, 1.0);
     let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
 

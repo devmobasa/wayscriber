@@ -1,6 +1,6 @@
 use crate::input::ToolbarDrawerTab;
 
-use super::{ToolbarEvent, ToolbarSnapshot};
+use super::super::{ToolbarEvent, ToolbarSnapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarCommandGroupKind {
@@ -172,74 +172,4 @@ pub(crate) fn toolbar_boards_model(snapshot: &ToolbarSnapshot) -> Option<Toolbar
 
 fn drawer_view_visible(snapshot: &ToolbarSnapshot) -> bool {
     snapshot.drawer_open && snapshot.drawer_tab == ToolbarDrawerTab::View
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::input::state::test_support::make_test_input_state;
-    use crate::ui::toolbar::{ToolbarBindingHints, ToolbarSnapshot};
-
-    fn snapshot() -> ToolbarSnapshot {
-        let mut state = make_test_input_state();
-        state.toolbar_drawer_open = true;
-        state.toolbar_drawer_tab = ToolbarDrawerTab::View;
-        state.show_actions_section = true;
-        state.show_actions_advanced = false;
-        state.show_zoom_actions = true;
-        state.show_pages_section = true;
-        state.show_boards_section = true;
-        ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default())
-    }
-
-    #[test]
-    fn actions_model_keeps_advanced_actions_in_view_drawer() {
-        let mut snapshot = snapshot();
-        snapshot.show_actions_section = false;
-        snapshot.show_actions_advanced = true;
-        snapshot.delay_actions_enabled = true;
-
-        let model = ToolbarActionsModel::from_snapshot(&snapshot).expect("actions model");
-        assert_eq!(model.groups().len(), 2);
-        assert_eq!(model.groups()[0].kind, ToolbarCommandGroupKind::ViewActions);
-        assert_eq!(
-            model.groups()[1].kind,
-            ToolbarCommandGroupKind::AdvancedActions
-        );
-        assert_eq!(model.groups()[1].buttons.len(), 5);
-
-        snapshot.drawer_open = false;
-        assert!(ToolbarActionsModel::from_snapshot(&snapshot).is_none());
-    }
-
-    #[test]
-    fn page_and_board_models_report_disabled_navigation() {
-        let mut snapshot = snapshot();
-        snapshot.page_count = 2;
-        snapshot.board_count = 1;
-        snapshot.is_transparent = true;
-
-        let pages = toolbar_pages_model(&snapshot).expect("pages model");
-        assert!(!pages.buttons[0].enabled);
-        assert!(pages.buttons[1].enabled);
-
-        let boards = toolbar_boards_model(&snapshot).expect("boards model");
-        assert!(!boards.buttons[0].enabled);
-        assert!(!boards.buttons[1].enabled);
-        assert!(!boards.buttons[3].enabled);
-    }
-
-    #[test]
-    fn dynamic_toolbar_labels_live_with_the_event_model() {
-        let mut snapshot = snapshot();
-        snapshot.frozen_active = true;
-        snapshot.zoom_locked = true;
-
-        let freeze = ToolbarButtonModel::new(ToolbarEvent::ToggleFreeze, true);
-        let zoom_lock = ToolbarButtonModel::new(ToolbarEvent::ToggleZoomLock, true);
-
-        assert_eq!(freeze.short_label(&snapshot, "Action"), "Unfreeze");
-        assert_eq!(zoom_lock.tooltip_label(&snapshot, "Action"), "Unlock Zoom");
-        assert_eq!(zoom_lock.binding_hint(&snapshot), None);
-    }
 }

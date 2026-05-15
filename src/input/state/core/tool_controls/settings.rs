@@ -7,6 +7,7 @@ use crate::input::{
     modifiers::DragToolBindings,
     tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 impl InputState {
     /// Returns the stored drawing color for a tool.
@@ -133,7 +134,8 @@ impl InputState {
 
     /// Sets the marker opacity multiplier (0.05-0.9). Returns true if changed.
     pub fn set_marker_opacity(&mut self, opacity: f64) -> bool {
-        let clamped = opacity.clamp(0.05, 0.9);
+        let spec = ToolbarSliderSpec::MARKER_OPACITY;
+        let clamped = opacity.clamp(spec.min, spec.max);
         if (clamped - self.marker_opacity).abs() < f64::EPSILON {
             return false;
         }
@@ -311,7 +313,8 @@ impl InputState {
     /// Sets the absolute font size (px), clamped to the same range as config validation.
     #[allow(dead_code)]
     pub fn set_font_size(&mut self, size: f64) -> bool {
-        let clamped = size.clamp(8.0, 72.0);
+        let spec = ToolbarSliderSpec::FONT_SIZE;
+        let clamped = size.clamp(spec.min, spec.max);
         if (clamped - self.current_font_size).abs() < f64::EPSILON {
             return false;
         }

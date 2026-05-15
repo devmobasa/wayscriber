@@ -2,6 +2,7 @@ use crate::backend::wayland::state::{color_log, debug_toolbar_color_logging_enab
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 #[derive(Clone, Debug)]
 pub struct HitRegion {
@@ -54,7 +55,8 @@ pub fn intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<(ToolbarIntent,
         }
         DragSetFontSize => {
             let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-            let value = 8.0 + t * (72.0 - 8.0);
+            let spec = ToolbarSliderSpec::FONT_SIZE;
+            let value = spec.min + t * (spec.max - spec.min);
             ToolbarEvent::SetFontSize(value)
         }
         PickColor { x: px, y: py, w, h } => {
@@ -121,7 +123,8 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
         }
         DragSetFontSize => {
             let t = ((x - hit.rect.0) / hit.rect.2).clamp(0.0, 1.0);
-            let value = 8.0 + t * (72.0 - 8.0);
+            let spec = ToolbarSliderSpec::FONT_SIZE;
+            let value = spec.min + t * (spec.max - spec.min);
             Some(ToolbarIntent(ToolbarEvent::SetFontSize(value)))
         }
         PickColor { x: px, y: py, w, h } => {
