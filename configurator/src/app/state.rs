@@ -33,6 +33,7 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) is_loading: bool,
     pub(crate) is_saving: bool,
     pub(crate) is_dirty: bool,
+    pub(crate) defaults_reset_pending: bool,
     pub(crate) config_path: Option<PathBuf>,
     pub(crate) config_mtime: Option<SystemTime>,
     pub(crate) last_backup_path: Option<PathBuf>,
@@ -51,6 +52,7 @@ pub(crate) enum StatusMessage {
     Info(String),
     Success(String),
     Error(String),
+    Warning(String),
 }
 
 impl StatusMessage {
@@ -68,6 +70,10 @@ impl StatusMessage {
 
     pub(crate) fn error(message: impl Into<String>) -> Self {
         StatusMessage::Error(message.into())
+    }
+
+    pub(crate) fn warning(message: impl Into<String>) -> Self {
+        StatusMessage::Warning(message.into())
     }
 }
 
@@ -100,6 +106,7 @@ impl ConfiguratorApp {
             is_loading: true,
             is_saving: false,
             is_dirty: false,
+            defaults_reset_pending: false,
             config_path,
             config_mtime: None,
             last_backup_path: None,
@@ -139,6 +146,7 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn refresh_dirty_flag(&mut self) {
+        self.defaults_reset_pending = false;
         self.is_dirty = self.draft != self.baseline;
     }
 }

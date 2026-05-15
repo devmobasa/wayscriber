@@ -30,6 +30,7 @@ impl ConfiguratorApp {
                 self.sync_all_color_picker_hex();
                 self.config_mtime = load_config_mtime(&self.config_path);
                 self.is_dirty = false;
+                self.defaults_reset_pending = false;
                 self.status = StatusMessage::success("Configuration loaded from disk.");
             }
             Err(err) => {
@@ -44,6 +45,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_reload_requested(&mut self) -> Task<Message> {
         if !self.is_loading && !self.is_saving {
             self.is_loading = true;
+            self.defaults_reset_pending = false;
             self.status = StatusMessage::info("Reloading configuration...");
             return Task::perform(load_config_from_disk(), Message::ConfigLoaded);
         }
@@ -51,8 +53,25 @@ impl ConfiguratorApp {
         Task::none()
     }
 
-    pub(super) fn handle_reset_to_defaults(&mut self) -> Task<Message> {
-        if !self.is_loading {
+    pub(super) fn handle_reset_to_defaults_requested(&mut self) -> Task<Message> {
+        if !self.is_loading && !self.is_saving {
+            self.defaults_reset_pending = true;
+            self.status = StatusMessage::warning(
+                "Defaults will replace the current draft with built-in defaults. Press Confirm Defaults to continue.",
+            );
+        }
+
+        Task::none()
+    }
+
+    pub(super) fn handle_reset_to_defaults_canceled(&mut self) -> Task<Message> {
+        self.defaults_reset_pending = false;
+        self.status = StatusMessage::idle();
+        Task::none()
+    }
+
+    pub(super) fn handle_reset_to_defaults_confirmed(&mut self) -> Task<Message> {
+        if self.defaults_reset_pending && !self.is_loading && !self.is_saving {
             self.draft = self.defaults.clone();
             self.override_mode = self.draft.ui_toolbar_layout_mode;
             self.boards_collapsed = vec![false; self.draft.boards.items.len()];
@@ -60,6 +79,7 @@ impl ConfiguratorApp {
             self.color_picker_advanced.clear();
             self.color_picker_hex.clear();
             self.sync_all_color_picker_hex();
+            self.defaults_reset_pending = false;
             self.status = StatusMessage::info("Loaded default configuration (not saved).");
             self.refresh_dirty_flag();
         }
@@ -71,6 +91,7 @@ impl ConfiguratorApp {
         if self.is_saving {
             return Task::none();
         }
+        self.defaults_reset_pending = false;
         if self.config_changed_on_disk() {
             self.status =
                 StatusMessage::error("Configuration changed on disk. Reload before saving.");
@@ -117,6 +138,7 @@ impl ConfiguratorApp {
                 self.color_picker_hex.clear();
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
+                self.defaults_reset_pending = false;
                 let mut msg = "Configuration saved successfully.".to_string();
                 if let Some(path) = backup {
                     msg.push_str(&format!("\nBackup created at {}", path.display()));
@@ -139,13 +161,14 @@ mod tests {
     use std::time::SystemTime;
 
     use super::*;
-    use crate::models::ColorPickerId;
+    use crate::models::{ColorPickerId, ToggleField};
 
     fn status_contains(status: &StatusMessage, needle: &str) -> bool {
         match status {
             StatusMessage::Info(text)
             | StatusMessage::Success(text)
-            | StatusMessage::Error(text) => text.contains(needle),
+            | StatusMessage::Error(text)
+            | StatusMessage::Warning(text) => text.contains(needle),
             StatusMessage::Idle => false,
         }
     }
@@ -216,6 +239,44 @@ mod tests {
 
         assert!(app.is_saving);
         assert!(status_contains(&app.status, "Saving configuration..."));
+    }
+
+    #[test]
+    fn reset_to_defaults_requires_confirmation() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+        app.draft.capture_enabled = !app.defaults.capture_enabled;
+        let changed_draft = app.draft.clone();
+
+        let _ = app.handle_reset_to_defaults_requested();
+
+        assert!(app.defaults_reset_pending);
+        assert_eq!(app.draft, changed_draft);
+        assert!(status_contains(&app.status, "Confirm Defaults"));
+
+        let _ = app.handle_reset_to_defaults_confirmed();
+
+        assert!(!app.defaults_reset_pending);
+        assert_eq!(app.draft, app.defaults);
+        assert!(status_contains(&app.status, "Loaded default configuration"));
+    }
+
+    #[test]
+    fn reset_to_defaults_confirmation_is_canceled_by_draft_edit() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+
+        let _ = app.handle_reset_to_defaults_requested();
+        let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
+        let edited_draft = app.draft.clone();
+
+        assert!(!app.defaults_reset_pending);
+        assert!(matches!(app.status, StatusMessage::Idle));
+
+        let _ = app.handle_reset_to_defaults_confirmed();
+
+        assert_eq!(app.draft, edited_draft);
+        assert_ne!(app.draft, app.defaults);
     }
 
     #[test]
