@@ -3,6 +3,7 @@ use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 use wayland_protocols::wp::relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1;
 
 use super::super::state::WaylandState;
+use super::super::state::drag_log;
 
 impl RelativePointerHandler for WaylandState {
     fn relative_pointer_motion(
@@ -14,11 +15,11 @@ impl RelativePointerHandler for WaylandState {
         event: RelativeMotionEvent,
     ) {
         if !self.pointer_lock_active() || !self.is_move_dragging() {
-            log::info!(
+            drag_log(format!(
                 "relative motion ignored: lock_active={}, drag_active={}",
                 self.pointer_lock_active(),
                 self.is_move_dragging()
-            );
+            ));
             return;
         }
 
@@ -26,7 +27,7 @@ impl RelativePointerHandler for WaylandState {
             return;
         };
 
-        log::info!(
+        drag_log(format!(
             "relative drag: kind={:?}, delta=({:.3}, {:.3}), utime={}, offsets=({}, {})/({}, {})",
             kind,
             event.delta.0,
@@ -36,7 +37,7 @@ impl RelativePointerHandler for WaylandState {
             self.toolbar_top_offset_y(),
             self.toolbar_side_offset_x(),
             self.toolbar_side_offset()
-        );
+        ));
 
         self.apply_toolbar_relative_delta(kind, event.delta);
     }

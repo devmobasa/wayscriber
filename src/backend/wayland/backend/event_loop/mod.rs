@@ -87,6 +87,7 @@ pub(super) fn run_event_loop(
             || (vsync_enabled && frame_callback_pending);
         let now = Instant::now();
         let animation_timeout = state.ui_animation_timeout(now);
+        let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
         let focus_exit_timeout = state.focus_exit_timeout(now);
         let clipboard_timeout = (state.clipboard_paste_rx.is_some()
@@ -127,6 +128,7 @@ pub(super) fn run_event_loop(
             timeout,
             tray_action_flag.as_ref().map(|_| TRAY_ACTION_POLL_TIMEOUT),
         );
+        let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         if let Err(e) = dispatch::dispatch_events(event_queue, state, capture_active, timeout) {
             warn!("Event queue error: {}", e);
             loop_error = Some(e);
@@ -181,6 +183,10 @@ pub(super) fn run_event_loop(
         }
         // Adjust keyboard interactivity if toolbar visibility changed.
         state.sync_toolbar_visibility(qh);
+
+        if state.finish_toolbar_drag_handoff_if_due(Instant::now()) {
+            let _ = conn.flush();
+        }
 
         // Advance any delayed history playback (undo/redo with delay).
         if state

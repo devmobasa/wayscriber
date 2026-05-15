@@ -121,11 +121,12 @@ impl WaylandState {
             return (false, false);
         }
         let _ = self.clamp_toolbar_offsets(snapshot);
-        // During inline drag preview we keep the layer-shell toolbars suppressed
-        // and only move the inline-rendered preview. Applying layer-surface margins
-        // while receiving pointer motion in toolbar-local coordinates can drift.
-        if self.toolbar_drag_preview_active() {
-            drag_log("skip apply_toolbar_offsets: drag preview active");
+        // During local-coordinate preview drags, keep the layer-shell surface parked
+        // to avoid drift as the source surface moves under the pointer. Pointer-locked
+        // drags use relative deltas instead, so the suppressed real surface can track
+        // the preview and avoid a visible catch-up animation on release.
+        if self.toolbar_drag_preview_active() && !self.pointer_lock_active() {
+            drag_log("skip apply_toolbar_offsets: drag preview active without pointer lock");
             return (false, false);
         }
         if self.layer_shell.is_none() {
@@ -194,6 +195,12 @@ impl WaylandState {
         if side_changed {
             self.toolbar
                 .set_side_margins(side_margin_top, side_margin_left);
+        }
+        if (top_changed || side_changed)
+            && self.toolbar_drag_preview_active()
+            && self.pointer_lock_active()
+        {
+            self.request_toolbar_drag_flush();
         }
         (top_changed, side_changed)
     }

@@ -133,6 +133,18 @@ pub(in crate::backend::wayland) fn toolbar_drag_throttle_interval() -> Option<Du
     })
 }
 
+pub(in crate::backend::wayland) fn toolbar_drag_handoff_delay() -> Duration {
+    static VALUE: OnceLock<Duration> = OnceLock::new();
+    *VALUE.get_or_init(|| {
+        let raw =
+            std::env::var("WAYSCRIBER_TOOLBAR_DRAG_HANDOFF_MS").unwrap_or_else(|_| "250".into());
+        let Ok(ms) = raw.trim().parse::<u64>() else {
+            return Duration::from_millis(250);
+        };
+        Duration::from_millis(ms.min(500))
+    })
+}
+
 pub(in crate::backend::wayland) fn drag_log(message: impl AsRef<str>) {
     if debug_toolbar_drag_logging_enabled() {
         log::info!("{}", message.as_ref());

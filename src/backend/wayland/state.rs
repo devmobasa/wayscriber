@@ -256,7 +256,7 @@ impl WaylandState {
     const SIDE_MARGIN_BOTTOM: f64 = 24.0;
     const SIDE_BASE_MARGIN_LEFT: f64 = 24.0;
     const SIDE_MARGIN_RIGHT: f64 = 0.0;
-    const INLINE_TOP_Y: f64 = 16.0;
+    const INLINE_TOP_Y: f64 = Self::TOP_BASE_MARGIN_TOP;
     const INLINE_SIDE_X: f64 = 24.0;
     const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
     const INLINE_TOP_PUSH: f64 = 16.0;

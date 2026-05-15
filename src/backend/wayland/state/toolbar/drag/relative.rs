@@ -63,7 +63,7 @@ impl WaylandState {
                 let top_size = top_size(&snapshot);
                 let side_start_y = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
                 let top_bottom_y =
-                    Self::INLINE_TOP_Y + self.data.toolbar_top_offset_y + top_size.1 as f64;
+                    Self::TOP_BASE_MARGIN_TOP + self.data.toolbar_top_offset_y + top_size.1 as f64;
                 let base = Self::INLINE_SIDE_X;
                 let new_base_x = geometry::compute_inline_top_base_x(
                     base,
@@ -109,17 +109,7 @@ impl WaylandState {
                 self.data.toolbar_drag_pending_apply = false;
             }
             if self.toolbar_drag_preview_active() {
-                drag_log("disable inline drag preview (restore layer-shell toolbars)");
-                // Turn off preview first so apply_toolbar_offsets can update layer-surface margins.
-                self.set_toolbar_drag_preview_active(false);
-                // Apply final offsets to the (still suppressed) layer-shell toolbars.
-                let snapshot = self.toolbar_snapshot();
-                let _ = self.apply_toolbar_offsets(&snapshot);
-                self.toolbar.set_suppressed(&self.compositor_state, false);
-                self.clear_inline_toolbar_hits();
-                self.clear_inline_toolbar_hover();
-                self.input_state.dirty_tracker.mark_full();
-                self.input_state.needs_redraw = true;
+                self.begin_toolbar_drag_handoff();
             }
             self.save_toolbar_pin_config();
             self.unlock_pointer();
