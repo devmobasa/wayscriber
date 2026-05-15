@@ -1,7 +1,9 @@
 mod inputs;
 mod panel;
 
-pub(in crate::app::view) use inputs::{color_quad_picker, color_triplet_picker};
+pub(in crate::app::view) use inputs::{
+    color_quad_picker, color_rgb255_picker, color_triplet_picker,
+};
 
 use crate::models::ColorPickerId;
 

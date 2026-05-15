@@ -89,6 +89,7 @@ impl ConfiguratorApp {
     pub(crate) fn sync_all_color_picker_hex(&mut self) {
         self.sync_board_color_picker_hex();
         for id in [
+            ColorPickerId::DrawingColor,
             ColorPickerId::StatusBarBg,
             ColorPickerId::StatusBarText,
             ColorPickerId::HighlightFill,
@@ -104,6 +105,14 @@ impl ConfiguratorApp {
     fn apply_color_picker_value(&mut self, id: ColorPickerId, rgb: [f64; 3], alpha: Option<f64>) {
         let values = rgb.map(format_float);
         match id {
+            ColorPickerId::DrawingColor => {
+                let values = rgb.map(format_rgb255);
+                for (component, value) in values.iter().enumerate() {
+                    if let Some(slot) = self.draft.drawing_color.rgb.get_mut(component) {
+                        *slot = value.to_string();
+                    }
+                }
+            }
             ColorPickerId::BoardBackground(index) => {
                 if let Some(item) = self.draft.boards.items.get_mut(index) {
                     for (component, value) in values.iter().enumerate() {
@@ -158,6 +167,9 @@ impl ConfiguratorApp {
 
     fn current_color_for_id(&self, id: ColorPickerId) -> Option<([f64; 3], Option<f64>)> {
         match id {
+            ColorPickerId::DrawingColor => {
+                normalized_drawing_rgb(&self.draft.drawing_color.rgb).map(|rgb| (rgb, None))
+            }
             ColorPickerId::BoardBackground(index) => {
                 self.draft.boards.items.get(index).map(|item| {
                     (
@@ -219,5 +231,61 @@ impl ConfiguratorApp {
                 | ColorPickerId::HelpBorder
                 | ColorPickerId::HelpText
         )
+    }
+}
+
+fn normalized_drawing_rgb(values: &[String; 3]) -> Option<[f64; 3]> {
+    let mut rgb = [0.0; 3];
+    for (index, value) in values.iter().enumerate() {
+        let parsed = value.trim().parse::<f64>().ok()?;
+        if !(0.0..=255.0).contains(&parsed) {
+            return None;
+        }
+        rgb[index] = parsed / 255.0;
+    }
+    Some(rgb)
+}
+
+fn format_rgb255(value: f64) -> String {
+    let value = if value.is_nan() { 0.0 } else { value };
+    ((value.clamp(0.0, 1.0) * 255.0).round() as u8).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{ColorMode, ColorPickerValue};
+
+    #[test]
+    fn drawing_color_picker_writes_rgb255_components_and_hex() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        app.draft.drawing_color.mode = ColorMode::Rgb;
+
+        let _ = app.handle_color_picker_changed(
+            ColorPickerId::DrawingColor,
+            ColorPickerValue {
+                rgb: [0.0, 0.5, 1.0],
+                alpha: None,
+            },
+        );
+
+        assert_eq!(app.draft.drawing_color.rgb, ["0", "128", "255"]);
+        assert_eq!(
+            app.color_picker_hex
+                .get(&ColorPickerId::DrawingColor)
+                .map(String::as_str),
+            Some("#0080FF")
+        );
+    }
+
+    #[test]
+    fn drawing_color_picker_hex_writes_rgb255_components() {
+        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        app.draft.drawing_color.mode = ColorMode::Rgb;
+
+        let _ =
+            app.handle_color_picker_hex_changed(ColorPickerId::DrawingColor, "#00FF80".to_string());
+
+        assert_eq!(app.draft.drawing_color.rgb, ["0", "255", "128"]);
     }
 }

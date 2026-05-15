@@ -40,6 +40,8 @@ impl ConfiguratorApp {
     ) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.set_triplet(field, index, value);
+        let id = triplet_field_picker_id(field);
+        self.sync_color_picker_hex_for_id(id);
         self.refresh_dirty_flag();
         Task::none()
     }
@@ -75,6 +77,7 @@ impl ConfiguratorApp {
                 self.draft.drawing_color.update_named_from_current();
             }
         }
+        self.sync_color_picker_hex_for_id(ColorPickerId::DrawingColor);
         self.refresh_dirty_flag();
         Task::none()
     }
@@ -269,5 +272,11 @@ fn quad_field_picker_id(field: QuadField) -> Option<ColorPickerId> {
         QuadField::HelpBg => Some(ColorPickerId::HelpBg),
         QuadField::HelpBorder => Some(ColorPickerId::HelpBorder),
         QuadField::HelpText => Some(ColorPickerId::HelpText),
+    }
+}
+
+fn triplet_field_picker_id(field: TripletField) -> ColorPickerId {
+    match field {
+        TripletField::DrawingColorRgb => ColorPickerId::DrawingColor,
     }
 }
