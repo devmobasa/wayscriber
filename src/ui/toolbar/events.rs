@@ -1,4 +1,4 @@
-use crate::config::{Action, ToolbarLayoutMode, action_label, action_short_label};
+use crate::config::{Action, ToolbarLayoutMode};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
 
@@ -140,50 +140,16 @@ pub enum ToolbarEvent {
 
 impl ToolbarEvent {
     pub fn action(&self) -> Option<Action> {
-        match self {
-            Self::SelectTool(tool) => action_for_tool(*tool),
-            Self::EnterTextMode => Some(Action::EnterTextMode),
-            Self::EnterStickyNoteMode => Some(Action::EnterStickyNoteMode),
-            Self::ToggleFill(_) => Some(Action::ToggleFill),
-            Self::Undo => Some(Action::Undo),
-            Self::Redo => Some(Action::Redo),
-            Self::UndoAll => Some(Action::UndoAll),
-            Self::RedoAll => Some(Action::RedoAll),
-            Self::UndoAllDelayed => Some(Action::UndoAllDelayed),
-            Self::RedoAllDelayed => Some(Action::RedoAllDelayed),
-            Self::ClearCanvas => Some(Action::ClearCanvas),
-            Self::PagePrev => Some(Action::PagePrev),
-            Self::PageNext => Some(Action::PageNext),
-            Self::PageNew => Some(Action::PageNew),
-            Self::PageDuplicate => Some(Action::PageDuplicate),
-            Self::PageDelete => Some(Action::PageDelete),
-            Self::BoardPrev => Some(Action::BoardPrev),
-            Self::BoardNext => Some(Action::BoardNext),
-            Self::BoardNew => Some(Action::BoardNew),
-            Self::BoardDelete => Some(Action::BoardDelete),
-            Self::BoardDuplicate => Some(Action::BoardDuplicate),
-            Self::BoardRename | Self::ToggleBoardPicker => Some(Action::BoardPicker),
-            Self::ToggleAllHighlight(_) => Some(Action::ToggleHighlightTool),
-            Self::ToggleFreeze => Some(Action::ToggleFrozenMode),
-            Self::ZoomIn => Some(Action::ZoomIn),
-            Self::ZoomOut => Some(Action::ZoomOut),
-            Self::ResetZoom => Some(Action::ResetZoom),
-            Self::ResetStepMarkerCounter => Some(Action::ResetStepMarkerCounter),
-            Self::ToggleZoomLock => Some(Action::ToggleZoomLock),
-            Self::ApplyPreset(slot) => action_for_apply_preset(*slot),
-            Self::SavePreset(slot) => action_for_save_preset(*slot),
-            Self::ClearPreset(slot) => action_for_clear_preset(*slot),
-            Self::OpenConfigurator => Some(Action::OpenConfigurator),
-            _ => None,
-        }
+        super::model::action_for_event(self)
     }
 
     pub fn short_label(&self, snapshot: &ToolbarSnapshot, fallback: &'static str) -> &'static str {
-        match self {
-            Self::ToggleFreeze if snapshot.frozen_active => "Unfreeze",
-            Self::ToggleZoomLock if snapshot.zoom_locked => "Unlock Zoom",
-            _ => self.action().map(action_short_label).unwrap_or(fallback),
-        }
+        super::model::short_label_for_event(
+            self,
+            snapshot.frozen_active,
+            snapshot.zoom_locked,
+            fallback,
+        )
     }
 
     pub fn tooltip_label(
@@ -191,59 +157,27 @@ impl ToolbarEvent {
         snapshot: &ToolbarSnapshot,
         fallback: &'static str,
     ) -> &'static str {
-        match self {
-            Self::ToggleFreeze if snapshot.frozen_active => "Unfreeze",
-            Self::ToggleZoomLock if snapshot.zoom_locked => "Unlock Zoom",
-            _ => self.action().map(action_label).unwrap_or(fallback),
-        }
+        super::model::tooltip_label_for_event(
+            self,
+            snapshot.frozen_active,
+            snapshot.zoom_locked,
+            fallback,
+        )
     }
 }
 
 pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
-    match tool {
-        Tool::Select => Some(Action::SelectSelectionTool),
-        Tool::Pen => Some(Action::SelectPenTool),
-        Tool::Line => Some(Action::SelectLineTool),
-        Tool::Rect => Some(Action::SelectRectTool),
-        Tool::Ellipse => Some(Action::SelectEllipseTool),
-        Tool::Arrow => Some(Action::SelectArrowTool),
-        Tool::Blur => Some(Action::SelectBlurTool),
-        Tool::Marker => Some(Action::SelectMarkerTool),
-        Tool::StepMarker => Some(Action::SelectStepMarkerTool),
-        Tool::Highlight => Some(Action::SelectHighlightTool),
-        Tool::Eraser => Some(Action::SelectEraserTool),
-    }
+    super::model::action_for_tool(tool)
 }
 
 pub(crate) fn action_for_apply_preset(slot: usize) -> Option<Action> {
-    match slot {
-        1 => Some(Action::ApplyPreset1),
-        2 => Some(Action::ApplyPreset2),
-        3 => Some(Action::ApplyPreset3),
-        4 => Some(Action::ApplyPreset4),
-        5 => Some(Action::ApplyPreset5),
-        _ => None,
-    }
+    super::model::action_for_apply_preset(slot)
 }
 
 pub(crate) fn action_for_save_preset(slot: usize) -> Option<Action> {
-    match slot {
-        1 => Some(Action::SavePreset1),
-        2 => Some(Action::SavePreset2),
-        3 => Some(Action::SavePreset3),
-        4 => Some(Action::SavePreset4),
-        5 => Some(Action::SavePreset5),
-        _ => None,
-    }
+    super::model::action_for_save_preset(slot)
 }
 
 pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
-    match slot {
-        1 => Some(Action::ClearPreset1),
-        2 => Some(Action::ClearPreset2),
-        3 => Some(Action::ClearPreset3),
-        4 => Some(Action::ClearPreset4),
-        5 => Some(Action::ClearPreset5),
-        _ => None,
-    }
+    super::model::action_for_clear_preset(slot)
 }

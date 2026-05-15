@@ -35,13 +35,19 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
     ctx.set_source_rgba(1.0, 1.0, 1.0, bar_alpha);
     let bar_w = w * 0.55;
     let bar_h = SPACING_XS;
+    let bar_gap = SPACING_XS;
     let bar_x = x + (w - bar_w) / 2.0;
-    let mut bar_y = y + (h - 3.0 * bar_h) / 2.0;
+    let mut bar_y = drag_handle_bar_start_y(y, h, bar_h, bar_gap);
     for _ in 0..3 {
         draw_round_rect(ctx, bar_x, bar_y, bar_w, bar_h, 1.0);
         let _ = ctx.fill();
-        bar_y += bar_h + SPACING_XS;
+        bar_y += bar_h + bar_gap;
     }
+}
+
+fn drag_handle_bar_start_y(y: f64, h: f64, bar_h: f64, bar_gap: f64) -> f64 {
+    let stack_h = 3.0 * bar_h + 2.0 * bar_gap;
+    y + (h - stack_h) / 2.0
 }
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_close_button(
@@ -328,5 +334,24 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
         let tx = label_x + (segment_w - ext.width()) / 2.0 - ext.x_bearing();
         let ty = y + (h - ext.height()) / 2.0 - ext.y_bearing();
         layout.show_at_baseline(ctx, tx, ty);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drag_handle_bars_center_full_stack_in_button() {
+        let y = 12.0;
+        let h = 18.0;
+        let bar_h = 2.0;
+        let bar_gap = 2.0;
+
+        let start_y = drag_handle_bar_start_y(y, h, bar_h, bar_gap);
+        let stack_h = 3.0 * bar_h + 2.0 * bar_gap;
+
+        assert_eq!(start_y, 16.0);
+        assert_eq!(start_y + stack_h / 2.0, y + h / 2.0);
     }
 }

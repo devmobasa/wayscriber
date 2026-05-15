@@ -1,7 +1,5 @@
 use crate::input::InputState;
-
-const MIN_DELAY_S: f64 = 0.05;
-const MAX_DELAY_S: f64 = 5.0;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 impl InputState {
     pub(super) fn apply_toolbar_set_undo_delay(&mut self, delay_secs: f64) -> bool {
@@ -46,7 +44,8 @@ impl InputState {
 }
 
 fn clamp_delay_ms(delay_secs: f64) -> u64 {
-    (delay_secs.clamp(MIN_DELAY_S, MAX_DELAY_S) * 1000.0).round() as u64
+    let spec = ToolbarSliderSpec::DELAY_SECONDS;
+    (delay_secs.clamp(spec.min, spec.max) * 1000.0).round() as u64
 }
 
 #[cfg(test)]

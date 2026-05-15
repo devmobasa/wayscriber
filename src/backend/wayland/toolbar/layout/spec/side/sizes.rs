@@ -1,8 +1,8 @@
 use crate::backend::wayland::toolbar::rows::capped_grid_columns;
-use crate::config::ToolbarLayoutMode;
 use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model::{
-    ToolbarActionsModel, ToolbarCommandGroupKind, toolbar_boards_model, toolbar_pages_model,
+    ToolbarActionsModel, ToolbarCommandGroupKind, ToolbarSettingsModel, toolbar_boards_model,
+    toolbar_pages_model,
 };
 use crate::ui::toolbar::snapshot::ToolContext;
 
@@ -292,11 +292,11 @@ impl ToolbarLayoutSpec {
     ) -> f64 {
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
-        let mut toggle_count = 7; // Context UI + text controls + status bar + status badges + preset toasts
-        if snapshot.layout_mode != ToolbarLayoutMode::Simple {
-            toggle_count += 7; // presets, actions, zoom actions, advanced actions, pages, boards, step section
-        }
-        let rows = (toggle_count + 1) / 2;
+        let Some(settings) = ToolbarSettingsModel::from_snapshot(snapshot) else {
+            return 0.0;
+        };
+        let toggle_count = settings.toggles().len();
+        let rows = toggle_count.div_ceil(2);
         let toggle_rows_h = if rows > 0 {
             toggle_h * rows as f64 + toggle_gap * (rows as f64 - 1.0)
         } else {

@@ -1,13 +1,10 @@
 use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
-use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
-use crate::config::{Action, action_label, action_short_label};
-use crate::input::ToolbarDrawerTab;
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model::{ToolbarActivation, ToolbarIcon, ToolbarSettingsModel};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
@@ -37,12 +34,9 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         size: 12.0,
     };
 
-    if !snapshot.show_settings_section
-        || !snapshot.drawer_open
-        || snapshot.drawer_tab != ToolbarDrawerTab::App
-    {
+    let Some(settings_model) = ToolbarSettingsModel::from_snapshot(snapshot) else {
         return;
-    }
+    };
 
     let settings_card_h = layout.spec.side_settings_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, settings_card_h);
@@ -56,96 +50,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
 
     let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
     let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
-    let mut toggles: Vec<(&str, bool, ToolbarEvent, Option<&str>)> = vec![
-        (
-            "Context UI",
-            snapshot.context_aware_ui,
-            ToolbarEvent::ToggleContextAwareUi(!snapshot.context_aware_ui),
-            Some("Show/hide controls based on active tool."),
-        ),
-        (
-            "Text controls",
-            snapshot.show_text_controls,
-            ToolbarEvent::ToggleTextControls(!snapshot.show_text_controls),
-            Some("Text: font size/family."),
-        ),
-        (
-            "Status bar",
-            snapshot.show_status_bar,
-            ToolbarEvent::ToggleStatusBar(!snapshot.show_status_bar),
-            Some("Status bar: color/tool readout."),
-        ),
-        (
-            "Status board",
-            snapshot.show_status_board_badge,
-            ToolbarEvent::ToggleStatusBoardBadge(!snapshot.show_status_board_badge),
-            Some("Status bar: board label."),
-        ),
-        (
-            "Status page",
-            snapshot.show_status_page_badge,
-            ToolbarEvent::ToggleStatusPageBadge(!snapshot.show_status_page_badge),
-            Some("Status bar: page counter."),
-        ),
-        (
-            "Overlay badge",
-            snapshot.show_floating_badge_always,
-            ToolbarEvent::ToggleFloatingBadgeAlways(!snapshot.show_floating_badge_always),
-            Some("Board/page badge when status bar is visible."),
-        ),
-        (
-            "Preset toasts",
-            snapshot.show_preset_toasts,
-            ToolbarEvent::TogglePresetToasts(!snapshot.show_preset_toasts),
-            Some("Preset toasts: apply/save/clear."),
-        ),
-    ];
-    if snapshot.layout_mode != crate::config::ToolbarLayoutMode::Simple {
-        toggles.extend_from_slice(&[
-            (
-                "Show presets",
-                snapshot.show_presets,
-                ToolbarEvent::TogglePresets(!snapshot.show_presets),
-                Some("Presets: quick slots."),
-            ),
-            (
-                "Show actions",
-                snapshot.show_actions_section,
-                ToolbarEvent::ToggleActionsSection(!snapshot.show_actions_section),
-                Some("Actions: undo/redo/clear."),
-            ),
-            (
-                "Zoom actions",
-                snapshot.show_zoom_actions,
-                ToolbarEvent::ToggleZoomActions(!snapshot.show_zoom_actions),
-                Some("Zoom: in/out/reset/lock."),
-            ),
-            (
-                "Adv. Actions",
-                snapshot.show_actions_advanced,
-                ToolbarEvent::ToggleActionsAdvanced(!snapshot.show_actions_advanced),
-                Some("Advanced: undo-all/delay/freeze."),
-            ),
-            (
-                "Boards",
-                snapshot.show_boards_section,
-                ToolbarEvent::ToggleBoardsSection(!snapshot.show_boards_section),
-                Some("Boards: prev/next/new/del."),
-            ),
-            (
-                "Pages",
-                snapshot.show_pages_section,
-                ToolbarEvent::TogglePagesSection(!snapshot.show_pages_section),
-                Some("Pages: prev/next/new/dup/del."),
-            ),
-            (
-                "Step controls",
-                snapshot.show_step_section,
-                ToolbarEvent::ToggleStepSection(!snapshot.show_step_section),
-                Some("Step: step undo/redo."),
-            ),
-        ]);
-    }
+    let toggles = settings_model.toggles();
 
     let toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let toggle_col_gap = toggle_gap;
@@ -160,7 +65,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         2,
         toggles.len(),
     );
-    for (item, (label, value, event, tooltip)) in toggle_layout.items.iter().zip(toggles.iter()) {
+    for (item, toggle) in toggle_layout.items.iter().zip(toggles.iter()) {
         let toggle_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
             .unwrap_or(false);
@@ -170,16 +75,16 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             item.y,
             item.w,
             item.h,
-            *value,
+            toggle.checked,
             toggle_hover,
             toggle_style,
-            label,
+            toggle.label.as_ref(),
         );
         hits.push(HitRegion {
             rect: (item.x, item.y, item.w, item.h),
-            event: event.clone(),
+            event: activation_event(&toggle.activation),
             kind: HitKind::Click,
-            tooltip: tooltip.map(|text| text.to_string()),
+            tooltip: toggle.tooltip.as_string(),
         });
     }
 
@@ -193,16 +98,27 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
     let button_w = row_item_width(content_width, 2, button_gap);
     let icon_size = 16.0;
 
-    let button_layout = grid_layout(x, buttons_y, button_w, button_h, button_gap, 0.0, 2, 2);
-    if let Some(item) = button_layout.items.first() {
-        let config_hover = hover
+    let buttons = settings_model.buttons();
+    let button_layout = grid_layout(
+        x,
+        buttons_y,
+        button_w,
+        button_h,
+        button_gap,
+        0.0,
+        2,
+        buttons.len(),
+    );
+    for (item, button) in button_layout.items.iter().zip(buttons.iter()) {
+        let button_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
             .unwrap_or(false);
-        draw_button(ctx, item.x, item.y, item.w, item.h, false, config_hover);
+        draw_button(ctx, item.x, item.y, item.w, item.h, false, button_hover);
         if use_icons {
-            set_icon_color(ctx, config_hover);
-            toolbar_icons::draw_icon_settings(
+            set_icon_color(ctx, button_hover);
+            draw_settings_icon(
                 ctx,
+                button.icon,
                 item.x + (item.w - icon_size) / 2.0,
                 item.y + (item.h - icon_size) / 2.0,
                 icon_size,
@@ -215,53 +131,28 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                 item.y,
                 item.w,
                 item.h,
-                action_short_label(Action::OpenConfigurator),
+                button.label.as_ref(),
             );
         }
         hits.push(HitRegion {
             rect: (item.x, item.y, item.w, item.h),
-            event: ToolbarEvent::OpenConfigurator,
+            event: button.event.clone(),
             kind: HitKind::Click,
-            tooltip: Some(format_binding_label(
-                action_label(Action::OpenConfigurator),
-                snapshot
-                    .binding_hints
-                    .binding_for_action(Action::OpenConfigurator),
-            )),
-        });
-    }
-
-    if let Some(item) = button_layout.items.get(1) {
-        let file_hover = hover
-            .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
-            .unwrap_or(false);
-        draw_button(ctx, item.x, item.y, item.w, item.h, false, file_hover);
-        if use_icons {
-            set_icon_color(ctx, file_hover);
-            toolbar_icons::draw_icon_file(
-                ctx,
-                item.x + (item.w - icon_size) / 2.0,
-                item.y + (item.h - icon_size) / 2.0,
-                icon_size,
-            );
-        } else {
-            draw_label_center(
-                ctx,
-                label_style,
-                item.x,
-                item.y,
-                item.w,
-                item.h,
-                "Config file",
-            );
-        }
-        hits.push(HitRegion {
-            rect: (item.x, item.y, item.w, item.h),
-            event: ToolbarEvent::OpenConfigFile,
-            kind: HitKind::Click,
-            tooltip: Some("Config file".to_string()),
+            tooltip: button.tooltip.as_string(),
         });
     }
 
     *y += settings_card_h + section_gap;
+}
+
+fn activation_event(activation: &ToolbarActivation) -> crate::ui::toolbar::ToolbarEvent {
+    activation.compatibility_event()
+}
+
+fn draw_settings_icon(ctx: &cairo::Context, icon: ToolbarIcon, x: f64, y: f64, size: f64) {
+    match icon {
+        ToolbarIcon::Settings => toolbar_icons::draw_icon_settings(ctx, x, y, size),
+        ToolbarIcon::File => toolbar_icons::draw_icon_file(ctx, x, y, size),
+        ToolbarIcon::More | ToolbarIcon::Board => {}
+    }
 }

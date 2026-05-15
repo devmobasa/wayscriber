@@ -14,7 +14,6 @@ pub(super) use super::super::events::{HitKind, delay_secs_from_t, delay_t_from_m
 pub(super) use super::super::format_binding_label;
 pub(super) use super::super::hit::HitRegion;
 pub(super) use super::spec::ToolbarLayoutSpec;
-pub(super) use crate::config::ToolbarLayoutMode;
 pub(super) use crate::ui::toolbar::snapshot::ToolContext;
 pub(super) use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 

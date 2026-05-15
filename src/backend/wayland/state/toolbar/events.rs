@@ -1,38 +1,46 @@
 use super::*;
-
-fn toolbar_event_saves_config(event: &ToolbarEvent) -> bool {
-    matches!(
-        event,
-        ToolbarEvent::PinTopToolbar(_)
-            | ToolbarEvent::PinSideToolbar(_)
-            | ToolbarEvent::ToggleIconMode(_)
-            | ToolbarEvent::ToggleMoreColors(_)
-            | ToolbarEvent::ToggleActionsSection(_)
-            | ToolbarEvent::ToggleActionsAdvanced(_)
-            | ToolbarEvent::ToggleZoomActions(_)
-            | ToolbarEvent::TogglePagesSection(_)
-            | ToolbarEvent::ToggleBoardsSection(_)
-            | ToolbarEvent::TogglePresets(_)
-            | ToolbarEvent::ToggleStepSection(_)
-            | ToolbarEvent::ToggleTextControls(_)
-            | ToolbarEvent::ToggleContextAwareUi(_)
-            | ToolbarEvent::TogglePresetToasts(_)
-            | ToolbarEvent::ToggleToolPreview(_)
-            | ToolbarEvent::ToggleDelaySliders(_)
-            | ToolbarEvent::ToggleCustomSection(_)
-            | ToolbarEvent::SetToolbarLayoutMode(_)
-    )
-}
-
-fn toolbar_event_saves_click_highlight_config(event: &ToolbarEvent) -> bool {
-    matches!(
-        event,
-        ToolbarEvent::ToggleAllHighlight(_) | ToolbarEvent::ToggleHighlightToolRing(_)
-    )
-}
+use crate::{
+    input::InputState,
+    onboarding::OnboardingState,
+    ui::toolbar::model::{
+        ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPersistenceTarget,
+        ToolbarPreApplyEffect, ToolbarUiPersistenceTarget,
+    },
+};
 
 fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) -> bool {
     presenter_restore.unwrap_or(current)
+}
+
+fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
+    if state.drawer_hint_count >= crate::onboarding::DRAWER_HINT_MAX {
+        return false;
+    }
+
+    state.drawer_hint_count = state.drawer_hint_count.saturating_add(1);
+    state.drawer_hint_shown = state.drawer_hint_count >= crate::onboarding::DRAWER_HINT_MAX;
+    true
+}
+
+fn apply_toolbar_ui_config_target(
+    config: &mut crate::config::Config,
+    input_state: &InputState,
+    target: ToolbarUiPersistenceTarget,
+) {
+    match target {
+        ToolbarUiPersistenceTarget::StatusBar => {
+            config.ui.show_status_bar = input_state.show_status_bar;
+        }
+        ToolbarUiPersistenceTarget::StatusBoardBadge => {
+            config.ui.show_status_board_badge = input_state.show_status_board_badge;
+        }
+        ToolbarUiPersistenceTarget::StatusPageBadge => {
+            config.ui.show_status_page_badge = input_state.show_status_page_badge;
+        }
+        ToolbarUiPersistenceTarget::FloatingBadgeAlways => {
+            config.ui.show_floating_badge_always = input_state.show_floating_badge_always;
+        }
+    }
 }
 
 impl WaylandState {
@@ -47,61 +55,57 @@ impl WaylandState {
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
     pub(in crate::backend::wayland) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
-        // Mark drawer hint as shown when user opens the drawer
-        let hint_max = crate::onboarding::DRAWER_HINT_MAX;
-        if matches!(event, ToolbarEvent::ToggleDrawer(true)) {
-            let state = self.onboarding.state_mut();
-            if state.drawer_hint_count < hint_max {
-                state.drawer_hint_count = state.drawer_hint_count.saturating_add(1);
-                state.drawer_hint_shown = state.drawer_hint_count >= hint_max;
-                self.onboarding.save();
+        let policy = ToolbarEventPolicy::for_event(&event);
+        for effect in &policy.pre_apply_effects {
+            match effect {
+                ToolbarPreApplyEffect::RecordDrawerHintShown => {
+                    if record_drawer_hint_shown(self.onboarding.state_mut()) {
+                        self.onboarding.save();
+                    }
+                }
             }
         }
 
-        match event {
-            ToolbarEvent::MoveTopToolbar { x, y } => {
+        match (&policy.backend_route, &event) {
+            (ToolbarBackendRoute::MoveTopToolbar, ToolbarEvent::MoveTopToolbar { x, y }) => {
                 let inline_active = self.inline_toolbars_active();
                 let coord_is_screen = inline_active;
                 drag_log(format!(
                     "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
-                    x, y, coord_is_screen, inline_active
+                    *x, *y, coord_is_screen, inline_active
                 ));
-                self.begin_toolbar_move_drag(MoveDragKind::Top, (x, y), coord_is_screen);
+                self.begin_toolbar_move_drag(MoveDragKind::Top, (*x, *y), coord_is_screen);
                 if coord_is_screen {
-                    self.handle_toolbar_move_screen(MoveDragKind::Top, (x, y));
+                    self.handle_toolbar_move_screen(MoveDragKind::Top, (*x, *y));
                 } else {
-                    self.handle_toolbar_move(MoveDragKind::Top, (x, y));
+                    self.handle_toolbar_move(MoveDragKind::Top, (*x, *y));
                 }
                 return;
             }
-            ToolbarEvent::MoveSideToolbar { x, y } => {
+            (ToolbarBackendRoute::MoveSideToolbar, ToolbarEvent::MoveSideToolbar { x, y }) => {
                 let inline_active = self.inline_toolbars_active();
                 let coord_is_screen = inline_active;
                 drag_log(format!(
                     "toolbar move event: kind=Side, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
-                    x, y, coord_is_screen, inline_active
+                    *x, *y, coord_is_screen, inline_active
                 ));
-                self.begin_toolbar_move_drag(MoveDragKind::Side, (x, y), coord_is_screen);
+                self.begin_toolbar_move_drag(MoveDragKind::Side, (*x, *y), coord_is_screen);
                 if coord_is_screen {
-                    self.handle_toolbar_move_screen(MoveDragKind::Side, (x, y));
+                    self.handle_toolbar_move_screen(MoveDragKind::Side, (*x, *y));
                 } else {
-                    self.handle_toolbar_move(MoveDragKind::Side, (x, y));
+                    self.handle_toolbar_move(MoveDragKind::Side, (*x, *y));
                 }
                 return;
             }
-            _ => {}
+            (ToolbarBackendRoute::ApplyToInput, _)
+            | (ToolbarBackendRoute::MoveTopToolbar, _)
+            | (ToolbarBackendRoute::MoveSideToolbar, _) => {}
         }
 
         #[cfg(tablet)]
         let prev_thickness = self.input_state.current_thickness;
         #[cfg(tablet)]
-        let thickness_event = matches!(
-            event,
-            ToolbarEvent::SetThickness(_) | ToolbarEvent::NudgeThickness(_)
-        );
-
-        let needs_config_save = toolbar_event_saves_config(&event);
-        let persist_click_highlight = toolbar_event_saves_click_highlight_config(&event);
+        let thickness_event = policy.tablet_thickness_sensitive;
 
         if self.input_state.apply_toolbar_event(event) {
             self.toolbar.mark_dirty();
@@ -117,23 +121,28 @@ impl WaylandState {
                 }
             }
 
-            // Save config when pin state changes
-            if needs_config_save {
-                self.save_toolbar_pin_config();
-            }
-
-            if persist_click_highlight {
-                self.save_click_highlight_preferences();
+            match policy.persistence {
+                ToolbarPersistence::RuntimeOnly => {}
+                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar) => {
+                    self.save_toolbar_pin_config();
+                }
+                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Ui(target)) => {
+                    self.save_toolbar_ui_config(target);
+                }
+                ToolbarPersistence::Persist(ToolbarPersistenceTarget::History) => {
+                    self.save_toolbar_history_config();
+                }
+                ToolbarPersistence::Persist(ToolbarPersistenceTarget::ClickHighlight) => {
+                    self.save_click_highlight_preferences();
+                }
             }
         }
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
         }
-        // Check if hex color copy was requested
         if self.input_state.take_pending_copy_hex() {
             self.handle_copy_hex_color();
         }
-        // Check if hex color paste was requested
         if self.input_state.take_pending_paste_hex() {
             self.handle_paste_hex_color();
         }
@@ -195,13 +204,31 @@ impl WaylandState {
         self.config.ui.toolbar.top_offset_y = self.data.toolbar_top_offset_y;
         self.config.ui.toolbar.side_offset = self.data.toolbar_side_offset;
         self.config.ui.toolbar.side_offset_x = self.data.toolbar_side_offset_x;
-        // Step controls toggle is in history config
-        self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
 
         if let Err(err) = self.config.save() {
             log::warn!("Failed to save toolbar config: {}", err);
         } else {
             log::debug!("Saved toolbar config");
+        }
+    }
+
+    fn save_toolbar_ui_config(&mut self, target: ToolbarUiPersistenceTarget) {
+        apply_toolbar_ui_config_target(&mut self.config, &self.input_state, target);
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to save toolbar UI config: {}", err);
+        } else {
+            log::debug!("Saved toolbar UI config");
+        }
+    }
+
+    fn save_toolbar_history_config(&mut self) {
+        self.config.history.custom_section_enabled = self.input_state.custom_section_enabled;
+
+        if let Err(err) = self.config.save() {
+            log::warn!("Failed to save toolbar history config: {}", err);
+        } else {
+            log::debug!("Saved toolbar history config");
         }
     }
 
@@ -247,10 +274,15 @@ mod tests {
     use super::*;
     use crate::config::ToolbarLayoutMode;
     use crate::draw::{Color, FontDescriptor};
+    use crate::input::state::test_support::make_test_input_state;
     use crate::input::{EraserMode, Tool};
 
+    fn persistence_for(event: &ToolbarEvent) -> ToolbarPersistence {
+        ToolbarEventPolicy::for_event(event).persistence
+    }
+
     #[test]
-    fn runtime_toolbar_events_do_not_save_static_config() {
+    fn runtime_toolbar_events_do_not_directly_save_config() {
         let events = vec![
             ToolbarEvent::SelectTool(Tool::Line),
             ToolbarEvent::SetColor(Color {
@@ -275,19 +307,16 @@ mod tests {
         ];
 
         for event in events {
-            assert!(
-                !toolbar_event_saves_config(&event),
-                "{event:?} should not save toolbar config"
-            );
-            assert!(
-                !toolbar_event_saves_click_highlight_config(&event),
-                "{event:?} should not save click-highlight config"
+            assert_eq!(
+                persistence_for(&event),
+                ToolbarPersistence::RuntimeOnly,
+                "{event:?} should not directly save config"
             );
         }
     }
 
     #[test]
-    fn toolbar_preference_events_save_static_config() {
+    fn toolbar_preference_events_save_toolbar_config() {
         let events = vec![
             ToolbarEvent::PinTopToolbar(true),
             ToolbarEvent::PinSideToolbar(true),
@@ -305,20 +334,77 @@ mod tests {
             ToolbarEvent::TogglePresetToasts(true),
             ToolbarEvent::ToggleToolPreview(true),
             ToolbarEvent::ToggleDelaySliders(true),
-            ToolbarEvent::ToggleCustomSection(true),
             ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
         ];
 
         for event in events {
-            assert!(
-                toolbar_event_saves_config(&event),
+            assert_eq!(
+                persistence_for(&event),
+                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar),
                 "{event:?} should save toolbar config"
             );
-            assert!(
-                !toolbar_event_saves_click_highlight_config(&event),
-                "{event:?} should not save click-highlight config"
+        }
+    }
+
+    #[test]
+    fn ui_and_history_preference_events_save_their_own_config_targets() {
+        let ui_events = [
+            (
+                ToolbarEvent::ToggleStatusBar(true),
+                ToolbarUiPersistenceTarget::StatusBar,
+            ),
+            (
+                ToolbarEvent::ToggleStatusBoardBadge(true),
+                ToolbarUiPersistenceTarget::StatusBoardBadge,
+            ),
+            (
+                ToolbarEvent::ToggleStatusPageBadge(true),
+                ToolbarUiPersistenceTarget::StatusPageBadge,
+            ),
+            (
+                ToolbarEvent::ToggleFloatingBadgeAlways(true),
+                ToolbarUiPersistenceTarget::FloatingBadgeAlways,
+            ),
+        ];
+
+        for (event, target) in ui_events {
+            assert_eq!(
+                persistence_for(&event),
+                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Ui(target)),
+                "{event:?} should save only its UI config field"
             );
         }
+
+        assert_eq!(
+            persistence_for(&ToolbarEvent::ToggleCustomSection(true)),
+            ToolbarPersistence::Persist(ToolbarPersistenceTarget::History)
+        );
+    }
+
+    #[test]
+    fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
+        let mut config = crate::config::Config::default();
+        config.ui.show_status_bar = true;
+        config.ui.show_status_board_badge = false;
+        config.ui.show_status_page_badge = true;
+        config.ui.show_floating_badge_always = false;
+
+        let mut input_state = make_test_input_state();
+        input_state.show_status_bar = false;
+        input_state.show_status_board_badge = true;
+        input_state.show_status_page_badge = false;
+        input_state.show_floating_badge_always = true;
+
+        apply_toolbar_ui_config_target(
+            &mut config,
+            &input_state,
+            ToolbarUiPersistenceTarget::StatusBoardBadge,
+        );
+
+        assert!(config.ui.show_status_bar);
+        assert!(config.ui.show_status_board_badge);
+        assert!(config.ui.show_status_page_badge);
+        assert!(!config.ui.show_floating_badge_always);
     }
 
     #[test]
@@ -329,15 +415,38 @@ mod tests {
         ];
 
         for event in events {
-            assert!(
-                !toolbar_event_saves_config(&event),
-                "{event:?} should not save toolbar config"
-            );
-            assert!(
-                toolbar_event_saves_click_highlight_config(&event),
+            assert_eq!(
+                persistence_for(&event),
+                ToolbarPersistence::Persist(ToolbarPersistenceTarget::ClickHighlight),
                 "{event:?} should save click-highlight config"
             );
         }
+    }
+
+    #[test]
+    fn drawer_hint_pre_apply_effect_is_conditionally_recorded_below_max() {
+        let mut state = OnboardingState {
+            drawer_hint_count: crate::onboarding::DRAWER_HINT_MAX - 1,
+            drawer_hint_shown: false,
+            ..OnboardingState::default()
+        };
+
+        assert!(record_drawer_hint_shown(&mut state));
+        assert_eq!(state.drawer_hint_count, crate::onboarding::DRAWER_HINT_MAX);
+        assert!(state.drawer_hint_shown);
+    }
+
+    #[test]
+    fn drawer_hint_pre_apply_effect_is_ignored_at_max() {
+        let mut state = OnboardingState {
+            drawer_hint_count: crate::onboarding::DRAWER_HINT_MAX,
+            drawer_hint_shown: true,
+            ..OnboardingState::default()
+        };
+
+        assert!(!record_drawer_hint_shown(&mut state));
+        assert_eq!(state.drawer_hint_count, crate::onboarding::DRAWER_HINT_MAX);
+        assert!(state.drawer_hint_shown);
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use crate::draw::Color;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 /// Kinds of hit regions and their drag semantics.
 #[derive(Clone, Debug, PartialEq)]
@@ -50,17 +51,15 @@ impl HitKind {
 
 /// Convert normalized drag position [0,1] to a delay in seconds.
 pub fn delay_secs_from_t(t: f64) -> f64 {
-    const MIN_DELAY_S: f64 = 0.05;
-    const MAX_DELAY_S: f64 = 5.0;
-    MIN_DELAY_S + t.clamp(0.0, 1.0) * (MAX_DELAY_S - MIN_DELAY_S)
+    let spec = ToolbarSliderSpec::DELAY_SECONDS;
+    spec.min + t.clamp(0.0, 1.0) * (spec.max - spec.min)
 }
 
 /// Convert a delay in ms to normalized [0,1] position for sliders.
 pub fn delay_t_from_ms(delay_ms: u64) -> f64 {
-    const MIN_DELAY_S: f64 = 0.05;
-    const MAX_DELAY_S: f64 = 5.0;
-    let delay_s = (delay_ms as f64 / 1000.0).clamp(MIN_DELAY_S, MAX_DELAY_S);
-    (delay_s - MIN_DELAY_S) / (MAX_DELAY_S - MIN_DELAY_S)
+    let spec = ToolbarSliderSpec::DELAY_SECONDS;
+    let delay_s = (delay_ms as f64 / 1000.0).clamp(spec.min, spec.max);
+    (delay_s - spec.min) / (spec.max - spec.min)
 }
 
 /// Convert HSV to RGB for color picker math.
