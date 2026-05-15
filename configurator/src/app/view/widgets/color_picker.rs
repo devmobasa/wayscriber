@@ -1,4 +1,3 @@
-mod canvas;
 mod inputs;
 mod panel;
 
