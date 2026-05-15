@@ -1,7 +1,9 @@
-use super::super::base::{InputState, UiToastKind};
+use super::super::base::{InputState, PasteAnchor, UiToastKind};
 use super::types::{ContextMenuKind, ContextMenuState, MenuCommand};
+use crate::config::Action;
 use crate::draw::ShapeId;
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
+use log::info;
 
 impl InputState {
     fn hovered_context_menu_shape(&self) -> Option<ShapeId> {
@@ -16,8 +18,27 @@ impl InputState {
         }
     }
 
+    fn context_menu_paste_anchor(&self) -> PasteAnchor {
+        if let ContextMenuState::Open { anchor, .. } = self.context_menu_state {
+            let (x, y) = self.canvas_coords_for_screen(anchor.0, anchor.1);
+            PasteAnchor::Pointer { x, y }
+        } else {
+            self.paste_anchor()
+        }
+    }
+
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
         match command {
+            MenuCommand::Copy => {
+                self.handle_action(Action::CopySelection);
+                self.close_context_menu();
+            }
+            MenuCommand::Paste => {
+                let anchor = self.context_menu_paste_anchor();
+                self.request_clipboard_paste_at_anchor(anchor);
+                info!("Requested clipboard paste");
+                self.close_context_menu();
+            }
             MenuCommand::Delete => {
                 self.delete_selection();
                 self.close_context_menu();
@@ -295,7 +316,7 @@ impl InputState {
             }
             MenuCommand::OpenRadialMenu => {
                 self.close_context_menu();
-                self.handle_action(crate::config::Action::ToggleRadialMenu);
+                self.handle_action(Action::ToggleRadialMenu);
             }
             MenuCommand::ToggleHelp => {
                 self.toggle_help_overlay();

@@ -37,6 +37,20 @@ impl InputState {
             Some(MenuCommand::Delete),
         ));
         entries.push(ContextMenuEntry::new(
+            "Copy",
+            self.shortcut_for_action(Action::CopySelection),
+            false,
+            all_locked,
+            Some(MenuCommand::Copy),
+        ));
+        entries.push(ContextMenuEntry::new(
+            "Paste",
+            self.shortcut_for_action(Action::PasteSelection),
+            false,
+            false,
+            Some(MenuCommand::Paste),
+        ));
+        entries.push(ContextMenuEntry::new(
             "Duplicate",
             self.shortcut_for_action(Action::DuplicateSelection),
             false,

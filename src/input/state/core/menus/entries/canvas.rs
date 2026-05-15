@@ -26,6 +26,13 @@ impl InputState {
         };
         let clear_disabled = !has_unlocked;
         entries.push(ContextMenuEntry::new(
+            "Paste",
+            self.shortcut_for_action(Action::PasteSelection),
+            false,
+            false,
+            Some(MenuCommand::Paste),
+        ));
+        entries.push(ContextMenuEntry::new(
             clear_label,
             self.shortcut_for_action(Action::ClearCanvas),
             false,

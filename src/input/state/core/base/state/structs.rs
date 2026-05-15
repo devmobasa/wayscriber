@@ -319,8 +319,6 @@ pub struct InputState {
     pub(in crate::input::state::core) clipboard_paste_request_counter: u64,
     /// Latest paste request id whose completion should still be accepted.
     pub(in crate::input::state::core) active_clipboard_paste_request_id: Option<u64>,
-    /// Offset applied to successive paste operations
-    pub(in crate::input::state::core) clipboard_paste_offset: i32,
     /// Last capture path (for quick open-folder action)
     pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
     /// Last text/note click used for double-click detection
