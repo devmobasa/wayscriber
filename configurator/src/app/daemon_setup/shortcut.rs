@@ -11,9 +11,9 @@ use wayscriber::shortcut_hint::{
 
 use super::command::{command_available, run_command, run_command_checked};
 use super::service::{
-    escape_systemd_env_value, portal_shortcut_dropin_path, query_service_active,
-    remove_portal_shortcut_dropin_if_gnome, require_systemctl_available,
-    resolve_wayscriber_binary_path, run_systemctl_user,
+    detect_managed_daemon_portal_runtime_supported, escape_systemd_env_value,
+    portal_shortcut_dropin_path, query_service_active, remove_portal_shortcut_dropin_if_gnome,
+    require_systemctl_available, resolve_wayscriber_binary_path, run_systemctl_user,
 };
 
 const PORTAL_APP_ID: &str = "wayscriber";
@@ -43,6 +43,7 @@ pub(super) fn apply_shortcut(shortcut_input: &str) -> Result<String, String> {
         desktop,
         command_available("gsettings"),
         command_available("systemctl"),
+        detect_managed_daemon_portal_runtime_supported(),
     );
 
     match apply_capability {

@@ -1,6 +1,6 @@
 use wayscriber::shortcut_hint::{
     PortalShortcutDropInState, ShortcutRuntimeBackend, ShortcutRuntimeInputs, is_gnome_desktop,
-    portal_runtime_supported, resolve_shortcut_runtime_backend,
+    resolve_shortcut_runtime_backend,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,10 +64,11 @@ impl ShortcutBackend {
     pub fn from_runtime_inputs(
         desktop: DesktopEnvironment,
         portal_dropin_state: PortalShortcutDropInState,
+        portal_runtime_supported: bool,
     ) -> Self {
         match resolve_shortcut_runtime_backend(ShortcutRuntimeInputs {
             gnome_desktop: desktop == DesktopEnvironment::Gnome,
-            portal_runtime_supported: portal_runtime_supported(),
+            portal_runtime_supported,
             portal_dropin_state,
         }) {
             ShortcutRuntimeBackend::GnomeCustomShortcut => Self::GnomeCustomShortcut,
@@ -97,6 +98,7 @@ impl ShortcutApplyCapability {
         desktop: DesktopEnvironment,
         gsettings_available: bool,
         systemctl_available: bool,
+        portal_runtime_supported: bool,
     ) -> Self {
         if desktop == DesktopEnvironment::Gnome {
             if gsettings_available {
@@ -104,7 +106,7 @@ impl ShortcutApplyCapability {
             }
             return Self::Manual;
         }
-        if systemctl_available && portal_runtime_supported() {
+        if systemctl_available && portal_runtime_supported {
             return Self::PortalServiceDropIn;
         }
         Self::Manual
@@ -245,7 +247,8 @@ mod tests {
                     portal_shortcut_present: true,
                     portal_app_id_present: true,
                     explicit_portal_opt_in_present: false,
-                }
+                },
+                true,
             ),
             ShortcutBackend::GnomeCustomShortcut
         );
@@ -256,52 +259,56 @@ mod tests {
                     portal_shortcut_present: true,
                     portal_app_id_present: true,
                     explicit_portal_opt_in_present: true,
-                }
+                },
+                true,
             ),
-            if portal_runtime_supported() {
-                ShortcutBackend::PortalServiceDropIn
-            } else {
-                ShortcutBackend::GnomeCustomShortcut
-            }
+            ShortcutBackend::PortalServiceDropIn
         );
         assert_eq!(
             ShortcutBackend::from_runtime_inputs(
                 DesktopEnvironment::Kde,
                 PortalShortcutDropInState::default(),
+                true,
             ),
-            if portal_runtime_supported() {
-                ShortcutBackend::PortalServiceDropIn
-            } else {
-                ShortcutBackend::Manual
-            }
+            ShortcutBackend::PortalServiceDropIn
+        );
+        assert_eq!(
+            ShortcutBackend::from_runtime_inputs(
+                DesktopEnvironment::Kde,
+                PortalShortcutDropInState::default(),
+                false,
+            ),
+            ShortcutBackend::Manual
         );
     }
 
     #[test]
     fn shortcut_apply_capability_does_not_fallback_to_portal_on_gnome() {
         assert_eq!(
-            ShortcutApplyCapability::from_environment(DesktopEnvironment::Gnome, true, true),
+            ShortcutApplyCapability::from_environment(DesktopEnvironment::Gnome, true, true, true),
             ShortcutApplyCapability::GnomeCustomShortcut
         );
         assert_eq!(
-            ShortcutApplyCapability::from_environment(DesktopEnvironment::Gnome, false, true),
+            ShortcutApplyCapability::from_environment(DesktopEnvironment::Gnome, false, true, true),
             ShortcutApplyCapability::Manual
         );
         assert_eq!(
-            ShortcutApplyCapability::from_environment(DesktopEnvironment::Unknown, false, true),
-            if portal_runtime_supported() {
-                ShortcutApplyCapability::PortalServiceDropIn
-            } else {
-                ShortcutApplyCapability::Manual
-            }
+            ShortcutApplyCapability::from_environment(
+                DesktopEnvironment::Unknown,
+                false,
+                true,
+                true
+            ),
+            ShortcutApplyCapability::PortalServiceDropIn
         );
-    }
-
-    #[test]
-    fn configurator_build_keeps_portal_runtime_support_enabled() {
-        assert!(
-            portal_runtime_supported(),
-            "wayscriber-configurator must enable the wayscriber `portal` feature so status and shortcut setup stay aligned with portal-capable daemon builds"
+        assert_eq!(
+            ShortcutApplyCapability::from_environment(
+                DesktopEnvironment::Unknown,
+                false,
+                true,
+                false
+            ),
+            ShortcutApplyCapability::Manual
         );
     }
 }

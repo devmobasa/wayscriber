@@ -14,9 +14,9 @@ use hyprland::{
     read_light_controls_status as read_hyprland_light_controls_status,
 };
 use service::{
-    SERVICE_NAME, detect_service_unit_path, install_or_update_user_service, query_service_active,
-    query_service_enabled, remove_portal_shortcut_dropin_if_gnome, require_systemctl_available,
-    run_systemctl_user,
+    SERVICE_NAME, detect_managed_daemon_portal_runtime_supported, detect_service_unit_path,
+    install_or_update_user_service, query_service_active, query_service_enabled,
+    remove_portal_shortcut_dropin_if_gnome, require_systemctl_available, run_systemctl_user,
 };
 use shortcut::{apply_shortcut, read_configured_shortcut, read_portal_shortcut_dropin_state};
 
@@ -87,12 +87,17 @@ fn load_daemon_runtime_status_sync() -> Result<DaemonRuntimeStatus, String> {
     let desktop = DesktopEnvironment::detect_current();
     let systemctl_available = command_available("systemctl");
     let gsettings_available = command_available("gsettings");
-    let shortcut_backend =
-        ShortcutBackend::from_runtime_inputs(desktop, read_portal_shortcut_dropin_state());
+    let portal_runtime_supported = detect_managed_daemon_portal_runtime_supported();
+    let shortcut_backend = ShortcutBackend::from_runtime_inputs(
+        desktop,
+        read_portal_shortcut_dropin_state(),
+        portal_runtime_supported,
+    );
     let shortcut_apply_capability = crate::models::ShortcutApplyCapability::from_environment(
         desktop,
         gsettings_available,
         systemctl_available,
+        portal_runtime_supported,
     );
     let service_unit_path = detect_service_unit_path(systemctl_available);
     let service_installed = service_unit_path.is_some();

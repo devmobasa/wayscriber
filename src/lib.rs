@@ -12,6 +12,7 @@ pub(crate) mod image_decode;
 pub mod input;
 mod label_format;
 pub mod paths;
+pub mod runtime_capabilities;
 pub mod session;
 pub mod shortcut_hint;
 pub mod systemd_user_service;
