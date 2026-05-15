@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rustc-check-cfg=cfg(tablet)");
     if env::var_os("CARGO_FEATURE_TABLET_INPUT").is_some() {
         println!("cargo:rustc-cfg=tablet");
     }

@@ -11,6 +11,12 @@ default-run = "wayscriber"
 members = ["configurator"]
 default-members = ["."]
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tablet)'] }
+
+[lints]
+workspace = true
+
 [dependencies]
 # Wayland
 wayland-client = "0.31"
