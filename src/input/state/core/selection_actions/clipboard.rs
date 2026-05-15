@@ -5,8 +5,9 @@ use super::super::base::{
 };
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
+use crate::util::Rect;
 
-const COPY_PASTE_OFFSET: i32 = 12;
+const DUPLICATE_OFFSET: i32 = 12;
 const PRIVATE_CLIPBOARD_SCHEMA_VERSION: u32 = 1;
 
 #[allow(dead_code)]
@@ -33,7 +34,7 @@ impl InputState {
             }
 
             let mut cloned_shape = shape.shape.clone();
-            Self::translate_shape(&mut cloned_shape, COPY_PASTE_OFFSET, COPY_PASTE_OFFSET);
+            Self::translate_shape(&mut cloned_shape, DUPLICATE_OFFSET, DUPLICATE_OFFSET);
             let new_id = {
                 let frame = self.boards.active_frame_mut();
                 frame.add_shape(cloned_shape)
@@ -94,7 +95,6 @@ impl InputState {
         self.selection_clipboard_generation = self.selection_clipboard_generation.wrapping_add(1);
         self.selection_publish_state = SelectionPublishState::NotAttempted;
         self.selection_clipboard = Some(copied.clone());
-        self.clipboard_paste_offset = 0;
         self.pending_selection_clipboard_publish = self
             .selection_clipboard_payload(copied)
             .and_then(|payload| {
@@ -139,16 +139,14 @@ impl InputState {
         }
 
         let total = shapes.len();
-        let offset = self
-            .clipboard_paste_offset
-            .saturating_add(COPY_PASTE_OFFSET);
+        let (dx, dy) = shape_paste_translation(&shapes, self.paste_anchor());
         let mut created = Vec::new();
         let mut new_ids = Vec::new();
         let mut limit_hit = false;
 
         for shape in shapes {
             let mut cloned_shape = shape;
-            Self::translate_shape(&mut cloned_shape, offset, offset);
+            Self::translate_shape(&mut cloned_shape, dx, dy);
             let new_id = {
                 let frame = self.boards.active_frame_mut();
                 frame.try_add_shape_with_id(cloned_shape, self.max_shapes_per_frame)
@@ -187,7 +185,6 @@ impl InputState {
         self.mark_session_dirty();
         self.needs_redraw = true;
         self.set_selection(new_ids);
-        self.clipboard_paste_offset = offset;
         if limit_hit {
             self.set_ui_toast(
                 UiToastKind::Warning,
@@ -412,9 +409,7 @@ impl InputState {
             return 0;
         }
 
-        let offset = self
-            .clipboard_paste_offset
-            .saturating_add(COPY_PASTE_OFFSET);
+        let (dx, dy) = shape_paste_translation(&shapes, request.anchor);
         let target_active = self.clipboard_request_targets_active_page(request);
         let mut created = Vec::new();
         let mut new_ids = Vec::new();
@@ -442,7 +437,7 @@ impl InputState {
 
         for shape in shapes {
             let mut cloned_shape = shape;
-            Self::translate_shape(&mut cloned_shape, offset, offset);
+            Self::translate_shape(&mut cloned_shape, dx, dy);
             let Some(new_id) = frame.try_add_shape_with_id(cloned_shape, max_shapes) else {
                 limit_hit = true;
                 break;
@@ -467,7 +462,6 @@ impl InputState {
 
         let created_len = created.len();
         frame.push_undo_action(UndoAction::Create { shapes: created }, undo_limit);
-        self.clipboard_paste_offset = offset;
         self.mark_session_dirty();
         if target_active {
             for bounds in dirty_bounds {
@@ -568,6 +562,41 @@ fn non_empty_shapes(shapes: Vec<Shape>) -> Option<Vec<Shape>> {
     } else {
         Some(shapes)
     }
+}
+
+fn shape_paste_translation(shapes: &[Shape], anchor: PasteAnchor) -> (i32, i32) {
+    let Some(bounds) = shapes_bounding_box(shapes) else {
+        return (0, 0);
+    };
+    let (anchor_x, anchor_y) = anchor.point();
+    let center_x = bounds.x.saturating_add(bounds.width / 2);
+    let center_y = bounds.y.saturating_add(bounds.height / 2);
+    (
+        anchor_x.saturating_sub(center_x),
+        anchor_y.saturating_sub(center_y),
+    )
+}
+
+fn shapes_bounding_box(shapes: &[Shape]) -> Option<Rect> {
+    let mut min_x = i32::MAX;
+    let mut min_y = i32::MAX;
+    let mut max_x = i32::MIN;
+    let mut max_y = i32::MIN;
+    let mut found = false;
+
+    for shape in shapes {
+        if let Some(bounds) = shape.bounding_box() {
+            min_x = min_x.min(bounds.x);
+            min_y = min_y.min(bounds.y);
+            max_x = max_x.max(bounds.x + bounds.width);
+            max_y = max_y.max(bounds.y + bounds.height);
+            found = true;
+        }
+    }
+
+    found
+        .then(|| Rect::from_min_max(min_x, min_y, max_x, max_y))
+        .flatten()
 }
 
 fn image_display_bounds(

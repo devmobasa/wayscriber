@@ -202,7 +202,6 @@ impl InputState {
             pending_clipboard_paste_request: None,
             clipboard_paste_request_counter: 0,
             active_clipboard_paste_request_id: None,
-            clipboard_paste_offset: 0,
             last_capture_path: None,
             last_text_click: None,
             last_board_picker_click: None,
