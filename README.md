@@ -30,10 +30,25 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 
 ## Table of Contents
 
+- [Quick Start](#quick-start)
+  - [CLI quick install](#cli-quick-install)
+    - [Debian and Ubuntu](#debian-and-ubuntu)
+    - [Fedora and RHEL](#fedora-and-rhel)
+    - [Arch Linux](#arch-linux)
+    - [Nix and NixOS](#nix-and-nixos)
+  - [First launch](#first-launch)
+  - [Daily daemon setup](#daily-daemon-setup)
 - [Why wayscriber?](#why-wayscriber)
 - [Features](#features)
-- [Quick Start](#quick-start)
 - [Installation](#installation)
+  - [Pick an install path](#pick-an-install-path)
+  - [No terminal install (GitHub Releases)](#no-terminal-install-github-releases)
+  - [Debian / Ubuntu (repo - recommended)](#debian--ubuntu-repo--recommended)
+  - [Fedora / RHEL (repo - recommended)](#fedora--rhel-repo--recommended)
+  - [Arch Linux (AUR)](#arch-linux-aur)
+  - [NixOS / Nix](#nixos--nix)
+  - [From Source](#from-source)
+  - [Screenshot Tools](#screenshot-tools)
 - [Usage](#usage)
 - [Getting Help](#getting-help)
 - [Controls Reference](#controls-reference)
@@ -43,6 +58,102 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - [Roadmap](#roadmap)
 - [Additional Information](#additional-information)
 - [License & Credits](#license--credits)
+
+---
+
+## Quick Start
+
+### CLI quick install
+
+Pick the block for your distro. Repo, AUR, and Nix installs are the best default for CLI users because they use the normal system update flow. GitHub `.deb`/`.rpm` downloads are one-off installs; use them only when you do not want to add a repo.
+
+#### Debian and Ubuntu
+
+Also use this path for Linux Mint, Pop!_OS, and other Debian-based distros.
+
+```bash
+sudo apt update
+sudo apt install curl gpg
+sudo install -d -m 0755 /usr/share/keyrings
+curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | gpg --dearmor | sudo tee /usr/share/keyrings/wayscriber.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
+sudo apt update
+sudo apt install wayscriber
+# Optional GUI configurator:
+sudo apt install wayscriber-configurator
+```
+
+#### Fedora and RHEL
+
+Also use this path for Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros.
+
+```bash
+cat <<'EOF' | sudo tee /etc/yum.repos.d/wayscriber.repo
+[wayscriber]
+name=Wayscriber Repo
+baseurl=https://wayscriber.com/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://wayscriber.com/rpm/RPM-GPG-KEY-wayscriber.asc
+EOF
+sudo dnf clean all
+sudo dnf install wayscriber
+# Optional GUI configurator:
+sudo dnf install wayscriber-configurator
+```
+
+#### Arch Linux
+
+Also use this path for Manjaro, CachyOS, and other Arch-based distros.
+
+```bash
+yay -S wayscriber-bin    # prebuilt binary
+# or:
+yay -S wayscriber        # build from source
+# Optional GUI configurator:
+yay -S wayscriber-configurator
+```
+
+Use your preferred AUR helper if you do not use `yay`.
+
+#### Nix and NixOS
+
+```bash
+nix run github:devmobasa/wayscriber
+# or install to your profile:
+nix profile install github:devmobasa/wayscriber
+# Optional GUI configurator:
+nix profile install github:devmobasa/wayscriber#wayscriber-configurator
+```
+
+For browser downloads, see [No terminal install](#no-terminal-install-github-releases). For source builds, see [From Source](#from-source).
+
+### First launch
+
+After a package-manager install:
+
+```bash
+wayscriber --version
+wayscriber --active
+```
+
+If you used `nix run`, that command already launches the app without installing it to `PATH`.
+
+Press <kbd>F1</kbd> or <kbd>F10</kbd> for help, <kbd>Shift+F1</kbd> for quick reference, <kbd>Ctrl+K</kbd> for the command palette, and <kbd>Escape</kbd> to hide or exit.
+
+### Daily daemon setup
+
+Daemon mode is preferred for daily use because toggles are faster and session state survives between activations.
+
+```bash
+systemctl --user enable --now wayscriber.service
+wayscriber --daemon-toggle
+```
+
+Bind `wayscriber --daemon-toggle` to a global shortcut in your compositor or desktop environment. Ubuntu GNOME users: <kbd>Super+G</kbd> is a good default because <kbd>Super+D</kbd> is often reserved.
+
+For distro-specific package details, see [Installation](#installation). For keybinding examples and daemon behavior, see [Usage](#daemon-mode-preferred).
 
 ---
 
@@ -148,51 +259,20 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 
 ---
 
-## Quick Start
-
-**1. Install wayscriber (choose one path)**
-
-**Option A: No CLI (click and install)**
-- Main app (`wayscriber`) `.deb` (Ubuntu, Debian, Linux Mint, Pop!_OS, and other Debian-based distros): [wayscriber-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-amd64.deb)
-- Main app (`wayscriber`) `.rpm` (Fedora, RHEL, Rocky Linux, AlmaLinux, Nobara, and other RPM-based distros): [wayscriber-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm)
-- Optional GUI app (`wayscriber-configurator`) `.deb`: [wayscriber-configurator-amd64.deb](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-amd64.deb)
-- Optional GUI app (`wayscriber-configurator`) `.rpm`: [wayscriber-configurator-x86_64.rpm](https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm)
-- [Latest release page (all assets)](https://github.com/devmobasa/wayscriber/releases/latest)
-
-Install the main app package first. `wayscriber-configurator` is optional and does not include the `wayscriber` binary.
-Open the downloaded package in your software installer (Software Center / Discover), then install.
-Important: direct GitHub `.deb`/`.rpm` installs are one-off installs and do not auto-update. Use repo install commands if you want automatic updates.
-
-**Option B: CLI (Debian/Ubuntu repo, auto-updates recommended)**
-```bash
-sudo install -d /usr/share/keyrings
-curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | sudo gpg --dearmor -o /usr/share/keyrings/wayscriber.gpg
-echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
-sudo apt update
-sudo apt install wayscriber
-# Optional GUI configurator (separate app)
-sudo apt install wayscriber-configurator
-```
-Fedora/RHEL CLI users: use the [Fedora / RHEL (repo – recommended)](#fedora--rhel-repo--recommended) section below instead of this `apt` block.
-
-**2. First launch (GUI-first, no terminal needed)**
-Open your app menu/launcher and start **Wayscriber**.
-Press <kbd>F1</kbd> or <kbd>F10</kbd> for help; <kbd>Shift+F1</kbd> for quick reference; <kbd>Ctrl+K</kbd> for the command palette; <kbd>Escape</kbd> hides/exits.
-
-**3. Daemon mode (preferred for daily use, optional)**
-Daemon mode is faster and keeps session state between toggles.
-For setup steps, see [Usage](#daemon-mode-preferred). Ubuntu GNOME users: <kbd>Super+G</kbd> is a good default because <kbd>Super+D</kbd> is often reserved.
-
-Alternative (one-shot mode):
-```bash
-wayscriber --active
-```
-
-For distro-specific package steps, see [Installation](#installation). For daemon vs one-shot behavior, see [Usage](#usage).
-
----
-
 ## Installation
+
+### Pick an install path
+
+| You want | Use |
+|----------|-----|
+| Fast CLI install with auto-updates on Debian/Ubuntu/Mint/Pop!_OS | [Debian / Ubuntu repo](#debian--ubuntu-repo--recommended) |
+| Fast CLI install with auto-updates on Fedora/RHEL/Rocky/Alma/Nobara | [Fedora / RHEL repo](#fedora--rhel-repo--recommended) |
+| Arch, Manjaro, CachyOS, or another Arch-based distro | [AUR](#arch-linux-aur), preferably `wayscriber-bin` for the prebuilt package |
+| Nix profile, `nix run`, or NixOS flake setup | [NixOS / Nix](#nixos--nix) |
+| Browser-based install without adding a repo | [GitHub Releases](#no-terminal-install-github-releases) |
+| Hacking on wayscriber or building a local binary | [From Source](#from-source) |
+
+Install the main `wayscriber` package first. `wayscriber-configurator` is optional and does not include the `wayscriber` binary.
 
 ### No terminal install (GitHub Releases)
 
@@ -213,12 +293,14 @@ Release packages are one-off installs (no auto-updates). Use repo installs below
 
 ### Debian / Ubuntu (repo – recommended)
 ```bash
-sudo install -d /usr/share/keyrings
-curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | sudo gpg --dearmor -o /usr/share/keyrings/wayscriber.gpg
+sudo apt update
+sudo apt install curl gpg
+sudo install -d -m 0755 /usr/share/keyrings
+curl -fsSL https://wayscriber.com/apt/WAYSCRIBER-GPG-KEY.asc | gpg --dearmor | sudo tee /usr/share/keyrings/wayscriber.gpg > /dev/null
 echo "deb [signed-by=/usr/share/keyrings/wayscriber.gpg] https://wayscriber.com/apt stable main" | sudo tee /etc/apt/sources.list.d/wayscriber.list
 sudo apt update
 sudo apt install wayscriber
-# Optional GUI configurator
+# Optional GUI configurator:
 sudo apt install wayscriber-configurator
 ```
 
@@ -246,26 +328,27 @@ gpgkey=https://wayscriber.com/rpm/RPM-GPG-KEY-wayscriber.asc
 EOF
 sudo dnf clean all
 sudo dnf install wayscriber
-# Optional GUI configurator
+# Optional GUI configurator:
 sudo dnf install wayscriber-configurator
 ```
 
 One-off .rpm (no auto-updates):
 ```bash
 wget -O wayscriber-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-x86_64.rpm
-sudo rpm -Uvh wayscriber-x86_64.rpm
+sudo dnf install ./wayscriber-x86_64.rpm
 ```
 Configurator .rpm (optional):
 ```bash
 wget -O wayscriber-configurator-x86_64.rpm https://github.com/devmobasa/wayscriber/releases/latest/download/wayscriber-configurator-x86_64.rpm
-sudo rpm -Uvh wayscriber-configurator-x86_64.rpm
+sudo dnf install ./wayscriber-configurator-x86_64.rpm
 ```
 
 ### Arch Linux (AUR)
 
 ```bash
-yay -S wayscriber        # from source
 yay -S wayscriber-bin    # prebuilt binary
+# or:
+yay -S wayscriber        # build from source
 # Optional GUI configurator:
 yay -S wayscriber-configurator
 ```

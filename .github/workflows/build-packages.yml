@@ -51,7 +51,6 @@ jobs:
         with:
           workspaces: |
             .
-            configurator
 
       - name: Read release version
         id: meta
@@ -63,6 +62,25 @@ jobs:
             VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="wayscriber") | .version')
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Check Nix flake package versions
+        run: |
+          cargo_version="$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)"
+          wayscriber_version="$(nix eval .#packages.x86_64-linux.wayscriber.version --raw)"
+          configurator_version="$(nix eval .#packages.x86_64-linux.wayscriber-configurator.version --raw)"
+
+          test "$wayscriber_version" = "$cargo_version"
+          test "$configurator_version" = "$cargo_version"
+
+      - name: Check Nix flake package instantiation
+        run: nix build .#wayscriber .#wayscriber-configurator --no-link --dry-run
 
       - name: Pre-fetch Cargo dependencies (locked)
         env:

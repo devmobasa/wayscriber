@@ -10,7 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        version = "0.9.8";
+        version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
       in {
         packages = {
           wayscriber = pkgs.rustPlatform.buildRustPackage {
