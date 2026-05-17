@@ -205,6 +205,7 @@ impl WaylandState {
         }
         if self.pointer_over_toolbar() || self.toolbar_dragging() {
             if self.toolbar_dragging()
+                && !self.pointer_lock_active()
                 && let Some(intent) = self.inline_toolbar_drag_at(position)
             {
                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());

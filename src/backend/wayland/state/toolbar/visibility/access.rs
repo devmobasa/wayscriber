@@ -27,6 +27,16 @@ impl WaylandState {
         self.data.toolbar_drag_preview = value;
     }
 
+    pub(in crate::backend::wayland) fn request_toolbar_drag_flush(&mut self) {
+        self.data.toolbar_drag_flush_requested = true;
+    }
+
+    pub(in crate::backend::wayland) fn take_toolbar_drag_flush_requested(&mut self) -> bool {
+        let requested = self.data.toolbar_drag_flush_requested;
+        self.data.toolbar_drag_flush_requested = false;
+        requested
+    }
+
     pub(in crate::backend::wayland) fn toolbar_needs_recreate(&self) -> bool {
         self.data.toolbar_needs_recreate
     }

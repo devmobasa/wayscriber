@@ -98,6 +98,11 @@ pub(super) fn dispatch_with_timeout(
         .dispatch_pending(state)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     if dispatched > 0 {
+        if state.take_toolbar_drag_flush_requested() {
+            event_queue
+                .flush()
+                .map_err(|e| anyhow::anyhow!("Wayland flush error: {}", e))?;
+        }
         return Ok(());
     }
 

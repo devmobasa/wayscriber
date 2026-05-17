@@ -13,15 +13,11 @@ impl WaylandState {
                 && !self.inline_toolbars_active()
                 && !self.toolbar_drag_preview_active()
             {
-                if self.pointer_lock_active() {
-                    drag_log("skip inline drag preview (pointer locked)");
-                } else {
-                    drag_log("enable inline drag preview (layer-shell toolbars hidden)");
-                    self.set_toolbar_drag_preview_active(true);
-                    self.toolbar.set_suppressed(&self.compositor_state, true);
-                    self.input_state.dirty_tracker.mark_full();
-                    self.input_state.needs_redraw = true;
-                }
+                drag_log("enable inline drag preview (layer-shell toolbars hidden)");
+                self.set_toolbar_drag_preview_active(true);
+                self.toolbar.set_suppressed(&self.compositor_state, true);
+                self.input_state.dirty_tracker.mark_full();
+                self.input_state.needs_redraw = true;
             }
             log::debug!(
                 "Begin toolbar move drag: kind={:?}, coord=({:.3}, {:.3}), coord_is_screen={}",
@@ -151,7 +147,8 @@ impl WaylandState {
                 coord_is_screen: false,
             });
 
-            // Clamp offsets; applying layer-surface margins is skipped while preview is active.
+            // Clamp offsets; pointer-locked preview drags also move the suppressed
+            // layer surface so release does not visibly replay the drag.
             self.apply_toolbar_offsets_throttled(&snapshot);
 
             let inline_render_active = self.inline_toolbars_render_active();
