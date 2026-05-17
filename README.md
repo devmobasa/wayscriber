@@ -127,6 +127,13 @@ nix profile install github:devmobasa/wayscriber
 nix profile install github:devmobasa/wayscriber#wayscriber-configurator
 ```
 
+Unpinned GitHub flake URLs follow the default branch. To run or install a specific release, pin the tag, for example:
+```bash
+nix run 'github:devmobasa/wayscriber?ref=v0.9.19'
+nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19'
+nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19#wayscriber-configurator'
+```
+
 For browser downloads, see [No terminal install](#no-terminal-install-github-releases). For source builds, see [From Source](#from-source).
 
 ### First launch
@@ -392,6 +399,13 @@ nix profile install github:devmobasa/wayscriber#wayscriber-configurator
 **Development shell:**
 ```bash
 nix develop github:devmobasa/wayscriber
+```
+
+Unpinned GitHub flake URLs follow the default branch. Pin a release tag when you want reproducible release installs:
+```bash
+nix run 'github:devmobasa/wayscriber?ref=v0.9.19'
+nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19'
+nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19#wayscriber-configurator'
 ```
 
 ### From Source

@@ -52,6 +52,9 @@ jobs:
           workspaces: |
             .
 
+      - name: Check version metadata
+        run: bash tools/check-version-consistency.sh
+
       - name: cargo fmt
         run: cargo fmt --all -- --check
 

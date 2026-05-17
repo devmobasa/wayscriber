@@ -7,6 +7,8 @@ Usage: tools/bump-version.sh [--dry-run] [new_version]
 
 - If new_version is omitted, bumps the patch version (e.g., 0.9.2 -> 0.9.3).
 - new_version can be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH.HOTFIX.
+- HOTFIX versions are packaging-only: Cargo and flake.nix stay on MAJOR.MINOR.PATCH;
+  packaging/PKGBUILD, packaging/.SRCINFO, and release artifacts use the HOTFIX version.
 - Updates:
   * Cargo.toml (wayscriber)
   * configurator/Cargo.toml
@@ -16,7 +18,7 @@ Usage: tools/bump-version.sh [--dry-run] [new_version]
   * packaging/PKGBUILD pkgver
   * packaging/.SRCINFO (via makepkg --printsrcinfo)
 
-Requires: cargo, jq, makepkg, sed, perl.
+Requires: cargo, jq, makepkg, sed, perl, python3 or python pointing to Python 3.
 EOF
 }
 
@@ -37,6 +39,11 @@ require_bin jq
 require_bin makepkg
 require_bin sed
 require_bin perl
+if ! { command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; } \
+    && ! { command -v python >/dev/null 2>&1 && python -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; }; then
+    echo "error: python3 or python pointing to Python 3 is required" >&2
+    exit 1
+fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -168,5 +175,6 @@ fi
 if $DRY_RUN; then
     echo "Dry run complete (no changes made)"
 else
+    bash tools/check-version-consistency.sh --release-version "$package_version"
     echo "Updated versions to $next_version"
 fi

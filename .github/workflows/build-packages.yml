@@ -63,6 +63,9 @@ jobs:
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      - name: Check version metadata
+        run: bash tools/check-version-consistency.sh --release-version "${{ steps.meta.outputs.version }}"
+
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
