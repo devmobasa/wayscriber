@@ -31,6 +31,7 @@ pub enum ToggleField {
     UiClickHighlightEnabled,
     UiClickHighlightShowOnHighlightTool,
     UiClickHighlightUsePenColor,
+    UiClickHighlightForceInLightMode,
     UiShowStatusBoardBadge,
     UiShowStatusPageBadge,
     UiShowPageBadgeWithStatusBar,

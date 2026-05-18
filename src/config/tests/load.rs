@@ -38,6 +38,17 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
 }
 
 #[test]
+fn click_highlight_force_in_light_mode_defaults_true_and_parses_false() {
+    let config: Config = toml::from_str("[ui.click_highlight]\nenabled = false\n")
+        .expect("missing force_in_light_mode should use default");
+    assert!(config.ui.click_highlight.force_in_light_mode);
+
+    let config: Config = toml::from_str("[ui.click_highlight]\nforce_in_light_mode = false\n")
+        .expect("explicit force_in_light_mode should parse");
+    assert!(!config.ui.click_highlight.force_in_light_mode);
+}
+
+#[test]
 fn load_parses_mouse_button_drag_tool_bindings() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);

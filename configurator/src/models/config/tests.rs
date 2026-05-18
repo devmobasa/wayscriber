@@ -45,6 +45,20 @@ fn config_draft_to_config_trims_custom_directory() {
 }
 
 #[test]
+fn config_draft_round_trips_light_mode_click_highlight_policy() {
+    let mut config = Config::default();
+    config.ui.click_highlight.force_in_light_mode = false;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(!draft.click_highlight_force_in_light_mode);
+
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("expected config to round trip");
+    assert!(!round_trip.ui.click_highlight.force_in_light_mode);
+}
+
+#[test]
 fn setters_update_draft_state() {
     let mut draft = ConfigDraft::from_config(&Config::default());
 

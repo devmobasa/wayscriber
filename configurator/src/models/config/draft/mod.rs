@@ -101,6 +101,7 @@ pub struct ConfigDraft {
     pub click_highlight_enabled: bool,
     pub click_highlight_show_on_highlight_tool: bool,
     pub click_highlight_use_pen_color: bool,
+    pub click_highlight_force_in_light_mode: bool,
     pub click_highlight_radius: String,
     pub click_highlight_outline_thickness: String,
     pub click_highlight_duration_ms: String,

@@ -16,6 +16,7 @@ pub struct ClickHighlightSettings {
     pub base_fill_color: Color,
     pub base_outline_color: Color,
     pub use_pen_color: bool,
+    pub force_in_light_mode: bool,
 }
 
 impl ClickHighlightSettings {
@@ -44,6 +45,7 @@ impl ClickHighlightSettings {
             base_fill_color: base_fill,
             base_outline_color: base_outline,
             use_pen_color: true,
+            force_in_light_mode: true,
         }
     }
 }
@@ -73,6 +75,7 @@ impl From<&ClickHighlightConfig> for ClickHighlightSettings {
             base_fill_color: fill,
             base_outline_color: outline,
             use_pen_color: cfg.use_pen_color,
+            force_in_light_mode: cfg.force_in_light_mode,
         }
     }
 }

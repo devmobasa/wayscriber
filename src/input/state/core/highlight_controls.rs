@@ -10,6 +10,11 @@ impl InputState {
         self.click_highlight.enabled()
     }
 
+    /// Returns whether light mode should force-enable click highlights on entry.
+    pub fn click_highlight_forced_in_light_mode(&self) -> bool {
+        self.click_highlight.force_in_light_mode()
+    }
+
     /// Returns whether the persistent highlight ring is enabled.
     pub fn highlight_tool_ring_enabled(&self) -> bool {
         self.click_highlight.show_on_highlight_tool()

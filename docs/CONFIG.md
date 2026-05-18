@@ -354,6 +354,7 @@ duration_ms = 750
 fill_color = [1.0, 0.8, 0.0, 0.35]
 outline_color = [1.0, 0.6, 0.0, 0.9]
 use_pen_color = true  # Existing highlights update immediately when you change pen color
+force_in_light_mode = true  # Force-enable click highlights when entering light mode
 
 # Context menu visibility
 [ui.context_menu]
@@ -377,6 +378,7 @@ enabled = true
 - **Layout**: Padding, line height, dot size, border width all configurable
 - **Click highlight**: Enable presenter-style click halos with adjustable radius, colors, and duration; by default the halo follows your current pen color (set `use_pen_color = false` to keep a fixed color)
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
+- **Light mode**: `force_in_light_mode = true` preserves the default behavior of enabling click highlights on light mode entry; set it to `false` to keep the current click highlight state
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
 - **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized; `xdg_focus_loss_behavior` controls whether losing focus closes (`exit`) or keeps (`stay`) the overlay

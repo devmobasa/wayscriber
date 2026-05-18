@@ -1,9 +1,17 @@
-use super::create_test_input_state;
+use super::{create_test_input_state, create_test_input_state_with_click_highlight};
 use crate::config::Action;
-use crate::input::Tool;
+use crate::input::{ClickHighlightSettings, Tool};
 
 fn create_light_mode_test_state() -> crate::input::InputState {
     let mut state = create_test_input_state();
+    state.compositor_capabilities.layer_shell = true;
+    state
+}
+
+fn create_light_mode_test_state_with_click_highlight(
+    click_highlight_settings: ClickHighlightSettings,
+) -> crate::input::InputState {
+    let mut state = create_test_input_state_with_click_highlight(click_highlight_settings);
     state.compositor_capabilities.layer_shell = true;
     state
 }
@@ -81,6 +89,39 @@ fn light_mode_restores_previous_ui_and_tool_on_exit() {
     assert!(state.toolbar_side_visible);
     assert!(state.show_tool_preview);
     assert_eq!(state.tool_override(), Some(Tool::Marker));
+}
+
+#[test]
+fn light_mode_force_enables_click_highlight_by_default_and_restores_on_exit() {
+    let mut state = create_light_mode_test_state();
+    assert!(!state.click_highlight_enabled());
+
+    state.handle_action(Action::ToggleLightMode);
+
+    assert!(state.light_mode);
+    assert!(state.click_highlight_enabled());
+
+    state.handle_action(Action::ToggleLightMode);
+
+    assert!(!state.light_mode);
+    assert!(!state.click_highlight_enabled());
+}
+
+#[test]
+fn light_mode_can_leave_click_highlight_disabled() {
+    let mut settings = ClickHighlightSettings::disabled();
+    settings.force_in_light_mode = false;
+    let mut state = create_light_mode_test_state_with_click_highlight(settings);
+
+    state.handle_action(Action::ToggleLightMode);
+
+    assert!(state.light_mode);
+    assert!(!state.click_highlight_enabled());
+
+    state.handle_action(Action::ToggleLightModeDrawing);
+
+    assert!(state.light_mode_drawing);
+    assert!(!state.click_highlight_enabled());
 }
 
 #[test]
