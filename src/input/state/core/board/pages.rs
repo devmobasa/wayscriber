@@ -87,21 +87,34 @@ impl InputState {
         from: usize,
         to: usize,
     ) -> bool {
+        let is_active_board = self.boards.active_index() == board_index;
+        let Some(board) = self.boards.board_states().get(board_index) else {
+            return false;
+        };
+        let page_count = board.pages.page_count();
+        if from >= page_count || to >= page_count {
+            return false;
+        }
+        if is_active_board {
+            self.prepare_active_page_content_change();
+        }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
         };
-        if !board.pages.move_page(from, to) {
-            return false;
-        }
-        if self.boards.active_index() == board_index {
-            self.prepare_page_switch();
-        } else {
-            self.mark_board_surface_changed();
-        }
+        let moved = board.pages.move_page(from, to);
+        debug_assert!(moved, "preflighted page reorder failed on apply");
+        self.finish_board_page_content_change(board_index);
         true
     }
 
     pub(crate) fn add_page_in_board(&mut self, board_index: usize) -> bool {
+        let is_active_board = self.boards.active_index() == board_index;
+        if self.boards.board_states().get(board_index).is_none() {
+            return false;
+        }
+        if is_active_board {
+            self.prepare_active_page_content_change();
+        }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
         };
@@ -110,11 +123,7 @@ impl InputState {
         let page_count = board.pages.page_count();
         let board_name = board.spec.name.clone();
         let board_id = board.spec.id.clone();
-        if self.boards.active_index() == board_index {
-            self.prepare_page_switch();
-        } else {
-            self.mark_board_surface_changed();
-        }
+        self.finish_board_page_content_change(board_index);
         self.set_ui_toast(
             UiToastKind::Info,
             format!("Page added on '{board_name}' ({board_id}) ({page_num}/{page_count})"),
@@ -127,6 +136,16 @@ impl InputState {
         board_index: usize,
         page_index: usize,
     ) -> bool {
+        let is_active_board = self.boards.active_index() == board_index;
+        let Some(board) = self.boards.board_states().get(board_index) else {
+            return false;
+        };
+        if page_index >= board.pages.page_count() {
+            return false;
+        }
+        if is_active_board {
+            self.prepare_active_page_content_change();
+        }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
         };
@@ -137,11 +156,7 @@ impl InputState {
         let page_count = board.pages.page_count();
         let board_name = board.spec.name.clone();
         let board_id = board.spec.id.clone();
-        if self.boards.active_index() == board_index {
-            self.prepare_page_switch();
-        } else {
-            self.mark_board_surface_changed();
-        }
+        self.finish_board_page_content_change(board_index);
         self.set_ui_toast(
             UiToastKind::Info,
             format!("Page duplicated on '{board_name}' ({board_id}) ({page_num}/{page_count})"),
@@ -155,27 +170,34 @@ impl InputState {
         page_index: usize,
         name: Option<String>,
     ) -> bool {
+        let is_active_board = self.boards.active_index() == board_index;
+        let Some(board) = self.boards.board_states().get(board_index) else {
+            return false;
+        };
+        if page_index >= board.pages.page_count() {
+            return false;
+        }
+        if is_active_board {
+            self.prepare_active_page_content_change();
+        }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
         };
         if !board.pages.set_page_name(page_index, name) {
             return false;
         }
-        if self.boards.active_index() == board_index {
-            self.prepare_page_switch();
-        } else {
-            self.mark_board_surface_changed();
-        }
+        self.finish_board_page_content_change(board_index);
         self.set_ui_toast(UiToastKind::Info, "Page renamed.");
         true
     }
 
-    pub(crate) fn move_page_between_boards(
+    pub(crate) fn move_page_between_boards_with_activation(
         &mut self,
         source_board: usize,
         page_index: usize,
         target_board: usize,
         copy: bool,
+        activate_target: bool,
     ) -> bool {
         if source_board == target_board {
             return false;
@@ -183,6 +205,17 @@ impl InputState {
         let board_count = self.boards.board_count();
         if source_board >= board_count || target_board >= board_count {
             return false;
+        }
+        let Some(source) = self.boards.board_states().get(source_board) else {
+            return false;
+        };
+        if page_index >= source.pages.page_count() {
+            return false;
+        }
+        let active_board = self.boards.active_index();
+        let active_involved = source_board == active_board || target_board == active_board;
+        if active_involved {
+            self.prepare_active_page_content_change();
         }
         let (new_index, target_name, target_id, target_count) = {
             let (source, target) = if source_board < target_board {
@@ -212,6 +245,11 @@ impl InputState {
             let target_count = target.pages.page_count();
             (new_index, target_name, target_id, target_count)
         };
+        if active_involved {
+            self.finish_active_page_content_change();
+        } else {
+            self.mark_board_surface_changed();
+        }
 
         let action = if copy { "copied" } else { "moved" };
         self.set_ui_toast(
@@ -223,39 +261,52 @@ impl InputState {
             ),
         );
         self.mark_session_dirty();
+        if activate_target {
+            self.switch_board_slot(target_board);
+            if let Some(row) = self.board_picker_row_for_board(target_board) {
+                self.board_picker_set_selected(row);
+            }
+        }
         true
     }
 
     pub fn page_prev(&mut self) -> bool {
-        if self.boards.prev_page() {
-            self.prepare_page_switch();
-            true
-        } else {
-            false
+        if self.boards.active_page_index() == 0 {
+            return false;
         }
+        self.prepare_active_page_content_change();
+        let switched = self.boards.prev_page();
+        debug_assert!(switched, "preflighted previous page failed on apply");
+        self.finish_active_page_content_change();
+        true
     }
 
     pub fn page_next(&mut self) -> bool {
-        if self.boards.next_page() {
-            self.prepare_page_switch();
-            true
-        } else {
-            false
+        if self.boards.active_page_index() + 1 >= self.boards.page_count() {
+            return false;
         }
+        self.prepare_active_page_content_change();
+        let switched = self.boards.next_page();
+        debug_assert!(switched, "preflighted next page failed on apply");
+        self.finish_active_page_content_change();
+        true
     }
 
     pub fn switch_to_page(&mut self, index: usize) -> bool {
-        if self.boards.active_pages_mut().switch_to_page(index) {
-            self.prepare_page_switch();
-            true
-        } else {
-            false
+        if index >= self.boards.page_count() || index == self.boards.active_page_index() {
+            return false;
         }
+        self.prepare_active_page_content_change();
+        let switched = self.boards.active_pages_mut().switch_to_page(index);
+        debug_assert!(switched, "preflighted page switch failed on apply");
+        self.finish_active_page_content_change();
+        true
     }
 
     pub fn page_new(&mut self) {
+        self.prepare_active_page_content_change();
         self.boards.new_page();
-        self.prepare_page_switch();
+        self.finish_active_page_content_change();
         let page_num = self.boards.active_page_index() + 1;
         let page_count = self.boards.page_count();
         self.set_ui_toast(
@@ -265,8 +316,9 @@ impl InputState {
     }
 
     pub fn page_duplicate(&mut self) {
+        self.prepare_active_page_content_change();
         self.boards.duplicate_page();
-        self.prepare_page_switch();
+        self.finish_active_page_content_change();
         let page_num = self.boards.active_page_index() + 1;
         let page_count = self.boards.page_count();
         self.set_ui_toast(

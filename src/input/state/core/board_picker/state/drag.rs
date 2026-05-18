@@ -165,17 +165,13 @@ impl InputState {
         let target_board = drag.target_board.unwrap_or(drag.board_index);
         if target_board != drag.board_index {
             let copy = self.modifiers.alt;
-            if self.move_page_between_boards(
+            let _ = self.move_page_between_boards_with_activation(
                 drag.board_index,
                 drag.source_index,
                 target_board,
                 copy,
-            ) {
-                self.switch_board_slot(target_board);
-                if let Some(row) = self.board_picker_row_for_board(target_board) {
-                    self.board_picker_set_selected(row);
-                }
-            }
+                true,
+            );
             self.needs_redraw = true;
             return true;
         }

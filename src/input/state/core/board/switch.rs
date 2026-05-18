@@ -236,35 +236,4 @@ impl InputState {
     pub(super) fn remove_board_recent(&mut self, board_id: &str) {
         self.board_recent.retain(|id| id != board_id);
     }
-
-    pub(super) fn mark_board_surface_dirty(&mut self) {
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
-    }
-
-    pub(super) fn mark_board_surface_changed(&mut self) {
-        self.mark_board_surface_dirty();
-        self.mark_session_dirty();
-    }
-
-    fn finish_active_board_transition(&mut self) {
-        self.sync_canvas_pointer_to_current_transform();
-        self.mark_board_surface_changed();
-    }
-
-    pub(crate) fn queue_board_config_save(&mut self) {
-        if !self.boards.persist_customizations() {
-            return;
-        }
-        self.pending_board_config = Some(self.boards.to_config());
-    }
-
-    pub(super) fn prepare_page_switch(&mut self) {
-        self.cancel_active_interaction();
-        self.clear_selection();
-        self.close_context_menu();
-        self.invalidate_hit_cache();
-        self.sync_canvas_pointer_to_current_transform();
-        self.mark_board_surface_changed();
-    }
 }
