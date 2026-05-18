@@ -2,6 +2,7 @@
 name = "wayscriber-configurator"
 version = "0.9.19"
 edition = "2024"
+rust-version = "1.95"
 
 [lints]
 workspace = true

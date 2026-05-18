@@ -4,7 +4,7 @@ Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The appli
 
 ## Prerequisites
 
-- Rust toolchain (1.80 or newer recommended).
+- Rust toolchain 1.95 or newer.
 - System dependencies required by `iced`'s Wayland `tiny-skia` renderer.
 
 ## Run It
