@@ -120,9 +120,10 @@ Use your preferred AUR helper if you do not use `yay`.
 #### Nix and NixOS
 
 ```bash
-nix run github:devmobasa/wayscriber
+nix run github:devmobasa/wayscriber -- --active
 # or install to your profile:
 nix profile install github:devmobasa/wayscriber
+wayscriber --active
 # Optional GUI configurator:
 nix profile install github:devmobasa/wayscriber#wayscriber-configurator
 ```
@@ -138,7 +139,7 @@ wayscriber --version
 wayscriber --active
 ```
 
-If you used `nix run`, that command already launches the app without installing it to `PATH`.
+If you used the `nix run` command above, it already launches the app without installing it to `PATH`.
 
 Press <kbd>F1</kbd> or <kbd>F10</kbd> for help, <kbd>Shift+F1</kbd> for quick reference, <kbd>Ctrl+K</kbd> for the command palette, and <kbd>Escape</kbd> to hide or exit.
 
@@ -357,7 +358,7 @@ yay -S wayscriber-configurator
 
 **Run without installing:**
 ```bash
-nix run github:devmobasa/wayscriber
+nix run github:devmobasa/wayscriber -- --active
 ```
 
 **Install to profile:**
