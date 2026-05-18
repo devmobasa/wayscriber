@@ -51,7 +51,6 @@ jobs:
         with:
           workspaces: |
             .
-            configurator
 
       - name: cargo fmt
         run: cargo fmt --all -- --check
@@ -64,3 +63,29 @@ jobs:
 
       - name: cargo test (no default features)
         run: cargo test --workspace --no-default-features
+
+  nix-flake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Check flake package versions
+        run: |
+          cargo_version="$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)"
+          wayscriber_version="$(nix eval .#packages.x86_64-linux.wayscriber.version --raw)"
+          configurator_version="$(nix eval .#packages.x86_64-linux.wayscriber-configurator.version --raw)"
+
+          test "$wayscriber_version" = "$cargo_version"
+          test "$configurator_version" = "$cargo_version"
+
+      - name: Check flake package instantiation
+        run: nix build .#wayscriber .#wayscriber-configurator --no-link --dry-run
