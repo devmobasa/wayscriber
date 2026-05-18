@@ -32,6 +32,12 @@ impl ConfiguratorApp {
                 self.defaults.click_highlight_use_pen_color,
                 ToggleField::UiClickHighlightUsePenColor,
             ),
+            toggle_row(
+                "Force on when entering light mode",
+                self.draft.click_highlight_force_in_light_mode,
+                self.defaults.click_highlight_force_in_light_mode,
+                ToggleField::UiClickHighlightForceInLightMode,
+            ),
             row![
                 labeled_input_with_feedback(
                     "Radius",

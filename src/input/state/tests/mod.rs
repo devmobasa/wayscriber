@@ -6,7 +6,10 @@ use crate::input::{ClickHighlightSettings, EraserMode, Key, MouseButton, Tool};
 use crate::util;
 
 mod helpers;
-use helpers::{create_test_input_state, create_test_input_state_with_keybindings};
+use helpers::{
+    create_test_input_state, create_test_input_state_with_click_highlight,
+    create_test_input_state_with_keybindings,
+};
 
 mod action_bindings;
 mod arrow_labels;

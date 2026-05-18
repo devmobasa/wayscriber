@@ -112,6 +112,7 @@ impl ConfigDraft {
         config.ui.click_highlight.show_on_highlight_tool =
             self.click_highlight_show_on_highlight_tool;
         config.ui.click_highlight.use_pen_color = self.click_highlight_use_pen_color;
+        config.ui.click_highlight.force_in_light_mode = self.click_highlight_force_in_light_mode;
         parse_field(
             &self.click_highlight_radius,
             "ui.click_highlight.radius",

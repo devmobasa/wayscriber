@@ -4,8 +4,27 @@ pub(super) fn create_test_input_state() -> InputState {
     create_test_input_state_with_keybindings(crate::config::KeybindingsConfig::default())
 }
 
+pub(super) fn create_test_input_state_with_click_highlight(
+    click_highlight_settings: ClickHighlightSettings,
+) -> InputState {
+    create_test_input_state_with_keybindings_and_click_highlight(
+        crate::config::KeybindingsConfig::default(),
+        click_highlight_settings,
+    )
+}
+
 pub(super) fn create_test_input_state_with_keybindings(
     keybindings: crate::config::KeybindingsConfig,
+) -> InputState {
+    create_test_input_state_with_keybindings_and_click_highlight(
+        keybindings,
+        ClickHighlightSettings::disabled(),
+    )
+}
+
+fn create_test_input_state_with_keybindings_and_click_highlight(
+    keybindings: crate::config::KeybindingsConfig,
+    click_highlight_settings: ClickHighlightSettings,
 ) -> InputState {
     let action_map = keybindings.build_action_map().unwrap();
     let action_bindings = keybindings.build_action_bindings().unwrap();
@@ -36,7 +55,7 @@ pub(super) fn create_test_input_state_with_keybindings(
         BoardsConfig::default(), // boards_config
         action_map,              // action_map
         usize::MAX,
-        ClickHighlightSettings::disabled(),
+        click_highlight_settings,
         0,
         0,
         false, // custom_section_enabled

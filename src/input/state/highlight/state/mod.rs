@@ -51,6 +51,10 @@ impl ClickHighlightState {
         self.settings.use_pen_color
     }
 
+    pub fn force_in_light_mode(&self) -> bool {
+        self.settings.force_in_light_mode
+    }
+
     pub fn show_on_highlight_tool(&self) -> bool {
         self.settings.show_on_highlight_tool
     }

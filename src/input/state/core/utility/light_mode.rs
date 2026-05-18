@@ -142,7 +142,7 @@ impl InputState {
         self.toolbar_top_visible = false;
         self.toolbar_side_visible = false;
         self.set_tool_override(Some(Tool::Pen));
-        if !self.click_highlight_enabled() {
+        if self.click_highlight_forced_in_light_mode() && !self.click_highlight_enabled() {
             self.toggle_click_highlight();
         }
 

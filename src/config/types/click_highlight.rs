@@ -35,6 +35,10 @@ pub struct ClickHighlightConfig {
     /// Derive highlight color from current pen color
     #[serde(default = "default_click_highlight_use_pen_color")]
     pub use_pen_color: bool,
+
+    /// Force-enable click highlights when entering light mode
+    #[serde(default = "default_click_highlight_force_in_light_mode")]
+    pub force_in_light_mode: bool,
 }
 
 impl Default for ClickHighlightConfig {
@@ -48,6 +52,7 @@ impl Default for ClickHighlightConfig {
             fill_color: default_click_highlight_fill_color(),
             outline_color: default_click_highlight_outline_color(),
             use_pen_color: default_click_highlight_use_pen_color(),
+            force_in_light_mode: default_click_highlight_force_in_light_mode(),
         }
     }
 }
@@ -81,5 +86,9 @@ fn default_click_highlight_outline_color() -> [f64; 4] {
 }
 
 fn default_click_highlight_use_pen_color() -> bool {
+    true
+}
+
+fn default_click_highlight_force_in_light_mode() -> bool {
     true
 }

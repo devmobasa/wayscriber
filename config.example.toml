@@ -457,6 +457,10 @@ outline_color = [1.0, 0.6, 0.0, 0.9]
 # Note: active highlights update immediately when the pen color changes
 use_pen_color = true
 
+# Force-enable click highlights when entering light mode.
+# Set false to keep the current click highlight state on light mode entry.
+force_in_light_mode = true
+
 [ui.context_menu]
 # Enable right-click / keyboard context menus
 enabled = true

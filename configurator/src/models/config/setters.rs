@@ -170,6 +170,9 @@ impl ConfigDraft {
                 self.click_highlight_show_on_highlight_tool = value;
             }
             ToggleField::UiClickHighlightUsePenColor => self.click_highlight_use_pen_color = value,
+            ToggleField::UiClickHighlightForceInLightMode => {
+                self.click_highlight_force_in_light_mode = value;
+            }
             ToggleField::PresenterHideStatusBar => self.presenter_hide_status_bar = value,
             ToggleField::PresenterHideToolbars => self.presenter_hide_toolbars = value,
             ToggleField::PresenterHideToolPreview => self.presenter_hide_tool_preview = value,
