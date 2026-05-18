@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 usage() {
     cat <<'EOF'
 Usage: tools/create-release-tag.sh <version>
@@ -38,6 +41,9 @@ if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
     echo "error: invalid version format: $version (expected MAJOR.MINOR.PATCH[.HOTFIX])" >&2
     exit 1
 fi
+
+cd "$REPO_ROOT"
+bash tools/check-version-consistency.sh --release-version "$version"
 
 if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
     echo "error: working tree is not clean; commit/stash changes before tagging" >&2

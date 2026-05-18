@@ -45,20 +45,27 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Supports MAJOR.MINOR.PATCH.HOTFIX for packaging-only hotfix releases
   - Usage: `./tools/bump-version.sh [--dry-run] [new_version]`
 
+- **check-version-consistency.sh** - Check release metadata alignment
+  - Verifies Cargo manifests, lockfiles, packaging metadata, and flake version sourcing
+  - With `--release-version X.Y.Z[.N]`, rejects tags that do not match Cargo or an explicit packaging hotfix of Cargo
+  - Usage: `bash tools/check-version-consistency.sh [--release-version X.Y.Z[.N]]`
+
+Packaging-only hotfix policy:
+- Normal releases use one version everywhere: Cargo, package metadata, Git tags, and artifacts all use `X.Y.Z`.
+- Hotfix releases may use `X.Y.Z.N` only when the Cargo version is still `X.Y.Z`. In that case, `packaging/PKGBUILD`, `packaging/.SRCINFO`, release artifacts, and AUR metadata use `X.Y.Z.N`; Cargo manifests and `flake.nix` stay on `X.Y.Z`.
+- Release builds set `WAYSCRIBER_RELEASE_VERSION`, so packaged binaries report the release artifact version. Nix builds follow Cargo and report `X.Y.Z` unless the Cargo version itself is bumped.
+
 - **create-release-tag.sh** - Create git tag (local only)
   - Creates annotated tag `v<version>` without pushing
   - Requires clean working tree
+  - Runs version consistency checks before tagging
   - Usage: `./tools/create-release-tag.sh <version>` (X.Y.Z or X.Y.Z.N)
 
 - **publish-release-tag.sh** - Create and push git tag
   - Creates annotated tag and pushes to origin
   - Auto-detects version from Cargo.toml if not specified
+  - Runs version consistency checks before tagging
   - Usage: `./tools/publish-release-tag.sh [--version X.Y.Z[.N]] [--dry-run]`
-
-- **release.sh** - Full release workflow
-  - Bumps version, commits changes, creates tag, and pushes
-  - All-in-one release script for maintainers
-  - Usage: `./tools/release.sh <version> [--force-tag]`
 
 ## Packaging
 
@@ -95,6 +102,5 @@ All scripts work from any location in the project.
 
 The release/tag scripts have overlapping functionality:
 - `create-release-tag.sh` + push = `publish-release-tag.sh`
-- `bump-version.sh` + commit + `create-release-tag.sh` + push = `release.sh`
 
-Consider using `release.sh` for full releases, or the individual scripts for more control.
+Use the individual scripts in sequence for full releases when you need explicit control over each step.
