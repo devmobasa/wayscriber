@@ -120,16 +120,17 @@ Use your preferred AUR helper if you do not use `yay`.
 #### Nix and NixOS
 
 ```bash
-nix run github:devmobasa/wayscriber
+nix run github:devmobasa/wayscriber -- --active
 # or install to your profile:
 nix profile install github:devmobasa/wayscriber
+wayscriber --active
 # Optional GUI configurator:
 nix profile install github:devmobasa/wayscriber#wayscriber-configurator
 ```
 
 Unpinned GitHub flake URLs follow the default branch. To run or install a specific release, pin the tag, for example:
 ```bash
-nix run 'github:devmobasa/wayscriber?ref=v0.9.19'
+nix run 'github:devmobasa/wayscriber?ref=v0.9.19' -- --active
 nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19'
 nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19#wayscriber-configurator'
 ```
@@ -145,7 +146,7 @@ wayscriber --version
 wayscriber --active
 ```
 
-If you used `nix run`, that command already launches the app without installing it to `PATH`.
+If you used the `nix run` command above, it already launches the app without installing it to `PATH`.
 
 Press <kbd>F1</kbd> or <kbd>F10</kbd> for help, <kbd>Shift+F1</kbd> for quick reference, <kbd>Ctrl+K</kbd> for the command palette, and <kbd>Escape</kbd> to hide or exit.
 
@@ -364,7 +365,7 @@ yay -S wayscriber-configurator
 
 **Run without installing:**
 ```bash
-nix run github:devmobasa/wayscriber
+nix run github:devmobasa/wayscriber -- --active
 ```
 
 **Install to profile:**
@@ -403,7 +404,7 @@ nix develop github:devmobasa/wayscriber
 
 Unpinned GitHub flake URLs follow the default branch. Pin a release tag when you want reproducible release installs:
 ```bash
-nix run 'github:devmobasa/wayscriber?ref=v0.9.19'
+nix run 'github:devmobasa/wayscriber?ref=v0.9.19' -- --active
 nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19'
 nix profile install 'github:devmobasa/wayscriber?ref=v0.9.19#wayscriber-configurator'
 ```

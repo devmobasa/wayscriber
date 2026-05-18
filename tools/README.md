@@ -67,11 +67,6 @@ Packaging-only hotfix policy:
   - Runs version consistency checks before tagging
   - Usage: `./tools/publish-release-tag.sh [--version X.Y.Z[.N]] [--dry-run]`
 
-- **release.sh** - Full release workflow
-  - Bumps version, commits changes, creates tag, and pushes
-  - All-in-one release script for maintainers
-  - Usage: `./tools/release.sh <version> [--force-tag]`
-
 ## Packaging
 
 - **package.sh** - Build distribution packages
@@ -107,6 +102,5 @@ All scripts work from any location in the project.
 
 The release/tag scripts have overlapping functionality:
 - `create-release-tag.sh` + push = `publish-release-tag.sh`
-- `bump-version.sh` + commit + `create-release-tag.sh` + push = `release.sh`
 
-Consider using `release.sh` for full releases, or the individual scripts for more control.
+Use the individual scripts in sequence for full releases when you need explicit control over each step.
