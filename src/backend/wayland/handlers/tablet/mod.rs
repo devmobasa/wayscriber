@@ -6,6 +6,7 @@ use wayland_client::backend::protocol::Message;
 use wayland_client::backend::{Backend, ObjectData, ObjectId};
 
 mod device;
+mod frame;
 mod manager;
 mod pad;
 mod pad_group;

@@ -1,10 +1,9 @@
 use super::blur::render_blur_placeholder;
 use super::highlight::render_click_highlight;
 use super::image::render_image_shape;
+use super::pressure_strokes::render_freehand_pressure_borrowed;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_rect};
-use super::strokes::{
-    render_freehand_borrowed, render_freehand_pressure_borrowed, render_marker_stroke_borrowed,
-};
+use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
 use super::text::{render_sticky_note, render_text};
 use crate::draw::Color;
 use crate::draw::shape::Shape;
