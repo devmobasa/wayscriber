@@ -2,6 +2,7 @@
 name = "wayscriber"
 version = "0.9.19"
 edition = "2024"
+rust-version = "1.95"
 description = "Screen annotation tool for Wayland compositors"
 homepage = "https://wayscriber.com"
 repository = "https://github.com/devmobasa/wayscriber"
