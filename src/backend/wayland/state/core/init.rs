@@ -153,6 +153,8 @@ impl WaylandState {
             #[cfg(tablet)]
             stylus_peak_thickness: None,
             #[cfg(tablet)]
+            pending_stylus_frame: crate::backend::wayland::state::PendingStylusFrame::default(),
+            #[cfg(tablet)]
             stylus_tool_types: std::collections::HashMap::new(),
             #[cfg(tablet)]
             stylus_auto_switched_to_eraser: false,

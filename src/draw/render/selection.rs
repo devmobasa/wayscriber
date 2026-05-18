@@ -47,7 +47,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
                 .map(|&(_, _, t)| t + outline_width as f32)
                 .collect();
 
-            use super::strokes::render_freehand_pressure_borrowed;
+            use super::pressure_strokes::render_freehand_pressure_borrowed;
             render_freehand_pressure_borrowed(ctx, &coords, &thickness, glow);
         }
         Shape::Line {

@@ -220,6 +220,8 @@ pub(super) struct WaylandState {
     pub(super) stylus_last_pos: Option<(f64, f64)>,
     #[cfg(tablet)]
     pub(super) stylus_peak_thickness: Option<f64>,
+    #[cfg(tablet)]
+    pub(super) pending_stylus_frame: PendingStylusFrame,
     /// Map of tool object IDs to their physical types (pen, eraser, etc.)
     #[cfg(tablet)]
     pub(super) stylus_tool_types: std::collections::HashMap<
@@ -238,6 +240,22 @@ pub(super) struct WaylandState {
 
     // Tokio runtime handle for async operations
     pub(super) tokio_handle: tokio::runtime::Handle,
+}
+
+#[cfg(tablet)]
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct PendingStylusFrame {
+    pub(super) motion: Option<(f64, f64)>,
+    pub(super) pressure: Option<u32>,
+    pub(super) down: bool,
+    pub(super) up: bool,
+}
+
+#[cfg(tablet)]
+impl PendingStylusFrame {
+    pub(super) fn is_empty(self) -> bool {
+        self.motion.is_none() && self.pressure.is_none() && !self.down && !self.up
+    }
 }
 
 impl WaylandState {
