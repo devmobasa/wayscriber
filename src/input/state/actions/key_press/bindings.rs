@@ -1,6 +1,6 @@
 use crate::input::events::Key;
 
-pub(super) fn key_to_action_label(key: Key) -> Option<String> {
+pub(in crate::input::state) fn key_to_action_label(key: Key) -> Option<String> {
     match key {
         Key::Char(c) => Some(c.to_string()),
         Key::Escape => Some("Escape".to_string()),
@@ -28,7 +28,7 @@ pub(super) fn key_to_action_label(key: Key) -> Option<String> {
     }
 }
 
-pub(super) fn fallback_unshifted_label(key: &str) -> Option<&'static str> {
+pub(in crate::input::state) fn fallback_unshifted_label(key: &str) -> Option<&'static str> {
     match key {
         "!" => Some("1"),
         "@" => Some("2"),

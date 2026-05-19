@@ -3,7 +3,7 @@ use crate::input::events::Key;
 use super::super::InputState;
 
 impl InputState {
-    pub(super) fn handle_help_overlay_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_help_overlay_key(&mut self, key: Key) -> bool {
         if !self.show_help {
             return false;
         }

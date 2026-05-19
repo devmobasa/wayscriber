@@ -4,7 +4,10 @@ use crate::input::{DragTool, Tool, events::MouseButton};
 use std::sync::Arc;
 
 use super::super::core::MenuCommand;
-use super::super::{ContextMenuKind, DrawingState, InputState};
+use super::super::{
+    ContextMenuKind, DrawingState, InputState,
+    interaction::{CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press},
+};
 
 #[derive(Clone, Copy)]
 struct PressCoords {
@@ -15,7 +18,10 @@ struct PressCoords {
 }
 
 impl InputState {
-    fn is_radial_menu_toggle_button(&self, button: MouseButton) -> bool {
+    pub(in crate::input::state) fn is_radial_menu_toggle_button(
+        &self,
+        button: MouseButton,
+    ) -> bool {
         use crate::config::RadialMenuMouseBinding;
         match self.radial_menu_mouse_binding {
             RadialMenuMouseBinding::Middle => matches!(button, MouseButton::Middle),
@@ -24,13 +30,22 @@ impl InputState {
         }
     }
 
-    fn should_toggle_radial_menu_from_mouse(&self, button: MouseButton) -> bool {
+    pub(in crate::input::state) fn should_toggle_radial_menu_from_mouse(
+        &self,
+        button: MouseButton,
+    ) -> bool {
         !self.zoom_active()
             && matches!(self.state, DrawingState::Idle)
             && self.is_radial_menu_toggle_button(button)
     }
 
-    fn handle_right_click(&mut self, screen_x: i32, screen_y: i32, canvas_x: i32, canvas_y: i32) {
+    pub(in crate::input::state) fn handle_right_click(
+        &mut self,
+        screen_x: i32,
+        screen_y: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
         self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
         self.last_text_click = None;
         if self.try_cancel_active_interaction() {
@@ -125,84 +140,18 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
-        if self.handle_radial_menu_press(button, screen_x, screen_y, canvas_x, canvas_y) {
-            return;
-        }
-
-        if self.handle_color_picker_press(button, screen_x, screen_y) {
-            return;
-        }
-
-        if self.handle_board_picker_press(button, screen_x, screen_y) {
-            return;
-        }
-
-        if self.handle_properties_panel_press(button, screen_x, screen_y) {
-            return;
-        }
-
-        if button == MouseButton::Left && self.is_context_menu_open() {
-            self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
-            self.trigger_click_highlight(canvas_x, canvas_y);
-            self.handle_context_menu_press(screen_x, screen_y);
-            return;
-        }
-
-        self.close_properties_panel();
-
-        let binding = self.drag_binding_for_button(button);
-        if let Some(tool) = self.tool_for_button_press(button, binding.tool) {
-            let coords = PressCoords {
-                screen_x,
-                screen_y,
-                canvas_x,
-                canvas_y,
-            };
-            self.handle_tool_button_press(button, tool, binding.color, coords);
-            return;
-        }
-
-        match button {
-            MouseButton::Right => {
-                if self.should_toggle_radial_menu_from_mouse(MouseButton::Right) {
-                    self.toggle_radial_menu(screen_x as f64, screen_y as f64);
-                } else {
-                    self.handle_right_click(screen_x, screen_y, canvas_x, canvas_y);
-                }
-            }
-            MouseButton::Left => {
-                self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
-                self.trigger_click_highlight(canvas_x, canvas_y);
-
-                if self.handle_context_menu_press(screen_x, screen_y) {
-                    return;
-                }
-
-                match &mut self.state {
-                    DrawingState::Idle => {}
-                    DrawingState::TextInput { x: tx, y: ty, .. } => {
-                        *tx = canvas_x;
-                        *ty = canvas_y;
-                        self.update_text_preview_dirty();
-                        self.needs_redraw = true;
-                    }
-                    DrawingState::Drawing { .. }
-                    | DrawingState::MovingSelection { .. }
-                    | DrawingState::Selecting { .. }
-                    | DrawingState::PendingTextClick { .. }
-                    | DrawingState::ResizingText { .. }
-                    | DrawingState::ResizingSelection { .. } => {}
-                }
-            }
-            MouseButton::Middle => {
-                if self.should_toggle_radial_menu_from_mouse(MouseButton::Middle) {
-                    self.toggle_radial_menu(screen_x as f64, screen_y as f64);
-                }
-            }
-        }
+        let points = PointerPoints::new(
+            ScreenPoint::new(screen_x, screen_y),
+            CanvasPoint::new(canvas_x, canvas_y),
+        );
+        let _ = route_pointer_press(self, PointerPress::new(button, points));
     }
 
-    fn tool_for_button_press(&self, button: MouseButton, binding_tool: DragTool) -> Option<Tool> {
+    pub(in crate::input::state) fn tool_for_button_press(
+        &self,
+        button: MouseButton,
+        binding_tool: DragTool,
+    ) -> Option<Tool> {
         let configured_tool = binding_tool.as_tool();
         if configured_tool.is_some()
             && self.presenter_mode
@@ -261,6 +210,27 @@ impl InputState {
             | DrawingState::ResizingText { .. }
             | DrawingState::ResizingSelection { .. } => {}
         }
+    }
+
+    pub(in crate::input::state) fn handle_tool_button_press_at(
+        &mut self,
+        button: MouseButton,
+        tool: Tool,
+        color: Option<crate::draw::Color>,
+        screen: (i32, i32),
+        canvas: (i32, i32),
+    ) {
+        self.handle_tool_button_press(
+            button,
+            tool,
+            color,
+            PressCoords {
+                screen_x: screen.0,
+                screen_y: screen.1,
+                canvas_x: canvas.0,
+                canvas_y: canvas.1,
+            },
+        );
     }
 
     fn handle_idle_tool_click(
@@ -396,7 +366,11 @@ impl InputState {
         }
     }
 
-    fn handle_context_menu_press(&mut self, screen_x: i32, screen_y: i32) -> bool {
+    pub(in crate::input::state) fn handle_context_menu_press(
+        &mut self,
+        screen_x: i32,
+        screen_y: i32,
+    ) -> bool {
         if !self.is_context_menu_open() {
             return false;
         }
@@ -411,7 +385,7 @@ impl InputState {
         true
     }
 
-    fn handle_radial_menu_press(
+    pub(in crate::input::state) fn handle_radial_menu_press(
         &mut self,
         button: MouseButton,
         screen_x: i32,
@@ -444,7 +418,12 @@ impl InputState {
         true
     }
 
-    fn handle_color_picker_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+    pub(in crate::input::state) fn handle_color_picker_press(
+        &mut self,
+        button: MouseButton,
+        x: i32,
+        y: i32,
+    ) -> bool {
         if !self.is_color_picker_popup_open() {
             return false;
         }
@@ -472,7 +451,12 @@ impl InputState {
         true
     }
 
-    fn handle_board_picker_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+    pub(in crate::input::state) fn handle_board_picker_press(
+        &mut self,
+        button: MouseButton,
+        x: i32,
+        y: i32,
+    ) -> bool {
         if !self.is_board_picker_open() {
             return false;
         }
@@ -511,7 +495,12 @@ impl InputState {
         true
     }
 
-    fn handle_properties_panel_press(&mut self, button: MouseButton, x: i32, y: i32) -> bool {
+    pub(in crate::input::state) fn handle_properties_panel_press(
+        &mut self,
+        button: MouseButton,
+        x: i32,
+        y: i32,
+    ) -> bool {
         if !self.is_properties_panel_open() {
             return false;
         }

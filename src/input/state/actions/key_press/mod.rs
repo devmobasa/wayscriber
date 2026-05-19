@@ -1,15 +1,13 @@
-mod bindings;
+pub(in crate::input::state) mod bindings;
 mod panels;
 mod text_input;
 
-use crate::config::Action;
 use crate::input::events::Key;
 
-use super::super::{DrawingState, InputState};
-use bindings::{fallback_unshifted_label, key_to_action_label};
+use super::super::{DrawingState, InputState, interaction};
 
 impl InputState {
-    fn handle_modifier_key_press(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_modifier_key_press(&mut self, key: Key) -> bool {
         match key {
             Key::Shift => self.modifiers.shift = true,
             Key::Ctrl => self.modifiers.ctrl = true,
@@ -34,130 +32,6 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
-        // Tour takes highest priority when active
-        if self.tour_active && self.handle_tour_key(key) {
-            return;
-        }
-
-        // Command palette takes priority
-        if self.command_palette_open && self.handle_command_palette_key(key) {
-            return;
-        }
-
-        if self.show_help && self.handle_help_overlay_key(key) {
-            return;
-        }
-
-        if self.is_radial_menu_open() {
-            if self.handle_modifier_key_press(key) {
-                return;
-            }
-
-            if matches!(key, Key::Escape) {
-                self.close_radial_menu();
-                return;
-            }
-
-            if let Some(key_str) = key_to_action_label(key) {
-                let mapped_action = self.find_action(&key_str).or_else(|| {
-                    if self.modifiers.shift {
-                        fallback_unshifted_label(&key_str)
-                            .and_then(|fallback| self.find_action(fallback))
-                    } else {
-                        None
-                    }
-                });
-                if matches!(mapped_action, Some(Action::ToggleRadialMenu)) {
-                    self.close_radial_menu();
-                }
-            }
-            return;
-        }
-
-        if self.is_color_picker_popup_open() && self.handle_color_picker_popup_key(key) {
-            return;
-        }
-
-        if self.is_context_menu_open() && self.handle_context_menu_key(key) {
-            return;
-        }
-
-        if self.is_board_picker_open() && self.handle_board_picker_key(key) {
-            return;
-        }
-
-        // Handle modifier keys first
-        if self.handle_modifier_key_press(key) {
-            return;
-        }
-
-        if self.is_properties_panel_open() {
-            let handled = self.handle_properties_panel_key(key);
-            if handled {
-                return;
-            }
-            return;
-        }
-
-        // Escape cancels pending board or page deletion
-        if matches!(key, Key::Escape) && self.has_pending_board_delete() {
-            self.cancel_pending_board_delete();
-            return;
-        }
-        if matches!(key, Key::Escape) && self.has_pending_page_delete() {
-            self.cancel_pending_page_delete();
-            return;
-        }
-
-        if matches!(key, Key::Escape)
-            && matches!(self.state, DrawingState::Idle)
-            && self.has_selection()
-        {
-            let bounds = self.selection_bounding_box(self.selected_shape_ids());
-            self.clear_selection();
-            self.mark_selection_dirty_region(bounds);
-            self.needs_redraw = true;
-            return;
-        }
-
-        if matches!(&self.state, DrawingState::TextInput { .. }) {
-            self.handle_text_input_key(key);
-            return;
-        }
-
-        // Handle Escape in Drawing state for canceling
-        if matches!(key, Key::Escape)
-            && let DrawingState::Drawing { .. } = &self.state
-            && let Some(Action::Exit) = self.find_action("Escape")
-        {
-            self.try_cancel_active_interaction();
-            return;
-        }
-
-        // Convert key to string for action lookup
-        let Some(key_str) = key_to_action_label(key) else {
-            return;
-        };
-
-        // Look up action based on keybinding
-        if let Some(action) = self.find_action(&key_str) {
-            self.handle_action(action);
-            return;
-        }
-        if self.modifiers.shift
-            && let Some(fallback) = fallback_unshifted_label(&key_str)
-            && let Some(action) = self.find_action(fallback)
-        {
-            self.handle_action(action);
-            return;
-        }
-
-        if matches!(key, Key::Return)
-            && !self.modifiers.ctrl
-            && !self.modifiers.shift
-            && !self.modifiers.alt
-            && matches!(self.state, DrawingState::Idle)
-            && self.edit_selected_text()
-        {}
+        let _ = interaction::route_key_press(self, key);
     }
 }

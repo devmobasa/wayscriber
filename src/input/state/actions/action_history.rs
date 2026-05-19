@@ -3,7 +3,7 @@ use crate::config::Action;
 use super::super::InputState;
 
 impl InputState {
-    pub(super) fn handle_history_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_history_action(&mut self, action: Action) -> bool {
         match action {
             Action::Undo => {
                 if let Some(action) = self.boards.active_frame_mut().undo_last() {

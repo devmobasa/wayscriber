@@ -1,6 +1,7 @@
 mod actions;
 mod core;
 mod highlight;
+pub(crate) mod interaction;
 mod mouse;
 mod render;
 #[cfg(test)]

@@ -7,7 +7,7 @@ const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
 impl InputState {
-    pub(super) fn handle_selection_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_selection_action(&mut self, action: Action) -> bool {
         match action {
             Action::CopySelection => {
                 let copied = self.copy_selection();

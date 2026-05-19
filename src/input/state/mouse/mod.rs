@@ -2,7 +2,7 @@ mod motion;
 mod press;
 mod release;
 
-const TEXT_CLICK_DRAG_THRESHOLD: i32 = 4;
+pub(in crate::input::state) const TEXT_CLICK_DRAG_THRESHOLD: i32 = 4;
 const TEXT_DOUBLE_CLICK_MS: u64 = 400;
 const TEXT_DOUBLE_CLICK_DISTANCE: i32 = 6;
 const BOARD_PICKER_DOUBLE_CLICK_MS: u64 = 400;

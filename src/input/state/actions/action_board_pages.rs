@@ -6,7 +6,7 @@ use log::info;
 use super::super::{InputState, UiToastKind};
 
 impl InputState {
-    pub(super) fn handle_board_pages_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_board_pages_action(&mut self, action: Action) -> bool {
         match action {
             Action::ToggleWhiteboard => {
                 if self.boards.has_board(BOARD_ID_WHITEBOARD) {

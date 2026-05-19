@@ -5,7 +5,7 @@ use log::info;
 use super::super::InputState;
 
 impl InputState {
-    pub(super) fn handle_tool_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_tool_action(&mut self, action: Action) -> bool {
         match action {
             Action::IncreaseThickness => {
                 self.nudge_thickness_for_active_tool(1.0);
