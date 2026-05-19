@@ -1,11 +1,6 @@
 use super::base::{DrawingState, InputState, TextInputMode};
-use crate::draw::shape::{
-    bounding_box_for_arrow, bounding_box_for_blur, bounding_box_for_ellipse,
-    bounding_box_for_eraser, bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
-    bounding_box_for_sticky_note, bounding_box_for_text, step_marker_bounds,
-};
-use crate::input::tool::Tool;
-use crate::util::{self, Rect};
+use crate::draw::shape::{bounding_box_for_sticky_note, bounding_box_for_text};
+use crate::util::Rect;
 
 impl InputState {
     /// Clears any cached provisional shape bounds and marks their damage region.
@@ -36,97 +31,9 @@ impl InputState {
 
     fn compute_provisional_bounds(&self, current_x: i32, current_y: i32) -> Option<Rect> {
         match &self.state {
-            DrawingState::Drawing {
-                tool,
-                start_x,
-                start_y,
-                points,
-                point_thicknesses,
-            } => match tool {
-                Tool::Pen => {
-                    // Approximate bounding box for variable width
-                    // If we have pressure data, we should ideally use it, but for dirty tracking
-                    // utilizing the max possible width (current_thickness) is safe and fast.
-                    // Or we could scan the point_thicknesses vector.
-                    if !point_thicknesses.is_empty() {
-                        let max_thick =
-                            point_thicknesses.iter().fold(0.0f32, |a, &b| a.max(b)) as f64;
-                        bounding_box_for_points(points, max_thick)
-                    } else {
-                        bounding_box_for_points(points, self.thickness_for_tool(*tool))
-                    }
-                }
-                Tool::Marker => {
-                    let thickness = self.thickness_for_tool(*tool);
-                    let inflated = (thickness * 1.35).max(thickness + 1.0);
-                    bounding_box_for_points(points, inflated)
-                }
-                Tool::Eraser => bounding_box_for_eraser(points, self.eraser_size),
-                Tool::Line => bounding_box_for_line(
-                    *start_x,
-                    *start_y,
-                    current_x,
-                    current_y,
-                    self.thickness_for_tool(*tool),
-                ),
-                Tool::Rect => {
-                    let (x, w) = if current_x >= *start_x {
-                        (*start_x, current_x - start_x)
-                    } else {
-                        (current_x, start_x - current_x)
-                    };
-                    let (y, h) = if current_y >= *start_y {
-                        (*start_y, current_y - start_y)
-                    } else {
-                        (current_y, start_y - current_y)
-                    };
-                    bounding_box_for_rect(x, y, w, h, self.thickness_for_tool(*tool))
-                }
-                Tool::Ellipse => {
-                    let (cx, cy, rx, ry) =
-                        util::ellipse_bounds(*start_x, *start_y, current_x, current_y);
-                    bounding_box_for_ellipse(cx, cy, rx, ry, self.thickness_for_tool(*tool))
-                }
-                Tool::Arrow => {
-                    let label = self.next_arrow_label();
-                    bounding_box_for_arrow(
-                        *start_x,
-                        *start_y,
-                        current_x,
-                        current_y,
-                        self.thickness_for_tool(*tool),
-                        self.arrow_length,
-                        self.arrow_angle,
-                        self.arrow_head_at_end,
-                        label.as_ref(),
-                    )
-                }
-                Tool::Blur => {
-                    let (x, w) = if current_x >= *start_x {
-                        (*start_x, current_x - start_x)
-                    } else {
-                        (current_x, start_x - current_x)
-                    };
-                    let (y, h) = if current_y >= *start_y {
-                        (*start_y, current_y - start_y)
-                    } else {
-                        (current_y, start_y - current_y)
-                    };
-                    bounding_box_for_blur(x, y, w, h)
-                }
-                Tool::StepMarker => {
-                    let label = self.next_step_marker_label();
-                    step_marker_bounds(
-                        current_x,
-                        current_y,
-                        label.value,
-                        label.size,
-                        &label.font_descriptor,
-                    )
-                }
-                Tool::Highlight => None,
-                Tool::Select => None,
-            },
+            DrawingState::Drawing { .. } => {
+                self.provisional_tool_stroke(current_x, current_y).bounds()
+            }
             DrawingState::Selecting {
                 start_x, start_y, ..
             } => Self::selection_rect_from_points(*start_x, *start_y, current_x, current_y)

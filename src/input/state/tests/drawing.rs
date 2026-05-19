@@ -1,5 +1,6 @@
 use super::*;
 use crate::input::{DragBinding, DragButtonBindings, DragToolBindings};
+use crate::ui::toolbar::ToolbarEvent;
 
 fn left_drag_bindings(
     drag: Tool,
@@ -211,6 +212,39 @@ fn toggle_click_highlight_action_changes_state() {
     state.handle_action(Action::ToggleClickHighlight);
     assert!(!state.click_highlight_enabled());
     assert!(state.needs_redraw);
+}
+
+#[test]
+fn toolbar_select_highlight_syncs_click_highlight_state() {
+    let mut state = create_test_input_state();
+    assert!(!state.highlight_tool_active());
+    assert!(!state.click_highlight_enabled());
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Highlight)));
+
+    assert_eq!(state.tool_override(), Some(Tool::Highlight));
+    assert!(state.highlight_tool_active());
+    assert!(state.click_highlight_enabled());
+}
+
+#[test]
+fn toolbar_select_highlight_sticks_when_highlight_is_active_via_modifier() {
+    let mut state = create_test_input_state();
+    let mut bindings = DragToolBindings::default();
+    bindings.left.shift_drag = DragBinding::from_tool(Tool::Highlight);
+    assert!(state.set_drag_tool_bindings(bindings));
+    assert!(state.set_tool_override(Some(Tool::Pen)));
+
+    state.on_key_press(Key::Shift);
+    assert_eq!(state.active_tool(), Tool::Highlight);
+    assert_eq!(state.tool_override(), Some(Tool::Pen));
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Highlight)));
+    state.on_key_release(Key::Shift);
+
+    assert_eq!(state.tool_override(), Some(Tool::Highlight));
+    assert_eq!(state.active_tool(), Tool::Highlight);
+    assert!(state.click_highlight_enabled());
 }
 
 #[test]

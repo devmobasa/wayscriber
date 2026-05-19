@@ -129,19 +129,7 @@ pub(crate) fn tooltip_label_for_event(
 }
 
 pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
-    match tool {
-        Tool::Select => Some(Action::SelectSelectionTool),
-        Tool::Pen => Some(Action::SelectPenTool),
-        Tool::Line => Some(Action::SelectLineTool),
-        Tool::Rect => Some(Action::SelectRectTool),
-        Tool::Ellipse => Some(Action::SelectEllipseTool),
-        Tool::Arrow => Some(Action::SelectArrowTool),
-        Tool::Blur => Some(Action::SelectBlurTool),
-        Tool::Marker => Some(Action::SelectMarkerTool),
-        Tool::StepMarker => Some(Action::SelectStepMarkerTool),
-        Tool::Highlight => Some(Action::SelectHighlightTool),
-        Tool::Eraser => Some(Action::SelectEraserTool),
-    }
+    tool.action()
 }
 
 pub(crate) fn action_for_apply_preset(slot: usize) -> Option<Action> {
@@ -207,9 +195,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::ToggleFloatingBadgeAlways(_) => {
             ToolbarPersistence::Persist(Ui(FloatingBadgeAlways))
         }
-        ToolbarEvent::ToggleAllHighlight(_) | ToolbarEvent::ToggleHighlightToolRing(_) => {
-            ToolbarPersistence::Persist(ClickHighlight)
-        }
+        ToolbarEvent::SelectTool(Tool::Highlight)
+        | ToolbarEvent::ToggleAllHighlight(_)
+        | ToolbarEvent::ToggleHighlightToolRing(_) => ToolbarPersistence::Persist(ClickHighlight),
         _ => ToolbarPersistence::RuntimeOnly,
     }
 }

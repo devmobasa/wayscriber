@@ -6,6 +6,14 @@ use super::super::InputState;
 
 impl InputState {
     pub(in crate::input::state) fn handle_tool_action(&mut self, action: Action) -> bool {
+        if let Some(tool) = Tool::from_select_action(action) {
+            if tool == Tool::Highlight {
+                self.set_highlight_tool(true);
+            }
+            self.set_tool_override(Some(tool));
+            return true;
+        }
+
         match action {
             Action::IncreaseThickness => {
                 self.nudge_thickness_for_active_tool(1.0);
@@ -19,44 +27,10 @@ impl InputState {
             Action::DecreaseMarkerOpacity => {
                 self.set_marker_opacity(self.marker_opacity - 0.05);
             }
-            Action::SelectSelectionTool => {
-                self.set_tool_override(Some(Tool::Select));
-            }
-            Action::SelectMarkerTool => {
-                self.set_tool_override(Some(Tool::Marker));
-            }
-            Action::SelectStepMarkerTool => {
-                self.set_tool_override(Some(Tool::StepMarker));
-            }
-            Action::SelectEraserTool => {
-                self.set_tool_override(Some(Tool::Eraser));
-            }
             Action::ToggleEraserMode => {
                 if self.toggle_eraser_mode() {
                     info!("Eraser mode set to {:?}", self.eraser_mode);
                 }
-            }
-            Action::SelectPenTool => {
-                self.set_tool_override(Some(Tool::Pen));
-            }
-            Action::SelectLineTool => {
-                self.set_tool_override(Some(Tool::Line));
-            }
-            Action::SelectRectTool => {
-                self.set_tool_override(Some(Tool::Rect));
-            }
-            Action::SelectEllipseTool => {
-                self.set_tool_override(Some(Tool::Ellipse));
-            }
-            Action::SelectArrowTool => {
-                self.set_tool_override(Some(Tool::Arrow));
-            }
-            Action::SelectBlurTool => {
-                self.set_tool_override(Some(Tool::Blur));
-            }
-            Action::SelectHighlightTool => {
-                self.set_highlight_tool(true);
-                self.set_tool_override(Some(Tool::Highlight));
             }
             Action::IncreaseFontSize => {
                 self.adjust_font_size(2.0);

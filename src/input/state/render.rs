@@ -1,115 +1,111 @@
+use crate::draw::render::render_freehand_pressure_borrowed;
 use crate::draw::{
     Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape,
 };
-use crate::input::tool::Tool;
-use crate::util;
+use crate::input::Tool;
+use crate::input::tool::{ProvisionalToolSnapshot, ProvisionalToolStroke};
 
 use super::{DrawingState, InputState};
 
 impl InputState {
-    /// Returns the shape currently being drawn for non-freehand tools.
-    ///
-    /// # Note
-    /// This is only for Line, Rect, Ellipse, Arrow tools which don't require
-    /// cloning. Pen/Marker/Eraser are handled directly in `render_provisional_shape()`
-    /// using borrowed rendering to avoid per-frame allocations.
-    fn get_provisional_shape(&self, current_x: i32, current_y: i32) -> Option<Shape> {
-        if let DrawingState::Drawing {
+    pub(crate) fn provisional_tool_stroke(
+        &self,
+        current_x: i32,
+        current_y: i32,
+    ) -> ProvisionalToolStroke<'_> {
+        let DrawingState::Drawing {
             tool,
             start_x,
             start_y,
-            ..
+            points,
+            point_thicknesses,
         } = &self.state
-        {
-            let drawing_color = self.active_drag_color_or_current();
-            let drawing_thickness = self.thickness_for_tool(*tool);
-            match tool {
-                // Pen, Marker, Eraser are handled by render_provisional_shape() directly
-                // with borrowed rendering - never call this method for those tools.
-                Tool::Pen | Tool::Marker | Tool::Eraser | Tool::Highlight | Tool::Select => None,
-                Tool::Line => Some(Shape::Line {
-                    x1: *start_x,
-                    y1: *start_y,
-                    x2: current_x,
-                    y2: current_y,
-                    color: drawing_color,
-                    thick: drawing_thickness,
-                }),
-                Tool::Rect => {
-                    // Normalize rectangle to handle dragging in any direction
-                    let (x, w) = if current_x >= *start_x {
-                        (*start_x, current_x - start_x)
-                    } else {
-                        (current_x, start_x - current_x)
-                    };
-                    let (y, h) = if current_y >= *start_y {
-                        (*start_y, current_y - start_y)
-                    } else {
-                        (current_y, start_y - current_y)
-                    };
-                    Some(Shape::Rect {
-                        x,
-                        y,
-                        w,
-                        h,
-                        fill: self.fill_enabled,
-                        color: drawing_color,
-                        thick: drawing_thickness,
-                    })
-                }
-                Tool::Ellipse => {
-                    let (cx, cy, rx, ry) =
-                        util::ellipse_bounds(*start_x, *start_y, current_x, current_y);
-                    Some(Shape::Ellipse {
-                        cx,
-                        cy,
-                        rx,
-                        ry,
-                        fill: self.fill_enabled,
-                        color: drawing_color,
-                        thick: drawing_thickness,
-                    })
-                }
-                Tool::Arrow => Some(Shape::Arrow {
-                    x1: *start_x,
-                    y1: *start_y,
-                    x2: current_x,
-                    y2: current_y,
-                    color: drawing_color,
-                    thick: drawing_thickness,
-                    arrow_length: self.arrow_length,
-                    arrow_angle: self.arrow_angle,
-                    head_at_end: self.arrow_head_at_end,
-                    label: self.next_arrow_label(),
-                }),
-                Tool::Blur => {
-                    let (x, w) = if current_x >= *start_x {
-                        (*start_x, current_x - start_x)
-                    } else {
-                        (current_x, start_x - current_x)
-                    };
-                    let (y, h) = if current_y >= *start_y {
-                        (*start_y, current_y - start_y)
-                    } else {
-                        (current_y, start_y - current_y)
-                    };
-                    Some(Shape::BlurRect {
-                        x,
-                        y,
-                        w,
-                        h,
-                        strength: drawing_thickness,
-                    })
-                }
-                Tool::StepMarker => Some(Shape::StepMarker {
-                    x: current_x,
-                    y: current_y,
-                    color: drawing_color,
-                    label: self.next_step_marker_label(),
-                }),
+        else {
+            return ProvisionalToolStroke::None;
+        };
+
+        let snapshot = ProvisionalToolSnapshot {
+            tool: *tool,
+            start: (*start_x, *start_y),
+            current: (current_x, current_y),
+            points,
+            point_thicknesses,
+            color: self.active_drag_color_or_current(),
+            size: self.thickness_for_tool(*tool),
+            eraser_size: self.eraser_size,
+            marker_opacity: self.marker_opacity,
+            fill_enabled: self.fill_enabled,
+            arrow_length: self.arrow_length,
+            arrow_angle: self.arrow_angle,
+            arrow_head_at_end: self.arrow_head_at_end,
+            arrow_label: if *tool == Tool::Arrow {
+                self.next_arrow_label()
+            } else {
+                None
+            },
+            step_marker_label: (*tool == Tool::StepMarker).then(|| self.next_step_marker_label()),
+        };
+        tool.provisional_stroke(snapshot)
+    }
+
+    pub(crate) fn render_provisional_tool_stroke(
+        &self,
+        ctx: &cairo::Context,
+        stroke: ProvisionalToolStroke<'_>,
+    ) -> bool {
+        match stroke {
+            ProvisionalToolStroke::BorrowedFreehand {
+                points,
+                color,
+                size,
+            } => {
+                render_freehand_borrowed(ctx, points, color, size);
+                true
             }
-        } else {
-            None
+            ProvisionalToolStroke::BorrowedPressureFreehand {
+                points,
+                point_thicknesses,
+                color,
+            } => {
+                render_freehand_pressure_borrowed(ctx, points, point_thicknesses, color);
+                true
+            }
+            ProvisionalToolStroke::BorrowedMarker {
+                points,
+                color,
+                size,
+            } => {
+                render_marker_stroke_borrowed(ctx, points, color, size);
+                true
+            }
+            ProvisionalToolStroke::EraserPreview { points, size } => {
+                let preview_color = Color {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 1.0,
+                    a: 0.35,
+                };
+                render_freehand_borrowed(ctx, points, preview_color, size);
+                true
+            }
+            ProvisionalToolStroke::Shape(shape) => {
+                render_shape(ctx, &shape);
+                true
+            }
+            ProvisionalToolStroke::BlurReplayPreview(params) => {
+                render_shape(
+                    ctx,
+                    &Shape::BlurRect {
+                        x: params.x,
+                        y: params.y,
+                        w: params.w,
+                        h: params.h,
+                        strength: params.strength,
+                    },
+                );
+                true
+            }
+            ProvisionalToolStroke::None => false,
         }
     }
 
@@ -132,70 +128,10 @@ impl InputState {
         current_y: i32,
     ) -> bool {
         match &self.state {
-            DrawingState::Drawing {
-                tool,
-                start_x: _,
-                start_y: _,
-                points,
-                point_thicknesses,
-            } => match tool {
-                Tool::Pen => {
-                    let drawing_color = self.active_drag_color_or_current();
-                    // Render freehand without cloning - just borrow the points
-                    // Check if we have pressure data available for this stroke
-                    let use_pressure =
-                        !point_thicknesses.is_empty() && point_thicknesses.len() == points.len();
-
-                    if use_pressure {
-                        // Pass separate slices to avoid allocation
-                        use crate::draw::render::render_freehand_pressure_borrowed;
-                        render_freehand_pressure_borrowed(
-                            ctx,
-                            points,
-                            point_thicknesses,
-                            drawing_color,
-                        );
-                    } else {
-                        render_freehand_borrowed(
-                            ctx,
-                            points,
-                            drawing_color,
-                            self.thickness_for_tool(*tool),
-                        );
-                    }
-                    true
-                }
-                Tool::Highlight => false,
-                Tool::Marker => {
-                    render_marker_stroke_borrowed(
-                        ctx,
-                        points,
-                        self.marker_color_for(self.active_drag_color_or_current()),
-                        self.thickness_for_tool(*tool),
-                    );
-                    true
-                }
-                Tool::Eraser => {
-                    // Visual preview without actually clearing
-                    let preview_color = Color {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
-                        a: 0.35,
-                    };
-                    render_freehand_borrowed(ctx, points, preview_color, self.eraser_size);
-                    true
-                }
-                _ => {
-                    // For other tools, use the normal path (no clone needed)
-                    if let Some(shape) = self.get_provisional_shape(current_x, current_y) {
-                        render_shape(ctx, &shape);
-                        true
-                    } else {
-                        false
-                    }
-                }
-            },
+            DrawingState::Drawing { .. } => {
+                let stroke = self.provisional_tool_stroke(current_x, current_y);
+                self.render_provisional_tool_stroke(ctx, stroke)
+            }
             DrawingState::Selecting {
                 start_x,
                 start_y,

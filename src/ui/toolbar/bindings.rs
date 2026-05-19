@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::config::{Action, action_label, action_meta_iter, action_short_label};
+use crate::config::{Action, action_meta_iter};
 use crate::input::{InputState, Tool};
 use crate::label_format::join_binding_labels;
 
@@ -8,7 +8,6 @@ use super::events::{
     ToolbarEvent, action_for_apply_preset as event_action_for_apply_preset,
     action_for_clear_preset as event_action_for_clear_preset,
     action_for_save_preset as event_action_for_save_preset,
-    action_for_tool as event_action_for_tool,
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -54,19 +53,17 @@ impl ToolbarBindingHints {
 }
 
 pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
-    event_action_for_tool(tool)
+    tool.action()
 }
 
 #[allow(dead_code)]
 pub(crate) fn tool_label(tool: Tool) -> &'static str {
-    action_for_tool(tool)
-        .map(action_short_label)
-        .unwrap_or("Select")
+    tool.short_label()
 }
 
 #[allow(dead_code)]
 pub(crate) fn tool_tooltip_label(tool: Tool) -> &'static str {
-    action_for_tool(tool).map(action_label).unwrap_or("Select")
+    tool.display_label()
 }
 
 pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
@@ -210,6 +207,8 @@ mod tests {
 
     #[test]
     fn tool_label_and_tooltip_label_use_action_metadata() {
+        use crate::config::{action_label, action_short_label};
+
         assert_eq!(
             tool_label(Tool::Ellipse),
             action_short_label(Action::SelectEllipseTool)

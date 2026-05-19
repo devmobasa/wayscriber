@@ -411,6 +411,7 @@ mod tests {
     fn click_highlight_toolbar_events_are_explicit_config_exceptions() {
         let events = vec![
             ToolbarEvent::ToggleAllHighlight(true),
+            ToolbarEvent::SelectTool(Tool::Highlight),
             ToolbarEvent::ToggleHighlightToolRing(true),
         ];
 

@@ -16,7 +16,7 @@ use super::widgets::{
     draw_close_button, draw_drag_handle, draw_panel_background, draw_pin_button,
     draw_tooltip_with_delay, point_in_rect,
 };
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolbarEvent, model};
 
 pub(super) const TOP_LABEL_FONT_SIZE: f64 = 14.0;
 pub(super) const ICON_TOGGLE_FONT_SIZE: f64 = 12.0;
@@ -53,13 +53,7 @@ impl<'a> TopStripLayout<'a> {
     }
 
     pub(super) fn tool_tooltip(&self, tool: Tool, label: &str) -> String {
-        let default_hint = match tool {
-            Tool::Line => Some("Shift+Drag"),
-            Tool::Rect => Some("Ctrl+Drag"),
-            Tool::Ellipse => Some("Tab+Drag"),
-            Tool::Arrow => Some("Ctrl+Shift+Drag"),
-            _ => None,
-        };
+        let default_hint = model::default_drag_hint(tool);
         let binding = match (self.snapshot.binding_hints.for_tool(tool), default_hint) {
             (Some(binding), Some(fallback)) => Some(format!("{}, {}", binding, fallback)),
             (Some(binding), None) => Some(binding.to_string()),
@@ -101,24 +95,10 @@ pub fn render_top_strip(
     x += handle_w + layout.gap;
 
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
-    let current_shape_tool = match snapshot.tool_override {
-        Some(Tool::Line) => Some(Tool::Line),
-        Some(Tool::Rect) => Some(Tool::Rect),
-        Some(Tool::Ellipse) => Some(Tool::Ellipse),
-        Some(Tool::Arrow) => Some(Tool::Arrow),
-        Some(Tool::Blur) => Some(Tool::Blur),
-        _ => match snapshot.active_tool {
-            Tool::Line => Some(Tool::Line),
-            Tool::Rect => Some(Tool::Rect),
-            Tool::Ellipse => Some(Tool::Ellipse),
-            Tool::Arrow => Some(Tool::Arrow),
-            Tool::Blur => Some(Tool::Blur),
-            _ => None,
-        },
-    };
-    let shape_icon_tool = current_shape_tool.unwrap_or(Tool::Rect);
-    let fill_tool_active = matches!(snapshot.tool_override, Some(Tool::Rect | Tool::Ellipse))
-        || matches!(snapshot.active_tool, Tool::Rect | Tool::Ellipse);
+    let current_shape_tool =
+        model::current_shape_tool(snapshot.active_tool, snapshot.tool_override);
+    let shape_icon_tool = current_shape_tool.unwrap_or_else(model::default_shape_tool);
+    let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
 
     if snapshot.use_icons {
         icons::draw_icon_strip(

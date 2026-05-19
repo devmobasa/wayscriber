@@ -1,15 +1,13 @@
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::input::Tool;
-use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::bindings::tool_tooltip_label;
+use crate::ui::toolbar::model;
 
 use super::super::super::widgets::*;
 use super::TopStripLayout;
-
-type IconFn = fn(&cairo::Context, f64, f64, f64);
+use super::tool_row::draw_semantic_tool_icon;
 
 pub(super) fn draw_shape_picker_row(
     layout: &mut TopStripLayout,
@@ -20,14 +18,7 @@ pub(super) fn draw_shape_picker_row(
 ) {
     let shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
     let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + layout.gap;
-    let shapes: &[(Tool, IconFn)] = &[
-        (Tool::Line, toolbar_icons::draw_icon_line),
-        (Tool::Rect, toolbar_icons::draw_icon_rect),
-        (Tool::Ellipse, toolbar_icons::draw_icon_circle),
-        (Tool::Arrow, toolbar_icons::draw_icon_arrow),
-        (Tool::Blur, toolbar_icons::draw_icon_blur),
-    ];
-    for (tool, icon_fn) in shapes {
+    for tool in model::shape_tools() {
         let is_active =
             layout.snapshot.active_tool == *tool || layout.snapshot.tool_override == Some(*tool);
         let is_hover = layout
@@ -40,7 +31,13 @@ pub(super) fn draw_shape_picker_row(
         set_icon_color(layout.ctx, is_hover);
         let icon_x = shape_x + (btn_size - icon_size) / 2.0;
         let icon_y = shape_y + (btn_size - icon_size) / 2.0;
-        icon_fn(layout.ctx, icon_x, icon_y, icon_size);
+        draw_semantic_tool_icon(
+            layout.ctx,
+            model::semantic_icon_for_tool(*tool),
+            icon_x,
+            icon_y,
+            icon_size,
+        );
         let tooltip = layout.tool_tooltip(*tool, tool_tooltip_label(*tool));
         layout.hits.push(HitRegion {
             rect: (shape_x, shape_y, btn_size, btn_size),
