@@ -1,6 +1,7 @@
-use crate::backend::wayland::toolbar::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
+use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::ui::toolbar::model::{ToolbarSliderSpec, delay_secs_from_t, delay_t_from_ms};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
@@ -43,7 +44,12 @@ pub(super) fn draw_delay_sliders(
     draw_round_rect(ctx, x, undo_slider_y, sliders_w, slider_h, 3.0);
     let _ = ctx.fill();
     let undo_t = delay_t_from_ms(snapshot.undo_all_delay_ms);
-    let undo_knob_x = x + undo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
+    let undo_knob_x = ToolbarSliderSpec::DELAY_SECONDS.knob_center_x(
+        x,
+        sliders_w,
+        slider_knob_r,
+        snapshot.undo_all_delay_ms as f64 / 1000.0,
+    );
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
     ctx.arc(
         undo_knob_x,
@@ -88,7 +94,12 @@ pub(super) fn draw_delay_sliders(
     draw_round_rect(ctx, x, redo_slider_y, sliders_w, slider_h, 3.0);
     let _ = ctx.fill();
     let redo_t = delay_t_from_ms(snapshot.redo_all_delay_ms);
-    let redo_knob_x = x + redo_t * (sliders_w - slider_knob_r * 2.0) + slider_knob_r;
+    let redo_knob_x = ToolbarSliderSpec::DELAY_SECONDS.knob_center_x(
+        x,
+        sliders_w,
+        slider_knob_r,
+        snapshot.redo_all_delay_ms as f64 / 1000.0,
+    );
     ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
     ctx.arc(
         redo_knob_x,

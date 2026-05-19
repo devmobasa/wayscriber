@@ -109,10 +109,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     let track_x = minus_x + btn_size + SPACING_STD;
     let track_w = plus_x - track_x - SPACING_STD;
     let marker_track_y = marker_slider_row_y + (btn_size - track_h) / 2.0;
-    let min_opacity = opacity_spec.min;
-    let max_opacity = opacity_spec.max;
-    let t = ((snapshot.marker_opacity - min_opacity) / (max_opacity - min_opacity)).clamp(0.0, 1.0);
-    let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
+    let knob_x = opacity_spec.knob_center_x(track_x, track_w, knob_r, snapshot.marker_opacity);
 
     set_color(ctx, COLOR_TRACK_BACKGROUND);
     draw_round_rect(ctx, track_x, marker_track_y, track_w, track_h, 4.0);
@@ -131,8 +128,8 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         rect: (track_x, marker_track_y - 6.0, track_w, track_h + 12.0),
         event: ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity),
         kind: HitKind::DragSetMarkerOpacity {
-            min: min_opacity,
-            max: max_opacity,
+            min: opacity_spec.min,
+            max: opacity_spec.max,
         },
         tooltip: None,
     });

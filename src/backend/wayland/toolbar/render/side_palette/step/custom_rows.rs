@@ -1,7 +1,8 @@
-use crate::backend::wayland::toolbar::events::{HitKind, delay_secs_from_t, delay_t_from_ms};
+use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
+use crate::ui::toolbar::model::{ToolbarSliderSpec, delay_secs_from_t, delay_t_from_ms};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 use crate::ui_text::UiTextStyle;
 
@@ -199,7 +200,12 @@ impl<'a> CustomRowContext<'a> {
         draw_round_rect(self.ctx, self.x, slider_y, slider_w, slider_h, 3.0);
         let _ = self.ctx.fill();
         let t = delay_t_from_ms(delay_ms);
-        let knob_x = self.x + t * (slider_w - slider_r * 2.0) + slider_r;
+        let knob_x = ToolbarSliderSpec::DELAY_SECONDS.knob_center_x(
+            self.x,
+            slider_w,
+            slider_r,
+            delay_ms as f64 / 1000.0,
+        );
         self.ctx.set_source_rgba(0.25, 0.5, 0.95, 0.9);
         self.ctx.arc(
             knob_x,
