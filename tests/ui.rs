@@ -2,7 +2,7 @@ use cairo::{Context, ImageSurface};
 use wayscriber::config::{
     HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle, StatusPosition,
 };
-use wayscriber::draw::Color;
+use wayscriber::draw::{Color, Shape};
 use wayscriber::input::{
     BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD, ClickHighlightSettings, EraserMode, InputState,
 };
@@ -58,6 +58,12 @@ fn surface_has_pixels(surface: &mut ImageSurface) -> bool {
         .data()
         .map(|data| data.iter().any(|byte| *byte != 0))
         .unwrap_or(false)
+}
+
+fn alpha_at(surface: &mut ImageSurface, x: i32, y: i32) -> u8 {
+    let stride = surface.stride() as usize;
+    let offset = y as usize * stride + x as usize * 4 + 3;
+    surface.data().unwrap()[offset]
 }
 
 #[test]
@@ -142,6 +148,42 @@ fn render_frozen_badge_draws_pixels() {
     wayscriber::ui::render_frozen_badge(&ctx, 400, 200);
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
+}
+
+#[test]
+fn render_shape_ellipse_does_not_connect_to_existing_current_path() {
+    let (mut surface, ctx) = surface_with_context(120, 120);
+    let magenta = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
+
+    ctx.move_to(10.0, 90.0);
+    wayscriber::draw::render_shape(
+        &ctx,
+        &Shape::Ellipse {
+            cx: 80,
+            cy: 20,
+            rx: 20,
+            ry: 10,
+            fill: false,
+            color: magenta,
+            thick: 6.0,
+        },
+    );
+
+    drop(ctx);
+    assert_eq!(
+        alpha_at(&mut surface, 48, 60),
+        0,
+        "ellipse rendering must not connect to a path left by prior drawing"
+    );
+    assert!(
+        alpha_at(&mut surface, 100, 20) > 0,
+        "ellipse stroke should still render"
+    );
 }
 
 #[test]
