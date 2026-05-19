@@ -1,6 +1,9 @@
 use crate::input::events::MouseButton;
 
-use super::super::{DrawingState, InputState};
+use super::super::{
+    DrawingState, InputState,
+    interaction::{CanvasPoint, PointerPoints, PointerRelease, ScreenPoint, route_pointer_release},
+};
 
 mod drawing;
 mod panels;
@@ -34,45 +37,50 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
-        self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
+        let points = PointerPoints::new(
+            ScreenPoint::new(screen_x, screen_y),
+            CanvasPoint::new(canvas_x, canvas_y),
+        );
+        let _ = route_pointer_release(self, PointerRelease::new(button, points));
+    }
 
-        // Radial menu uses press for selection, ignore release
-        if self.is_radial_menu_open() {
-            return;
-        }
+    pub(in crate::input::state) fn handle_color_picker_popup_release_at(
+        &mut self,
+        x: i32,
+        y: i32,
+    ) -> bool {
+        panels::handle_color_picker_popup_release(self, x, y)
+    }
 
-        if button == MouseButton::Left {
-            if panels::handle_color_picker_popup_release(self, screen_x, screen_y) {
-                return;
-            }
-            if panels::handle_context_menu_release(self, screen_x, screen_y) {
-                return;
-            }
-            if panels::handle_board_picker_release(self, screen_x, screen_y) {
-                return;
-            }
-            if panels::handle_properties_panel_release(self, screen_x, screen_y) {
-                return;
-            }
-        }
+    pub(in crate::input::state) fn handle_context_menu_release_at(
+        &mut self,
+        x: i32,
+        y: i32,
+    ) -> bool {
+        panels::handle_context_menu_release(self, x, y)
+    }
 
-        if matches!(
-            self.state,
-            DrawingState::Drawing { .. }
-                | DrawingState::MovingSelection { .. }
-                | DrawingState::Selecting { .. }
-                | DrawingState::PendingTextClick { .. }
-                | DrawingState::ResizingText { .. }
-                | DrawingState::ResizingSelection { .. }
-        ) && !self.pointer_drag_button_matches(button)
-        {
-            return;
-        }
+    pub(in crate::input::state) fn handle_board_picker_release_at(
+        &mut self,
+        x: i32,
+        y: i32,
+    ) -> bool {
+        panels::handle_board_picker_release(self, x, y)
+    }
 
-        if button != MouseButton::Left && self.active_drag_button.is_none() {
-            return;
-        }
+    pub(in crate::input::state) fn handle_properties_panel_release_at(
+        &mut self,
+        x: i32,
+        y: i32,
+    ) -> bool {
+        panels::handle_properties_panel_release(self, x, y)
+    }
 
+    pub(in crate::input::state) fn finish_pointer_interaction_at(
+        &mut self,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
         let state = std::mem::replace(&mut self.state, DrawingState::Idle);
         match state {
             DrawingState::MovingSelection {

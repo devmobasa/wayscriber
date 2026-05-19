@@ -4,7 +4,7 @@ use crate::input::{OutputFocusAction, ZoomAction};
 use super::super::InputState;
 
 impl InputState {
-    pub(super) fn handle_capture_zoom_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_capture_zoom_action(&mut self, action: Action) -> bool {
         match action {
             Action::CaptureFullScreen
             | Action::CaptureActiveWindow

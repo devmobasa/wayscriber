@@ -9,5 +9,5 @@ mod action_selection;
 mod action_tools;
 mod action_ui;
 mod help_overlay;
-mod key_press;
+pub(in crate::input::state) mod key_press;
 mod key_release;

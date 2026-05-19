@@ -4,7 +4,7 @@ use log::info;
 use super::super::{DrawingState, InputState, UiToastKind};
 
 impl InputState {
-    pub(super) fn handle_ui_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_ui_action(&mut self, action: Action) -> bool {
         match action {
             Action::ToggleHelp => {
                 self.toggle_help_overlay();

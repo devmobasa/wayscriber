@@ -5,7 +5,7 @@ use crate::input::state::InputState;
 const PROPERTIES_PANEL_COARSE_STEP: i32 = 5;
 
 impl InputState {
-    pub(super) fn handle_color_picker_popup_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_color_picker_popup_key(&mut self, key: Key) -> bool {
         if !self.is_color_picker_popup_open() {
             return false;
         }
@@ -49,7 +49,7 @@ impl InputState {
         }
     }
 
-    pub(super) fn handle_board_picker_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_board_picker_key(&mut self, key: Key) -> bool {
         if !self.is_board_picker_open() {
             return false;
         }
@@ -314,7 +314,7 @@ impl InputState {
         }
     }
 
-    pub(super) fn handle_properties_panel_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_properties_panel_key(&mut self, key: Key) -> bool {
         let adjust_step = if self.modifiers.shift {
             PROPERTIES_PANEL_COARSE_STEP
         } else {
@@ -338,7 +338,7 @@ impl InputState {
         }
     }
 
-    pub(super) fn handle_context_menu_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_context_menu_key(&mut self, key: Key) -> bool {
         match key {
             Key::Escape => {
                 self.close_context_menu();

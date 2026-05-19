@@ -3,7 +3,7 @@ use crate::config::Action;
 use log::info;
 
 impl InputState {
-    pub(super) fn handle_core_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_core_action(&mut self, action: Action) -> bool {
         match action {
             Action::Exit => {
                 if self.try_cancel_active_interaction() {

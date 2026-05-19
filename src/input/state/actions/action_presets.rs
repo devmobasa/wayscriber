@@ -3,7 +3,7 @@ use crate::config::Action;
 use super::super::InputState;
 
 impl InputState {
-    pub(super) fn handle_preset_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_preset_action(&mut self, action: Action) -> bool {
         match action {
             Action::ApplyPreset1 => {
                 let _ = self.apply_preset(1);

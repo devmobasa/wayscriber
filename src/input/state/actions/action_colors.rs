@@ -6,7 +6,7 @@ use crate::util;
 use super::super::InputState;
 
 impl InputState {
-    pub(super) fn handle_color_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_color_action(&mut self, action: Action) -> bool {
         let Some(color) = action_color(action) else {
             return false;
         };

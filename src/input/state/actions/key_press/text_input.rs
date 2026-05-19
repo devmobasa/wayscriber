@@ -9,7 +9,7 @@ use super::bindings::{fallback_unshifted_label, key_to_action_label};
 const MAX_TEXT_LENGTH: usize = 10_000;
 
 impl InputState {
-    pub(super) fn handle_text_input_key(&mut self, key: Key) {
+    pub(in crate::input::state) fn handle_text_input_key(&mut self, key: Key) {
         let should_check_actions = match key {
             // Special keys always check for actions
             Key::Escape
