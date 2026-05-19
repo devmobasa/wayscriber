@@ -13,7 +13,7 @@ pub(crate) use actions::{
 #[allow(unused_imports)]
 pub(crate) use activation::{
     ToolbarActivation, ToolbarColorPicker, ToolbarControlId, ToolbarDragTarget, ToolbarSlider,
-    ToolbarSliderSpec, ToolbarSliderTarget,
+    ToolbarSliderSpec, ToolbarSliderTarget, delay_secs_from_t, delay_t_from_ms,
 };
 #[allow(unused_imports)]
 pub(crate) use control::{

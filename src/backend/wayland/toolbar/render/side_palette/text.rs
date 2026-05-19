@@ -116,8 +116,8 @@ pub(super) fn draw_text_controls_section(layout: &mut SidePaletteLayout, y: &mut
     let fs_track_x = fs_minus_x + btn_size + SPACING_STD;
     let fs_track_w = fs_plus_x - fs_track_x - SPACING_STD;
     let fs_track_y = fs_slider_row_y + (btn_size - track_h) / 2.0;
-    let fs_t = ((snapshot.font_size - fs_min) / (fs_max - fs_min)).clamp(0.0, 1.0);
-    let fs_knob_x = fs_track_x + fs_t * (fs_track_w - knob_r * 2.0) + knob_r;
+    let fs_knob_x =
+        font_size_spec.knob_center_x(fs_track_x, fs_track_w, knob_r, snapshot.font_size);
 
     set_color(ctx, COLOR_TRACK_BACKGROUND);
     draw_round_rect(ctx, fs_track_x, fs_track_y, fs_track_w, track_h, 4.0);

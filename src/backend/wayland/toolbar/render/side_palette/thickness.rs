@@ -52,7 +52,6 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     let track_h = ToolbarLayoutSpec::SIDE_TRACK_HEIGHT;
     let knob_r = ToolbarLayoutSpec::SIDE_TRACK_KNOB_RADIUS;
     let thickness_spec = ToolbarSliderSpec::THICKNESS;
-    let (min_thick, max_thick) = (thickness_spec.min, thickness_spec.max);
     let nudge_step = thickness_spec.step.unwrap_or(1.0);
 
     let minus_x = x;
@@ -112,8 +111,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
     let track_x = minus_x + btn_size + SPACING_STD;
     let track_w = plus_x - track_x - SPACING_STD;
     let thickness_track_y = thickness_slider_row_y + (btn_size - track_h) / 2.0;
-    let t = ((snapshot.thickness - min_thick) / (max_thick - min_thick)).clamp(0.0, 1.0);
-    let knob_x = track_x + t * (track_w - knob_r * 2.0) + knob_r;
+    let knob_x = thickness_spec.knob_center_x(track_x, track_w, knob_r, snapshot.thickness);
 
     set_color(ctx, COLOR_TRACK_BACKGROUND);
     draw_round_rect(ctx, track_x, thickness_track_y, track_w, track_h, 4.0);
@@ -132,8 +130,8 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         rect: (track_x, thickness_track_y - 6.0, track_w, track_h + 12.0),
         event: ToolbarEvent::SetThickness(snapshot.thickness),
         kind: HitKind::DragSetThickness {
-            min: min_thick,
-            max: max_thick,
+            min: thickness_spec.min,
+            max: thickness_spec.max,
         },
         tooltip: None,
     });
