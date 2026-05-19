@@ -1,6 +1,6 @@
 use crate::config::ToolbarLayoutMode;
-use crate::input::Tool;
 use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui::toolbar::model;
 
 use super::ToolbarLayoutSpec;
 
@@ -52,18 +52,15 @@ impl ToolbarLayoutSpec {
         } else {
             Self::TOP_TEXT_BUTTON_W
         };
-        let tool_count = if self.layout_mode == ToolbarLayoutMode::Simple {
-            5
-        } else {
-            10
-        };
+        let tool_count =
+            model::top_tool_buttons(self.layout_mode == ToolbarLayoutMode::Simple).len();
         let mut x = Self::TOP_START_X + Self::TOP_HANDLE_SIZE + gap;
         x += tool_count as f64 * (btn_w + gap);
         if self.layout_mode == ToolbarLayoutMode::Simple {
             x += btn_w + gap;
         }
-        let fill_tool_active = matches!(snapshot.tool_override, Some(Tool::Rect | Tool::Ellipse))
-            || matches!(snapshot.active_tool, Tool::Rect | Tool::Ellipse);
+        let fill_tool_active =
+            model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
         let fill_visible = !self.use_icons
             && fill_tool_active
             && !(self.layout_mode == ToolbarLayoutMode::Simple && self.shape_picker_open);

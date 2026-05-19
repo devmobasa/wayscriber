@@ -1,5 +1,6 @@
 use crate::draw::Shape;
 use crate::draw::frame::ShapeSnapshot;
+use crate::input::tool::ToolPressBehavior;
 use crate::input::{DragTool, Tool, events::MouseButton};
 use std::sync::Arc;
 
@@ -241,7 +242,8 @@ impl InputState {
         x: i32,
         y: i32,
     ) {
-        let selection_click = self.modifiers.alt || tool == Tool::Select;
+        let selection_click =
+            self.modifiers.alt || matches!(tool.press_behavior(), ToolPressBehavior::Selection);
         let hit_id = self.hit_test_at(x, y);
 
         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
@@ -346,23 +348,28 @@ impl InputState {
             }
         }
 
-        if tool == Tool::Blur && !self.frozen_active() && !self.pending_frozen_toggle() {
-            self.request_frozen_toggle();
-        }
-        if tool != Tool::Highlight && tool != Tool::Select {
-            self.sync_current_settings_for_tool(tool);
-            let drawing_thickness = self.thickness_for_tool(tool);
-            self.begin_pointer_drag(button, color);
-            self.state = DrawingState::Drawing {
-                tool,
-                start_x: x,
-                start_y: y,
-                points: vec![(x, y)],
-                point_thicknesses: vec![drawing_thickness as f32],
-            };
-            self.last_provisional_bounds = None;
-            self.update_provisional_dirty(x, y);
-            self.needs_redraw = true;
+        match tool.press_behavior() {
+            ToolPressBehavior::Selection | ToolPressBehavior::HighlightNoop => {}
+            ToolPressBehavior::StartDrawing {
+                request_blur_capture,
+            } => {
+                if request_blur_capture && !self.frozen_active() && !self.pending_frozen_toggle() {
+                    self.request_frozen_toggle();
+                }
+                self.sync_current_settings_for_tool(tool);
+                let drawing_thickness = self.thickness_for_tool(tool);
+                self.begin_pointer_drag(button, color);
+                self.state = DrawingState::Drawing {
+                    tool,
+                    start_x: x,
+                    start_y: y,
+                    points: vec![(x, y)],
+                    point_thicknesses: vec![drawing_thickness as f32],
+                };
+                self.last_provisional_bounds = None;
+                self.update_provisional_dirty(x, y);
+                self.needs_redraw = true;
+            }
         }
     }
 

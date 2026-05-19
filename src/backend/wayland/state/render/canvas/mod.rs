@@ -168,42 +168,13 @@ impl WaylandState {
 
         self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
 
-        // Render provisional shape if actively drawing.
-        let rendered_provisional = if let crate::input::DrawingState::Drawing {
-            tool: crate::input::Tool::Blur,
-            start_x,
-            start_y,
-            ..
-        } = &self.input_state.state
-        {
-            let (x, w) = if mx >= *start_x {
-                (*start_x, mx - start_x)
-            } else {
-                (mx, start_x - mx)
-            };
-            let (y, h) = if my >= *start_y {
-                (*start_y, my - start_y)
-            } else {
-                (my, start_y - my)
-            };
-            crate::draw::render_blur_rect(
-                ctx,
-                crate::draw::BlurRectParams {
-                    x,
-                    y,
-                    w,
-                    h,
-                    strength: self
-                        .input_state
-                        .thickness_for_tool(crate::input::Tool::Blur),
-                    cacheable: false,
-                },
-                &replay_ctx,
-            );
-            true
-        } else {
-            // Use optimized method that avoids cloning for freehand
-            self.input_state.render_provisional_shape(ctx, mx, my)
+        let provisional = self.input_state.provisional_tool_stroke(mx, my);
+        let rendered_provisional = match provisional {
+            crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(params) => {
+                crate::draw::render_blur_rect(ctx, params, &replay_ctx);
+                true
+            }
+            _ => self.input_state.render_provisional_shape(ctx, mx, my),
         };
         if rendered_provisional {
             debug!("Rendered provisional shape");

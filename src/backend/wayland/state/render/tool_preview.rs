@@ -1,6 +1,7 @@
 use crate::draw::Color;
 use crate::input::Tool;
 use crate::toolbar_icons;
+use crate::ui::toolbar::model::{self, SemanticToolIcon};
 
 pub(super) fn draw_tool_preview(
     ctx: &cairo::Context,
@@ -47,20 +48,36 @@ pub(super) fn draw_tool_preview(
     ctx.set_source_rgba(r, g, b, a);
     let icon_x = bx + pad;
     let icon_y = by + pad;
-    match tool {
-        Tool::Select => toolbar_icons::draw_icon_select(ctx, icon_x, icon_y, icon_size),
-        Tool::Pen => toolbar_icons::draw_icon_pen(ctx, icon_x, icon_y, icon_size),
-        Tool::Line => toolbar_icons::draw_icon_line(ctx, icon_x, icon_y, icon_size),
-        Tool::Rect => toolbar_icons::draw_icon_rect(ctx, icon_x, icon_y, icon_size),
-        Tool::Ellipse => toolbar_icons::draw_icon_circle(ctx, icon_x, icon_y, icon_size),
-        Tool::Arrow => toolbar_icons::draw_icon_arrow(ctx, icon_x, icon_y, icon_size),
-        Tool::Blur => toolbar_icons::draw_icon_blur(ctx, icon_x, icon_y, icon_size),
-        Tool::Marker => toolbar_icons::draw_icon_marker(ctx, icon_x, icon_y, icon_size),
-        Tool::StepMarker => toolbar_icons::draw_icon_step_marker(ctx, icon_x, icon_y, icon_size),
-        Tool::Highlight => toolbar_icons::draw_icon_highlight(ctx, icon_x, icon_y, icon_size),
-        Tool::Eraser => toolbar_icons::draw_icon_eraser(ctx, icon_x, icon_y, icon_size),
-    }
+    draw_semantic_tool_icon(
+        ctx,
+        model::semantic_icon_for_tool(tool),
+        icon_x,
+        icon_y,
+        icon_size,
+    );
     let _ = ctx.restore();
+}
+
+fn draw_semantic_tool_icon(
+    ctx: &cairo::Context,
+    icon: SemanticToolIcon,
+    x: f64,
+    y: f64,
+    size: f64,
+) {
+    match icon {
+        SemanticToolIcon::Select => toolbar_icons::draw_icon_select(ctx, x, y, size),
+        SemanticToolIcon::Pen => toolbar_icons::draw_icon_pen(ctx, x, y, size),
+        SemanticToolIcon::Line => toolbar_icons::draw_icon_line(ctx, x, y, size),
+        SemanticToolIcon::Rect => toolbar_icons::draw_icon_rect(ctx, x, y, size),
+        SemanticToolIcon::Circle => toolbar_icons::draw_icon_circle(ctx, x, y, size),
+        SemanticToolIcon::Arrow => toolbar_icons::draw_icon_arrow(ctx, x, y, size),
+        SemanticToolIcon::Blur => toolbar_icons::draw_icon_blur(ctx, x, y, size),
+        SemanticToolIcon::Marker => toolbar_icons::draw_icon_marker(ctx, x, y, size),
+        SemanticToolIcon::Highlight => toolbar_icons::draw_icon_highlight(ctx, x, y, size),
+        SemanticToolIcon::StepMarker => toolbar_icons::draw_icon_step_marker(ctx, x, y, size),
+        SemanticToolIcon::Eraser => toolbar_icons::draw_icon_eraser(ctx, x, y, size),
+    }
 }
 
 pub(super) fn draw_stylus_hover_cursor(

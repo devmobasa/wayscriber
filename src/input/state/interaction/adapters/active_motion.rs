@@ -4,6 +4,7 @@ use super::super::outcome::{
 };
 use crate::input::state::mouse::TEXT_CLICK_DRAG_THRESHOLD;
 use crate::input::state::{DrawingState, InputState};
+use crate::input::tool::{ToolMotionBehavior, ToolMotionSizeSource, ToolPressBehavior};
 use crate::input::{EraserMode, MouseButton, Tool};
 use std::sync::Arc;
 
@@ -37,13 +38,16 @@ pub(crate) fn handle_active_motion(
         let dy = canvas.y() - *start_y;
         if dx.abs() >= TEXT_CLICK_DRAG_THRESHOLD || dy.abs() >= TEXT_CLICK_DRAG_THRESHOLD {
             let tool = *tool;
-            if tool != Tool::Highlight && tool != Tool::Select {
+            if matches!(
+                tool.press_behavior(),
+                ToolPressBehavior::StartDrawing { .. }
+            ) {
                 let drawing_thickness = state.thickness_for_tool(tool);
                 let mut points = vec![(*start_x, *start_y)];
                 let mut point_thicknesses = vec![drawing_thickness as f32];
-                if tool == Tool::Pen || tool == Tool::Marker || tool == Tool::Eraser {
+                if let Some(sample_size) = motion_sample_size(state, tool) {
                     points.push((canvas.x(), canvas.y()));
-                    point_thicknesses.push(drawing_thickness as f32);
+                    point_thicknesses.push(sample_size as f32);
                 }
                 state.state = DrawingState::Drawing {
                     tool,
@@ -121,19 +125,19 @@ pub(crate) fn handle_drawing_or_idle_motion(
 ) -> RoutingOutcome {
     let canvas = points.canvas();
     let mut drawing = false;
+    let sample_size = if let DrawingState::Drawing { tool, .. } = &state.state {
+        motion_sample_size(state, *tool)
+    } else {
+        None
+    };
     if let DrawingState::Drawing {
-        tool,
         points,
         point_thicknesses,
         ..
     } = &mut state.state
     {
-        if *tool == Tool::Pen || *tool == Tool::Marker || *tool == Tool::Eraser {
+        if let Some(thickness) = sample_size {
             points.push((canvas.x(), canvas.y()));
-            let thickness = match *tool {
-                Tool::Eraser => state.eraser_size,
-                _ => state.tool_settings.get(*tool).thickness,
-            };
             point_thicknesses.push(thickness as f32);
         }
         drawing = true;
@@ -174,4 +178,16 @@ pub(crate) fn has_active_drag(state: &InputState) -> bool {
 
 pub(crate) fn release_button_matches_active_drag(state: &InputState, button: MouseButton) -> bool {
     state.pointer_drag_button_matches(button)
+}
+
+fn motion_sample_size(state: &InputState, tool: Tool) -> Option<f64> {
+    match tool.motion_behavior() {
+        ToolMotionBehavior::NoPathAccumulation => None,
+        ToolMotionBehavior::AccumulatePath {
+            size_source: ToolMotionSizeSource::ToolSize,
+        } => Some(state.tool_settings.get(tool).thickness),
+        ToolMotionBehavior::AccumulatePath {
+            size_source: ToolMotionSizeSource::EraserSize,
+        } => Some(state.eraser_size),
+    }
 }

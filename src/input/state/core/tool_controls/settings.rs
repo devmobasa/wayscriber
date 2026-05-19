@@ -177,12 +177,6 @@ impl InputState {
             .unwrap_or_else(|| self.color_for_tool(tool))
     }
 
-    pub(crate) fn marker_color_for(&self, color: Color) -> Color {
-        // Keep a minimum alpha so the marker remains visible even if a fully transparent color was set.
-        let alpha = (color.a * self.marker_opacity).clamp(0.05, 0.9);
-        Color { a: alpha, ..color }
-    }
-
     pub(crate) fn begin_pointer_drag(&mut self, button: MouseButton, color: Option<Color>) {
         self.active_drag_button = Some(button);
         self.active_drag_color = color;

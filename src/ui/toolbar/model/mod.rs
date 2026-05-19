@@ -4,6 +4,7 @@ pub(crate) mod control;
 pub(crate) mod event_policy;
 pub(crate) mod header;
 pub(crate) mod settings;
+pub(crate) mod tools;
 
 #[allow(unused_imports)]
 pub(crate) use actions::{
@@ -32,6 +33,11 @@ pub(crate) use event_policy::{
 pub(crate) use header::{SideHeaderModel, board_chip_label};
 #[allow(unused_imports)]
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
+#[allow(unused_imports)]
+pub(crate) use tools::{
+    SemanticToolIcon, current_shape_tool, default_drag_hint, default_shape_tool, fill_tool_active,
+    is_fill_tool, semantic_icon_for_tool, shape_tools, top_tool_buttons,
+};
 
 #[cfg(test)]
 mod tests {

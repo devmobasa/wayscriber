@@ -5,8 +5,8 @@ use super::super::spec::ToolbarLayoutSpec;
 use super::shape_buttons;
 use super::tool_buttons;
 use crate::config::{Action, action_label};
-use crate::input::Tool;
 use crate::ui::toolbar::bindings::tool_tooltip_label;
+use crate::ui::toolbar::model;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 pub(super) fn build_hits(
@@ -28,10 +28,10 @@ pub(super) fn build_hits(
     let mut rect_x = None;
     let mut circle_end_x = None;
     for tool in tool_buttons {
-        if *tool == Tool::Rect {
+        if model::is_fill_tool(*tool) && rect_x.is_none() {
             rect_x = Some(x);
         }
-        if *tool == Tool::Ellipse {
+        if model::is_fill_tool(*tool) {
             circle_end_x = Some(x + btn_size);
         }
         hits.push(HitRegion {

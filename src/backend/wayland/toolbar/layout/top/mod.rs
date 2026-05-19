@@ -5,37 +5,11 @@ use super::super::hit::HitRegion;
 use super::spec::ToolbarLayoutSpec;
 use crate::config::ToolbarLayoutMode;
 use crate::input::Tool;
+use crate::ui::toolbar::model;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 mod icons;
 mod text;
-
-const TOOL_BUTTONS_SIMPLE: &[Tool] = &[
-    Tool::Select,
-    Tool::Pen,
-    Tool::Marker,
-    Tool::StepMarker,
-    Tool::Eraser,
-];
-const TOOL_BUTTONS_FULL: &[Tool] = &[
-    Tool::Select,
-    Tool::Pen,
-    Tool::Marker,
-    Tool::StepMarker,
-    Tool::Eraser,
-    Tool::Line,
-    Tool::Rect,
-    Tool::Ellipse,
-    Tool::Arrow,
-    Tool::Blur,
-];
-const SHAPE_BUTTONS: &[Tool] = &[
-    Tool::Line,
-    Tool::Rect,
-    Tool::Ellipse,
-    Tool::Arrow,
-    Tool::Blur,
-];
 
 pub fn build_top_hits(
     width: f64,
@@ -45,8 +19,7 @@ pub fn build_top_hits(
 ) {
     let spec = ToolbarLayoutSpec::new(snapshot);
     let is_simple = snapshot.layout_mode == ToolbarLayoutMode::Simple;
-    let fill_tool_active = matches!(snapshot.tool_override, Some(Tool::Rect | Tool::Ellipse))
-        || matches!(snapshot.active_tool, Tool::Rect | Tool::Ellipse);
+    let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
 
     if spec.use_icons() {
         icons::build_hits(height, snapshot, &spec, is_simple, fill_tool_active, hits);
@@ -79,13 +52,9 @@ pub fn build_top_hits(
 }
 
 fn tool_buttons(is_simple: bool) -> &'static [Tool] {
-    if is_simple {
-        TOOL_BUTTONS_SIMPLE
-    } else {
-        TOOL_BUTTONS_FULL
-    }
+    model::top_tool_buttons(is_simple)
 }
 
 fn shape_buttons() -> &'static [Tool] {
-    SHAPE_BUTTONS
+    model::shape_tools()
 }

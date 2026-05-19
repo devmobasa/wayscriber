@@ -81,6 +81,7 @@ pub(super) fn render_ellipse(
     ctx.save().ok();
     ctx.translate(cx as f64, cy as f64);
     ctx.scale(rx as f64, ry as f64);
+    ctx.new_sub_path();
     ctx.arc(0.0, 0.0, 1.0, 0.0, 2.0 * std::f64::consts::PI);
     if fill {
         let _ = ctx.save();
@@ -153,4 +154,47 @@ pub(super) fn render_arrow(
     ctx.close_path();
     let _ = ctx.fill();
     ctx.restore().ok();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cairo::{Context, ImageSurface};
+
+    fn surface_with_context(width: i32, height: i32) -> (ImageSurface, Context) {
+        let surface = ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
+        let ctx = Context::new(&surface).unwrap();
+        (surface, ctx)
+    }
+
+    fn alpha_at(surface: &mut ImageSurface, x: i32, y: i32) -> u8 {
+        let stride = surface.stride() as usize;
+        let offset = y as usize * stride + x as usize * 4 + 3;
+        surface.data().unwrap()[offset]
+    }
+
+    #[test]
+    fn ellipse_does_not_connect_to_existing_current_path() {
+        let (mut surface, ctx) = surface_with_context(120, 120);
+        let magenta = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 1.0,
+            a: 1.0,
+        };
+
+        ctx.move_to(10.0, 90.0);
+        render_ellipse(&ctx, 80, 20, 20, 10, false, magenta, 6.0);
+
+        drop(ctx);
+        assert_eq!(
+            alpha_at(&mut surface, 48, 60),
+            0,
+            "ellipse rendering must not stroke a line from a prior current point"
+        );
+        assert!(
+            alpha_at(&mut surface, 100, 20) > 0,
+            "ellipse stroke should still render"
+        );
+    }
 }

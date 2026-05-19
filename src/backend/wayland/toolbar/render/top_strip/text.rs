@@ -5,8 +5,8 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::{Action, action_label, action_short_label};
 use crate::input::Tool;
-use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
+use crate::ui::toolbar::{ToolbarEvent, model};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::FONT_FAMILY_DEFAULT;
@@ -40,28 +40,7 @@ pub(super) fn draw_text_strip(
         size: ICON_TOGGLE_FONT_SIZE,
     };
 
-    let tool_buttons: &[Tool] = if is_simple {
-        &[
-            Tool::Select,
-            Tool::Pen,
-            Tool::Marker,
-            Tool::StepMarker,
-            Tool::Eraser,
-        ]
-    } else {
-        &[
-            Tool::Select,
-            Tool::Pen,
-            Tool::Marker,
-            Tool::StepMarker,
-            Tool::Eraser,
-            Tool::Line,
-            Tool::Rect,
-            Tool::Ellipse,
-            Tool::Arrow,
-            Tool::Blur,
-        ]
-    };
+    let tool_buttons = model::top_tool_buttons(is_simple);
 
     for tool in tool_buttons {
         let label = tool_label(*tool);
@@ -246,14 +225,7 @@ pub(super) fn draw_text_strip(
     if is_simple && snapshot.shape_picker_open {
         let shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
         let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + gap;
-        let shapes: &[Tool] = &[
-            Tool::Line,
-            Tool::Rect,
-            Tool::Ellipse,
-            Tool::Arrow,
-            Tool::Blur,
-        ];
-        for tool in shapes {
+        for tool in model::shape_tools() {
             let label = tool_label(*tool);
             let tooltip_label = tool_tooltip_label(*tool);
             let is_active = snapshot.active_tool == *tool || snapshot.tool_override == Some(*tool);

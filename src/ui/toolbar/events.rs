@@ -166,10 +166,6 @@ impl ToolbarEvent {
     }
 }
 
-pub(crate) fn action_for_tool(tool: Tool) -> Option<Action> {
-    super::model::action_for_tool(tool)
-}
-
 pub(crate) fn action_for_apply_preset(slot: usize) -> Option<Action> {
     super::model::action_for_apply_preset(slot)
 }

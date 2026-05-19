@@ -4,6 +4,7 @@ use crate::input::Tool;
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::bindings::tool_tooltip_label;
+use crate::ui::toolbar::model::{self, SemanticToolIcon};
 
 use super::super::super::widgets::*;
 use super::TopStripLayout;
@@ -27,45 +28,14 @@ pub(super) fn draw_tool_row(
 ) -> ToolRowResult {
     let snapshot = layout.snapshot;
 
-    type IconFn = fn(&cairo::Context, f64, f64, f64);
-
-    let tool_buttons: &[(Tool, IconFn)] = if is_simple {
-        &[
-            (Tool::Select, toolbar_icons::draw_icon_select as IconFn),
-            (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn),
-            (Tool::Marker, toolbar_icons::draw_icon_marker as IconFn),
-            (
-                Tool::StepMarker,
-                toolbar_icons::draw_icon_step_marker as IconFn,
-            ),
-            (Tool::Eraser, toolbar_icons::draw_icon_eraser as IconFn),
-        ]
-    } else {
-        &[
-            (Tool::Select, toolbar_icons::draw_icon_select as IconFn),
-            (Tool::Pen, toolbar_icons::draw_icon_pen as IconFn),
-            (Tool::Marker, toolbar_icons::draw_icon_marker as IconFn),
-            (
-                Tool::StepMarker,
-                toolbar_icons::draw_icon_step_marker as IconFn,
-            ),
-            (Tool::Eraser, toolbar_icons::draw_icon_eraser as IconFn),
-            (Tool::Line, toolbar_icons::draw_icon_line as IconFn),
-            (Tool::Rect, toolbar_icons::draw_icon_rect as IconFn),
-            (Tool::Ellipse, toolbar_icons::draw_icon_circle as IconFn),
-            (Tool::Arrow, toolbar_icons::draw_icon_arrow as IconFn),
-            (Tool::Blur, toolbar_icons::draw_icon_blur as IconFn),
-        ]
-    };
-
     let mut fill_anchor: Option<(f64, f64)> = None;
     let mut rect_x = None;
     let mut circle_end_x = None;
-    for (tool, icon_fn) in tool_buttons {
-        if *tool == Tool::Rect {
+    for tool in model::top_tool_buttons(is_simple) {
+        if model::is_fill_tool(*tool) && rect_x.is_none() {
             rect_x = Some(x);
         }
-        if *tool == Tool::Ellipse {
+        if model::is_fill_tool(*tool) {
             circle_end_x = Some(x + btn_size);
         }
 
@@ -79,7 +49,13 @@ pub(super) fn draw_tool_row(
         set_icon_color(layout.ctx, is_hover);
         let icon_x = x + (btn_size - icon_size) / 2.0;
         let icon_y = y + (btn_size - icon_size) / 2.0;
-        icon_fn(layout.ctx, icon_x, icon_y, icon_size);
+        draw_semantic_tool_icon(
+            layout.ctx,
+            model::semantic_icon_for_tool(*tool),
+            icon_x,
+            icon_y,
+            icon_size,
+        );
 
         let tooltip = layout.tool_tooltip(*tool, tool_tooltip_label(*tool));
         layout.hits.push(HitRegion {
@@ -109,14 +85,13 @@ pub(super) fn draw_tool_row(
         set_icon_color(layout.ctx, shapes_hover);
         let icon_x = x + (btn_size - icon_size) / 2.0;
         let icon_y = y + (btn_size - icon_size) / 2.0;
-        match shape_icon_tool {
-            Tool::Line => toolbar_icons::draw_icon_line(layout.ctx, icon_x, icon_y, icon_size),
-            Tool::Rect => toolbar_icons::draw_icon_rect(layout.ctx, icon_x, icon_y, icon_size),
-            Tool::Ellipse => toolbar_icons::draw_icon_circle(layout.ctx, icon_x, icon_y, icon_size),
-            Tool::Arrow => toolbar_icons::draw_icon_arrow(layout.ctx, icon_x, icon_y, icon_size),
-            Tool::Blur => toolbar_icons::draw_icon_blur(layout.ctx, icon_x, icon_y, icon_size),
-            _ => toolbar_icons::draw_icon_rect(layout.ctx, icon_x, icon_y, icon_size),
-        }
+        draw_semantic_tool_icon(
+            layout.ctx,
+            model::semantic_icon_for_tool(shape_icon_tool),
+            icon_x,
+            icon_y,
+            icon_size,
+        );
         layout.hits.push(HitRegion {
             rect: (x, y, btn_size, btn_size),
             event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
@@ -132,5 +107,27 @@ pub(super) fn draw_tool_row(
     ToolRowResult {
         next_x: x,
         fill_anchor,
+    }
+}
+
+pub(crate) fn draw_semantic_tool_icon(
+    ctx: &cairo::Context,
+    icon: SemanticToolIcon,
+    x: f64,
+    y: f64,
+    size: f64,
+) {
+    match icon {
+        SemanticToolIcon::Select => toolbar_icons::draw_icon_select(ctx, x, y, size),
+        SemanticToolIcon::Pen => toolbar_icons::draw_icon_pen(ctx, x, y, size),
+        SemanticToolIcon::Line => toolbar_icons::draw_icon_line(ctx, x, y, size),
+        SemanticToolIcon::Rect => toolbar_icons::draw_icon_rect(ctx, x, y, size),
+        SemanticToolIcon::Circle => toolbar_icons::draw_icon_circle(ctx, x, y, size),
+        SemanticToolIcon::Arrow => toolbar_icons::draw_icon_arrow(ctx, x, y, size),
+        SemanticToolIcon::Blur => toolbar_icons::draw_icon_blur(ctx, x, y, size),
+        SemanticToolIcon::Marker => toolbar_icons::draw_icon_marker(ctx, x, y, size),
+        SemanticToolIcon::Highlight => toolbar_icons::draw_icon_highlight(ctx, x, y, size),
+        SemanticToolIcon::StepMarker => toolbar_icons::draw_icon_step_marker(ctx, x, y, size),
+        SemanticToolIcon::Eraser => toolbar_icons::draw_icon_eraser(ctx, x, y, size),
     }
 }

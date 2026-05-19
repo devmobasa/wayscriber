@@ -7,7 +7,17 @@ impl InputState {
         if matches!(self.state, DrawingState::TextInput { .. }) {
             self.cancel_text_input();
         }
-        let mut changed = self.set_tool_override(Some(tool));
+        let mut changed = if tool == Tool::Highlight {
+            let was_highlight_active = self.highlight_tool_active();
+            let was_click_highlight_enabled = self.click_highlight_enabled();
+            self.set_highlight_tool(true);
+            let override_changed = self.set_tool_override(Some(tool));
+            override_changed
+                || was_highlight_active != self.highlight_tool_active()
+                || was_click_highlight_enabled != self.click_highlight_enabled()
+        } else {
+            self.set_tool_override(Some(tool))
+        };
         if self.toolbar_layout_mode == ToolbarLayoutMode::Simple && self.toolbar_shapes_expanded {
             self.toolbar_shapes_expanded = false;
             changed = true;
