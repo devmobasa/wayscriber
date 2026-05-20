@@ -1,7 +1,8 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::config::Action;
-use crate::draw::{Color, FontDescriptor, Frame, Shape};
+use crate::draw::{Color, FontDescriptor, Frame, PageDeleteOutcome, Shape};
+use crate::input::BOARD_ID_BLACKBOARD;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
 use std::path::PathBuf;
@@ -322,4 +323,82 @@ fn apply_snapshot_keeps_current_board_when_active_board_is_missing() {
     apply_snapshot(&mut input, snapshot, &options);
 
     assert_eq!(input.board_id(), "whiteboard");
+}
+
+#[test]
+fn apply_snapshot_clears_pending_board_delete_confirmation() {
+    let options = SessionOptions::new(PathBuf::from("/tmp"), "display-board-confirm");
+    let mut input = dummy_input_state();
+    input.switch_board_force(BOARD_ID_BLACKBOARD);
+    let board_count = input.boards.board_count();
+
+    input.delete_active_board();
+    assert!(input.has_pending_board_delete());
+    assert!(
+        input
+            .ui_toast
+            .as_ref()
+            .and_then(|toast| toast.action.as_ref())
+            .is_some_and(|action| action.action == Action::BoardDelete)
+    );
+    input.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+    let snapshot = SessionSnapshot {
+        active_board_id: BOARD_ID_BLACKBOARD.to_string(),
+        boards: vec![BoardSnapshot {
+            id: BOARD_ID_BLACKBOARD.to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![Frame::new()],
+                active: 0,
+            },
+        }],
+        tool_state: None,
+    };
+
+    apply_snapshot(&mut input, snapshot, &options);
+
+    assert!(!input.has_pending_board_delete());
+    assert!(input.ui_toast.is_none());
+    assert!(input.ui_toast_bounds.is_none());
+    input.delete_active_board();
+    assert_eq!(input.boards.board_count(), board_count);
+    assert!(input.has_pending_board_delete());
+}
+
+#[test]
+fn apply_snapshot_clears_pending_page_delete_confirmation() {
+    let options = SessionOptions::new(PathBuf::from("/tmp"), "display-page-confirm");
+    let mut input = dummy_input_state();
+    input.switch_board_force(BOARD_ID_BLACKBOARD);
+    input.page_new();
+
+    assert_eq!(input.page_delete(), PageDeleteOutcome::Pending);
+    assert!(input.has_pending_page_delete());
+    assert!(
+        input
+            .ui_toast
+            .as_ref()
+            .and_then(|toast| toast.action.as_ref())
+            .is_some_and(|action| action.action == Action::PageDelete)
+    );
+    input.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+    let snapshot = SessionSnapshot {
+        active_board_id: BOARD_ID_BLACKBOARD.to_string(),
+        boards: vec![BoardSnapshot {
+            id: BOARD_ID_BLACKBOARD.to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![Frame::new()],
+                active: 0,
+            },
+        }],
+        tool_state: None,
+    };
+
+    apply_snapshot(&mut input, snapshot, &options);
+
+    assert!(!input.has_pending_page_delete());
+    assert!(input.ui_toast.is_none());
+    assert!(input.ui_toast_bounds.is_none());
+    assert_eq!(input.boards.page_count(), 1);
 }

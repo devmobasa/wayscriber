@@ -17,7 +17,7 @@ pub mod tool;
 #[allow(unused_imports)]
 pub use boards::{
     BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardManager,
-    BoardSpec,
+    BoardSpec, runtime_contrast_pen_color,
 };
 pub use events::{Key, MouseButton};
 pub use state::{

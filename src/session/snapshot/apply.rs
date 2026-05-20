@@ -7,6 +7,8 @@ use crate::session::options::SessionOptions;
 /// Apply a session snapshot to the live [`InputState`].
 pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options: &SessionOptions) {
     let runtime_history_limit = options.effective_history_limit(input.undo_stack_limit);
+    let board_generation_before = input.boards.board_identity_generation();
+    input.clear_pending_delete_confirmations();
 
     for board in &snapshot.boards {
         let pages = snapshot_to_board_pages(board.pages.clone());
@@ -20,6 +22,7 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
             clamp_runtime_history(&mut board_state.pages, runtime_history_limit);
         }
     }
+    input.clear_pending_deletes_after_board_generation_change(board_generation_before);
 
     if input.boards.has_board(&snapshot.active_board_id) {
         input.switch_board_force(&snapshot.active_board_id);

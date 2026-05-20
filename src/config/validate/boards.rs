@@ -1,6 +1,6 @@
 use crate::config::types::{BoardBackgroundConfig, BoardColorConfig, BoardsConfig};
+use crate::input::boards::{BoundaryBoardIdSet, clamp_board_rgb};
 use log::warn;
-use std::collections::HashSet;
 
 use super::Config;
 
@@ -19,28 +19,24 @@ impl Config {
             boards.max_count = 1;
         }
 
-        let mut seen = HashSet::new();
+        let mut seen = BoundaryBoardIdSet::new();
         for (index, item) in boards.items.iter_mut().enumerate() {
-            let trimmed = item.id.trim();
-            let mut normalized = trimmed.to_lowercase();
-            if normalized.is_empty() {
-                normalized = format!("board-{}", index + 1);
-                warn!("Board id was empty; using '{}'", normalized);
-            } else if normalized != trimmed {
-                warn!("Board id '{}' normalized to '{}'", trimmed, normalized);
+            let raw_id = item.id.clone();
+            let normalized = seen.normalize_unique(&raw_id, index);
+            if normalized.changes.defaulted_empty {
+                warn!("Board id was empty; using '{}'", normalized.value);
+            } else {
+                if normalized.changes.trimmed || normalized.changes.lowercased {
+                    warn!("Board id '{}' normalized to '{}'", raw_id, normalized.value);
+                }
+                if normalized.changes.deduplicated {
+                    warn!(
+                        "Board id '{}' deduplicated to '{}'",
+                        raw_id, normalized.value
+                    );
+                }
             }
-
-            let base = normalized.clone();
-            let mut suffix = 2;
-            while seen.contains(&normalized) {
-                normalized = format!("{base}-{suffix}");
-                suffix += 1;
-            }
-            if normalized != item.id {
-                warn!("Board id '{}' updated to '{}'", item.id, normalized);
-            }
-            item.id = normalized.clone();
-            seen.insert(normalized);
+            item.id = normalized.value;
 
             if item.name.trim().is_empty() {
                 item.name = format!("Board {}", index + 1);
@@ -129,14 +125,16 @@ fn normalize_background(background: &mut BoardBackgroundConfig, id: &str) {
 }
 
 fn clamp_color(color: &mut BoardColorConfig, label: &str) {
-    let mut rgb = color.rgb();
-    for (i, component) in rgb.iter_mut().enumerate() {
-        if !(0.0..=1.0).contains(component) {
-            warn!(
-                "Invalid {}[{}] = {:.3}, clamping to 0.0-1.0",
-                label, i, *component
-            );
-            *component = (*component).clamp(0.0, 1.0);
+    let original = color.rgb();
+    let (rgb, clamped) = clamp_board_rgb(original);
+    if clamped {
+        for (i, (before, after)) in original.iter().zip(rgb.iter()).enumerate() {
+            if before != after {
+                warn!(
+                    "Invalid {}[{}] = {:.3}, clamping to 0.0-1.0",
+                    label, i, *before
+                );
+            }
         }
     }
     *color = BoardColorConfig::Rgb(rgb);

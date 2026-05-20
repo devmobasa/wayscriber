@@ -58,6 +58,84 @@ fn validate_and_clamp_clamps_out_of_range_values() {
 }
 
 #[test]
+fn validate_boards_uses_boundary_id_normalization() {
+    let mut config = Config {
+        boards: Some(BoardsConfig {
+            max_count: 4,
+            auto_create: true,
+            show_board_badge: true,
+            pan_enabled: true,
+            show_pan_badge: true,
+            persist_customizations: true,
+            default_board: "transparent".to_string(),
+            items: vec![
+                BoardItemConfig {
+                    id: " Transparent ".to_string(),
+                    name: "Overlay".to_string(),
+                    background: BoardBackgroundConfig::Transparent("transparent".to_string()),
+                    default_pen_color: None,
+                    auto_adjust_pen: false,
+                    persist: true,
+                    pinned: false,
+                },
+                BoardItemConfig {
+                    id: "  BOARD-A ".to_string(),
+                    name: "A".to_string(),
+                    background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([
+                        1.2, 0.5, -0.1,
+                    ])),
+                    default_pen_color: Some(BoardColorConfig::Rgb([0.2, 1.4, 0.6])),
+                    auto_adjust_pen: true,
+                    persist: true,
+                    pinned: false,
+                },
+                BoardItemConfig {
+                    id: "board-a".to_string(),
+                    name: "Duplicate".to_string(),
+                    background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([
+                        0.2, 0.3, 0.4,
+                    ])),
+                    default_pen_color: None,
+                    auto_adjust_pen: true,
+                    persist: true,
+                    pinned: false,
+                },
+                BoardItemConfig {
+                    id: "   ".to_string(),
+                    name: "Defaulted".to_string(),
+                    background: BoardBackgroundConfig::Color(BoardColorConfig::Rgb([
+                        0.2, 0.3, 0.4,
+                    ])),
+                    default_pen_color: None,
+                    auto_adjust_pen: true,
+                    persist: true,
+                    pinned: false,
+                },
+            ],
+        }),
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    let boards = config.boards.as_ref().expect("boards");
+    let ids: Vec<_> = boards.items.iter().map(|item| item.id.as_str()).collect();
+    assert_eq!(ids, vec!["transparent", "board-a", "board-a-2", "board-4"]);
+    match &boards.items[1].background {
+        BoardBackgroundConfig::Color(color) => assert_eq!(color.rgb(), [1.0, 0.5, 0.0]),
+        BoardBackgroundConfig::Transparent(_) => panic!("expected color background"),
+    }
+    assert_eq!(
+        boards.items[1]
+            .default_pen_color
+            .as_ref()
+            .expect("pen")
+            .rgb(),
+        [0.2, 1.0, 0.6]
+    );
+}
+
+#[test]
 fn validate_clamps_history_delays() {
     let mut config = Config::default();
     config.history.undo_all_delay_ms = 0;

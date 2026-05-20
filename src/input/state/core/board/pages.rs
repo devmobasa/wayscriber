@@ -1,6 +1,6 @@
 use super::super::base::{InputState, UiToastKind};
 use crate::draw::Color;
-use crate::input::BoardBackground;
+use crate::input::{BoardBackground, runtime_contrast_pen_color};
 
 impl InputState {
     pub(crate) fn reset_active_canvas_position(&mut self) -> bool {
@@ -49,7 +49,7 @@ impl InputState {
 
         board.spec.background = BoardBackground::Solid(color);
         let active_pen_color = if board.spec.auto_adjust_pen {
-            board.spec.default_pen_color = Some(super::contrast_color(color));
+            board.spec.default_pen_color = Some(runtime_contrast_pen_color(color));
             is_active.then(|| board.spec.effective_pen_color().unwrap_or(color))
         } else {
             None

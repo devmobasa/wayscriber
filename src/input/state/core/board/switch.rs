@@ -1,5 +1,5 @@
 use super::super::base::{InputState, UiToastKind};
-use crate::input::BOARD_ID_TRANSPARENT;
+use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
 impl InputState {
     /// Returns the active board id.
@@ -110,7 +110,9 @@ impl InputState {
         }
 
         self.cancel_active_interaction();
+        let generation_before = self.boards.board_identity_generation();
         if let Some(new_id) = self.boards.duplicate_active_board() {
+            self.clear_pending_deletes_after_board_generation_change(generation_before);
             self.record_board_recent(&new_id);
             self.queue_board_config_save();
             let name = self.boards.active_board_name();
@@ -161,6 +163,7 @@ impl InputState {
 
         let current_spec = self.boards.active_board().spec.clone();
         let prev_count = self.boards.board_count();
+        let generation_before = self.boards.board_identity_generation();
         self.cancel_active_interaction();
         let switched = switch(&mut self.boards);
         debug_assert!(switched, "preflighted board transition failed on apply");
@@ -173,10 +176,21 @@ impl InputState {
         if target_spec.id == current_id {
             return false;
         }
-        self.pending_board_delete = None;
         if self.boards.board_count() > prev_count {
             self.queue_board_config_save();
         }
+        self.clear_pending_deletes_after_board_generation_change(generation_before);
+        self.finish_board_transition_from(current_spec, current_id, true);
+        true
+    }
+
+    pub(super) fn finish_board_transition_from(
+        &mut self,
+        current_spec: BoardSpec,
+        current_id: &str,
+        log_switch: bool,
+    ) {
+        let target_spec = self.boards.active_board().spec.clone();
         self.record_board_recent(&target_spec.id);
 
         let current_auto =
@@ -217,12 +231,13 @@ impl InputState {
 
         self.finish_active_board_transition();
 
-        log::info!(
-            "Switched from '{}' to '{}' board",
-            current_id,
-            target_spec.id
-        );
-        true
+        if log_switch {
+            log::info!(
+                "Switched from '{}' to '{}' board",
+                current_id,
+                target_spec.id
+            );
+        }
     }
 
     fn record_board_recent(&mut self, board_id: &str) {

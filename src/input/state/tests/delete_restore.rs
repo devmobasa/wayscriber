@@ -1,6 +1,7 @@
 use super::*;
 use crate::draw::{Frame, PageDeleteOutcome, ShapeId};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT};
+use std::time::{Duration, Instant};
 
 fn board_index(state: &InputState, id: &str) -> usize {
     state
@@ -235,4 +236,183 @@ fn page_delete_on_last_page_clears_shapes_without_removing_page() {
         state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
         Some("Page cleared (last page)")
     );
+}
+
+#[test]
+fn pending_board_delete_survives_active_drift_and_deletes_original_board() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    let requested_at = Instant::now();
+
+    state.delete_active_board_at(requested_at);
+    state.switch_board("whiteboard");
+    state.delete_active_board_at(requested_at + Duration::from_millis(1));
+
+    assert_eq!(state.board_id(), "whiteboard");
+    assert!(!state.boards.has_board(BOARD_ID_BLACKBOARD));
+    assert!(!state.has_pending_board_delete());
+}
+
+#[test]
+fn board_rename_does_not_stale_pending_board_delete() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    let requested_at = Instant::now();
+
+    state.delete_active_board_at(requested_at);
+    let index = board_index(&state, BOARD_ID_BLACKBOARD);
+    assert!(state.set_board_name(index, "Renamed Board".to_string()));
+    state.delete_active_board_at(requested_at + Duration::from_millis(1));
+
+    assert!(!state.boards.has_board(BOARD_ID_BLACKBOARD));
+    assert_eq!(
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Board deleted: Renamed Board")
+    );
+}
+
+#[test]
+fn page_content_edit_does_not_stale_pending_page_delete() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    set_page_count(&mut state, board, 2);
+    let requested_at = Instant::now();
+
+    assert_eq!(state.page_delete(), PageDeleteOutcome::Pending);
+    state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 10,
+        fill: false,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+    assert_eq!(
+        state.delete_active_page_at(requested_at + Duration::from_millis(1)),
+        PageDeleteOutcome::Removed
+    );
+
+    assert_eq!(state.boards.page_count(), 1);
+}
+
+#[test]
+fn pending_page_delete_survives_active_board_drift_and_deletes_original_page() {
+    let mut state = create_test_input_state();
+    let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    set_page_count(&mut state, blackboard, 2);
+    let requested_at = Instant::now();
+
+    assert_eq!(
+        state.delete_active_page_at(requested_at),
+        PageDeleteOutcome::Pending
+    );
+    state.switch_board(BOARD_ID_TRANSPARENT);
+    assert_eq!(
+        state.delete_active_page_at(requested_at + Duration::from_millis(1)),
+        PageDeleteOutcome::Removed
+    );
+
+    assert_eq!(state.board_id(), BOARD_ID_TRANSPARENT);
+    assert_eq!(
+        state.boards.board_states()[blackboard].pages.page_count(),
+        1
+    );
+    assert!(!state.has_pending_page_delete());
+
+    state.state = DrawingState::Drawing {
+        tool: Tool::Pen,
+        start_x: 10,
+        start_y: 20,
+        points: vec![(10, 20), (30, 40)],
+        point_thicknesses: vec![1.0, 1.0],
+    };
+    state.begin_pointer_drag(MouseButton::Left, None);
+    state.restore_deleted_page();
+
+    assert_eq!(state.board_id(), BOARD_ID_TRANSPARENT);
+    assert_eq!(
+        state.boards.board_states()[blackboard].pages.page_count(),
+        2
+    );
+    assert_eq!(
+        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Page restored (2/2)")
+    );
+    assert!(matches!(state.state, DrawingState::Drawing { .. }));
+    assert_eq!(state.active_drag_button, Some(MouseButton::Left));
+}
+
+#[test]
+fn stale_active_page_delete_confirmation_does_not_cancel_active_interaction() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    set_page_count(&mut state, board, 2);
+    let requested_at = Instant::now();
+
+    assert_eq!(
+        state.delete_active_page_at(requested_at),
+        PageDeleteOutcome::Pending
+    );
+    assert_eq!(
+        state.boards.active_pages_mut().delete_page_at(1),
+        PageDeleteOutcome::Removed
+    );
+    state.state = DrawingState::Drawing {
+        tool: Tool::Pen,
+        start_x: 10,
+        start_y: 20,
+        points: vec![(10, 20), (30, 40)],
+        point_thicknesses: vec![1.0, 1.0],
+    };
+    state.begin_pointer_drag(MouseButton::Left, None);
+
+    assert_eq!(
+        state.delete_active_page_at(requested_at + Duration::from_millis(1)),
+        PageDeleteOutcome::Pending
+    );
+
+    assert!(matches!(state.state, DrawingState::Drawing { .. }));
+    assert_eq!(state.active_drag_button, Some(MouseButton::Left));
+    assert!(!state.has_pending_page_delete());
+}
+
+#[test]
+fn stale_board_panel_page_delete_confirmation_does_not_cancel_active_interaction() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    set_page_count(&mut state, board, 2);
+    let requested_at = Instant::now();
+
+    assert_eq!(
+        state.delete_page_in_board_at(board, 0, requested_at),
+        PageDeleteOutcome::Pending
+    );
+    assert_eq!(
+        state.boards.board_states_mut()[board]
+            .pages
+            .delete_page_at(1),
+        PageDeleteOutcome::Removed
+    );
+    state.state = DrawingState::Drawing {
+        tool: Tool::Pen,
+        start_x: 10,
+        start_y: 20,
+        points: vec![(10, 20), (30, 40)],
+        point_thicknesses: vec![1.0, 1.0],
+    };
+    state.begin_pointer_drag(MouseButton::Left, None);
+
+    assert_eq!(
+        state.delete_page_in_board_at(board, 0, requested_at + Duration::from_millis(1)),
+        PageDeleteOutcome::Pending
+    );
+
+    assert!(matches!(state.state, DrawingState::Drawing { .. }));
+    assert_eq!(state.active_drag_button, Some(MouseButton::Left));
+    assert!(!state.has_pending_page_delete());
 }

@@ -91,4 +91,14 @@ impl WaylandState {
         self.data.suppress_next_release = false;
         value
     }
+
+    pub(in crate::backend::wayland) fn set_pending_toast_press(&mut self, value: bool) {
+        self.data.pending_toast_press = value;
+    }
+
+    pub(in crate::backend::wayland) fn take_pending_toast_press(&mut self) -> bool {
+        let value = self.data.pending_toast_press;
+        self.data.pending_toast_press = false;
+        value
+    }
 }

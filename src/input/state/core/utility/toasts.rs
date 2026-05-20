@@ -18,6 +18,7 @@ impl InputState {
         message: impl Into<String>,
         duration_ms: u64,
     ) {
+        self.ui_toast_bounds = None;
         self.ui_toast = Some(UiToastState {
             kind,
             message: message.into(),
@@ -36,6 +37,7 @@ impl InputState {
         action_label: impl Into<String>,
         action: Action,
     ) {
+        self.ui_toast_bounds = None;
         self.ui_toast = Some(UiToastState {
             kind,
             message: message.into(),
@@ -57,6 +59,7 @@ impl InputState {
         action: Action,
         duration_ms: u64,
     ) {
+        self.ui_toast_bounds = None;
         self.ui_toast = Some(UiToastState {
             kind,
             message: message.into(),
@@ -118,18 +121,11 @@ impl InputState {
     /// whether it was hit plus any associated action.
     #[allow(dead_code)] // Called from WaylandState pointer release handler
     pub(crate) fn check_toast_click(&mut self, x: i32, y: i32) -> (bool, Option<Action>) {
-        let Some(bounds) = self.ui_toast_bounds else {
-            return (false, None);
-        };
         let Some(toast) = self.ui_toast.as_ref() else {
             return (false, None);
         };
 
-        // Check if click is within toast bounds
-        let (bx, by, bw, bh) = bounds;
-        let xf = x as f64;
-        let yf = y as f64;
-        if xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh {
+        if self.toast_contains(x, y) {
             // Click is within toast
             let action = toast.action.as_ref().map(|action| action.action);
             // Dismiss the toast
@@ -139,6 +135,15 @@ impl InputState {
             return (true, action);
         }
         (false, None)
+    }
+
+    pub(crate) fn toast_contains(&self, x: i32, y: i32) -> bool {
+        self.ui_toast.is_some()
+            && self.ui_toast_bounds.is_some_and(|(bx, by, bw, bh)| {
+                let xf = x as f64;
+                let yf = y as f64;
+                xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh
+            })
     }
 
     /// Trigger the blocked action visual feedback (red flash on screen edges).
@@ -331,6 +336,36 @@ mod tests {
         assert_eq!(action, Some(Action::OpenCaptureFolder));
         assert!(state.ui_toast.is_none());
         assert!(state.ui_toast_bounds.is_none());
+    }
+
+    #[test]
+    fn toast_contains_reports_hit_without_dismissing() {
+        let mut state = make_state();
+        state.set_ui_toast(UiToastKind::Info, "Saved");
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+        assert!(state.toast_contains(50, 40));
+        assert!(state.ui_toast.is_some());
+        assert!(state.ui_toast_bounds.is_some());
+    }
+
+    #[test]
+    fn replacing_toast_clears_stale_click_bounds() {
+        let mut state = make_state();
+        state.set_ui_toast(UiToastKind::Info, "Saved");
+        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+
+        state.set_ui_toast_with_action(
+            UiToastKind::Warning,
+            "Delete page?",
+            "Confirm",
+            Action::PageDelete,
+        );
+
+        assert!(state.ui_toast.is_some());
+        assert!(state.ui_toast_bounds.is_none());
+        assert!(!state.toast_contains(50, 40));
+        assert_eq!(state.check_toast_click(50, 40), (false, None));
     }
 
     #[test]
