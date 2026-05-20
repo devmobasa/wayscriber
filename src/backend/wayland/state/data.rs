@@ -88,6 +88,8 @@ pub struct StateData {
     pub(super) overlay_ready: bool,
     /// Suppress the next pointer release after a modal click (e.g., command palette).
     pub(super) suppress_next_release: bool,
+    /// True when a left press began inside the main-surface toast.
+    pub(super) pending_toast_press: bool,
     /// Suppress overlay exit on focus loss for a short window (e.g., clipboard helpers).
     pub(super) suppress_focus_exit_until: Option<Instant>,
     /// Short guard window after xdg focus loss where compositor close requests are ignored
@@ -156,6 +158,7 @@ impl StateData {
             overlay_clickthrough: false,
             overlay_ready: false,
             suppress_next_release: false,
+            pending_toast_press: false,
             suppress_focus_exit_until: None,
             xdg_close_guard_until: None,
             xdg_explicit_close_requested: false,

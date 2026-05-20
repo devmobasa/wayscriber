@@ -99,6 +99,17 @@ impl WaylandState {
             self.set_toolbar_dragging(false);
             return;
         }
+
+        if button == BTN_LEFT {
+            let screen_x = event.position.0.round() as i32;
+            let screen_y = event.position.1.round() as i32;
+            self.set_pending_toast_press(false);
+            if self.input_state.toast_contains(screen_x, screen_y) {
+                self.set_pending_toast_press(true);
+                return;
+            }
+        }
+
         debug!(
             "Button {} pressed at ({}, {})",
             button, event.position.0, event.position.1

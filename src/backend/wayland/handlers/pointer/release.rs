@@ -16,12 +16,31 @@ impl WaylandState {
     ) {
         // Swallow releases after modal clicks (e.g., palette dismiss)
         if self.take_suppress_next_release() {
+            self.set_pending_toast_press(false);
             return;
         }
 
         // Block pointer input when modal overlays are active
         if self.input_state.command_palette_open || self.input_state.tour_active {
             // For command palette, press handles the click - release is a no-op
+            self.set_pending_toast_press(false);
+            return;
+        }
+
+        if button == BTN_LEFT && self.take_pending_toast_press() {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let Some((screen_x, screen_y)) = screen_position {
+                let (hit, action) = self
+                    .input_state
+                    .check_toast_click(screen_x.round() as i32, screen_y.round() as i32);
+                if hit && let Some(action) = action {
+                    self.input_state.handle_action(action);
+                }
+            }
             return;
         }
 
@@ -108,19 +127,6 @@ impl WaylandState {
             BTN_RIGHT => MouseButton::Right,
             _ => return,
         };
-
-        // Check for toast click before other handling (toast uses screen coords)
-        if mb == MouseButton::Left {
-            let screen_x = event.position.0 as i32;
-            let screen_y = event.position.1 as i32;
-            let (hit, action) = self.input_state.check_toast_click(screen_x, screen_y);
-            if hit {
-                if let Some(action) = action {
-                    self.input_state.handle_action(action);
-                }
-                return;
-            }
-        }
 
         let screen_x = event.position.0.round() as i32;
         let screen_y = event.position.1.round() as i32;
