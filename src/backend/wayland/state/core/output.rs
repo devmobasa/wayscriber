@@ -1,10 +1,11 @@
-use log::{info, warn};
+use log::{debug, info, warn};
 use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Anchor};
 use std::time::Instant;
 
 use super::super::*;
 use crate::{
     input::state::{OutputFocusAction, UiToastKind},
+    notification,
     session::{self, SessionSnapshot},
 };
 
@@ -124,6 +125,10 @@ impl WaylandState {
         };
         save_options.set_output_identity(output_identity.as_deref());
 
+        if self.should_skip_protected_session_save(&save_options) {
+            return;
+        }
+
         let save_result = if let Some(snapshot) =
             session::snapshot_from_input(&self.input_state, &save_options)
         {
@@ -162,6 +167,73 @@ impl WaylandState {
                 err
             ),
         }
+    }
+
+    pub(in crate::backend::wayland) fn handle_session_load_outcome(
+        &mut self,
+        outcome: session::LoadSnapshotOutcome,
+        context: &str,
+    ) {
+        match outcome {
+            session::LoadSnapshotOutcome::Loaded(snapshot) => {
+                if let Some(options) = self.session_options().cloned() {
+                    debug!(
+                        "Restoring session {} from {}",
+                        context,
+                        options.session_file_path().display()
+                    );
+                    session::apply_snapshot(&mut self.input_state, *snapshot, &options);
+                }
+            }
+            session::LoadSnapshotOutcome::Empty => {
+                if let Some(options) = self.session_options() {
+                    debug!(
+                        "No session data found for {} ({})",
+                        options.session_file_path().display(),
+                        context
+                    );
+                }
+            }
+            session::LoadSnapshotOutcome::ExpandedTooLarge {
+                path,
+                max_expanded_size,
+            } => {
+                self.session.protect_session_path(path.clone());
+                if self.session.mark_expanded_load_notified(&path) {
+                    notification::send_notification_async(
+                        &self.tokio_handle,
+                        "Session Too Large to Restore".to_string(),
+                        format!(
+                            "The saved session was left unchanged because it expands beyond the {} MiB safety cap. Clear the session or move {} if it is no longer needed.",
+                            max_expanded_size / 1024 / 1024,
+                            path.display()
+                        ),
+                        Some("dialog-warning".to_string()),
+                    );
+                }
+            }
+        }
+        self.mark_clean_after_session_load();
+    }
+
+    fn mark_clean_after_session_load(&mut self) {
+        self.input_state.clear_session_dirty();
+        self.session.mark_clean_after_load();
+    }
+
+    fn should_skip_protected_session_save(&self, options: &session::SessionOptions) -> bool {
+        let session_path = options.session_file_path();
+        let skip = self.session.should_skip_save_for_protected_path(
+            &session_path,
+            self.input_state.is_session_dirty(),
+        );
+        if skip {
+            info!(
+                "Skipping session save to {} because a previous oversized compressed session was left protected and no session changes have been made",
+                session_path.display()
+            );
+        }
+        skip
     }
 
     fn session_persistence_enabled(options: &session::SessionOptions) -> bool {

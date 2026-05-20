@@ -20,6 +20,10 @@ pub use snapshot::{
     load_snapshot, save_snapshot, snapshot_from_input,
 };
 #[allow(unused_imports)]
+pub(crate) use snapshot::{LoadSnapshotOutcome, load_snapshot_with_outcome};
+#[allow(unused_imports)]
+pub(crate) use snapshot::{SaveSnapshotOutcome, SaveSnapshotReport, save_snapshot_with_report};
+#[allow(unused_imports)]
 pub use storage::{ClearOutcome, FrameCounts, SessionInspection, clear_session, inspect_session};
 
 #[cfg(test)]

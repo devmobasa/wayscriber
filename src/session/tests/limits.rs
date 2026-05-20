@@ -160,7 +160,19 @@ fn save_snapshot_allows_compressed_payload_that_fits_limit() {
     assert!(input.switch_to_page(ACTIVE_PAGE));
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
-    save_snapshot(&snapshot, &options).expect("compressed payload should fit and save");
+    let report = save_snapshot_with_report(&snapshot, &options)
+        .expect("compressed payload should fit and save")
+        .expect("session should be written");
+    assert_eq!(report.outcome, SaveSnapshotOutcome::Full);
+    assert!(report.compressed);
+    assert!(
+        report.raw_size as u64 > options.max_file_size_bytes,
+        "raw session should exceed the configured limit"
+    );
+    assert!(
+        report.written_size as u64 <= options.max_file_size_bytes,
+        "compressed session should fit configured limit"
+    );
 
     let saved_size = fs::metadata(options.session_file_path())
         .expect("session metadata")
@@ -266,7 +278,10 @@ fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
     options.max_file_size_bytes = visible_size + (full_size - visible_size) / 2;
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
 
-    save_snapshot(&snapshot, &options).expect("save should drop oversized history");
+    let report = save_snapshot_with_report(&snapshot, &options)
+        .expect("save should drop oversized history")
+        .expect("session should be written");
+    assert_eq!(report.outcome, SaveSnapshotOutcome::VisibleOnly);
 
     let saved_size = fs::metadata(options.session_file_path())
         .expect("fallback session metadata")
@@ -367,7 +382,13 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
     options.max_file_size_bytes = depth_two_size + (depth_three_size - depth_two_size) / 2;
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
 
-    save_snapshot(&snapshot, &options).expect("save should trim history to the fitting depth");
+    let report = save_snapshot_with_report(&snapshot, &options)
+        .expect("save should trim history to the fitting depth")
+        .expect("session should be written");
+    assert_eq!(
+        report.outcome,
+        SaveSnapshotOutcome::TrimmedHistory { depth: 2 }
+    );
 
     let loaded = load_snapshot(&options)
         .expect("load_snapshot should succeed")
@@ -386,6 +407,25 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
         "save should keep the largest recent undo depth that fits"
     );
     assert_eq!(frame.redo_stack_len(), 0);
+}
+
+#[test]
+fn save_snapshot_report_marks_near_limit_at_ninety_percent() {
+    let report = SaveSnapshotReport {
+        path: Path::new("/tmp/session.json").to_path_buf(),
+        outcome: SaveSnapshotOutcome::Full,
+        raw_size: 90,
+        written_size: 90,
+        max_file_size_bytes: 100,
+        compressed: false,
+    };
+    assert!(report.is_near_limit());
+
+    let report = SaveSnapshotReport {
+        written_size: 89,
+        ..report
+    };
+    assert!(!report.is_near_limit());
 }
 
 fn add_image_and_annotations(frame: &mut crate::draw::Frame, page_index: usize, bytes: usize) {

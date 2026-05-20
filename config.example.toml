@@ -652,7 +652,7 @@ max_shapes_per_frame = 10000
 # max_persisted_undo_depth = 200
 
 # Maximum session file size (in megabytes); larger files are ignored
-max_file_size_mb = 10
+max_file_size_mb = 50
 
 # Compression mode: "auto", "on", or "off"
 compress = "auto"

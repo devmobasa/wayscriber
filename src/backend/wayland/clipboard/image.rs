@@ -68,7 +68,7 @@ mod tests {
     fn image_byte_cap_leaves_room_for_default_persisted_create_history() {
         let encoded_len = MAX_CLIPBOARD_IMAGE_BYTES.div_ceil(3) * 4;
         let duplicated_history_len = encoded_len * 2;
-        let default_session_budget = 10 * 1024 * 1024;
+        let default_session_budget = 50 * 1024 * 1024;
         let json_margin = 512 * 1024;
 
         assert!(duplicated_history_len + json_margin < default_session_budget);

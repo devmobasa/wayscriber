@@ -156,7 +156,7 @@ fn default_max_shapes_per_frame() -> usize {
 }
 
 fn default_max_file_size_mb() -> u64 {
-    10
+    50
 }
 
 fn default_session_compression() -> SessionCompression {
