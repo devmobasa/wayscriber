@@ -1,8 +1,8 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
-use crate::draw::{Color, FontDescriptor, Shape};
-use crate::input::EraserMode;
+use crate::draw::{Color, EmbeddedImage, FontDescriptor, Shape};
+use crate::input::{BOARD_ID_WHITEBOARD, EraserMode};
 use std::fs;
 use std::path::Path;
 
@@ -132,6 +132,83 @@ fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
         2,
         "frame should be truncated to max_shapes_per_frame"
     );
+}
+
+#[test]
+fn save_snapshot_allows_compressed_payload_that_fits_limit() {
+    const PAGE_COUNT: usize = 12;
+    const ACTIVE_PAGE: usize = 10;
+    const IMAGE_BYTES: usize = 64 * 1024;
+
+    let temp = tempfile::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-compressed-fit");
+    options.persist_whiteboard = true;
+    options.persist_history = true;
+    options.restore_tool_state = false;
+    options.compression = CompressionMode::On;
+    options.max_file_size_bytes = 20 * 1024;
+    options.backup_retention = 0;
+
+    let mut input = dummy_input_state();
+    input.switch_board(BOARD_ID_WHITEBOARD);
+    for page_index in 0..PAGE_COUNT {
+        if page_index > 0 {
+            input.page_new();
+        }
+        add_image_and_annotations(input.boards.active_frame_mut(), page_index, IMAGE_BYTES);
+    }
+    assert!(input.switch_to_page(ACTIVE_PAGE));
+
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+    save_snapshot(&snapshot, &options).expect("compressed payload should fit and save");
+
+    let saved_size = fs::metadata(options.session_file_path())
+        .expect("session metadata")
+        .len();
+    assert!(
+        saved_size <= options.max_file_size_bytes,
+        "compressed session should fit configured limit"
+    );
+
+    let loaded = load_snapshot(&options)
+        .expect("load_snapshot should succeed")
+        .expect("snapshot should be present");
+
+    let mut restored = dummy_input_state();
+    apply_snapshot(&mut restored, loaded, &options);
+    restored.switch_board_force(BOARD_ID_WHITEBOARD);
+
+    let pages = restored.boards.active_pages();
+    assert_eq!(pages.page_count(), PAGE_COUNT);
+    assert_eq!(pages.active_index(), ACTIVE_PAGE);
+    for (page_index, page) in pages.pages().iter().enumerate() {
+        assert_eq!(page.shapes.len(), 3, "page {page_index} shape count");
+        assert_eq!(page.undo_stack_len(), 1, "page {page_index} undo depth");
+        match &page.shapes[0].shape {
+            Shape::Image { data, .. } => {
+                assert_eq!(data.bytes.len(), IMAGE_BYTES);
+                assert_eq!(data.width, 640);
+                assert_eq!(data.height, 360);
+            }
+            other => panic!("expected image on page {page_index}, got {other:?}"),
+        }
+        match &page.shapes[1].shape {
+            Shape::Freehand { points, .. } => {
+                assert_eq!(points.len(), 3);
+                assert_eq!(
+                    points[0],
+                    (i32::try_from(page_index).expect("page index fits i32"), 20)
+                );
+            }
+            other => panic!("expected annotation stroke on page {page_index}, got {other:?}"),
+        }
+        match &page.shapes[2].shape {
+            Shape::Text { text, .. } => {
+                assert_eq!(text, &format!("note-{page_index}"));
+            }
+            other => panic!("expected text annotation on page {page_index}, got {other:?}"),
+        }
+    }
 }
 
 #[test]
@@ -309,6 +386,62 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
         "save should keep the largest recent undo depth that fits"
     );
     assert_eq!(frame.redo_stack_len(), 0);
+}
+
+fn add_image_and_annotations(frame: &mut crate::draw::Frame, page_index: usize, bytes: usize) {
+    let image_id = frame.add_shape(Shape::Image {
+        x: 12,
+        y: 16,
+        w: 320,
+        h: 180,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 640,
+            height: 360,
+            bytes: vec![0x5a; bytes],
+        },
+    });
+    let (image_index, image_shape) = frame
+        .find_index(image_id)
+        .and_then(|index| frame.shape(image_id).map(|shape| (index, shape.clone())))
+        .expect("stored image shape");
+    frame.push_undo_action(
+        UndoAction::Create {
+            shapes: vec![(image_index, image_shape)],
+        },
+        usize::MAX,
+    );
+
+    let y = 20 + i32::try_from(page_index).expect("page index fits i32");
+    frame.add_shape(Shape::Freehand {
+        points: vec![
+            (i32::try_from(page_index).expect("page index fits i32"), 20),
+            (40, y),
+            (80, y + 8),
+        ],
+        color: Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 3.0,
+    });
+    frame.add_shape(Shape::Text {
+        x: 24,
+        y: 48 + i32::try_from(page_index).expect("page index fits i32"),
+        text: format!("note-{page_index}"),
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        size: 20.0,
+        font_descriptor: FontDescriptor::default(),
+        background_enabled: true,
+        wrap_width: None,
+    });
 }
 
 fn limit_test_options(base_dir: &Path, display_id: &str, persist_history: bool) -> SessionOptions {

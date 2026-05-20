@@ -83,6 +83,62 @@ fn session_roundtrip_preserves_shapes_across_frames() {
 }
 
 #[test]
+fn session_roundtrip_preserves_pages_beyond_visible_shortcuts() {
+    const PAGE_COUNT: usize = 12;
+    const ACTIVE_PAGE: usize = 10;
+
+    let temp = tempfile::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-many-pages");
+    options.persist_whiteboard = true;
+
+    let mut input = dummy_input_state();
+    input.switch_board(BOARD_ID_WHITEBOARD);
+    for page_index in 0..PAGE_COUNT {
+        if page_index > 0 {
+            input.page_new();
+        }
+        input.boards.active_frame_mut().add_shape(Shape::Text {
+            x: 10,
+            y: 20,
+            text: format!("page-{page_index}"),
+            color: Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            size: 18.0,
+            font_descriptor: FontDescriptor::default(),
+            background_enabled: false,
+            wrap_width: None,
+        });
+    }
+    assert!(input.switch_to_page(ACTIVE_PAGE));
+
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot produced");
+    save_snapshot(&snapshot, &options).expect("save snapshot");
+
+    let loaded_snapshot = load_snapshot(&options)
+        .expect("load snapshot result")
+        .expect("snapshot present");
+
+    let mut fresh_input = dummy_input_state();
+    apply_snapshot(&mut fresh_input, loaded_snapshot, &options);
+    fresh_input.switch_board_force(BOARD_ID_WHITEBOARD);
+
+    let pages = fresh_input.boards.active_pages();
+    assert_eq!(pages.page_count(), PAGE_COUNT);
+    assert_eq!(pages.active_index(), ACTIVE_PAGE);
+    for (page_index, page) in pages.pages().iter().enumerate() {
+        assert_eq!(page.shapes.len(), 1, "page {page_index} shape count");
+        match &page.shapes[0].shape {
+            Shape::Text { text, .. } => assert_eq!(text, &format!("page-{page_index}")),
+            other => panic!("expected text on page {page_index}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn save_snapshot_rotates_backup_when_enabled() {
     let temp = tempfile::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-backup");
