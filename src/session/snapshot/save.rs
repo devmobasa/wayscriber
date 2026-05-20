@@ -54,20 +54,28 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
     let backup_path = options.backup_file_path();
     let last_modified = now_rfc3339();
 
-    let Some(mut json_bytes) = payload_within_limit(snapshot, options, &last_modified)? else {
-        remove_session_file(&session_path)?;
-        return Ok(());
+    let payload = match payload_within_limit(snapshot, options, &last_modified) {
+        Ok(Some(payload)) => payload,
+        Ok(None) => {
+            remove_session_file(&session_path)?;
+            return Ok(());
+        }
+        Err(err) => {
+            if session_path.exists() {
+                warn!(
+                    "Session save failed before replacing {}; existing session file is unchanged",
+                    session_path.display()
+                );
+            }
+            return Err(err);
+        }
     };
-
-    let should_compress = match options.compression {
-        CompressionMode::Off => false,
-        CompressionMode::On => true,
-        CompressionMode::Auto => (json_bytes.len() as u64) >= options.auto_compress_threshold_bytes,
-    };
-
-    if should_compress {
-        json_bytes = compress_bytes(&json_bytes)?;
-    }
+    let PayloadCandidate {
+        bytes: payload_bytes,
+        raw_size,
+        compressed,
+    } = payload;
+    let final_size = payload_bytes.len();
 
     let tmp_path = temp_path(&session_path)?;
     {
@@ -82,7 +90,7 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
                 )
             })?;
         tmp_file
-            .write_all(&json_bytes)
+            .write_all(&payload_bytes)
             .context("failed to write session payload")?;
         tmp_file
             .sync_all()
@@ -115,41 +123,62 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
     })?;
 
     info!(
-        "Session saved to {} ({} bytes, compression={})",
+        "Session saved to {} ({} bytes written, raw={} bytes, compression={})",
         session_path.display(),
-        json_bytes.len(),
-        should_compress
+        final_size,
+        raw_size,
+        compressed
     );
 
     Ok(())
+}
+
+struct PayloadCandidate {
+    bytes: Vec<u8>,
+    raw_size: usize,
+    compressed: bool,
+}
+
+impl PayloadCandidate {
+    fn final_size(&self) -> usize {
+        self.bytes.len()
+    }
+
+    fn fits_limit(&self, options: &SessionOptions) -> bool {
+        self.final_size() as u64 <= options.max_file_size_bytes
+    }
 }
 
 fn payload_within_limit(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
     last_modified: &str,
-) -> Result<Option<Vec<u8>>> {
+) -> Result<Option<PayloadCandidate>> {
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
         return Ok(None);
     }
 
-    let full_payload = serialize_payload(snapshot, last_modified)?;
-    if full_payload.len() as u64 <= options.max_file_size_bytes {
+    let full_payload = payload_candidate(snapshot, options, last_modified)?;
+    if full_payload.fits_limit(options) {
         return Ok(Some(full_payload));
     }
 
-    let full_size = full_payload.len();
+    let full_raw_size = full_payload.raw_size;
+    let full_final_size = full_payload.final_size();
     let history_depth = max_history_depth(snapshot);
     if history_depth > 0
         && let Some((depth, payload)) =
             largest_fitting_history_payload(snapshot, history_depth, options, last_modified)?
     {
         warn!(
-            "Session data size {} bytes exceeds the configured limit of {} bytes; saving recent {} undo/redo history entries per stack ({} bytes)",
-            full_size,
+            "Full session payload writes as {} bytes from {} raw bytes, exceeding the configured limit of {} bytes; saving recent {} undo/redo history entries per stack ({} bytes written from {} raw bytes, compression={})",
+            full_final_size,
+            full_raw_size,
             options.max_file_size_bytes,
             depth,
-            payload.len()
+            payload.final_size(),
+            payload.raw_size,
+            payload.compressed
         );
         return Ok(Some(payload));
     }
@@ -157,26 +186,31 @@ fn payload_within_limit(
     let visible_only = snapshot_without_history(snapshot);
     if visible_only.is_empty() && visible_only.tool_state.is_none() {
         warn!(
-            "Session data size {} bytes exceeds the configured limit of {} bytes; dropping undo/redo history leaves no visible session data, clearing saved session",
-            full_size, options.max_file_size_bytes
+            "Full session payload writes as {} bytes from {} raw bytes, exceeding the configured limit of {} bytes; dropping undo/redo history leaves no visible session data, clearing saved session",
+            full_final_size, full_raw_size, options.max_file_size_bytes
         );
         return Ok(None);
     }
 
-    let visible_payload = serialize_payload(&visible_only, last_modified)?;
-    if visible_payload.len() as u64 <= options.max_file_size_bytes {
+    let visible_payload = payload_candidate(&visible_only, options, last_modified)?;
+    if visible_payload.fits_limit(options) {
         warn!(
-            "Session data size {} bytes exceeds the configured limit of {} bytes; saving visible data without undo/redo history ({} bytes)",
-            full_size,
+            "Full session payload writes as {} bytes from {} raw bytes, exceeding the configured limit of {} bytes; saving visible data without undo/redo history ({} bytes written from {} raw bytes, compression={})",
+            full_final_size,
+            full_raw_size,
             options.max_file_size_bytes,
-            visible_payload.len()
+            visible_payload.final_size(),
+            visible_payload.raw_size,
+            visible_payload.compressed
         );
         return Ok(Some(visible_payload));
     }
 
     Err(anyhow!(
-        "Session data size {} bytes exceeds the configured limit of {} bytes; skipping save",
-        visible_payload.len(),
+        "Session data writes as {} bytes from {} raw bytes with compression={} which exceeds the configured limit of {} bytes; skipping save",
+        visible_payload.final_size(),
+        visible_payload.raw_size,
+        visible_payload.compressed,
         options.max_file_size_bytes
     ))
 }
@@ -186,27 +220,45 @@ fn largest_fitting_history_payload(
     max_depth: usize,
     options: &SessionOptions,
     last_modified: &str,
-) -> Result<Option<(usize, Vec<u8>)>> {
-    let mut low = 1;
-    let mut high = max_depth;
-    let mut best = None;
-
-    while low <= high {
-        let depth = low + (high - low) / 2;
+) -> Result<Option<(usize, PayloadCandidate)>> {
+    for depth in (1..=max_depth).rev() {
         let candidate = snapshot_with_history_depth(snapshot, depth);
-        let payload = serialize_payload(&candidate, last_modified)?;
-
-        if payload.len() as u64 <= options.max_file_size_bytes {
-            best = Some((depth, payload));
-            low = depth.saturating_add(1);
-        } else if depth == 1 {
-            break;
-        } else {
-            high = depth - 1;
+        let payload = payload_candidate(&candidate, options, last_modified)?;
+        if payload.fits_limit(options) {
+            return Ok(Some((depth, payload)));
         }
     }
 
-    Ok(best)
+    Ok(None)
+}
+
+fn payload_candidate(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    last_modified: &str,
+) -> Result<PayloadCandidate> {
+    let raw_bytes = serialize_payload(snapshot, last_modified)?;
+    let raw_size = raw_bytes.len();
+    let compressed = should_compress_payload(raw_size, options);
+    let bytes = if compressed {
+        compress_bytes(&raw_bytes)?
+    } else {
+        raw_bytes
+    };
+
+    Ok(PayloadCandidate {
+        bytes,
+        raw_size,
+        compressed,
+    })
+}
+
+fn should_compress_payload(raw_size: usize, options: &SessionOptions) -> bool {
+    match options.compression {
+        CompressionMode::Off => false,
+        CompressionMode::On => true,
+        CompressionMode::Auto => raw_size as u64 >= options.auto_compress_threshold_bytes,
+    }
 }
 
 fn serialize_payload(snapshot: &SessionSnapshot, last_modified: &str) -> Result<Vec<u8>> {
