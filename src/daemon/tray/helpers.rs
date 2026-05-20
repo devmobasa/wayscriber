@@ -43,11 +43,12 @@ impl WayscriberTray {
             }
             Err(err) => {
                 let not_found = err.kind() == ErrorKind::NotFound;
-                if not_found {
+                let opened_config = if not_found {
                     error!(
                         "Configurator not found (looked for '{}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path.",
                         self.configurator_binary
                     );
+                    self.open_config_file()
                 } else {
                     error!(
                         "Failed to launch wayscriber-configurator using '{}': {}",
@@ -56,11 +57,14 @@ impl WayscriberTray {
                     error!(
                         "Set WAYSCRIBER_CONFIGURATOR to override the executable path if needed."
                     );
-                }
+                    false
+                };
                 #[cfg(feature = "dbus")]
                 {
-                    let body = if not_found {
-                        "Install wayscriber-configurator or set WAYSCRIBER_CONFIGURATOR to its path."
+                    let body = if opened_config {
+                        "Configurator not found; opened config.toml with the default application."
+                    } else if not_found {
+                        "Configurator not found, and config.toml could not be opened."
                     } else {
                         "Failed to launch configurator; see logs for details."
                     };
@@ -196,12 +200,12 @@ impl WayscriberTray {
         }
     }
 
-    pub(super) fn open_config_file(&self) {
+    pub(super) fn open_config_file(&self) -> bool {
         let path = match Config::get_config_path() {
             Ok(p) => p,
             Err(err) => {
                 warn!("Unable to resolve config path: {}", err);
-                return;
+                return false;
             }
         };
 
@@ -221,12 +225,18 @@ impl WayscriberTray {
         }
 
         match cmd.spawn() {
-            Ok(child) => info!(
-                "Opened config file at {} (pid {})",
-                path.display(),
-                child.id()
-            ),
-            Err(err) => warn!("Failed to open config file at {}: {}", path.display(), err),
+            Ok(child) => {
+                info!(
+                    "Opened config file at {} (pid {})",
+                    path.display(),
+                    child.id()
+                );
+                true
+            }
+            Err(err) => {
+                warn!("Failed to open config file at {}: {}", path.display(), err);
+                false
+            }
         }
     }
 

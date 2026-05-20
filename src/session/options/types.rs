@@ -62,7 +62,7 @@ impl SessionOptions {
             autosave_failure_backoff: Duration::from_millis(DEFAULT_AUTOSAVE_FAILURE_BACKOFF_MS),
             max_shapes_per_frame: 10_000,
             max_persisted_undo_depth: None,
-            max_file_size_bytes: 10 * 1024 * 1024,
+            max_file_size_bytes: 50 * 1024 * 1024,
             compression: CompressionMode::Auto,
             auto_compress_threshold_bytes: DEFAULT_AUTO_COMPRESS_THRESHOLD_BYTES,
             display_id,

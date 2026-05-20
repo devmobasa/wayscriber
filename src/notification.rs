@@ -46,6 +46,15 @@ mod real {
         body: &str,
         icon: Option<&str>,
     ) -> Result<(), String> {
+        send_notification_with_timeout(summary, body, icon, 3000).await
+    }
+
+    pub async fn send_notification_with_timeout(
+        summary: &str,
+        body: &str,
+        icon: Option<&str>,
+        expire_timeout_ms: i32,
+    ) -> Result<(), String> {
         let connection = Connection::session()
             .await
             .map_err(|e| format!("Failed to connect to session bus: {}", e))?;
@@ -66,7 +75,7 @@ mod real {
                 body,
                 vec![],
                 hints,
-                3000, // 3 second timeout
+                expire_timeout_ms,
             )
             .await
             .map_err(|e| format!("Failed to send notification: {}", e))?;
@@ -87,6 +96,23 @@ mod real {
             }
         });
     }
+
+    pub fn send_notification_with_timeout_async(
+        runtime_handle: &tokio::runtime::Handle,
+        summary: String,
+        body: String,
+        icon: Option<String>,
+        expire_timeout_ms: i32,
+    ) {
+        runtime_handle.spawn(async move {
+            let icon_ref = icon.as_deref();
+            if let Err(e) =
+                send_notification_with_timeout(&summary, &body, icon_ref, expire_timeout_ms).await
+            {
+                log::warn!("Failed to send notification: {}", e);
+            }
+        });
+    }
 }
 
 #[cfg(not(feature = "dbus"))]
@@ -101,6 +127,16 @@ mod real {
     }
 
     #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
+    pub async fn send_notification_with_timeout(
+        _summary: &str,
+        _body: &str,
+        _icon: Option<&str>,
+        _expire_timeout_ms: i32,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
     pub fn send_notification_async(
         _runtime_handle: &tokio::runtime::Handle,
         _summary: String,
@@ -109,7 +145,21 @@ mod real {
     ) {
         // no-op without D-Bus
     }
+
+    #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
+    pub fn send_notification_with_timeout_async(
+        _runtime_handle: &tokio::runtime::Handle,
+        _summary: String,
+        _body: String,
+        _icon: Option<String>,
+        _expire_timeout_ms: i32,
+    ) {
+        // no-op without D-Bus
+    }
 }
 
 #[allow(unused_imports)]
-pub use real::{send_notification, send_notification_async};
+pub use real::{
+    send_notification, send_notification_async, send_notification_with_timeout,
+    send_notification_with_timeout_async,
+};

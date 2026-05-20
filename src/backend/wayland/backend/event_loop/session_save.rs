@@ -1,10 +1,15 @@
 use super::super::super::state::WaylandState;
 use crate::{
     backend::wayland::session::SessionState,
+    config::{Action, Config},
+    input::state::UiToastKind,
     notification, session,
     session::{SaveSnapshotOutcome, SaveSnapshotReport},
 };
 use std::time::{Duration, Instant};
+
+const SESSION_SAVE_WARNING_TOAST_MS: u64 = 20_000;
+const SESSION_SAVE_NOTIFICATION_TIMEOUT_MS: i32 = 15_000;
 
 pub(super) fn persist_session(state: &WaylandState) -> Result<(), anyhow::Error> {
     let Some(options) = state.session_options() else {
@@ -15,8 +20,26 @@ pub(super) fn persist_session(state: &WaylandState) -> Result<(), anyhow::Error>
         return Ok(());
     }
 
+    let started = Instant::now();
+    log::info!(
+        "Starting {} session persistence to {}",
+        SessionSaveReason::Shutdown.label(),
+        options.session_file_path().display()
+    );
+    let snapshot_started = Instant::now();
     let snapshot = session::snapshot_from_input(&state.input_state, options);
-    let _ = save_snapshot_or_clear(state, options, snapshot)?;
+    log_snapshot_capture(
+        SessionSaveReason::Shutdown,
+        options,
+        snapshot.as_ref(),
+        snapshot_started.elapsed(),
+    );
+    let report = save_snapshot_or_clear(state, options, snapshot)?;
+    log_session_save_result(
+        SessionSaveReason::Shutdown,
+        report.as_ref(),
+        started.elapsed(),
+    );
     Ok(())
 }
 
@@ -37,17 +60,29 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
         return Ok(());
     }
 
-    match save_snapshot_or_clear(
-        state,
+    let started = Instant::now();
+    let snapshot_started = Instant::now();
+    let snapshot = session::snapshot_from_input(&state.input_state, &options);
+    log_snapshot_capture(
+        SessionSaveReason::Autosave,
         &options,
-        session::snapshot_from_input(&state.input_state, &options),
-    ) {
+        snapshot.as_ref(),
+        snapshot_started.elapsed(),
+    );
+
+    match save_snapshot_or_clear(state, &options, snapshot) {
         Ok(report) => {
+            log_session_save_result(
+                SessionSaveReason::Autosave,
+                report.as_ref(),
+                started.elapsed(),
+            );
             notify_session_save_report(state, report.as_ref());
             record_autosave_success(&mut state.session, now, report.is_some());
         }
         Err(err) => {
             if record_autosave_failure(&mut state.session, now, &options) {
+                show_session_failure_toast(state);
                 notify_session_failure(state, &err);
             }
             return Err(err);
@@ -79,6 +114,123 @@ fn save_snapshot_or_clear(
         tool_state: None,
     };
     session::save_snapshot_with_report(&empty_snapshot, options)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionSaveReason {
+    Autosave,
+    Shutdown,
+}
+
+impl SessionSaveReason {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Autosave => "autosave",
+            Self::Shutdown => "shutdown",
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct SnapshotSummary {
+    boards: usize,
+    pages: usize,
+    shapes: usize,
+    undo_entries: usize,
+    redo_entries: usize,
+    visible_image_shapes: usize,
+    visible_image_bytes: usize,
+    max_history_depth: usize,
+    tool_state: bool,
+}
+
+impl SnapshotSummary {
+    fn from_snapshot(snapshot: &session::SessionSnapshot) -> Self {
+        let mut summary = Self {
+            tool_state: snapshot.tool_state.is_some(),
+            ..Self::default()
+        };
+        for board in &snapshot.boards {
+            summary.boards += 1;
+            summary.pages += board.pages.pages.len();
+            for frame in &board.pages.pages {
+                let undo = frame.undo_stack_len();
+                let redo = frame.redo_stack_len();
+                summary.shapes += frame.shapes.len();
+                summary.undo_entries += undo;
+                summary.redo_entries += redo;
+                summary.max_history_depth = summary.max_history_depth.max(undo.max(redo));
+                for drawn in &frame.shapes {
+                    if let crate::draw::Shape::Image { data, .. } = &drawn.shape {
+                        summary.visible_image_shapes += 1;
+                        summary.visible_image_bytes =
+                            summary.visible_image_bytes.saturating_add(data.bytes.len());
+                    }
+                }
+            }
+        }
+        summary
+    }
+}
+
+fn log_snapshot_capture(
+    reason: SessionSaveReason,
+    options: &session::SessionOptions,
+    snapshot: Option<&session::SessionSnapshot>,
+    elapsed: Duration,
+) {
+    let Some(snapshot) = snapshot else {
+        log::info!(
+            "Captured {} session snapshot for {} in {:?}: no persistable data",
+            reason.label(),
+            options.session_file_path().display(),
+            elapsed
+        );
+        return;
+    };
+
+    let summary = SnapshotSummary::from_snapshot(snapshot);
+    log::info!(
+        "Captured {} session snapshot for {} in {:?}: boards={}, pages={}, shapes={}, undo_entries={}, redo_entries={}, max_history_depth={}, visible_images={} ({} bytes), tool_state={}",
+        reason.label(),
+        options.session_file_path().display(),
+        elapsed,
+        summary.boards,
+        summary.pages,
+        summary.shapes,
+        summary.undo_entries,
+        summary.redo_entries,
+        summary.max_history_depth,
+        summary.visible_image_shapes,
+        summary.visible_image_bytes,
+        summary.tool_state
+    );
+}
+
+fn log_session_save_result(
+    reason: SessionSaveReason,
+    report: Option<&SaveSnapshotReport>,
+    elapsed: Duration,
+) {
+    let Some(report) = report else {
+        log::info!(
+            "Finished {} session persistence in {:?}: no file write needed",
+            reason.label(),
+            elapsed
+        );
+        return;
+    };
+
+    log::info!(
+        "Finished {} session persistence in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}, path={}",
+        reason.label(),
+        elapsed,
+        report.outcome,
+        report.written_size,
+        report.raw_size,
+        report.compressed,
+        report.path.display()
+    );
 }
 
 fn persistence_enabled(options: &session::SessionOptions) -> bool {
@@ -142,12 +294,40 @@ fn notify_session_save_report(state: &mut WaylandState, report: Option<&SaveSnap
 
     for notification in pending_save_notifications(&mut state.session, report) {
         let (summary, body) = session_save_notification_text(notification, report);
-        notification::send_notification_async(
+        let toast = session_save_toast_text(notification, report);
+        state.input_state.set_ui_toast_with_action_and_duration(
+            UiToastKind::Warning,
+            toast,
+            "Settings",
+            Action::OpenConfigurator,
+            SESSION_SAVE_WARNING_TOAST_MS,
+        );
+        notification::send_notification_with_timeout_async(
             &state.tokio_handle,
             summary,
             body,
             Some("dialog-warning".to_string()),
+            SESSION_SAVE_NOTIFICATION_TIMEOUT_MS,
         );
+    }
+}
+
+fn session_save_toast_text(
+    notification: SessionSaveNotification,
+    report: &SaveSnapshotReport,
+) -> String {
+    let written = format_bytes(report.written_size as u64);
+    let limit = format_bytes(report.max_file_size_bytes);
+    let suggested_limit_mb =
+        suggested_limit_mb(report.written_size as u64, report.max_file_size_bytes);
+    match notification {
+        SessionSaveNotification::NearLimit => {
+            format!("Session near limit: {written}/{limit}. Set {suggested_limit_mb} MiB.")
+        }
+        SessionSaveNotification::TrimmedHistory { depth } => {
+            format!("Session saved. Undo history trimmed to {depth} entries.")
+        }
+        SessionSaveNotification::VisibleOnly => "Session saved without undo history.".to_string(),
     }
 }
 
@@ -157,22 +337,25 @@ fn session_save_notification_text(
 ) -> (String, String) {
     let written = format_bytes(report.written_size as u64);
     let limit = format_bytes(report.max_file_size_bytes);
+    let suggested_limit_mb =
+        suggested_limit_mb(report.written_size as u64, report.max_file_size_bytes);
     match notification {
         SessionSaveNotification::NearLimit => (
             "Session Storage Nearly Full".to_string(),
             format!(
-                "Session save is using {written} of the {limit} cap. Image-heavy sessions can grow quickly; consider disabling persisted history or increasing session.max_file_size_mb."
+                "Session save is using {written} of {limit}. Open Settings > Session > Max file size and set {suggested_limit_mb} MiB, or edit {}.",
+                config_path_display()
             ),
         ),
         SessionSaveNotification::TrimmedHistory { depth } => (
             "Session Undo History Trimmed".to_string(),
             format!(
-                "Your drawings were saved, but undo/redo history was trimmed to {depth} entries per stack to keep the session within save and restore safety limits."
+                "Drawings were saved, but undo/redo history was trimmed to {depth} entries per stack to meet save and restore safety limits."
             ),
         ),
         SessionSaveNotification::VisibleOnly => (
             "Session Undo History Not Saved".to_string(),
-            "Your drawings were saved, but undo/redo history was omitted to keep the session within save and restore safety limits.".to_string(),
+            "Drawings were saved, but undo/redo history was omitted to meet save and restore safety limits.".to_string(),
         ),
     }
 }
@@ -204,12 +387,43 @@ fn record_autosave_failure(
 }
 
 pub(super) fn notify_session_failure(state: &WaylandState, err: &anyhow::Error) {
-    notification::send_notification_async(
+    notification::send_notification_with_timeout_async(
         &state.tokio_handle,
         "Failed to Save Session".to_string(),
-        format!("Your drawings may not persist: {}", err),
+        format!(
+            "Drawings may not persist. Raise Session > Max file size, remove images, or disable persisted history. Details: {}",
+            err
+        ),
         Some("dialog-error".to_string()),
+        SESSION_SAVE_NOTIFICATION_TIMEOUT_MS,
     );
+}
+
+fn show_session_failure_toast(state: &mut WaylandState) {
+    state.input_state.set_ui_toast_with_action_and_duration(
+        UiToastKind::Warning,
+        "Session save failed; drawings may not restore. Check max_file_size_mb.",
+        "Settings",
+        Action::OpenConfigurator,
+        SESSION_SAVE_WARNING_TOAST_MS,
+    );
+}
+
+fn suggested_limit_mb(projected_written_size: u64, current_limit_bytes: u64) -> u64 {
+    const MIB: u64 = 1024 * 1024;
+    let projected_mb = projected_written_size.div_ceil(MIB);
+    let current_mb = current_limit_bytes.div_ceil(MIB);
+    projected_mb
+        .saturating_mul(3)
+        .div_ceil(2)
+        .max(current_mb.saturating_mul(3).div_ceil(2))
+        .clamp(1, 1024)
+}
+
+fn config_path_display() -> String {
+    Config::get_config_path()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
 }
 
 #[cfg(test)]

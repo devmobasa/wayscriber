@@ -8,7 +8,11 @@ use crate::backend::wayland::clipboard::{
 };
 use crate::input::state::{ClipboardPasteRequest, UiToastKind};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+mod session_paste;
+
+use session_paste::{PastePersistenceDecision, SessionPasteWarning};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn drain_clipboard_requests(&mut self) {
@@ -71,6 +75,13 @@ impl WaylandState {
     }
 
     fn start_clipboard_paste(&mut self, request: ClipboardPasteRequest) {
+        log::info!(
+            "Starting clipboard paste request {} for board '{}' page {} generation {}",
+            request.id,
+            request.target_board_id,
+            request.target_page_index,
+            request.target_page_generation
+        );
         self.suppress_focus_exit_for(Duration::from_millis(1500));
 
         let pending_shapes = self.input_state.local_selection_shapes_for_pending_publish(
@@ -91,6 +102,12 @@ impl WaylandState {
 
     fn apply_clipboard_paste_completion(&mut self, completion: ClipboardPasteCompletion) {
         let active_request_id = self.input_state.active_clipboard_paste_request_id();
+        log::info!(
+            "Applying clipboard paste completion {} with active_request={:?}: {}",
+            completion.request.id,
+            active_request_id,
+            completion.result.summary()
+        );
         let private_payload = match &completion.result {
             ClipboardPasteResult::PrivateSelection(payload)
                 if active_request_id == Some(completion.request.id) =>
@@ -173,11 +190,54 @@ impl WaylandState {
                 }
             }
             PasteAction::ApplyExternalImage { request, image } => {
-                if !self
-                    .input_state
-                    .paste_external_image_from_request(&request, image)
+                let mime_type = image.mime_type.clone();
+                let image_width = image.width;
+                let image_height = image.height;
+                let image_bytes = image.bytes.len();
+                let persistence_warning = match self
+                    .session_paste_preflight_message(&request, &image)
                 {
+                    Ok(PastePersistenceDecision::Allow { warning }) => warning,
+                    Ok(PastePersistenceDecision::Block { warning }) => {
+                        log::warn!(
+                            "External image paste request {} rejected by session size preflight: {}",
+                            request.id,
+                            warning.log_detail
+                        );
+                        self.show_session_paste_warning(warning);
+                        self.input_state.trigger_blocked_feedback();
+                        self.input_state.finish_clipboard_paste_request(request.id);
+                        return;
+                    }
+                    Err(err) => {
+                        log::warn!(
+                            "External image paste request {} could not be checked against session size limits: {}",
+                            request.id,
+                            err
+                        );
+                        Some(SessionPasteWarning::toast_only(
+                            "Could not check session size; this image may not persist.",
+                        ))
+                    }
+                };
+                let pasted = self
+                    .input_state
+                    .paste_external_image_from_request(&request, image);
+                log::info!(
+                    "Applied external image paste request {} to board '{}' page {}: success={}, mime={}, dimensions={}x{}, bytes={}",
+                    request.id,
+                    request.target_board_id,
+                    request.target_page_index,
+                    pasted,
+                    mime_type,
+                    image_width,
+                    image_height,
+                    image_bytes
+                );
+                if !pasted {
                     self.input_state.trigger_blocked_feedback();
+                } else if let Some(warning) = persistence_warning {
+                    self.show_session_paste_warning(warning);
                 }
                 self.input_state.finish_clipboard_paste_request(request.id);
             }
@@ -208,10 +268,18 @@ impl WaylandState {
     }
 
     fn start_system_clipboard_read(&mut self, request: ClipboardPasteRequest) {
+        log::info!("Reading system clipboard for paste request {}", request.id);
         let (tx, rx) = mpsc::channel();
         self.clipboard_paste_rx = Some(rx);
         std::thread::spawn(move || {
+            let started = Instant::now();
             let result = transfer::resolve_system_clipboard();
+            log::info!(
+                "System clipboard read for paste request {} completed in {:?}: {}",
+                request.id,
+                started.elapsed(),
+                result.summary()
+            );
             let _ = tx.send(ClipboardPasteCompletion { request, result });
         });
     }

@@ -57,6 +57,42 @@ pub(in crate::backend::wayland) enum ClipboardPasteResult {
     MalformedPrivateSelection(String),
 }
 
+impl ClipboardPasteResult {
+    pub(in crate::backend::wayland) fn summary(&self) -> String {
+        match self {
+            Self::PrivateSelection(selection) => {
+                format!("private-selection shapes={}", selection.shapes.len())
+            }
+            Self::Image(image) => format!(
+                "image mime={} dimensions={}x{} bytes={}",
+                image.mime_type,
+                image.width,
+                image.height,
+                image.bytes.len()
+            ),
+            Self::ClipboardEmpty => "clipboard-empty".to_string(),
+            Self::NoSupportedMime { offered } => {
+                format!("unsupported-mime offered={offered:?}")
+            }
+            Self::TooLarge { limit } => format!("too-large limit={limit}"),
+            Self::TooManyPixels {
+                width,
+                height,
+                limit,
+            } => {
+                format!("too-many-pixels dimensions={width}x{height} limit={limit}")
+            }
+            Self::DecodeFailed(err) => format!("decode-failed error={err}"),
+            Self::ReadTimedOut => "read-timed-out".to_string(),
+            Self::ClipboardUnavailable(err) => format!("clipboard-unavailable error={err}"),
+            Self::ClipboardError(err) => format!("clipboard-error error={err}"),
+            Self::MalformedPrivateSelection(err) => {
+                format!("malformed-private-selection error={err}")
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum ClipboardReadError {
     Empty,

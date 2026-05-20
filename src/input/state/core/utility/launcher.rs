@@ -26,10 +26,16 @@ impl InputState {
                     log::error!(
                         "Configurator not found (looked for '{binary}'). Install 'wayscriber-configurator' (Arch: yay -S wayscriber-configurator; deb/rpm users: grab the wayscriber-configurator package from the release page) or set WAYSCRIBER_CONFIGURATOR to its path."
                     );
-                    self.set_ui_toast(
-                        UiToastKind::Warning,
-                        format!("Configurator not found: {binary}"),
-                    );
+                    if self.open_config_file_default() {
+                        log::info!(
+                            "Opened config file with default application because wayscriber-configurator was unavailable"
+                        );
+                    } else {
+                        self.set_ui_toast(
+                            UiToastKind::Warning,
+                            format!("Configurator not found: {binary}"),
+                        );
+                    }
                 } else {
                     log::error!("Failed to launch wayscriber-configurator using '{binary}': {err}");
                     log::error!(
@@ -96,12 +102,13 @@ impl InputState {
     }
 
     /// Opens the primary config file using the desktop default application.
-    pub(crate) fn open_config_file_default(&mut self) {
+    pub(crate) fn open_config_file_default(&mut self) -> bool {
         let path = match Config::get_config_path() {
             Ok(p) => p,
             Err(err) => {
                 log::error!("Unable to resolve config path: {}", err);
-                return;
+                self.set_ui_toast(UiToastKind::Error, "Unable to resolve config path.");
+                return false;
             }
         };
 
@@ -128,9 +135,12 @@ impl InputState {
                     child.id()
                 );
                 self.should_exit = true;
+                true
             }
             Err(err) => {
                 log::error!("Failed to open config file at {}: {}", path.display(), err);
+                self.set_ui_toast(UiToastKind::Error, "Failed to open config file.");
+                false
             }
         }
     }

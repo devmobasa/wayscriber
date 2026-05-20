@@ -22,7 +22,11 @@ pub use snapshot::{
 #[allow(unused_imports)]
 pub(crate) use snapshot::{LoadSnapshotOutcome, load_snapshot_with_outcome};
 #[allow(unused_imports)]
-pub(crate) use snapshot::{SaveSnapshotOutcome, SaveSnapshotReport, save_snapshot_with_report};
+pub(crate) use snapshot::{
+    SaveLimitExceeded, SaveSnapshotOutcome, SaveSnapshotReport, SnapshotPayloadEstimate,
+    SnapshotSaveEstimate, estimate_snapshot_payload, estimate_snapshot_save,
+    estimate_snapshot_without_history_payload, save_snapshot_with_report,
+};
 #[allow(unused_imports)]
 pub use storage::{ClearOutcome, FrameCounts, SessionInspection, clear_session, inspect_session};
 

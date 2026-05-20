@@ -10,7 +10,13 @@ use super::super::types::OverlayState;
 impl Daemon {
     pub(super) fn terminate_overlay_process(&mut self) -> Result<()> {
         if let Some(mut child) = self.overlay_child.take() {
-            info!("Stopping overlay process (pid {})", child.id());
+            let stop_started = Instant::now();
+            let timeout = Duration::from_secs(2);
+            info!(
+                "Stopping overlay process (pid {}, graceful_timeout={:?})",
+                child.id(),
+                timeout
+            );
             #[cfg(unix)]
             {
                 if unsafe { libc::kill(child.id() as i32, libc::SIGTERM) } != 0 {
@@ -27,18 +33,36 @@ impl Daemon {
                 }
             }
 
-            let deadline = Instant::now() + Duration::from_secs(2);
+            let deadline = Instant::now() + timeout;
             loop {
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        info!("Overlay process exited with status {:?}", status);
+                        info!(
+                            "Overlay process exited with status {:?} after {:?}",
+                            status,
+                            stop_started.elapsed()
+                        );
                         break;
                     }
                     Ok(None) => {
                         if Instant::now() >= deadline {
-                            warn!("Overlay process did not exit, sending SIGKILL");
+                            warn!(
+                                "Overlay process did not exit after {:?}, sending SIGKILL",
+                                stop_started.elapsed()
+                            );
                             let _ = child.kill();
-                            let _ = child.wait();
+                            match child.wait() {
+                                Ok(status) => warn!(
+                                    "Overlay process killed with status {:?} after {:?}",
+                                    status,
+                                    stop_started.elapsed()
+                                ),
+                                Err(err) => warn!(
+                                    "Failed to wait for killed overlay process after {:?}: {}",
+                                    stop_started.elapsed(),
+                                    err
+                                ),
+                            }
                             break;
                         }
                         thread::sleep(Duration::from_millis(50));

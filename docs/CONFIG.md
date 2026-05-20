@@ -748,7 +748,7 @@ backup_retention = 1
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
 - `per_output` — when `true` (default) keep a separate session file for each monitor; set to `false` to share one file per Wayland display as in earlier releases
 - `max_shapes_per_frame` — trims older shapes if a frame grows beyond this count when loading/saving
-- `max_file_size_mb` — skips loading and writing session files beyond this size cap; autosave warns near the cap
+- `max_file_size_mb` — skips loading and writing session files beyond this size cap; image paste and autosave warn near the cap
 - `compress` — `auto` (gzip files above the threshold), `on`, or `off`
 - `auto_compress_threshold_kb` — size threshold for `compress = "auto"`
 - `backup_retention` — how many rotated `.bak` files to keep (set to 0 to disable backups)
@@ -765,6 +765,7 @@ Session overrides and recovery:
 
 - CLI flags: `--resume-session` forces persistence on, `--no-resume-session` forces it off for the current run. The environment variable `WAYSCRIBER_RESUME_SESSION=1/0` does the same.
 - Size fallback: if visible drawings fit but persisted undo/redo history would exceed save or restore safety limits, autosave saves the drawings and warns once per run that history was trimmed or omitted.
+- Image paste guard: when a pasted image would push visible session data over `max_file_size_mb`, Wayscriber blocks the paste and points you to `[session] max_file_size_mb`; when only undo history is at risk, the paste is allowed with a warning.
 - Load safety: compressed session files are checked against an internal expanded-size cap while saving and loading. If an existing file expands beyond that cap, wayscriber refuses to load it, leaves the primary session file unchanged, and avoids overwriting it until session data changes.
 - Recovery: if a session file is corrupt or cannot be parsed/decompressed, wayscriber logs a warning, writes a `.bak` copy of the bad file, removes the corrupt file, and continues with defaults. Overrides above still apply after recovery.
 
