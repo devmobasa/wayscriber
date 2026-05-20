@@ -50,6 +50,7 @@ impl BoardManager {
         }
 
         self.active_index = slot;
+        self.bump_board_identity_generation();
         true
     }
 
@@ -103,6 +104,7 @@ impl BoardManager {
         spec.name = name_from_id(id);
         self.boards.push(BoardState::new(spec));
         let index = self.boards.len() - 1;
+        self.bump_board_identity_generation();
         Some(&mut self.boards[index])
     }
 
@@ -114,6 +116,7 @@ impl BoardManager {
         let new_spec = self.template_for_slot(index);
         self.boards.push(BoardState::new(new_spec));
         self.active_index = index;
+        self.bump_board_identity_generation();
         true
     }
 
@@ -136,6 +139,7 @@ impl BoardManager {
         let insert_at = self.active_index + 1;
         self.boards.insert(insert_at, new_board);
         self.active_index = insert_at;
+        self.bump_board_identity_generation();
         Some(new_spec.id)
     }
 

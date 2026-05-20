@@ -1,7 +1,9 @@
 use super::{
-    BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardManager, BoardSpec, BoardState,
+    BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardIdentityGeneration,
+    BoardManager, BoardSpec, BoardState, board_color_from_config, board_color_to_config,
+    runtime_contrast_pen_color,
 };
-use crate::config::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, BoardsConfig};
+use crate::config::{BoardBackgroundConfig, BoardItemConfig, BoardsConfig};
 use crate::draw::Color;
 
 impl BoardSpec {
@@ -27,7 +29,7 @@ impl BoardSpec {
         }
 
         match self.background {
-            BoardBackground::Solid(color) => Some(contrast_color(color)),
+            BoardBackground::Solid(color) => Some(runtime_contrast_pen_color(color)),
             BoardBackground::Transparent => None,
         }
     }
@@ -64,6 +66,7 @@ impl BoardManager {
             persist_customizations: config.persist_customizations,
             default_board_id: config.default_board,
             template,
+            identity_generation: BoardIdentityGeneration::fresh(),
         }
     }
 
@@ -83,10 +86,7 @@ impl BoardManager {
                     id: board.spec.id.clone(),
                     name: board.spec.name.clone(),
                     background: board_background_to_config(&board.spec.background),
-                    default_pen_color: board
-                        .spec
-                        .default_pen_color
-                        .map(|color| BoardColorConfig::Rgb([color.r, color.g, color.b])),
+                    default_pen_color: board.spec.default_pen_color.map(board_color_to_config),
                     auto_adjust_pen: board.spec.auto_adjust_pen,
                     persist: board.spec.persist,
                     pinned: board.spec.pinned,
@@ -123,36 +123,7 @@ fn board_background_to_config(background: &BoardBackground) -> BoardBackgroundCo
             BoardBackgroundConfig::Transparent("transparent".to_string())
         }
         BoardBackground::Solid(color) => {
-            BoardBackgroundConfig::Color(BoardColorConfig::Rgb([color.r, color.g, color.b]))
-        }
-    }
-}
-
-fn board_color_from_config(config: &BoardColorConfig) -> Color {
-    let rgb = config.rgb();
-    Color {
-        r: rgb[0],
-        g: rgb[1],
-        b: rgb[2],
-        a: 1.0,
-    }
-}
-
-fn contrast_color(background: Color) -> Color {
-    let luminance = 0.2126 * background.r + 0.7152 * background.g + 0.0722 * background.b;
-    if luminance > 0.5 {
-        Color {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        }
-    } else {
-        Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 1.0,
+            BoardBackgroundConfig::Color(board_color_to_config(*color))
         }
     }
 }

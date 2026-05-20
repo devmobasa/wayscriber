@@ -24,7 +24,7 @@ use crate::config::{
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
 use crate::input::BoardManager;
-use crate::input::boards::BoardState;
+use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{
     MouseButton,
@@ -210,7 +210,7 @@ pub struct InputState {
     /// Pending confirmation for deleting a page
     pub(in crate::input::state::core) pending_page_delete: Option<PendingPageDelete>,
     /// Recently deleted pages (for undo), with expiration timestamps
-    pub(in crate::input::state::core) deleted_pages: Vec<(String, crate::draw::Frame, Instant)>,
+    pub(in crate::input::state::core) deleted_pages: Vec<(PageRestoreRequest, Instant)>,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)
@@ -413,7 +413,7 @@ pub struct InputState {
     /// Pending clipboard fallback for failed copy operations
     pub(crate) pending_clipboard_fallback: Option<PendingClipboardFallback>,
     /// Recently deleted boards available for undo (with deletion timestamp)
-    pub(in crate::input::state::core) deleted_boards: Vec<(BoardState, Instant)>,
+    pub(in crate::input::state::core) deleted_boards: Vec<(BoardRestoreRequest, Instant)>,
     /// Status bar change highlight animation state
     #[allow(dead_code)]
     pub(crate) status_change_highlight: Option<StatusChangeHighlight>,

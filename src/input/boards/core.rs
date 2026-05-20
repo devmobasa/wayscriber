@@ -1,5 +1,8 @@
-use super::{BOARD_ID_TRANSPARENT, BoardBackground, BoardManager, BoardSpec, BoardState};
-use crate::draw::{BoardPages, Frame, PageDeleteOutcome};
+use super::{
+    BOARD_ID_TRANSPARENT, BoardBackground, BoardIdentityGeneration, BoardManager, BoardSpec,
+    BoardState,
+};
+use crate::draw::{BoardPages, Frame, PageDeleteOutcome as CanvasPageDeleteOutcome};
 
 impl BoardManager {
     pub fn board_count(&self) -> usize {
@@ -8,6 +11,15 @@ impl BoardManager {
 
     pub fn active_index(&self) -> usize {
         self.active_index
+    }
+
+    pub fn board_identity_generation(&self) -> BoardIdentityGeneration {
+        self.identity_generation
+    }
+
+    pub(crate) fn bump_board_identity_generation(&mut self) -> BoardIdentityGeneration {
+        self.identity_generation = BoardIdentityGeneration::fresh();
+        self.identity_generation
     }
 
     pub fn active_board(&self) -> &BoardState {
@@ -103,11 +115,13 @@ impl BoardManager {
         self.active_pages_mut().duplicate_page();
     }
 
+    #[allow(dead_code)]
     pub fn insert_page(&mut self, page: Frame) {
         self.active_pages_mut().insert_page(page);
     }
 
-    pub fn delete_page(&mut self) -> PageDeleteOutcome {
+    #[allow(dead_code)]
+    pub fn delete_active_page(&mut self) -> CanvasPageDeleteOutcome {
         self.active_pages_mut().delete_page()
     }
 
@@ -155,6 +169,7 @@ impl BoardManager {
         self.boards.iter_mut().find(|board| board.spec.id == id)
     }
 
+    #[allow(dead_code)]
     pub fn remove_active_board(&mut self) -> bool {
         if self.boards.len() <= 1 {
             return false;
@@ -170,6 +185,7 @@ impl BoardManager {
                 |board| board.spec.id.clone(),
             );
         }
+        self.bump_board_identity_generation();
         true
     }
 
@@ -200,6 +216,7 @@ impl BoardManager {
 
     /// Insert a board at the given index.
     /// Returns true if successful, false if the board limit is reached.
+    #[allow(dead_code)]
     pub fn insert_board(&mut self, index: usize, mut board: BoardState) -> bool {
         if self.boards.len() >= self.max_count {
             return false;
@@ -208,6 +225,7 @@ impl BoardManager {
         let insert_at = index.min(self.boards.len());
         self.boards.insert(insert_at, board);
         self.active_index = insert_at;
+        self.bump_board_identity_generation();
         true
     }
 }

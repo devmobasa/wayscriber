@@ -384,15 +384,14 @@ pub(crate) struct ClipboardPasteRequest {
 /// Pending board deletion confirmation state.
 #[derive(Debug, Clone)]
 pub(crate) struct PendingBoardDelete {
-    pub board_id: String,
+    pub confirmation: crate::input::boards::BoardDeleteConfirmation,
     pub expires_at: Instant,
 }
 
 /// Pending page deletion confirmation state.
 #[derive(Debug, Clone)]
 pub(crate) struct PendingPageDelete {
-    pub board_id: String,
-    pub page_index: usize,
+    pub confirmation: crate::input::boards::PageDeleteConfirmation,
     pub expires_at: Instant,
 }
 

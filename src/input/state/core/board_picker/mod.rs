@@ -7,6 +7,7 @@ mod state;
 use std::time::Duration;
 
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
+use crate::input::runtime_contrast_pen_color;
 
 const TITLE_FONT_SIZE: f64 = 17.0;
 const BODY_FONT_SIZE: f64 = 14.0;
@@ -220,22 +221,7 @@ fn color_to_hex(color: Color) -> String {
 }
 
 fn contrast_color(background: Color) -> Color {
-    let luminance = 0.2126 * background.r + 0.7152 * background.g + 0.0722 * background.b;
-    if luminance > 0.5 {
-        Color {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        }
-    } else {
-        Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 1.0,
-        }
-    }
+    runtime_contrast_pen_color(background)
 }
 
 const BOARD_PALETTE: [Color; 11] = [

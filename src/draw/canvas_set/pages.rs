@@ -126,13 +126,21 @@ impl BoardPages {
     }
 
     /// Insert a page after the current position.
+    #[allow(dead_code)]
     pub fn insert_page(&mut self, page: Frame) {
         let insert_at = (self.active + 1).min(self.pages.len());
+        self.insert_page_at(insert_at, page);
+    }
+
+    pub fn insert_page_at(&mut self, index: usize, page: Frame) -> usize {
+        let insert_at = index.min(self.pages.len());
         self.pages.insert(insert_at, page);
         self.active = insert_at;
         self.bump_generation();
+        insert_at
     }
 
+    #[allow(dead_code)]
     pub fn delete_page(&mut self) -> PageDeleteOutcome {
         if self.pages.len() == 1 {
             self.pages[0].clear();
@@ -267,5 +275,50 @@ impl BoardPages {
 
     pub fn pages_mut(&mut self) -> &mut Vec<Frame> {
         &mut self.pages
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::{RED, Shape};
+
+    #[test]
+    fn page_generation_changes_on_identity_or_order_updates() {
+        let mut pages = BoardPages::new();
+        let start = pages.generation();
+
+        pages.new_page();
+        assert_ne!(pages.generation(), start);
+        let after_new = pages.generation();
+
+        assert!(pages.move_page(1, 0));
+        assert_ne!(pages.generation(), after_new);
+        let after_move = pages.generation();
+
+        let _ = pages.delete_page();
+        assert_ne!(pages.generation(), after_move);
+    }
+
+    #[test]
+    fn page_generation_does_not_change_for_rejected_noop_content_or_rename_updates() {
+        let mut pages = BoardPages::new();
+        let start = pages.generation();
+
+        assert!(!pages.switch_to_page(0));
+        assert!(!pages.move_page(0, 9));
+        assert_eq!(pages.delete_page_at(9), PageDeleteOutcome::Pending);
+        assert_eq!(pages.generation(), start);
+
+        assert!(pages.set_page_name(0, Some("Notes".to_string())));
+        pages.active_frame_mut().add_shape(Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 10,
+            y2: 10,
+            color: RED,
+            thick: 2.0,
+        });
+        assert_eq!(pages.generation(), start);
     }
 }
