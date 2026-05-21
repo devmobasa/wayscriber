@@ -108,7 +108,11 @@ impl InputState {
                 _ => true,
             }
         } else if self.board_picker_focus() == BoardPickerFocus::PagePanel {
-            self.handle_board_picker_page_panel_key(key)
+            if let Some(consumed) = self.handle_board_picker_page_nav_key(key) {
+                consumed
+            } else {
+                self.handle_board_picker_page_panel_key(key)
+            }
         } else {
             self.handle_board_picker_board_list_key(key)
         }
@@ -346,6 +350,18 @@ impl InputState {
             }
             Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
                 self.board_picker_add_page();
+                true
+            }
+            Key::Char('g') | Key::Char('G') if self.modifiers.ctrl => {
+                self.board_picker_begin_page_jump();
+                true
+            }
+            Key::Char('f') | Key::Char('F') if self.modifiers.ctrl => {
+                self.board_picker_begin_page_search();
+                true
+            }
+            Key::Char('/') if !self.modifiers.ctrl && !self.modifiers.alt => {
+                self.board_picker_begin_page_search();
                 true
             }
             Key::Backspace => {

@@ -60,6 +60,7 @@ impl InputState {
         {
             self.board_picker_queue_page_scroll_to(page_index);
             self.board_picker_set_page_focus_page_index(page_index);
+            self.board_picker_reconcile_page_nav_after_page_change();
         }
     }
 
@@ -67,7 +68,11 @@ impl InputState {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
             return PageDeleteOutcome::Pending;
         };
-        self.delete_page_in_board(board_index, page_index)
+        let outcome = self.delete_page_in_board(board_index, page_index);
+        if !matches!(outcome, PageDeleteOutcome::Pending) {
+            self.board_picker_reconcile_page_nav_after_page_change();
+        }
+        outcome
     }
 
     pub(crate) fn board_picker_duplicate_page(&mut self, page_index: usize) {
@@ -83,6 +88,7 @@ impl InputState {
         {
             self.board_picker_queue_page_scroll_to(new_page_index);
             self.board_picker_set_page_focus_page_index(new_page_index);
+            self.board_picker_reconcile_page_nav_after_page_change();
         }
     }
 

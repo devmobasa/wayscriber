@@ -1,10 +1,10 @@
 use super::create_test_input_state;
-use crate::draw::Frame;
+use crate::draw::{Frame, PageDeleteOutcome};
 use crate::input::BoardBackground;
 use crate::input::events::Key;
 use crate::input::state::core::board_picker::{
     BoardPickerDrag, BoardPickerEditMode, BoardPickerFocus, BoardPickerMode, BoardPickerPageDrag,
-    BoardPickerPageEdit, BoardPickerState,
+    BoardPickerPageEdit, BoardPickerPageNavMode, BoardPickerState,
 };
 use crate::input::state::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
@@ -176,6 +176,21 @@ fn set_board_page_count(
         .pages_mut();
     pages.clear();
     pages.extend((0..page_count.max(1)).map(|_| Frame::new()));
+}
+
+fn set_board_page_names(
+    state: &mut crate::input::state::InputState,
+    board_index: usize,
+    names: &[&str],
+) {
+    set_board_page_count(state, board_index, names.len());
+    for (index, name) in names.iter().enumerate() {
+        assert!(
+            state.boards.board_states_mut()[board_index]
+                .pages
+                .set_page_name(index, Some((*name).to_string()))
+        );
+    }
 }
 
 fn page_thumb_origin(
@@ -631,6 +646,99 @@ fn board_picker_wheel_scroll_up_clamps_focus_to_last_visible_page() {
 }
 
 #[test]
+fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 80);
+    update_picker_layout(&mut input, 1280, 720);
+
+    let cols = input
+        .board_picker_layout()
+        .expect("layout")
+        .page_cols
+        .max(1);
+    let second_match = cols;
+    let mut names = vec![""; 80];
+    names[0] = "Match first";
+    names[second_match] = "Match visible after scroll";
+    set_board_page_names(&mut input, board_index, &names);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.handle_board_picker_key(Key::Char('/'));
+    for ch in "match".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert_eq!(input.board_picker_page_search_cursor(), Some(0));
+    assert_eq!(input.board_picker_page_search_active_match(), Some(0));
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(0));
+
+    assert!(input.board_picker_scroll_page_panel_rows(1));
+    update_picker_layout(&mut input, 1280, 720);
+
+    assert_eq!(input.board_picker_page_search_cursor(), Some(1));
+    assert_eq!(
+        input.board_picker_page_search_active_match(),
+        Some(second_match)
+    );
+    assert_eq!(
+        input.board_picker_page_focus_page_index(),
+        Some(second_match)
+    );
+    assert_page_visible(*input.board_picker_layout().expect("layout"), second_match);
+
+    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(!input.is_board_picker_open());
+    assert_eq!(
+        input.boards.board_states()[board_index]
+            .pages
+            .active_index(),
+        second_match
+    );
+}
+
+#[test]
+fn board_picker_page_search_wheel_scroll_without_visible_match_clears_cursor() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    let mut names = vec![""; 80];
+    names[0] = "Match first";
+    set_board_page_names(&mut input, board_index, &names);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.handle_board_picker_key(Key::Char('/'));
+    for ch in "match".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert_eq!(input.board_picker_page_search_cursor(), Some(0));
+    assert_eq!(input.board_picker_page_search_active_match(), Some(0));
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(0));
+
+    assert!(input.board_picker_scroll_page_panel_rows(1));
+    update_picker_layout(&mut input, 1280, 720);
+
+    assert_eq!(input.board_picker_page_search_cursor(), None);
+    assert_eq!(input.board_picker_page_search_active_match(), None);
+    assert_eq!(input.board_picker_page_focus_page_index(), None);
+    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.is_board_picker_open());
+
+    assert!(input.handle_board_picker_key(Key::F3));
+    update_picker_layout(&mut input, 1280, 720);
+    assert_eq!(input.board_picker_page_search_cursor(), Some(0));
+    assert_eq!(input.board_picker_page_search_active_match(), Some(0));
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(0));
+    assert_page_visible(*input.board_picker_layout().expect("layout"), 0);
+}
+
+#[test]
 fn board_picker_column_change_keeps_focused_absolute_page_visible() {
     let mut input = create_test_input_state();
     input.open_board_picker();
@@ -650,6 +758,328 @@ fn board_picker_column_change_keeps_focused_absolute_page_visible() {
     let narrow = *input.board_picker_layout().expect("layout");
     assert_eq!(input.board_picker_page_focus_page_index(), Some(9));
     assert_page_visible(narrow, 9);
+}
+
+#[test]
+fn board_picker_page_jump_focuses_absolute_page_and_scrolls_visible() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 18);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.modifiers.ctrl = true;
+    assert!(input.handle_board_picker_key(Key::Char('g')));
+    input.modifiers.ctrl = false;
+    for ch in "12".chars() {
+        assert!(input.handle_board_picker_key(Key::Char(ch)));
+    }
+    assert_eq!(input.board_picker_page_jump_buffer(), Some("12"));
+    assert!(input.handle_board_picker_key(Key::Return));
+    update_picker_layout(&mut input, 1280, 720);
+
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Normal
+    );
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(11));
+    assert_page_visible(*input.board_picker_layout().expect("layout"), 11);
+}
+
+#[test]
+fn board_picker_page_jump_edges_keep_picker_open() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 4);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+    input.modifiers.ctrl = true;
+    input.handle_board_picker_key(Key::Char('g'));
+    input.modifiers.ctrl = false;
+
+    assert!(input.handle_board_picker_key(Key::Char('x')));
+    assert_eq!(input.board_picker_page_jump_buffer(), Some(""));
+    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.is_board_picker_open());
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Jump
+    );
+
+    for ch in "99".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.is_board_picker_open());
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Jump
+    );
+    assert_eq!(
+        input.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        Some("Page number out of range.")
+    );
+
+    assert!(input.handle_board_picker_key(Key::Escape));
+    assert!(input.is_board_picker_open());
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Normal
+    );
+}
+
+#[test]
+fn board_picker_page_search_slash_starts_without_inserting_slash() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    assert!(input.handle_board_picker_key(Key::Char('/')));
+
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Search
+    );
+    assert_eq!(input.board_picker_page_search_query(), Some(""));
+}
+
+#[test]
+fn board_picker_selecting_current_board_row_clears_page_nav_mode() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.handle_board_picker_key(Key::Char('/'));
+    for ch in "target".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Search
+    );
+
+    let selected = input.board_picker_selected_index().expect("selected row");
+    input.board_picker_set_selected(selected);
+
+    assert_eq!(input.board_picker_focus(), BoardPickerFocus::BoardList);
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Normal
+    );
+    assert_eq!(input.board_picker_page_search_query(), None);
+}
+
+#[test]
+fn board_picker_page_search_finds_named_page_beyond_visible_window() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    let mut names = vec![""; 14];
+    names[12] = "Capstone";
+    set_board_page_names(&mut input, board_index, &names);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    assert!(input.handle_board_picker_key(Key::Char('/')));
+    for ch in "cap".chars() {
+        assert!(input.handle_board_picker_key(Key::Char(ch)));
+    }
+    update_picker_layout(&mut input, 1280, 720);
+
+    assert_eq!(input.board_picker_page_search_active_match(), Some(12));
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(12));
+    assert_page_visible(*input.board_picker_layout().expect("layout"), 12);
+}
+
+#[test]
+fn board_picker_page_search_numeric_is_exact_page_number() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    let mut names = vec![""; 12];
+    names[0] = "Topic 12";
+    set_board_page_names(&mut input, board_index, &names);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    assert!(input.handle_board_picker_key(Key::Char('/')));
+    for ch in "12".chars() {
+        assert!(input.handle_board_picker_key(Key::Char(ch)));
+    }
+
+    assert_eq!(input.board_picker_page_search_active_match(), Some(11));
+    assert!(input.board_picker_page_matches_current_search(11));
+    assert!(!input.board_picker_page_matches_current_search(0));
+}
+
+#[test]
+fn board_picker_page_search_no_match_enter_is_noop() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 4);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    assert!(input.handle_board_picker_key(Key::Char('/')));
+    for ch in "missing".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert_eq!(input.board_picker_page_search_match_count(), 0);
+    assert!(input.handle_board_picker_key(Key::Return));
+
+    assert!(input.is_board_picker_open());
+    assert_eq!(
+        input.boards.board_states()[board_index]
+            .pages
+            .active_index(),
+        0
+    );
+    assert!(input.handle_board_picker_key(Key::Escape));
+    assert!(input.is_board_picker_open());
+    assert_eq!(
+        input.board_picker_page_nav_mode(),
+        BoardPickerPageNavMode::Normal
+    );
+}
+
+#[test]
+fn board_picker_page_search_f3_cycles_matches() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    let mut names = vec![""; 12];
+    names[2] = "Match early";
+    names[11] = "Match late";
+    set_board_page_names(&mut input, board_index, &names);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.handle_board_picker_key(Key::Char('/'));
+    for ch in "match".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert_eq!(input.board_picker_page_search_active_match(), Some(2));
+
+    assert!(input.handle_board_picker_key(Key::F3));
+    assert_eq!(input.board_picker_page_search_active_match(), Some(11));
+    input.modifiers.shift = true;
+    assert!(input.handle_board_picker_key(Key::F3));
+    input.modifiers.shift = false;
+
+    assert_eq!(input.board_picker_page_search_active_match(), Some(2));
+}
+
+#[test]
+fn board_picker_page_search_enter_opens_absolute_page_beyond_nine() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    let mut names = vec![""; 12];
+    names[11] = "Target";
+    set_board_page_names(&mut input, board_index, &names);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.handle_board_picker_key(Key::Char('/'));
+    for ch in "target".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert_eq!(input.board_picker_page_search_active_match(), Some(11));
+    assert!(input.handle_board_picker_key(Key::Return));
+
+    assert!(!input.is_board_picker_open());
+    assert_eq!(
+        input.boards.board_states()[board_index]
+            .pages
+            .active_index(),
+        11
+    );
+}
+
+#[test]
+fn board_picker_page_search_rename_updates_derived_match() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 12);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.handle_board_picker_key(Key::Char('/'));
+    for ch in "target".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    assert_eq!(input.board_picker_page_search_match_count(), 0);
+
+    input.board_picker_page_edit = Some(BoardPickerPageEdit {
+        board_index,
+        page_index: 9,
+        buffer: "Target".to_string(),
+    });
+    assert!(input.board_picker_commit_page_edit());
+
+    assert_eq!(input.board_picker_page_search_active_match(), Some(9));
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(9));
+}
+
+#[test]
+fn board_picker_page_search_pending_delete_preserves_confirmed_delete_clamps() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_names(
+        &mut input,
+        board_index,
+        &["Match one", "Match two", "Other"],
+    );
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+    input.handle_board_picker_key(Key::Char('/'));
+    for ch in "match".chars() {
+        input.handle_board_picker_key(Key::Char(ch));
+    }
+    input.handle_board_picker_key(Key::F3);
+    assert_eq!(input.board_picker_page_search_cursor(), Some(1));
+    assert_eq!(input.board_picker_page_search_active_match(), Some(1));
+
+    assert_eq!(
+        input.board_picker_delete_page(1),
+        PageDeleteOutcome::Pending
+    );
+    assert_eq!(input.board_picker_page_search_cursor(), Some(1));
+    assert_eq!(input.board_picker_page_search_active_match(), Some(1));
+
+    assert_eq!(
+        input.board_picker_delete_page(1),
+        PageDeleteOutcome::Removed
+    );
+    assert_eq!(input.board_picker_page_search_cursor(), Some(0));
+    assert_eq!(input.board_picker_page_search_active_match(), Some(0));
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(0));
 }
 
 #[test]
@@ -772,7 +1202,22 @@ fn board_picker_footer_text_changes_for_quick_and_page_panel_modes() {
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
     assert_eq!(
         input.board_picker_footer_text(),
-        "Enter: open  Ctrl+N: add  F2: rename  Del: delete  Tab: back"
+        "Enter: open  Ctrl+N: add  Ctrl+G: page  /: search  F2: rename"
+    );
+
+    input.modifiers.ctrl = true;
+    input.handle_board_picker_key(Key::Char('g'));
+    input.modifiers.ctrl = false;
+    assert_eq!(
+        input.board_picker_footer_text(),
+        "Go to page:   Enter: go  Esc: cancel"
+    );
+
+    input.handle_board_picker_key(Key::Escape);
+    input.handle_board_picker_key(Key::Char('/'));
+    assert_eq!(
+        input.board_picker_footer_text(),
+        "Search pages:   Enter: open  F3: next  Esc: clear"
     );
 }
 

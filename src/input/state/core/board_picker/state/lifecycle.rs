@@ -1,5 +1,5 @@
 use super::super::super::base::InputState;
-use super::super::{BoardPickerFocus, BoardPickerMode, BoardPickerState};
+use super::super::{BoardPickerFocus, BoardPickerMode, BoardPickerPageNavMode, BoardPickerState};
 
 impl InputState {
     pub(crate) fn is_board_picker_open(&self) -> bool {
@@ -39,6 +39,10 @@ impl InputState {
             page_focus_page_index: None,
             page_scroll_row: 0,
             page_scroll_target_page_index: Some(active_page),
+            page_nav_mode: BoardPickerPageNavMode::Normal,
+            page_search_query: String::new(),
+            page_search_cursor: None,
+            page_jump_buffer: String::new(),
         };
         let selected_row = self.board_picker_row_for_board(active_index);
         if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
@@ -72,6 +76,10 @@ impl InputState {
             page_focus_page_index: None,
             page_scroll_row: 0,
             page_scroll_target_page_index: Some(active_page),
+            page_nav_mode: BoardPickerPageNavMode::Normal,
+            page_search_query: String::new(),
+            page_search_cursor: None,
+            page_jump_buffer: String::new(),
         };
         let selected_row = self.board_picker_row_for_board(active_index);
         if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
@@ -163,6 +171,10 @@ impl InputState {
             focus,
             page_focus_page_index,
             page_scroll_target_page_index,
+            page_nav_mode,
+            page_search_query,
+            page_search_cursor,
+            page_jump_buffer,
             ..
         } = &mut self.board_picker_state
         else {
@@ -178,6 +190,10 @@ impl InputState {
             }
             BoardPickerFocus::BoardList => {
                 *page_focus_page_index = None;
+                *page_nav_mode = BoardPickerPageNavMode::Normal;
+                page_search_query.clear();
+                *page_search_cursor = None;
+                page_jump_buffer.clear();
             }
         }
         self.needs_redraw = true;
@@ -237,12 +253,20 @@ impl InputState {
             page_focus_page_index,
             page_scroll_row,
             page_scroll_target_page_index,
+            page_nav_mode,
+            page_search_query,
+            page_search_cursor,
+            page_jump_buffer,
             ..
         } = &mut self.board_picker_state
         {
             *selected = next;
             *focus = BoardPickerFocus::BoardList;
             *page_focus_page_index = None;
+            *page_nav_mode = BoardPickerPageNavMode::Normal;
+            page_search_query.clear();
+            *page_search_cursor = None;
+            page_jump_buffer.clear();
             if previous_board != Some(next_board) {
                 *page_scroll_row = 0;
                 *page_scroll_target_page_index = Some(next_active_page);
@@ -321,38 +345,62 @@ impl InputState {
         let cols = layout.page_cols.max(1);
         let visible_slots = layout.page_visible_slots.max(1);
         let page_count = layout.page_count;
+        let Some((scroll_row, _, _)) = self.board_picker_page_panel_state_parts() else {
+            return false;
+        };
+        let current = scroll_row.min(max);
+        let next = if delta_rows.is_negative() {
+            current.saturating_sub(delta_rows.unsigned_abs())
+        } else {
+            current.saturating_add(delta_rows as usize).min(max)
+        };
+        if scroll_row == next {
+            return false;
+        }
+        let first_visible = next.saturating_mul(cols).min(page_count);
+        let last_visible = first_visible
+            .saturating_add(visible_slots)
+            .min(page_count)
+            .saturating_sub(1);
+        let visible_search_match = (self.board_picker_page_nav_mode()
+            == BoardPickerPageNavMode::Search)
+            .then(|| {
+                self.board_picker_page_search_visible_match(
+                    first_visible,
+                    last_visible,
+                    delta_rows.is_negative(),
+                )
+            })
+            .flatten();
         if let BoardPickerState::Open {
             page_scroll_row,
             page_focus_page_index,
             page_scroll_target_page_index,
+            page_nav_mode,
+            page_search_cursor,
             ..
         } = &mut self.board_picker_state
         {
-            let current = (*page_scroll_row).min(max);
-            let next = if delta_rows.is_negative() {
-                current.saturating_sub(delta_rows.unsigned_abs())
-            } else {
-                current.saturating_add(delta_rows as usize).min(max)
-            };
             *page_scroll_target_page_index = None;
-            if *page_scroll_row != next {
-                *page_scroll_row = next;
-                if let Some(focus_page) = page_focus_page_index {
-                    let first_visible = next.saturating_mul(cols).min(page_count);
-                    let last_visible = first_visible
-                        .saturating_add(visible_slots)
-                        .min(page_count)
-                        .saturating_sub(1);
-                    if *focus_page < first_visible {
-                        *page_focus_page_index = Some(first_visible.min(last_visible));
-                    } else if *focus_page > last_visible {
-                        *page_focus_page_index = Some(last_visible);
-                    }
+            *page_scroll_row = next;
+            if *page_nav_mode == BoardPickerPageNavMode::Search {
+                if let Some((cursor, page_index)) = visible_search_match {
+                    *page_search_cursor = Some(cursor);
+                    *page_focus_page_index = Some(page_index);
+                } else {
+                    *page_search_cursor = None;
+                    *page_focus_page_index = None;
                 }
-                self.needs_redraw = true;
-                self.dirty_tracker.mark_full();
-                return true;
+            } else if let Some(focus_page) = page_focus_page_index {
+                if *focus_page < first_visible {
+                    *page_focus_page_index = Some(first_visible.min(last_visible));
+                } else if *focus_page > last_visible {
+                    *page_focus_page_index = Some(last_visible);
+                }
             }
+            self.needs_redraw = true;
+            self.dirty_tracker.mark_full();
+            return true;
         }
         false
     }

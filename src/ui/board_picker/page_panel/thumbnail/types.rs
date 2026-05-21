@@ -16,6 +16,7 @@ pub(in crate::ui::board_picker::page_panel) struct PageThumbnailArgs<'a> {
     pub(in crate::ui::board_picker::page_panel) page_name: Option<&'a str>,
     pub(in crate::ui::board_picker::page_panel) is_active: bool,
     pub(in crate::ui::board_picker::page_panel) is_drop_target: bool,
+    pub(in crate::ui::board_picker::page_panel) is_search_match: bool,
     pub(in crate::ui::board_picker::page_panel) is_hovered: bool,
     pub(in crate::ui::board_picker::page_panel) is_keyboard_focused: bool,
     pub(in crate::ui::board_picker::page_panel) delete_hovered: bool,

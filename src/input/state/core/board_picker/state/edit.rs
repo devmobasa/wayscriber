@@ -5,8 +5,8 @@ use super::super::super::base::{InputState, UiToastKind};
 use super::super::{
     BOARD_PICKER_RECENT_LABEL_MAX_CHARS, BOARD_PICKER_RECENT_MAX_NAMES,
     BOARD_PICKER_SEARCH_MAX_LEN, BoardPickerEdit, BoardPickerEditMode, BoardPickerFocus,
-    BoardPickerMode, BoardPickerPageEdit, BoardPickerState, MAX_BOARD_NAME_LEN, MAX_PAGE_NAME_LEN,
-    color_to_hex, parse_hex_color, truncate_search_label,
+    BoardPickerMode, BoardPickerPageEdit, BoardPickerPageNavMode, BoardPickerState,
+    MAX_BOARD_NAME_LEN, MAX_PAGE_NAME_LEN, color_to_hex, parse_hex_color, truncate_search_label,
 };
 
 impl InputState {
@@ -73,6 +73,7 @@ impl InputState {
         let name = edit.buffer.trim().to_string();
         let name = if name.is_empty() { None } else { Some(name) };
         let _ = self.rename_page_in_board(edit.board_index, edit.page_index, name);
+        self.board_picker_reconcile_page_nav_after_page_change();
         self.needs_redraw = true;
         true
     }
@@ -105,6 +106,20 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_footer_text(&self) -> String {
+        match self.board_picker_page_nav_mode() {
+            BoardPickerPageNavMode::Jump => {
+                let buffer = self.board_picker_page_jump_buffer().unwrap_or_default();
+                return format!("Go to page: {buffer}  Enter: go  Esc: cancel");
+            }
+            BoardPickerPageNavMode::Search => {
+                let query = self.board_picker_page_search_query().unwrap_or_default();
+                if !query.trim().is_empty() && self.board_picker_page_search_match_count() == 0 {
+                    return format!("Search pages: {query}  No matches  Esc: clear");
+                }
+                return format!("Search pages: {query}  Enter: open  F3: next  Esc: clear");
+            }
+            BoardPickerPageNavMode::Normal => {}
+        }
         let search = self.board_picker_search.trim();
         if !search.is_empty() {
             return format!(
@@ -115,7 +130,7 @@ impl InputState {
         if self.board_picker_is_quick() {
             "Enter: switch  Type: jump  Esc: close".to_string()
         } else if self.board_picker_focus() == BoardPickerFocus::PagePanel {
-            "Enter: open  Ctrl+N: add  F2: rename  Del: delete  Tab: back".to_string()
+            "Enter: open  Ctrl+N: add  Ctrl+G: page  /: search  F2: rename".to_string()
         } else {
             let page_panel_enabled = self
                 .board_picker_layout
@@ -206,6 +221,10 @@ impl InputState {
             page_focus_page_index,
             page_scroll_row,
             page_scroll_target_page_index,
+            page_nav_mode,
+            page_search_query,
+            page_search_cursor,
+            page_jump_buffer,
         } = &mut self.board_picker_state
         else {
             return;
@@ -220,6 +239,10 @@ impl InputState {
         *page_focus_page_index = None;
         *page_scroll_row = 0;
         *page_scroll_target_page_index = selected_active_page;
+        *page_nav_mode = BoardPickerPageNavMode::Normal;
+        page_search_query.clear();
+        *page_search_cursor = None;
+        page_jump_buffer.clear();
         if let Some(row) = selected_row_full {
             *selected = row;
         }

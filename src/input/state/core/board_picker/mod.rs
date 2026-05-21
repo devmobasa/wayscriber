@@ -48,6 +48,8 @@ const BOARD_PICKER_RECENT_LINE_HEIGHT_COMPACT: f64 = 14.0;
 const BOARD_PICKER_RECENT_MAX_NAMES: usize = 3;
 const BOARD_PICKER_RECENT_LABEL_MAX_CHARS: usize = BOARD_PICKER_SEARCH_MAX_LEN + 6;
 const MAX_PAGE_NAME_LEN: usize = 40;
+const BOARD_PICKER_PAGE_SEARCH_MAX_LEN: usize = 40;
+const BOARD_PICKER_PAGE_JUMP_MAX_LEN: usize = 6;
 const PAGE_PANEL_GAP: f64 = 16.0;
 const PAGE_PANEL_PADDING_X: f64 = 12.0;
 const PAGE_THUMB_HEIGHT: f64 = 88.0;
@@ -77,6 +79,10 @@ pub enum BoardPickerState {
         page_focus_page_index: Option<usize>,
         page_scroll_row: usize,
         page_scroll_target_page_index: Option<usize>,
+        page_nav_mode: BoardPickerPageNavMode,
+        page_search_query: String,
+        page_search_cursor: Option<usize>,
+        page_jump_buffer: String,
     },
 }
 
@@ -90,6 +96,13 @@ pub enum BoardPickerFocus {
 pub enum BoardPickerMode {
     Full,
     Quick,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardPickerPageNavMode {
+    Normal,
+    Jump,
+    Search,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

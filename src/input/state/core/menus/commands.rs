@@ -27,6 +27,10 @@ impl InputState {
         }
     }
 
+    fn board_picker_page_context_change_affects_panel(&self, board_index: usize) -> bool {
+        self.board_picker_page_panel_board_index() == Some(board_index)
+    }
+
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
         match command {
             MenuCommand::Copy => {
@@ -236,13 +240,25 @@ impl InputState {
             }
             MenuCommand::PageDuplicateFromContext => {
                 if let Some(target) = self.context_menu_page_target {
-                    let _ = self.duplicate_page_in_board(target.board_index, target.page_index);
+                    let affects_panel =
+                        self.board_picker_page_context_change_affects_panel(target.board_index);
+                    if self.duplicate_page_in_board(target.board_index, target.page_index)
+                        && affects_panel
+                    {
+                        self.board_picker_reconcile_page_nav_after_page_change();
+                    }
                 }
                 self.close_context_menu();
             }
             MenuCommand::PageDeleteFromContext => {
                 if let Some(target) = self.context_menu_page_target {
-                    let _ = self.delete_page_in_board(target.board_index, target.page_index);
+                    let affects_panel =
+                        self.board_picker_page_context_change_affects_panel(target.board_index);
+                    let outcome = self.delete_page_in_board(target.board_index, target.page_index);
+                    if !matches!(outcome, crate::draw::PageDeleteOutcome::Pending) && affects_panel
+                    {
+                        self.board_picker_reconcile_page_nav_after_page_change();
+                    }
                 }
                 self.close_context_menu();
             }
@@ -250,19 +266,24 @@ impl InputState {
                 if let Some(target) = self.context_menu_page_target {
                     let source_board = target.board_index;
                     let page_index = target.page_index;
+                    let affects_panel =
+                        self.board_picker_page_context_change_affects_panel(source_board);
                     if let Some(target_index) = self
                         .boards
                         .board_states()
                         .iter()
                         .position(|board| board.spec.id == id)
                     {
-                        let _ = self.move_page_between_boards_with_activation(
+                        let moved = self.move_page_between_boards_with_activation(
                             source_board,
                             page_index,
                             target_index,
                             false,
                             true,
                         );
+                        if moved && affects_panel {
+                            self.board_picker_reconcile_page_nav_after_page_change();
+                        }
                     }
                 }
                 self.close_context_menu();

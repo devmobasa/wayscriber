@@ -127,6 +127,7 @@ pub(super) fn render_page_panel(
             page_name: page.page_name(),
             is_active,
             is_drop_target,
+            is_search_match: input_state.board_picker_page_matches_current_search(index),
             is_hovered: hover_index == Some(index),
             is_keyboard_focused: page_focus_page_index == Some(index),
             delete_hovered: hover_delete == Some(index),
