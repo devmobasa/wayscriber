@@ -27,6 +27,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
         page_name,
         is_active,
         is_drop_target,
+        is_search_match,
         is_hovered,
         is_keyboard_focused,
         delete_hovered,
@@ -67,6 +68,20 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
             width + 2.0,
             height + 2.0,
             radius + 1.0,
+        );
+        let _ = ctx.stroke();
+    }
+
+    if is_search_match {
+        ctx.set_source_rgba(1.0, 0.84, 0.28, 0.82);
+        ctx.set_line_width(1.25);
+        draw_rounded_rect(
+            ctx,
+            x - 2.0,
+            y - 2.0,
+            width + 4.0,
+            height + 4.0,
+            radius + 2.0,
         );
         let _ = ctx.stroke();
     }
