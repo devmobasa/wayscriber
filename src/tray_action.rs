@@ -212,7 +212,7 @@ mod tests {
         let _guard = ENV_MUTEX
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = crate::test_temp::tempdir().unwrap();
         let prev = env::var_os("XDG_RUNTIME_DIR");
         unsafe {
             env::set_var("XDG_RUNTIME_DIR", tmp.path());

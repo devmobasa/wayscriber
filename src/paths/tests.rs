@@ -10,7 +10,7 @@ fn tray_action_prefers_runtime_dir_when_set() {
     let _guard = ENV_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os("XDG_RUNTIME_DIR");
     // SAFETY: serialised via ENV_MUTEX
     unsafe {
@@ -41,7 +41,7 @@ fn config_dir_prefers_xdg_config_home_when_set() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
     let prev_userprofile = env::var_os("USERPROFILE");
     let prev_xdg = env::var_os("XDG_CONFIG_HOME");
@@ -75,7 +75,7 @@ fn config_dir_falls_back_to_home_config() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
     let prev_userprofile = env::var_os("USERPROFILE");
     let prev_xdg = env::var_os("XDG_CONFIG_HOME");
@@ -109,7 +109,7 @@ fn data_dir_prefers_xdg_data_home_when_set() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
     let prev_userprofile = env::var_os("USERPROFILE");
     let prev_xdg = env::var_os("XDG_DATA_HOME");
@@ -143,7 +143,7 @@ fn data_dir_falls_back_to_home_share() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
     let prev_userprofile = env::var_os("USERPROFILE");
     let prev_xdg = env::var_os("XDG_DATA_HOME");
@@ -177,7 +177,7 @@ fn pictures_dir_prefers_xdg_when_set() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
     let prev_userprofile = env::var_os("USERPROFILE");
     let prev_xdg = env::var_os("XDG_PICTURES_DIR");
@@ -211,7 +211,7 @@ fn pictures_dir_falls_back_to_home() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
     let prev_userprofile = env::var_os("USERPROFILE");
     let prev_xdg = env::var_os("XDG_PICTURES_DIR");
@@ -245,7 +245,7 @@ fn expand_tilde_replaces_home() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
 
     unsafe {

@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn onboarding_defaults_when_missing() {
-        let tmp = tempfile::tempdir().expect("tempdir should succeed");
+        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
         let store = OnboardingStore::load_from_path(path.clone());
         assert!(!store.state().welcome_shown);
@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn onboarding_persists_flags() {
-        let tmp = tempfile::tempdir().expect("tempdir should succeed");
+        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
         let mut store = OnboardingStore::load_from_path(path.clone());
         store.state_mut().welcome_shown = true;
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn onboarding_recovers_from_parse_error() {
-        let tmp = tempfile::tempdir().expect("tempdir should succeed");
+        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("create onboarding dir");
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn onboarding_version_bump_saves() {
-        let tmp = tempfile::tempdir().expect("tempdir should succeed");
+        let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
         let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("create onboarding dir");

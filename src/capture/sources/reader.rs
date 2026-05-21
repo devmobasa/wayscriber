@@ -81,7 +81,7 @@ fn decode_file_uri(uri: &str) -> Result<PathBuf, CaptureError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use crate::test_temp::TempDir;
 
     #[test]
     fn reads_and_removes_file() {

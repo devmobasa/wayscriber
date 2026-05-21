@@ -7,7 +7,6 @@ use super::text::{bounding_box_for_sticky_note, bounding_box_for_text};
 use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
-use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Encoded image payload stored directly on an image shape.
@@ -404,9 +403,7 @@ mod base64_bytes {
     where
         S: Serializer,
     {
-        general_purpose::STANDARD
-            .encode(bytes)
-            .serialize(serializer)
+        crate::base64::encode_standard(bytes).serialize(serializer)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
@@ -414,8 +411,6 @@ mod base64_bytes {
         D: Deserializer<'de>,
     {
         let encoded = String::deserialize(deserializer)?;
-        general_purpose::STANDARD
-            .decode(encoded)
-            .map_err(serde::de::Error::custom)
+        crate::base64::decode_standard(&encoded).map_err(serde::de::Error::custom)
     }
 }

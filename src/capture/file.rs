@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn ensure_directory_exists_creates_missing_path() {
-        let temp = tempfile::tempdir().unwrap();
+        let temp = crate::test_temp::tempdir().unwrap();
         let target = temp.path().join("nested").join("shots");
 
         let resolved = ensure_directory_exists(&target).expect("ensure_directory_exists");

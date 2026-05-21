@@ -7,7 +7,7 @@ use std::fs;
 
 #[test]
 fn snapshot_preserves_history_only_frames() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-history");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -59,7 +59,7 @@ fn snapshot_preserves_history_only_frames() {
 
 #[test]
 fn modify_delete_cycle_survives_restore() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-modify-delete");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -152,7 +152,7 @@ fn modify_delete_cycle_survives_restore() {
 
 #[test]
 fn clear_all_can_be_undone_after_restore() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-clear-all");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -199,7 +199,7 @@ fn clear_all_can_be_undone_after_restore() {
 
 #[test]
 fn corrupted_history_is_dropped_but_shapes_load() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-corrupt");
     options.persist_transparent = true;
     options.persist_history = true;

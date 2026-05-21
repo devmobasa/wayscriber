@@ -1,10 +1,124 @@
-use assert_cmd::{Command, cargo::cargo_bin_cmd};
-use predicates::prelude::*;
 use std::fs;
-use tempfile::TempDir;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::sync::atomic::{AtomicU64, Ordering};
 use wayscriber::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG;
 
-fn write_session_config(temp: &TempDir, custom_dir: &std::path::Path) {
+static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+
+struct TempDir {
+    path: PathBuf,
+}
+
+impl TempDir {
+    fn new() -> std::io::Result<Self> {
+        let base = std::env::temp_dir();
+        let pid = std::process::id();
+
+        for _ in 0..100 {
+            let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+            let path = base.join(format!("wayscriber-cli-test-{pid}-{id}"));
+            match fs::create_dir(&path) {
+                Ok(()) => return Ok(Self { path }),
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(err) => return Err(err),
+            }
+        }
+
+        Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "failed to create a unique temporary test directory",
+        ))
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+struct CommandOutput {
+    output: Output,
+}
+
+impl CommandOutput {
+    fn success(self) -> Self {
+        assert!(
+            self.output.status.success(),
+            "expected success\nstdout:\n{}\nstderr:\n{}",
+            self.stdout_text(),
+            self.stderr_text()
+        );
+        self
+    }
+
+    fn failure(self) -> Self {
+        assert!(
+            !self.output.status.success(),
+            "expected failure\nstdout:\n{}\nstderr:\n{}",
+            self.stdout_text(),
+            self.stderr_text()
+        );
+        self
+    }
+
+    fn stdout_contains(self, needle: &str) -> Self {
+        let stdout = self.stdout_text();
+        assert!(
+            stdout.contains(needle),
+            "stdout did not contain {needle:?}\nstdout:\n{stdout}\nstderr:\n{}",
+            self.stderr_text()
+        );
+        self
+    }
+
+    fn stdout_starts_with(self, prefix: &str) -> Self {
+        let stdout = self.stdout_text();
+        assert!(
+            stdout.starts_with(prefix),
+            "stdout did not start with {prefix:?}\nstdout:\n{stdout}\nstderr:\n{}",
+            self.stderr_text()
+        );
+        self
+    }
+
+    fn stdout_eq(self, expected: &str) -> Self {
+        let stdout = self.stdout_text();
+        assert_eq!(stdout, expected, "stderr:\n{}", self.stderr_text());
+        self
+    }
+
+    fn stderr_contains(self, needle: &str) -> Self {
+        let stderr = self.stderr_text();
+        assert!(
+            stderr.contains(needle),
+            "stderr did not contain {needle:?}\nstdout:\n{}\nstderr:\n{stderr}",
+            self.stdout_text()
+        );
+        self
+    }
+
+    fn stdout_text(&self) -> String {
+        String::from_utf8_lossy(&self.output.stdout).into_owned()
+    }
+
+    fn stderr_text(&self) -> String {
+        String::from_utf8_lossy(&self.output.stderr).into_owned()
+    }
+}
+
+fn run_command(command: &mut Command) -> CommandOutput {
+    CommandOutput {
+        output: command.output().expect("run wayscriber command"),
+    }
+}
+
+fn write_session_config(temp: &TempDir, custom_dir: &Path) {
     let config_dir = temp.path().join("wayscriber");
     fs::create_dir_all(&config_dir).unwrap();
     let config_contents = format!(
@@ -28,35 +142,27 @@ backup_retention = 1
 }
 
 fn wayscriber_cmd() -> Command {
-    cargo_bin_cmd!("wayscriber")
+    Command::new(env!("CARGO_BIN_EXE_wayscriber"))
 }
 
 #[test]
 fn wayscriber_help_prints_usage() {
-    wayscriber_cmd()
-        .arg("--help")
-        .assert()
+    run_command(wayscriber_cmd().arg("--help"))
         .success()
-        .stdout(predicate::str::contains(
-            "Screen annotation tool for Wayland compositors",
-        ))
-        .stdout(predicate::str::contains(
-            "--light-toggle            Toggle light passthrough mode",
-        ))
-        .stdout(predicate::str::contains("--light-draw-toggle"))
-        .stdout(predicate::str::contains("--light-draw-on"))
-        .stdout(predicate::str::contains("--light-draw-off"));
+        .stdout_contains("Screen annotation tool for Wayland compositors")
+        .stdout_contains("--light-toggle            Toggle light passthrough mode")
+        .stdout_contains("--light-draw-toggle")
+        .stdout_contains("--light-draw-on")
+        .stdout_contains("--light-draw-off");
 }
 
 #[test]
 fn wayscriber_version_prints_binary_name() {
     for arg in ["--version", "-V"] {
-        wayscriber_cmd()
-            .arg(arg)
-            .assert()
+        run_command(wayscriber_cmd().arg(arg))
             .success()
-            .stdout(predicate::str::starts_with("wayscriber "))
-            .stdout(predicate::str::contains(wayscriber::build_info::version()));
+            .stdout_starts_with("wayscriber ")
+            .stdout_contains(wayscriber::build_info::version());
     }
 }
 
@@ -66,30 +172,28 @@ fn wayscriber_runtime_capabilities_reports_portal_feature() {
         "portal={}\n",
         wayscriber::shortcut_hint::portal_runtime_supported()
     );
-    wayscriber_cmd()
-        .arg(RUNTIME_CAPABILITIES_FLAG)
-        .assert()
+    run_command(wayscriber_cmd().arg(RUNTIME_CAPABILITIES_FLAG))
         .success()
-        .stdout(predicate::eq(expected));
+        .stdout_eq(&expected);
 }
 
 #[test]
 fn bare_usage_mentions_freeze_on_show() {
-    wayscriber_cmd()
-        .assert()
+    run_command(&mut wayscriber_cmd())
         .success()
-        .stdout(predicate::str::contains("--freeze-on-show"))
-        .stdout(predicate::str::contains("--daemon-toggle"));
+        .stdout_contains("--freeze-on-show")
+        .stdout_contains("--daemon-toggle");
 }
 
 #[test]
 fn active_mode_requires_wayland_env() {
-    wayscriber_cmd()
-        .env_remove("WAYLAND_DISPLAY")
-        .arg("--active")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("WAYLAND_DISPLAY not set"));
+    run_command(
+        wayscriber_cmd()
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--active"),
+    )
+    .failure()
+    .stderr_contains("WAYLAND_DISPLAY not set");
 }
 
 #[test]
@@ -98,14 +202,15 @@ fn session_clear_command_succeeds_without_files() {
     let session_dir = temp.path().join("sessions");
     write_session_config(&temp, &session_dir);
 
-    wayscriber_cmd()
-        .env("XDG_CONFIG_HOME", temp.path())
-        .env_remove("WAYLAND_DISPLAY")
-        .arg("--clear-session")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Session file:"))
-        .stdout(predicate::str::contains("No session file present"));
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--clear-session"),
+    )
+    .success()
+    .stdout_contains("Session file:")
+    .stdout_contains("No session file present");
 }
 
 #[test]
@@ -174,15 +279,16 @@ fn session_info_reports_saved_snapshot() {
 
     wayscriber::session::save_snapshot(&snapshot, &options).unwrap();
 
-    wayscriber_cmd()
-        .env("XDG_CONFIG_HOME", temp.path())
-        .env("WAYLAND_DISPLAY", display)
-        .arg("--session-info")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Per-output persistence: true"))
-        .stdout(predicate::str::contains("Session file       :"))
-        .stdout(predicate::str::contains("Output identity: DP_1"))
-        .stdout(predicate::str::contains("transparent 1"))
-        .stdout(predicate::str::contains("Tool state stored: false"));
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env("WAYLAND_DISPLAY", display)
+            .arg("--session-info"),
+    )
+    .success()
+    .stdout_contains("Per-output persistence: true")
+    .stdout_contains("Session file       :")
+    .stdout_contains("Output identity: DP_1")
+    .stdout_contains("transparent 1")
+    .stdout_contains("Tool state stored: false");
 }

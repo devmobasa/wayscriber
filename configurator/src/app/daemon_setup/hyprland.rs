@@ -449,7 +449,7 @@ mod tests {
         let _guard = ENV_MUTEX
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = crate::test_temp::tempdir().unwrap();
         let home = tmp.path();
         let prev_home = env::var_os("HOME");
         unsafe {
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn write_light_controls_writes_include_and_sources_existing_main() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = crate::test_temp::tempdir().unwrap();
         let hypr_dir = tmp.path().join(HYPRLAND_DIR);
         fs::create_dir_all(&hypr_dir).unwrap();
         let main = hypr_dir.join(MAIN_CONFIG);
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn write_light_controls_is_idempotent_for_existing_source() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = crate::test_temp::tempdir().unwrap();
         let hypr_dir = tmp.path().join(HYPRLAND_DIR);
         fs::create_dir_all(&hypr_dir).unwrap();
         let main = hypr_dir.join(MAIN_CONFIG);
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn write_light_controls_handles_missing_main_config() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = crate::test_temp::tempdir().unwrap();
 
         let result = write_light_controls(tmp.path(), Path::new("/tmp/wayscriber")).unwrap();
 

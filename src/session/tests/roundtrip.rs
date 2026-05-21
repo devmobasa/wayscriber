@@ -7,7 +7,7 @@ use std::fs;
 
 #[test]
 fn session_roundtrip_preserves_shapes_across_frames() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-2");
     options.persist_transparent = true;
     options.persist_whiteboard = true;
@@ -87,7 +87,7 @@ fn session_roundtrip_preserves_pages_beyond_visible_shortcuts() {
     const PAGE_COUNT: usize = 12;
     const ACTIVE_PAGE: usize = 10;
 
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-many-pages");
     options.persist_whiteboard = true;
 
@@ -140,7 +140,7 @@ fn session_roundtrip_preserves_pages_beyond_visible_shortcuts() {
 
 #[test]
 fn save_snapshot_rotates_backup_when_enabled() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-backup");
     options.persist_transparent = true;
     options.backup_retention = 1;
@@ -186,7 +186,7 @@ fn save_snapshot_rotates_backup_when_enabled() {
 
 #[test]
 fn save_snapshot_skips_backup_when_disabled() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-no-backup");
     options.persist_transparent = true;
     options.backup_retention = 0;
@@ -229,7 +229,7 @@ fn save_snapshot_skips_backup_when_disabled() {
 
 #[test]
 fn corrupt_session_is_backed_up_and_reset() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-bad");
     options.persist_transparent = true;
 
