@@ -203,31 +203,14 @@ impl CompositorHandler for WaylandState {
                     options.per_output,
                     options.output_identity()
                 );
-                load_result = Some(session::load_snapshot(options));
+                load_result = Some(session::load_snapshot_with_outcome(options));
                 load_requested = true;
             }
         }
 
         if let Some(result) = load_result {
-            let current_options = self.session_options().cloned();
             match result {
-                Ok(Some(snapshot)) => {
-                    if let Some(ref options) = current_options {
-                        debug!(
-                            "Restoring session from {}",
-                            options.session_file_path().display()
-                        );
-                        session::apply_snapshot(&mut self.input_state, snapshot, options);
-                    }
-                }
-                Ok(None) => {
-                    if let Some(ref options) = current_options {
-                        debug!(
-                            "No session data found for {}",
-                            options.session_file_path().display()
-                        );
-                    }
-                }
+                Ok(outcome) => self.handle_session_load_outcome(outcome, "output load"),
                 Err(err) => {
                     warn!("Failed to load session state: {}", err);
                 }

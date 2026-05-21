@@ -1,5 +1,9 @@
 use super::compression::is_gzip;
-use super::load::load_snapshot_inner;
+use super::load::{
+    LoadSnapshotOutcome, load_snapshot_inner, load_snapshot_inner_with_expanded_limit,
+    load_snapshot_with_expanded_limit,
+};
+use super::save::save_snapshot_with_expanded_limit;
 use super::types::{
     BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
 };
@@ -87,6 +91,107 @@ fn load_snapshot_inner_reports_compression_and_version() {
             .boards
             .iter()
             .any(|board| board.id == "transparent")
+    );
+}
+
+#[test]
+fn load_snapshot_inner_refuses_compressed_payload_over_expanded_limit() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "expanded-inner");
+    options.persist_transparent = true;
+    options.compression = CompressionMode::On;
+    save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+
+    let Err(err) =
+        load_snapshot_inner_with_expanded_limit(&options.session_file_path(), &options, 16)
+    else {
+        panic!("expanded payload should exceed the test cap");
+    };
+    assert!(
+        err.to_string().contains("exceeds the safety limit"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[test]
+fn load_snapshot_expansion_limit_leaves_primary_file_unchanged() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "expanded-outer");
+    options.persist_transparent = true;
+    options.compression = CompressionMode::On;
+    save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
+
+    let session_path = options.session_file_path();
+    let original_bytes = std::fs::read(&session_path).expect("session bytes");
+    let outcome = load_snapshot_with_expanded_limit(&options, 16)
+        .expect("expanded-cap refusal should not be a load error");
+
+    assert!(matches!(
+        outcome,
+        LoadSnapshotOutcome::ExpandedTooLarge {
+            max_expanded_size: 16,
+            ..
+        }
+    ));
+    assert_eq!(
+        std::fs::read(&session_path).expect("session should remain in place"),
+        original_bytes
+    );
+    assert!(
+        !options.backup_file_path().exists(),
+        "expanded-cap refusal should not rotate the primary session into backup"
+    );
+}
+
+#[test]
+fn save_snapshot_refuses_compressed_payload_over_expanded_limit() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "expanded-save");
+    options.persist_transparent = true;
+    options.compression = CompressionMode::On;
+    options.max_file_size_bytes = u64::MAX;
+
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Text {
+        x: 1,
+        y: 2,
+        text: "x".repeat(4096),
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        size: 24.0,
+        font_descriptor: Default::default(),
+        background_enabled: false,
+        wrap_width: None,
+    });
+    let snapshot = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            },
+        }],
+        tool_state: None,
+    };
+
+    let err = save_snapshot_with_expanded_limit(&snapshot, &options, 512)
+        .expect_err("compressed raw payload over expanded cap should not be written");
+    assert!(
+        err.to_string().contains("load safety limit"),
+        "unexpected error: {err:#}"
+    );
+    assert!(
+        !options.session_file_path().exists(),
+        "unloadable compressed session should not be created"
     );
 }
 

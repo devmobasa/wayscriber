@@ -651,8 +651,8 @@ max_shapes_per_frame = 10000
 # Optional cap for serialized undo history (defaults to runtime undo limit)
 # max_persisted_undo_depth = 200
 
-# Maximum session file size (in megabytes); larger files are ignored
-max_file_size_mb = 10
+# Maximum session file size (in megabytes); image paste and autosave warn near this cap
+max_file_size_mb = 50
 
 # Compression mode: "auto", "on", or "off"
 compress = "auto"

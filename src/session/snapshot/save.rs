@@ -1,4 +1,4 @@
-use super::compression::{compress_bytes, temp_path};
+use super::compression::{DEFAULT_MAX_EXPANDED_SESSION_BYTES, compress_bytes, temp_path};
 use super::types::{
     BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
 };
@@ -9,13 +9,185 @@ use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+const NEAR_LIMIT_PERCENT: u64 = 90;
+
+/// Outcome of a session save after applying configured size fallbacks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveSnapshotOutcome {
+    Full,
+    TrimmedHistory { depth: usize },
+    VisibleOnly,
+    ClearedEmpty,
+}
+
+/// Details about a completed session save.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveSnapshotReport {
+    pub path: PathBuf,
+    pub outcome: SaveSnapshotOutcome,
+    pub raw_size: usize,
+    pub written_size: usize,
+    pub max_file_size_bytes: u64,
+    pub compressed: bool,
+}
+
+impl SaveSnapshotReport {
+    pub fn is_near_limit(&self) -> bool {
+        is_near_limit(self.written_size as u64, self.max_file_size_bytes)
+    }
+}
+
+/// Estimated session payload size using the same serialisation, compression, and limits as saves.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnapshotPayloadEstimate {
+    pub raw_size: usize,
+    pub written_size: usize,
+    pub max_file_size_bytes: u64,
+    pub compressed: bool,
+    pub limit_exceeded: Option<SaveLimitExceeded>,
+}
+
+#[allow(dead_code)]
+impl SnapshotPayloadEstimate {
+    pub fn is_near_limit(&self) -> bool {
+        is_near_limit(self.written_size as u64, self.max_file_size_bytes)
+    }
+}
+
+/// Estimated full and visible-only payloads for a snapshot.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnapshotSaveEstimate {
+    pub full: SnapshotPayloadEstimate,
+    pub visible_without_history: SnapshotPayloadEstimate,
+}
+
+/// The save or restore safety limit exceeded by a prepared payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveLimitExceeded {
+    WrittenSize {
+        written_size: u64,
+        max_file_size: u64,
+    },
+    ExpandedSize {
+        raw_size: u64,
+        max_expanded_size: u64,
+    },
+}
+
+impl SaveLimitExceeded {
+    fn description(self) -> String {
+        match self {
+            Self::WrittenSize {
+                written_size,
+                max_file_size,
+            } => format!(
+                "writes as {written_size} bytes and exceeds the configured limit of {max_file_size} bytes"
+            ),
+            Self::ExpandedSize {
+                raw_size,
+                max_expanded_size,
+            } => format!(
+                "would expand to {raw_size} raw bytes, exceeding the load safety limit of {max_expanded_size} bytes"
+            ),
+        }
+    }
+}
 
 /// Persist the provided snapshot to disk according to the configured options.
 pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
+    save_snapshot_with_report(snapshot, options).map(|_| ())
+}
+
+/// Persist the provided snapshot and report what was written.
+pub(crate) fn save_snapshot_with_report(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+) -> Result<Option<SaveSnapshotReport>> {
+    save_snapshot_with_expanded_limit(snapshot, options, DEFAULT_MAX_EXPANDED_SESSION_BYTES)
+}
+
+#[allow(dead_code)]
+pub(crate) fn estimate_snapshot_save(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+) -> Result<SnapshotSaveEstimate> {
+    estimate_snapshot_save_with_expanded_limit(
+        snapshot,
+        options,
+        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
+    )
+}
+
+#[allow(dead_code)]
+pub(super) fn estimate_snapshot_save_with_expanded_limit(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+) -> Result<SnapshotSaveEstimate> {
+    let last_modified = now_rfc3339();
+    let full = payload_candidate(snapshot, options, &last_modified)?;
+    let visible_only = snapshot_without_history(snapshot);
+    let visible_without_history = payload_candidate(&visible_only, options, &last_modified)?;
+
+    Ok(SnapshotSaveEstimate {
+        full: estimate_from_candidate(&full, options, max_expanded_size),
+        visible_without_history: estimate_from_candidate(
+            &visible_without_history,
+            options,
+            max_expanded_size,
+        ),
+    })
+}
+
+#[allow(dead_code)]
+pub(crate) fn estimate_snapshot_payload(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+) -> Result<SnapshotPayloadEstimate> {
+    estimate_snapshot_payload_with_expanded_limit(
+        snapshot,
+        options,
+        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
+    )
+}
+
+#[allow(dead_code)]
+pub(crate) fn estimate_snapshot_without_history_payload(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+) -> Result<SnapshotPayloadEstimate> {
+    let visible_only = snapshot_without_history(snapshot);
+    estimate_snapshot_payload(&visible_only, options)
+}
+
+#[allow(dead_code)]
+pub(super) fn estimate_snapshot_payload_with_expanded_limit(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+) -> Result<SnapshotPayloadEstimate> {
+    let last_modified = now_rfc3339();
+    let candidate = payload_candidate(snapshot, options, &last_modified)?;
+    Ok(estimate_from_candidate(
+        &candidate,
+        options,
+        max_expanded_size,
+    ))
+}
+
+pub(super) fn save_snapshot_with_expanded_limit(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+) -> Result<Option<SaveSnapshotReport>> {
     if !options.any_enabled() && !options.persist_history && snapshot.tool_state.is_none() {
         debug!("Session persistence disabled for all boards; skipping save");
-        return Ok(());
+        return Ok(None);
     }
 
     fs::create_dir_all(&options.base_dir).with_context(|| {
@@ -33,10 +205,38 @@ pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Re
         .truncate(true)
         .open(&lock_path)
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
+    let lock_started = Instant::now();
     lock_exclusive(&lock_file)
         .with_context(|| format!("failed to lock session file {}", lock_path.display()))?;
+    info!(
+        "Acquired session save lock {} in {:?}",
+        lock_path.display(),
+        lock_started.elapsed()
+    );
 
-    let result = save_snapshot_inner(snapshot, options);
+    let save_started = Instant::now();
+    let result = save_snapshot_inner(snapshot, options, max_expanded_size);
+    match &result {
+        Ok(Some(report)) => info!(
+            "Session save pipeline finished for {} in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}",
+            report.path.display(),
+            save_started.elapsed(),
+            report.outcome,
+            report.written_size,
+            report.raw_size,
+            report.compressed
+        ),
+        Ok(None) => info!(
+            "Session save pipeline finished in {:?}: no file write needed",
+            save_started.elapsed()
+        ),
+        Err(err) => warn!(
+            "Session save pipeline failed for {} after {:?}: {}",
+            options.session_file_path().display(),
+            save_started.elapsed(),
+            err
+        ),
+    }
 
     if let Err(err) = unlock(&lock_file) {
         warn!(
@@ -49,17 +249,19 @@ pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Re
     result
 }
 
-fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
+fn save_snapshot_inner(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+) -> Result<Option<SaveSnapshotReport>> {
     let session_path = options.session_file_path();
     let backup_path = options.backup_file_path();
     let last_modified = now_rfc3339();
 
-    let payload = match payload_within_limit(snapshot, options, &last_modified) {
-        Ok(Some(payload)) => payload,
-        Ok(None) => {
-            remove_session_file(&session_path)?;
-            return Ok(());
-        }
+    let prepare_started = Instant::now();
+    let prepared = match payload_within_limit(snapshot, options, &last_modified, max_expanded_size)
+    {
+        Ok(prepared) => prepared,
         Err(err) => {
             if session_path.exists() {
                 warn!(
@@ -70,6 +272,35 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
             return Err(err);
         }
     };
+    let prepared_written_size = prepared
+        .payload
+        .as_ref()
+        .map_or(0, PayloadCandidate::final_size);
+    info!(
+        "Prepared session payload for {} in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}",
+        session_path.display(),
+        prepare_started.elapsed(),
+        prepared.outcome,
+        prepared_written_size,
+        prepared.raw_size,
+        prepared.compressed
+    );
+
+    let Some(payload) = prepared.payload else {
+        let report = SaveSnapshotReport {
+            path: session_path.clone(),
+            outcome: prepared.outcome,
+            raw_size: prepared.raw_size,
+            written_size: 0,
+            max_file_size_bytes: options.max_file_size_bytes,
+            compressed: prepared.compressed,
+        };
+        if matches!(prepared.outcome, SaveSnapshotOutcome::ClearedEmpty) {
+            remove_session_file(&session_path)?;
+        }
+        log_near_limit(&report);
+        return Ok(Some(report));
+    };
     let PayloadCandidate {
         bytes: payload_bytes,
         raw_size,
@@ -78,6 +309,7 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
     let final_size = payload_bytes.len();
 
     let tmp_path = temp_path(&session_path)?;
+    let write_started = Instant::now();
     {
         let mut tmp_file = OpenOptions::new()
             .write(true)
@@ -96,7 +328,9 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
             .sync_all()
             .context("failed to sync temporary session file")?;
     }
+    let write_elapsed = write_started.elapsed();
 
+    let replace_started = Instant::now();
     if session_path.exists() {
         if options.backup_retention > 0 {
             if backup_path.exists() {
@@ -121,16 +355,43 @@ fn save_snapshot_inner(snapshot: &SessionSnapshot, options: &SessionOptions) -> 
             session_path.display()
         )
     })?;
+    let replace_elapsed = replace_started.elapsed();
+    info!(
+        "Session file replace completed for {}: write_and_sync={:?}, rotate_and_rename={:?}, final_size={} bytes",
+        session_path.display(),
+        write_elapsed,
+        replace_elapsed,
+        final_size
+    );
 
     info!(
-        "Session saved to {} ({} bytes written, raw={} bytes, compression={})",
+        "Session saved to {} ({} bytes written, raw={} bytes, compression={}, outcome={:?})",
         session_path.display(),
         final_size,
         raw_size,
-        compressed
+        compressed,
+        prepared.outcome
     );
 
-    Ok(())
+    let report = SaveSnapshotReport {
+        path: session_path,
+        outcome: prepared.outcome,
+        raw_size,
+        written_size: final_size,
+        max_file_size_bytes: options.max_file_size_bytes,
+        compressed,
+    };
+    log_near_limit(&report);
+    Ok(Some(report))
+}
+
+fn log_near_limit(report: &SaveSnapshotReport) {
+    if report.is_near_limit() {
+        debug!(
+            "Session save size is near the configured limit ({} of {} bytes, threshold={}%)",
+            report.written_size, report.max_file_size_bytes, NEAR_LIMIT_PERCENT
+        );
+    }
 }
 
 struct PayloadCandidate {
@@ -144,8 +405,55 @@ impl PayloadCandidate {
         self.bytes.len()
     }
 
-    fn fits_limit(&self, options: &SessionOptions) -> bool {
-        self.final_size() as u64 <= options.max_file_size_bytes
+    fn limit_exceeded(
+        &self,
+        options: &SessionOptions,
+        max_expanded_size: u64,
+    ) -> Option<SaveLimitExceeded> {
+        if self.final_size() as u64 > options.max_file_size_bytes {
+            return Some(SaveLimitExceeded::WrittenSize {
+                written_size: self.final_size() as u64,
+                max_file_size: options.max_file_size_bytes,
+            });
+        }
+        if self.compressed && self.raw_size as u64 > max_expanded_size {
+            return Some(SaveLimitExceeded::ExpandedSize {
+                raw_size: self.raw_size as u64,
+                max_expanded_size,
+            });
+        }
+        None
+    }
+
+    fn fits_limit(&self, options: &SessionOptions, max_expanded_size: u64) -> bool {
+        self.limit_exceeded(options, max_expanded_size).is_none()
+    }
+}
+
+struct PreparedPayload {
+    payload: Option<PayloadCandidate>,
+    outcome: SaveSnapshotOutcome,
+    raw_size: usize,
+    compressed: bool,
+}
+
+impl PreparedPayload {
+    fn write(payload: PayloadCandidate, outcome: SaveSnapshotOutcome) -> Self {
+        Self {
+            raw_size: payload.raw_size,
+            compressed: payload.compressed,
+            payload: Some(payload),
+            outcome,
+        }
+    }
+
+    fn clear(raw_size: usize, compressed: bool) -> Self {
+        Self {
+            payload: None,
+            outcome: SaveSnapshotOutcome::ClearedEmpty,
+            raw_size,
+            compressed,
+        }
     }
 }
 
@@ -153,83 +461,200 @@ fn payload_within_limit(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
     last_modified: &str,
-) -> Result<Option<PayloadCandidate>> {
+    max_expanded_size: u64,
+) -> Result<PreparedPayload> {
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
-        return Ok(None);
+        return Ok(PreparedPayload::clear(0, false));
     }
 
+    let full_started = Instant::now();
     let full_payload = payload_candidate(snapshot, options, last_modified)?;
-    if full_payload.fits_limit(options) {
-        return Ok(Some(full_payload));
+    log_payload_candidate("full", &full_payload, full_started.elapsed());
+    if full_payload.fits_limit(options, max_expanded_size) {
+        return Ok(PreparedPayload::write(
+            full_payload,
+            SaveSnapshotOutcome::Full,
+        ));
     }
 
     let full_raw_size = full_payload.raw_size;
     let full_final_size = full_payload.final_size();
-    let history_depth = max_history_depth(snapshot);
-    if history_depth > 0
-        && let Some((depth, payload)) =
-            largest_fitting_history_payload(snapshot, history_depth, options, last_modified)?
-    {
-        warn!(
-            "Full session payload writes as {} bytes from {} raw bytes, exceeding the configured limit of {} bytes; saving recent {} undo/redo history entries per stack ({} bytes written from {} raw bytes, compression={})",
-            full_final_size,
-            full_raw_size,
-            options.max_file_size_bytes,
-            depth,
-            payload.final_size(),
-            payload.raw_size,
-            payload.compressed
-        );
-        return Ok(Some(payload));
-    }
-
+    let full_limit = full_payload
+        .limit_exceeded(options, max_expanded_size)
+        .expect("full payload should exceed a save/load limit");
     let visible_only = snapshot_without_history(snapshot);
     if visible_only.is_empty() && visible_only.tool_state.is_none() {
         warn!(
-            "Full session payload writes as {} bytes from {} raw bytes, exceeding the configured limit of {} bytes; dropping undo/redo history leaves no visible session data, clearing saved session",
-            full_final_size, full_raw_size, options.max_file_size_bytes
-        );
-        return Ok(None);
-    }
-
-    let visible_payload = payload_candidate(&visible_only, options, last_modified)?;
-    if visible_payload.fits_limit(options) {
-        warn!(
-            "Full session payload writes as {} bytes from {} raw bytes, exceeding the configured limit of {} bytes; saving visible data without undo/redo history ({} bytes written from {} raw bytes, compression={})",
+            "Full session payload cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); dropping undo/redo history leaves no visible session data, clearing saved session",
+            full_limit.description(),
             full_final_size,
             full_raw_size,
-            options.max_file_size_bytes,
+            full_payload.compressed
+        );
+        return Ok(PreparedPayload::clear(
+            full_raw_size,
+            full_payload.compressed,
+        ));
+    }
+
+    let visible_started = Instant::now();
+    let visible_payload = payload_candidate(&visible_only, options, last_modified)?;
+    log_payload_candidate("visible-only", &visible_payload, visible_started.elapsed());
+    if !visible_payload.fits_limit(options, max_expanded_size) {
+        let visible_limit = visible_payload
+            .limit_exceeded(options, max_expanded_size)
+            .expect("visible payload should exceed a save/load limit");
+        return Err(anyhow!(
+            "Session data cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping save",
+            visible_limit.description(),
             visible_payload.final_size(),
             visible_payload.raw_size,
             visible_payload.compressed
-        );
-        return Ok(Some(visible_payload));
+        ));
     }
 
-    Err(anyhow!(
-        "Session data writes as {} bytes from {} raw bytes with compression={} which exceeds the configured limit of {} bytes; skipping save",
+    let history_depth = max_history_depth(snapshot);
+    if history_depth > 0 {
+        let visible_near_limit = is_near_limit(
+            visible_payload.final_size() as u64,
+            options.max_file_size_bytes,
+        );
+        let depth_one_started = Instant::now();
+        let depth_one_candidate = snapshot_with_history_depth(snapshot, 1);
+        let depth_one_payload = payload_candidate(&depth_one_candidate, options, last_modified)?;
+        log_payload_candidate(
+            "history-depth 1",
+            &depth_one_payload,
+            depth_one_started.elapsed(),
+        );
+
+        if depth_one_payload.fits_limit(options, max_expanded_size) {
+            let fitting_history = if history_depth == 1 || visible_near_limit {
+                if visible_near_limit && history_depth > 1 {
+                    warn!(
+                        "Visible-only session payload is already near the configured limit ({} of {} bytes); keeping one history entry and skipping deeper history-depth scan",
+                        visible_payload.final_size(),
+                        options.max_file_size_bytes
+                    );
+                }
+                Some((1, depth_one_payload))
+            } else {
+                largest_fitting_history_payload(
+                    snapshot,
+                    2,
+                    history_depth,
+                    options,
+                    last_modified,
+                    max_expanded_size,
+                )?
+                .or(Some((1, depth_one_payload)))
+            };
+
+            if let Some((depth, payload)) = fitting_history {
+                warn!(
+                    "Full session payload cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); saving recent {} undo/redo history entries per stack ({} bytes written from {} raw bytes, compression={})",
+                    full_limit.description(),
+                    full_final_size,
+                    full_raw_size,
+                    full_payload.compressed,
+                    depth,
+                    payload.final_size(),
+                    payload.raw_size,
+                    payload.compressed
+                );
+                return Ok(PreparedPayload::write(
+                    payload,
+                    SaveSnapshotOutcome::TrimmedHistory { depth },
+                ));
+            }
+        } else {
+            let depth_one_limit = depth_one_payload
+                .limit_exceeded(options, max_expanded_size)
+                .expect("depth-one payload should exceed a save/load limit");
+            warn!(
+                "Even one persisted history entry cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping history-depth scan and saving visible data only",
+                depth_one_limit.description(),
+                depth_one_payload.final_size(),
+                depth_one_payload.raw_size,
+                depth_one_payload.compressed
+            );
+        }
+    }
+
+    warn!(
+        "Full session payload cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); saving visible data without undo/redo history ({} bytes written from {} raw bytes, compression={})",
+        full_limit.description(),
+        full_final_size,
+        full_raw_size,
+        full_payload.compressed,
         visible_payload.final_size(),
         visible_payload.raw_size,
-        visible_payload.compressed,
-        options.max_file_size_bytes
+        visible_payload.compressed
+    );
+    Ok(PreparedPayload::write(
+        visible_payload,
+        SaveSnapshotOutcome::VisibleOnly,
     ))
 }
 
 fn largest_fitting_history_payload(
     snapshot: &SessionSnapshot,
+    min_depth: usize,
     max_depth: usize,
     options: &SessionOptions,
     last_modified: &str,
+    max_expanded_size: u64,
 ) -> Result<Option<(usize, PayloadCandidate)>> {
-    for depth in (1..=max_depth).rev() {
+    if min_depth > max_depth {
+        return Ok(None);
+    }
+
+    let scan_started = Instant::now();
+    let mut attempts = 0usize;
+    for depth in (min_depth..=max_depth).rev() {
+        attempts += 1;
+        let candidate_started = Instant::now();
         let candidate = snapshot_with_history_depth(snapshot, depth);
         let payload = payload_candidate(&candidate, options, last_modified)?;
-        if payload.fits_limit(options) {
+        debug!(
+            "Prepared history-depth session payload candidate depth={} in {:?}: written={} bytes, raw={} bytes, compression={}",
+            depth,
+            candidate_started.elapsed(),
+            payload.final_size(),
+            payload.raw_size,
+            payload.compressed
+        );
+        if payload.fits_limit(options, max_expanded_size) {
+            info!(
+                "History trim scan found fitting session payload at depth {} after {} candidate(s) in {:?}: written={} bytes, raw={} bytes, compression={}",
+                depth,
+                attempts,
+                scan_started.elapsed(),
+                payload.final_size(),
+                payload.raw_size,
+                payload.compressed
+            );
             return Ok(Some((depth, payload)));
         }
     }
 
+    warn!(
+        "History trim scan found no fitting session payload after {} candidate(s) in {:?}",
+        attempts,
+        scan_started.elapsed()
+    );
     Ok(None)
+}
+
+fn log_payload_candidate(label: &str, payload: &PayloadCandidate, elapsed: Duration) {
+    info!(
+        "Prepared {} session payload candidate in {:?}: written={} bytes, raw={} bytes, compression={}",
+        label,
+        elapsed,
+        payload.final_size(),
+        payload.raw_size,
+        payload.compressed
+    );
 }
 
 fn payload_candidate(
@@ -289,6 +714,29 @@ fn serialize_payload(snapshot: &SessionSnapshot, last_modified: &str) -> Result<
     };
 
     serde_json::to_vec_pretty(&file_payload).context("failed to serialise session payload")
+}
+
+#[allow(dead_code)]
+fn estimate_from_candidate(
+    candidate: &PayloadCandidate,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+) -> SnapshotPayloadEstimate {
+    SnapshotPayloadEstimate {
+        raw_size: candidate.raw_size,
+        written_size: candidate.final_size(),
+        max_file_size_bytes: options.max_file_size_bytes,
+        compressed: candidate.compressed,
+        limit_exceeded: candidate.limit_exceeded(options, max_expanded_size),
+    }
+}
+
+fn is_near_limit(written_size: u64, max_file_size_bytes: u64) -> bool {
+    if written_size == 0 {
+        return false;
+    }
+    let threshold = ((max_file_size_bytes as u128) * (NEAR_LIMIT_PERCENT as u128)).div_ceil(100);
+    (written_size as u128) >= threshold
 }
 
 fn max_history_depth(snapshot: &SessionSnapshot) -> usize {

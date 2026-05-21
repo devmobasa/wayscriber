@@ -1,4 +1,6 @@
-use super::compression::maybe_decompress;
+use super::compression::{
+    DEFAULT_MAX_EXPANDED_SESSION_BYTES, ExpandedSessionTooLarge, maybe_decompress_with_limit,
+};
 use super::history::{
     apply_history_policies, enforce_shape_limits, max_history_depth, strip_history_fields,
 };
@@ -14,7 +16,7 @@ use log::{debug, info, warn};
 use serde_json::Value;
 use std::fs::{self, File, OpenOptions};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct LoadedSnapshot {
     pub snapshot: SessionSnapshot,
@@ -22,15 +24,43 @@ pub struct LoadedSnapshot {
     pub version: u32,
 }
 
+/// High-level load result used by runtime callers that need to distinguish a
+/// missing session from a protected session that was intentionally left intact.
+#[allow(dead_code)]
+#[derive(Debug)]
+pub(crate) enum LoadSnapshotOutcome {
+    Loaded(Box<SessionSnapshot>),
+    Empty,
+    ExpandedTooLarge {
+        path: PathBuf,
+        max_expanded_size: u64,
+    },
+}
+
 /// Attempt to load a previously saved session.
+#[allow(dead_code)]
 pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>> {
+    match load_snapshot_with_outcome(options)? {
+        LoadSnapshotOutcome::Loaded(snapshot) => Ok(Some(*snapshot)),
+        LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::ExpandedTooLarge { .. } => Ok(None),
+    }
+}
+
+pub(crate) fn load_snapshot_with_outcome(options: &SessionOptions) -> Result<LoadSnapshotOutcome> {
+    load_snapshot_with_expanded_limit(options, DEFAULT_MAX_EXPANDED_SESSION_BYTES)
+}
+
+pub(super) fn load_snapshot_with_expanded_limit(
+    options: &SessionOptions,
+    max_expanded_size: u64,
+) -> Result<LoadSnapshotOutcome> {
     if !options.any_enabled() && !options.restore_tool_state {
         info!(
             "Session load skipped: persistence disabled (base_dir={}, file={})",
             options.base_dir.display(),
             options.session_file_path().display()
         );
-        return Ok(None);
+        return Ok(LoadSnapshotOutcome::Empty);
     }
 
     let session_path = options.session_file_path();
@@ -39,7 +69,7 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
             "Session file not found at {}; skipping load",
             session_path.display()
         );
-        return Ok(None);
+        return Ok(LoadSnapshotOutcome::Empty);
     }
 
     let metadata = fs::metadata(&session_path)
@@ -58,7 +88,7 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
             metadata.len(),
             options.max_file_size_bytes
         );
-        return Ok(None);
+        return Ok(LoadSnapshotOutcome::Empty);
     }
 
     let lock_path = options.lock_file_path();
@@ -72,7 +102,7 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
     lock_shared(&lock_file)
         .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
 
-    let result = load_snapshot_inner(&session_path, options);
+    let result = load_snapshot_inner_with_expanded_limit(&session_path, options, max_expanded_size);
 
     if let Err(err) = unlock(&lock_file) {
         warn!(
@@ -94,14 +124,26 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
                 loaded.snapshot.active_board_id,
                 tool_state
             );
-            Ok(Some(loaded.snapshot))
+            Ok(LoadSnapshotOutcome::Loaded(Box::new(loaded.snapshot)))
         }
         Ok(None) => {
             info!(
                 "Session file {} contained no usable data; continuing with defaults",
                 session_path.display()
             );
-            Ok(None)
+            Ok(LoadSnapshotOutcome::Empty)
+        }
+        Err(err) if err.downcast_ref::<ExpandedSessionTooLarge>().is_some() => {
+            warn!(
+                "Refusing to load session {}; expanded payload exceeds safety limit ({} bytes). The session file is left unchanged; clear the session or move the file if it is no longer needed: {}",
+                session_path.display(),
+                max_expanded_size,
+                err
+            );
+            Ok(LoadSnapshotOutcome::ExpandedTooLarge {
+                path: session_path,
+                max_expanded_size,
+            })
         }
         Err(err) => {
             warn!(
@@ -116,7 +158,7 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
                     backup_err
                 );
             }
-            Ok(None)
+            Ok(LoadSnapshotOutcome::Empty)
         }
     }
 }
@@ -124,6 +166,18 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
 pub(crate) fn load_snapshot_inner(
     session_path: &Path,
     options: &SessionOptions,
+) -> Result<Option<LoadedSnapshot>> {
+    load_snapshot_inner_with_expanded_limit(
+        session_path,
+        options,
+        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
+    )
+}
+
+pub(super) fn load_snapshot_inner_with_expanded_limit(
+    session_path: &Path,
+    options: &SessionOptions,
+    max_expanded_size: u64,
 ) -> Result<Option<LoadedSnapshot>> {
     let mut file_bytes = Vec::new();
     {
@@ -133,7 +187,7 @@ pub(crate) fn load_snapshot_inner(
             .context("failed to read session file")?;
     }
 
-    let (decompressed, compressed) = maybe_decompress(file_bytes)?;
+    let (decompressed, compressed) = maybe_decompress_with_limit(file_bytes, max_expanded_size)?;
 
     let original_value: Value =
         serde_json::from_slice(&decompressed).context("failed to parse session json")?;

@@ -27,6 +27,7 @@ pub(super) fn choose_supported_mime(offered: &[String]) -> Option<String> {
 }
 
 pub(super) fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResult {
+    let encoded_bytes = bytes.len();
     let Some(format) = format_from_mime_or_bytes(mime_type, &bytes) else {
         return ClipboardPasteResult::DecodeFailed(format!("unsupported MIME type {}", mime_type));
     };
@@ -45,6 +46,14 @@ pub(super) fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> Clipboa
     if let Err(err) = decode_rgba(format, &bytes) {
         return ClipboardPasteResult::DecodeFailed(err);
     }
+    log::info!(
+        "Decoded clipboard image: offered_mime={}, stored_mime={}, dimensions={}x{}, encoded_bytes={}",
+        mime_type,
+        canonical_image_mime_type(format),
+        dimensions.0,
+        dimensions.1,
+        encoded_bytes
+    );
     ClipboardPasteResult::Image(EmbeddedImage {
         mime_type: canonical_image_mime_type(format).to_string(),
         width: dimensions.0,
@@ -68,7 +77,7 @@ mod tests {
     fn image_byte_cap_leaves_room_for_default_persisted_create_history() {
         let encoded_len = MAX_CLIPBOARD_IMAGE_BYTES.div_ceil(3) * 4;
         let duplicated_history_len = encoded_len * 2;
-        let default_session_budget = 10 * 1024 * 1024;
+        let default_session_budget = 50 * 1024 * 1024;
         let json_margin = 512 * 1024;
 
         assert!(duplicated_history_len + json_margin < default_session_budget);

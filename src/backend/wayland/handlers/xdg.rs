@@ -141,28 +141,12 @@ impl WindowHandler for WaylandState {
         if !self.session.is_loaded()
             && let Some(options) = self.session_options_mut()
         {
-            let load_result = session::load_snapshot(options);
+            let load_result = session::load_snapshot_with_outcome(options);
             let mut load_succeeded = false;
-            let current_options = self.session_options().cloned();
             match load_result {
-                Ok(Some(snapshot)) => {
+                Ok(outcome) => {
                     load_succeeded = true;
-                    if let Some(ref opts) = current_options {
-                        debug!(
-                            "Restoring session (fallback) from {}",
-                            opts.session_file_path().display()
-                        );
-                        session::apply_snapshot(&mut self.input_state, snapshot, opts);
-                    }
-                }
-                Ok(None) => {
-                    load_succeeded = true;
-                    if let Some(ref opts) = current_options {
-                        debug!(
-                            "No session data found for {} (fallback load)",
-                            opts.session_file_path().display()
-                        );
-                    }
+                    self.handle_session_load_outcome(outcome, "fallback load");
                 }
                 Err(err) => {
                     warn!("Fallback session load failed: {}", err);

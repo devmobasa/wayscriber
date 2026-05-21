@@ -145,6 +145,11 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
     let Some(mime_type) = image::choose_supported_mime(&offered) else {
         return ClipboardPasteResult::NoSupportedMime { offered };
     };
+    log::info!(
+        "Selected clipboard MIME type '{}' from offered {:?}",
+        mime_type,
+        offered
+    );
     let limit = if mime_type == WAYSCRIBER_SELECTION_MIME {
         MAX_CLIPBOARD_SELECTION_BYTES
     } else {
@@ -156,6 +161,12 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
         Ok(bytes) => bytes,
         Err(err) => return map_read_error(err),
     };
+    log::info!(
+        "Read clipboard MIME '{}' payload: {} bytes (limit {} bytes)",
+        mime_type,
+        bytes.len(),
+        limit
+    );
 
     if mime_type == WAYSCRIBER_SELECTION_MIME {
         return serde_json::from_slice::<WayscriberClipboardSelection>(&bytes)

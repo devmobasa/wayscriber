@@ -488,9 +488,18 @@ impl InputState {
         image: EmbeddedImage,
     ) -> bool {
         if self.active_clipboard_paste_request_id != Some(request.id) {
+            log::info!(
+                "Ignoring external image paste request {} because active request is {:?}",
+                request.id,
+                self.active_clipboard_paste_request_id
+            );
             return false;
         }
 
+        let image_mime_type = image.mime_type.clone();
+        let image_width = image.width;
+        let image_height = image.height;
+        let image_bytes = image.bytes.len();
         let target_active = self.clipboard_request_targets_active_page(request);
         let max_shapes = self.max_shapes_per_frame;
         let undo_limit = self.undo_stack_limit;
@@ -501,6 +510,13 @@ impl InputState {
             .and_then(|board| board.pages.frame_mut(request.target_page_index));
 
         let Some(frame) = target else {
+            log::warn!(
+                "External image paste request {} cancelled because target board '{}' page {} generation {} is no longer available",
+                request.id,
+                request.target_board_id,
+                request.target_page_index,
+                request.target_page_generation
+            );
             self.set_ui_toast(
                 UiToastKind::Warning,
                 "Paste target changed; image paste was cancelled.",
@@ -518,6 +534,14 @@ impl InputState {
             data: image,
         };
         let Some(new_id) = frame.try_add_shape_with_id(shape, max_shapes) else {
+            log::warn!(
+                "External image paste request {} rejected by shape limit on board '{}' page {} (max_shapes={}, image_bytes={})",
+                request.id,
+                request.target_board_id,
+                request.target_page_index,
+                max_shapes,
+                image_bytes
+            );
             self.set_ui_toast(
                 UiToastKind::Warning,
                 "Shape limit reached; image not pasted.",
@@ -539,6 +563,7 @@ impl InputState {
             },
             undo_limit,
         );
+        let undo_entries = frame.undo_stack_len();
         self.mark_session_dirty();
         if target_active {
             self.mark_selection_dirty_region(bounds);
@@ -546,6 +571,23 @@ impl InputState {
             self.set_selection(vec![new_id]);
             self.needs_redraw = true;
         }
+        log::info!(
+            "Pasted external image shape {} from request {} into board '{}' page {}: target_active={}, mime={}, image={}x{}, bytes={}, display_bounds=({}, {}, {}, {}), undo_entries={}",
+            new_id,
+            request.id,
+            request.target_board_id,
+            request.target_page_index,
+            target_active,
+            image_mime_type,
+            image_width,
+            image_height,
+            image_bytes,
+            x,
+            y,
+            w,
+            h,
+            undo_entries
+        );
         true
     }
 

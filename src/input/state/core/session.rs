@@ -16,4 +16,16 @@ impl InputState {
             false
         }
     }
+
+    /// Clears session dirtiness after loading persisted state into memory.
+    #[allow(dead_code)]
+    pub(crate) fn clear_session_dirty(&mut self) {
+        self.session_dirty = false;
+    }
+
+    /// Returns whether session data is dirty without clearing the dirty flag.
+    #[allow(dead_code)]
+    pub(crate) fn is_session_dirty(&self) -> bool {
+        self.session_dirty
+    }
 }
