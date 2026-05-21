@@ -2,7 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{AxisScroll, PointerEvent};
 
 use crate::input::Tool;
-use crate::input::state::COMMAND_PALETTE_MAX_VISIBLE;
+use crate::input::state::{COMMAND_PALETTE_MAX_VISIBLE, InputState};
 
 use super::*;
 
@@ -87,6 +87,13 @@ impl WaylandState {
             }
             return;
         }
+        if try_handle_board_picker_page_panel_axis(
+            &mut self.input_state,
+            event.position,
+            scroll_direction,
+        ) {
+            return;
+        }
         if on_toolbar || self.pointer_over_toolbar() {
             return;
         }
@@ -162,5 +169,72 @@ impl WaylandState {
                 self.stylus_peak_thickness = None;
             }
         }
+    }
+}
+
+fn try_handle_board_picker_page_panel_axis(
+    input_state: &mut InputState,
+    position: (f64, f64),
+    scroll_direction: i32,
+) -> bool {
+    if !input_state.is_board_picker_open() || scroll_direction == 0 {
+        return false;
+    }
+    let x = position.0.round() as i32;
+    let y = position.1.round() as i32;
+    if !input_state.board_picker_page_panel_content_at(x, y) {
+        return false;
+    }
+    let delta = if scroll_direction > 0 { 1 } else { -1 };
+    let _ = input_state.board_picker_scroll_page_panel_rows(delta);
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::Frame;
+    use crate::input::state::{BoardPickerFocus, test_support::make_test_input_state};
+
+    fn update_picker_layout(input_state: &mut InputState) {
+        let surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).expect("image surface");
+        let ctx = cairo::Context::new(&surface).expect("cairo context");
+        input_state.update_board_picker_layout(&ctx, 1280, 720);
+    }
+
+    fn set_board_page_count(input_state: &mut InputState, board_index: usize, page_count: usize) {
+        let pages = input_state.boards.board_states_mut()[board_index]
+            .pages
+            .pages_mut();
+        pages.clear();
+        pages.extend((0..page_count.max(1)).map(|_| Frame::new()));
+    }
+
+    #[test]
+    fn board_picker_page_panel_axis_consumes_before_thickness_changes() {
+        let mut input_state = make_test_input_state();
+        input_state.open_board_picker();
+        let board_index = input_state
+            .board_picker_page_panel_board_index()
+            .expect("page panel board index");
+        set_board_page_count(&mut input_state, board_index, 80);
+        update_picker_layout(&mut input_state);
+
+        let layout = *input_state.board_picker_layout().expect("layout");
+        let position = (layout.page_viewport_x + 1.0, layout.page_viewport_y + 1.0);
+        let thickness = input_state.current_thickness;
+        input_state.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+        assert!(try_handle_board_picker_page_panel_axis(
+            &mut input_state,
+            position,
+            1,
+        ));
+        assert_eq!(input_state.current_thickness, thickness);
+        update_picker_layout(&mut input_state);
+
+        let layout = *input_state.board_picker_layout().expect("layout");
+        assert_eq!(layout.page_scroll_row, 1);
     }
 }
