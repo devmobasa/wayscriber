@@ -29,13 +29,16 @@ impl InputState {
         self.board_picker_page_drag = None;
         self.board_picker_page_edit = None;
         let active_index = self.boards.active_index();
+        let active_page = self.boards.active_page_index();
         self.board_picker_state = BoardPickerState::Open {
             selected: active_index,
             hover_index: None,
             edit: None,
             mode: BoardPickerMode::Full,
             focus: BoardPickerFocus::BoardList,
-            page_focus_index: None,
+            page_focus_page_index: None,
+            page_scroll_row: 0,
+            page_scroll_target_page_index: Some(active_page),
         };
         let selected_row = self.board_picker_row_for_board(active_index);
         if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
@@ -59,13 +62,16 @@ impl InputState {
         self.board_picker_page_drag = None;
         self.board_picker_page_edit = None;
         let active_index = self.boards.active_index();
+        let active_page = self.boards.active_page_index();
         self.board_picker_state = BoardPickerState::Open {
             selected: active_index,
             hover_index: None,
             edit: None,
             mode: BoardPickerMode::Quick,
             focus: BoardPickerFocus::BoardList,
-            page_focus_index: None,
+            page_focus_page_index: None,
+            page_scroll_row: 0,
+            page_scroll_target_page_index: Some(active_page),
         };
         let selected_row = self.board_picker_row_for_board(active_index);
         if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
@@ -148,28 +154,15 @@ impl InputState {
         if self.board_picker_focus() == new_focus {
             return;
         }
-        // Compute active page index before mutably borrowing state,
-        // clamped to visible thumbnail count so focus never lands off-screen.
         let active_page = if new_focus == BoardPickerFocus::PagePanel {
-            let visible = self
-                .board_picker_layout
-                .map(|layout| layout.page_visible_count)
-                .unwrap_or(0);
-            if visible == 0 {
-                0
-            } else {
-                let board_index = self.board_picker_page_panel_board_index_inner();
-                let raw = board_index
-                    .and_then(|index| self.boards.board_states().get(index))
-                    .map_or(0, |board| board.pages.active_index());
-                raw.min(visible.saturating_sub(1))
-            }
+            self.board_picker_selected_board_active_page()
         } else {
             0
         };
         let BoardPickerState::Open {
             focus,
-            page_focus_index,
+            page_focus_page_index,
+            page_scroll_target_page_index,
             ..
         } = &mut self.board_picker_state
         else {
@@ -178,42 +171,39 @@ impl InputState {
         *focus = new_focus;
         match new_focus {
             BoardPickerFocus::PagePanel => {
-                if page_focus_index.is_none() {
-                    *page_focus_index = Some(active_page);
+                if page_focus_page_index.is_none() {
+                    *page_focus_page_index = Some(active_page);
+                    *page_scroll_target_page_index = Some(active_page);
                 }
             }
             BoardPickerFocus::BoardList => {
-                *page_focus_index = None;
+                *page_focus_page_index = None;
             }
         }
         self.needs_redraw = true;
         self.dirty_tracker.mark_full();
     }
 
-    pub(crate) fn board_picker_page_focus_index(&self) -> Option<usize> {
+    pub(crate) fn board_picker_page_focus_page_index(&self) -> Option<usize> {
         match &self.board_picker_state {
             BoardPickerState::Open {
-                page_focus_index, ..
-            } => *page_focus_index,
+                page_focus_page_index,
+                ..
+            } => *page_focus_page_index,
             BoardPickerState::Hidden => None,
         }
     }
 
-    pub(crate) fn board_picker_set_page_focus_index(&mut self, index: usize) {
-        let visible = self
-            .board_picker_layout
-            .map(|layout| layout.page_visible_count)
-            .unwrap_or(0);
-        let clamped = if visible == 0 {
-            0
-        } else {
-            index.min(visible.saturating_sub(1))
-        };
+    pub(crate) fn board_picker_set_page_focus_page_index(&mut self, index: usize) {
+        let clamped = self.board_picker_clamp_page_index(index);
         if let BoardPickerState::Open {
-            page_focus_index, ..
+            page_focus_page_index,
+            page_scroll_target_page_index,
+            ..
         } = &mut self.board_picker_state
         {
-            *page_focus_index = Some(clamped);
+            *page_focus_page_index = Some(clamped);
+            *page_scroll_target_page_index = Some(clamped);
             self.needs_redraw = true;
             self.dirty_tracker.mark_full();
         }
@@ -232,16 +222,31 @@ impl InputState {
     pub(crate) fn board_picker_set_selected(&mut self, index: usize) {
         let row_count = self.board_picker_row_count().max(1);
         let next = index.min(row_count.saturating_sub(1));
+        let previous_board = self.board_picker_page_panel_board_index();
+        let next_board = self
+            .board_picker_board_index_for_row(next)
+            .unwrap_or_else(|| self.boards.active_index());
+        let next_active_page = self
+            .boards
+            .board_states()
+            .get(next_board)
+            .map_or(0, |board| board.pages.active_index());
         if let BoardPickerState::Open {
             selected,
             focus,
-            page_focus_index,
+            page_focus_page_index,
+            page_scroll_row,
+            page_scroll_target_page_index,
             ..
         } = &mut self.board_picker_state
         {
             *selected = next;
             *focus = BoardPickerFocus::BoardList;
-            *page_focus_index = None;
+            *page_focus_page_index = None;
+            if previous_board != Some(next_board) {
+                *page_scroll_row = 0;
+                *page_scroll_target_page_index = Some(next_active_page);
+            }
             self.needs_redraw = true;
             self.dirty_tracker.mark_full();
         }
@@ -253,5 +258,120 @@ impl InputState {
 
     pub(crate) fn board_picker_is_page_dragging(&self) -> bool {
         self.board_picker_page_drag.is_some()
+    }
+
+    pub(crate) fn board_picker_page_panel_state_parts(
+        &self,
+    ) -> Option<(usize, Option<usize>, Option<usize>)> {
+        match &self.board_picker_state {
+            BoardPickerState::Open {
+                page_scroll_row,
+                page_focus_page_index,
+                page_scroll_target_page_index,
+                ..
+            } => Some((
+                *page_scroll_row,
+                *page_focus_page_index,
+                *page_scroll_target_page_index,
+            )),
+            BoardPickerState::Hidden => None,
+        }
+    }
+
+    pub(crate) fn set_board_picker_page_panel_state_parts(
+        &mut self,
+        scroll_row: usize,
+        focus_page_index: Option<usize>,
+        scroll_target_page_index: Option<usize>,
+    ) {
+        if let BoardPickerState::Open {
+            page_scroll_row,
+            page_focus_page_index,
+            page_scroll_target_page_index,
+            ..
+        } = &mut self.board_picker_state
+        {
+            *page_scroll_row = scroll_row;
+            *page_focus_page_index = focus_page_index;
+            *page_scroll_target_page_index = scroll_target_page_index;
+        }
+    }
+
+    pub(crate) fn board_picker_queue_page_scroll_to(&mut self, page_index: usize) {
+        let clamped = self.board_picker_clamp_page_index(page_index);
+        if let BoardPickerState::Open {
+            page_scroll_target_page_index,
+            ..
+        } = &mut self.board_picker_state
+        {
+            *page_scroll_target_page_index = Some(clamped);
+            self.needs_redraw = true;
+            self.dirty_tracker.mark_full();
+        }
+    }
+
+    pub(crate) fn board_picker_scroll_page_panel_rows(&mut self, delta_rows: isize) -> bool {
+        let Some(layout) = self.board_picker_layout else {
+            return false;
+        };
+        if !layout.page_panel_enabled || delta_rows == 0 {
+            return false;
+        }
+        let max = layout.page_max_scroll_row;
+        let cols = layout.page_cols.max(1);
+        let visible_slots = layout.page_visible_slots.max(1);
+        let page_count = layout.page_count;
+        if let BoardPickerState::Open {
+            page_scroll_row,
+            page_focus_page_index,
+            page_scroll_target_page_index,
+            ..
+        } = &mut self.board_picker_state
+        {
+            let current = (*page_scroll_row).min(max);
+            let next = if delta_rows.is_negative() {
+                current.saturating_sub(delta_rows.unsigned_abs())
+            } else {
+                current.saturating_add(delta_rows as usize).min(max)
+            };
+            *page_scroll_target_page_index = None;
+            if *page_scroll_row != next {
+                *page_scroll_row = next;
+                if let Some(focus_page) = page_focus_page_index {
+                    let first_visible = next.saturating_mul(cols).min(page_count);
+                    let last_visible = first_visible
+                        .saturating_add(visible_slots)
+                        .min(page_count)
+                        .saturating_sub(1);
+                    if *focus_page < first_visible {
+                        *page_focus_page_index = Some(first_visible.min(last_visible));
+                    } else if *focus_page > last_visible {
+                        *page_focus_page_index = Some(last_visible);
+                    }
+                }
+                self.needs_redraw = true;
+                self.dirty_tracker.mark_full();
+                return true;
+            }
+        }
+        false
+    }
+
+    fn board_picker_selected_board_active_page(&self) -> usize {
+        self.board_picker_page_panel_board_index_inner()
+            .and_then(|index| self.boards.board_states().get(index))
+            .map_or(0, |board| board.pages.active_index())
+    }
+
+    fn board_picker_clamp_page_index(&self, index: usize) -> usize {
+        let page_count = self
+            .board_picker_page_panel_board_index_inner()
+            .and_then(|board_index| self.boards.board_states().get(board_index))
+            .map_or(0, |board| board.pages.page_count());
+        if page_count == 0 {
+            0
+        } else {
+            index.min(page_count.saturating_sub(1))
+        }
     }
 }

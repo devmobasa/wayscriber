@@ -3,7 +3,6 @@ use crate::draw::Color;
 use super::super::super::base::InputState;
 use super::super::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
-    PAGE_PANEL_PADDING_X,
 };
 use super::helpers::PagePanelInfo;
 
@@ -71,14 +70,18 @@ impl InputState {
         context: &BoardPickerPagePanelHitContext,
         mut rect_for_thumb: impl FnMut(f64, f64) -> FloatRect,
     ) -> Option<usize> {
-        for index in 0..context.info.visible_pages {
+        for slot in 0..context.info.visible_slots {
             let Some((_info, _row, _col, thumb_x, thumb_y)) =
-                self.board_picker_page_thumb_origin(context.layout, context.board_index, index)
+                self.board_picker_page_thumb_origin_for_slot(context.layout, context.info, slot)
             else {
                 continue;
             };
             if rect_for_thumb(thumb_x, thumb_y).contains(x, y) {
-                return Some(index);
+                return self.board_picker_slot_to_page_index(
+                    context.layout,
+                    context.board_index,
+                    slot,
+                );
             }
         }
         None
@@ -212,18 +215,26 @@ impl InputState {
             return false;
         };
 
-        let index = context.info.visible_pages;
-        let add_col = index % context.info.cols;
-        let add_row = index / context.info.cols;
-        if add_row >= context.layout.page_max_rows.max(1) {
+        let sticky_rect = FloatRect {
+            x: context.layout.page_add_button_x,
+            y: context.layout.page_add_button_y,
+            w: context.layout.page_add_button_width,
+            h: context.layout.page_add_button_height,
+        };
+        if sticky_rect.contains(x as f64, y as f64) {
+            return true;
+        }
+
+        if !self.board_picker_end_of_pages_visible(&context) {
             return false;
         }
 
-        let row_stride = Self::board_picker_page_row_stride(context.layout);
-        let thumb_x = context.layout.page_panel_x
-            + PAGE_PANEL_PADDING_X
-            + add_col as f64 * (context.layout.page_thumb_width + context.layout.page_thumb_gap);
-        let thumb_y = context.layout.page_panel_y + add_row as f64 * row_stride;
+        let add_slot = context.info.page_count - context.info.first_visible_page;
+        let Some((_info, _row, _col, thumb_x, thumb_y)) =
+            self.board_picker_page_thumb_origin_for_slot(context.layout, context.info, add_slot)
+        else {
+            return false;
+        };
         let thumb_rect = FloatRect {
             x: thumb_x,
             y: thumb_y,
@@ -231,6 +242,11 @@ impl InputState {
             h: context.layout.page_thumb_height,
         };
         thumb_rect.contains(x as f64, y as f64)
+    }
+
+    fn board_picker_end_of_pages_visible(&self, context: &BoardPickerPagePanelHitContext) -> bool {
+        context.info.first_visible_page + context.info.visible_pages >= context.info.page_count
+            && context.info.visible_pages < context.info.slot_count
     }
 
     pub(crate) fn board_picker_page_overflow_at(&self, x: i32, y: i32) -> bool {
@@ -242,15 +258,12 @@ impl InputState {
             return false;
         }
 
-        let hint_x = context.layout.page_panel_x + PAGE_PANEL_PADDING_X;
-        let hint_y = context.layout.page_panel_y
-            + context.layout.page_panel_height
-            + context.layout.footer_font_size
-            + 6.0;
+        let hint_x = context.layout.page_add_button_x;
+        let hint_y = context.layout.page_add_button_y - context.layout.footer_font_size - 4.0;
         let hint_rect = FloatRect {
             x: hint_x,
-            y: hint_y - context.layout.footer_font_size,
-            w: context.layout.page_panel_width - PAGE_PANEL_PADDING_X * 2.0,
+            y: hint_y,
+            w: context.layout.page_add_button_width,
             h: context.layout.footer_font_size + 8.0,
         };
         hint_rect.contains(x as f64, y as f64)
@@ -274,6 +287,19 @@ impl InputState {
                 },
             )
         })
+    }
+
+    pub(crate) fn board_picker_page_panel_content_at(&self, x: i32, y: i32) -> bool {
+        let Some(context) = self.board_picker_page_panel_context() else {
+            return false;
+        };
+        FloatRect {
+            x: context.layout.page_panel_x,
+            y: context.layout.page_panel_y,
+            w: context.layout.page_panel_width,
+            h: context.layout.page_panel_height,
+        }
+        .contains(x as f64, y as f64)
     }
 
     pub(crate) fn board_picker_page_duplicate_index_at(&self, x: i32, y: i32) -> Option<usize> {

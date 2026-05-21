@@ -41,12 +41,12 @@ impl InputState {
         // Typing always returns focus to the board list
         if let BoardPickerState::Open {
             focus,
-            page_focus_index,
+            page_focus_page_index,
             ..
         } = &mut self.board_picker_state
         {
             *focus = BoardPickerFocus::BoardList;
-            *page_focus_index = None;
+            *page_focus_page_index = None;
         }
         self.board_picker_select_search_match();
         self.needs_redraw = true;
@@ -292,7 +292,7 @@ mod tests {
         state.board_picker_append_search('b');
 
         assert_eq!(state.board_picker_focus(), BoardPickerFocus::BoardList);
-        assert_eq!(state.board_picker_page_focus_index(), None);
+        assert_eq!(state.board_picker_page_focus_page_index(), None);
     }
 
     #[test]

@@ -56,6 +56,9 @@ const PAGE_THUMB_MIN_WIDTH: f64 = 72.0;
 const PAGE_THUMB_MAX_WIDTH: f64 = 150.0;
 const PAGE_PANEL_MAX_COLS: usize = 3;
 const PAGE_PANEL_MAX_ROWS: usize = 3;
+const PAGE_PANEL_HEADER_HEIGHT: f64 = 32.0;
+const PAGE_PANEL_ADD_BUTTON_HEIGHT: f64 = 24.0;
+const PAGE_PANEL_ADD_BUTTON_GAP: f64 = 8.0;
 pub(crate) const PAGE_HEADER_ICON_SIZE: f64 = 12.0;
 pub(crate) const PAGE_DELETE_ICON_SIZE: f64 = 14.0;
 pub(crate) const PAGE_DELETE_ICON_MARGIN: f64 = 5.0;
@@ -71,7 +74,9 @@ pub enum BoardPickerState {
         edit: Option<BoardPickerEdit>,
         mode: BoardPickerMode,
         focus: BoardPickerFocus,
-        page_focus_index: Option<usize>,
+        page_focus_page_index: Option<usize>,
+        page_scroll_row: usize,
+        page_scroll_target_page_index: Option<usize>,
     },
 }
 
@@ -159,12 +164,25 @@ pub struct BoardPickerLayout {
     pub page_panel_y: f64,
     pub page_panel_width: f64,
     pub page_panel_height: f64,
+    pub page_viewport_x: f64,
+    pub page_viewport_y: f64,
+    pub page_viewport_width: f64,
+    pub page_viewport_height: f64,
+    pub page_add_button_x: f64,
+    pub page_add_button_y: f64,
+    pub page_add_button_width: f64,
+    pub page_add_button_height: f64,
     pub page_thumb_width: f64,
     pub page_thumb_height: f64,
     pub page_thumb_gap: f64,
     pub page_cols: usize,
     pub page_rows: usize,
     pub page_max_rows: usize,
+    pub page_total_rows: usize,
+    pub page_scroll_row: usize,
+    pub page_max_scroll_row: usize,
+    pub page_first_visible_index: usize,
+    pub page_visible_slots: usize,
     pub page_count: usize,
     pub page_visible_count: usize,
     pub page_board_index: Option<usize>,

@@ -1,6 +1,7 @@
 use super::create_test_input_state;
 use crate::draw::Frame;
 use crate::input::BoardBackground;
+use crate::input::events::Key;
 use crate::input::state::core::board_picker::{
     BoardPickerDrag, BoardPickerEditMode, BoardPickerFocus, BoardPickerMode, BoardPickerPageDrag,
     BoardPickerPageEdit, BoardPickerState,
@@ -177,6 +178,42 @@ fn set_board_page_count(
     pages.extend((0..page_count.max(1)).map(|_| Frame::new()));
 }
 
+fn page_thumb_origin(
+    layout: crate::input::state::BoardPickerLayout,
+    page_index: usize,
+) -> Option<(f64, f64)> {
+    if page_index < layout.page_first_visible_index {
+        return None;
+    }
+    let slot = page_index - layout.page_first_visible_index;
+    if slot >= layout.page_visible_slots {
+        return None;
+    }
+    let col = slot % layout.page_cols.max(1);
+    let row = slot / layout.page_cols.max(1);
+    if row >= layout.page_rows.max(1) {
+        return None;
+    }
+    Some((
+        layout.page_viewport_x + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap),
+        layout.page_viewport_y
+            + row as f64
+                * (layout.page_thumb_height
+                    + PAGE_NAME_HEIGHT
+                    + PAGE_NAME_PADDING
+                    + layout.page_thumb_gap),
+    ))
+}
+
+fn assert_page_visible(layout: crate::input::state::BoardPickerLayout, page_index: usize) {
+    assert!(
+        page_thumb_origin(layout, page_index).is_some(),
+        "page {} should be visible in {:?}",
+        page_index + 1,
+        layout
+    );
+}
+
 #[test]
 fn board_picker_page_hit_testing_uses_rendered_thumbnail_positions() {
     let mut input = create_test_input_state();
@@ -186,8 +223,7 @@ fn board_picker_page_hit_testing_uses_rendered_thumbnail_positions() {
     let layout = *input.board_picker_layout().expect("layout");
     assert!(layout.page_panel_enabled);
 
-    let thumb_x = layout.page_panel_x + 12.0;
-    let thumb_y = layout.page_panel_y;
+    let (thumb_x, thumb_y) = page_thumb_origin(layout, 0).expect("page 1 visible");
 
     assert_eq!(
         input.board_picker_page_index_at((thumb_x + 1.0) as i32, (thumb_y + 1.0) as i32),
@@ -230,8 +266,8 @@ fn board_picker_empty_page_list_has_no_page_hit() {
     update_picker_layout(&mut input, 1280, 720);
 
     let layout = *input.board_picker_layout().expect("layout");
-    let add_x = (layout.page_panel_x + 12.0 + 1.0) as i32;
-    let add_y = (layout.page_panel_y + 1.0) as i32;
+    let add_x = (layout.page_viewport_x + 1.0) as i32;
+    let add_y = (layout.page_viewport_y + 1.0) as i32;
 
     assert_eq!(input.board_picker_page_index_at(add_x, add_y), None);
     assert!(input.board_picker_page_add_card_at(add_x, add_y));
@@ -272,8 +308,8 @@ fn board_picker_add_card_clickable_when_pages_exactly_fill_rows() {
     let add_row = target_pages / layout.page_cols.max(1);
     assert!(add_row < max_rows);
 
-    let add_x = (layout.page_panel_x + 12.0 + 1.0) as i32;
-    let add_y = (layout.page_panel_y + add_row as f64 * row_stride + 1.0) as i32;
+    let add_x = (layout.page_viewport_x + 1.0) as i32;
+    let add_y = (layout.page_viewport_y + add_row as f64 * row_stride + 1.0) as i32;
 
     assert!(input.board_picker_page_add_card_at(add_x, add_y));
     assert_eq!(input.board_picker_page_index_at(add_x, add_y), None);
@@ -303,11 +339,317 @@ fn board_picker_overflow_hitbox_matches_rendered_hint_position() {
         layout = *input.board_picker_layout().expect("layout");
     }
 
-    let hint_x = (layout.page_panel_x + 12.0 + 2.0) as i32;
-    let hint_y =
-        (layout.page_panel_y + layout.page_panel_height + layout.footer_font_size + 6.0) as i32;
+    let hint_x = (layout.page_add_button_x + 2.0) as i32;
+    let hint_y = (layout.page_add_button_y - layout.footer_font_size) as i32;
 
     assert!(input.board_picker_page_overflow_at(hint_x, hint_y));
+}
+
+#[test]
+fn board_picker_page_ten_hit_testing_returns_absolute_index() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 12);
+    input.boards.board_states_mut()[board_index]
+        .pages
+        .switch_to_page(9);
+    input.board_picker_queue_page_scroll_to(9);
+
+    update_picker_layout(&mut input, 1280, 720);
+    let layout = *input.board_picker_layout().expect("layout");
+    assert_page_visible(layout, 9);
+    let (thumb_x, thumb_y) = page_thumb_origin(layout, 9).expect("page 10 origin");
+
+    assert_eq!(
+        input.board_picker_page_index_at((thumb_x + 1.0) as i32, (thumb_y + 1.0) as i32),
+        Some(9)
+    );
+
+    let icon_y =
+        thumb_y + layout.page_thumb_height - PAGE_DELETE_ICON_SIZE * 0.5 - PAGE_DELETE_ICON_MARGIN;
+    let rename_x = thumb_x + PAGE_DELETE_ICON_SIZE * 0.5 + PAGE_DELETE_ICON_MARGIN;
+    let duplicate_x = thumb_x + layout.page_thumb_width * 0.5;
+    let delete_x =
+        thumb_x + layout.page_thumb_width - PAGE_DELETE_ICON_SIZE * 0.5 - PAGE_DELETE_ICON_MARGIN;
+
+    assert_eq!(
+        input.board_picker_page_rename_index_at(rename_x as i32, icon_y as i32),
+        Some(9)
+    );
+    assert_eq!(
+        input.board_picker_page_duplicate_index_at(duplicate_x as i32, icon_y as i32),
+        Some(9)
+    );
+    assert_eq!(
+        input.board_picker_page_delete_index_at(delete_x as i32, icon_y as i32),
+        Some(9)
+    );
+}
+
+#[test]
+fn board_picker_page_ten_operations_use_absolute_index() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 12);
+    for index in 0..12 {
+        assert!(
+            input.boards.board_states_mut()[board_index]
+                .pages
+                .set_page_name(index, Some(format!("Page {}", index + 1)))
+        );
+    }
+    update_picker_layout(&mut input, 1280, 720);
+
+    input.board_picker_duplicate_page(9);
+
+    let pages = &input.boards.board_states()[board_index].pages;
+    assert_eq!(pages.active_index(), 10);
+    assert_eq!(pages.page_name(10), Some("Page 10"));
+    assert_eq!(pages.page_name(9), Some("Page 10"));
+
+    input.board_picker_delete_page(9);
+    assert_eq!(
+        input.boards.board_states()[board_index].pages.page_count(),
+        13,
+        "first delete should only request confirmation"
+    );
+    input.board_picker_delete_page(9);
+
+    let pages = &input.boards.board_states()[board_index].pages;
+    assert_eq!(pages.page_count(), 12);
+    assert_eq!(pages.page_name(9), Some("Page 10"));
+}
+
+#[test]
+fn board_picker_active_page_ten_visible_on_open_and_focus() {
+    let mut input = create_test_input_state();
+    let board_index = input.boards.active_index();
+    set_board_page_count(&mut input, board_index, 12);
+    input.boards.board_states_mut()[board_index]
+        .pages
+        .switch_to_page(9);
+
+    input.open_board_picker();
+    update_picker_layout(&mut input, 1280, 720);
+    let layout = *input.board_picker_layout().expect("layout");
+    assert_page_visible(layout, 9);
+
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+    update_picker_layout(&mut input, 1280, 720);
+    let layout = *input.board_picker_layout().expect("layout");
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(9));
+    assert_page_visible(layout, 9);
+}
+
+#[test]
+fn board_picker_keyboard_focus_scrolls_absolute_page_into_view() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 18);
+    update_picker_layout(&mut input, 1280, 720);
+
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+    input.board_picker_set_page_focus_page_index(14);
+    update_picker_layout(&mut input, 1280, 720);
+
+    let layout = *input.board_picker_layout().expect("layout");
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(14));
+    assert_page_visible(layout, 14);
+}
+
+#[test]
+fn board_picker_sticky_add_works_when_visible_grid_is_full() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 12);
+    update_picker_layout(&mut input, 1280, 720);
+
+    let layout = *input.board_picker_layout().expect("layout");
+    assert_eq!(layout.page_visible_count, layout.page_visible_slots);
+    let add_x = (layout.page_add_button_x + layout.page_add_button_width * 0.5) as i32;
+    let add_y = (layout.page_add_button_y + layout.page_add_button_height * 0.5) as i32;
+
+    assert!(input.board_picker_page_add_card_at(add_x, add_y));
+
+    input.board_picker_add_page();
+    update_picker_layout(&mut input, 1280, 720);
+
+    let pages = &input.boards.board_states()[board_index].pages;
+    assert_eq!(pages.page_count(), 13);
+    assert_eq!(pages.active_index(), 12);
+    assert_page_visible(*input.board_picker_layout().expect("layout"), 12);
+}
+
+#[test]
+fn board_picker_ctrl_n_adds_page_while_page_panel_focused() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 1);
+    update_picker_layout(&mut input, 1280, 720);
+
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+    input.modifiers.ctrl = true;
+    assert!(input.handle_board_picker_key(Key::Char('n')));
+
+    assert_eq!(
+        input.boards.board_states()[board_index].pages.page_count(),
+        2
+    );
+    assert_eq!(
+        input.boards.board_states()[board_index]
+            .pages
+            .active_index(),
+        1
+    );
+}
+
+#[test]
+fn board_picker_add_and_duplicate_scroll_to_newly_active_page() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 15);
+    update_picker_layout(&mut input, 1280, 720);
+
+    input.board_picker_add_page();
+    update_picker_layout(&mut input, 1280, 720);
+    assert_page_visible(*input.board_picker_layout().expect("layout"), 15);
+
+    input.board_picker_duplicate_page(15);
+    update_picker_layout(&mut input, 1280, 720);
+    assert_page_visible(*input.board_picker_layout().expect("layout"), 16);
+}
+
+#[test]
+fn board_picker_wheel_scroll_changes_visible_page_window() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 18);
+    update_picker_layout(&mut input, 1280, 720);
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+    input.board_picker_set_page_focus_page_index(0);
+    update_picker_layout(&mut input, 1280, 720);
+
+    let layout = *input.board_picker_layout().expect("layout");
+    let start = layout.page_first_visible_index;
+    let x = (layout.page_viewport_x + 1.0) as i32;
+    let y = (layout.page_viewport_y + 1.0) as i32;
+
+    assert!(input.board_picker_page_panel_content_at(x, y));
+    assert!(input.board_picker_scroll_page_panel_rows(1));
+    update_picker_layout(&mut input, 1280, 720);
+
+    let layout = *input.board_picker_layout().expect("layout");
+    assert!(layout.page_first_visible_index > start);
+    assert_page_visible(
+        layout,
+        input
+            .board_picker_page_focus_page_index()
+            .expect("page focus"),
+    );
+}
+
+#[test]
+fn board_picker_repeated_wheel_scroll_uses_state_between_layouts() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 80);
+    update_picker_layout(&mut input, 1280, 720);
+
+    let layout = *input.board_picker_layout().expect("layout");
+    assert!(layout.page_max_scroll_row >= 2);
+
+    assert!(input.board_picker_scroll_page_panel_rows(1));
+    assert!(input.board_picker_scroll_page_panel_rows(1));
+    update_picker_layout(&mut input, 1280, 720);
+
+    let layout = *input.board_picker_layout().expect("layout");
+    assert_eq!(layout.page_scroll_row, 2);
+    assert_eq!(layout.page_first_visible_index, layout.page_cols * 2);
+}
+
+#[test]
+fn board_picker_wheel_scroll_up_clamps_focus_to_last_visible_page() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 80);
+    update_picker_layout(&mut input, 1280, 720);
+
+    let initial = *input.board_picker_layout().expect("layout");
+    assert!(initial.page_max_scroll_row >= 2);
+    input.set_board_picker_page_panel_state_parts(2, None, None);
+    update_picker_layout(&mut input, 1280, 720);
+
+    let before = *input.board_picker_layout().expect("layout");
+    let focus = before
+        .page_first_visible_index
+        .saturating_add(before.page_visible_slots)
+        .min(before.page_count)
+        .saturating_sub(1);
+    input.set_board_picker_page_panel_state_parts(before.page_scroll_row, Some(focus), None);
+
+    assert!(input.board_picker_scroll_page_panel_rows(-1));
+    update_picker_layout(&mut input, 1280, 720);
+
+    let after = *input.board_picker_layout().expect("layout");
+    let expected_focus = after
+        .page_first_visible_index
+        .saturating_add(after.page_visible_slots)
+        .min(after.page_count)
+        .saturating_sub(1);
+    assert_eq!(
+        input.board_picker_page_focus_page_index(),
+        Some(expected_focus)
+    );
+    assert_page_visible(after, expected_focus);
+}
+
+#[test]
+fn board_picker_column_change_keeps_focused_absolute_page_visible() {
+    let mut input = create_test_input_state();
+    input.open_board_picker();
+    let board_index = input
+        .board_picker_page_panel_board_index()
+        .expect("page panel board index");
+    set_board_page_count(&mut input, board_index, 12);
+    update_picker_layout(&mut input, 1280, 720);
+
+    input.board_picker_set_focus(BoardPickerFocus::PagePanel);
+    input.board_picker_set_page_focus_page_index(9);
+    update_picker_layout(&mut input, 1280, 720);
+    let wide = *input.board_picker_layout().expect("layout");
+    assert_page_visible(wide, 9);
+
+    update_picker_layout(&mut input, 180, 720);
+    let narrow = *input.board_picker_layout().expect("layout");
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(9));
+    assert_page_visible(narrow, 9);
 }
 
 #[test]
@@ -390,8 +732,8 @@ fn board_picker_page_focus_clamps_to_existing_pages() {
     assert_eq!(layout.page_visible_count, 1);
 
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
-    input.board_picker_set_page_focus_index(usize::MAX);
-    assert_eq!(input.board_picker_page_focus_index(), Some(0));
+    input.board_picker_set_page_focus_page_index(usize::MAX);
+    assert_eq!(input.board_picker_page_focus_page_index(), Some(0));
 }
 
 #[test]
@@ -416,10 +758,21 @@ fn board_picker_footer_text_changes_for_quick_and_page_panel_modes() {
     );
 
     input.open_board_picker();
+    assert_eq!(
+        input.board_picker_footer_text(),
+        "Enter: open  F2: rename  Ctrl+C: color  Ctrl+N: new  Del: delete"
+    );
+
+    update_picker_layout(&mut input, 1280, 720);
+    assert_eq!(
+        input.board_picker_footer_text(),
+        "Enter: open  F2: rename  Ctrl+C: color  Del: delete  Tab: pages"
+    );
+
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
     assert_eq!(
         input.board_picker_footer_text(),
-        "Enter: open  F2: rename  Del: delete  Tab: back  Esc: close"
+        "Enter: open  Ctrl+N: add  F2: rename  Del: delete  Tab: back"
     );
 }
 
@@ -466,6 +819,105 @@ fn board_picker_rename_selected_promotes_quick_mode_to_full_editing() {
     assert_eq!(
         input.board_picker_edit_state(),
         Some((BoardPickerEditMode::Name, selected_row, "Blackboard"))
+    );
+}
+
+#[test]
+fn board_picker_f2_starts_board_name_edit_not_color_edit() {
+    let mut input = create_test_input_state();
+    let blackboard_index = input
+        .boards
+        .board_states()
+        .iter()
+        .position(|board| board.spec.id == "blackboard")
+        .expect("blackboard board");
+
+    input.open_board_picker();
+    let selected_row = input
+        .board_picker_row_for_board(blackboard_index)
+        .expect("blackboard row");
+    input.board_picker_set_selected(selected_row);
+    assert!(input.handle_board_picker_key(Key::F2));
+
+    assert_eq!(
+        input.board_picker_edit_state(),
+        Some((BoardPickerEditMode::Name, selected_row, "Blackboard"))
+    );
+}
+
+#[test]
+fn board_picker_f2_key_route_starts_board_name_edit_not_color_edit() {
+    let mut input = create_test_input_state();
+    let blackboard_index = input
+        .boards
+        .board_states()
+        .iter()
+        .position(|board| board.spec.id == "blackboard")
+        .expect("blackboard board");
+
+    input.open_board_picker();
+    let selected_row = input
+        .board_picker_row_for_board(blackboard_index)
+        .expect("blackboard row");
+    input.board_picker_set_selected(selected_row);
+    input.on_key_press(Key::F2);
+
+    assert_eq!(
+        input.board_picker_edit_state(),
+        Some((BoardPickerEditMode::Name, selected_row, "Blackboard"))
+    );
+}
+
+#[test]
+fn board_picker_f2_switches_color_edit_back_to_name_edit() {
+    let mut input = create_test_input_state();
+    let blackboard_index = input
+        .boards
+        .board_states()
+        .iter()
+        .position(|board| board.spec.id == "blackboard")
+        .expect("blackboard board");
+
+    input.open_board_picker();
+    let selected_row = input
+        .board_picker_row_for_board(blackboard_index)
+        .expect("blackboard row");
+    input.board_picker_set_selected(selected_row);
+    input.board_picker_edit_color_selected();
+    assert_eq!(
+        input.board_picker_edit_state(),
+        Some((BoardPickerEditMode::Color, selected_row, "#111111"))
+    );
+
+    assert!(input.handle_board_picker_key(Key::F2));
+
+    assert_eq!(
+        input.board_picker_edit_state(),
+        Some((BoardPickerEditMode::Name, selected_row, "Blackboard"))
+    );
+}
+
+#[test]
+fn board_picker_ctrl_c_starts_board_color_edit() {
+    let mut input = create_test_input_state();
+    let blackboard_index = input
+        .boards
+        .board_states()
+        .iter()
+        .position(|board| board.spec.id == "blackboard")
+        .expect("blackboard board");
+
+    input.open_board_picker();
+    let selected_row = input
+        .board_picker_row_for_board(blackboard_index)
+        .expect("blackboard row");
+    input.board_picker_set_selected(selected_row);
+    input.modifiers.ctrl = true;
+    assert!(input.handle_board_picker_key(Key::Char('c')));
+
+    assert_eq!(
+        input.board_picker_edit_state(),
+        Some((BoardPickerEditMode::Color, selected_row, "#111111"))
     );
 }
 

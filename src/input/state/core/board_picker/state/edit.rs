@@ -115,15 +115,15 @@ impl InputState {
         if self.board_picker_is_quick() {
             "Enter: switch  Type: jump  Esc: close".to_string()
         } else if self.board_picker_focus() == BoardPickerFocus::PagePanel {
-            "Enter: open  F2: rename  Del: delete  Tab: back  Esc: close".to_string()
+            "Enter: open  Ctrl+N: add  F2: rename  Del: delete  Tab: back".to_string()
         } else {
             let page_panel_enabled = self
                 .board_picker_layout
                 .is_some_and(|layout| layout.page_panel_enabled);
             if page_panel_enabled {
-                "Enter: open  F2: rename  Del: delete  Tab: pages  Esc: close".to_string()
+                "Enter: open  F2: rename  Ctrl+C: color  Del: delete  Tab: pages".to_string()
             } else {
-                "Enter: open  F2: rename  Ctrl+N: new  Del: delete  Esc: close".to_string()
+                "Enter: open  F2: rename  Ctrl+C: color  Ctrl+N: new  Del: delete".to_string()
             }
         }
     }
@@ -193,6 +193,9 @@ impl InputState {
         let selected_row_full = selected_board.and_then(|board_index| {
             self.board_picker_row_for_board_in_mode(board_index, BoardPickerMode::Full)
         });
+        let selected_active_page = selected_board
+            .and_then(|board_index| self.boards.board_states().get(board_index))
+            .map(|board| board.pages.active_index());
 
         let BoardPickerState::Open {
             selected,
@@ -200,7 +203,9 @@ impl InputState {
             edit,
             mode,
             focus,
-            page_focus_index,
+            page_focus_page_index,
+            page_scroll_row,
+            page_scroll_target_page_index,
         } = &mut self.board_picker_state
         else {
             return;
@@ -212,7 +217,9 @@ impl InputState {
         *hover_index = None;
         *edit = None;
         *focus = BoardPickerFocus::BoardList;
-        *page_focus_index = None;
+        *page_focus_page_index = None;
+        *page_scroll_row = 0;
+        *page_scroll_target_page_index = selected_active_page;
         if let Some(row) = selected_row_full {
             *selected = row;
         }
