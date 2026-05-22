@@ -410,6 +410,89 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
 }
 
 #[test]
+fn autosave_snapshot_uses_bounded_history_fallback() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut input = dummy_input_state();
+    let point_count = 600;
+
+    {
+        let frame = input.boards.active_frame_mut();
+        let id = frame.add_shape(large_freehand(point_count, 0));
+        for offset in 1..=3 {
+            let current = frame.shape(id).expect("shape should exist");
+            let before = ShapeSnapshot {
+                shape: current.shape.clone(),
+                locked: current.locked,
+            };
+            let after_shape = large_freehand(point_count, offset);
+            frame.shape_mut(id).expect("shape should exist").shape = after_shape.clone();
+            frame.push_undo_action(
+                UndoAction::Modify {
+                    shape_id: id,
+                    before,
+                    after: ShapeSnapshot {
+                        shape: after_shape,
+                        locked: false,
+                    },
+                },
+                input.undo_stack_limit,
+            );
+        }
+    }
+
+    let mut depth_two_options = limit_test_options(temp.path(), "autosave-depth-two", true);
+    depth_two_options.max_file_size_bytes = u64::MAX;
+    depth_two_options.max_persisted_undo_depth = Some(2);
+    let depth_two_snapshot =
+        snapshot_from_input(&input, &depth_two_options).expect("depth two snapshot present");
+    save_snapshot(&depth_two_snapshot, &depth_two_options).expect("depth two save should fit");
+    let depth_two_size = fs::metadata(depth_two_options.session_file_path())
+        .expect("depth two metadata")
+        .len();
+
+    let mut depth_three_options = limit_test_options(temp.path(), "autosave-depth-three", true);
+    depth_three_options.max_file_size_bytes = u64::MAX;
+    depth_three_options.max_persisted_undo_depth = Some(3);
+    let depth_three_snapshot =
+        snapshot_from_input(&input, &depth_three_options).expect("depth three snapshot present");
+    save_snapshot(&depth_three_snapshot, &depth_three_options)
+        .expect("depth three save should fit");
+    let depth_three_size = fs::metadata(depth_three_options.session_file_path())
+        .expect("depth three metadata")
+        .len();
+    assert!(depth_three_size > depth_two_size);
+
+    let mut options = limit_test_options(temp.path(), "autosave-trimmed", true);
+    options.max_file_size_bytes = depth_two_size + (depth_three_size - depth_two_size) / 2;
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+
+    let report = save_snapshot_autosave_with_report(&snapshot, &options)
+        .expect("autosave should use bounded history fallback")
+        .expect("session should be written");
+    assert_eq!(
+        report.outcome,
+        SaveSnapshotOutcome::TrimmedHistory { depth: 1 }
+    );
+
+    let loaded = load_snapshot(&options)
+        .expect("load_snapshot should succeed")
+        .expect("snapshot should be present");
+    let transparent = loaded
+        .boards
+        .iter()
+        .find(|board| board.id == "transparent")
+        .expect("transparent board should be present");
+    let frame = &transparent.pages.pages[0];
+
+    assert_eq!(frame.shapes.len(), 1, "visible stroke should be saved");
+    assert_eq!(
+        frame.undo_stack_len(),
+        1,
+        "autosave should avoid deeper history-depth scans"
+    );
+}
+
+#[test]
 fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
     let temp = crate::test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();

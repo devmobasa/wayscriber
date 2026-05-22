@@ -110,6 +110,10 @@ impl WaylandState {
         self.apply_zoom_factor(factor, screen_x, screen_y, zoom_in);
     }
 
+    pub(in crate::backend::wayland) fn zoom_panning_active(&self) -> bool {
+        self.zoom.panning
+    }
+
     pub(in crate::backend::wayland) fn exit_zoom(&mut self) {
         if self.zoom.is_engaged() {
             self.zoom.deactivate(&mut self.input_state);

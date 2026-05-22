@@ -13,6 +13,15 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 const NEAR_LIMIT_PERCENT: u64 = 90;
+#[allow(dead_code)]
+const AUTOSAVE_HISTORY_FALLBACK_DEPTH: usize = 1;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HistoryFallbackStrategy {
+    LargestFitting,
+    Bounded { max_depth: usize },
+}
 
 /// Outcome of a session save after applying configured size fallbacks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +121,21 @@ pub(crate) fn save_snapshot_with_report(
 }
 
 #[allow(dead_code)]
+pub(crate) fn save_snapshot_autosave_with_report(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+) -> Result<Option<SaveSnapshotReport>> {
+    save_snapshot_with_expanded_limit_and_strategy(
+        snapshot,
+        options,
+        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
+        HistoryFallbackStrategy::Bounded {
+            max_depth: AUTOSAVE_HISTORY_FALLBACK_DEPTH,
+        },
+    )
+}
+
+#[allow(dead_code)]
 pub(crate) fn estimate_snapshot_save(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
@@ -185,6 +209,20 @@ pub(super) fn save_snapshot_with_expanded_limit(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<Option<SaveSnapshotReport>> {
+    save_snapshot_with_expanded_limit_and_strategy(
+        snapshot,
+        options,
+        max_expanded_size,
+        HistoryFallbackStrategy::LargestFitting,
+    )
+}
+
+fn save_snapshot_with_expanded_limit_and_strategy(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
+) -> Result<Option<SaveSnapshotReport>> {
     if !options.any_enabled() && !options.persist_history && snapshot.tool_state.is_none() {
         debug!("Session persistence disabled for all boards; skipping save");
         return Ok(None);
@@ -215,7 +253,7 @@ pub(super) fn save_snapshot_with_expanded_limit(
     );
 
     let save_started = Instant::now();
-    let result = save_snapshot_inner(snapshot, options, max_expanded_size);
+    let result = save_snapshot_inner(snapshot, options, max_expanded_size, history_fallback);
     match &result {
         Ok(Some(report)) => info!(
             "Session save pipeline finished for {} in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}",
@@ -253,14 +291,20 @@ fn save_snapshot_inner(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
     max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
 ) -> Result<Option<SaveSnapshotReport>> {
     let session_path = options.session_file_path();
     let backup_path = options.backup_file_path();
     let last_modified = now_rfc3339();
 
     let prepare_started = Instant::now();
-    let prepared = match payload_within_limit(snapshot, options, &last_modified, max_expanded_size)
-    {
+    let prepared = match payload_within_limit(
+        snapshot,
+        options,
+        &last_modified,
+        max_expanded_size,
+        history_fallback,
+    ) {
         Ok(prepared) => prepared,
         Err(err) => {
             if session_path.exists() {
@@ -462,6 +506,7 @@ fn payload_within_limit(
     options: &SessionOptions,
     last_modified: &str,
     max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
 ) -> Result<PreparedPayload> {
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
         return Ok(PreparedPayload::clear(0, false));
@@ -539,13 +584,13 @@ fn payload_within_limit(
                 }
                 Some((1, depth_one_payload))
             } else {
-                largest_fitting_history_payload(
+                fitting_history_payload(
                     snapshot,
-                    2,
                     history_depth,
                     options,
                     last_modified,
                     max_expanded_size,
+                    history_fallback,
                 )?
                 .or(Some((1, depth_one_payload)))
             };
@@ -595,6 +640,45 @@ fn payload_within_limit(
         visible_payload,
         SaveSnapshotOutcome::VisibleOnly,
     ))
+}
+
+fn fitting_history_payload(
+    snapshot: &SessionSnapshot,
+    history_depth: usize,
+    options: &SessionOptions,
+    last_modified: &str,
+    max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
+) -> Result<Option<(usize, PayloadCandidate)>> {
+    match history_fallback {
+        HistoryFallbackStrategy::LargestFitting => largest_fitting_history_payload(
+            snapshot,
+            2,
+            history_depth,
+            options,
+            last_modified,
+            max_expanded_size,
+        ),
+        HistoryFallbackStrategy::Bounded { max_depth } => {
+            let max_depth = max_depth.min(history_depth);
+            if max_depth < 2 {
+                debug!(
+                    "Autosave history fallback capped at depth {}; skipping deeper history-depth scan",
+                    max_depth
+                );
+                return Ok(None);
+            }
+
+            largest_fitting_history_payload(
+                snapshot,
+                2,
+                max_depth,
+                options,
+                last_modified,
+                max_expanded_size,
+            )
+        }
+    }
 }
 
 fn largest_fitting_history_payload(

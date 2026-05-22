@@ -17,6 +17,7 @@ pub struct SessionState {
     last_dirty_at: Option<Instant>,
     last_save_at: Option<Instant>,
     autosave_retry_at: Option<Instant>,
+    autosave_deferred_until: Option<Instant>,
     notified_failure: bool,
     notified_near_limit_paths: HashSet<PathBuf>,
     notified_trimmed_history: bool,
@@ -36,6 +37,7 @@ impl SessionState {
             last_dirty_at: None,
             last_save_at: None,
             autosave_retry_at: None,
+            autosave_deferred_until: None,
             notified_failure: false,
             notified_near_limit_paths: HashSet::new(),
             notified_trimmed_history: false,
@@ -82,6 +84,7 @@ impl SessionState {
         self.last_dirty_at = None;
         self.last_save_at = Some(now);
         self.autosave_retry_at = None;
+        self.autosave_deferred_until = None;
         self.notified_failure = false;
     }
 
@@ -90,6 +93,7 @@ impl SessionState {
         self.dirty_since = None;
         self.last_dirty_at = None;
         self.autosave_retry_at = None;
+        self.autosave_deferred_until = None;
     }
 
     pub fn mark_autosave_failure(&mut self, now: Instant, backoff: Duration) -> bool {
@@ -100,6 +104,14 @@ impl SessionState {
             self.notified_failure = true;
             true
         }
+    }
+
+    pub fn defer_autosave(&mut self, now: Instant, delay: Duration) {
+        let until = now + delay;
+        self.autosave_deferred_until = Some(match self.autosave_deferred_until {
+            Some(current) => current.max(until),
+            None => until,
+        });
     }
 
     pub fn mark_near_limit_notified(&mut self, path: &Path) -> bool {
@@ -145,6 +157,11 @@ impl SessionState {
         {
             return false;
         }
+        if let Some(deferred_until) = self.autosave_deferred_until
+            && now < deferred_until
+        {
+            return false;
+        }
         let Some(last_dirty_at) = self.last_dirty_at else {
             return false;
         };
@@ -175,10 +192,13 @@ impl SessionState {
         } else {
             periodic_due
         };
-        let next_time = match self.autosave_retry_at {
-            Some(retry_at) => std::cmp::max(next_due, retry_at),
-            None => next_due,
-        };
+        let mut next_time = next_due;
+        if let Some(retry_at) = self.autosave_retry_at {
+            next_time = next_time.max(retry_at);
+        }
+        if let Some(deferred_until) = self.autosave_deferred_until {
+            next_time = next_time.max(deferred_until);
+        }
         Some(next_time.saturating_duration_since(now))
     }
 }
@@ -219,6 +239,48 @@ mod tests {
             state.autosave_timeout(later, &options),
             Some(Duration::from_millis(0))
         );
+    }
+
+    #[test]
+    fn autosave_deferral_delays_due_without_clearing_dirty() {
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+        options.autosave_enabled = true;
+        options.persist_transparent = true;
+        options.autosave_idle = Duration::from_millis(1);
+        options.autosave_interval = Duration::from_millis(1);
+
+        let mut state = SessionState::new(Some(options.clone()));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+        let due_at = now + Duration::from_millis(2);
+        assert!(state.autosave_due(due_at, &options));
+
+        let defer_for = Duration::from_millis(50);
+        state.defer_autosave(due_at, defer_for);
+        assert!(!state.autosave_due(due_at, &options));
+        assert_eq!(state.autosave_timeout(due_at, &options), Some(defer_for));
+
+        let later = due_at + defer_for;
+        assert!(state.autosave_due(later, &options));
+        assert_eq!(
+            state.autosave_timeout(later, &options),
+            Some(Duration::ZERO)
+        );
+    }
+
+    #[test]
+    fn mark_saved_clears_autosave_deferral() {
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
+        options.autosave_enabled = true;
+        options.persist_transparent = true;
+
+        let mut state = SessionState::new(Some(options));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+        state.defer_autosave(now, Duration::from_secs(60));
+        state.mark_saved(now);
+
+        assert_eq!(state.autosave_deferred_until, None);
     }
 
     #[test]

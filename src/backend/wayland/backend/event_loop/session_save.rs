@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 const SESSION_SAVE_WARNING_TOAST_MS: u64 = 20_000;
 const SESSION_SAVE_NOTIFICATION_TIMEOUT_MS: i32 = 15_000;
+const AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS: u64 = 500;
 
 pub(super) fn persist_session(state: &WaylandState) -> Result<(), anyhow::Error> {
     let Some(options) = state.session_options() else {
@@ -34,7 +35,7 @@ pub(super) fn persist_session(state: &WaylandState) -> Result<(), anyhow::Error>
         snapshot.as_ref(),
         snapshot_started.elapsed(),
     );
-    let report = save_snapshot_or_clear(state, options, snapshot)?;
+    let report = save_snapshot_or_clear(state, options, snapshot, SessionSaveReason::Shutdown)?;
     log_session_save_result(
         SessionSaveReason::Shutdown,
         report.as_ref(),
@@ -56,6 +57,12 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
     let input_dirty = state.input_state.take_session_dirty();
     state.session.record_input_dirty(now, input_dirty);
 
+    if should_defer_autosave_for_interaction(state)
+        && defer_pending_autosave_for_interaction(&mut state.session, now, &options)
+    {
+        return Ok(());
+    }
+
     if !state.session.autosave_due(now, &options) {
         return Ok(());
     }
@@ -70,7 +77,7 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
         snapshot_started.elapsed(),
     );
 
-    match save_snapshot_or_clear(state, &options, snapshot) {
+    match save_snapshot_or_clear(state, &options, snapshot, SessionSaveReason::Autosave) {
         Ok(report) => {
             log_session_save_result(
                 SessionSaveReason::Autosave,
@@ -95,13 +102,14 @@ fn save_snapshot_or_clear(
     state: &WaylandState,
     options: &session::SessionOptions,
     snapshot: Option<session::SessionSnapshot>,
+    reason: SessionSaveReason,
 ) -> Result<Option<SaveSnapshotReport>, anyhow::Error> {
     if should_skip_protected_session_save(state, options) {
         return Ok(None);
     }
 
     if let Some(snapshot) = snapshot {
-        return session::save_snapshot_with_report(&snapshot, options);
+        return save_snapshot_with_reason(&snapshot, options, reason);
     }
 
     if !persistence_enabled(options) {
@@ -113,7 +121,57 @@ fn save_snapshot_or_clear(
         boards: Vec::new(),
         tool_state: None,
     };
-    session::save_snapshot_with_report(&empty_snapshot, options)
+    save_snapshot_with_reason(&empty_snapshot, options, reason)
+}
+
+fn save_snapshot_with_reason(
+    snapshot: &session::SessionSnapshot,
+    options: &session::SessionOptions,
+    reason: SessionSaveReason,
+) -> Result<Option<SaveSnapshotReport>, anyhow::Error> {
+    match reason {
+        SessionSaveReason::Autosave => {
+            session::save_snapshot_autosave_with_report(snapshot, options)
+        }
+        SessionSaveReason::Shutdown => session::save_snapshot_with_report(snapshot, options),
+    }
+}
+
+fn should_defer_autosave_for_interaction(state: &WaylandState) -> bool {
+    state.input_state.has_active_pointer_interaction()
+        || state.toolbar_dragging()
+        || state.is_move_dragging()
+        || state.board_panning_active()
+        || state.zoom_panning_active()
+        || stylus_tip_down(state)
+}
+
+fn defer_pending_autosave_for_interaction(
+    session: &mut SessionState,
+    now: Instant,
+    options: &session::SessionOptions,
+) -> bool {
+    if session.autosave_timeout(now, options).is_none() {
+        return false;
+    }
+
+    let delay = Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS);
+    session.defer_autosave(now, delay);
+    log::debug!(
+        "Deferring autosave for {:?} while pointer/stylus interaction is active",
+        delay
+    );
+    true
+}
+
+#[cfg(tablet)]
+fn stylus_tip_down(state: &WaylandState) -> bool {
+    state.stylus_tip_down
+}
+
+#[cfg(not(tablet))]
+fn stylus_tip_down(_state: &WaylandState) -> bool {
+    false
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -502,6 +560,101 @@ mod tests {
 
         record_autosave_success(&mut state, now + Duration::from_millis(2), true);
         assert!(!state.autosave_due(now + Duration::from_millis(2), &options));
+    }
+
+    #[test]
+    fn record_autosave_success_without_saved_report_keeps_dirty_state() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = true;
+        options.autosave_enabled = true;
+        options.autosave_idle = Duration::from_millis(1);
+        options.autosave_interval = Duration::from_millis(1);
+
+        let mut state = SessionState::new(Some(options.clone()));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+        let due_at = now + Duration::from_millis(2);
+        assert!(state.autosave_due(due_at, &options));
+
+        record_autosave_success(&mut state, due_at, false);
+
+        assert!(state.autosave_due(due_at, &options));
+    }
+
+    #[test]
+    fn autosave_failure_after_deferral_respects_backoff() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = true;
+        options.autosave_enabled = true;
+        options.autosave_idle = Duration::from_millis(1);
+        options.autosave_interval = Duration::from_millis(1);
+        options.autosave_failure_backoff = Duration::from_millis(75);
+
+        let mut state = SessionState::new(Some(options.clone()));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+        let due_at = now + Duration::from_millis(2);
+        assert!(defer_pending_autosave_for_interaction(
+            &mut state, due_at, &options
+        ));
+
+        let after_deferral = due_at + Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS);
+        assert!(state.autosave_due(after_deferral, &options));
+
+        assert!(record_autosave_failure(
+            &mut state,
+            after_deferral,
+            &options
+        ));
+
+        assert!(!state.autosave_due(after_deferral, &options));
+        assert_eq!(
+            state.autosave_timeout(after_deferral, &options),
+            Some(options.autosave_failure_backoff)
+        );
+    }
+
+    #[test]
+    fn interaction_deferral_refreshes_existing_autosave_deferral() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = true;
+        options.autosave_enabled = true;
+        options.autosave_idle = Duration::from_millis(1);
+        options.autosave_interval = Duration::from_millis(1);
+
+        let mut state = SessionState::new(Some(options.clone()));
+        let now = Instant::now();
+        state.record_input_dirty(now, true);
+        let due_at = now + Duration::from_millis(2);
+        assert!(state.autosave_due(due_at, &options));
+
+        let defer_for = Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS);
+        assert!(defer_pending_autosave_for_interaction(
+            &mut state, due_at, &options
+        ));
+
+        let first_deferred_until = due_at + defer_for;
+        let later_interaction = first_deferred_until - Duration::from_millis(100);
+        assert_eq!(
+            state.autosave_timeout(later_interaction, &options),
+            Some(Duration::from_millis(100))
+        );
+
+        assert!(defer_pending_autosave_for_interaction(
+            &mut state,
+            later_interaction,
+            &options
+        ));
+
+        assert_eq!(
+            state.autosave_timeout(later_interaction, &options),
+            Some(defer_for)
+        );
+        assert!(
+            !state.autosave_due(first_deferred_until, &options),
+            "autosave should stay deferred after activity inside the original quiet window"
+        );
+        assert!(state.autosave_due(later_interaction + defer_for, &options));
     }
 
     #[test]
