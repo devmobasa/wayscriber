@@ -199,8 +199,8 @@ fn is_gnome_copied_files_mime(mime_type: &str) -> bool {
 mod tests {
     use super::*;
     use crate::backend::wayland::clipboard::image::choose_supported_mime;
+    use crate::test_temp::TempDir;
     use std::fs;
-    use tempfile::TempDir;
 
     #[test]
     fn choose_supported_mime_accepts_file_manager_uri_lists() {

@@ -10,8 +10,8 @@ use super::types::{
 use super::{load_snapshot, save_snapshot};
 use crate::draw::{Color, Frame, Shape};
 use crate::session::options::{CompressionMode, SessionOptions};
+use crate::test_temp::tempdir;
 use crate::time_utils::now_rfc3339;
-use tempfile::tempdir;
 
 fn sample_frame() -> Frame {
     let mut frame = Frame::new();

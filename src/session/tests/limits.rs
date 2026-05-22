@@ -8,7 +8,7 @@ use std::path::Path;
 
 #[test]
 fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-too-big");
     options.persist_transparent = false;
     options.persist_whiteboard = false;
@@ -63,7 +63,7 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
 
 #[test]
 fn load_snapshot_refuses_file_larger_than_max() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-large-file");
     options.persist_transparent = true;
     options.max_file_size_bytes = 8; // very small
@@ -85,7 +85,7 @@ fn load_snapshot_refuses_file_larger_than_max() {
 
 #[test]
 fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut save_options = SessionOptions::new(temp.path().to_path_buf(), "display-shape-limit");
     save_options.persist_transparent = true;
 
@@ -140,7 +140,7 @@ fn save_snapshot_allows_compressed_payload_that_fits_limit() {
     const ACTIVE_PAGE: usize = 10;
     const IMAGE_BYTES: usize = 64 * 1024;
 
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-compressed-fit");
     options.persist_whiteboard = true;
     options.persist_history = true;
@@ -225,7 +225,7 @@ fn save_snapshot_allows_compressed_payload_that_fits_limit() {
 
 #[test]
 fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();
     let point_count = 1_500;
 
@@ -324,7 +324,7 @@ fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
 
 #[test]
 fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();
     let point_count = 600;
 
@@ -411,7 +411,7 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
 
 #[test]
 fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();
     {
         let frame = input.boards.active_frame_mut();

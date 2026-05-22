@@ -195,11 +195,10 @@ fn pixel_count(width: u32, height: u32) -> Result<usize, String> {
 #[cfg(test)]
 mod tests {
     use super::{EncodedImageFormat, decode_rgba};
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     #[test]
     fn decode_jpeg_rgba_preserves_cmyk_jpeg_colors() {
-        let bytes = STANDARD.decode(CMYK_RED_JPEG).unwrap();
+        let bytes = crate::base64::decode_standard(CMYK_RED_JPEG).unwrap();
 
         let image = decode_rgba(EncodedImageFormat::Jpeg, &bytes).unwrap();
 

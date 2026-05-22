@@ -1,6 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
-
-use async_trait::async_trait;
+use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc};
 
 use crate::capture::{
     clipboard,
@@ -10,10 +8,12 @@ use crate::capture::{
 };
 
 /// Abstraction over how image data is captured for the different capture types.
-#[async_trait]
 pub trait CaptureSource: Send + Sync {
-    async fn capture(&self, capture_type: CaptureType) -> Result<Vec<u8>, CaptureError>;
+    fn capture(&self, capture_type: CaptureType) -> CaptureFuture<'_>;
 }
+
+pub type CaptureFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Vec<u8>, CaptureError>> + Send + 'a>>;
 
 /// Abstraction over file saving for captured screenshots.
 pub trait CaptureFileSaver: Send + Sync {
@@ -47,10 +47,9 @@ struct DefaultCaptureSource;
 struct DefaultFileSaver;
 struct DefaultClipboard;
 
-#[async_trait]
 impl CaptureSource for DefaultCaptureSource {
-    async fn capture(&self, capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
-        sources::capture_image(capture_type).await
+    fn capture(&self, capture_type: CaptureType) -> CaptureFuture<'_> {
+        Box::pin(async move { sources::capture_image(capture_type).await })
     }
 }
 

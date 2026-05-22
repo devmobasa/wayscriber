@@ -1,7 +1,5 @@
 use anyhow::{Context, Result};
 use log::{info, warn};
-use signal_hook::consts::signal::{SIGINT, SIGTERM, SIGUSR1};
-use signal_hook::iterator::Signals;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
@@ -299,6 +297,9 @@ impl Daemon {
         info!("Legacy raw SIGUSR1 toggle still works, but cannot carry launch args");
 
         self.acquire_daemon_lock()?;
+        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
+            warn!("Failed to clear stale daemon pid file on startup: {}", err);
+        }
         if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
             warn!(
                 "Failed to clear stale daemon toggle request on startup: {}",
@@ -306,50 +307,53 @@ impl Daemon {
             );
         }
 
-        // Set up signal handling
-        let mut signals = Signals::new([SIGUSR1, SIGTERM, SIGINT])
-            .context("Failed to register signal handler")?;
-
-        crate::daemon::write_daemon_pid_file(std::process::id(), &self.instance_token)?;
+        #[cfg(unix)]
+        const DAEMON_SIGNALS: [libc::c_int; 3] = [libc::SIGUSR1, libc::SIGTERM, libc::SIGINT];
 
         let toggle_flag = self.toggle_requested.clone();
         let signal_toggle_flag = self.signal_toggle_requested.clone();
         let quit_flag = self.should_quit.clone();
 
-        // Spawn signal handler thread
-        // Note: This thread will run until process termination. The signal_hook iterator
-        // doesn't provide a clean shutdown mechanism with forever(), but this is acceptable
-        // for a daemon process as the thread has no resources requiring explicit cleanup.
-        // The thread will be terminated by the OS when the process exits.
-        thread::spawn(move || {
-            for sig in signals.forever() {
-                if quit_flag.load(Ordering::Acquire) {
-                    info!("Signal handler thread exiting");
-                    break;
+        // The signal listener thread runs until process termination. The daemon
+        // exits shortly after quit signals, and the OS cleans up the detached thread.
+        #[cfg(unix)]
+        crate::unix_signals::spawn_listener(&DAEMON_SIGNALS, move |sig| {
+            if quit_flag.load(Ordering::Acquire) {
+                info!("Signal handler thread exiting");
+                return;
+            }
+            match sig {
+                libc::SIGUSR1 => {
+                    info!("Received SIGUSR1 - toggling overlay");
+                    // Use Release ordering to ensure all prior memory operations
+                    // are visible to the thread that reads this flag
+                    signal_toggle_flag.store(true, Ordering::Release);
+                    toggle_flag.store(true, Ordering::Release);
                 }
-                match sig {
-                    SIGUSR1 => {
-                        info!("Received SIGUSR1 - toggling overlay");
-                        // Use Release ordering to ensure all prior memory operations
-                        // are visible to the thread that reads this flag
-                        signal_toggle_flag.store(true, Ordering::Release);
-                        toggle_flag.store(true, Ordering::Release);
-                    }
-                    SIGTERM | SIGINT => {
-                        info!(
-                            "Received {} - initiating graceful shutdown",
-                            if sig == SIGTERM { "SIGTERM" } else { "SIGINT" }
-                        );
-                        // Use Release ordering to ensure all prior memory operations
-                        // are visible to the thread that reads this flag
-                        quit_flag.store(true, Ordering::Release);
-                    }
-                    _ => {
-                        warn!("Received unexpected signal: {}", sig);
-                    }
+                libc::SIGTERM | libc::SIGINT => {
+                    info!(
+                        "Received {} - initiating graceful shutdown",
+                        if sig == libc::SIGTERM {
+                            "SIGTERM"
+                        } else {
+                            "SIGINT"
+                        }
+                    );
+                    // Use Release ordering to ensure all prior memory operations
+                    // are visible to the thread that reads this flag
+                    quit_flag.store(true, Ordering::Release);
+                }
+                _ => {
+                    warn!("Received unexpected signal: {}", sig);
                 }
             }
-        });
+        })
+        .context("Failed to register signal handler")?;
+
+        // Only publish the pid after SIGUSR1 is handled. A racing
+        // `--daemon-toggle` sends SIGUSR1 to this pid, and the default action
+        // before handler installation would terminate the daemon.
+        crate::daemon::write_daemon_pid_file(std::process::id(), &self.instance_token)?;
 
         // Start system tray (optional)
         if self.tray_enabled {

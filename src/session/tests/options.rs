@@ -3,7 +3,7 @@ use crate::config::{SessionConfig, SessionStorageMode};
 
 #[test]
 fn options_from_config_custom_storage() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let custom_dir = temp.path().join("sessions");
 
     let cfg = SessionConfig {
@@ -29,7 +29,7 @@ fn options_from_config_custom_storage() {
 
 #[test]
 fn options_from_config_config_storage_uses_config_dir() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
 
     let cfg = SessionConfig {
         persist_whiteboard: true,

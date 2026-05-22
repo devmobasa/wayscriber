@@ -10,8 +10,6 @@ use wayscriber::shortcut_hint::{PORTAL_APP_ID_ENV, PORTAL_SHORTCUT_ENV};
 #[cfg(feature = "portal")]
 use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "portal")]
-use futures_util::StreamExt;
-#[cfg(feature = "portal")]
 use log::{debug, info, warn};
 #[cfg(feature = "portal")]
 use std::collections::HashMap;
@@ -215,7 +213,7 @@ async fn run_listener(
 
     loop {
         tokio::select! {
-            maybe_signal = activated_stream.next() => {
+            maybe_signal = crate::zbus_stream::next(&mut activated_stream) => {
                 let Some(signal) = maybe_signal else {
                     return Err(anyhow!("GlobalShortcuts.Activated stream ended unexpectedly"));
                 };
@@ -375,7 +373,7 @@ async fn wait_for_request_response(
         .context("failed to subscribe to Request.Response")?;
     loop {
         tokio::select! {
-            maybe_signal = response_stream.next() => {
+            maybe_signal = crate::zbus_stream::next(&mut response_stream) => {
                 let response_signal = maybe_signal
                     .ok_or_else(|| anyhow!("portal request completed without Response signal"))?;
                 let args = response_signal

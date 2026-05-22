@@ -1,6 +1,5 @@
 use crate::draw::frame::{Frame, ImageBoundsSnapshot, UndoAction};
 use crate::draw::{EmbeddedImage, Shape, color::BLACK};
-use base64::{Engine as _, engine::general_purpose};
 
 #[test]
 fn frame_serializes_history() {
@@ -126,7 +125,7 @@ fn try_add_shape_respects_limit() {
 #[test]
 fn image_bounds_history_serializes_without_duplicate_image_payloads() {
     let bytes = vec![42u8; 256];
-    let encoded = general_purpose::STANDARD.encode(&bytes);
+    let encoded = crate::base64::encode_standard(&bytes);
     let mut frame = Frame::new();
     let id = frame.add_shape(Shape::Image {
         x: 0,

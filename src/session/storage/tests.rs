@@ -7,7 +7,7 @@ use crate::session::{
 
 #[test]
 fn clear_session_removes_all_variants_for_prefix() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-1");
     options.per_output = true;
 
@@ -53,7 +53,7 @@ fn clear_session_removes_all_variants_for_prefix() {
 
 #[test]
 fn inspect_session_reports_counts_and_flags() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-inspect");
     options.persist_transparent = true;
     options.persist_whiteboard = false;

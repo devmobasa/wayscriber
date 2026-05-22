@@ -1,9 +1,9 @@
 use std::{
+    future::Future,
     path::PathBuf,
+    pin::Pin,
     sync::{Arc, Mutex},
 };
-
-use async_trait::async_trait;
 
 use crate::capture::{
     dependencies::{CaptureClipboard, CaptureFileSaver, CaptureSource},
@@ -18,15 +18,19 @@ pub(super) struct MockSource {
     pub(super) captured_types: Arc<Mutex<Vec<CaptureType>>>,
 }
 
-#[async_trait]
 impl CaptureSource for MockSource {
-    async fn capture(&self, capture_type: CaptureType) -> Result<Vec<u8>, CaptureError> {
-        self.captured_types.lock().unwrap().push(capture_type);
-        if let Some(err) = self.error.lock().unwrap().take() {
-            Err(err)
-        } else {
-            Ok(self.data.clone())
-        }
+    fn capture(
+        &self,
+        capture_type: CaptureType,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, CaptureError>> + Send + '_>> {
+        Box::pin(async move {
+            self.captured_types.lock().unwrap().push(capture_type);
+            if let Some(err) = self.error.lock().unwrap().take() {
+                Err(err)
+            } else {
+                Ok(self.data.clone())
+            }
+        })
     }
 }
 

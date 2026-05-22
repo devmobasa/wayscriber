@@ -33,26 +33,21 @@ pango = "0.22"
 pangocairo = "0.22"
 
 # Utils
-log = "0.4"
-env_logger = { version = "0.11", default-features = false }
+log = { version = "0.4", features = ["std"] }
 anyhow = "1.0"
 toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
-async-trait = "0.1"
 schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
 flate2 = "1.0"
-base64 = "0.22"
 zune-jpeg = "0.5"
 
 # Daemon mode
-signal-hook = "0.4"
 ksni = { version = "0.3", optional = true }
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
 
 # Screenshot capture
 zbus = { version = "5.0", optional = true, default-features = false, features = ["tokio"] }
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
 serde_json = "1.0"
 png = "0.18"
 
@@ -72,8 +67,3 @@ default = ["tablet-input", "portal", "tray"]
 name = "dump_config_schema"
 path = "src/bin/dump_config_schema.rs"
 required-features = ["config-schema"]
-
-[dev-dependencies]
-tempfile = "3.10"
-assert_cmd = "2.0"
-predicates = "3.1"

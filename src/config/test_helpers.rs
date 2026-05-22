@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::Mutex;
-use tempfile::TempDir;
+
+use crate::test_temp::TempDir;
 
 static ENV_MUTEX: Mutex<()> = Mutex::new(());
 

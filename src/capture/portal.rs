@@ -1,7 +1,6 @@
 //! xdg-desktop-portal integration for screenshot capture.
 
 use super::types::{CaptureError, CaptureType};
-use futures_util::StreamExt;
 use std::collections::HashMap;
 use zbus::zvariant::OwnedValue;
 use zbus::{Connection, proxy};
@@ -144,8 +143,7 @@ async fn capture_once(
     log::debug!("Waiting for Response signal...");
 
     // Get the first (and only) response.
-    let response_signal = response_stream
-        .next()
+    let response_signal = crate::zbus_stream::next(&mut response_stream)
         .await
         .ok_or_else(|| CaptureError::InvalidResponse("No Response signal received".to_string()))?;
 
