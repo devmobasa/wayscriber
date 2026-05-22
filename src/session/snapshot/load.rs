@@ -30,6 +30,7 @@ pub struct LoadedSnapshot {
 #[derive(Debug)]
 pub(crate) enum LoadSnapshotOutcome {
     Loaded(Box<SessionSnapshot>),
+    LoadedFromRecovery(Box<SessionSnapshot>),
     Empty,
     ExpandedTooLarge {
         path: PathBuf,
@@ -41,7 +42,8 @@ pub(crate) enum LoadSnapshotOutcome {
 #[allow(dead_code)]
 pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>> {
     match load_snapshot_with_outcome(options)? {
-        LoadSnapshotOutcome::Loaded(snapshot) => Ok(Some(*snapshot)),
+        LoadSnapshotOutcome::Loaded(snapshot)
+        | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => Ok(Some(*snapshot)),
         LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::ExpandedTooLarge { .. } => Ok(None),
     }
 }
@@ -64,24 +66,70 @@ pub(super) fn load_snapshot_with_expanded_limit(
     }
 
     let session_path = options.session_file_path();
-    if !session_path.exists() {
+    let recovery_path = options.recovery_file_path();
+    let session_metadata = fs::metadata(&session_path).ok();
+    let recovery_metadata = fs::metadata(&recovery_path).ok();
+
+    if let Some(recovery_metadata) = recovery_metadata.as_ref()
+        && should_prefer_recovery(recovery_metadata, session_metadata.as_ref())
+    {
         info!(
-            "Session file not found at {}; skipping load",
+            "Loading session recovery artifact {} before normal session {}",
+            recovery_path.display(),
             session_path.display()
         );
-        return Ok(LoadSnapshotOutcome::Empty);
+        let recovery_outcome = load_snapshot_path_with_outcome(
+            &recovery_path,
+            options,
+            max_expanded_size,
+            false,
+            "session recovery",
+        )?;
+        match recovery_outcome {
+            LoadSnapshotOutcome::Loaded(snapshot) => {
+                return Ok(LoadSnapshotOutcome::LoadedFromRecovery(snapshot));
+            }
+            loaded @ LoadSnapshotOutcome::LoadedFromRecovery(_) => return Ok(loaded),
+            LoadSnapshotOutcome::Empty => {
+                warn!(
+                    "Session recovery artifact {} did not contain usable session data; falling back to normal session {}",
+                    recovery_path.display(),
+                    session_path.display()
+                );
+                preserve_unloadable_recovery(&recovery_path, "empty");
+            }
+            LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
+                warn!(
+                    "Session recovery artifact {} exceeded the expanded load safety cap; preserving it and falling back to normal session {}",
+                    path.display(),
+                    session_path.display()
+                );
+                preserve_unloadable_recovery(&path, "too-large");
+            }
+        }
     }
 
-    let metadata = fs::metadata(&session_path)
+    load_normal_session_or_empty(options, &session_path, session_metadata, max_expanded_size)
+}
+
+fn load_snapshot_path_with_outcome(
+    session_path: &Path,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    enforce_configured_file_size: bool,
+    label: &str,
+) -> Result<LoadSnapshotOutcome> {
+    let metadata = fs::metadata(session_path)
         .with_context(|| format!("failed to stat session file {}", session_path.display()))?;
     info!(
-        "Session file present at {} ({} bytes, per_output={}, output_identity={:?})",
+        "{} file present at {} ({} bytes, per_output={}, output_identity={:?})",
+        label,
         session_path.display(),
         metadata.len(),
         options.per_output,
         options.output_identity()
     );
-    if metadata.len() > options.max_file_size_bytes {
+    if enforce_configured_file_size && metadata.len() > options.max_file_size_bytes {
         warn!(
             "Session file {} is {} bytes which exceeds the configured limit ({} bytes); refusing to load",
             session_path.display(),
@@ -89,6 +137,27 @@ pub(super) fn load_snapshot_with_expanded_limit(
             options.max_file_size_bytes
         );
         return Ok(LoadSnapshotOutcome::Empty);
+    } else if !enforce_configured_file_size {
+        if metadata.len() > max_expanded_size {
+            warn!(
+                "Session recovery file {} is {} bytes which exceeds the expanded load safety limit ({} bytes); refusing to read",
+                session_path.display(),
+                metadata.len(),
+                max_expanded_size
+            );
+            return Ok(LoadSnapshotOutcome::ExpandedTooLarge {
+                path: session_path.to_path_buf(),
+                max_expanded_size,
+            });
+        }
+        if metadata.len() > options.max_file_size_bytes {
+            info!(
+                "Session recovery file {} is {} bytes, above configured normal session limit {}; loading with expanded safety cap only",
+                session_path.display(),
+                metadata.len(),
+                options.max_file_size_bytes
+            );
+        }
     }
 
     let lock_path = options.lock_file_path();
@@ -102,7 +171,7 @@ pub(super) fn load_snapshot_with_expanded_limit(
     lock_shared(&lock_file)
         .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
 
-    let result = load_snapshot_inner_with_expanded_limit(&session_path, options, max_expanded_size);
+    let result = load_snapshot_inner_with_expanded_limit(session_path, options, max_expanded_size);
 
     if let Err(err) = unlock(&lock_file) {
         warn!(
@@ -116,7 +185,8 @@ pub(super) fn load_snapshot_with_expanded_limit(
         Ok(Some(loaded)) => {
             let tool_state = loaded.snapshot.tool_state.is_some();
             info!(
-                "Loaded session from {} (version {}, compressed={}, boards={}, active_board={}, tool_state={})",
+                "Loaded {} from {} (version {}, compressed={}, boards={}, active_board={}, tool_state={})",
+                label,
                 session_path.display(),
                 loaded.version,
                 loaded.compressed,
@@ -128,7 +198,8 @@ pub(super) fn load_snapshot_with_expanded_limit(
         }
         Ok(None) => {
             info!(
-                "Session file {} contained no usable data; continuing with defaults",
+                "{} file {} contained no usable data; continuing with defaults",
+                label,
                 session_path.display()
             );
             Ok(LoadSnapshotOutcome::Empty)
@@ -141,17 +212,18 @@ pub(super) fn load_snapshot_with_expanded_limit(
                 err
             );
             Ok(LoadSnapshotOutcome::ExpandedTooLarge {
-                path: session_path,
+                path: session_path.to_path_buf(),
                 max_expanded_size,
             })
         }
         Err(err) => {
             warn!(
-                "Failed to load session {}; backing up and continuing with defaults: {}",
+                "Failed to load {} {}; backing up and continuing with defaults: {}",
+                label,
                 session_path.display(),
                 err
             );
-            if let Err(backup_err) = backup_corrupt_session(&session_path, options) {
+            if let Err(backup_err) = backup_corrupt_session(session_path, options) {
                 warn!(
                     "Failed to back up corrupt session {}: {}",
                     session_path.display(),
@@ -160,6 +232,78 @@ pub(super) fn load_snapshot_with_expanded_limit(
             }
             Ok(LoadSnapshotOutcome::Empty)
         }
+    }
+}
+
+fn load_normal_session_or_empty(
+    options: &SessionOptions,
+    session_path: &Path,
+    session_metadata: Option<fs::Metadata>,
+    max_expanded_size: u64,
+) -> Result<LoadSnapshotOutcome> {
+    if session_metadata.is_none() {
+        info!(
+            "Session file not found at {}; skipping load",
+            session_path.display()
+        );
+        return Ok(LoadSnapshotOutcome::Empty);
+    }
+    load_snapshot_path_with_outcome(session_path, options, max_expanded_size, true, "session")
+}
+
+fn preserve_unloadable_recovery(path: &Path, reason: &str) {
+    if !path.exists() {
+        return;
+    }
+    let preserved_path = preserved_recovery_path(path, reason);
+    match fs::rename(path, &preserved_path) {
+        Ok(()) => warn!(
+            "Preserved unloadable session recovery artifact as {}",
+            preserved_path.display()
+        ),
+        Err(err) => warn!(
+            "Failed to preserve unloadable session recovery artifact {}: {}",
+            path.display(),
+            err
+        ),
+    }
+}
+
+fn preserved_recovery_path(path: &Path, reason: &str) -> PathBuf {
+    let base_extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .filter(|extension| !extension.is_empty())
+        .map_or_else(
+            || reason.to_string(),
+            |extension| format!("{extension}.{reason}"),
+        );
+
+    for index in 0..100 {
+        let extension = if index == 0 {
+            base_extension.clone()
+        } else {
+            format!("{base_extension}.{index}")
+        };
+        let candidate = path.with_extension(extension);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    path.with_extension(format!("{base_extension}.100"))
+}
+
+fn should_prefer_recovery(
+    recovery_metadata: &fs::Metadata,
+    session_metadata: Option<&fs::Metadata>,
+) -> bool {
+    let Some(session_metadata) = session_metadata else {
+        return true;
+    };
+    match (recovery_metadata.modified(), session_metadata.modified()) {
+        (Ok(recovery_modified), Ok(session_modified)) => recovery_modified >= session_modified,
+        _ => true,
     }
 }
 
@@ -365,7 +509,12 @@ fn resolved_active_board_id(requested: Option<String>, boards: &[BoardSnapshot])
 fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Result<()> {
     let bytes = fs::read(session_path)
         .with_context(|| format!("failed to read corrupt session {}", session_path.display()))?;
-    let backup_path = options.backup_file_path();
+    let primary_path = options.session_file_path();
+    let backup_path = if session_path == primary_path.as_path() {
+        options.backup_file_path()
+    } else {
+        session_path.with_extension("recovery.bak")
+    };
     fs::write(&backup_path, &bytes)
         .with_context(|| format!("failed to write session backup {}", backup_path.display()))?;
     fs::remove_file(session_path).with_context(|| {

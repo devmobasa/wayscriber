@@ -6,6 +6,7 @@ use std::time::SystemTime;
 pub struct ClearOutcome {
     pub removed_session: bool,
     pub removed_backup: bool,
+    pub removed_recovery: bool,
     pub removed_lock: bool,
 }
 

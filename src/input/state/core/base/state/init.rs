@@ -104,6 +104,7 @@ impl InputState {
             should_exit: false,
             needs_redraw: true,
             session_dirty: false,
+            session_preflight_options: None,
             show_help: false,
             help_overlay_page: 0,
             help_overlay_search: String::new(),

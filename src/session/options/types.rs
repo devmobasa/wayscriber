@@ -96,6 +96,11 @@ impl SessionOptions {
             .join(format!("{}.json.bak", self.session_file_stem()))
     }
 
+    pub fn recovery_file_path(&self) -> PathBuf {
+        self.base_dir
+            .join(format!("{}.json.recovery", self.session_file_stem()))
+    }
+
     pub fn lock_file_path(&self) -> PathBuf {
         self.base_dir
             .join(format!("{}.lock", self.session_file_stem()))

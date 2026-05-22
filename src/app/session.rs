@@ -22,10 +22,17 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
         if outcome.removed_backup {
             println!("  Removed backup file");
         }
+        if outcome.removed_recovery {
+            println!("  Removed recovery file");
+        }
         if outcome.removed_lock {
             println!("  Removed lock file");
         }
-        if !outcome.removed_session && !outcome.removed_backup && !outcome.removed_lock {
+        if !outcome.removed_session
+            && !outcome.removed_backup
+            && !outcome.removed_recovery
+            && !outcome.removed_lock
+        {
             println!("  No session artefacts found");
         }
         return Ok(());

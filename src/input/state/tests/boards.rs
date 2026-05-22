@@ -1,7 +1,9 @@
 use super::*;
-use crate::draw::ShapeId;
+use crate::draw::{EmbeddedImage, ShapeId};
 use crate::input::state::core::board_picker::BoardPickerState;
 use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardManager};
+use crate::session::{self, BoardSnapshot, CompressionMode, SessionOptions};
+use std::path::PathBuf;
 
 fn board_index(state: &InputState, id: &str) -> usize {
     state
@@ -239,6 +241,89 @@ fn duplicate_board_cancels_text_input_through_lifecycle_transition() {
 }
 
 #[test]
+fn duplicate_board_blocks_when_clone_would_exceed_persisted_session_limit() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    add_active_image_shape(&mut state, 2048);
+
+    let options = duplicate_preflight_options_for_current_state(&state);
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count);
+    assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicate blocked"))
+    );
+}
+
+#[test]
+fn duplicate_board_preflight_uses_collision_unique_id() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    state.duplicate_board();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    add_active_image_shape(&mut state, 512);
+
+    let mut options = duplicate_preflight_options_base();
+    let snapshot =
+        session::snapshot_from_input(&state, &options).expect("snapshot before duplicate");
+    let source_index = snapshot
+        .boards
+        .iter()
+        .position(|board| board.id == BOARD_ID_WHITEBOARD)
+        .expect("persisted source board");
+
+    let mut old_id_snapshot = snapshot.clone();
+    old_id_snapshot.boards.insert(
+        source_index + 1,
+        BoardSnapshot {
+            id: format!("{BOARD_ID_WHITEBOARD}-copy"),
+            pages: snapshot.boards[source_index].pages.clone(),
+        },
+    );
+    let old_id_estimate = session::estimate_snapshot_save(&old_id_snapshot, &options)
+        .expect("old id estimate")
+        .visible_without_history
+        .written_size;
+
+    let mut runtime_id_snapshot = snapshot.clone();
+    runtime_id_snapshot.boards.insert(
+        source_index + 1,
+        BoardSnapshot {
+            id: format!("{BOARD_ID_WHITEBOARD}-copy-2"),
+            pages: snapshot.boards[source_index].pages.clone(),
+        },
+    );
+    let runtime_id_estimate = session::estimate_snapshot_save(&runtime_id_snapshot, &options)
+        .expect("runtime id estimate")
+        .visible_without_history
+        .written_size;
+    assert!(runtime_id_estimate > old_id_estimate);
+
+    options.max_file_size_bytes = runtime_id_estimate as u64 - 1;
+    assert!(old_id_estimate as u64 <= options.max_file_size_bytes);
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count);
+    assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicate blocked"))
+    );
+}
+
+#[test]
 fn duplicate_board_cancels_text_edit_before_cloning_board() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
@@ -265,6 +350,55 @@ fn duplicate_board_cancels_text_edit_before_cloning_board() {
     let duplicated_id = state.board_id().to_string();
     assert_ne!(duplicated_id, BOARD_ID_WHITEBOARD);
     assert_board_text(&state, &duplicated_id, shape_id, "Original");
+}
+
+fn add_active_image_shape(state: &mut InputState, bytes: usize) -> ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Image {
+        x: 10,
+        y: 20,
+        w: 120,
+        h: 90,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 240,
+            height: 180,
+            bytes: pseudo_random_bytes(bytes),
+        },
+    })
+}
+
+fn duplicate_preflight_options_for_current_state(state: &InputState) -> SessionOptions {
+    let mut options = duplicate_preflight_options_base();
+    let snapshot =
+        session::snapshot_from_input(state, &options).expect("snapshot before duplicate");
+    let estimate = session::estimate_snapshot_without_history_payload(&snapshot, &options)
+        .expect("estimate before duplicate");
+    options.max_file_size_bytes = estimate.written_size as u64 + 64;
+    options
+}
+
+fn duplicate_preflight_options_base() -> SessionOptions {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "board-duplicate-preflight");
+    options.persist_transparent = true;
+    options.persist_whiteboard = true;
+    options.persist_blackboard = true;
+    options.persist_history = false;
+    options.restore_tool_state = false;
+    options.compression = CompressionMode::Off;
+    options.max_file_size_bytes = u64::MAX;
+    options
+}
+
+fn pseudo_random_bytes(len: usize) -> Vec<u8> {
+    let mut value = 0x2468_ace0_u32;
+    (0..len)
+        .map(|_| {
+            value ^= value << 13;
+            value ^= value >> 17;
+            value ^= value << 5;
+            value as u8
+        })
+        .collect()
 }
 
 #[test]

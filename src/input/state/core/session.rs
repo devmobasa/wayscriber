@@ -1,6 +1,14 @@
-use super::base::{DrawingState, InputState};
+use super::base::{DrawingState, InputState, UiToastKind};
+use crate::input::boards::BoardState;
+use crate::session::{self, BoardPagesSnapshot, BoardSnapshot, SessionOptions, SessionSnapshot};
 
 impl InputState {
+    /// Updates the runtime session options used by size preflights for clone-heavy actions.
+    #[allow(dead_code)]
+    pub(crate) fn set_session_preflight_options(&mut self, options: Option<SessionOptions>) {
+        self.session_preflight_options = options;
+    }
+
     /// Marks session data as dirty for autosave tracking.
     pub(crate) fn mark_session_dirty(&mut self) {
         self.session_dirty = true;
@@ -45,6 +53,295 @@ impl InputState {
             || self.board_picker_is_dragging()
             || self.board_picker_is_page_dragging()
             || self.color_picker_popup_is_dragging()
+    }
+
+    pub(crate) fn session_allows_page_duplicate(
+        &mut self,
+        board_index: usize,
+        page_index: usize,
+    ) -> bool {
+        let Some(options) = self.session_preflight_options.as_ref() else {
+            return true;
+        };
+        if !session_persistence_enabled(options) {
+            return true;
+        }
+        let Some(mut snapshot) = session::snapshot_from_input(self, options) else {
+            return true;
+        };
+        if !duplicate_page_in_snapshot(self, &mut snapshot, board_index, page_index) {
+            return true;
+        }
+        self.session_allows_duplicate_snapshot(&snapshot, "Page")
+    }
+
+    pub(crate) fn session_allows_page_copy_between_boards(
+        &mut self,
+        source_board: usize,
+        page_index: usize,
+        target_board: usize,
+    ) -> bool {
+        let Some(options) = self.session_preflight_options.as_ref() else {
+            return true;
+        };
+        if !session_persistence_enabled(options) {
+            return true;
+        }
+        let mut snapshot =
+            session::snapshot_from_input(self, options).unwrap_or_else(|| SessionSnapshot {
+                active_board_id: self.board_id().to_string(),
+                boards: Vec::new(),
+                tool_state: None,
+            });
+        if !copy_page_between_boards_in_snapshot(
+            self,
+            options,
+            &mut snapshot,
+            source_board,
+            page_index,
+            target_board,
+        ) {
+            return true;
+        }
+        self.session_allows_copy_snapshot(&snapshot, "Page")
+    }
+
+    pub(crate) fn session_allows_board_duplicate(&mut self) -> bool {
+        let Some(options) = self.session_preflight_options.as_ref() else {
+            return true;
+        };
+        if !session_persistence_enabled(options) {
+            return true;
+        }
+        let Some(mut snapshot) = session::snapshot_from_input(self, options) else {
+            return true;
+        };
+        if !duplicate_active_board_in_snapshot(self, &mut snapshot) {
+            return true;
+        }
+        self.session_allows_duplicate_snapshot(&snapshot, "Board")
+    }
+
+    fn session_allows_duplicate_snapshot(
+        &mut self,
+        snapshot: &SessionSnapshot,
+        action_label: &str,
+    ) -> bool {
+        self.session_allows_clone_heavy_snapshot(snapshot, action_label, "duplicate")
+    }
+
+    fn session_allows_copy_snapshot(
+        &mut self,
+        snapshot: &SessionSnapshot,
+        action_label: &str,
+    ) -> bool {
+        self.session_allows_clone_heavy_snapshot(snapshot, action_label, "copy")
+    }
+
+    fn session_allows_clone_heavy_snapshot(
+        &mut self,
+        snapshot: &SessionSnapshot,
+        action_label: &str,
+        action_name: &str,
+    ) -> bool {
+        let Some(options) = self.session_preflight_options.as_ref() else {
+            return true;
+        };
+        let estimate = match session::estimate_snapshot_save(snapshot, options) {
+            Ok(estimate) => estimate,
+            Err(err) => {
+                log::warn!(
+                    "Blocking {} {} because session size preflight failed: {}",
+                    action_label.to_lowercase(),
+                    action_name,
+                    err
+                );
+                self.set_ui_toast(
+                    UiToastKind::Warning,
+                    format!("{action_label} {action_name} blocked; session size check failed."),
+                );
+                self.trigger_blocked_feedback();
+                return false;
+            }
+        };
+
+        if estimate.visible_without_history.limit_exceeded.is_some() {
+            let limit = format_session_limit(options.max_file_size_bytes);
+            log::warn!(
+                "Blocking {} {} because visible session payload would exceed configured cap: written={} raw={} max={}",
+                action_label.to_lowercase(),
+                action_name,
+                estimate.visible_without_history.written_size,
+                estimate.visible_without_history.raw_size,
+                options.max_file_size_bytes
+            );
+            self.set_ui_toast(
+                UiToastKind::Warning,
+                format!(
+                    "{action_label} {action_name} blocked; session would exceed {limit}. Remove images or raise session.max_file_size_mb."
+                ),
+            );
+            self.trigger_blocked_feedback();
+            return false;
+        }
+
+        if estimate.full.limit_exceeded.is_some() || estimate.full.is_near_limit() {
+            log::warn!(
+                "{} {} allowed but session is near/over full-history cap: full_written={} visible_written={} max={}",
+                action_label,
+                action_name,
+                estimate.full.written_size,
+                estimate.visible_without_history.written_size,
+                options.max_file_size_bytes
+            );
+        }
+        true
+    }
+}
+
+fn session_persistence_enabled(options: &SessionOptions) -> bool {
+    options.any_enabled() || options.restore_tool_state || options.persist_history
+}
+
+fn duplicate_page_in_snapshot(
+    input: &InputState,
+    snapshot: &mut SessionSnapshot,
+    board_index: usize,
+    page_index: usize,
+) -> bool {
+    let Some(source_board) = input.boards.board_states().get(board_index) else {
+        return false;
+    };
+    let Some(board) = snapshot
+        .boards
+        .iter_mut()
+        .find(|board| board.id == source_board.spec.id)
+    else {
+        return false;
+    };
+    if page_index >= board.pages.pages.len() {
+        return false;
+    }
+    let cloned = board.pages.pages[page_index].clone_without_history();
+    let insert_at = (page_index + 1).min(board.pages.pages.len());
+    board.pages.pages.insert(insert_at, cloned);
+    board.pages.active = insert_at;
+    true
+}
+
+fn copy_page_between_boards_in_snapshot(
+    input: &InputState,
+    options: &SessionOptions,
+    snapshot: &mut SessionSnapshot,
+    source_board_index: usize,
+    page_index: usize,
+    target_board_index: usize,
+) -> bool {
+    if source_board_index == target_board_index {
+        return false;
+    }
+    let Some(source_board) = input.boards.board_states().get(source_board_index) else {
+        return false;
+    };
+    let Some(target_board) = input.boards.board_states().get(target_board_index) else {
+        return false;
+    };
+    let Some(cloned_page) = source_board
+        .pages
+        .pages()
+        .get(page_index)
+        .map(|page| page.clone_without_history())
+    else {
+        return false;
+    };
+    if !board_should_persist_for_session(target_board, options) {
+        return false;
+    }
+
+    if let Some(target_snapshot) = snapshot
+        .boards
+        .iter_mut()
+        .find(|board| board.id == target_board.spec.id)
+    {
+        let new_index = target_snapshot.pages.pages.len();
+        target_snapshot.pages.pages.push(cloned_page);
+        target_snapshot.pages.active = new_index;
+        return true;
+    }
+
+    let mut target_pages = target_board.pages.pages().to_vec();
+    target_pages.push(cloned_page);
+    snapshot.boards.push(BoardSnapshot {
+        id: target_board.spec.id.clone(),
+        pages: BoardPagesSnapshot {
+            active: target_pages.len().saturating_sub(1),
+            pages: target_pages,
+        },
+    });
+    true
+}
+
+fn board_should_persist_for_session(board: &BoardState, options: &SessionOptions) -> bool {
+    if board.spec.background.is_transparent() {
+        options.persist_transparent
+    } else {
+        (options.persist_whiteboard || options.persist_blackboard) && board.spec.persist
+    }
+}
+
+fn duplicate_active_board_in_snapshot(input: &InputState, snapshot: &mut SessionSnapshot) -> bool {
+    let source_board = input.boards.active_board();
+    let Some(source_index) = snapshot
+        .boards
+        .iter()
+        .position(|board| board.id == source_board.spec.id)
+    else {
+        return false;
+    };
+
+    let mut cloned = BoardSnapshot {
+        id: duplicate_board_id_for_snapshot(input, &source_board.spec.id),
+        pages: snapshot.boards[source_index].pages.clone(),
+    };
+    cloned.pages.active = source_board.pages.active_index();
+    let insert_at = (source_index + 1).min(snapshot.boards.len());
+    snapshot.active_board_id = cloned.id.clone();
+    snapshot.boards.insert(insert_at, cloned);
+    true
+}
+
+fn duplicate_board_id_for_snapshot(input: &InputState, source_id: &str) -> String {
+    let base = format!("{source_id}-copy");
+    if !input
+        .boards
+        .board_states()
+        .iter()
+        .any(|board| board.spec.id == base)
+    {
+        return base;
+    }
+
+    let mut suffix = 2;
+    loop {
+        let candidate = format!("{base}-{suffix}");
+        if !input
+            .boards
+            .board_states()
+            .iter()
+            .any(|board| board.spec.id == candidate)
+        {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
+fn format_session_limit(bytes: u64) -> String {
+    let mib = bytes as f64 / 1024.0 / 1024.0;
+    if mib >= 10.0 {
+        format!("{mib:.0} MiB")
+    } else {
+        format!("{mib:.1} MiB")
     }
 }
 
