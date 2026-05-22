@@ -1,7 +1,9 @@
 use super::*;
-use crate::draw::ShapeId;
+use crate::draw::{EmbeddedImage, ShapeId};
 use crate::input::state::core::board_picker::BoardPickerState;
 use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardManager};
+use crate::session::{CompressionMode, SessionOptions};
+use std::path::PathBuf;
 
 fn board_index(state: &InputState, id: &str) -> usize {
     state
@@ -239,6 +241,124 @@ fn duplicate_board_cancels_text_input_through_lifecycle_transition() {
 }
 
 #[test]
+fn duplicate_board_blocks_when_clone_would_exceed_persisted_session_limit() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    add_active_image_shape(&mut state, 2048);
+
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes = 1024;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count);
+    assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicate blocked"))
+    );
+}
+
+#[test]
+fn duplicate_board_skips_session_preflight_for_single_empty_page_board() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes = 1;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count + 1);
+    assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicated"))
+    );
+}
+
+#[test]
+fn duplicate_board_ignores_history_only_page_when_history_persistence_disabled() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    make_active_page_history_only(&mut state);
+
+    let mut options = duplicate_preflight_options_base();
+    options.persist_history = false;
+    options.max_file_size_bytes = 1;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count + 1);
+    assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicated"))
+    );
+}
+
+#[test]
+fn duplicate_board_ignores_history_only_page_for_visible_save_preflight() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    make_active_page_history_only(&mut state);
+
+    let mut options = duplicate_preflight_options_base();
+    options.persist_history = true;
+    options.max_file_size_bytes = 1;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count + 1);
+    assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicated"))
+    );
+}
+
+#[test]
+fn duplicate_board_preflight_handles_existing_copy_board_when_over_image_limit() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    state.duplicate_board();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    add_active_image_shape(&mut state, 2048);
+
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes = 1024;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count);
+    assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicate blocked"))
+    );
+}
+
+#[test]
 fn duplicate_board_cancels_text_edit_before_cloning_board() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
@@ -265,6 +385,73 @@ fn duplicate_board_cancels_text_edit_before_cloning_board() {
     let duplicated_id = state.board_id().to_string();
     assert_ne!(duplicated_id, BOARD_ID_WHITEBOARD);
     assert_board_text(&state, &duplicated_id, shape_id, "Original");
+}
+
+fn add_active_image_shape(state: &mut InputState, bytes: usize) -> ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Image {
+        x: 10,
+        y: 20,
+        w: 120,
+        h: 90,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 240,
+            height: 180,
+            bytes: pseudo_random_bytes(bytes),
+        },
+    })
+}
+
+fn duplicate_preflight_options_base() -> SessionOptions {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "board-duplicate-preflight");
+    options.persist_transparent = true;
+    options.persist_whiteboard = true;
+    options.persist_blackboard = true;
+    options.persist_history = false;
+    options.restore_tool_state = false;
+    options.compression = CompressionMode::Off;
+    options.max_file_size_bytes = u64::MAX;
+    options
+}
+
+fn make_active_page_history_only(state: &mut InputState) {
+    let frame = state.boards.active_frame_mut();
+    let id = frame.add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 20,
+        y2: 20,
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 2.0,
+    });
+    let index = frame.find_index(id).expect("shape index");
+    let shape = frame.shape(id).expect("shape").clone();
+    frame.push_undo_action(
+        UndoAction::Create {
+            shapes: vec![(index, shape)],
+        },
+        100,
+    );
+    frame.undo_last();
+    assert!(frame.shapes.is_empty());
+    assert_eq!(frame.redo_stack_len(), 1);
+}
+
+fn pseudo_random_bytes(len: usize) -> Vec<u8> {
+    let mut value = 0x2468_ace0_u32;
+    (0..len)
+        .map(|_| {
+            value ^= value << 13;
+            value ^= value >> 17;
+            value ^= value << 5;
+            value as u8
+        })
+        .collect()
 }
 
 #[test]

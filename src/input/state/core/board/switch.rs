@@ -108,6 +108,9 @@ impl InputState {
             self.set_ui_toast(UiToastKind::Info, "Board limit reached.");
             return;
         }
+        if !self.session_allows_board_duplicate() {
+            return;
+        }
 
         self.cancel_active_interaction();
         let generation_before = self.boards.board_identity_generation();

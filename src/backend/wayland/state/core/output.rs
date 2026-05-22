@@ -185,6 +185,20 @@ impl WaylandState {
                     session::apply_snapshot(&mut self.input_state, *snapshot, &options);
                 }
             }
+            session::LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => {
+                if let Some(options) = self.session_options().cloned() {
+                    debug!(
+                        "Restoring session {} from recovery artifact {}",
+                        context,
+                        options.recovery_file_path().display()
+                    );
+                    session::apply_snapshot(&mut self.input_state, *snapshot, &options);
+                    self.input_state.set_ui_toast(
+                        UiToastKind::Warning,
+                        "Restored session from recovery file; normal save previously exceeded the size limit.",
+                    );
+                }
+            }
             session::LoadSnapshotOutcome::Empty => {
                 if let Some(options) = self.session_options() {
                     debug!(

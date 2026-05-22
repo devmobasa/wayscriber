@@ -84,6 +84,45 @@ fn load_snapshot_refuses_file_larger_than_max() {
 }
 
 #[test]
+fn oversized_save_writes_recovery_and_load_prefers_it() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-recovery");
+    options.persist_transparent = true;
+    options.persist_history = false;
+    options.restore_tool_state = false;
+    options.backup_retention = 0;
+
+    let old_snapshot = single_page_snapshot(named_frame("old autosave"));
+    save_snapshot(&old_snapshot, &options).expect("old snapshot should save");
+
+    options.max_file_size_bytes = 1;
+    let recovery_snapshot = single_page_snapshot(image_frame(64 * 1024));
+    let err = save_snapshot(&recovery_snapshot, &options)
+        .expect_err("oversized normal save should still report failure");
+    assert!(err.to_string().contains("exceeds the configured limit"));
+
+    let recovery_path = options.recovery_file_path();
+    assert!(
+        recovery_path.exists(),
+        "recovery artifact should be written"
+    );
+
+    let loaded = load_snapshot(&options)
+        .expect("load should use recovery path")
+        .expect("recovery snapshot should load");
+    assert_eq!(count_images(&loaded), 1);
+    assert_eq!(loaded.boards[0].pages.pages.len(), 1);
+
+    let mut roomy_options = options.clone();
+    roomy_options.max_file_size_bytes = u64::MAX;
+    save_snapshot(&loaded, &roomy_options).expect("normal save of recovered state should succeed");
+    assert!(
+        !recovery_path.exists(),
+        "successful normal save should clear recovery artifact"
+    );
+}
+
+#[test]
 fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
     let temp = crate::test_temp::tempdir().unwrap();
     let mut save_options = SessionOptions::new(temp.path().to_path_buf(), "display-shape-limit");
@@ -132,6 +171,65 @@ fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
         2,
         "frame should be truncated to max_shapes_per_frame"
     );
+}
+
+fn named_frame(name: &str) -> crate::draw::Frame {
+    let mut frame = crate::draw::Frame::new();
+    frame.set_page_name(Some(name.to_string()));
+    frame
+}
+
+fn image_frame(bytes: usize) -> crate::draw::Frame {
+    let mut frame = crate::draw::Frame::new();
+    frame.add_shape(Shape::Image {
+        x: 12,
+        y: 16,
+        w: 320,
+        h: 180,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 640,
+            height: 360,
+            bytes: pseudo_random_bytes(bytes),
+        },
+    });
+    frame
+}
+
+fn single_page_snapshot(frame: crate::draw::Frame) -> SessionSnapshot {
+    SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            },
+        }],
+        tool_state: None,
+    }
+}
+
+fn count_images(snapshot: &SessionSnapshot) -> usize {
+    snapshot
+        .boards
+        .iter()
+        .flat_map(|board| board.pages.pages.iter())
+        .flat_map(|page| page.shapes.iter())
+        .filter(|shape| matches!(shape.shape, Shape::Image { .. }))
+        .count()
+}
+
+fn pseudo_random_bytes(len: usize) -> Vec<u8> {
+    let mut value = 0x1234_5678_u32;
+    (0..len)
+        .map(|_| {
+            value ^= value << 13;
+            value ^= value >> 17;
+            value ^= value << 5;
+            value as u8
+        })
+        .collect()
 }
 
 #[test]
@@ -407,6 +505,89 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
         "save should keep the largest recent undo depth that fits"
     );
     assert_eq!(frame.redo_stack_len(), 0);
+}
+
+#[test]
+fn autosave_snapshot_uses_bounded_history_fallback() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut input = dummy_input_state();
+    let point_count = 600;
+
+    {
+        let frame = input.boards.active_frame_mut();
+        let id = frame.add_shape(large_freehand(point_count, 0));
+        for offset in 1..=3 {
+            let current = frame.shape(id).expect("shape should exist");
+            let before = ShapeSnapshot {
+                shape: current.shape.clone(),
+                locked: current.locked,
+            };
+            let after_shape = large_freehand(point_count, offset);
+            frame.shape_mut(id).expect("shape should exist").shape = after_shape.clone();
+            frame.push_undo_action(
+                UndoAction::Modify {
+                    shape_id: id,
+                    before,
+                    after: ShapeSnapshot {
+                        shape: after_shape,
+                        locked: false,
+                    },
+                },
+                input.undo_stack_limit,
+            );
+        }
+    }
+
+    let mut depth_two_options = limit_test_options(temp.path(), "autosave-depth-two", true);
+    depth_two_options.max_file_size_bytes = u64::MAX;
+    depth_two_options.max_persisted_undo_depth = Some(2);
+    let depth_two_snapshot =
+        snapshot_from_input(&input, &depth_two_options).expect("depth two snapshot present");
+    save_snapshot(&depth_two_snapshot, &depth_two_options).expect("depth two save should fit");
+    let depth_two_size = fs::metadata(depth_two_options.session_file_path())
+        .expect("depth two metadata")
+        .len();
+
+    let mut depth_three_options = limit_test_options(temp.path(), "autosave-depth-three", true);
+    depth_three_options.max_file_size_bytes = u64::MAX;
+    depth_three_options.max_persisted_undo_depth = Some(3);
+    let depth_three_snapshot =
+        snapshot_from_input(&input, &depth_three_options).expect("depth three snapshot present");
+    save_snapshot(&depth_three_snapshot, &depth_three_options)
+        .expect("depth three save should fit");
+    let depth_three_size = fs::metadata(depth_three_options.session_file_path())
+        .expect("depth three metadata")
+        .len();
+    assert!(depth_three_size > depth_two_size);
+
+    let mut options = limit_test_options(temp.path(), "autosave-trimmed", true);
+    options.max_file_size_bytes = depth_two_size + (depth_three_size - depth_two_size) / 2;
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+
+    let report = save_snapshot_autosave_with_report(&snapshot, &options)
+        .expect("autosave should use bounded history fallback")
+        .expect("session should be written");
+    assert_eq!(
+        report.outcome,
+        SaveSnapshotOutcome::TrimmedHistory { depth: 1 }
+    );
+
+    let loaded = load_snapshot(&options)
+        .expect("load_snapshot should succeed")
+        .expect("snapshot should be present");
+    let transparent = loaded
+        .boards
+        .iter()
+        .find(|board| board.id == "transparent")
+        .expect("transparent board should be present");
+    let frame = &transparent.pages.pages[0];
+
+    assert_eq!(frame.shapes.len(), 1, "visible stroke should be saved");
+    assert_eq!(
+        frame.undo_stack_len(),
+        1,
+        "autosave should avoid deeper history-depth scans"
+    );
 }
 
 #[test]

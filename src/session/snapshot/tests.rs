@@ -148,6 +148,152 @@ fn load_snapshot_expansion_limit_leaves_primary_file_unchanged() {
 }
 
 #[test]
+fn load_snapshot_reports_successful_recovery_source() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "valid-recovery");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+
+    let recovery_file = SessionFile {
+        version: CURRENT_VERSION,
+        last_modified: now_rfc3339(),
+        active_board_id: Some("transparent".to_string()),
+        active_mode: None,
+        boards: vec![BoardFile {
+            id: "transparent".to_string(),
+            pages: vec![sample_frame()],
+            active_page: 0,
+        }],
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: None,
+        whiteboard_pages: None,
+        blackboard_pages: None,
+        transparent_active_page: None,
+        whiteboard_active_page: None,
+        blackboard_active_page: None,
+        tool_state: None,
+    };
+    std::fs::write(
+        options.recovery_file_path(),
+        serde_json::to_vec_pretty(&recovery_file).expect("recovery json"),
+    )
+    .expect("recovery write");
+
+    let outcome =
+        load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("valid recovery should load");
+    assert!(
+        matches!(outcome, LoadSnapshotOutcome::LoadedFromRecovery(_)),
+        "valid recovery should be surfaced in the load outcome"
+    );
+}
+
+#[test]
+fn load_snapshot_falls_back_to_normal_when_recovery_is_corrupt() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "corrupt-recovery");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+
+    let recovery_path = options.recovery_file_path();
+    std::fs::write(&recovery_path, b"{not valid json").expect("recovery write");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("corrupt recovery should fall back to normal session");
+    assert_loaded_sample_snapshot(outcome);
+    assert!(
+        !recovery_path.exists(),
+        "corrupt recovery should be moved out of the recovery path"
+    );
+    assert!(
+        recovery_path.with_extension("recovery.bak").exists(),
+        "corrupt recovery should be backed up for inspection"
+    );
+}
+
+#[test]
+fn load_snapshot_falls_back_to_normal_when_recovery_is_empty() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "empty-recovery");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+
+    let empty_file = SessionFile {
+        version: CURRENT_VERSION,
+        last_modified: now_rfc3339(),
+        active_board_id: Some("transparent".to_string()),
+        active_mode: None,
+        boards: Vec::new(),
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: None,
+        whiteboard_pages: None,
+        blackboard_pages: None,
+        transparent_active_page: None,
+        whiteboard_active_page: None,
+        blackboard_active_page: None,
+        tool_state: None,
+    };
+    let recovery_path = options.recovery_file_path();
+    std::fs::write(
+        &recovery_path,
+        serde_json::to_vec_pretty(&empty_file).expect("empty recovery json"),
+    )
+    .expect("recovery write");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("empty recovery should fall back to normal session");
+    assert_loaded_sample_snapshot(outcome);
+    assert!(
+        !recovery_path.exists(),
+        "empty recovery should be moved out of the recovery path"
+    );
+    assert!(
+        recovery_path.with_extension("recovery.empty").exists(),
+        "empty recovery should be preserved for inspection"
+    );
+}
+
+#[test]
+fn load_snapshot_rejects_oversized_plain_recovery_before_falling_back() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    const MAX_EXPANDED_SIZE: u64 = 16 * 1024;
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "huge-plain-recovery");
+    options.persist_transparent = true;
+    options.max_file_size_bytes = u64::MAX;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+
+    let recovery_path = options.recovery_file_path();
+    std::fs::write(
+        &recovery_path,
+        vec![b' '; usize::try_from(MAX_EXPANDED_SIZE + 1).expect("test size fits")],
+    )
+    .expect("recovery write");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, MAX_EXPANDED_SIZE)
+        .expect("oversized plain recovery should fall back to normal session");
+    assert_loaded_sample_snapshot(outcome);
+    assert!(
+        !recovery_path.exists(),
+        "oversized recovery should be moved out of the recovery path"
+    );
+    assert!(
+        recovery_path.with_extension("recovery.too-large").exists(),
+        "oversized recovery should be preserved for inspection"
+    );
+}
+
+#[test]
 fn save_snapshot_refuses_compressed_payload_over_expanded_limit() {
     let temp = tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "expanded-save");
@@ -193,6 +339,16 @@ fn save_snapshot_refuses_compressed_payload_over_expanded_limit() {
         !options.session_file_path().exists(),
         "unloadable compressed session should not be created"
     );
+}
+
+fn assert_loaded_sample_snapshot(outcome: LoadSnapshotOutcome) {
+    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+        panic!("expected normal session to load, got {outcome:?}");
+    };
+    assert_eq!(snapshot.boards.len(), 1);
+    assert_eq!(snapshot.boards[0].id, "transparent");
+    assert_eq!(snapshot.boards[0].pages.pages.len(), 1);
+    assert_eq!(snapshot.boards[0].pages.pages[0].shapes.len(), 1);
 }
 
 #[test]

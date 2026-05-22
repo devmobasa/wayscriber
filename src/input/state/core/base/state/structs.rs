@@ -31,6 +31,7 @@ use crate::input::{
     modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
+use crate::session::SessionOptions;
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -121,6 +122,8 @@ pub struct InputState {
     pub needs_redraw: bool,
     /// Whether session persistence should capture changes (cleared after autosave check)
     pub(crate) session_dirty: bool,
+    /// Runtime session options used to preflight clone-heavy actions before mutation.
+    pub(crate) session_preflight_options: Option<SessionOptions>,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
     /// Active help overlay page index

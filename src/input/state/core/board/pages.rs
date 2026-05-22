@@ -143,6 +143,9 @@ impl InputState {
         if page_index >= board.pages.page_count() {
             return false;
         }
+        if !self.session_allows_page_duplicate(board_index, page_index) {
+            return false;
+        }
         if is_active_board {
             self.prepare_active_page_content_change();
         }
@@ -210,6 +213,11 @@ impl InputState {
             return false;
         };
         if page_index >= source.pages.page_count() {
+            return false;
+        }
+        if copy
+            && !self.session_allows_page_copy_between_boards(source_board, page_index, target_board)
+        {
             return false;
         }
         let active_board = self.boards.active_index();
@@ -316,6 +324,10 @@ impl InputState {
     }
 
     pub fn page_duplicate(&mut self) {
+        let before_page = self.boards.active_page_index();
+        if !self.session_allows_page_duplicate(self.boards.active_index(), before_page) {
+            return;
+        }
         self.prepare_active_page_content_change();
         self.boards.duplicate_page();
         self.finish_active_page_content_change();

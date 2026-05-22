@@ -4,7 +4,7 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-pub(super) const DEFAULT_MAX_EXPANDED_SESSION_BYTES: u64 = 128 * 1024 * 1024;
+pub(crate) const DEFAULT_MAX_EXPANDED_SESSION_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Debug)]
 pub(super) struct ExpandedSessionTooLarge {

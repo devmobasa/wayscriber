@@ -16,6 +16,13 @@ fn clear_session_removes_all_variants_for_prefix() {
     std::fs::write(base_dir.join("session-display_1-DP_1.json"), b"{}").unwrap();
     std::fs::write(base_dir.join("session-display_1.json.bak"), b"{}").unwrap();
     std::fs::write(base_dir.join("session-display_1-DP_1.json.bak"), b"{}").unwrap();
+    std::fs::write(base_dir.join("session-display_1.json.recovery"), b"{}").unwrap();
+    std::fs::write(
+        base_dir.join("session-display_1.json.recovery.empty"),
+        b"{}",
+    )
+    .unwrap();
+    std::fs::write(base_dir.join("session-display_1-DP_1.json.recovery"), b"{}").unwrap();
     std::fs::write(base_dir.join("session-display_1.lock"), b"").unwrap();
     std::fs::write(base_dir.join("session-display_1-DP_1.lock"), b"").unwrap();
 
@@ -27,6 +34,10 @@ fn clear_session_removes_all_variants_for_prefix() {
     assert!(
         outcome.removed_backup,
         "at least one backup variant should be removed"
+    );
+    assert!(
+        outcome.removed_recovery,
+        "at least one recovery variant should be removed"
     );
     assert!(
         outcome.removed_lock,
@@ -41,6 +52,22 @@ fn clear_session_removes_all_variants_for_prefix() {
     assert!(
         !base_dir.join("session-display_1.json.bak").exists(),
         "primary backup file should be removed"
+    );
+    assert!(
+        !base_dir.join("session-display_1.json.recovery").exists(),
+        "primary recovery file should be removed"
+    );
+    assert!(
+        !base_dir
+            .join("session-display_1.json.recovery.empty")
+            .exists(),
+        "preserved primary recovery file should be removed"
+    );
+    assert!(
+        !base_dir
+            .join("session-display_1-DP_1.json.recovery")
+            .exists(),
+        "per-output recovery file should be removed even when the primary recovery existed"
     );
     assert!(
         !base_dir.join("session-display_1.lock").exists(),

@@ -7,12 +7,22 @@ use crate::session::options::{CompressionMode, SessionOptions};
 use crate::time_utils::now_rfc3339;
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
+use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 const NEAR_LIMIT_PERCENT: u64 = 90;
+#[allow(dead_code)]
+const AUTOSAVE_HISTORY_FALLBACK_DEPTH: usize = 1;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HistoryFallbackStrategy {
+    LargestFitting,
+    Bounded { max_depth: usize },
+}
 
 /// Outcome of a session save after applying configured size fallbacks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,6 +108,29 @@ impl SaveLimitExceeded {
     }
 }
 
+#[derive(Debug)]
+struct SavePayloadTooLarge {
+    limit: SaveLimitExceeded,
+    written_size: usize,
+    raw_size: usize,
+    compressed: bool,
+}
+
+impl fmt::Display for SavePayloadTooLarge {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Session data cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping save",
+            self.limit.description(),
+            self.written_size,
+            self.raw_size,
+            self.compressed
+        )
+    }
+}
+
+impl std::error::Error for SavePayloadTooLarge {}
+
 /// Persist the provided snapshot to disk according to the configured options.
 pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
     save_snapshot_with_report(snapshot, options).map(|_| ())
@@ -109,6 +142,21 @@ pub(crate) fn save_snapshot_with_report(
     options: &SessionOptions,
 ) -> Result<Option<SaveSnapshotReport>> {
     save_snapshot_with_expanded_limit(snapshot, options, DEFAULT_MAX_EXPANDED_SESSION_BYTES)
+}
+
+#[allow(dead_code)]
+pub(crate) fn save_snapshot_autosave_with_report(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+) -> Result<Option<SaveSnapshotReport>> {
+    save_snapshot_with_expanded_limit_and_strategy(
+        snapshot,
+        options,
+        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
+        HistoryFallbackStrategy::Bounded {
+            max_depth: AUTOSAVE_HISTORY_FALLBACK_DEPTH,
+        },
+    )
 }
 
 #[allow(dead_code)]
@@ -185,6 +233,20 @@ pub(super) fn save_snapshot_with_expanded_limit(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<Option<SaveSnapshotReport>> {
+    save_snapshot_with_expanded_limit_and_strategy(
+        snapshot,
+        options,
+        max_expanded_size,
+        HistoryFallbackStrategy::LargestFitting,
+    )
+}
+
+fn save_snapshot_with_expanded_limit_and_strategy(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
+) -> Result<Option<SaveSnapshotReport>> {
     if !options.any_enabled() && !options.persist_history && snapshot.tool_state.is_none() {
         debug!("Session persistence disabled for all boards; skipping save");
         return Ok(None);
@@ -215,7 +277,7 @@ pub(super) fn save_snapshot_with_expanded_limit(
     );
 
     let save_started = Instant::now();
-    let result = save_snapshot_inner(snapshot, options, max_expanded_size);
+    let result = save_snapshot_inner(snapshot, options, max_expanded_size, history_fallback);
     match &result {
         Ok(Some(report)) => info!(
             "Session save pipeline finished for {} in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}",
@@ -253,14 +315,20 @@ fn save_snapshot_inner(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
     max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
 ) -> Result<Option<SaveSnapshotReport>> {
     let session_path = options.session_file_path();
     let backup_path = options.backup_file_path();
     let last_modified = now_rfc3339();
 
     let prepare_started = Instant::now();
-    let prepared = match payload_within_limit(snapshot, options, &last_modified, max_expanded_size)
-    {
+    let prepared = match payload_within_limit(
+        snapshot,
+        options,
+        &last_modified,
+        max_expanded_size,
+        history_fallback,
+    ) {
         Ok(prepared) => prepared,
         Err(err) => {
             if session_path.exists() {
@@ -268,6 +336,26 @@ fn save_snapshot_inner(
                     "Session save failed before replacing {}; existing session file is unchanged",
                     session_path.display()
                 );
+            }
+            if err.downcast_ref::<SavePayloadTooLarge>().is_some()
+                && matches!(history_fallback, HistoryFallbackStrategy::LargestFitting)
+            {
+                match save_recovery_snapshot(snapshot, options, max_expanded_size, &last_modified) {
+                    Ok(Some(report)) => warn!(
+                        "Wrote oversized session recovery artifact to {} ({} bytes written, raw={} bytes, compression={}, outcome={:?})",
+                        report.path.display(),
+                        report.written_size,
+                        report.raw_size,
+                        report.compressed,
+                        report.outcome
+                    ),
+                    Ok(None) => {}
+                    Err(recovery_err) => warn!(
+                        "Failed to write oversized session recovery artifact {}: {}",
+                        options.recovery_file_path().display(),
+                        recovery_err
+                    ),
+                }
             }
             return Err(err);
         }
@@ -297,6 +385,7 @@ fn save_snapshot_inner(
         };
         if matches!(prepared.outcome, SaveSnapshotOutcome::ClearedEmpty) {
             remove_session_file(&session_path)?;
+            remove_recovery_file(options);
         }
         log_near_limit(&report);
         return Ok(Some(report));
@@ -382,6 +471,7 @@ fn save_snapshot_inner(
         compressed,
     };
     log_near_limit(&report);
+    remove_recovery_file(options);
     Ok(Some(report))
 }
 
@@ -392,6 +482,122 @@ fn log_near_limit(report: &SaveSnapshotReport) {
             report.written_size, report.max_file_size_bytes, NEAR_LIMIT_PERCENT
         );
     }
+}
+
+fn save_recovery_snapshot(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    last_modified: &str,
+) -> Result<Option<SaveSnapshotReport>> {
+    let Some((payload, outcome)) =
+        recovery_payload(snapshot, options, max_expanded_size, last_modified)?
+    else {
+        return Ok(None);
+    };
+
+    let recovery_path = options.recovery_file_path();
+    let tmp_path = temp_path(&recovery_path)?;
+    let write_started = Instant::now();
+    {
+        let mut tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .with_context(|| {
+                format!(
+                    "failed to open temporary recovery file {}",
+                    tmp_path.display()
+                )
+            })?;
+        tmp_file
+            .write_all(&payload.bytes)
+            .context("failed to write session recovery payload")?;
+        tmp_file
+            .sync_all()
+            .context("failed to sync temporary recovery file")?;
+    }
+    let write_elapsed = write_started.elapsed();
+
+    let replace_started = Instant::now();
+    fs::rename(&tmp_path, &recovery_path).with_context(|| {
+        format!(
+            "failed to move temporary recovery file {} -> {}",
+            tmp_path.display(),
+            recovery_path.display()
+        )
+    })?;
+    info!(
+        "Session recovery file replace completed for {}: write_and_sync={:?}, rename={:?}, final_size={} bytes",
+        recovery_path.display(),
+        write_elapsed,
+        replace_started.elapsed(),
+        payload.final_size()
+    );
+
+    Ok(Some(SaveSnapshotReport {
+        path: recovery_path,
+        outcome,
+        raw_size: payload.raw_size,
+        written_size: payload.final_size(),
+        max_file_size_bytes: options.max_file_size_bytes,
+        compressed: payload.compressed,
+    }))
+}
+
+fn recovery_payload(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    last_modified: &str,
+) -> Result<Option<(PayloadCandidate, SaveSnapshotOutcome)>> {
+    if snapshot.is_empty() && snapshot.tool_state.is_none() {
+        return Ok(None);
+    }
+
+    let full_started = Instant::now();
+    let full_payload = payload_candidate(snapshot, options, last_modified)?;
+    log_payload_candidate("recovery full", &full_payload, full_started.elapsed());
+    if full_payload.fits_expanded_limit(max_expanded_size) {
+        return Ok(Some((full_payload, SaveSnapshotOutcome::Full)));
+    }
+
+    let full_limit = full_payload
+        .expanded_limit_exceeded(max_expanded_size)
+        .expect("full recovery payload should exceed expanded limit");
+    warn!(
+        "Full session recovery payload cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); trying visible data without undo/redo history",
+        full_limit.description(),
+        full_payload.final_size(),
+        full_payload.raw_size,
+        full_payload.compressed
+    );
+
+    let visible_only = snapshot_without_history(snapshot);
+    if visible_only.is_empty() && visible_only.tool_state.is_none() {
+        return Ok(None);
+    }
+    let visible_started = Instant::now();
+    let visible_payload = payload_candidate(&visible_only, options, last_modified)?;
+    log_payload_candidate(
+        "recovery visible-only",
+        &visible_payload,
+        visible_started.elapsed(),
+    );
+    if visible_payload.fits_expanded_limit(max_expanded_size) {
+        return Ok(Some((visible_payload, SaveSnapshotOutcome::VisibleOnly)));
+    }
+
+    let visible_limit = visible_payload
+        .expanded_limit_exceeded(max_expanded_size)
+        .expect("visible recovery payload should exceed expanded limit");
+    Err(anyhow!(
+        "Session recovery data cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping recovery",
+        visible_limit.description(),
+        visible_payload.final_size(),
+        visible_payload.raw_size,
+        visible_payload.compressed
+    ))
 }
 
 struct PayloadCandidate {
@@ -428,6 +634,21 @@ impl PayloadCandidate {
     fn fits_limit(&self, options: &SessionOptions, max_expanded_size: u64) -> bool {
         self.limit_exceeded(options, max_expanded_size).is_none()
     }
+
+    fn expanded_limit_exceeded(&self, max_expanded_size: u64) -> Option<SaveLimitExceeded> {
+        if self.raw_size as u64 > max_expanded_size {
+            Some(SaveLimitExceeded::ExpandedSize {
+                raw_size: self.raw_size as u64,
+                max_expanded_size,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn fits_expanded_limit(&self, max_expanded_size: u64) -> bool {
+        self.expanded_limit_exceeded(max_expanded_size).is_none()
+    }
 }
 
 struct PreparedPayload {
@@ -462,6 +683,7 @@ fn payload_within_limit(
     options: &SessionOptions,
     last_modified: &str,
     max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
 ) -> Result<PreparedPayload> {
     if snapshot.is_empty() && snapshot.tool_state.is_none() {
         return Ok(PreparedPayload::clear(0, false));
@@ -504,13 +726,13 @@ fn payload_within_limit(
         let visible_limit = visible_payload
             .limit_exceeded(options, max_expanded_size)
             .expect("visible payload should exceed a save/load limit");
-        return Err(anyhow!(
-            "Session data cannot be saved safely ({}; {} bytes written from {} raw bytes, compression={}); skipping save",
-            visible_limit.description(),
-            visible_payload.final_size(),
-            visible_payload.raw_size,
-            visible_payload.compressed
-        ));
+        return Err(SavePayloadTooLarge {
+            limit: visible_limit,
+            written_size: visible_payload.final_size(),
+            raw_size: visible_payload.raw_size,
+            compressed: visible_payload.compressed,
+        }
+        .into());
     }
 
     let history_depth = max_history_depth(snapshot);
@@ -539,13 +761,13 @@ fn payload_within_limit(
                 }
                 Some((1, depth_one_payload))
             } else {
-                largest_fitting_history_payload(
+                fitting_history_payload(
                     snapshot,
-                    2,
                     history_depth,
                     options,
                     last_modified,
                     max_expanded_size,
+                    history_fallback,
                 )?
                 .or(Some((1, depth_one_payload)))
             };
@@ -595,6 +817,45 @@ fn payload_within_limit(
         visible_payload,
         SaveSnapshotOutcome::VisibleOnly,
     ))
+}
+
+fn fitting_history_payload(
+    snapshot: &SessionSnapshot,
+    history_depth: usize,
+    options: &SessionOptions,
+    last_modified: &str,
+    max_expanded_size: u64,
+    history_fallback: HistoryFallbackStrategy,
+) -> Result<Option<(usize, PayloadCandidate)>> {
+    match history_fallback {
+        HistoryFallbackStrategy::LargestFitting => largest_fitting_history_payload(
+            snapshot,
+            2,
+            history_depth,
+            options,
+            last_modified,
+            max_expanded_size,
+        ),
+        HistoryFallbackStrategy::Bounded { max_depth } => {
+            let max_depth = max_depth.min(history_depth);
+            if max_depth < 2 {
+                debug!(
+                    "Autosave history fallback capped at depth {}; skipping deeper history-depth scan",
+                    max_depth
+                );
+                return Ok(None);
+            }
+
+            largest_fitting_history_payload(
+                snapshot,
+                2,
+                max_depth,
+                options,
+                last_modified,
+                max_expanded_size,
+            )
+        }
+    }
 }
 
 fn largest_fitting_history_payload(
@@ -800,4 +1061,22 @@ fn remove_session_file(session_path: &Path) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+fn remove_recovery_file(options: &SessionOptions) {
+    let recovery_path = options.recovery_file_path();
+    if !recovery_path.exists() {
+        return;
+    }
+    match fs::remove_file(&recovery_path) {
+        Ok(()) => info!(
+            "Removed session recovery artifact after successful normal save: {}",
+            recovery_path.display()
+        ),
+        Err(err) => warn!(
+            "Failed to remove session recovery artifact {} after successful normal save: {}",
+            recovery_path.display(),
+            err
+        ),
+    }
 }

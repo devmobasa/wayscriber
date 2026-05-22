@@ -1,6 +1,10 @@
 use super::*;
-use crate::draw::{BoardPages, Frame, ShapeId};
-use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD, BoardBackground};
+use crate::draw::{BoardPages, EmbeddedImage, Frame, ShapeId};
+use crate::input::{
+    BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground,
+};
+use crate::session::{self, CompressionMode, SessionOptions};
+use std::path::PathBuf;
 
 fn board_index(state: &InputState, id: &str) -> usize {
     state
@@ -227,6 +231,231 @@ fn page_duplicate_cancels_text_edit_before_cloning_source_page() {
 }
 
 #[test]
+fn page_duplicate_blocks_when_clone_would_exceed_persisted_session_limit() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_image_shape(&mut state, 2048);
+
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes = 1024;
+    state.set_session_preflight_options(Some(options));
+
+    state.page_duplicate();
+
+    assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
+    );
+}
+
+#[test]
+fn page_duplicate_blocks_many_tiny_images_when_real_save_exceeds_limit() {
+    let image_count = 240;
+    let image_bytes = 100;
+    let mut options = duplicate_preflight_options_base();
+    options.compression = CompressionMode::Off;
+    options.max_file_size_bytes =
+        projected_image_page_duplicate_written_size(image_count, image_bytes, &options)
+            .saturating_sub(1) as u64;
+
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_image_shapes(&mut state, image_count, image_bytes);
+    state.set_session_preflight_options(Some(options));
+
+    state.page_duplicate();
+
+    assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
+    );
+}
+
+#[test]
+fn page_duplicate_blocks_mixed_image_and_text_when_real_save_exceeds_limit() {
+    let text_count = 1000;
+    let mut options = duplicate_preflight_options_base();
+    options.compression = CompressionMode::Off;
+    options.max_file_size_bytes =
+        projected_mixed_page_duplicate_written_size(text_count, &options).saturating_sub(1) as u64;
+
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_image_shape(&mut state, 0);
+    add_active_text_shapes(&mut state, text_count, "x");
+    state.set_session_preflight_options(Some(options));
+
+    state.page_duplicate();
+
+    assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
+    );
+}
+
+#[test]
+fn page_duplicate_preflights_omitted_empty_board_becoming_persisted() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes =
+        projected_empty_page_duplicate_written_size(&options).saturating_sub(1) as u64;
+    state.set_session_preflight_options(Some(options));
+
+    state.page_duplicate();
+
+    assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
+    );
+}
+
+#[test]
+fn page_duplicate_allows_compressed_text_when_real_save_fits() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_text_shape(&mut state, &pseudo_random_ascii(4096));
+
+    let mut options = duplicate_preflight_options_base();
+    options.compression = CompressionMode::On;
+    options.max_file_size_bytes = 7000;
+    state.set_session_preflight_options(Some(options.clone()));
+
+    state.page_duplicate();
+
+    assert_eq!(state.boards.board_states()[board].pages.page_count(), 2);
+    let snapshot = session::snapshot_from_input(&state, &options).expect("snapshot present");
+    let estimate = session::estimate_snapshot_save(&snapshot, &options).expect("estimate save");
+    assert!(estimate.visible_without_history.limit_exceeded.is_none());
+    assert!(
+        estimate.visible_without_history.written_size <= options.max_file_size_bytes as usize,
+        "written={} max={}",
+        estimate.visible_without_history.written_size,
+        options.max_file_size_bytes
+    );
+}
+
+#[test]
+fn page_duplicate_blocks_compressed_text_when_real_save_exceeds_limit() {
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_text_shape(&mut state, &pseudo_random_ascii(4096));
+
+    let mut options = duplicate_preflight_options_base();
+    options.compression = CompressionMode::On;
+    options.max_file_size_bytes = 512;
+    state.set_session_preflight_options(Some(options));
+
+    state.page_duplicate();
+
+    assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
+    );
+}
+
+#[test]
+fn page_duplicate_blocks_uncompressed_text_when_real_save_exceeds_limit() {
+    let text = pseudo_random_ascii(4096);
+    let mut options = duplicate_preflight_options_base();
+    options.compression = CompressionMode::Off;
+    let exact_written = projected_page_duplicate_written_size(&text, &options);
+    options.max_file_size_bytes = exact_written.saturating_sub(1) as u64;
+
+    let mut state = create_test_input_state();
+    let board = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_text_shape(&mut state, &text);
+    state.set_session_preflight_options(Some(options));
+
+    state.page_duplicate();
+
+    assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
+    );
+}
+
+#[test]
+fn cross_board_page_copy_blocks_when_clone_would_exceed_persisted_session_limit() {
+    let mut state = create_test_input_state();
+    let source = board_index(&state, BOARD_ID_WHITEBOARD);
+    let target = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    add_active_image_shape(&mut state, 2048);
+
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes = 1024;
+    state.set_session_preflight_options(Some(options));
+
+    assert!(!state.move_page_between_boards_with_activation(source, 0, target, true, false));
+
+    assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
+    assert_eq!(state.boards.board_states()[target].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page copy blocked"))
+    );
+}
+
+#[test]
+fn cross_board_page_copy_preflights_when_source_was_not_previously_persisted() {
+    let mut state = create_test_input_state();
+    let source = board_index(&state, BOARD_ID_TRANSPARENT);
+    let target = board_index(&state, BOARD_ID_BLACKBOARD);
+    state.switch_board(BOARD_ID_TRANSPARENT);
+    add_active_image_shape(&mut state, 2048);
+
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "copy-preflight");
+    options.persist_transparent = false;
+    options.persist_whiteboard = true;
+    options.persist_blackboard = true;
+    options.persist_history = false;
+    options.restore_tool_state = false;
+    options.compression = CompressionMode::Off;
+    options.max_file_size_bytes = 512;
+    state.set_session_preflight_options(Some(options));
+
+    assert!(!state.move_page_between_boards_with_activation(source, 0, target, true, false));
+
+    assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
+    assert_eq!(state.boards.board_states()[target].pages.page_count(), 1);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Page copy blocked"))
+    );
+}
+
+#[test]
 fn cross_board_page_copy_cancels_active_source_text_edit_before_cloning() {
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
@@ -243,4 +472,122 @@ fn cross_board_page_copy_cancels_active_source_text_edit_before_cloning() {
     assert!(state.text_edit_target.is_none());
     assert_page_text(&state, source, 0, shape_id, "Original");
     assert_page_text(&state, target, 1, shape_id, "Original");
+}
+
+fn add_active_image_shape(state: &mut InputState, bytes: usize) -> ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Image {
+        x: 10,
+        y: 20,
+        w: 120,
+        h: 90,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 240,
+            height: 180,
+            bytes: pseudo_random_bytes(bytes),
+        },
+    })
+}
+
+fn add_active_image_shapes(state: &mut InputState, count: usize, bytes: usize) {
+    for _ in 0..count {
+        add_active_image_shape(state, bytes);
+    }
+}
+
+fn add_active_text_shapes(state: &mut InputState, count: usize, text: &str) {
+    for _ in 0..count {
+        add_active_text_shape(state, text);
+    }
+}
+
+fn duplicate_preflight_options_base() -> SessionOptions {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "duplicate-preflight");
+    options.persist_transparent = true;
+    options.persist_whiteboard = true;
+    options.persist_blackboard = true;
+    options.persist_history = false;
+    options.restore_tool_state = false;
+    options.compression = CompressionMode::Off;
+    options.max_file_size_bytes = u64::MAX;
+    options
+}
+
+fn pseudo_random_bytes(len: usize) -> Vec<u8> {
+    let mut value = 0x8765_4321_u32;
+    (0..len)
+        .map(|_| {
+            value ^= value << 13;
+            value ^= value >> 17;
+            value ^= value << 5;
+            value as u8
+        })
+        .collect()
+}
+
+fn pseudo_random_ascii(len: usize) -> String {
+    let mut value = 0x1357_9bdf_u32;
+    (0..len)
+        .map(|_| {
+            value ^= value << 13;
+            value ^= value >> 17;
+            value ^= value << 5;
+            char::from(33 + (value % 94) as u8)
+        })
+        .collect()
+}
+
+fn projected_page_duplicate_written_size(text: &str, options: &SessionOptions) -> usize {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_text_shape(&mut state, text);
+    state.page_duplicate();
+    let snapshot = session::snapshot_from_input(&state, options).expect("snapshot present");
+    session::estimate_snapshot_save(&snapshot, options)
+        .expect("estimate save")
+        .visible_without_history
+        .written_size
+}
+
+fn projected_empty_page_duplicate_written_size(options: &SessionOptions) -> usize {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    state.page_duplicate();
+    let snapshot = session::snapshot_from_input(&state, options).expect("snapshot present");
+    session::estimate_snapshot_save(&snapshot, options)
+        .expect("estimate save")
+        .visible_without_history
+        .written_size
+}
+
+fn projected_image_page_duplicate_written_size(
+    image_count: usize,
+    image_bytes: usize,
+    options: &SessionOptions,
+) -> usize {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_image_shapes(&mut state, image_count, image_bytes);
+    state.page_duplicate();
+    let snapshot = session::snapshot_from_input(&state, options).expect("snapshot present");
+    session::estimate_snapshot_save(&snapshot, options)
+        .expect("estimate save")
+        .visible_without_history
+        .written_size
+}
+
+fn projected_mixed_page_duplicate_written_size(
+    text_count: usize,
+    options: &SessionOptions,
+) -> usize {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_BLACKBOARD);
+    add_active_image_shape(&mut state, 0);
+    add_active_text_shapes(&mut state, text_count, "x");
+    state.page_duplicate();
+    let snapshot = session::snapshot_from_input(&state, options).expect("snapshot present");
+    session::estimate_snapshot_save(&snapshot, options)
+        .expect("estimate save")
+        .visible_without_history
+        .written_size
 }

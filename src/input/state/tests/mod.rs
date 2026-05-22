@@ -27,6 +27,7 @@ mod pressure_modes;
 mod properties_panel;
 mod radial_menu;
 mod selection;
+mod session_preflight;
 mod step_markers;
 mod text_edit;
 mod text_input;

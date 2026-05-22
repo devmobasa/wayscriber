@@ -41,6 +41,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+    input_state.set_session_preflight_options(session_options.clone());
 
     // Set compositor capabilities based on detected Wayland protocols
     input_state.compositor_capabilities = CompositorCapabilities {
