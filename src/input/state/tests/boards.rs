@@ -2,7 +2,7 @@ use super::*;
 use crate::draw::{EmbeddedImage, ShapeId};
 use crate::input::state::core::board_picker::BoardPickerState;
 use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardManager};
-use crate::session::{self, BoardSnapshot, CompressionMode, SessionOptions};
+use crate::session::{CompressionMode, SessionOptions};
 use std::path::PathBuf;
 
 fn board_index(state: &InputState, id: &str) -> usize {
@@ -247,7 +247,8 @@ fn duplicate_board_blocks_when_clone_would_exceed_persisted_session_limit() {
     let before_count = state.boards.board_count();
     add_active_image_shape(&mut state, 2048);
 
-    let options = duplicate_preflight_options_for_current_state(&state);
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes = 1024;
     state.set_session_preflight_options(Some(options));
 
     state.duplicate_board();
@@ -263,52 +264,86 @@ fn duplicate_board_blocks_when_clone_would_exceed_persisted_session_limit() {
 }
 
 #[test]
-fn duplicate_board_preflight_uses_collision_unique_id() {
+fn duplicate_board_skips_session_preflight_for_single_empty_page_board() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+
+    let mut options = duplicate_preflight_options_base();
+    options.max_file_size_bytes = 1;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count + 1);
+    assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicated"))
+    );
+}
+
+#[test]
+fn duplicate_board_ignores_history_only_page_when_history_persistence_disabled() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    make_active_page_history_only(&mut state);
+
+    let mut options = duplicate_preflight_options_base();
+    options.persist_history = false;
+    options.max_file_size_bytes = 1;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count + 1);
+    assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicated"))
+    );
+}
+
+#[test]
+fn duplicate_board_ignores_history_only_page_for_visible_save_preflight() {
+    let mut state = create_test_input_state();
+    state.switch_board(BOARD_ID_WHITEBOARD);
+    let before_count = state.boards.board_count();
+    make_active_page_history_only(&mut state);
+
+    let mut options = duplicate_preflight_options_base();
+    options.persist_history = true;
+    options.max_file_size_bytes = 1;
+    state.set_session_preflight_options(Some(options));
+
+    state.duplicate_board();
+
+    assert_eq!(state.boards.board_count(), before_count + 1);
+    assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
+    assert!(
+        state
+            .ui_toast
+            .as_ref()
+            .is_some_and(|toast| toast.message.contains("Board duplicated"))
+    );
+}
+
+#[test]
+fn duplicate_board_preflight_handles_existing_copy_board_when_over_image_limit() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
     state.duplicate_board();
     state.switch_board(BOARD_ID_WHITEBOARD);
     let before_count = state.boards.board_count();
-    add_active_image_shape(&mut state, 512);
+    add_active_image_shape(&mut state, 2048);
 
     let mut options = duplicate_preflight_options_base();
-    let snapshot =
-        session::snapshot_from_input(&state, &options).expect("snapshot before duplicate");
-    let source_index = snapshot
-        .boards
-        .iter()
-        .position(|board| board.id == BOARD_ID_WHITEBOARD)
-        .expect("persisted source board");
-
-    let mut old_id_snapshot = snapshot.clone();
-    old_id_snapshot.boards.insert(
-        source_index + 1,
-        BoardSnapshot {
-            id: format!("{BOARD_ID_WHITEBOARD}-copy"),
-            pages: snapshot.boards[source_index].pages.clone(),
-        },
-    );
-    let old_id_estimate = session::estimate_snapshot_save(&old_id_snapshot, &options)
-        .expect("old id estimate")
-        .visible_without_history
-        .written_size;
-
-    let mut runtime_id_snapshot = snapshot.clone();
-    runtime_id_snapshot.boards.insert(
-        source_index + 1,
-        BoardSnapshot {
-            id: format!("{BOARD_ID_WHITEBOARD}-copy-2"),
-            pages: snapshot.boards[source_index].pages.clone(),
-        },
-    );
-    let runtime_id_estimate = session::estimate_snapshot_save(&runtime_id_snapshot, &options)
-        .expect("runtime id estimate")
-        .visible_without_history
-        .written_size;
-    assert!(runtime_id_estimate > old_id_estimate);
-
-    options.max_file_size_bytes = runtime_id_estimate as u64 - 1;
-    assert!(old_id_estimate as u64 <= options.max_file_size_bytes);
+    options.max_file_size_bytes = 1024;
     state.set_session_preflight_options(Some(options));
 
     state.duplicate_board();
@@ -367,16 +402,6 @@ fn add_active_image_shape(state: &mut InputState, bytes: usize) -> ShapeId {
     })
 }
 
-fn duplicate_preflight_options_for_current_state(state: &InputState) -> SessionOptions {
-    let mut options = duplicate_preflight_options_base();
-    let snapshot =
-        session::snapshot_from_input(state, &options).expect("snapshot before duplicate");
-    let estimate = session::estimate_snapshot_without_history_payload(&snapshot, &options)
-        .expect("estimate before duplicate");
-    options.max_file_size_bytes = estimate.written_size as u64 + 64;
-    options
-}
-
 fn duplicate_preflight_options_base() -> SessionOptions {
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "board-duplicate-preflight");
     options.persist_transparent = true;
@@ -387,6 +412,34 @@ fn duplicate_preflight_options_base() -> SessionOptions {
     options.compression = CompressionMode::Off;
     options.max_file_size_bytes = u64::MAX;
     options
+}
+
+fn make_active_page_history_only(state: &mut InputState) {
+    let frame = state.boards.active_frame_mut();
+    let id = frame.add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 20,
+        y2: 20,
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 2.0,
+    });
+    let index = frame.find_index(id).expect("shape index");
+    let shape = frame.shape(id).expect("shape").clone();
+    frame.push_undo_action(
+        UndoAction::Create {
+            shapes: vec![(index, shape)],
+        },
+        100,
+    );
+    frame.undo_last();
+    assert!(frame.shapes.is_empty());
+    assert_eq!(frame.redo_stack_len(), 1);
 }
 
 fn pseudo_random_bytes(len: usize) -> Vec<u8> {

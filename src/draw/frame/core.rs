@@ -95,6 +95,13 @@ impl Frame {
             || !self.redo_stack.is_empty()
     }
 
+    pub(crate) fn has_persistable_data_after_history_limit(&self, history_limit: usize) -> bool {
+        !self.shapes.is_empty()
+            || self.page_name.is_some()
+            || self.view_offset != (0, 0)
+            || (history_limit > 0 && (!self.undo_stack.is_empty() || !self.redo_stack.is_empty()))
+    }
+
     pub fn view_offset(&self) -> (i32, i32) {
         self.view_offset
     }
