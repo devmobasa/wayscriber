@@ -208,6 +208,7 @@ For distro-specific package details, see [Installation](#installation). For keyb
 - Selection: Alt-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, palettes, size via hotkeys or scroll
+- Render color profiles for print/projector/light-theme preview
 - Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection + scroll size adjust
 
 ### Boards
@@ -915,6 +916,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure,
 - [x] Highlighter & eraser tools
 - [x] Additional shapes (filled shapes)
 - [x] Color picker
+- [x] Render color profiles
 - [x] Zoom (ZoomIt-style controls)
 - [x] Presets (tool/color/size slots)
 - [x] Sticky notes

@@ -8,6 +8,7 @@ mod launcher;
 mod light_mode;
 mod pending;
 mod presenter_mode;
+mod render_profiles;
 mod step_markers;
 mod toasts;
 

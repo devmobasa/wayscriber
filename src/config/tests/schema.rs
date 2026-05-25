@@ -14,6 +14,7 @@ fn json_schema_includes_expected_sections() {
         "arrow",
         "performance",
         "ui",
+        "render_profiles",
         "boards",
         "board",
         "keybindings",

@@ -88,6 +88,9 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::TogglePresenterMode
         | Action::ToggleLightMode
         | Action::ToggleLightModeDrawing
+        | Action::RenderProfileNext
+        | Action::RenderProfilePrevious
+        | Action::RenderProfileOff
         | Action::ToggleRadialMenu
         | Action::ToggleSelectionProperties
         | Action::OpenContextMenu

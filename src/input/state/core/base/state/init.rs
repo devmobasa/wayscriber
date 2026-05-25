@@ -124,6 +124,7 @@ impl InputState {
             show_floating_badge_always: false,
             presenter_mode: false,
             presenter_mode_config,
+            render_profiles: crate::render_profiles::RenderProfileSet::default(),
             presenter_restore: None,
             light_mode: false,
             light_mode_drawing: false,

@@ -9,6 +9,7 @@ use smithay_client_toolkit::{
 
 use super::structs::ToolbarSurface;
 use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::render_profiles::RenderColorProfile;
 use crate::ui::toolbar::ToolbarSnapshot;
 
 impl ToolbarSurface {
@@ -19,6 +20,7 @@ impl ToolbarSurface {
         snapshot: &ToolbarSnapshot,
         hover: Option<(f64, f64)>,
         hover_start: Option<Instant>,
+        render_profile: Option<&RenderColorProfile>,
         render_fn: F,
     ) -> Result<()>
     where
@@ -127,6 +129,19 @@ impl ToolbarSurface {
         }
 
         surface.flush();
+        drop(ctx);
+        drop(surface);
+        if let Some(profile) = render_profile
+            && let Some(full) = crate::util::Rect::new(0, 0, phys_w as i32, phys_h as i32)
+        {
+            profile.remap_argb8888_regions(
+                canvas,
+                phys_w as i32,
+                phys_h as i32,
+                (phys_w * 4) as i32,
+                &[full],
+            );
+        }
 
         if let Some(layer) = self.layer_surface.as_ref() {
             let wl_surface = layer.wl_surface();

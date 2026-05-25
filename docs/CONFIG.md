@@ -670,6 +670,46 @@ wayscriber --daemon --mode transparent
 This section is still recognized for backward compatibility. If `[boards]` is missing,
 wayscriber will synthesize boards from `[board]`. New configurations should prefer `[boards]`.
 
+### `[render_profiles]` - Render Color Profiles
+
+Render profiles preview an alternate final color mapping without changing saved shapes or board
+data. They are useful for print, projectors, grayscale-ish previews, and light/dark sharing
+workflows.
+
+```toml
+[render_profiles]
+# Optional profile id to preview on startup
+# active = "print"
+apply_to_canvas = true
+apply_to_ui = true
+
+[[render_profiles.items]]
+id = "print"
+name = "Print"
+mappings = [
+  { from = "#000000", to = "#FFFFFF" },
+  { from = "#FFFFFF", to = "#000000" },
+  { from = "#FFFF00", to = "#8B4513" },
+  { from = "#00FF00", to = "#006400" },
+]
+```
+
+**Behavior:**
+- `id` is the stable identifier used by `active` and runtime profile switching.
+- `apply_to_canvas` controls board backgrounds, annotations, and canvas-space editor previews such as selections, hover rings, provisional strokes, text-edit previews, and click highlights.
+- `apply_to_ui` controls screen-space Wayscriber UI chrome, status text, popups, command palette, and toolbars.
+- `mappings` use exact RGB matches. Accepted input forms are `#RRGGBB`, `RRGGBB`, and `0xRRGGBB`; validation normalizes to `#RRGGBB`.
+- Pixel alpha is preserved. Unmapped colors are unchanged.
+- With both targets enabled, profiles apply to Wayscriber-rendered pixels: annotations, board backgrounds, UI chrome, toolbars, popups, embedded images, and frozen/zoom backgrounds when Wayscriber paints them.
+- Set `apply_to_ui = false` to preview remapped canvas content while keeping screen-space UI text and controls in the normal theme.
+- Profiles do not recolor the compositor-owned live desktop seen through a transparent overlay.
+- Screenshot capture, PDF export, and saved annotation export are not profile-aware in this version.
+
+**Runtime actions:**
+- `render_profile_next`
+- `render_profile_previous`
+- `render_profile_off`
+
 ### `[capture]` - Screenshot Capture
 
 Configures how screenshots are stored and shared.
@@ -908,6 +948,11 @@ toggle_light_mode = ["Ctrl+Shift+L"]
 # Once passthrough is active, use compositor/global shortcuts that call
 # `wayscriber --light-draw-toggle`, `--light-draw-on`, or `--light-draw-off`.
 toggle_light_mode_drawing = []
+
+# Optional render color profile preview controls
+render_profile_next = []
+render_profile_previous = []
+render_profile_off = []
 
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]

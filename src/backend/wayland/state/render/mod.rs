@@ -128,6 +128,12 @@ impl WaylandState {
         } else {
             damage_screen.clone()
         };
+        let scaled_damage = scale_damage_regions(damage_screen.clone(), scale);
+        let active_render_profile = self.input_state.active_render_profile().cloned();
+        let remap_canvas = self.input_state.active_canvas_render_profile().is_some();
+        let remap_ui = self.input_state.active_ui_render_profile().is_some();
+        let stride = (phys_width * 4) as i32;
+        let canvas_len = phys_height as usize * stride as usize;
 
         // SAFETY: This unsafe block creates a Cairo surface from raw memory buffer.
         // Safety invariants that must be maintained:
@@ -184,17 +190,75 @@ impl WaylandState {
                 scale,
                 phys_width,
                 phys_height,
-                render_ui,
                 now,
                 &damage_world,
             )?;
         }
+
+        let mut has_ui_baseline = false;
+        if let Some(profile) = active_render_profile.as_ref() {
+            if remap_canvas && !remap_ui {
+                cairo_surface.flush();
+                // SAFETY: `canvas_ptr` points to the SlotPool memory for the buffer created above.
+                // Cairo has flushed all pending writes, so the rendered canvas pixels can be
+                // rewritten before UI is drawn on top.
+                let canvas =
+                    unsafe { std::slice::from_raw_parts_mut(canvas_ptr as *mut u8, canvas_len) };
+                profile.remap_argb8888_regions(
+                    canvas,
+                    phys_width as i32,
+                    phys_height as i32,
+                    stride,
+                    &scaled_damage,
+                );
+                cairo_surface.mark_dirty();
+            } else if !remap_canvas && remap_ui && render_ui {
+                cairo_surface.flush();
+                // SAFETY: `canvas_ptr` points to the SlotPool memory for the buffer created above.
+                // Cairo has flushed all pending writes, so we can snapshot the canvas-only pixels in
+                // a reusable scratch buffer before drawing UI and later remap only bytes changed by
+                // the UI pass.
+                let canvas =
+                    unsafe { std::slice::from_raw_parts_mut(canvas_ptr as *mut u8, canvas_len) };
+                self.data.render_profile_ui_baseline.resize(canvas_len, 0);
+                self.data.render_profile_ui_baseline.copy_from_slice(canvas);
+                has_ui_baseline = true;
+            }
+        }
+
+        self.render_ui_layer(&ctx, width, height, scale, render_ui);
 
         // Flush Cairo
         debug!("Flushing Cairo surface");
         cairo_surface.flush();
         drop(ctx);
         drop(cairo_surface);
+
+        if let Some(profile) = active_render_profile.as_ref() {
+            // SAFETY: `canvas_ptr` points to the SlotPool memory for the buffer created above.
+            // Cairo has been flushed and dropped, and the buffer has not been attached yet, so this
+            // is the only active mutable access to the rendered pixel bytes.
+            let canvas =
+                unsafe { std::slice::from_raw_parts_mut(canvas_ptr as *mut u8, canvas_len) };
+            if remap_canvas && remap_ui {
+                profile.remap_argb8888_regions(
+                    canvas,
+                    phys_width as i32,
+                    phys_height as i32,
+                    stride,
+                    &scaled_damage,
+                );
+            } else if !remap_canvas && remap_ui && has_ui_baseline {
+                profile.remap_argb8888_regions_changed_from(
+                    canvas,
+                    &self.data.render_profile_ui_baseline,
+                    phys_width as i32,
+                    phys_height as i32,
+                    stride,
+                    &scaled_damage,
+                );
+            }
+        }
 
         let draw_duration = draw_start.elapsed();
         if draw_duration > std::time::Duration::from_millis(2) {
@@ -213,8 +277,6 @@ impl WaylandState {
 
         // Damage logic moved to top of function (add_regions and take_buffer_damage).
         // We now use the computed screen-space damage for clipping and compositor hints.
-
-        let scaled_damage = scale_damage_regions(damage_screen.clone(), scale);
 
         if debug_damage_logging_enabled() {
             debug!(

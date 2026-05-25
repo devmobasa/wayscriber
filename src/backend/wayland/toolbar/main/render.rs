@@ -1,10 +1,17 @@
 use smithay_client_toolkit::shm::Shm;
 
 use super::structs::ToolbarSurfaceManager;
+use crate::render_profiles::RenderColorProfile;
 use crate::ui::toolbar::ToolbarSnapshot;
 
 impl ToolbarSurfaceManager {
-    pub fn render(&mut self, shm: &Shm, snapshot: &ToolbarSnapshot, hover: Option<(f64, f64)>) {
+    pub fn render(
+        &mut self,
+        shm: &Shm,
+        snapshot: &ToolbarSnapshot,
+        hover: Option<(f64, f64)>,
+        render_profile: Option<&RenderColorProfile>,
+    ) {
         // Render top toolbar if visible
         if self.is_top_visible() {
             self.top.set_ui_scale(snapshot.toolbar_scale);
@@ -15,6 +22,7 @@ impl ToolbarSurfaceManager {
                 snapshot,
                 top_hover,
                 top_hover_start,
+                render_profile,
                 |ctx, w, h, snap, hits, hov, hov_start| {
                     crate::backend::wayland::toolbar::render_top_strip(
                         ctx, w, h, snap, hits, hov, hov_start,
@@ -35,6 +43,7 @@ impl ToolbarSurfaceManager {
                 snapshot,
                 side_hover,
                 side_hover_start,
+                render_profile,
                 |ctx, w, h, snap, hits, hov, hov_start| {
                     crate::backend::wayland::toolbar::render_side_palette(
                         ctx, w, h, snap, hits, hov, hov_start,

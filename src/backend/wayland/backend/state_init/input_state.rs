@@ -44,6 +44,9 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     );
     input_state.set_action_bindings(action_bindings);
     input_state.set_drag_tool_bindings(build_drag_tool_bindings(config));
+    input_state.set_render_profiles(crate::render_profiles::RenderProfileSet::from_config(
+        &config.render_profiles,
+    ));
 
     input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
     input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
