@@ -97,6 +97,8 @@ pub struct StateData {
     pub(super) xdg_close_guard_until: Option<Instant>,
     /// Explicit compositor close request received for xdg fallback window.
     pub(super) xdg_explicit_close_requested: bool,
+    /// Reused pre-UI pixel snapshot for render-profile UI-only remapping.
+    pub(super) render_profile_ui_baseline: Vec<u8>,
 }
 
 impl StateData {
@@ -162,6 +164,7 @@ impl StateData {
             suppress_focus_exit_until: None,
             xdg_close_guard_until: None,
             xdg_explicit_close_requested: false,
+            render_profile_ui_baseline: Vec::new(),
         }
     }
 }

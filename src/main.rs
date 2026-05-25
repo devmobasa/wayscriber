@@ -17,6 +17,7 @@ mod logger;
 mod notification;
 mod onboarding;
 mod paths;
+mod render_profiles;
 mod session;
 mod session_override;
 #[cfg(test)]

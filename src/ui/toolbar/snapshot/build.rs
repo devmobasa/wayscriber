@@ -184,6 +184,7 @@ impl ToolbarSnapshot {
             binding_hints,
             show_drawer_hint,
             is_transparent: state.board_is_transparent(),
+            render_profile_generation: state.render_profile_generation(),
         }
     }
 }

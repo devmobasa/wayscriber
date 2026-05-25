@@ -2,13 +2,23 @@ use super::tool_preview::{draw_stylus_hover_cursor, draw_tool_preview};
 use super::*;
 
 impl WaylandState {
-    pub(super) fn render_ui_layers(
+    pub(super) fn render_ui_layer(
         &mut self,
         ctx: &cairo::Context,
         width: u32,
         height: u32,
+        scale: i32,
         render_ui: bool,
     ) {
+        let _ = ctx.save();
+        if scale > 1 {
+            ctx.scale(scale as f64, scale as f64);
+        }
+        self.render_ui_layers(ctx, width, height, render_ui);
+        let _ = ctx.restore();
+    }
+
+    fn render_ui_layers(&mut self, ctx: &cairo::Context, width: u32, height: u32, render_ui: bool) {
         if render_ui {
             if self.input_state.show_tool_preview
                 && self.has_cursor_focus()

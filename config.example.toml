@@ -140,6 +140,11 @@ toggle_light_mode = ["Ctrl+Shift+L"]
 # or `--light-draw-on` / `--light-draw-off` from a compositor shortcut.
 toggle_light_mode_drawing = []
 
+# Optional render color profile preview controls
+render_profile_next = []
+render_profile_previous = []
+render_profile_off = []
+
 # Toggle fill for rectangle/ellipse
 toggle_fill = []
 
@@ -605,6 +610,31 @@ auto_adjust_pen = true
 # background = { rgb = [0.96, 0.93, 0.86] }
 # default_pen_color = { rgb = [0.29, 0.23, 0.18] }
 # auto_adjust_pen = true
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RENDER COLOR PROFILES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[render_profiles]
+# Optional profile id to preview on startup
+# active = "print"
+# Apply profiles to board backgrounds, annotations, and canvas-space previews
+apply_to_canvas = true
+# Apply profiles to screen-space UI chrome, toolbars, popups, and status text
+apply_to_ui = true
+
+# Render profiles remap final rendered pixels by exact RGB match. Alpha is
+# preserved, and colors not listed here are unchanged.
+#
+# [[render_profiles.items]]
+# id = "print"
+# name = "Print"
+# mappings = [
+#   { from = "#000000", to = "#FFFFFF" },
+#   { from = "#FFFFFF", to = "#000000" },
+#   { from = "#FFFF00", to = "#8B4513" },
+#   { from = "#00FF00", to = "#006400" },
+# ]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SESSION PERSISTENCE

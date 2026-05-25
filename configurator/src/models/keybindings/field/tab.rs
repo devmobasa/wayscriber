@@ -90,6 +90,9 @@ impl KeybindingField {
             | Self::ToggleClickHighlight
             | Self::ToggleToolbar
             | Self::TogglePresenterMode
+            | Self::RenderProfileNext
+            | Self::RenderProfilePrevious
+            | Self::RenderProfileOff
             | Self::ToggleSelectionProperties
             | Self::OpenContextMenu
             | Self::ToggleCommandPalette => KeybindingsTabId::UiModes,

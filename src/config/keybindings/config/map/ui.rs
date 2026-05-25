@@ -18,6 +18,12 @@ impl KeybindingsConfig {
             &self.ui.toggle_light_mode_drawing,
             Action::ToggleLightModeDrawing,
         )?;
+        inserter.insert_all(&self.ui.render_profile_next, Action::RenderProfileNext)?;
+        inserter.insert_all(
+            &self.ui.render_profile_previous,
+            Action::RenderProfilePrevious,
+        )?;
+        inserter.insert_all(&self.ui.render_profile_off, Action::RenderProfileOff)?;
         inserter.insert_all(&self.ui.toggle_fill, Action::ToggleFill)?;
         inserter.insert_all(&self.ui.toggle_radial_menu, Action::ToggleRadialMenu)?;
         inserter.insert_all(

@@ -31,6 +31,7 @@ use crate::input::{
     modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
+use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
 use crate::util::Rect;
 use std::collections::HashMap;
@@ -162,6 +163,8 @@ pub struct InputState {
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration
     pub presenter_mode_config: PresenterModeConfig,
+    /// Configured render color profiles and active preview state.
+    pub(crate) render_profiles: RenderProfileSet,
     /// Previous UI state to restore after presenter mode exits
     pub(crate) presenter_restore: Option<PresenterRestore>,
     /// Whether passthrough light mode is currently enabled

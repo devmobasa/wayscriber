@@ -14,7 +14,6 @@ impl WaylandState {
         scale: i32,
         phys_width: u32,
         phys_height: u32,
-        render_ui: bool,
         now: Instant,
         damage_world: &[crate::util::Rect],
     ) -> Result<()> {
@@ -191,8 +190,6 @@ impl WaylandState {
         if canvas_transform_active {
             let _ = ctx.restore();
         }
-
-        self.render_ui_layers(ctx, width, height, render_ui);
 
         let _ = ctx.restore();
 

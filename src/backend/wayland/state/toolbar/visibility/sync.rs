@@ -198,7 +198,9 @@ impl WaylandState {
         }
 
         // No hover tracking yet; pass None. Can be updated when we record pointer positions per surface.
-        self.toolbar.render(&self.shm, snapshot, None);
+        let render_profile = self.input_state.active_ui_render_profile().cloned();
+        self.toolbar
+            .render(&self.shm, snapshot, None, render_profile.as_ref());
     }
 
     pub(in crate::backend::wayland) fn render_layer_toolbars_if_needed(&mut self) {

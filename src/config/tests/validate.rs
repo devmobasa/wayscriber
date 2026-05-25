@@ -136,6 +136,79 @@ fn validate_boards_uses_boundary_id_normalization() {
 }
 
 #[test]
+fn validate_render_profiles_normalizes_ids_and_mappings() {
+    let mut config = Config {
+        render_profiles: RenderProfilesConfig {
+            active: Some(" PRINT ".to_string()),
+            apply_to_canvas: true,
+            apply_to_ui: true,
+            items: vec![
+                RenderProfileConfig {
+                    id: " Print ".to_string(),
+                    name: "  Print Friendly  ".to_string(),
+                    mappings: vec![
+                        RenderColorMappingConfig {
+                            from: "#000000".to_string(),
+                            to: "FFFFFF".to_string(),
+                        },
+                        RenderColorMappingConfig {
+                            from: "#000000".to_string(),
+                            to: "#111111".to_string(),
+                        },
+                        RenderColorMappingConfig {
+                            from: "#GGGGGG".to_string(),
+                            to: "#222222".to_string(),
+                        },
+                    ],
+                },
+                RenderProfileConfig {
+                    id: "print".to_string(),
+                    name: " ".to_string(),
+                    mappings: Vec::new(),
+                },
+            ],
+        },
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.render_profiles.active.as_deref(), Some("print"));
+    assert_eq!(config.render_profiles.items[0].id, "print");
+    assert_eq!(config.render_profiles.items[0].name, "Print Friendly");
+    assert_eq!(config.render_profiles.items[1].id, "print-2");
+    assert_eq!(config.render_profiles.items[1].name, "Profile 2");
+    assert_eq!(
+        config.render_profiles.items[0].mappings,
+        vec![RenderColorMappingConfig {
+            from: "#000000".to_string(),
+            to: "#111111".to_string(),
+        }]
+    );
+}
+
+#[test]
+fn validate_render_profiles_disables_missing_active_profile() {
+    let mut config = Config {
+        render_profiles: RenderProfilesConfig {
+            active: Some("missing".to_string()),
+            apply_to_canvas: true,
+            apply_to_ui: true,
+            items: vec![RenderProfileConfig {
+                id: "print".to_string(),
+                name: "Print".to_string(),
+                mappings: Vec::new(),
+            }],
+        },
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.render_profiles.active, None);
+}
+
+#[test]
 fn validate_clamps_history_delays() {
     let mut config = Config::default();
     config.history.undo_all_delay_ms = 0;

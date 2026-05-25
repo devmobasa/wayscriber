@@ -29,6 +29,15 @@ pub struct UiKeybindingsConfig {
     #[serde(default = "default_toggle_light_mode_drawing")]
     pub toggle_light_mode_drawing: Vec<String>,
 
+    #[serde(default = "default_render_profile_next")]
+    pub render_profile_next: Vec<String>,
+
+    #[serde(default = "default_render_profile_previous")]
+    pub render_profile_previous: Vec<String>,
+
+    #[serde(default = "default_render_profile_off")]
+    pub render_profile_off: Vec<String>,
+
     #[serde(default = "default_toggle_fill")]
     pub toggle_fill: Vec<String>,
 
@@ -59,6 +68,9 @@ impl Default for UiKeybindingsConfig {
             toggle_presenter_mode: default_toggle_presenter_mode(),
             toggle_light_mode: default_toggle_light_mode(),
             toggle_light_mode_drawing: default_toggle_light_mode_drawing(),
+            render_profile_next: default_render_profile_next(),
+            render_profile_previous: default_render_profile_previous(),
+            render_profile_off: default_render_profile_off(),
             toggle_fill: default_toggle_fill(),
             toggle_radial_menu: default_toggle_radial_menu(),
             toggle_selection_properties: default_toggle_selection_properties(),

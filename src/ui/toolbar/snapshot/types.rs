@@ -302,4 +302,6 @@ pub struct ToolbarSnapshot {
     pub show_drawer_hint: bool,
     /// Whether the current board is the transparent overlay
     pub is_transparent: bool,
+    /// Changes whenever final-render color profile preview changes.
+    pub render_profile_generation: u64,
 }

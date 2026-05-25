@@ -12,6 +12,7 @@ mod history;
 mod performance;
 mod presenter_mode;
 mod presets;
+mod render_profiles;
 mod session;
 mod status_bar;
 #[cfg(tablet)]
@@ -34,6 +35,7 @@ pub use presets::{
     PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig, PresetToolSettingConfig,
     PresetToolStatesConfig, ToolPresetConfig,
 };
+pub use render_profiles::{RenderColorMappingConfig, RenderProfileConfig, RenderProfilesConfig};
 pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
 pub use status_bar::StatusBarStyle;
 #[cfg(tablet)]

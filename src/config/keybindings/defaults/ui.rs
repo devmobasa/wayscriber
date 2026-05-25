@@ -30,6 +30,18 @@ pub(crate) fn default_toggle_light_mode_drawing() -> Vec<String> {
     Vec::new()
 }
 
+pub(crate) fn default_render_profile_next() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_render_profile_previous() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_render_profile_off() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_toggle_fill() -> Vec<String> {
     Vec::new()
 }

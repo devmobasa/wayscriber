@@ -3,7 +3,8 @@ use super::keybindings::KeybindingsConfig;
 use super::types::TabletInputConfig;
 use super::types::{
     ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, HistoryConfig,
-    PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, SessionConfig, UiConfig,
+    PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, RenderProfilesConfig, SessionConfig,
+    UiConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -68,6 +69,10 @@ pub struct Config {
     #[serde(default)]
     pub presenter_mode: PresenterModeConfig,
 
+    /// Final-render color profile mappings.
+    #[serde(default)]
+    pub render_profiles: RenderProfilesConfig,
+
     /// Multi-board settings (preferred over legacy [board] section)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boards: Option<BoardsConfig>,
@@ -104,6 +109,7 @@ impl Default for Config {
             performance: PerformanceConfig::default(),
             ui: UiConfig::default(),
             presenter_mode: PresenterModeConfig::default(),
+            render_profiles: RenderProfilesConfig::default(),
             boards: Some(BoardsConfig::default()),
             board: BoardConfig::default(),
             keybindings: KeybindingsConfig::default(),

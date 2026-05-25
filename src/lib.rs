@@ -15,6 +15,7 @@ pub(crate) mod image_decode;
 pub mod input;
 mod label_format;
 pub mod paths;
+pub mod render_profiles;
 pub mod runtime_capabilities;
 pub mod session;
 pub mod shortcut_hint;

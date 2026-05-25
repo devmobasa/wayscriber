@@ -74,6 +74,39 @@ pub const ENTRIES: &[ActionMeta] = &[
         &["passthrough draw", "quick draw"]
     ),
     meta!(
+        RenderProfileNext,
+        "Next Render Profile",
+        Some("Next Profile"),
+        "Switch to the next render color profile",
+        UI,
+        true,
+        true,
+        false,
+        &["color profile", "print profile", "export theme"]
+    ),
+    meta!(
+        RenderProfilePrevious,
+        "Previous Render Profile",
+        Some("Prev Profile"),
+        "Switch to the previous render color profile",
+        UI,
+        true,
+        true,
+        false,
+        &["color profile", "print profile", "export theme"]
+    ),
+    meta!(
+        RenderProfileOff,
+        "Render Profile Off",
+        None,
+        "Disable render color profile preview",
+        UI,
+        true,
+        true,
+        false,
+        &["color profile off", "normal colors", "export theme off"]
+    ),
+    meta!(
         ToggleClickHighlight,
         "Click Highlight",
         None,

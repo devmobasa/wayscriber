@@ -9,6 +9,7 @@ mod history;
 mod keybindings;
 mod performance;
 mod presets;
+mod render_profiles;
 mod session;
 #[cfg(tablet)]
 mod tablet;
@@ -39,6 +40,7 @@ impl Config {
         self.validate_boards();
         self.validate_board();
         self.validate_ui();
+        self.validate_render_profiles();
         self.validate_keybindings();
         self.validate_session();
     }

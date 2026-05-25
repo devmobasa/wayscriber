@@ -76,6 +76,37 @@ impl InputState {
                 );
                 true
             }
+            Action::RenderProfileNext => {
+                let changed = self.activate_next_render_profile();
+                if changed {
+                    info!(
+                        "Render profile {}",
+                        self.active_render_profile()
+                            .map(|profile| profile.name())
+                            .unwrap_or("off")
+                    );
+                }
+                true
+            }
+            Action::RenderProfilePrevious => {
+                let changed = self.activate_previous_render_profile();
+                if changed {
+                    info!(
+                        "Render profile {}",
+                        self.active_render_profile()
+                            .map(|profile| profile.name())
+                            .unwrap_or("off")
+                    );
+                }
+                true
+            }
+            Action::RenderProfileOff => {
+                let changed = self.deactivate_render_profile();
+                if changed {
+                    info!("Render profile off");
+                }
+                true
+            }
             Action::ToggleRadialMenu => {
                 if self.is_radial_menu_open() {
                     self.close_radial_menu();
