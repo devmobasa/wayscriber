@@ -86,8 +86,27 @@ impl ConfiguratorApp {
         }
     }
 
+    pub(super) fn sync_render_profile_color_picker_hex(&mut self) {
+        for profile_index in 0..self.draft.render_profiles.profiles.len() {
+            let mapping_len = self.draft.render_profiles.profiles[profile_index]
+                .mappings
+                .len();
+            for mapping_index in 0..mapping_len {
+                self.sync_color_picker_hex_for_id(ColorPickerId::RenderProfileMappingFrom(
+                    profile_index,
+                    mapping_index,
+                ));
+                self.sync_color_picker_hex_for_id(ColorPickerId::RenderProfileMappingTo(
+                    profile_index,
+                    mapping_index,
+                ));
+            }
+        }
+    }
+
     pub(crate) fn sync_all_color_picker_hex(&mut self) {
         self.sync_board_color_picker_hex();
+        self.sync_render_profile_color_picker_hex();
         for id in [
             ColorPickerId::DrawingColor,
             ColorPickerId::StatusBarBg,
@@ -127,6 +146,23 @@ impl ConfiguratorApp {
                         item.default_pen_color
                             .color
                             .set_component(component, value.to_string());
+                    }
+                }
+            }
+            ColorPickerId::RenderProfileMappingFrom(profile_index, mapping_index)
+            | ColorPickerId::RenderProfileMappingTo(profile_index, mapping_index) => {
+                if let Some(mapping) = self
+                    .draft
+                    .render_profiles
+                    .profiles
+                    .get_mut(profile_index)
+                    .and_then(|profile| profile.mappings.get_mut(mapping_index))
+                {
+                    let hex = hex_from_rgb(rgb);
+                    match id {
+                        ColorPickerId::RenderProfileMappingFrom(_, _) => mapping.from = hex,
+                        ColorPickerId::RenderProfileMappingTo(_, _) => mapping.to = hex,
+                        _ => {}
                     }
                 }
             }
@@ -184,6 +220,21 @@ impl ConfiguratorApp {
                     None,
                 )
             }),
+            ColorPickerId::RenderProfileMappingFrom(profile_index, mapping_index)
+            | ColorPickerId::RenderProfileMappingTo(profile_index, mapping_index) => {
+                let mapping = self
+                    .draft
+                    .render_profiles
+                    .profiles
+                    .get(profile_index)
+                    .and_then(|profile| profile.mappings.get(mapping_index))?;
+                let value = match id {
+                    ColorPickerId::RenderProfileMappingFrom(_, _) => &mapping.from,
+                    ColorPickerId::RenderProfileMappingTo(_, _) => &mapping.to,
+                    _ => return None,
+                };
+                parse_hex(value).map(|(rgb, _)| (rgb, None))
+            }
             ColorPickerId::StatusBarBg => {
                 let values = parse_quad_values(&self.draft.status_bar_bg_color.components);
                 Some(([values[0], values[1], values[2]], Some(values[3])))

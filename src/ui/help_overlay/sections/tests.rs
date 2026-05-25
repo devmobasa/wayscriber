@@ -31,3 +31,30 @@ fn gesture_hints_remain_present() {
         );
     }
 }
+
+#[test]
+fn canvas_export_rows_remain_visible_when_capture_context_is_disabled() {
+    let bindings = HelpOverlayBindings::default();
+    let sections = build_section_sets(&bindings, false, true, true, false).all;
+    let rows: Vec<&str> = sections
+        .iter()
+        .flat_map(|section| section.rows.iter())
+        .map(|row| row.action)
+        .collect();
+
+    for action in [
+        Action::ExportCanvasClipboard,
+        Action::ExportCanvasFile,
+        Action::ExportCanvasClipboardAndFile,
+    ] {
+        assert!(
+            rows.contains(&action_label(action)),
+            "Missing canvas export help row for {}",
+            action_label(action)
+        );
+    }
+    assert!(
+        !rows.contains(&"Full screen → clipboard"),
+        "Screenshot rows should stay hidden when capture context is disabled"
+    );
+}

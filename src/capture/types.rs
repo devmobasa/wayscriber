@@ -3,6 +3,99 @@
 use std::fmt;
 use std::path::PathBuf;
 
+/// User-facing operation kind for image delivery and status labels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageOperationKind {
+    Screenshot,
+    CanvasExport,
+}
+
+impl ImageOperationKind {
+    pub fn success_title(self) -> &'static str {
+        match self {
+            Self::Screenshot => "Screenshot Captured",
+            Self::CanvasExport => "Canvas exported",
+        }
+    }
+
+    pub fn failure_title(self) -> &'static str {
+        match self {
+            Self::Screenshot => "Screenshot Failed",
+            Self::CanvasExport => "Canvas export failed",
+        }
+    }
+
+    pub fn clipboard_failure_title(self) -> &'static str {
+        match self {
+            Self::Screenshot => "Screenshot Clipboard Failed",
+            Self::CanvasExport => "Canvas clipboard failed",
+        }
+    }
+
+    pub fn fallback_toast(self) -> &'static str {
+        match self {
+            Self::Screenshot => "Clipboard failed",
+            Self::CanvasExport => "Canvas clipboard failed",
+        }
+    }
+
+    pub fn saved_log_label(self) -> &'static str {
+        match self {
+            Self::Screenshot => "Screenshot",
+            Self::CanvasExport => "Canvas export",
+        }
+    }
+
+    pub fn format_error(self, err: &CaptureError) -> String {
+        match self {
+            Self::Screenshot => err.to_string(),
+            Self::CanvasExport => match err {
+                CaptureError::SaveError(err) => {
+                    format!("Failed to save canvas export: {err}")
+                }
+                CaptureError::ClipboardError(err) => {
+                    format!("Canvas export clipboard operation failed: {err}")
+                }
+                CaptureError::ImageError(err) => format!("Canvas export failed: {err}"),
+                CaptureError::Cancelled(reason) => format!("Canvas export cancelled: {reason}"),
+                other => other.to_string(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageFormatMetadata {
+    pub extension: String,
+    pub mime_type: String,
+}
+
+impl ImageFormatMetadata {
+    pub fn png() -> Self {
+        Self {
+            extension: "png".to_string(),
+            mime_type: "image/png".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderedImage {
+    pub bytes: Vec<u8>,
+    pub format: ImageFormatMetadata,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImageDeliveryRequest {
+    pub image: RenderedImage,
+    pub destination: CaptureDestination,
+    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub operation: ImageOperationKind,
+    pub fallback_format_override: Option<ImageFormatMetadata>,
+}
+
 /// Type of screenshot capture to perform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureType {
@@ -26,6 +119,8 @@ pub struct CaptureResult {
     /// Raw image data (PNG format).
     #[allow(dead_code)] // Will be used in Phase 2 for annotation compositing
     pub image_data: Vec<u8>,
+    pub operation: ImageOperationKind,
+    pub fallback_format_override: Option<ImageFormatMetadata>,
     /// Path where the image was saved (if saved).
     pub saved_path: Option<PathBuf>,
     /// Whether the image was copied to clipboard.
@@ -37,8 +132,14 @@ pub struct CaptureResult {
 #[derive(Debug, Clone)]
 pub enum CaptureOutcome {
     Success(CaptureResult),
-    Failed(String),
-    Cancelled(String),
+    Failed {
+        operation: ImageOperationKind,
+        message: String,
+    },
+    Cancelled {
+        operation: ImageOperationKind,
+        reason: String,
+    },
 }
 
 /// Where the captured image should be delivered.

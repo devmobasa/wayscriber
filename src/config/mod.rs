@@ -44,9 +44,9 @@ pub use types::{
     HelpOverlayStyle, HistoryConfig, MouseDragToolsConfig, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN,
     PerformanceConfig, PresenterModeConfig, PresenterToolBehavior, PresetSlotsConfig,
     PresetToolSettingConfig, PresetToolStatesConfig, RenderColorMappingConfig, RenderProfileConfig,
-    RenderProfilesConfig, SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle,
-    ToolPresetConfig, ToolbarConfig, ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides,
-    UiConfig,
+    RenderProfileExportMode, RenderProfilesConfig, SessionCompression, SessionConfig,
+    SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig, ToolbarLayoutMode,
+    ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
 };
 
 // Re-export for public API (unused internally but part of public interface)

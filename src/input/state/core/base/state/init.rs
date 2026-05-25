@@ -156,7 +156,7 @@ impl InputState {
             last_text_preview_bounds: None,
             action_map,
             action_bindings: HashMap::new(),
-            pending_capture_action: None,
+            pending_backend_action: None,
             pending_output_focus_action: None,
             pending_zoom_action: None,
             pending_onboarding_usage: PendingOnboardingUsage::default(),

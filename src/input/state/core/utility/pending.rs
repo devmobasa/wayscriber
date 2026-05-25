@@ -1,19 +1,20 @@
 use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputState, OutputFocusAction,
-    PendingSelectionClipboardPublish, PresetAction, SelectionPublishState, ZoomAction,
+    PendingBackendAction, PendingSelectionClipboardPublish, PresetAction, SelectionPublishState,
+    ZoomAction,
 };
-use crate::config::{Action, BoardsConfig};
+use crate::config::BoardsConfig;
 
 #[allow(dead_code)]
 impl InputState {
-    /// Takes and clears any pending capture action.
-    pub fn take_pending_capture_action(&mut self) -> Option<Action> {
-        self.pending_capture_action.take()
+    /// Takes and clears any pending backend output action.
+    pub fn take_pending_backend_action(&mut self) -> Option<PendingBackendAction> {
+        self.pending_backend_action.take()
     }
 
-    /// Stores a capture action for retrieval by the backend.
-    pub(crate) fn set_pending_capture_action(&mut self, action: Action) {
-        self.pending_capture_action = Some(action);
+    /// Stores a backend output action for retrieval by the backend.
+    pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
+        self.pending_backend_action = Some(action);
     }
 
     /// Stores an output focus action for retrieval by the backend.
@@ -90,7 +91,7 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode};
 
@@ -135,15 +136,15 @@ mod tests {
     }
 
     #[test]
-    fn pending_capture_action_is_taken_once() {
+    fn pending_backend_action_is_taken_once() {
         let mut state = make_state();
-        state.set_pending_capture_action(Action::CaptureFileFull);
+        state.set_pending_backend_action(PendingBackendAction::Screenshot(Action::CaptureFileFull));
 
         assert_eq!(
-            state.take_pending_capture_action(),
-            Some(Action::CaptureFileFull)
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::Screenshot(Action::CaptureFileFull))
         );
-        assert_eq!(state.take_pending_capture_action(), None);
+        assert_eq!(state.take_pending_backend_action(), None);
     }
 
     #[test]

@@ -5,8 +5,11 @@ use tokio::sync::{Mutex, mpsc};
 use crate::capture::{
     dependencies::CaptureDependencies,
     file::FileSaveConfig,
-    pipeline::{CaptureRequest, perform_capture},
-    types::{CaptureDestination, CaptureError, CaptureOutcome, CaptureStatus, CaptureType},
+    pipeline::{CaptureManagerRequest, CaptureRequest, deliver_image, perform_capture},
+    types::{
+        CaptureDestination, CaptureError, CaptureOutcome, CaptureStatus, CaptureType,
+        ImageDeliveryRequest,
+    },
 };
 
 /// Shared state for managing async capture operations.
@@ -15,7 +18,7 @@ use crate::capture::{
 #[derive(Clone)]
 pub struct CaptureManager {
     /// Channel for sending capture requests.
-    request_tx: mpsc::UnboundedSender<CaptureRequest>,
+    request_tx: mpsc::UnboundedSender<CaptureManagerRequest>,
     /// Shared status of the current capture operation.
     status: Arc<Mutex<CaptureStatus>>,
     /// Shared result of the last capture (if any).
@@ -39,7 +42,7 @@ impl CaptureManager {
         runtime_handle: &tokio::runtime::Handle,
         dependencies: CaptureDependencies,
     ) -> Self {
-        let (request_tx, mut request_rx) = mpsc::unbounded_channel::<CaptureRequest>();
+        let (request_tx, mut request_rx) = mpsc::unbounded_channel::<CaptureManagerRequest>();
         let status = Arc::new(Mutex::new(CaptureStatus::Idle));
         let last_result = Arc::new(Mutex::new(None));
         let dependencies = Arc::new(dependencies);
@@ -51,28 +54,41 @@ impl CaptureManager {
         // Spawn background task to handle capture requests
         runtime_handle.spawn(async move {
             while let Some(request) = request_rx.recv().await {
-                log::debug!("Processing capture request: {:?}", request.capture_type);
+                log::debug!("Processing capture manager request: {:?}", request);
+                let operation = request.operation();
 
                 // Update status
                 *status_clone.lock().await = CaptureStatus::AwaitingPermission;
 
-                // Perform capture
-                match perform_capture(request, deps_clone.clone()).await {
+                let outcome = match request {
+                    CaptureManagerRequest::Capture(request) => {
+                        perform_capture(request, deps_clone.clone()).await
+                    }
+                    CaptureManagerRequest::DeliverImage(request) => {
+                        deliver_image(request, deps_clone.clone()).await
+                    }
+                };
+
+                match outcome {
                     Ok(result) => {
-                        log::info!("Capture successful: {:?}", result.saved_path);
+                        log::info!("Image operation successful: {:?}", result.saved_path);
                         *status_clone.lock().await = CaptureStatus::Success;
                         *result_clone.lock().await = Some(CaptureOutcome::Success(result));
                     }
                     Err(CaptureError::Cancelled(reason)) => {
-                        log::info!("Capture cancelled: {}", reason);
+                        log::info!("Image operation cancelled: {}", reason);
                         *status_clone.lock().await = CaptureStatus::Cancelled(reason.clone());
-                        *result_clone.lock().await = Some(CaptureOutcome::Cancelled(reason));
+                        *result_clone.lock().await =
+                            Some(CaptureOutcome::Cancelled { operation, reason });
                     }
                     Err(e) => {
-                        let error_message = e.to_string();
-                        log::error!("Capture failed: {}", error_message);
+                        let error_message = operation.format_error(&e);
+                        log::error!("Image operation failed: {}", error_message);
                         *status_clone.lock().await = CaptureStatus::Failed(error_message.clone());
-                        *result_clone.lock().await = Some(CaptureOutcome::Failed(error_message));
+                        *result_clone.lock().await = Some(CaptureOutcome::Failed {
+                            operation,
+                            message: error_message,
+                        });
                     }
                 }
             }
@@ -107,7 +123,18 @@ impl CaptureManager {
         };
 
         self.request_tx
-            .send(request)
+            .send(CaptureManagerRequest::Capture(request))
+            .map_err(|_| CaptureError::ImageError("Capture manager not running".to_string()))?;
+
+        Ok(())
+    }
+
+    pub fn request_image_delivery(
+        &self,
+        request: ImageDeliveryRequest,
+    ) -> Result<(), CaptureError> {
+        self.request_tx
+            .send(CaptureManagerRequest::DeliverImage(request))
             .map_err(|_| CaptureError::ImageError("Capture manager not running".to_string()))?;
 
         Ok(())
@@ -141,7 +168,7 @@ impl CaptureManager {
 #[cfg(test)]
 impl CaptureManager {
     pub(crate) fn with_closed_channel_for_test() -> Self {
-        let (tx, rx) = mpsc::unbounded_channel::<CaptureRequest>();
+        let (tx, rx) = mpsc::unbounded_channel::<CaptureManagerRequest>();
         drop(rx);
         Self {
             request_tx: tx,

@@ -167,9 +167,6 @@ impl KeyboardHandler for WaylandState {
 
         self.apply_input_key(key);
 
-        if let Some(action) = self.input_state.take_pending_capture_action() {
-            self.handle_capture_action(action);
-        }
         if let Some(action) = self.input_state.take_pending_zoom_action() {
             self.handle_zoom_action(action);
         }

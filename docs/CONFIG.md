@@ -682,8 +682,10 @@ workflows.
 # active = "print"
 apply_to_canvas = true
 apply_to_ui = true
+export = "off"
+# export_profile = "print"
 
-[[render_profiles.items]]
+[[render_profiles.profiles]]
 id = "print"
 name = "Print"
 mappings = [
@@ -696,19 +698,30 @@ mappings = [
 
 **Behavior:**
 - `id` is the stable identifier used by `active` and runtime profile switching.
+- Profile entries are stored under `profiles`.
 - `apply_to_canvas` controls board backgrounds, annotations, and canvas-space editor previews such as selections, hover rings, provisional strokes, text-edit previews, and click highlights.
 - `apply_to_ui` controls screen-space Wayscriber UI chrome, status text, popups, command palette, and toolbars.
+- `export` controls explicit canvas PNG export remapping: `off`, `active`, or `profile`.
+- `export_profile` is used only when `export = "profile"`.
 - `mappings` use exact RGB matches. Accepted input forms are `#RRGGBB`, `RRGGBB`, and `0xRRGGBB`; validation normalizes to `#RRGGBB`.
 - Pixel alpha is preserved. Unmapped colors are unchanged.
 - With both targets enabled, profiles apply to Wayscriber-rendered pixels: annotations, board backgrounds, UI chrome, toolbars, popups, embedded images, and frozen/zoom backgrounds when Wayscriber paints them.
 - Set `apply_to_ui = false` to preview remapped canvas content while keeping screen-space UI text and controls in the normal theme.
 - Profiles do not recolor the compositor-owned live desktop seen through a transparent overlay.
-- Screenshot capture, PDF export, and saved annotation export are not profile-aware in this version.
+- Explicit canvas PNG export applies its resolved export profile to persisted Wayscriber canvas content only, uses the current panned board viewport, respects output scale, and excludes frozen/zoom desktop pixels.
+- Explicit canvas export and its clipboard-failure fallback save PNG data as `.png`; screenshot clipboard fallback still uses `[capture].format`.
+- `[capture].enabled` disables compositor screenshot capture actions, not explicit canvas export actions.
+- PDF export is out of scope.
 
 **Runtime actions:**
 - `render_profile_next`
 - `render_profile_previous`
 - `render_profile_off`
+
+**Canvas export actions:**
+- `export_canvas_file`
+- `export_canvas_clipboard`
+- `export_canvas_clipboard_and_file`
 
 ### `[capture]` - Screenshot Capture
 
@@ -994,6 +1007,9 @@ capture_clipboard_selection = ["Ctrl+Shift+C"]
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
+export_canvas_file = []
+export_canvas_clipboard = []
+export_canvas_clipboard_and_file = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]

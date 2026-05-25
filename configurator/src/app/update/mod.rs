@@ -4,6 +4,7 @@ mod config;
 mod daemon;
 mod fields;
 mod presets;
+mod render_profiles;
 mod tabs;
 
 use iced::Task;
@@ -92,6 +93,36 @@ impl ConfiguratorApp {
             }
             Message::BoardsItemToggleChanged(index, field, value) => {
                 self.handle_boards_item_toggle_changed(index, field, value)
+            }
+            Message::RenderProfileAdd => self.handle_render_profile_add(),
+            Message::RenderProfileRemove(index) => self.handle_render_profile_remove(index),
+            Message::RenderProfileDuplicate(index) => self.handle_render_profile_duplicate(index),
+            Message::RenderProfileTextChanged(index, field, value) => {
+                self.handle_render_profile_text_changed(index, field, value)
+            }
+            Message::RenderProfileActiveChanged(value) => {
+                self.handle_render_profile_active_changed(value)
+            }
+            Message::RenderProfileExportChanged(value) => {
+                self.handle_render_profile_export_changed(value)
+            }
+            Message::RenderProfileExportProfileChanged(value) => {
+                self.handle_render_profile_export_profile_changed(value)
+            }
+            Message::RenderProfileApplyCanvasChanged(value) => {
+                self.handle_render_profile_apply_canvas_changed(value)
+            }
+            Message::RenderProfileApplyUiChanged(value) => {
+                self.handle_render_profile_apply_ui_changed(value)
+            }
+            Message::RenderProfileMappingAdd(index) => {
+                self.handle_render_profile_mapping_add(index)
+            }
+            Message::RenderProfileMappingRemove(profile, mapping) => {
+                self.handle_render_profile_mapping_remove(profile, mapping)
+            }
+            Message::RenderProfileMappingColorChanged(profile, mapping, side, value) => {
+                self.handle_render_profile_mapping_color_changed(profile, mapping, side, value)
             }
             Message::SessionStorageModeChanged(option) => {
                 self.handle_session_storage_mode_changed(option)

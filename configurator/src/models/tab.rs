@@ -7,6 +7,7 @@ pub enum TabId {
     Performance,
     Ui,
     Boards,
+    RenderProfiles,
     Capture,
     Daemon,
     Session,
@@ -17,12 +18,13 @@ pub enum TabId {
 
 impl TabId {
     #[cfg(feature = "tablet-input")]
-    pub const ALL: [TabId; 12] = [
+    pub const ALL: [TabId; 13] = [
         TabId::Daemon,
         TabId::Drawing,
         TabId::Presets,
         TabId::Ui,
         TabId::Boards,
+        TabId::RenderProfiles,
         TabId::Performance,
         TabId::History,
         TabId::Capture,
@@ -33,12 +35,13 @@ impl TabId {
     ];
 
     #[cfg(not(feature = "tablet-input"))]
-    pub const ALL: [TabId; 11] = [
+    pub const ALL: [TabId; 12] = [
         TabId::Daemon,
         TabId::Drawing,
         TabId::Presets,
         TabId::Ui,
         TabId::Boards,
+        TabId::RenderProfiles,
         TabId::Performance,
         TabId::History,
         TabId::Capture,
@@ -56,6 +59,7 @@ impl TabId {
             TabId::Performance => "Performance",
             TabId::Ui => "UI",
             TabId::Boards => "Boards",
+            TabId::RenderProfiles => "Render Profiles",
             TabId::Capture => "Capture",
             TabId::Daemon => "Background Mode",
             TabId::Session => "Session",

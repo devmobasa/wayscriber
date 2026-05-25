@@ -8,7 +8,7 @@ use crate::models::{ColorPickerId, ColorPickerValue};
 
 const COLOR_SLIDER_STEP: f32 = 0.001;
 
-pub(super) fn picker_panel<'a>(
+pub(in crate::app::view) fn picker_panel<'a>(
     id: ColorPickerId,
     hue: f64,
     saturation: f64,

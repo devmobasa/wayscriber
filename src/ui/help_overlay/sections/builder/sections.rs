@@ -384,9 +384,9 @@ pub(super) fn build_main_sections(
         icon: Some(toolbar_icons::draw_icon_undo),
     };
 
-    let screenshots = (!context_filter || capture_enabled).then(|| Section {
-        title: "Screenshots",
-        rows: vec![
+    let mut screenshot_rows = Vec::new();
+    if !context_filter || capture_enabled {
+        screenshot_rows.extend([
             row(
                 binding_or_fallback(bindings, Action::CaptureClipboardFull, NOT_BOUND_LABEL),
                 "Full screen → clipboard",
@@ -411,11 +411,33 @@ pub(super) fn build_main_sections(
                 binding_or_fallback(bindings, Action::CaptureSelection, NOT_BOUND_LABEL),
                 "Selection (capture defaults)",
             ),
-            row(
-                binding_or_fallback(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
-                action_label(Action::OpenCaptureFolder),
+        ]);
+    }
+    screenshot_rows.extend([
+        row(
+            binding_or_fallback(bindings, Action::ExportCanvasClipboard, NOT_BOUND_LABEL),
+            action_label(Action::ExportCanvasClipboard),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::ExportCanvasFile, NOT_BOUND_LABEL),
+            action_label(Action::ExportCanvasFile),
+        ),
+        row(
+            binding_or_fallback(
+                bindings,
+                Action::ExportCanvasClipboardAndFile,
+                NOT_BOUND_LABEL,
             ),
-        ],
+            action_label(Action::ExportCanvasClipboardAndFile),
+        ),
+        row(
+            binding_or_fallback(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
+            action_label(Action::OpenCaptureFolder),
+        ),
+    ]);
+    let screenshots = Some(Section {
+        title: "Screenshots & Export",
+        rows: screenshot_rows,
         badges: Vec::new(),
         icon: Some(toolbar_icons::draw_icon_save),
     });

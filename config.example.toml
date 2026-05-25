@@ -182,6 +182,9 @@ capture_clipboard_selection = ["Ctrl+Shift+C"]
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
+export_canvas_file = []
+export_canvas_clipboard = []
+export_canvas_clipboard_and_file = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]
@@ -622,11 +625,16 @@ auto_adjust_pen = true
 apply_to_canvas = true
 # Apply profiles to screen-space UI chrome, toolbars, popups, and status text
 apply_to_ui = true
+# Accepted values: "off", "active", "profile".
+# Explicit canvas PNG export applies this selector to persisted canvas content.
+export = "off"
+# Used only when export = "profile".
+# export_profile = "print"
 
 # Render profiles remap final rendered pixels by exact RGB match. Alpha is
 # preserved, and colors not listed here are unchanged.
 #
-# [[render_profiles.items]]
+# [[render_profiles.profiles]]
 # id = "print"
 # name = "Print"
 # mappings = [

@@ -6,7 +6,7 @@ mod labels;
 mod validation;
 
 pub(super) use color_picker::{
-    ColorPickerUi, color_quad_picker, color_rgb255_picker, color_triplet_picker,
+    ColorPickerUi, color_quad_picker, color_rgb255_picker, color_triplet_picker, picker_panel,
 };
 pub(super) use colors::color_preview_labeled;
 pub(super) use constants::{

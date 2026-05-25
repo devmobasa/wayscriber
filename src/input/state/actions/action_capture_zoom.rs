@@ -1,7 +1,7 @@
 use crate::config::Action;
 use crate::input::{OutputFocusAction, ZoomAction};
 
-use super::super::InputState;
+use super::super::{InputState, PendingBackendAction};
 
 impl InputState {
     pub(in crate::input::state) fn handle_capture_zoom_action(&mut self, action: Action) -> bool {
@@ -19,7 +19,18 @@ impl InputState {
                 // since they require access to CaptureManager
                 // Store the action for later retrieval
                 log::debug!("Capture action {:?} pending for backend", action);
-                self.set_pending_capture_action(action);
+                self.set_pending_backend_action(PendingBackendAction::Screenshot(action));
+
+                // Clear modifiers to prevent them from being "stuck" after capture
+                // (portal dialog causes key releases to be missed or focus to flicker)
+                self.reset_modifiers();
+                true
+            }
+            Action::ExportCanvasFile
+            | Action::ExportCanvasClipboard
+            | Action::ExportCanvasClipboardAndFile => {
+                log::debug!("Canvas export action {:?} pending for backend", action);
+                self.set_pending_backend_action(PendingBackendAction::CanvasExport(action));
 
                 // Clear modifiers to prevent them from being "stuck" after capture
                 // (portal dialog causes key releases to be missed or focus to flicker)

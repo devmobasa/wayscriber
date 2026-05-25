@@ -3,6 +3,8 @@ pub enum ColorPickerId {
     DrawingColor,
     BoardBackground(usize),
     BoardPen(usize),
+    RenderProfileMappingFrom(usize, usize),
+    RenderProfileMappingTo(usize, usize),
     StatusBarBg,
     StatusBarText,
     HighlightFill,
