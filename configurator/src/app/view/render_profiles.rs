@@ -5,14 +5,15 @@ use iced::{Alignment, Element, Length};
 
 use crate::app::view::theme;
 use crate::messages::Message;
-use crate::models::color::{parse_hex, rgb_to_hsv};
+use crate::models::color::rgb_to_hsv;
 use crate::models::{
     ColorPickerId, RenderProfileExportOption, RenderProfileMappingSide,
     RenderProfileSelectionOption, RenderProfileTextField,
 };
+use wayscriber::render_profiles::parse_hex_rgb;
 
 use super::super::state::ConfiguratorApp;
-use super::widgets::{labeled_control, picker_panel};
+use super::widgets::{color_preview_badge, labeled_control, picker_panel};
 
 impl ConfiguratorApp {
     pub(super) fn render_profiles_tab(&self) -> Element<'_, Message> {
@@ -195,9 +196,9 @@ impl ConfiguratorApp {
             .get(&id)
             .map(|value| value.as_str())
             .unwrap_or(value);
-        let rgb = parse_hex(hex_value)
-            .map(|(rgb, _)| rgb)
-            .unwrap_or([0.0, 0.0, 0.0]);
+        let rgb = render_profile_rgb(hex_value).unwrap_or([0.0, 0.0, 0.0]);
+        let preview = render_profile_rgb(hex_value)
+            .map(|rgb| iced::Color::from_rgb(rgb[0] as f32, rgb[1] as f32, rgb[2] as f32));
         let (hue, saturation, value_slider) = rgb_to_hsv(rgb);
         let picker = if self.color_picker_open == Some(id) {
             picker_panel(id, hue, saturation, value_slider, rgb, None)
@@ -208,6 +209,7 @@ impl ConfiguratorApp {
         column![
             row![
                 text(label).size(12),
+                color_preview_badge(preview),
                 text_input("#RRGGBB", hex_value)
                     .on_input(move |value| Message::RenderProfileMappingColorChanged(
                         profile_index,
@@ -231,4 +233,13 @@ impl ConfiguratorApp {
         .width(Length::FillPortion(1))
         .into()
     }
+}
+
+fn render_profile_rgb(value: &str) -> Option<[f64; 3]> {
+    let color = parse_hex_rgb(value)?;
+    Some([
+        f64::from(color.r) / 255.0,
+        f64::from(color.g) / 255.0,
+        f64::from(color.b) / 255.0,
+    ])
 }
