@@ -44,6 +44,7 @@ pub enum Message {
     ColorModeChanged(ColorMode),
     NamedColorSelected(NamedColorOption),
     EraserModeChanged(EraserModeOption),
+    DrawingDragMappingSectionToggled(DragMouseButton),
     DrawingMouseDragToolChanged(DragMouseButton, DragToolField, DragToolOption),
     DrawingMouseDragColorChanged(DragMouseButton, DragToolField, DragColorOption),
     StatusPositionChanged(StatusPositionOption),

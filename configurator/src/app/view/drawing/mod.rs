@@ -1,7 +1,7 @@
 mod color;
 mod font;
 
-use iced::widget::{column, pick_list, row, scrollable, text};
+use iced::widget::{button, column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
 use crate::messages::Message;
@@ -14,6 +14,7 @@ use wayscriber::config::DragButtonConfig;
 use self::color::drawing_color_block;
 use self::font::font_controls;
 use super::super::state::ConfiguratorApp;
+use super::theme;
 use super::widgets::{
     labeled_control, labeled_input_with_feedback, toggle_row, validate_f64_range,
     validate_usize_min, validate_usize_range,
@@ -26,35 +27,6 @@ impl ConfiguratorApp {
             Some(self.draft.drawing_default_eraser_mode),
             Message::EraserModeChanged,
         );
-        let drag_button_controls =
-            |button: DragMouseButton, current: &DragButtonConfig, defaults: &DragButtonConfig| {
-                column![
-                    text(button.label()).size(14),
-                    row![
-                        drag_binding_control(button, DragToolField::Drag, current, defaults,),
-                        drag_binding_control(button, DragToolField::ShiftDrag, current, defaults,)
-                    ]
-                    .spacing(12),
-                    row![
-                        drag_binding_control(button, DragToolField::CtrlDrag, current, defaults,),
-                        drag_binding_control(
-                            button,
-                            DragToolField::CtrlShiftDrag,
-                            current,
-                            defaults,
-                        )
-                    ]
-                    .spacing(12),
-                    row![drag_binding_control(
-                        button,
-                        DragToolField::TabDrag,
-                        current,
-                        defaults,
-                    )]
-                    .spacing(12)
-                ]
-                .spacing(8)
-            };
 
         let column = column![
             text("Drawing Defaults").size(20),
@@ -99,22 +71,7 @@ impl ConfiguratorApp {
                 )
             ]
             .spacing(12),
-            text("Drag Tool Mapping").size(16),
-            drag_button_controls(
-                DragMouseButton::Left,
-                &self.draft.drawing_drag_tools.left,
-                &self.defaults.drawing_drag_tools.left,
-            ),
-            drag_button_controls(
-                DragMouseButton::Right,
-                &self.draft.drawing_drag_tools.right,
-                &self.defaults.drawing_drag_tools.right,
-            ),
-            drag_button_controls(
-                DragMouseButton::Middle,
-                &self.draft.drawing_drag_tools.middle,
-                &self.defaults.drawing_drag_tools.middle,
-            ),
+            self.drag_mapping_block(),
             row![
                 labeled_input_with_feedback(
                     "Marker opacity (0.05-0.9)",
@@ -172,6 +129,78 @@ impl ConfiguratorApp {
 
         scrollable(column).into()
     }
+
+    fn drag_mapping_block(&self) -> Element<'_, Message> {
+        let section_button = |mouse_button: DragMouseButton| {
+            button(mouse_button.label())
+                .style(if self.active_drawing_drag_button == Some(mouse_button) {
+                    theme::Button::Primary
+                } else {
+                    theme::Button::Secondary
+                })
+                .on_press(Message::DrawingDragMappingSectionToggled(mouse_button))
+        };
+
+        let mut column = column![
+            text("Drag Tool Mapping").size(16),
+            row![
+                section_button(DragMouseButton::Left),
+                section_button(DragMouseButton::Right),
+                section_button(DragMouseButton::Middle),
+            ]
+            .spacing(8)
+        ]
+        .spacing(8);
+
+        if let Some(mouse_button) = self.active_drawing_drag_button {
+            let (current, defaults) = match mouse_button {
+                DragMouseButton::Left => (
+                    &self.draft.drawing_drag_tools.left,
+                    &self.defaults.drawing_drag_tools.left,
+                ),
+                DragMouseButton::Right => (
+                    &self.draft.drawing_drag_tools.right,
+                    &self.defaults.drawing_drag_tools.right,
+                ),
+                DragMouseButton::Middle => (
+                    &self.draft.drawing_drag_tools.middle,
+                    &self.defaults.drawing_drag_tools.middle,
+                ),
+            };
+
+            column = column.push(drag_button_controls(mouse_button, current, defaults));
+        }
+
+        column.into()
+    }
+}
+
+fn drag_button_controls<'a>(
+    button: DragMouseButton,
+    current: &DragButtonConfig,
+    defaults: &DragButtonConfig,
+) -> Element<'a, Message> {
+    column![
+        row![
+            drag_binding_control(button, DragToolField::Drag, current, defaults,),
+            drag_binding_control(button, DragToolField::ShiftDrag, current, defaults,)
+        ]
+        .spacing(12),
+        row![
+            drag_binding_control(button, DragToolField::CtrlDrag, current, defaults,),
+            drag_binding_control(button, DragToolField::CtrlShiftDrag, current, defaults,)
+        ]
+        .spacing(12),
+        row![drag_binding_control(
+            button,
+            DragToolField::TabDrag,
+            current,
+            defaults,
+        )]
+        .spacing(12)
+    ]
+    .spacing(8)
+    .into()
 }
 
 fn drag_binding_control<'a>(

@@ -53,6 +53,9 @@ impl ConfiguratorApp {
             Message::ColorModeChanged(mode) => self.handle_color_mode_changed(mode),
             Message::NamedColorSelected(option) => self.handle_named_color_selected(option),
             Message::EraserModeChanged(option) => self.handle_eraser_mode_changed(option),
+            Message::DrawingDragMappingSectionToggled(button) => {
+                self.handle_drawing_drag_mapping_section_toggled(button)
+            }
             Message::DrawingMouseDragToolChanged(button, field, option) => {
                 self.handle_drawing_mouse_drag_tool_changed(button, field, option)
             }
