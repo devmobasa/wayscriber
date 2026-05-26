@@ -12,6 +12,7 @@ use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;
 use super::super::boards::BoardsDraft;
 use super::super::presets::PresetsDraft;
+use super::super::render_profiles::RenderProfilesDraft;
 use super::super::toolbar_overrides::ToolbarModeOverridesDraft;
 use super::ConfigDraft;
 use wayscriber::config::{Config, XdgFocusLossBehavior};
@@ -159,6 +160,8 @@ impl ConfigDraft {
             help_context_filter: config.ui.help_overlay_context_filter,
 
             boards: BoardsDraft::from_config(config),
+
+            render_profiles: RenderProfilesDraft::from_config(config),
 
             capture_enabled: config.capture.enabled,
             capture_save_directory: config.capture.save_directory.clone(),

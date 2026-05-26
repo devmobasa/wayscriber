@@ -44,8 +44,13 @@ use wayland_protocols::wp::{
 use crate::input::tablet::TabletSettings;
 use crate::{
     backend::ExitAfterCaptureMode,
+    canvas_export::{
+        BoardExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportSnapshot,
+        CanvasExportViewport, render_canvas_png,
+    },
     capture::{
-        CaptureDestination, CaptureManager,
+        CaptureDestination, CaptureManager, ImageDeliveryRequest, ImageFormatMetadata,
+        ImageOperationKind,
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },

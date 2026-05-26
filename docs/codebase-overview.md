@@ -72,7 +72,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
 1. **Keyboard events (`handlers/keyboard.rs`)**
    - Translate Wayland keysyms to internal `Key`.
    - Call `InputState::on_key_press` / `on_key_release`.
-   - After processing a key press, check `InputState::take_pending_capture_action` to trigger captures.
+   - Key presses can enqueue backend output work; the event loop drains `InputState::take_pending_backend_action`.
 
 2. **Mouse events (`handlers/pointer.rs`)**
    - Update `current_mouse_x/y`.
@@ -103,22 +103,24 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` → 
 | `mod.rs` | Public exports and shared submodules. |
 | `manager.rs` | `CaptureManager` – owns channel, status, tokio task. |
 | `dependencies.rs` | Trait definitions (`CaptureSource`, `CaptureFileSaver`, `CaptureClipboard`) and default implementations. |
-| `pipeline.rs` | `perform_capture` and `CaptureRequest` definition. |
+| `pipeline.rs` | `perform_capture`, `deliver_image`, and capture/image-delivery request definitions. |
 | `sources/` | Strategies for acquiring image bytes: Hyprland fast-path (`hyprland.rs`), portal fallback (`portal.rs`), and URI reader/cleanup (`reader.rs`). |
 | `clipboard.rs`, `file.rs`, `portal.rs` | Support code reused by the pipeline. |
 | `tests.rs` | Unit tests for the manager/pipeline, plus mocks. |
 
 **Runtime flow:**
-1. `InputState::handle_action` sets `pending_capture_action`.
-2. Keyboard handler sees the pending action, calls `WaylandState::handle_capture_action`.
-3. `WaylandState::handle_capture_action` builds a `CaptureRequest` (type + destination + save config) and calls `CaptureManager::request_capture`.
-4. `CaptureManager`’s tokio task receives the request, updates status, and calls `perform_capture`.
-5. `perform_capture`:
+1. `InputState::handle_action` sets `pending_backend_action` for screenshot capture and canvas export actions.
+2. The Wayland event loop centrally drains the pending backend action, so keybindings, command-palette Return, and command-palette mouse clicks share the same dispatch path.
+3. Screenshot actions call `WaylandState::handle_capture_action`; explicit canvas PNG export actions call `WaylandState::handle_canvas_export_action`.
+4. `WaylandState::handle_capture_action` builds a `CaptureRequest` (type + destination + save config) and calls `CaptureManager::request_capture`.
+5. Canvas export snapshots persisted board content in the current panned viewport, renders PNG bytes, and calls `CaptureManager::request_image_delivery`.
+6. `CaptureManager`’s tokio task receives the request, updates status, and calls `perform_capture` or `deliver_image`.
+7. `perform_capture`:
    - Calls the configured `CaptureSource` (default: `sources::capture_image` with Hyprland→portal fallback).
    - Optionally saves via `CaptureFileSaver`.
    - Optionally copies to clipboard via `CaptureClipboard`.
    - Returns `CaptureResult` used for desktop notifications.
-6. `WaylandState` polls `CaptureManager::try_take_result()` to restore the overlay and emit notifications once capture completes.
+8. `WaylandState` polls `CaptureManager::try_take_result()` to restore the overlay and emit notifications once capture completes.
 
 Notifications are sent via `notification::send_notification_async`, keeping all UI feedback on the event loop thread.
 

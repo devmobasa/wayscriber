@@ -13,8 +13,8 @@ pub use types::{
 };
 pub(crate) use types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
-    DelayedHistory, HistoryMode, PasteAnchor, PendingBoardDelete, PendingClipboardFallback,
-    PendingPageDelete, PendingSelectionClipboardPublish, PresetFeedbackState,
-    SelectionPublishState, TextClickState, TextEditEntryFeedback, ToastAction, UiToastState,
-    WayscriberClipboardSelection,
+    DelayedHistory, HistoryMode, PasteAnchor, PendingBackendAction, PendingBoardDelete,
+    PendingClipboardFallback, PendingPageDelete, PendingSelectionClipboardPublish,
+    PresetFeedbackState, SelectionPublishState, TextClickState, TextEditEntryFeedback, ToastAction,
+    UiToastState, WayscriberClipboardSelection,
 };

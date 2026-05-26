@@ -247,3 +247,53 @@ fn test_build_action_bindings_reports_duplicate_keybindings() {
     assert!(err_msg.contains("Duplicate keybinding"));
     assert!(err_msg.contains("Ctrl+Z"));
 }
+
+#[test]
+fn build_action_map_includes_canvas_export_bindings() {
+    let mut config = KeybindingsConfig::default();
+    config.capture.export_canvas_file = vec!["Ctrl+Alt+Shift+F".to_string()];
+    config.capture.export_canvas_clipboard = vec!["Ctrl+Alt+Shift+C".to_string()];
+    config.capture.export_canvas_clipboard_and_file = vec!["Ctrl+Alt+Shift+B".to_string()];
+
+    let map = config.build_action_map().unwrap();
+
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+F").unwrap()),
+        Some(&Action::ExportCanvasFile)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+C").unwrap()),
+        Some(&Action::ExportCanvasClipboard)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+B").unwrap()),
+        Some(&Action::ExportCanvasClipboardAndFile)
+    );
+}
+
+#[test]
+fn canvas_export_actions_deserialize_from_config_names() {
+    #[derive(serde::Deserialize)]
+    struct ActionFixture {
+        action: Action,
+    }
+
+    assert_eq!(
+        toml::from_str::<ActionFixture>("action = \"export_canvas_file\"")
+            .unwrap()
+            .action,
+        Action::ExportCanvasFile
+    );
+    assert_eq!(
+        toml::from_str::<ActionFixture>("action = \"export_canvas_clipboard\"")
+            .unwrap()
+            .action,
+        Action::ExportCanvasClipboard
+    );
+    assert_eq!(
+        toml::from_str::<ActionFixture>("action = \"export_canvas_clipboard_and_file\"")
+            .unwrap()
+            .action,
+        Action::ExportCanvasClipboardAndFile
+    );
+}

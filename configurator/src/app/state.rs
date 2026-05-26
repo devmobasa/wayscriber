@@ -6,8 +6,8 @@ use wayscriber::config::{Config, PRESET_SLOTS_MAX};
 
 use crate::messages::Message;
 use crate::models::{
-    ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, KeybindingsTabId, TabId,
-    ToolbarLayoutModeOption, UiTabId,
+    ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
+    KeybindingsTabId, TabId, ToolbarLayoutModeOption, UiTabId,
 };
 
 use super::daemon_setup::load_daemon_runtime_status;
@@ -24,6 +24,7 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) active_tab: TabId,
     pub(crate) active_ui_tab: UiTabId,
     pub(crate) active_keybindings_tab: KeybindingsTabId,
+    pub(crate) active_drawing_drag_button: Option<DragMouseButton>,
     pub(crate) preset_collapsed: Vec<bool>,
     pub(crate) boards_collapsed: Vec<bool>,
     pub(crate) color_picker_open: Option<ColorPickerId>,
@@ -97,6 +98,7 @@ impl ConfiguratorApp {
             active_tab: TabId::Daemon,
             active_ui_tab: UiTabId::Toolbar,
             active_keybindings_tab: KeybindingsTabId::General,
+            active_drawing_drag_button: None,
             preset_collapsed: vec![false; PRESET_SLOTS_MAX],
             boards_collapsed: vec![false; boards_len],
             color_picker_open: None,

@@ -11,6 +11,7 @@ use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEnt
 use super::super::keybindings::KeybindingsDraft;
 use super::boards::BoardsDraft;
 use super::presets::PresetsDraft;
+use super::render_profiles::RenderProfilesDraft;
 use super::toolbar_overrides::ToolbarModeOverridesDraft;
 use wayscriber::config::MouseDragToolsConfig;
 
@@ -127,6 +128,8 @@ pub struct ConfigDraft {
     pub help_context_filter: bool,
 
     pub boards: BoardsDraft,
+
+    pub render_profiles: RenderProfilesDraft,
 
     pub capture_enabled: bool,
     pub capture_save_directory: String,

@@ -6,9 +6,9 @@ mod labels;
 mod validation;
 
 pub(super) use color_picker::{
-    ColorPickerUi, color_quad_picker, color_rgb255_picker, color_triplet_picker,
+    ColorPickerUi, color_quad_picker, color_rgb255_picker, color_triplet_picker, picker_panel,
 };
-pub(super) use colors::color_preview_labeled;
+pub(super) use colors::{color_preview_badge, color_preview_labeled};
 pub(super) use constants::{
     BUFFER_PICKER_WIDTH, COLOR_PICKER_WIDTH, DEFAULT_LABEL_GAP, LABEL_COLUMN_WIDTH,
     SMALL_PICKER_WIDTH,

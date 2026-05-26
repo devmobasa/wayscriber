@@ -25,6 +25,8 @@ impl ConfigDraft {
         self.apply_ui(&mut config, &mut errors);
         self.apply_presenter_mode(&mut config);
         self.apply_boards(&mut config, &mut errors);
+        self.render_profiles
+            .apply_to_config(&mut config, &mut errors);
         self.apply_capture(&mut config, &mut errors);
         self.apply_session(&mut config, &mut errors);
         self.apply_tablet(&mut config, &mut errors);

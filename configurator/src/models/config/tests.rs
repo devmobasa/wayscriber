@@ -4,9 +4,10 @@ use super::super::fields::{
     SessionStorageModeOption, TextField, ToggleField, ToolOption, TripletField,
 };
 use super::super::{ColorMode, NamedColorOption};
-use super::ConfigDraft;
+use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
-    ColorSpec, Config, PresetToolStatesConfig, ToolPresetConfig, XdgFocusLossBehavior,
+    ColorSpec, Config, PresetToolStatesConfig, RenderColorMappingConfig, RenderProfileConfig,
+    RenderProfileExportMode, ToolPresetConfig, XdgFocusLossBehavior,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -56,6 +57,96 @@ fn config_draft_round_trips_light_mode_click_highlight_policy() {
         .to_config(&Config::default())
         .expect("expected config to round trip");
     assert!(!round_trip.ui.click_highlight.force_in_light_mode);
+}
+
+#[test]
+fn config_draft_round_trips_render_profiles() {
+    let mut config = Config::default();
+    config.render_profiles.active = Some("print".to_string());
+    config.render_profiles.apply_to_canvas = true;
+    config.render_profiles.apply_to_ui = false;
+    config.render_profiles.export = RenderProfileExportMode::Profile;
+    config.render_profiles.export_profile = Some("export".to_string());
+    config.render_profiles.profiles = vec![
+        RenderProfileConfig {
+            id: "print".to_string(),
+            name: "Print".to_string(),
+            mappings: vec![RenderColorMappingConfig {
+                from: "#000000".to_string(),
+                to: "#FFFFFF".to_string(),
+            }],
+        },
+        RenderProfileConfig {
+            id: "export".to_string(),
+            name: "Export".to_string(),
+            mappings: vec![RenderColorMappingConfig {
+                from: "#FF0000".to_string(),
+                to: "#00FF00".to_string(),
+            }],
+        },
+    ];
+
+    let draft = ConfigDraft::from_config(&config);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected render profiles to round trip");
+
+    assert_eq!(round_trip.render_profiles.active.as_deref(), Some("print"));
+    assert!(!round_trip.render_profiles.apply_to_ui);
+    assert_eq!(
+        round_trip.render_profiles.export,
+        RenderProfileExportMode::Profile
+    );
+    assert_eq!(
+        round_trip.render_profiles.export_profile.as_deref(),
+        Some("export")
+    );
+    assert_eq!(round_trip.render_profiles.profiles.len(), 2);
+    assert_eq!(
+        round_trip.render_profiles.profiles[0].mappings[0].from,
+        "#000000"
+    );
+}
+
+#[test]
+fn render_profile_selection_options_include_selectable_off() {
+    let ids = vec!["print".to_string(), "projector".to_string()];
+
+    assert_eq!(
+        RenderProfileSelectionOption::list(&ids),
+        vec![
+            RenderProfileSelectionOption::Off,
+            RenderProfileSelectionOption::Profile("print".to_string()),
+            RenderProfileSelectionOption::Profile("projector".to_string()),
+        ]
+    );
+    assert_eq!(
+        RenderProfileSelectionOption::from_active("print", &ids),
+        RenderProfileSelectionOption::Profile("print".to_string())
+    );
+    assert_eq!(
+        RenderProfileSelectionOption::from_active("missing", &ids),
+        RenderProfileSelectionOption::Off
+    );
+    assert_eq!(RenderProfileSelectionOption::Off.profile_id(), "");
+}
+
+#[test]
+fn config_draft_reports_invalid_render_profile_hex() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    let mut profile = draft.render_profiles.new_profile();
+    profile.mappings[0].from = "#GGGGGG".to_string();
+    draft.render_profiles.profiles.push(profile);
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("expected invalid hex");
+
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.field.contains("mappings[0].from"))
+    );
 }
 
 #[test]

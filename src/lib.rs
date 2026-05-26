@@ -6,6 +6,7 @@
 
 pub(crate) mod base64;
 pub mod build_info;
+pub mod canvas_export;
 pub mod capture;
 pub mod config;
 pub mod draw;

@@ -28,6 +28,11 @@ impl InputState {
         }
     }
 
+    #[allow(dead_code)] // Used by the Wayland backend; the lib crate doesn't compile backend modules.
+    pub(crate) fn export_render_profile(&self) -> Option<RenderColorProfile> {
+        self.render_profiles.export_profile()
+    }
+
     pub fn render_profile_generation(&self) -> u64 {
         self.render_profiles.generation()
     }
@@ -62,7 +67,7 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{RenderProfileConfig, RenderProfilesConfig};
+    use crate::config::{RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig};
     use crate::input::state::test_support::make_test_input_state;
     use crate::render_profiles::RenderProfileSet;
 
@@ -73,7 +78,9 @@ mod tests {
             active: None,
             apply_to_canvas: true,
             apply_to_ui: true,
-            items: vec![RenderProfileConfig {
+            export: RenderProfileExportMode::Off,
+            export_profile: None,
+            profiles: vec![RenderProfileConfig {
                 id: "print".to_string(),
                 name: "Print".to_string(),
                 mappings: Vec::new(),

@@ -35,7 +35,9 @@ pub use presets::{
     PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PresetSlotsConfig, PresetToolSettingConfig,
     PresetToolStatesConfig, ToolPresetConfig,
 };
-pub use render_profiles::{RenderColorMappingConfig, RenderProfileConfig, RenderProfilesConfig};
+pub use render_profiles::{
+    RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig,
+};
 pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
 pub use status_bar::StatusBarStyle;
 #[cfg(tablet)]

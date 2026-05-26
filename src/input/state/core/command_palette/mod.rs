@@ -275,6 +275,27 @@ mod tests {
     }
 
     #[test]
+    fn return_key_sets_pending_canvas_export_backend_action() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "export canvas clipboard".to_string();
+        let selected = state.selected_command().expect("selected command");
+        assert_eq!(
+            selected.action,
+            crate::config::keybindings::Action::ExportCanvasClipboard
+        );
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::CanvasExport(
+                crate::config::keybindings::Action::ExportCanvasClipboard
+            ))
+        );
+    }
+
+    #[test]
     fn clicking_outside_palette_closes_it() {
         let mut state = make_state();
         state.toggle_command_palette();
@@ -339,6 +360,31 @@ mod tests {
             crate::input::state::core::base::UiToastKind::Info
         );
         assert_eq!(toast.message, selected.label);
+    }
+
+    #[test]
+    fn clicking_visible_canvas_export_item_sets_pending_backend_action() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "save board".to_string();
+        state.command_palette_selected = 0;
+        let filtered = state.filtered_commands();
+        assert_eq!(
+            filtered.first().expect("selected command").action,
+            crate::config::keybindings::Action::ExportCanvasFile
+        );
+        let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
+        let x = (geometry.x + geometry.inner_x + 4.0) as i32;
+        let y = (geometry.y + geometry.items_top + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
+
+        assert!(state.handle_command_palette_click(x, y, 1920, 1000));
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(crate::input::state::PendingBackendAction::CanvasExport(
+                crate::config::keybindings::Action::ExportCanvasFile
+            ))
+        );
     }
 
     #[test]

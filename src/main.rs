@@ -4,6 +4,7 @@ mod app_id;
 mod backend;
 mod base64;
 mod build_info;
+mod canvas_export;
 mod capture;
 mod cli;
 mod config;

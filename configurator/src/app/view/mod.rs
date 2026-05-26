@@ -7,6 +7,7 @@ mod history;
 mod keybindings;
 mod performance;
 mod presets;
+mod render_profiles;
 mod session;
 #[cfg(feature = "tablet-input")]
 mod tablet;
@@ -144,6 +145,7 @@ impl ConfiguratorApp {
             TabId::Performance => self.performance_tab(),
             TabId::Ui => self.ui_tab(),
             TabId::Boards => self.boards_tab(),
+            TabId::RenderProfiles => self.render_profiles_tab(),
             TabId::Capture => self.capture_tab(),
             TabId::Daemon => self.daemon_tab(),
             TabId::Session => self.session_tab(),

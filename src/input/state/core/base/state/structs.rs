@@ -12,11 +12,12 @@ use super::super::super::{
 };
 use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
-    DelayedHistory, DrawingState, OutputFocusAction, PendingBoardDelete, PendingClipboardFallback,
-    PendingOnboardingUsage, PendingPageDelete, PendingSelectionClipboardPublish, PresetAction,
-    PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis,
-    SelectionPublishState, StatusChangeHighlight, TextClickState, TextEditEntryFeedback,
-    TextInputMode, ToolbarDrawerTab, UiToastState, ZoomAction,
+    DelayedHistory, DrawingState, OutputFocusAction, PendingBackendAction, PendingBoardDelete,
+    PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
+    PendingSelectionClipboardPublish, PresetAction, PresetFeedbackState, PressureThicknessEditMode,
+    PressureThicknessEntryMode, SelectionAxis, SelectionPublishState, StatusChangeHighlight,
+    TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab, UiToastState,
+    ZoomAction,
 };
 use crate::config::{
     Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding, ToolPresetConfig,
@@ -227,8 +228,8 @@ pub struct InputState {
     pub(in crate::input::state::core) action_map: HashMap<KeyBinding, Action>,
     /// Ordered keybindings per action (as configured)
     pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
-    /// Pending capture action (to be handled by WaylandState)
-    pub(in crate::input::state::core) pending_capture_action: Option<Action>,
+    /// Pending backend output action (to be handled by WaylandState)
+    pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
     /// Pending output focus action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_output_focus_action: Option<OutputFocusAction>,
     /// Pending zoom action (to be handled by WaylandState)

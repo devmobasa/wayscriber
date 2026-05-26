@@ -10,7 +10,11 @@ pub mod util;
 
 pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
 pub use color_picker::{ColorPickerId, ColorPickerValue};
-pub use config::{BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft};
+pub use config::{
+    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft,
+    RenderProfileExportOption, RenderProfileMappingDraft, RenderProfileMappingSide,
+    RenderProfileSelectionOption, RenderProfileTextField,
+};
 pub use daemon::{
     DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DesktopEnvironment,
     LightShortcutApplyCapability, ShortcutApplyCapability, ShortcutBackend,

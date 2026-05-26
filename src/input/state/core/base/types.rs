@@ -13,8 +13,8 @@ pub const PAGE_UNDO_EXPIRE_MS: u64 = 30_000;
 #[allow(dead_code)]
 pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
-use crate::capture::file::FileSaveConfig;
-use crate::config::ToolPresetConfig;
+use crate::capture::{ImageOperationKind, file::FileSaveConfig};
+use crate::config::{Action, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Shape, ShapeId};
 use crate::input::tool::Tool;
@@ -307,8 +307,15 @@ pub(crate) struct BlockedActionFeedback {
 pub(crate) struct PendingClipboardFallback {
     pub image_data: Vec<u8>,
     pub save_config: FileSaveConfig,
+    pub operation: ImageOperationKind,
     /// Whether to exit after successful fallback save (from exit-after-capture mode).
     pub exit_after_save: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PendingBackendAction {
+    Screenshot(Action),
+    CanvasExport(Action),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

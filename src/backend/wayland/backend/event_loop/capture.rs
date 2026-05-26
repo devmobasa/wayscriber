@@ -6,7 +6,7 @@ use super::super::helpers::friendly_capture_error;
 use crate::capture::CaptureOutcome;
 use crate::capture::file::{FileSaveConfig, expand_tilde};
 use crate::config::Action;
-use crate::input::state::UiToastKind;
+use crate::input::state::{PendingBackendAction, UiToastKind};
 use crate::notification;
 
 pub(super) fn poll_portal_captures(state: &mut WaylandState) {
@@ -32,6 +32,12 @@ pub(super) fn handle_pending_actions(
     state.drain_clipboard_requests();
     handle_frozen_toggle(state);
 
+    if let Some(action) = state.input_state.take_pending_backend_action() {
+        match action {
+            PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
+            PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
+        }
+    }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {
         state.handle_output_focus_action(qh, action);
     }
@@ -100,14 +106,18 @@ fn handle_capture_results(state: &mut WaylandState) {
             let mut message_parts = Vec::new();
 
             if let Some(ref path) = result.saved_path {
-                info!("Screenshot saved to: {}", path.display());
+                info!(
+                    "{} saved to: {}",
+                    result.operation.saved_log_label(),
+                    path.display()
+                );
                 if let Some(filename) = path.file_name() {
                     message_parts.push(format!("Saved as {}", filename.to_string_lossy()));
                 }
             }
 
             if result.copied_to_clipboard {
-                info!("Screenshot copied to clipboard");
+                info!("{} copied to clipboard", result.operation.saved_log_label());
                 message_parts.push("Copied to clipboard".to_string());
             }
 
@@ -122,27 +132,31 @@ fn handle_capture_results(state: &mut WaylandState) {
                 warn!("Clipboard copy failed, offering save-to-file fallback");
 
                 // Build save config from user preferences for fallback save
-                let save_config = FileSaveConfig {
+                let mut save_config = FileSaveConfig {
                     save_directory: expand_tilde(&state.config.capture.save_directory),
                     filename_template: state.config.capture.filename_template.clone(),
                     format: state.config.capture.format.clone(),
                 };
+                if let Some(format) = result.fallback_format_override.as_ref() {
+                    save_config.format = format.extension.clone();
+                }
                 // Pass exit_after_capture so we can exit after successful fallback save
                 state.input_state.set_clipboard_fallback(
                     result.image_data.clone(),
                     save_config,
+                    result.operation,
                     exit_after_capture,
                 );
                 state.input_state.set_ui_toast_with_action(
                     UiToastKind::Error,
-                    "Clipboard failed",
+                    result.operation.fallback_toast(),
                     "Save to file",
                     Action::SavePendingToFile,
                 );
 
                 notification::send_notification_async(
                     &state.tokio_handle,
-                    "Screenshot Clipboard Failed".to_string(),
+                    result.operation.clipboard_failure_title().to_string(),
                     "Could not copy to clipboard. Use overlay to save to file.".to_string(),
                     Some("dialog-warning".to_string()),
                 );
@@ -150,7 +164,14 @@ fn handle_capture_results(state: &mut WaylandState) {
             } else {
                 // Send normal notification.
                 let notification_body = if message_parts.is_empty() {
-                    "Screenshot captured".to_string()
+                    match result.operation {
+                        crate::capture::ImageOperationKind::Screenshot => {
+                            "Screenshot captured".to_string()
+                        }
+                        crate::capture::ImageOperationKind::CanvasExport => {
+                            "Canvas exported".to_string()
+                        }
+                    }
                 } else {
                     message_parts.join(" - ")
                 };
@@ -170,7 +191,7 @@ fn handle_capture_results(state: &mut WaylandState) {
 
                 notification::send_notification_async(
                     &state.tokio_handle,
-                    "Screenshot Captured".to_string(),
+                    result.operation.success_title().to_string(),
                     notification_body,
                     Some("camera-photo".to_string()),
                 );
@@ -179,23 +200,28 @@ fn handle_capture_results(state: &mut WaylandState) {
                 should_exit = exit_after_capture;
             }
         }
-        CaptureOutcome::Failed(error) => {
-            let friendly_error = friendly_capture_error(&error);
+        CaptureOutcome::Failed { operation, message } => {
+            let friendly_error =
+                if matches!(operation, crate::capture::ImageOperationKind::Screenshot) {
+                    friendly_capture_error(&message)
+                } else {
+                    message.clone()
+                };
 
-            warn!("Screenshot capture failed: {}", error);
+            warn!("{} failed: {}", operation.saved_log_label(), message);
 
             state
                 .input_state
                 .set_ui_toast(UiToastKind::Error, friendly_error.clone());
             notification::send_notification_async(
                 &state.tokio_handle,
-                "Screenshot Failed".to_string(),
+                operation.failure_title().to_string(),
                 friendly_error,
                 Some("dialog-error".to_string()),
             );
         }
-        CaptureOutcome::Cancelled(reason) => {
-            info!("Capture cancelled: {}", reason);
+        CaptureOutcome::Cancelled { operation, reason } => {
+            info!("{} cancelled: {}", operation.saved_log_label(), reason);
         }
     }
     if should_exit {

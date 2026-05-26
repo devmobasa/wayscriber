@@ -92,6 +92,45 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        ExportCanvasFile,
+        "Export Canvas to File",
+        Some("Canvas to File"),
+        "Export persisted canvas as PNG",
+        Capture,
+        true,
+        true,
+        false,
+        &["save board", "export board", "export canvas", "png"]
+    ),
+    meta!(
+        ExportCanvasClipboard,
+        "Export Canvas to Clipboard",
+        Some("Canvas to Clipboard"),
+        "Copy persisted canvas PNG to clipboard",
+        Capture,
+        true,
+        true,
+        false,
+        &["export board", "export canvas", "png", "clipboard"]
+    ),
+    meta!(
+        ExportCanvasClipboardAndFile,
+        "Export Canvas to Clipboard and File",
+        Some("Canvas to Clipboard and File"),
+        "Copy persisted canvas PNG to clipboard and save it",
+        Capture,
+        true,
+        true,
+        false,
+        &[
+            "save board",
+            "export board",
+            "export canvas",
+            "png",
+            "clipboard"
+        ]
+    ),
+    meta!(
         OpenCaptureFolder,
         "Open Capture Folder",
         None,

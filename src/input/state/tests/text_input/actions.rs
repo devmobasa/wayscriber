@@ -48,8 +48,24 @@ fn capture_action_sets_pending_and_clears_modifiers() {
     assert!(!state.modifiers.alt);
 
     assert_eq!(
-        state.take_pending_capture_action(),
-        Some(Action::CaptureClipboardFull)
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::Screenshot(
+            Action::CaptureClipboardFull
+        ))
     );
-    assert!(state.take_pending_capture_action().is_none());
+    assert!(state.take_pending_backend_action().is_none());
+}
+
+#[test]
+fn canvas_export_action_sets_pending_backend_action() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(Action::ExportCanvasClipboard);
+
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard
+        ))
+    );
 }

@@ -109,6 +109,11 @@ impl KeybindingField {
             Self::CaptureFileSelection => config.capture.capture_file_selection = value,
             Self::CaptureClipboardRegion => config.capture.capture_clipboard_region = value,
             Self::CaptureFileRegion => config.capture.capture_file_region = value,
+            Self::ExportCanvasFile => config.capture.export_canvas_file = value,
+            Self::ExportCanvasClipboard => config.capture.export_canvas_clipboard = value,
+            Self::ExportCanvasClipboardAndFile => {
+                config.capture.export_canvas_clipboard_and_file = value;
+            }
             Self::OpenCaptureFolder => config.capture.open_capture_folder = value,
             Self::ToggleFrozenMode => config.zoom.toggle_frozen_mode = value,
             Self::ZoomIn => config.zoom.zoom_in = value,

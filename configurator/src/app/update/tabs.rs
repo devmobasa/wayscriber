@@ -1,7 +1,7 @@
 use iced::Task;
 
 use crate::messages::Message;
-use crate::models::{KeybindingsTabId, TabId, UiTabId};
+use crate::models::{DragMouseButton, KeybindingsTabId, TabId, UiTabId};
 
 use super::super::state::ConfiguratorApp;
 
@@ -21,6 +21,18 @@ impl ConfiguratorApp {
         tab: KeybindingsTabId,
     ) -> Task<Message> {
         self.active_keybindings_tab = tab;
+        Task::none()
+    }
+
+    pub(super) fn handle_drawing_drag_mapping_section_toggled(
+        &mut self,
+        button: DragMouseButton,
+    ) -> Task<Message> {
+        self.active_drawing_drag_button = if self.active_drawing_drag_button == Some(button) {
+            None
+        } else {
+            Some(button)
+        };
         Task::none()
     }
 }

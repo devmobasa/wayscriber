@@ -147,6 +147,102 @@ impl WaylandState {
         self.capture.queue_preflight(request);
     }
 
+    pub(in crate::backend::wayland) fn handle_canvas_export_action(&mut self, action: Action) {
+        if self.capture.is_in_progress() {
+            log::warn!(
+                "Canvas export action {:?} requested while another image operation is running; ignoring",
+                action
+            );
+            return;
+        }
+
+        let destination = match action {
+            Action::ExportCanvasFile => CaptureDestination::FileOnly,
+            Action::ExportCanvasClipboard => CaptureDestination::ClipboardOnly,
+            Action::ExportCanvasClipboardAndFile => CaptureDestination::ClipboardAndFile,
+            _ => {
+                log::error!(
+                    "Non-canvas-export action passed to handle_canvas_export_action: {:?}",
+                    action
+                );
+                return;
+            }
+        };
+
+        let snapshot = self.canvas_export_snapshot();
+        let rendered = match render_canvas_png(&snapshot) {
+            Ok(rendered) => rendered,
+            Err(err) => {
+                let message = ImageOperationKind::CanvasExport.format_error(&err);
+                log::error!("Canvas export failed: {}", message);
+                self.input_state
+                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                return;
+            }
+        };
+
+        let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
+            None
+        } else {
+            Some(FileSaveConfig {
+                save_directory: expand_tilde(&self.config.capture.save_directory),
+                filename_template: self.config.capture.filename_template.clone(),
+                format: rendered.format.extension.clone(),
+            })
+        };
+
+        let exit_on_success = self.should_exit_after_capture(destination);
+        self.capture.set_exit_on_success(exit_on_success);
+        self.capture.mark_in_progress();
+
+        let request = ImageDeliveryRequest {
+            image: rendered,
+            destination,
+            save_config,
+            operation: ImageOperationKind::CanvasExport,
+            fallback_format_override: Some(ImageFormatMetadata::png()),
+        };
+
+        if let Err(err) = self.capture.manager_mut().request_image_delivery(request) {
+            log::error!("Failed to request canvas export delivery: {}", err);
+            self.capture.clear_in_progress();
+            self.capture.clear_exit_on_success();
+            self.input_state.set_ui_toast(
+                crate::input::state::UiToastKind::Error,
+                format!("Canvas export failed: {err}"),
+            );
+        }
+    }
+
+    fn canvas_export_snapshot(&self) -> CanvasExportSnapshot {
+        let (origin_x, origin_y) = self.board_view_offset();
+        CanvasExportSnapshot {
+            viewport: CanvasExportViewport {
+                logical_width: self.surface.width(),
+                logical_height: self.surface.height(),
+                scale: self.surface.scale(),
+                origin_x: origin_x.round() as i32,
+                origin_y: origin_y.round() as i32,
+            },
+            backdrop: match self.input_state.boards.active_background() {
+                crate::input::BoardBackground::Transparent => {
+                    CanvasExportBackdropSnapshot::Transparent
+                }
+                crate::input::BoardBackground::Solid(color) => {
+                    CanvasExportBackdropSnapshot::Solid(*color)
+                }
+            },
+            board: BoardExportSnapshot {
+                frame: self
+                    .input_state
+                    .boards
+                    .active_frame()
+                    .clone_without_history(),
+            },
+            render_profile: self.input_state.export_render_profile(),
+        }
+    }
+
     pub(in crate::backend::wayland) fn begin_pending_capture(&mut self, request: CaptureRequest) {
         log::info!("Requesting {:?} capture", request.capture_type);
         if let Err(e) = self.capture.manager_mut().request_capture(

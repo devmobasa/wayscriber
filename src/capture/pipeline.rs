@@ -3,7 +3,10 @@ use std::{fmt, path::PathBuf, sync::Arc};
 use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
     file::FileSaveConfig,
-    types::{CaptureDestination, CaptureError, CaptureResult, CaptureType},
+    types::{
+        CaptureDestination, CaptureError, CaptureResult, CaptureType, ImageDeliveryRequest,
+        ImageOperationKind,
+    },
 };
 use tokio::task;
 
@@ -27,6 +30,37 @@ impl fmt::Debug for CaptureRequest {
                     .map(|cfg| cfg.filename_template.clone()),
             )
             .finish()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum CaptureManagerRequest {
+    Capture(CaptureRequest),
+    DeliverImage(ImageDeliveryRequest),
+}
+
+impl CaptureManagerRequest {
+    pub(crate) fn operation(&self) -> ImageOperationKind {
+        match self {
+            Self::Capture(_) => ImageOperationKind::Screenshot,
+            Self::DeliverImage(request) => request.operation,
+        }
+    }
+}
+
+impl fmt::Debug for CaptureManagerRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Capture(request) => f.debug_tuple("Capture").field(request).finish(),
+            Self::DeliverImage(request) => f
+                .debug_struct("DeliverImage")
+                .field("destination", &request.destination)
+                .field("operation", &request.operation)
+                .field("width", &request.image.width)
+                .field("height", &request.image.height)
+                .field("format", &request.image.format)
+                .finish(),
+        }
     }
 }
 
@@ -123,6 +157,84 @@ pub(crate) async fn perform_capture(
 
     Ok(CaptureResult {
         image_data,
+        operation: ImageOperationKind::Screenshot,
+        fallback_format_override: None,
+        saved_path,
+        copied_to_clipboard,
+    })
+}
+
+pub(crate) async fn deliver_image(
+    request: ImageDeliveryRequest,
+    dependencies: Arc<CaptureDependencies>,
+) -> Result<CaptureResult, CaptureError> {
+    log::info!(
+        "Starting image delivery: {:?} {}x{} {} bytes",
+        request.operation,
+        request.image.width,
+        request.image.height,
+        request.image.bytes.len()
+    );
+
+    let image_data = request.image.bytes;
+    let save_config = request.save_config.map(|mut config| {
+        config.format = request.image.format.extension.clone();
+        config
+    });
+
+    let mut save_error = None;
+    let saved_path = match request.destination {
+        CaptureDestination::FileOnly => {
+            if let Some(config) =
+                save_config.filter(|config| !config.save_directory.as_os_str().is_empty())
+            {
+                Some(save_image(Arc::clone(&dependencies.saver), image_data.clone(), config).await?)
+            } else {
+                None
+            }
+        }
+        CaptureDestination::ClipboardAndFile => {
+            if let Some(config) =
+                save_config.filter(|config| !config.save_directory.as_os_str().is_empty())
+            {
+                match save_image(Arc::clone(&dependencies.saver), image_data.clone(), config).await
+                {
+                    Ok(path) => Some(path),
+                    Err(err) => {
+                        log::warn!("Failed to save delivered image: {}", err);
+                        save_error = Some(err);
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        }
+        CaptureDestination::ClipboardOnly => None,
+    };
+
+    let copied_to_clipboard = match request.destination {
+        CaptureDestination::ClipboardOnly | CaptureDestination::ClipboardAndFile => {
+            log::info!(
+                "Attempting to copy delivered image {} bytes to clipboard",
+                image_data.len()
+            );
+            copy_to_clipboard(Arc::clone(&dependencies.clipboard), image_data.clone()).await
+        }
+        CaptureDestination::FileOnly => false,
+    };
+
+    if matches!(request.destination, CaptureDestination::ClipboardAndFile)
+        && !copied_to_clipboard
+        && let Some(save_error) = save_error
+    {
+        return Err(save_error);
+    }
+
+    Ok(CaptureResult {
+        image_data,
+        operation: request.operation,
+        fallback_format_override: request.fallback_format_override,
         saved_path,
         copied_to_clipboard,
     })

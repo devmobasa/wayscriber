@@ -2,7 +2,10 @@ use super::super::base::{
     BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback,
     TEXT_EDIT_ENTRY_DURATION_MS, ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState,
 };
-use crate::capture::file::{FileSaveConfig, save_screenshot};
+use crate::capture::{
+    ImageOperationKind,
+    file::{FileSaveConfig, save_screenshot},
+};
 use crate::config::keybindings::Action;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -184,11 +187,13 @@ impl InputState {
         &mut self,
         image_data: Vec<u8>,
         save_config: FileSaveConfig,
+        operation: ImageOperationKind,
         exit_after_save: bool,
     ) {
         self.pending_clipboard_fallback = Some(PendingClipboardFallback {
             image_data,
             save_config,
+            operation,
             exit_after_save,
         });
     }
@@ -205,7 +210,11 @@ impl InputState {
 
         match save_screenshot(&fallback.image_data, &fallback.save_config) {
             Ok(path) => {
-                log::info!("Saved pending screenshot to: {}", path.display());
+                log::info!(
+                    "Saved pending {} to: {}",
+                    fallback.operation.saved_log_label(),
+                    path.display()
+                );
                 self.last_capture_path = Some(path.clone());
                 if let Some(filename) = path.file_name() {
                     self.set_ui_toast(
@@ -213,7 +222,13 @@ impl InputState {
                         format!("Saved to {}", filename.to_string_lossy()),
                     );
                 } else {
-                    self.set_ui_toast(UiToastKind::Info, "Screenshot saved");
+                    self.set_ui_toast(
+                        UiToastKind::Info,
+                        match fallback.operation {
+                            ImageOperationKind::Screenshot => "Screenshot saved",
+                            ImageOperationKind::CanvasExport => "Canvas exported",
+                        },
+                    );
                 }
                 // Exit if exit-after-capture was originally enabled
                 if fallback.exit_after_save {
@@ -221,12 +236,17 @@ impl InputState {
                 }
             }
             Err(err) => {
-                log::error!("Failed to save pending screenshot: {}", err);
+                let message = fallback.operation.format_error(&err);
+                log::error!(
+                    "Failed to save pending {}: {}",
+                    fallback.operation.saved_log_label(),
+                    message
+                );
                 // Restore fallback so user can retry
                 self.pending_clipboard_fallback = Some(fallback);
                 self.set_ui_toast_with_action(
                     UiToastKind::Error,
-                    format!("Save failed: {}", err),
+                    format!("Save failed: {message}"),
                     "Retry",
                     Action::SavePendingToFile,
                 );
@@ -390,6 +410,42 @@ mod tests {
         let toast = state.ui_toast.as_ref().expect("warning toast");
         assert_eq!(toast.kind, UiToastKind::Warning);
         assert_eq!(toast.message, "No pending image to save");
+        assert!(state.blocked_action_feedback.is_some());
+    }
+
+    #[test]
+    fn canvas_clipboard_fallback_retry_failure_uses_canvas_wording() {
+        let mut state = make_state();
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let not_a_directory = temp.path().join("not-a-directory");
+        std::fs::write(&not_a_directory, b"file").expect("test fixture file");
+
+        state.set_clipboard_fallback(
+            vec![1, 2, 3],
+            FileSaveConfig {
+                save_directory: not_a_directory,
+                filename_template: "canvas_fallback".to_string(),
+                format: "png".to_string(),
+            },
+            ImageOperationKind::CanvasExport,
+            false,
+        );
+
+        state.save_pending_clipboard_to_file();
+
+        let toast = state.ui_toast.as_ref().expect("error toast");
+        assert_eq!(toast.kind, UiToastKind::Error);
+        assert!(
+            toast.message.contains("Failed to save canvas export"),
+            "unexpected toast: {}",
+            toast.message
+        );
+        assert!(
+            !toast.message.to_lowercase().contains("screenshot"),
+            "canvas fallback failure should not mention screenshot: {}",
+            toast.message
+        );
+        assert!(state.pending_clipboard_fallback.is_some());
         assert!(state.blocked_action_feedback.is_some());
     }
 

@@ -142,7 +142,9 @@ fn validate_render_profiles_normalizes_ids_and_mappings() {
             active: Some(" PRINT ".to_string()),
             apply_to_canvas: true,
             apply_to_ui: true,
-            items: vec![
+            export: RenderProfileExportMode::Profile,
+            export_profile: Some(" off ".to_string()),
+            profiles: vec![
                 RenderProfileConfig {
                     id: " Print ".to_string(),
                     name: "  Print Friendly  ".to_string(),
@@ -162,7 +164,7 @@ fn validate_render_profiles_normalizes_ids_and_mappings() {
                     ],
                 },
                 RenderProfileConfig {
-                    id: "print".to_string(),
+                    id: "off".to_string(),
                     name: " ".to_string(),
                     mappings: Vec::new(),
                 },
@@ -174,12 +176,20 @@ fn validate_render_profiles_normalizes_ids_and_mappings() {
     config.validate_and_clamp();
 
     assert_eq!(config.render_profiles.active.as_deref(), Some("print"));
-    assert_eq!(config.render_profiles.items[0].id, "print");
-    assert_eq!(config.render_profiles.items[0].name, "Print Friendly");
-    assert_eq!(config.render_profiles.items[1].id, "print-2");
-    assert_eq!(config.render_profiles.items[1].name, "Profile 2");
     assert_eq!(
-        config.render_profiles.items[0].mappings,
+        config.render_profiles.export,
+        RenderProfileExportMode::Profile
+    );
+    assert_eq!(
+        config.render_profiles.export_profile.as_deref(),
+        Some("off")
+    );
+    assert_eq!(config.render_profiles.profiles[0].id, "print");
+    assert_eq!(config.render_profiles.profiles[0].name, "Print Friendly");
+    assert_eq!(config.render_profiles.profiles[1].id, "off");
+    assert_eq!(config.render_profiles.profiles[1].name, "Profile 2");
+    assert_eq!(
+        config.render_profiles.profiles[0].mappings,
         vec![RenderColorMappingConfig {
             from: "#000000".to_string(),
             to: "#111111".to_string(),
@@ -194,7 +204,9 @@ fn validate_render_profiles_disables_missing_active_profile() {
             active: Some("missing".to_string()),
             apply_to_canvas: true,
             apply_to_ui: true,
-            items: vec![RenderProfileConfig {
+            export: RenderProfileExportMode::Off,
+            export_profile: None,
+            profiles: vec![RenderProfileConfig {
                 id: "print".to_string(),
                 name: "Print".to_string(),
                 mappings: Vec::new(),
@@ -206,6 +218,60 @@ fn validate_render_profiles_disables_missing_active_profile() {
     config.validate_and_clamp();
 
     assert_eq!(config.render_profiles.active, None);
+}
+
+#[test]
+fn validate_render_profiles_disables_missing_export_profile() {
+    let mut config = Config {
+        render_profiles: RenderProfilesConfig {
+            active: None,
+            apply_to_canvas: true,
+            apply_to_ui: true,
+            export: RenderProfileExportMode::Profile,
+            export_profile: Some("missing".to_string()),
+            profiles: vec![RenderProfileConfig {
+                id: "print".to_string(),
+                name: "Print".to_string(),
+                mappings: Vec::new(),
+            }],
+        },
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.render_profiles.export, RenderProfileExportMode::Off);
+    assert_eq!(config.render_profiles.export_profile, None);
+}
+
+#[test]
+fn validate_render_profiles_ignores_stale_export_profile_for_active_export() {
+    let mut config = Config {
+        render_profiles: RenderProfilesConfig {
+            active: Some("print".to_string()),
+            apply_to_canvas: true,
+            apply_to_ui: true,
+            export: RenderProfileExportMode::Active,
+            export_profile: Some("missing".to_string()),
+            profiles: vec![RenderProfileConfig {
+                id: "print".to_string(),
+                name: "Print".to_string(),
+                mappings: Vec::new(),
+            }],
+        },
+        ..Config::default()
+    };
+
+    config.validate_and_clamp();
+
+    assert_eq!(
+        config.render_profiles.export,
+        RenderProfileExportMode::Active
+    );
+    assert_eq!(
+        config.render_profiles.export_profile.as_deref(),
+        Some("missing")
+    );
 }
 
 #[test]

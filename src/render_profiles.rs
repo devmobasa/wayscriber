@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::config::{RenderProfileConfig, RenderProfilesConfig};
+use crate::config::{RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig};
 use crate::util::Rect;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -26,6 +26,11 @@ pub struct RenderColorProfile {
 }
 
 impl RenderColorProfile {
+    #[allow(dead_code)] // Used by tests and consumers of the library API.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -34,7 +39,7 @@ impl RenderColorProfile {
         self.mappings.is_empty()
     }
 
-    fn from_config(config: &RenderProfileConfig) -> Option<Self> {
+    pub(crate) fn from_config(config: &RenderProfileConfig) -> Option<Self> {
         let mut mappings = HashMap::with_capacity(config.mappings.len());
         for mapping in &config.mappings {
             let Some(from) = parse_hex_rgb(&mapping.from) else {
@@ -188,6 +193,8 @@ impl RenderColorProfile {
 pub struct RenderProfileSet {
     profiles: Vec<RenderColorProfile>,
     active_index: Option<usize>,
+    export_mode: RenderProfileExportMode,
+    export_profile_index: Option<usize>,
     apply_to_canvas: bool,
     apply_to_ui: bool,
     generation: u64,
@@ -198,6 +205,8 @@ impl Default for RenderProfileSet {
         Self {
             profiles: Vec::new(),
             active_index: None,
+            export_mode: RenderProfileExportMode::Off,
+            export_profile_index: None,
             apply_to_canvas: true,
             apply_to_ui: true,
             generation: 0,
@@ -208,7 +217,7 @@ impl Default for RenderProfileSet {
 impl RenderProfileSet {
     pub fn from_config(config: &RenderProfilesConfig) -> Self {
         let profiles: Vec<_> = config
-            .items
+            .profiles
             .iter()
             .filter_map(RenderColorProfile::from_config)
             .collect();
@@ -216,9 +225,15 @@ impl RenderProfileSet {
             let active = normalize_profile_id(active);
             profiles.iter().position(|profile| profile.id == active)
         });
+        let export_profile_index = config.export_profile.as_ref().and_then(|profile_id| {
+            let profile_id = normalize_profile_id(profile_id);
+            profiles.iter().position(|profile| profile.id == profile_id)
+        });
         Self {
             profiles,
             active_index,
+            export_mode: config.export,
+            export_profile_index,
             apply_to_canvas: config.apply_to_canvas,
             apply_to_ui: config.apply_to_ui,
             generation: 0,
@@ -227,6 +242,17 @@ impl RenderProfileSet {
 
     pub fn active(&self) -> Option<&RenderColorProfile> {
         self.active_index.and_then(|index| self.profiles.get(index))
+    }
+
+    pub fn export_profile(&self) -> Option<RenderColorProfile> {
+        match self.export_mode {
+            RenderProfileExportMode::Off => None,
+            RenderProfileExportMode::Active => self.active().cloned(),
+            RenderProfileExportMode::Profile => self
+                .export_profile_index
+                .and_then(|index| self.profiles.get(index))
+                .cloned(),
+        }
     }
 
     pub fn generation(&self) -> u64 {
@@ -464,7 +490,9 @@ mod tests {
             active: Some("first".to_string()),
             apply_to_canvas: true,
             apply_to_ui: true,
-            items: vec![
+            export: RenderProfileExportMode::Off,
+            export_profile: None,
+            profiles: vec![
                 RenderProfileConfig {
                     id: "first".to_string(),
                     name: "First".to_string(),
@@ -494,10 +522,74 @@ mod tests {
             active: None,
             apply_to_canvas: false,
             apply_to_ui: true,
-            items: Vec::new(),
+            export: RenderProfileExportMode::Off,
+            export_profile: None,
+            profiles: Vec::new(),
         });
 
         assert!(!set.applies_to_canvas());
         assert!(set.applies_to_ui());
+    }
+
+    #[test]
+    fn export_profile_resolves_off_active_and_named_profiles() {
+        let config = RenderProfilesConfig {
+            active: Some("active".to_string()),
+            apply_to_canvas: true,
+            apply_to_ui: true,
+            export: RenderProfileExportMode::Active,
+            export_profile: Some("off".to_string()),
+            profiles: vec![
+                RenderProfileConfig {
+                    id: "active".to_string(),
+                    name: "Active".to_string(),
+                    mappings: Vec::new(),
+                },
+                RenderProfileConfig {
+                    id: "off".to_string(),
+                    name: "Off Named Profile".to_string(),
+                    mappings: Vec::new(),
+                },
+            ],
+        };
+
+        let mut active = RenderProfileSet::from_config(&config);
+        assert_eq!(
+            active.export_profile().as_ref().map(|p| p.id()),
+            Some("active")
+        );
+
+        let mut named_config = config;
+        named_config.export = RenderProfileExportMode::Profile;
+        active = RenderProfileSet::from_config(&named_config);
+        assert_eq!(
+            active.export_profile().as_ref().map(|p| p.id()),
+            Some("off")
+        );
+
+        named_config.export = RenderProfileExportMode::Off;
+        active = RenderProfileSet::from_config(&named_config);
+        assert!(active.export_profile().is_none());
+    }
+
+    #[test]
+    fn config_serializes_profile_collection_as_profiles() {
+        let config = RenderProfilesConfig {
+            active: None,
+            apply_to_canvas: true,
+            apply_to_ui: true,
+            export: RenderProfileExportMode::Off,
+            export_profile: None,
+            profiles: vec![RenderProfileConfig {
+                id: "print".to_string(),
+                name: "Print".to_string(),
+                mappings: Vec::new(),
+            }],
+        };
+
+        let serialized = toml::to_string(&config).expect("serialize");
+
+        assert!(serialized.contains("[[profiles]]"));
+        assert!(!serialized.contains("[[items]]"));
     }
 }
