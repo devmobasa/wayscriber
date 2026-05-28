@@ -41,7 +41,7 @@ pub use render_profiles::{
 pub use session::{SessionCompression, SessionConfig, SessionStorageMode};
 pub use status_bar::StatusBarStyle;
 #[cfg(tablet)]
-pub use tablet::TabletInputConfig;
+pub use tablet::{StylusButtonBinding, TabletInputConfig};
 #[allow(unused_imports)]
 pub use toolbar::{
     ToolbarConfig, ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides,

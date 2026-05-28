@@ -34,9 +34,6 @@ pub use enums::{RadialMenuMouseBinding, StatusPosition, XdgFocusLossBehavior};
 #[allow(unused_imports)]
 pub use io::{ConfigSource, LoadedConfig};
 pub use keybindings::{Action, KeyBinding, KeybindingsConfig};
-#[cfg(tablet)]
-#[allow(unused_imports)]
-pub use types::TabletInputConfig;
 #[allow(unused_imports)]
 pub use types::{
     ArrowConfig, BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig,
@@ -48,6 +45,9 @@ pub use types::{
     SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig, ToolbarLayoutMode,
     ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
 };
+#[cfg(tablet)]
+#[allow(unused_imports)]
+pub use types::{StylusButtonBinding, TabletInputConfig};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

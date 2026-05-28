@@ -321,6 +321,22 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 // Note: We don't switch tools here - this event comes during initial
                 // tool setup, before proximity_in. The actual switch happens in proximity_in.
             }
+            Event::Button {
+                button,
+                state: button_state,
+                ..
+            } => {
+                use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ButtonState;
+                let pressed = button_state == wayland_client::WEnum::Value(ButtonState::Pressed);
+                debug!(
+                    "Tablet tool button: {} {}",
+                    button,
+                    if pressed { "pressed" } else { "released" }
+                );
+                if pressed {
+                    state.handle_stylus_button_press(button);
+                }
+            }
             Event::Frame { .. } => {
                 state.commit_pending_stylus_frame();
                 debug!("Tablet frame event");

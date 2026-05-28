@@ -1,6 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+use crate::config::keybindings::Action;
 use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
+
+/// Binding for a single stylus barrel button.
+///
+/// When the button is pressed, `action` is dispatched (e.g.
+/// `"toggle_radial_menu"`).  Set to `null` / omit to ignore the button.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct StylusButtonBinding {
+    /// Action dispatched when the button is pressed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
+}
 
 /// Tablet/stylus input configuration.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
@@ -41,6 +54,14 @@ pub struct TabletInputConfig {
     /// Per-step scale factor when using pressure thickness scale mode.
     #[serde(default = "default_pressure_thickness_scale_step")]
     pub pressure_thickness_scale_step: f64,
+
+    /// Binding for the primary barrel button (BTN_STYLUS / button 331).
+    #[serde(default = "default_stylus_button")]
+    pub stylus_button: StylusButtonBinding,
+
+    /// Binding for the secondary barrel button (BTN_STYLUS2 / button 332).
+    #[serde(default = "default_stylus_button2")]
+    pub stylus_button2: StylusButtonBinding,
 }
 
 impl Default for TabletInputConfig {
@@ -55,6 +76,8 @@ impl Default for TabletInputConfig {
             pressure_thickness_edit_mode: PressureThicknessEditMode::Disabled,
             pressure_thickness_entry_mode: PressureThicknessEntryMode::PressureOnly,
             pressure_thickness_scale_step: 0.1,
+            stylus_button: default_stylus_button(),
+            stylus_button2: default_stylus_button2(),
         }
     }
 }
@@ -85,4 +108,14 @@ fn default_pressure_variation_threshold() -> f64 {
 
 fn default_pressure_thickness_scale_step() -> f64 {
     0.1
+}
+
+fn default_stylus_button() -> StylusButtonBinding {
+    StylusButtonBinding {
+        action: Some(Action::ToggleRadialMenu),
+    }
+}
+
+fn default_stylus_button2() -> StylusButtonBinding {
+    StylusButtonBinding::default()
 }
