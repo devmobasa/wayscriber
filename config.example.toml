@@ -933,6 +933,21 @@ pressure_thickness_entry_mode = "pressure_only"
 # Per-step scale factor when using scale mode (0.1 = +/-10%)
 pressure_thickness_scale_step = 0.1
 
+# Barrel button bindings.
+#
+# Each button can trigger a keybinding action on press (e.g. "toggle_radial_menu").
+# Omit action to ignore the button.
+# Eraser switching is handled automatically via the physical tool type
+# (controlled by auto_eraser_switch above), not via barrel buttons.
+
+# Primary barrel button (BTN_STYLUS / button 331): open tool wheel
+[tablet.stylus_button]
+action = "toggle_radial_menu"
+
+# Secondary barrel button (BTN_STYLUS2 / button 332): unbound
+[tablet.stylus_button2]
+# action = "undo"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CAPTURE SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════

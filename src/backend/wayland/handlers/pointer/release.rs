@@ -38,7 +38,7 @@ impl WaylandState {
                     .input_state
                     .check_toast_click(screen_x.round() as i32, screen_y.round() as i32);
                 if hit && let Some(action) = action {
-                    self.input_state.handle_action(action);
+                    self.dispatch_input_action(action);
                 }
             }
             return;
