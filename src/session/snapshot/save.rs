@@ -132,22 +132,46 @@ impl fmt::Display for SavePayloadTooLarge {
 impl std::error::Error for SavePayloadTooLarge {}
 
 /// Persist the provided snapshot to disk according to the configured options.
+#[allow(dead_code)]
 pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
     save_snapshot_with_report(snapshot, options).map(|_| ())
 }
 
 /// Persist the provided snapshot and report what was written.
+#[allow(dead_code)]
 pub(crate) fn save_snapshot_with_report(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
 ) -> Result<Option<SaveSnapshotReport>> {
-    save_snapshot_with_expanded_limit(snapshot, options, DEFAULT_MAX_EXPANDED_SESSION_BYTES)
+    save_snapshot_with_report_and_clear_boundary(snapshot, options, false)
+}
+
+pub(crate) fn save_snapshot_with_report_and_clear_boundary(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    contentless_clear_boundary: bool,
+) -> Result<Option<SaveSnapshotReport>> {
+    save_snapshot_with_expanded_limit_and_strategy(
+        snapshot,
+        options,
+        DEFAULT_MAX_EXPANDED_SESSION_BYTES,
+        HistoryFallbackStrategy::LargestFitting,
+        contentless_clear_boundary,
+    )
 }
 
 #[allow(dead_code)]
 pub(crate) fn save_snapshot_autosave_with_report(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
+) -> Result<Option<SaveSnapshotReport>> {
+    save_snapshot_autosave_with_report_and_clear_boundary(snapshot, options, false)
+}
+
+pub(crate) fn save_snapshot_autosave_with_report_and_clear_boundary(
+    snapshot: &SessionSnapshot,
+    options: &SessionOptions,
+    contentless_clear_boundary: bool,
 ) -> Result<Option<SaveSnapshotReport>> {
     save_snapshot_with_expanded_limit_and_strategy(
         snapshot,
@@ -156,6 +180,7 @@ pub(crate) fn save_snapshot_autosave_with_report(
         HistoryFallbackStrategy::Bounded {
             max_depth: AUTOSAVE_HISTORY_FALLBACK_DEPTH,
         },
+        contentless_clear_boundary,
     )
 }
 
@@ -228,6 +253,7 @@ pub(super) fn estimate_snapshot_payload_with_expanded_limit(
     ))
 }
 
+#[allow(dead_code)]
 pub(super) fn save_snapshot_with_expanded_limit(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,
@@ -238,6 +264,7 @@ pub(super) fn save_snapshot_with_expanded_limit(
         options,
         max_expanded_size,
         HistoryFallbackStrategy::LargestFitting,
+        false,
     )
 }
 
@@ -246,6 +273,7 @@ fn save_snapshot_with_expanded_limit_and_strategy(
     options: &SessionOptions,
     max_expanded_size: u64,
     history_fallback: HistoryFallbackStrategy,
+    contentless_clear_boundary: bool,
 ) -> Result<Option<SaveSnapshotReport>> {
     if !options.any_enabled() && !options.persist_history && snapshot.tool_state.is_none() {
         debug!("Session persistence disabled for all boards; skipping save");
@@ -277,7 +305,13 @@ fn save_snapshot_with_expanded_limit_and_strategy(
     );
 
     let save_started = Instant::now();
-    let result = save_snapshot_inner(snapshot, options, max_expanded_size, history_fallback);
+    let result = save_snapshot_inner(
+        snapshot,
+        options,
+        max_expanded_size,
+        history_fallback,
+        contentless_clear_boundary,
+    );
     match &result {
         Ok(Some(report)) => info!(
             "Session save pipeline finished for {} in {:?}: outcome={:?}, written={} bytes, raw={} bytes, compression={}",
@@ -316,9 +350,16 @@ fn save_snapshot_inner(
     options: &SessionOptions,
     max_expanded_size: u64,
     history_fallback: HistoryFallbackStrategy,
+    contentless_clear_boundary: bool,
 ) -> Result<Option<SaveSnapshotReport>> {
     let session_path = options.session_file_path();
     let backup_path = options.backup_file_path();
+    let backup_recovery_marker_path = options.backup_recovery_marker_file_path();
+    let recovery_path = options.recovery_file_path();
+    let recovery_recoverable_marker_path = options.recovery_recoverable_marker_file_path();
+    let had_session_file = session_path.exists();
+    let snapshot_has_board_data = snapshot.has_board_data();
+    let contentless_clear_boundary = !snapshot_has_board_data && contentless_clear_boundary;
     let last_modified = now_rfc3339();
 
     let prepare_started = Instant::now();
@@ -384,8 +425,12 @@ fn save_snapshot_inner(
             compressed: prepared.compressed,
         };
         if matches!(prepared.outcome, SaveSnapshotOutcome::ClearedEmpty) {
+            write_clear_marker(options)?;
             remove_session_file(&session_path)?;
-            remove_recovery_file(options);
+            remove_backup_file(options);
+            remove_backup_recovery_marker_file(options);
+            remove_recovery_files(options);
+            remove_recovery_recoverable_marker_file(options);
         }
         log_near_limit(&report);
         return Ok(Some(report));
@@ -419,9 +464,33 @@ fn save_snapshot_inner(
     }
     let write_elapsed = write_started.elapsed();
 
+    if contentless_clear_boundary {
+        write_clear_marker(options)?;
+    }
+
     let replace_started = Instant::now();
+    let preserves_recoverable_backup =
+        !snapshot_has_board_data && !contentless_clear_boundary && backup_path.exists();
+    let preserves_recoverable_recovery = !snapshot_has_board_data
+        && !contentless_clear_boundary
+        && recovery_path.exists()
+        && (!had_session_file || recovery_recoverable_marker_path.exists());
+    let preserve_existing_backup = preserves_recoverable_backup
+        && backup_recovery_marker_path.exists()
+        && session_path.exists();
+    let mut should_mark_backup_recoverable = false;
+    let should_mark_recovery_recoverable = preserves_recoverable_recovery;
     if session_path.exists() {
-        if options.backup_retention > 0 {
+        if preserve_existing_backup {
+            fs::remove_file(&session_path).with_context(|| {
+                format!(
+                    "failed to remove previous contentless session file {} while preserving backup {}",
+                    session_path.display(),
+                    backup_path.display()
+                )
+            })?;
+            should_mark_backup_recoverable = true;
+        } else if options.backup_retention > 0 {
             if backup_path.exists() {
                 fs::remove_file(&backup_path).ok();
             }
@@ -432,9 +501,21 @@ fn save_snapshot_inner(
                     backup_path.display()
                 )
             })?;
+            if !snapshot_has_board_data && !contentless_clear_boundary {
+                should_mark_backup_recoverable = true;
+            }
         } else {
             fs::remove_file(&session_path).ok();
         }
+    } else if preserves_recoverable_backup {
+        should_mark_backup_recoverable = true;
+    }
+
+    if should_mark_backup_recoverable {
+        write_backup_recovery_marker(options)?;
+    }
+    if should_mark_recovery_recoverable {
+        write_recovery_recoverable_marker(options)?;
     }
 
     fs::rename(&tmp_path, &session_path).with_context(|| {
@@ -471,7 +552,27 @@ fn save_snapshot_inner(
         compressed,
     };
     log_near_limit(&report);
-    remove_recovery_file(options);
+    if snapshot_has_board_data {
+        if remove_recoverable_artifacts_suppressed_by_clear_marker(options) {
+            remove_clear_marker_file(options);
+        } else {
+            warn!(
+                "Keeping session clear marker {} because a stale recoverable artifact could not be removed",
+                options.clear_marker_file_path().display()
+            );
+        }
+        remove_backup_recovery_marker_file(options);
+        remove_recovery_recoverable_marker_file(options);
+        remove_recovery_file(options);
+    } else if contentless_clear_boundary {
+        remove_backup_file(options);
+        remove_backup_recovery_marker_file(options);
+        remove_recovery_files(options);
+        remove_recovery_recoverable_marker_file(options);
+    } else if had_session_file && !preserves_recoverable_recovery {
+        remove_recovery_file(options);
+        remove_recovery_recoverable_marker_file(options);
+    }
     Ok(Some(report))
 }
 
@@ -1061,6 +1162,305 @@ fn remove_session_file(session_path: &Path) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+fn remove_recoverable_artifacts_suppressed_by_clear_marker(options: &SessionOptions) -> bool {
+    let marker_path = options.clear_marker_file_path();
+    let Ok(marker_metadata) = fs::metadata(&marker_path) else {
+        return true;
+    };
+
+    let backup_removed = remove_recoverable_artifact_suppressed_by_clear_marker(
+        &options.backup_file_path(),
+        "session backup",
+        &marker_metadata,
+    );
+    let recovery_removed = remove_recoverable_artifact_suppressed_by_clear_marker(
+        &options.recovery_file_path(),
+        "session recovery",
+        &marker_metadata,
+    );
+    backup_removed && recovery_removed
+}
+
+fn remove_recoverable_artifact_suppressed_by_clear_marker(
+    path: &Path,
+    label: &str,
+    marker_metadata: &fs::Metadata,
+) -> bool {
+    let Ok(artifact_metadata) = fs::metadata(path) else {
+        return true;
+    };
+    if artifact_is_newer_than_marker(&artifact_metadata, marker_metadata) {
+        return true;
+    }
+
+    match fs::remove_file(path) {
+        Ok(()) => {
+            info!(
+                "Removed stale {} {} before removing session clear marker",
+                label,
+                path.display()
+            );
+            true
+        }
+        Err(err) => {
+            warn!(
+                "Failed to remove stale {} {} before removing session clear marker: {}",
+                label,
+                path.display(),
+                err
+            );
+            false
+        }
+    }
+}
+
+fn artifact_is_newer_than_marker(
+    artifact_metadata: &fs::Metadata,
+    marker_metadata: &fs::Metadata,
+) -> bool {
+    match (artifact_metadata.modified(), marker_metadata.modified()) {
+        (Ok(artifact_modified), Ok(marker_modified)) => artifact_modified > marker_modified,
+        _ => false,
+    }
+}
+
+fn write_backup_recovery_marker(options: &SessionOptions) -> Result<()> {
+    let marker_path = options.backup_recovery_marker_file_path();
+    let tmp_path = temp_path(&marker_path)?;
+    {
+        let mut tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .with_context(|| {
+                format!(
+                    "failed to open temporary backup recovery marker {}",
+                    tmp_path.display()
+                )
+            })?;
+        tmp_file
+            .write_all(now_rfc3339().as_bytes())
+            .context("failed to write backup recovery marker")?;
+        tmp_file
+            .sync_all()
+            .context("failed to sync backup recovery marker")?;
+    }
+    fs::rename(&tmp_path, &marker_path).with_context(|| {
+        format!(
+            "failed to move temporary backup recovery marker {} -> {}",
+            tmp_path.display(),
+            marker_path.display()
+        )
+    })?;
+    info!(
+        "Wrote backup recovery marker {} for contentless non-clear session save",
+        marker_path.display()
+    );
+    Ok(())
+}
+
+fn write_recovery_recoverable_marker(options: &SessionOptions) -> Result<()> {
+    let marker_path = options.recovery_recoverable_marker_file_path();
+    let tmp_path = temp_path(&marker_path)?;
+    {
+        let mut tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .with_context(|| {
+                format!(
+                    "failed to open temporary recovery recoverable marker {}",
+                    tmp_path.display()
+                )
+            })?;
+        tmp_file
+            .write_all(now_rfc3339().as_bytes())
+            .context("failed to write recovery recoverable marker")?;
+        tmp_file
+            .sync_all()
+            .context("failed to sync recovery recoverable marker")?;
+    }
+    fs::rename(&tmp_path, &marker_path).with_context(|| {
+        format!(
+            "failed to move temporary recovery recoverable marker {} -> {}",
+            tmp_path.display(),
+            marker_path.display()
+        )
+    })?;
+    info!(
+        "Wrote recovery recoverable marker {} for contentless non-clear session save",
+        marker_path.display()
+    );
+    Ok(())
+}
+
+fn write_clear_marker(options: &SessionOptions) -> Result<()> {
+    let marker_path = options.clear_marker_file_path();
+    let tmp_path = temp_path(&marker_path)?;
+    {
+        let mut tmp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .with_context(|| {
+                format!(
+                    "failed to open temporary session clear marker {}",
+                    tmp_path.display()
+                )
+            })?;
+        tmp_file
+            .write_all(now_rfc3339().as_bytes())
+            .context("failed to write session clear marker")?;
+        tmp_file
+            .sync_all()
+            .context("failed to sync session clear marker")?;
+    }
+    fs::rename(&tmp_path, &marker_path).with_context(|| {
+        format!(
+            "failed to move temporary session clear marker {} -> {}",
+            tmp_path.display(),
+            marker_path.display()
+        )
+    })?;
+    info!(
+        "Wrote session clear marker {} for empty saved session",
+        marker_path.display()
+    );
+    Ok(())
+}
+
+fn remove_clear_marker_file(options: &SessionOptions) {
+    let marker_path = options.clear_marker_file_path();
+    if !marker_path.exists() {
+        return;
+    }
+    match fs::remove_file(&marker_path) {
+        Ok(()) => info!(
+            "Removed session clear marker after successful contentful save: {}",
+            marker_path.display()
+        ),
+        Err(err) => warn!(
+            "Failed to remove session clear marker {} after successful contentful save: {}",
+            marker_path.display(),
+            err
+        ),
+    }
+}
+
+fn remove_backup_file(options: &SessionOptions) {
+    let backup_path = options.backup_file_path();
+    if !backup_path.exists() {
+        return;
+    }
+    match fs::remove_file(&backup_path) {
+        Ok(()) => info!(
+            "Removed session backup after intentional empty clear: {}",
+            backup_path.display()
+        ),
+        Err(err) => warn!(
+            "Failed to remove session backup {} after intentional empty clear: {}",
+            backup_path.display(),
+            err
+        ),
+    }
+}
+
+fn remove_backup_recovery_marker_file(options: &SessionOptions) {
+    let marker_path = options.backup_recovery_marker_file_path();
+    if !marker_path.exists() {
+        return;
+    }
+    match fs::remove_file(&marker_path) {
+        Ok(()) => info!("Removed backup recovery marker: {}", marker_path.display()),
+        Err(err) => warn!(
+            "Failed to remove backup recovery marker {}: {}",
+            marker_path.display(),
+            err
+        ),
+    }
+}
+
+fn remove_recovery_recoverable_marker_file(options: &SessionOptions) {
+    let marker_path = options.recovery_recoverable_marker_file_path();
+    if !marker_path.exists() {
+        return;
+    }
+    match fs::remove_file(&marker_path) {
+        Ok(()) => info!(
+            "Removed recovery recoverable marker: {}",
+            marker_path.display()
+        ),
+        Err(err) => warn!(
+            "Failed to remove recovery recoverable marker {}: {}",
+            marker_path.display(),
+            err
+        ),
+    }
+}
+
+fn remove_recovery_files(options: &SessionOptions) {
+    let recovery_path = options.recovery_file_path();
+    let Some(recovery_name) = recovery_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+    else {
+        remove_recovery_file(options);
+        return;
+    };
+    let Some(parent) = recovery_path.parent() else {
+        remove_recovery_file(options);
+        return;
+    };
+
+    let mut removed_any = false;
+    match fs::read_dir(parent) {
+        Ok(entries) => {
+            for entry in entries {
+                let Ok(entry) = entry else {
+                    continue;
+                };
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                if name != recovery_name && !name.starts_with(&format!("{recovery_name}.")) {
+                    continue;
+                }
+                match fs::remove_file(&path) {
+                    Ok(()) => {
+                        removed_any = true;
+                        info!(
+                            "Removed session recovery artifact after intentional empty clear: {}",
+                            path.display()
+                        );
+                    }
+                    Err(err) => warn!(
+                        "Failed to remove session recovery artifact {} after intentional empty clear: {}",
+                        path.display(),
+                        err
+                    ),
+                }
+            }
+        }
+        Err(err) => warn!(
+            "Failed to scan session recovery artifacts under {} after intentional empty clear: {}",
+            parent.display(),
+            err
+        ),
+    }
+
+    if !removed_any {
+        debug!(
+            "No session recovery artifact present after intentional empty clear: {}",
+            recovery_path.display()
+        );
+    }
 }
 
 fn remove_recovery_file(options: &SessionOptions) {

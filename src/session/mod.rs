@@ -24,7 +24,8 @@ pub(crate) use snapshot::{
     DEFAULT_MAX_EXPANDED_SESSION_BYTES, SaveLimitExceeded, SaveSnapshotOutcome, SaveSnapshotReport,
     SnapshotPayloadEstimate, SnapshotSaveEstimate, estimate_snapshot_payload,
     estimate_snapshot_save, estimate_snapshot_without_history_payload,
-    save_snapshot_autosave_with_report, save_snapshot_with_report,
+    save_snapshot_autosave_with_report, save_snapshot_autosave_with_report_and_clear_boundary,
+    save_snapshot_with_report, save_snapshot_with_report_and_clear_boundary,
 };
 #[allow(unused_imports)]
 pub(crate) use snapshot::{LoadSnapshotOutcome, load_snapshot_with_outcome};

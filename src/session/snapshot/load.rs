@@ -30,6 +30,7 @@ pub struct LoadedSnapshot {
 #[derive(Debug)]
 pub(crate) enum LoadSnapshotOutcome {
     Loaded(Box<SessionSnapshot>),
+    LoadedFromBackup(Box<SessionSnapshot>),
     LoadedFromRecovery(Box<SessionSnapshot>),
     Empty,
     ExpandedTooLarge {
@@ -38,11 +39,24 @@ pub(crate) enum LoadSnapshotOutcome {
     },
 }
 
+impl LoadSnapshotOutcome {
+    #[allow(dead_code)]
+    pub(crate) fn has_board_data(&self) -> bool {
+        match self {
+            Self::Loaded(snapshot)
+            | Self::LoadedFromBackup(snapshot)
+            | Self::LoadedFromRecovery(snapshot) => snapshot.has_board_data(),
+            Self::Empty | Self::ExpandedTooLarge { .. } => false,
+        }
+    }
+}
+
 /// Attempt to load a previously saved session.
 #[allow(dead_code)]
 pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>> {
     match load_snapshot_with_outcome(options)? {
         LoadSnapshotOutcome::Loaded(snapshot)
+        | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => Ok(Some(*snapshot)),
         LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::ExpandedTooLarge { .. } => Ok(None),
     }
@@ -69,10 +83,31 @@ pub(super) fn load_snapshot_with_expanded_limit(
     let recovery_path = options.recovery_file_path();
     let session_metadata = fs::metadata(&session_path).ok();
     let recovery_metadata = fs::metadata(&recovery_path).ok();
+    let clear_marker_metadata = fs::metadata(options.clear_marker_file_path()).ok();
+    let backup_recovery_marker_metadata =
+        recoverable_backup_marker_metadata(options, clear_marker_metadata.as_ref());
+    let recovery_recoverable_marker_metadata =
+        recoverable_recovery_marker_metadata(options, clear_marker_metadata.as_ref());
 
     if let Some(recovery_metadata) = recovery_metadata.as_ref()
         && should_prefer_recovery(recovery_metadata, session_metadata.as_ref())
     {
+        if clear_marker_suppresses_artifact(
+            "session recovery",
+            &recovery_path,
+            recovery_metadata,
+            clear_marker_metadata.as_ref(),
+        ) {
+            return load_normal_session_or_empty(
+                options,
+                &session_path,
+                session_metadata,
+                max_expanded_size,
+                clear_marker_metadata.as_ref(),
+                backup_recovery_marker_metadata.as_ref(),
+                recovery_recoverable_marker_metadata.as_ref(),
+            );
+        }
         info!(
             "Loading session recovery artifact {} before normal session {}",
             recovery_path.display(),
@@ -84,11 +119,13 @@ pub(super) fn load_snapshot_with_expanded_limit(
             max_expanded_size,
             false,
             "session recovery",
+            CorruptLoadAction::Backup,
         )?;
         match recovery_outcome {
             LoadSnapshotOutcome::Loaded(snapshot) => {
                 return Ok(LoadSnapshotOutcome::LoadedFromRecovery(snapshot));
             }
+            loaded @ LoadSnapshotOutcome::LoadedFromBackup(_) => return Ok(loaded),
             loaded @ LoadSnapshotOutcome::LoadedFromRecovery(_) => return Ok(loaded),
             LoadSnapshotOutcome::Empty => {
                 warn!(
@@ -109,7 +146,15 @@ pub(super) fn load_snapshot_with_expanded_limit(
         }
     }
 
-    load_normal_session_or_empty(options, &session_path, session_metadata, max_expanded_size)
+    load_normal_session_or_empty(
+        options,
+        &session_path,
+        session_metadata,
+        max_expanded_size,
+        clear_marker_metadata.as_ref(),
+        backup_recovery_marker_metadata.as_ref(),
+        recovery_recoverable_marker_metadata.as_ref(),
+    )
 }
 
 fn load_snapshot_path_with_outcome(
@@ -118,6 +163,7 @@ fn load_snapshot_path_with_outcome(
     max_expanded_size: u64,
     enforce_configured_file_size: bool,
     label: &str,
+    corrupt_load_action: CorruptLoadAction,
 ) -> Result<LoadSnapshotOutcome> {
     let metadata = fs::metadata(session_path)
         .with_context(|| format!("failed to stat session file {}", session_path.display()))?;
@@ -218,21 +264,38 @@ fn load_snapshot_path_with_outcome(
         }
         Err(err) => {
             warn!(
-                "Failed to load {} {}; backing up and continuing with defaults: {}",
+                "Failed to load {} {}; continuing with defaults: {}",
                 label,
                 session_path.display(),
                 err
             );
-            if let Err(backup_err) = backup_corrupt_session(session_path, options) {
-                warn!(
-                    "Failed to back up corrupt session {}: {}",
-                    session_path.display(),
-                    backup_err
-                );
+            match corrupt_load_action {
+                CorruptLoadAction::Backup => {
+                    if let Err(backup_err) = backup_corrupt_session(session_path, options) {
+                        warn!(
+                            "Failed to back up corrupt session {}: {}",
+                            session_path.display(),
+                            backup_err
+                        );
+                    }
+                }
+                CorruptLoadAction::Preserve => {
+                    debug!(
+                        "Leaving unloadable {} {} in place because it is suppressed by the session clear marker",
+                        label,
+                        session_path.display()
+                    );
+                }
             }
             Ok(LoadSnapshotOutcome::Empty)
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum CorruptLoadAction {
+    Backup,
+    Preserve,
 }
 
 fn load_normal_session_or_empty(
@@ -240,15 +303,302 @@ fn load_normal_session_or_empty(
     session_path: &Path,
     session_metadata: Option<fs::Metadata>,
     max_expanded_size: u64,
+    clear_marker_metadata: Option<&fs::Metadata>,
+    backup_recovery_marker_metadata: Option<&fs::Metadata>,
+    recovery_recoverable_marker_metadata: Option<&fs::Metadata>,
 ) -> Result<LoadSnapshotOutcome> {
-    if session_metadata.is_none() {
+    let Some(primary_metadata) = session_metadata.as_ref() else {
+        if let Some(backup) = load_contentful_backup(
+            options,
+            max_expanded_size,
+            None,
+            clear_marker_metadata,
+            backup_recovery_marker_metadata,
+            recovery_recoverable_marker_metadata,
+        )? {
+            return Ok(LoadSnapshotOutcome::LoadedFromBackup(backup));
+        }
         info!(
             "Session file not found at {}; skipping load",
             session_path.display()
         );
         return Ok(LoadSnapshotOutcome::Empty);
+    };
+
+    if clear_marker_suppresses_artifact(
+        "primary session",
+        session_path,
+        primary_metadata,
+        clear_marker_metadata,
+    ) {
+        match load_snapshot_path_with_outcome(
+            session_path,
+            options,
+            max_expanded_size,
+            true,
+            "session",
+            CorruptLoadAction::Preserve,
+        )? {
+            LoadSnapshotOutcome::Loaded(snapshot) if !snapshot.has_board_data() => {
+                return Ok(LoadSnapshotOutcome::Loaded(snapshot));
+            }
+            LoadSnapshotOutcome::Loaded(_) => {}
+            LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::ExpandedTooLarge { .. } => {}
+            LoadSnapshotOutcome::LoadedFromBackup(_)
+            | LoadSnapshotOutcome::LoadedFromRecovery(_) => {}
+        }
+
+        if let Some(backup) = load_contentful_backup(
+            options,
+            max_expanded_size,
+            None,
+            clear_marker_metadata,
+            backup_recovery_marker_metadata,
+            recovery_recoverable_marker_metadata,
+        )? {
+            return Ok(LoadSnapshotOutcome::LoadedFromBackup(backup));
+        }
+        return Ok(LoadSnapshotOutcome::Empty);
     }
-    load_snapshot_path_with_outcome(session_path, options, max_expanded_size, true, "session")
+
+    let outcome = load_snapshot_path_with_outcome(
+        session_path,
+        options,
+        max_expanded_size,
+        true,
+        "session",
+        CorruptLoadAction::Backup,
+    )?;
+    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+        return Ok(outcome);
+    };
+
+    if snapshot.has_board_data() {
+        return Ok(LoadSnapshotOutcome::Loaded(snapshot));
+    }
+
+    if let Some(backup) = load_contentful_backup(
+        options,
+        max_expanded_size,
+        Some(primary_metadata),
+        clear_marker_metadata,
+        backup_recovery_marker_metadata,
+        recovery_recoverable_marker_metadata,
+    )? {
+        return Ok(LoadSnapshotOutcome::LoadedFromBackup(backup));
+    }
+
+    if let Some(recovery) = load_contentful_recovery(
+        options,
+        max_expanded_size,
+        clear_marker_metadata,
+        recovery_recoverable_marker_metadata,
+    )? {
+        return Ok(LoadSnapshotOutcome::LoadedFromRecovery(recovery));
+    }
+
+    Ok(LoadSnapshotOutcome::Loaded(snapshot))
+}
+
+fn load_contentful_backup(
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    primary_metadata: Option<&fs::Metadata>,
+    clear_marker_metadata: Option<&fs::Metadata>,
+    backup_recovery_marker_metadata: Option<&fs::Metadata>,
+    recovery_recoverable_marker_metadata: Option<&fs::Metadata>,
+) -> Result<Option<Box<SessionSnapshot>>> {
+    let backup_path = options.backup_file_path();
+    let Some(backup_metadata) = fs::metadata(&backup_path).ok() else {
+        return Ok(None);
+    };
+
+    if clear_marker_suppresses_artifact(
+        "session backup",
+        &backup_path,
+        &backup_metadata,
+        clear_marker_metadata,
+    ) {
+        return Ok(None);
+    }
+
+    if let Some(primary_metadata) = primary_metadata
+        && backup_recovery_marker_metadata.is_none()
+        && !backup_is_newer_than_primary(&backup_metadata, primary_metadata)
+    {
+        info!(
+            "Primary session {} contains no board data, but backup {} is not newer; keeping primary session",
+            options.session_file_path().display(),
+            backup_path.display()
+        );
+        return Ok(None);
+    }
+
+    if primary_metadata.is_some() {
+        warn!(
+            "Primary session {} contains no board data; checking newer backup {} before accepting the blank session",
+            options.session_file_path().display(),
+            backup_path.display()
+        );
+    } else {
+        warn!(
+            "Primary session {} is missing; checking backup {} for recoverable board data",
+            options.session_file_path().display(),
+            backup_path.display()
+        );
+    }
+
+    match load_snapshot_path_with_outcome(
+        &backup_path,
+        options,
+        max_expanded_size,
+        true,
+        "session backup",
+        CorruptLoadAction::Backup,
+    )? {
+        LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => {
+            warn!(
+                "Restoring board data from backup {} because primary session {} contained no board data",
+                backup_path.display(),
+                options.session_file_path().display()
+            );
+            Ok(Some(snapshot))
+        }
+        LoadSnapshotOutcome::Loaded(_) => {
+            info!(
+                "Session backup {} also contains no board data; keeping primary session",
+                backup_path.display()
+            );
+            Ok(None)
+        }
+        LoadSnapshotOutcome::Empty => Ok(None),
+        LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
+            warn!(
+                "Session backup {} is too large to restore; keeping primary session",
+                path.display()
+            );
+            Ok(None)
+        }
+        LoadSnapshotOutcome::LoadedFromBackup(_) | LoadSnapshotOutcome::LoadedFromRecovery(_) => {
+            load_contentful_recovery(
+                options,
+                max_expanded_size,
+                clear_marker_metadata,
+                recovery_recoverable_marker_metadata,
+            )
+        }
+    }
+}
+
+fn load_contentful_recovery(
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    clear_marker_metadata: Option<&fs::Metadata>,
+    recovery_recoverable_marker_metadata: Option<&fs::Metadata>,
+) -> Result<Option<Box<SessionSnapshot>>> {
+    if recovery_recoverable_marker_metadata.is_none() {
+        return Ok(None);
+    }
+
+    let recovery_path = options.recovery_file_path();
+    let Some(recovery_metadata) = fs::metadata(&recovery_path).ok() else {
+        return Ok(None);
+    };
+    if clear_marker_suppresses_artifact(
+        "session recovery",
+        &recovery_path,
+        &recovery_metadata,
+        clear_marker_metadata,
+    ) {
+        return Ok(None);
+    }
+
+    match load_snapshot_path_with_outcome(
+        &recovery_path,
+        options,
+        max_expanded_size,
+        false,
+        "session recovery",
+        CorruptLoadAction::Backup,
+    )? {
+        LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => Ok(Some(snapshot)),
+        LoadSnapshotOutcome::Loaded(_) | LoadSnapshotOutcome::Empty => Ok(None),
+        LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
+            preserve_unloadable_recovery(&path, "too-large");
+            Ok(None)
+        }
+        LoadSnapshotOutcome::LoadedFromBackup(_) | LoadSnapshotOutcome::LoadedFromRecovery(_) => {
+            Ok(None)
+        }
+    }
+}
+
+fn backup_is_newer_than_primary(backup: &fs::Metadata, primary: &fs::Metadata) -> bool {
+    match (backup.modified(), primary.modified()) {
+        (Ok(backup_modified), Ok(primary_modified)) => backup_modified > primary_modified,
+        _ => false,
+    }
+}
+
+fn recoverable_backup_marker_metadata(
+    options: &SessionOptions,
+    clear_marker_metadata: Option<&fs::Metadata>,
+) -> Option<fs::Metadata> {
+    let marker_path = options.backup_recovery_marker_file_path();
+    let marker_metadata = fs::metadata(&marker_path).ok()?;
+    if clear_marker_suppresses_artifact(
+        "backup recovery marker",
+        &marker_path,
+        &marker_metadata,
+        clear_marker_metadata,
+    ) {
+        return None;
+    }
+    Some(marker_metadata)
+}
+
+fn recoverable_recovery_marker_metadata(
+    options: &SessionOptions,
+    clear_marker_metadata: Option<&fs::Metadata>,
+) -> Option<fs::Metadata> {
+    let marker_path = options.recovery_recoverable_marker_file_path();
+    let marker_metadata = fs::metadata(&marker_path).ok()?;
+    if clear_marker_suppresses_artifact(
+        "recovery recoverable marker",
+        &marker_path,
+        &marker_metadata,
+        clear_marker_metadata,
+    ) {
+        return None;
+    }
+    Some(marker_metadata)
+}
+
+fn clear_marker_suppresses_artifact(
+    label: &str,
+    path: &Path,
+    artifact_metadata: &fs::Metadata,
+    clear_marker_metadata: Option<&fs::Metadata>,
+) -> bool {
+    let Some(clear_marker_metadata) = clear_marker_metadata else {
+        return false;
+    };
+    let artifact_newer_than_marker = match (
+        artifact_metadata.modified(),
+        clear_marker_metadata.modified(),
+    ) {
+        (Ok(artifact_modified), Ok(marker_modified)) => artifact_modified > marker_modified,
+        _ => false,
+    };
+    if artifact_newer_than_marker {
+        return false;
+    }
+    info!(
+        "Ignoring {} {} because it is not newer than the session clear marker",
+        label,
+        path.display()
+    );
+    true
 }
 
 fn preserve_unloadable_recovery(path: &Path, reason: &str) {

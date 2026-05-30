@@ -96,9 +96,26 @@ impl SessionOptions {
             .join(format!("{}.json.bak", self.session_file_stem()))
     }
 
+    pub fn backup_recovery_marker_file_path(&self) -> PathBuf {
+        self.base_dir
+            .join(format!("{}.json.bak.recoverable", self.session_file_stem()))
+    }
+
     pub fn recovery_file_path(&self) -> PathBuf {
         self.base_dir
             .join(format!("{}.json.recovery", self.session_file_stem()))
+    }
+
+    pub fn recovery_recoverable_marker_file_path(&self) -> PathBuf {
+        self.base_dir.join(format!(
+            "{}.json.recovery.recoverable",
+            self.session_file_stem()
+        ))
+    }
+
+    pub fn clear_marker_file_path(&self) -> PathBuf {
+        self.base_dir
+            .join(format!("{}.json.cleared", self.session_file_stem()))
     }
 
     pub fn lock_file_path(&self) -> PathBuf {

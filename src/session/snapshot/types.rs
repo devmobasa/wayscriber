@@ -34,10 +34,14 @@ impl BoardPagesSnapshot {
 }
 
 impl SessionSnapshot {
-    pub(super) fn is_empty(&self) -> bool {
+    pub(crate) fn has_board_data(&self) -> bool {
         self.boards
             .iter()
-            .all(|board| !board.pages.has_persistable_data())
+            .any(|board| board.pages.has_persistable_data())
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        !self.has_board_data()
     }
 }
 

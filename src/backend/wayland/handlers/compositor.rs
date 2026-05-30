@@ -209,15 +209,19 @@ impl CompositorHandler for WaylandState {
         }
 
         if let Some(result) = load_result {
+            let mut loaded_board_data = false;
             match result {
-                Ok(outcome) => self.handle_session_load_outcome(outcome, "output load"),
+                Ok(outcome) => {
+                    loaded_board_data = outcome.has_board_data();
+                    self.handle_session_load_outcome(outcome, "output load");
+                }
                 Err(err) => {
                     warn!("Failed to load session state: {}", err);
                 }
             }
 
             if load_requested {
-                self.session.mark_loaded();
+                self.session.mark_loaded(loaded_board_data);
                 self.input_state.needs_redraw = true;
             }
         }

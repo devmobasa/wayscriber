@@ -1,6 +1,6 @@
 use super::super::super::state::WaylandState;
 use crate::{
-    backend::wayland::session::SessionState,
+    backend::wayland::session::{self as runtime_session, SessionState},
     config::{Action, Config},
     input::state::UiToastKind,
     notification, session,
@@ -35,10 +35,13 @@ pub(super) fn persist_session(state: &WaylandState) -> Result<(), anyhow::Error>
         snapshot.as_ref(),
         snapshot_started.elapsed(),
     );
-    let report = save_snapshot_or_clear(state, options, snapshot, SessionSaveReason::Shutdown)?;
+    if should_skip_unloaded_contentless_save(state, options, snapshot.as_ref()) {
+        return Ok(());
+    }
+    let save = save_snapshot_or_clear(state, options, snapshot, SessionSaveReason::Shutdown)?;
     log_session_save_result(
         SessionSaveReason::Shutdown,
-        report.as_ref(),
+        save.report.as_ref(),
         started.elapsed(),
     );
     Ok(())
@@ -78,14 +81,19 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
     );
 
     match save_snapshot_or_clear(state, &options, snapshot, SessionSaveReason::Autosave) {
-        Ok(report) => {
+        Ok(save) => {
             log_session_save_result(
                 SessionSaveReason::Autosave,
-                report.as_ref(),
+                save.report.as_ref(),
                 started.elapsed(),
             );
-            notify_session_save_report(state, report.as_ref());
-            record_autosave_success(&mut state.session, now, report.is_some());
+            notify_session_save_report(state, save.report.as_ref());
+            record_autosave_success(
+                &mut state.session,
+                now,
+                save.report.is_some(),
+                save.saved_board_data,
+            );
         }
         Err(err) => {
             if record_autosave_failure(&mut state.session, now, &options) {
@@ -103,17 +111,31 @@ fn save_snapshot_or_clear(
     options: &session::SessionOptions,
     snapshot: Option<session::SessionSnapshot>,
     reason: SessionSaveReason,
-) -> Result<Option<SaveSnapshotReport>, anyhow::Error> {
+) -> Result<SessionSaveAttempt, anyhow::Error> {
     if should_skip_protected_session_save(state, options) {
-        return Ok(None);
+        return Ok(SessionSaveAttempt::skipped());
+    }
+
+    if should_skip_unloaded_contentless_save(state, options, snapshot.as_ref()) {
+        return Ok(SessionSaveAttempt::skipped());
     }
 
     if let Some(snapshot) = snapshot {
-        return save_snapshot_with_reason(&snapshot, options, reason);
+        let saved_board_data = snapshot.has_board_data();
+        let report = save_snapshot_with_reason(
+            &snapshot,
+            options,
+            reason,
+            state.session.has_loaded_board_data(),
+        )?;
+        return Ok(SessionSaveAttempt {
+            saved_board_data: report.is_some() && saved_board_data,
+            report,
+        });
     }
 
     if !persistence_enabled(options) {
-        return Ok(None);
+        return Ok(SessionSaveAttempt::skipped());
     }
 
     let empty_snapshot = session::SessionSnapshot {
@@ -121,19 +143,52 @@ fn save_snapshot_or_clear(
         boards: Vec::new(),
         tool_state: None,
     };
-    save_snapshot_with_reason(&empty_snapshot, options, reason)
+    let report = save_snapshot_with_reason(
+        &empty_snapshot,
+        options,
+        reason,
+        state.session.has_loaded_board_data(),
+    )?;
+    Ok(SessionSaveAttempt {
+        report,
+        saved_board_data: false,
+    })
+}
+
+#[derive(Debug)]
+struct SessionSaveAttempt {
+    report: Option<SaveSnapshotReport>,
+    saved_board_data: bool,
+}
+
+impl SessionSaveAttempt {
+    fn skipped() -> Self {
+        Self {
+            report: None,
+            saved_board_data: false,
+        }
+    }
 }
 
 fn save_snapshot_with_reason(
     snapshot: &session::SessionSnapshot,
     options: &session::SessionOptions,
     reason: SessionSaveReason,
+    contentless_clear_boundary: bool,
 ) -> Result<Option<SaveSnapshotReport>, anyhow::Error> {
     match reason {
         SessionSaveReason::Autosave => {
-            session::save_snapshot_autosave_with_report(snapshot, options)
+            session::save_snapshot_autosave_with_report_and_clear_boundary(
+                snapshot,
+                options,
+                contentless_clear_boundary,
+            )
         }
-        SessionSaveReason::Shutdown => session::save_snapshot_with_report(snapshot, options),
+        SessionSaveReason::Shutdown => session::save_snapshot_with_report_and_clear_boundary(
+            snapshot,
+            options,
+            contentless_clear_boundary,
+        ),
     }
 }
 
@@ -312,6 +367,27 @@ fn should_skip_protected_session_save(
     skip
 }
 
+fn should_skip_unloaded_contentless_save(
+    state: &WaylandState,
+    options: &session::SessionOptions,
+    snapshot: Option<&session::SessionSnapshot>,
+) -> bool {
+    let skip = runtime_session::should_skip_unloaded_contentless_save(
+        state.session.has_loaded_board_data(),
+        state.session.is_dirty(),
+        state.input_state.is_session_dirty(),
+        snapshot.is_some_and(session::SessionSnapshot::has_board_data),
+        runtime_session::has_session_artifact(options),
+    );
+    if skip {
+        log::warn!(
+            "Skipping session save to {} because no session was loaded, no session changes were recorded, and the current snapshot has no board data",
+            options.session_file_path().display()
+        );
+    }
+    skip
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SessionSaveNotification {
     NearLimit,
@@ -430,9 +506,14 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-fn record_autosave_success(session_state: &mut SessionState, now: Instant, saved: bool) {
+fn record_autosave_success(
+    session_state: &mut SessionState,
+    now: Instant,
+    saved: bool,
+    saved_board_data: bool,
+) {
     if saved {
-        session_state.mark_saved(now);
+        session_state.mark_saved(now, saved_board_data);
     }
 }
 
@@ -540,7 +621,7 @@ mod tests {
         assert!(!record_autosave_failure(&mut state, now, &options));
         assert!(!state.autosave_due(now, &options));
 
-        record_autosave_success(&mut state, now, true);
+        record_autosave_success(&mut state, now, true, false);
         state.record_input_dirty(now, true);
         assert!(record_autosave_failure(&mut state, now, &options));
     }
@@ -558,8 +639,25 @@ mod tests {
         state.record_input_dirty(now, true);
         assert!(state.autosave_due(now + Duration::from_millis(2), &options));
 
-        record_autosave_success(&mut state, now + Duration::from_millis(2), true);
+        record_autosave_success(&mut state, now + Duration::from_millis(2), true, false);
         assert!(!state.autosave_due(now + Duration::from_millis(2), &options));
+    }
+
+    #[test]
+    fn record_autosave_success_tracks_saved_board_data_for_future_clear_boundaries() {
+        let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "display-1");
+        options.persist_transparent = true;
+        options.autosave_enabled = true;
+
+        let mut state = SessionState::new(Some(options));
+        assert!(!state.has_loaded_board_data());
+
+        record_autosave_success(&mut state, Instant::now(), true, true);
+
+        assert!(
+            state.has_loaded_board_data(),
+            "board data saved during this run must count when the next contentless save decides whether it is a clear"
+        );
     }
 
     #[test]
@@ -576,7 +674,7 @@ mod tests {
         let due_at = now + Duration::from_millis(2);
         assert!(state.autosave_due(due_at, &options));
 
-        record_autosave_success(&mut state, due_at, false);
+        record_autosave_success(&mut state, due_at, false, false);
 
         assert!(state.autosave_due(due_at, &options));
     }

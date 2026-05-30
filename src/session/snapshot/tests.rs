@@ -3,15 +3,21 @@ use super::load::{
     LoadSnapshotOutcome, load_snapshot_inner, load_snapshot_inner_with_expanded_limit,
     load_snapshot_with_expanded_limit,
 };
-use super::save::save_snapshot_with_expanded_limit;
+use super::save::{
+    save_snapshot_with_expanded_limit, save_snapshot_with_report_and_clear_boundary,
+};
 use super::types::{
     BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
+    ToolStateSnapshot,
 };
 use super::{load_snapshot, save_snapshot};
-use crate::draw::{Color, Frame, Shape};
+use crate::draw::{Color, FontDescriptor, Frame, Shape};
+use crate::input::EraserMode;
 use crate::session::options::{CompressionMode, SessionOptions};
 use crate::test_temp::tempdir;
 use crate::time_utils::now_rfc3339;
+use std::path::Path;
+use std::time::{Duration, SystemTime};
 
 fn sample_frame() -> Frame {
     let mut frame = Frame::new();
@@ -43,6 +49,71 @@ fn sample_snapshot() -> SessionSnapshot {
         }],
         tool_state: None,
     }
+}
+
+fn sample_tool_state() -> ToolStateSnapshot {
+    ToolStateSnapshot {
+        current_color: Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        current_thickness: 3.0,
+        eraser_size: 12.0,
+        eraser_kind: crate::draw::EraserKind::Circle,
+        eraser_mode: EraserMode::Brush,
+        marker_opacity: Some(0.32),
+        fill_enabled: Some(false),
+        tool_override: None,
+        current_font_size: 24.0,
+        font_descriptor: Some(FontDescriptor::default()),
+        text_background_enabled: false,
+        arrow_length: 20.0,
+        arrow_angle: 30.0,
+        arrow_head_at_end: Some(false),
+        arrow_label_enabled: Some(false),
+        board_previous_color: None,
+        show_status_bar: true,
+        tool_settings: None,
+    }
+}
+
+fn contentless_session_file() -> SessionFile {
+    SessionFile {
+        version: CURRENT_VERSION,
+        last_modified: now_rfc3339(),
+        active_board_id: Some("transparent".to_string()),
+        active_mode: None,
+        boards: Vec::new(),
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: None,
+        whiteboard_pages: None,
+        blackboard_pages: None,
+        transparent_active_page: None,
+        whiteboard_active_page: None,
+        blackboard_active_page: None,
+        tool_state: Some(sample_tool_state()),
+    }
+}
+
+fn write_contentless_session(path: &Path) {
+    std::fs::write(
+        path,
+        serde_json::to_vec_pretty(&contentless_session_file()).expect("contentless session json"),
+    )
+    .expect("contentless session write");
+}
+
+fn set_modified(path: &Path, modified: SystemTime) {
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .expect("open file for timestamp update")
+        .set_modified(modified)
+        .expect("set file modified timestamp");
 }
 
 #[test]
@@ -294,6 +365,539 @@ fn load_snapshot_rejects_oversized_plain_recovery_before_falling_back() {
 }
 
 #[test]
+fn load_snapshot_restores_newer_contentful_backup_when_primary_has_no_board_data() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "blank-primary");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::copy(options.session_file_path(), options.backup_file_path())
+        .expect("backup should be seeded");
+
+    write_contentless_session(&options.session_file_path());
+    set_modified(&options.session_file_path(), older);
+    set_modified(&options.backup_file_path(), newer);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("backup fallback should load");
+    let LoadSnapshotOutcome::LoadedFromBackup(snapshot) = outcome else {
+        panic!("expected backup restore, got {outcome:?}");
+    };
+    assert_sample_snapshot(&snapshot);
+}
+
+#[test]
+fn load_snapshot_ignores_older_contentful_backup_when_primary_has_no_board_data() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "stale-backup");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::copy(options.session_file_path(), options.backup_file_path())
+        .expect("backup should be seeded");
+    write_contentless_session(&options.session_file_path());
+    set_modified(&options.backup_file_path(), older);
+    set_modified(&options.session_file_path(), newer);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("blank primary should load without stale backup restore");
+    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+        panic!("expected primary blank session to remain authoritative, got {outcome:?}");
+    };
+    assert!(
+        !snapshot.has_board_data(),
+        "older backup must not resurrect drawings over a newer blank primary"
+    );
+    assert!(snapshot.tool_state.is_some());
+}
+
+#[test]
+fn load_snapshot_restores_contentful_backup_when_primary_is_missing() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "backup-only");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.backup_file_path())
+        .expect("primary should be moved to backup");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("backup-only fallback should load");
+    let LoadSnapshotOutcome::LoadedFromBackup(snapshot) = outcome else {
+        panic!("expected backup-only restore, got {outcome:?}");
+    };
+    assert_sample_snapshot(&snapshot);
+}
+
+#[test]
+fn save_contentless_snapshot_preserves_backup_when_primary_is_missing() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "backup-preserved");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.backup_file_path())
+        .expect("primary should be moved to backup");
+    let backup_before = std::fs::read(options.backup_file_path()).expect("backup bytes");
+
+    let contentless = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
+        tool_state: Some(sample_tool_state()),
+    };
+    save_snapshot(&contentless, &options).expect("contentless session should save");
+
+    assert!(
+        options.session_file_path().exists(),
+        "contentless primary should be saved"
+    );
+    assert_eq!(
+        std::fs::read(options.backup_file_path()).expect("backup should remain"),
+        backup_before,
+        "contentless save must not delete the only backup when primary was missing"
+    );
+    assert!(
+        options.backup_recovery_marker_file_path().exists(),
+        "backup-only recovery must be marked so the newer blank primary cannot shadow it"
+    );
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("preserved backup should load over blank primary");
+    let LoadSnapshotOutcome::LoadedFromBackup(snapshot) = outcome else {
+        panic!("expected preserved backup restore, got {outcome:?}");
+    };
+    assert_sample_snapshot(&snapshot);
+}
+
+#[test]
+fn save_contentless_snapshot_preserves_recovery_when_primary_is_missing() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "recovery-preserved");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.recovery_file_path())
+        .expect("primary should be moved to recovery");
+    let recovery_before = std::fs::read(options.recovery_file_path()).expect("recovery bytes");
+
+    let contentless = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
+        tool_state: Some(sample_tool_state()),
+    };
+    save_snapshot(&contentless, &options).expect("contentless session should save");
+
+    assert!(
+        options.session_file_path().exists(),
+        "contentless primary should be saved"
+    );
+    assert_eq!(
+        std::fs::read(options.recovery_file_path()).expect("recovery should remain"),
+        recovery_before,
+        "contentless save must not delete the only recovery artifact when primary was missing"
+    );
+    assert!(
+        options.recovery_recoverable_marker_file_path().exists(),
+        "recovery-only board data must be marked so the newer blank primary cannot shadow it"
+    );
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("preserved recovery should load over blank primary");
+    let LoadSnapshotOutcome::LoadedFromRecovery(snapshot) = outcome else {
+        panic!("expected preserved recovery restore, got {outcome:?}");
+    };
+    assert_sample_snapshot(&snapshot);
+
+    save_snapshot(&contentless, &options).expect("second contentless session should save");
+    assert_eq!(
+        std::fs::read(options.recovery_file_path())
+            .expect("recovery should remain after second save"),
+        recovery_before,
+        "a later non-clear contentless save must not remove the recoverable recovery artifact"
+    );
+}
+
+#[test]
+fn clear_empty_snapshot_removes_backup_when_primary_is_missing() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "clear-backup");
+    options.persist_transparent = true;
+    options.restore_tool_state = false;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.backup_file_path())
+        .expect("primary should be moved to backup");
+    std::fs::write(options.backup_recovery_marker_file_path(), b"recoverable")
+        .expect("backup recovery marker");
+
+    let cleared = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
+        tool_state: None,
+    };
+    save_snapshot(&cleared, &options).expect("empty clear should save");
+
+    assert!(
+        !options.backup_file_path().exists(),
+        "intentional empty clear must remove stale backup-only board data"
+    );
+    assert!(
+        !options.backup_recovery_marker_file_path().exists(),
+        "intentional empty clear must remove stale backup recovery markers"
+    );
+    assert!(
+        options.clear_marker_file_path().exists(),
+        "intentional empty clear should leave a marker that suppresses stale artifacts"
+    );
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("cleared session should load as empty");
+    let LoadSnapshotOutcome::Empty = outcome else {
+        panic!("expected cleared session to stay empty, got {outcome:?}");
+    };
+}
+
+#[test]
+fn clear_empty_snapshot_removes_recovery_when_primary_is_missing() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "clear-recovery");
+    options.persist_transparent = true;
+    options.restore_tool_state = false;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.recovery_file_path())
+        .expect("primary should be moved to recovery");
+
+    let cleared = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
+        tool_state: None,
+    };
+    save_snapshot(&cleared, &options).expect("empty clear should save");
+
+    assert!(
+        !options.recovery_file_path().exists(),
+        "intentional empty clear must remove stale recovery-only board data"
+    );
+    assert!(
+        options.clear_marker_file_path().exists(),
+        "intentional empty clear should leave a marker that suppresses stale artifacts"
+    );
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("cleared session should load as empty");
+    let LoadSnapshotOutcome::Empty = outcome else {
+        panic!("expected cleared session to stay empty, got {outcome:?}");
+    };
+}
+
+#[test]
+fn load_snapshot_ignores_backup_older_than_clear_marker() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-backup");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.backup_file_path())
+        .expect("primary should be moved to backup");
+    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    set_modified(&options.backup_file_path(), older);
+    set_modified(&options.clear_marker_file_path(), newer);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("stale backup should be suppressed");
+    let LoadSnapshotOutcome::Empty = outcome else {
+        panic!("expected clear marker to suppress stale backup, got {outcome:?}");
+    };
+}
+
+#[test]
+fn load_snapshot_ignores_primary_older_than_clear_marker() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-primary");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    set_modified(&options.session_file_path(), older);
+    set_modified(&options.clear_marker_file_path(), newer);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("stale primary should be suppressed");
+    let LoadSnapshotOutcome::Empty = outcome else {
+        panic!("expected clear marker to suppress stale primary, got {outcome:?}");
+    };
+}
+
+#[test]
+fn load_snapshot_preserves_backup_when_suppressed_primary_is_corrupt() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let marker_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+    let backup_time = SystemTime::UNIX_EPOCH + Duration::from_secs(30);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-corrupt-primary");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+
+    let primary_path = options.session_file_path();
+    let backup_path = options.backup_file_path();
+    let clear_marker_path = options.clear_marker_file_path();
+    let backup_bytes = std::fs::read(&primary_path).expect("saved primary bytes");
+    std::fs::write(&backup_path, &backup_bytes).expect("backup write");
+    std::fs::write(&primary_path, b"{not valid json").expect("corrupt primary write");
+    std::fs::write(&clear_marker_path, b"cleared").expect("clear marker");
+    set_modified(&primary_path, primary_time);
+    set_modified(&clear_marker_path, marker_time);
+    set_modified(&backup_path, backup_time);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("valid backup should survive suppressed corrupt primary probe");
+    let LoadSnapshotOutcome::LoadedFromBackup(snapshot) = outcome else {
+        panic!("expected backup restore, got {outcome:?}");
+    };
+    assert_sample_snapshot(&snapshot);
+    assert_eq!(
+        std::fs::read(&backup_path).expect("backup should remain readable"),
+        backup_bytes,
+        "suppressed corrupt primary probe must not overwrite the valid backup"
+    );
+    assert!(
+        primary_path.exists(),
+        "suppressed corrupt primary should be ignored without quarantine side effects"
+    );
+}
+
+#[test]
+fn load_snapshot_ignores_recovery_older_than_clear_marker() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-recovery");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.recovery_file_path())
+        .expect("primary should be moved to recovery");
+    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    set_modified(&options.recovery_file_path(), older);
+    set_modified(&options.clear_marker_file_path(), newer);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("stale recovery should be suppressed");
+    let LoadSnapshotOutcome::Empty = outcome else {
+        panic!("expected clear marker to suppress stale recovery, got {outcome:?}");
+    };
+}
+
+#[test]
+fn load_snapshot_restores_backup_newer_than_clear_marker() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-newer-backup");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.backup_file_path())
+        .expect("primary should be moved to backup");
+    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    set_modified(&options.clear_marker_file_path(), older);
+    set_modified(&options.backup_file_path(), newer);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("newer backup should still recover");
+    let LoadSnapshotOutcome::LoadedFromBackup(snapshot) = outcome else {
+        panic!("expected newer backup restore, got {outcome:?}");
+    };
+    assert_sample_snapshot(&snapshot);
+}
+
+#[test]
+fn save_contentless_tool_state_snapshot_marks_clear_boundary_before_backup_rotation() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "tool-clear-marker");
+    options.persist_transparent = true;
+    options.restore_tool_state = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    let stale_backup_bytes = std::fs::read(options.session_file_path()).expect("primary bytes");
+
+    let contentless = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
+        tool_state: Some(sample_tool_state()),
+    };
+    save_snapshot_with_report_and_clear_boundary(&contentless, &options, true)
+        .expect("contentless tool-state session should save");
+
+    assert!(
+        options.clear_marker_file_path().exists(),
+        "contentless tool-state save after board data must mark a clear boundary"
+    );
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("contentless clear primary should still load");
+    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+        panic!("expected contentless primary to load, got {outcome:?}");
+    };
+    assert!(
+        !snapshot.has_board_data(),
+        "contentless primary must remain authoritative after a clear"
+    );
+    assert!(
+        snapshot.tool_state.is_some(),
+        "clear marker must not suppress the freshly saved tool state"
+    );
+
+    std::fs::remove_file(options.session_file_path()).expect("remove primary to simulate crash");
+    std::fs::write(options.backup_file_path(), stale_backup_bytes).expect("stale backup write");
+    set_modified(&options.backup_file_path(), older);
+    set_modified(&options.clear_marker_file_path(), newer);
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("stale backup after contentless clear should be suppressed");
+    let LoadSnapshotOutcome::Empty = outcome else {
+        panic!("expected clear marker to suppress stale backup, got {outcome:?}");
+    };
+}
+
+#[test]
+fn contentful_save_after_clear_marker_removes_stale_backup_before_marker() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let older = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "contentful-after-clear");
+    options.persist_transparent = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    std::fs::rename(options.session_file_path(), options.backup_file_path())
+        .expect("primary should be moved to backup");
+    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    set_modified(&options.backup_file_path(), older);
+    set_modified(&options.clear_marker_file_path(), newer);
+
+    save_snapshot(&snapshot, &options).expect("contentful save should succeed");
+
+    assert!(
+        options.session_file_path().exists(),
+        "contentful primary should be saved"
+    );
+    assert!(
+        !options.backup_file_path().exists(),
+        "contentful save must remove a stale backup before dropping the clear marker"
+    );
+    assert!(
+        !options.clear_marker_file_path().exists(),
+        "clear marker can be removed after stale backup cleanup"
+    );
+}
+
+#[test]
+fn contentless_save_without_loaded_board_data_preserves_rotated_backup() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "tool-state-protected");
+    options.persist_transparent = true;
+    options.restore_tool_state = true;
+    save_snapshot(&snapshot, &options).expect("normal session should save");
+    let primary_before = std::fs::read(options.session_file_path()).expect("primary bytes");
+
+    let contentless = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
+        tool_state: Some(sample_tool_state()),
+    };
+    save_snapshot_with_report_and_clear_boundary(&contentless, &options, false)
+        .expect("dirty tool-state-only session should save");
+
+    assert!(
+        options.session_file_path().exists(),
+        "contentless primary should be saved"
+    );
+    assert_eq!(
+        std::fs::read(options.backup_file_path()).expect("backup should remain"),
+        primary_before,
+        "contentless save without loaded board data must preserve the rotated recoverable primary"
+    );
+    assert!(
+        options.backup_recovery_marker_file_path().exists(),
+        "non-clear contentless save must mark the preserved backup as recoverable"
+    );
+    assert!(
+        !options.clear_marker_file_path().exists(),
+        "caller did not mark this contentless save as an intentional clear"
+    );
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("recoverable backup should load over non-clear blank primary");
+    let LoadSnapshotOutcome::LoadedFromBackup(snapshot) = outcome else {
+        panic!("expected preserved backup restore, got {outcome:?}");
+    };
+    assert_sample_snapshot(&snapshot);
+
+    save_snapshot_with_report_and_clear_boundary(&contentless, &options, false)
+        .expect("second dirty tool-state-only session should save");
+    assert_eq!(
+        std::fs::read(options.backup_file_path()).expect("backup should remain after second save"),
+        primary_before,
+        "a later non-clear contentless save must not replace the recoverable backup with a blank primary"
+    );
+}
+
+#[test]
+fn contentless_save_twice_without_loaded_board_data_preserves_preserved_recovery() {
+    let temp = tempdir().unwrap();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "preserved-recovery-twice");
+    options.persist_transparent = true;
+    options.restore_tool_state = true;
+    let preserved_recovery = options
+        .recovery_file_path()
+        .with_extension("recovery.empty");
+    std::fs::write(&preserved_recovery, b"unloadable recovery").expect("preserved recovery write");
+
+    let contentless = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: Vec::new(),
+        tool_state: Some(sample_tool_state()),
+    };
+    save_snapshot_with_report_and_clear_boundary(&contentless, &options, false)
+        .expect("first contentless save should succeed");
+    save_snapshot_with_report_and_clear_boundary(&contentless, &options, false)
+        .expect("second contentless save should succeed");
+
+    assert!(
+        preserved_recovery.exists(),
+        "contentless saves without loaded board data must not delete preserved recovery artifacts"
+    );
+    assert!(
+        !options.clear_marker_file_path().exists(),
+        "caller did not mark either contentless save as an intentional clear"
+    );
+}
+
+#[test]
 fn save_snapshot_refuses_compressed_payload_over_expanded_limit() {
     let temp = tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "expanded-save");
@@ -345,6 +949,10 @@ fn assert_loaded_sample_snapshot(outcome: LoadSnapshotOutcome) {
     let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
         panic!("expected normal session to load, got {outcome:?}");
     };
+    assert_sample_snapshot(&snapshot);
+}
+
+fn assert_sample_snapshot(snapshot: &SessionSnapshot) {
     assert_eq!(snapshot.boards.len(), 1);
     assert_eq!(snapshot.boards[0].id, "transparent");
     assert_eq!(snapshot.boards[0].pages.pages.len(), 1);

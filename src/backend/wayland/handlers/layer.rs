@@ -117,9 +117,11 @@ impl LayerShellHandler for WaylandState {
         {
             let load_result = session::load_snapshot_with_outcome(options);
             let mut load_succeeded = false;
+            let mut loaded_board_data = false;
             match load_result {
                 Ok(outcome) => {
                     load_succeeded = true;
+                    loaded_board_data = outcome.has_board_data();
                     self.handle_session_load_outcome(outcome, "fallback load");
                 }
                 Err(err) => {
@@ -130,7 +132,7 @@ impl LayerShellHandler for WaylandState {
             // enter still reloads when a concrete output identity arrives because that changes
             // the identity and triggers a fresh load.
             if load_succeeded {
-                self.session.mark_loaded();
+                self.session.mark_loaded(loaded_board_data);
             }
             self.input_state.needs_redraw = true;
         }
