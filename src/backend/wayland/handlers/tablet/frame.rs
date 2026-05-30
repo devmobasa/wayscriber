@@ -3,6 +3,11 @@ use log::{debug, info};
 use crate::backend::wayland::state::WaylandState;
 use crate::input::MouseButton;
 
+/// Linux input event code for the primary stylus barrel button.
+const BTN_STYLUS: u32 = 331;
+/// Linux input event code for the secondary stylus barrel button.
+const BTN_STYLUS2: u32 = 332;
+
 impl WaylandState {
     /// Queue a tablet motion axis update until the enclosing tablet frame commits.
     pub(super) fn queue_stylus_motion(&mut self, x: f64, y: f64) {
@@ -22,6 +27,11 @@ impl WaylandState {
     /// Queue logical tip release until the enclosing tablet frame commits.
     pub(super) fn queue_stylus_up(&mut self) {
         self.pending_stylus_frame.up = true;
+    }
+
+    /// Queue a tablet tool button press until the enclosing tablet frame commits.
+    pub(super) fn queue_stylus_button_press(&mut self, button: u32) {
+        self.pending_stylus_frame.button_presses.push(button);
     }
 
     /// Commit coalesced tablet tool state.
@@ -56,6 +66,12 @@ impl WaylandState {
 
         if pending.up {
             self.commit_stylus_up();
+        }
+
+        // Actions like radial menu toggling read the cached pointer position,
+        // so button presses run after this frame's motion has been committed.
+        for button in pending.button_presses {
+            self.dispatch_stylus_button_press(button);
         }
     }
 
@@ -177,6 +193,23 @@ impl WaylandState {
 
     fn current_stylus_position(&self) -> (f64, f64) {
         self.current_or_pending_stylus_position()
+    }
+
+    /// Dispatch the configured action for a stylus barrel button press.
+    fn dispatch_stylus_button_press(&mut self, button: u32) {
+        let binding = match button {
+            BTN_STYLUS => self.config.tablet.stylus_button,
+            BTN_STYLUS2 => self.config.tablet.stylus_button2,
+            _ => {
+                debug!("Ignoring unknown stylus button {}", button);
+                return;
+            }
+        };
+
+        if let Some(action) = binding.action {
+            debug!("Stylus button {}: dispatching {:?}", button, action);
+            self.dispatch_input_action(action);
+        }
     }
 
     fn record_stylus_motion_thickness(&mut self) {

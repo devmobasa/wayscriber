@@ -134,3 +134,14 @@ fn force_inline_toolbars_requested_uses_config_or_env() {
         &config, false
     ));
 }
+
+#[cfg(tablet)]
+#[test]
+fn pending_stylus_frame_treats_button_presses_as_work() {
+    let mut pending = PendingStylusFrame::default();
+    assert!(pending.is_empty());
+
+    pending.button_presses.push(331);
+
+    assert!(!pending.is_empty());
+}
