@@ -75,12 +75,18 @@ impl WaylandState {
             return;
         }
 
+        let first_pressure_sample =
+            self.stylus_tip_down && self.stylus_pressure_thickness.is_none();
         let p01 = (pressure as f64) / 65535.0;
         crate::input::tablet::apply_pressure_to_state(
             p01,
             &mut self.input_state,
             self.tablet_settings,
         );
+        if first_pressure_sample {
+            self.input_state
+                .replace_active_drawing_pressure_samples(self.input_state.current_thickness);
+        }
         self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
         self.record_stylus_peak(self.input_state.current_thickness);
     }
@@ -95,8 +101,7 @@ impl WaylandState {
         let next_hover_cursor_pos = self.stylus_hover_cursor_position();
         self.mark_stylus_hover_cursor_dirty(previous_hover_cursor_pos, next_hover_cursor_pos);
         if self.stylus_tip_down {
-            self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
-            self.record_stylus_peak(self.input_state.current_thickness);
+            self.record_stylus_motion_thickness();
         }
     }
 
@@ -127,8 +132,7 @@ impl WaylandState {
             .on_mouse_press_with_canvas(MouseButton::Left, screen_x, screen_y, wx, wy);
         let base_thickness = self.input_state.current_thickness;
         self.stylus_base_thickness = Some(base_thickness);
-        self.stylus_pressure_thickness = Some(base_thickness);
-        self.record_stylus_peak(base_thickness);
+        self.record_stylus_motion_thickness();
         self.input_state.needs_redraw = true;
     }
 
@@ -173,5 +177,17 @@ impl WaylandState {
 
     fn current_stylus_position(&self) -> (f64, f64) {
         self.current_or_pending_stylus_position()
+    }
+
+    fn record_stylus_motion_thickness(&mut self) {
+        if self.tablet_settings.enabled
+            && self.tablet_settings.pressure_enabled
+            && self.stylus_pressure_thickness.is_none()
+        {
+            return;
+        }
+
+        self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
+        self.record_stylus_peak(self.input_state.current_thickness);
     }
 }
