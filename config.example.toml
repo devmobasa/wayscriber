@@ -936,7 +936,7 @@ pressure_thickness_scale_step = 0.1
 # Barrel button bindings.
 #
 # Each button can trigger a keybinding action on press (e.g. "toggle_radial_menu").
-# Set action to null or omit to ignore the button.
+# Omit action to ignore the button.
 # Eraser switching is handled automatically via the physical tool type
 # (controlled by auto_eraser_switch above), not via barrel buttons.
 

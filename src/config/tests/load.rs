@@ -161,3 +161,36 @@ fn load_defaults_tablet_input_to_enabled_when_section_is_missing() {
         assert!(loaded.config.tablet.enabled);
     });
 }
+
+#[cfg(tablet)]
+#[test]
+fn tablet_stylus_button_bindings_default_to_primary_radial_menu() {
+    let config = Config::default();
+
+    assert_eq!(
+        config.tablet.stylus_button.action,
+        Some(Action::ToggleRadialMenu)
+    );
+    assert_eq!(config.tablet.stylus_button2.action, None);
+}
+
+#[cfg(tablet)]
+#[test]
+fn tablet_stylus_button_action_omission_unbinds_button() {
+    let config: Config =
+        toml::from_str("[tablet.stylus_button]\n").expect("empty stylus button table should parse");
+
+    assert_eq!(config.tablet.stylus_button.action, None);
+}
+
+#[cfg(tablet)]
+#[test]
+fn tablet_stylus_button_bindings_parse_custom_actions() {
+    let config: Config = toml::from_str(
+        "[tablet.stylus_button]\naction = 'undo'\n\n[tablet.stylus_button2]\naction = 'redo'\n",
+    )
+    .expect("stylus button actions should parse");
+
+    assert_eq!(config.tablet.stylus_button.action, Some(Action::Undo));
+    assert_eq!(config.tablet.stylus_button2.action, Some(Action::Redo));
+}

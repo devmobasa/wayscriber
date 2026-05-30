@@ -766,11 +766,24 @@ enabled = true
 pressure_enabled = true
 min_thickness = 1.0
 max_thickness = 8.0
+auto_eraser_switch = true
+pressure_variation_threshold = 0.1
+pressure_thickness_edit_mode = "disabled"
+pressure_thickness_entry_mode = "pressure_only"
+pressure_thickness_scale_step = 0.1
+
+[tablet.stylus_button]
+action = "toggle_radial_menu"
+
+[tablet.stylus_button2]
+# action = "undo"
 ```
 
 **Notes:**
 - Requires the `tablet-input` feature at build time (enabled in default release builds).
 - Tablet input is enabled by default when the feature is compiled in; set `enabled = false` to opt out.
+- `stylus_button` is the primary barrel button (`BTN_STYLUS` / 331); `stylus_button2` is the secondary barrel button (`BTN_STYLUS2` / 332).
+- Barrel button `action` values use normal action names, such as `toggle_radial_menu`, `undo`, and `redo`. Omit `action` to leave a button unbound.
 
 ### `[session]` - Session Persistence
 

@@ -29,6 +29,11 @@ impl WaylandState {
         self.pending_stylus_frame.up = true;
     }
 
+    /// Queue a tablet tool button press until the enclosing tablet frame commits.
+    pub(super) fn queue_stylus_button_press(&mut self, button: u32) {
+        self.pending_stylus_frame.button_presses.push(button);
+    }
+
     /// Commit coalesced tablet tool state.
     ///
     /// Invariant: drawing samples are appended only after applying the pressure
@@ -62,6 +67,12 @@ impl WaylandState {
         if pending.up {
             self.commit_stylus_up();
         }
+
+        // Actions like radial menu toggling read the cached pointer position,
+        // so button presses run after this frame's motion has been committed.
+        for button in pending.button_presses {
+            self.dispatch_stylus_button_press(button);
+        }
     }
 
     pub(super) fn current_or_pending_stylus_position(&self) -> (f64, f64) {
@@ -80,12 +91,18 @@ impl WaylandState {
             return;
         }
 
+        let first_pressure_sample =
+            self.stylus_tip_down && self.stylus_pressure_thickness.is_none();
         let p01 = (pressure as f64) / 65535.0;
         crate::input::tablet::apply_pressure_to_state(
             p01,
             &mut self.input_state,
             self.tablet_settings,
         );
+        if first_pressure_sample {
+            self.input_state
+                .replace_active_drawing_pressure_samples(self.input_state.current_thickness);
+        }
         self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
         self.record_stylus_peak(self.input_state.current_thickness);
     }
@@ -100,8 +117,7 @@ impl WaylandState {
         let next_hover_cursor_pos = self.stylus_hover_cursor_position();
         self.mark_stylus_hover_cursor_dirty(previous_hover_cursor_pos, next_hover_cursor_pos);
         if self.stylus_tip_down {
-            self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
-            self.record_stylus_peak(self.input_state.current_thickness);
+            self.record_stylus_motion_thickness();
         }
     }
 
@@ -132,8 +148,7 @@ impl WaylandState {
             .on_mouse_press_with_canvas(MouseButton::Left, screen_x, screen_y, wx, wy);
         let base_thickness = self.input_state.current_thickness;
         self.stylus_base_thickness = Some(base_thickness);
-        self.stylus_pressure_thickness = Some(base_thickness);
-        self.record_stylus_peak(base_thickness);
+        self.record_stylus_motion_thickness();
         self.input_state.needs_redraw = true;
     }
 
@@ -181,7 +196,7 @@ impl WaylandState {
     }
 
     /// Dispatch the configured action for a stylus barrel button press.
-    pub(super) fn handle_stylus_button_press(&mut self, button: u32) {
+    fn dispatch_stylus_button_press(&mut self, button: u32) {
         let binding = match button {
             BTN_STYLUS => self.config.tablet.stylus_button,
             BTN_STYLUS2 => self.config.tablet.stylus_button2,
@@ -193,8 +208,19 @@ impl WaylandState {
 
         if let Some(action) = binding.action {
             debug!("Stylus button {}: dispatching {:?}", button, action);
-            self.input_state.handle_action(action);
-            self.input_state.needs_redraw = true;
+            self.dispatch_input_action(action);
         }
+    }
+
+    fn record_stylus_motion_thickness(&mut self) {
+        if self.tablet_settings.enabled
+            && self.tablet_settings.pressure_enabled
+            && self.stylus_pressure_thickness.is_none()
+        {
+            return;
+        }
+
+        self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
+        self.record_stylus_peak(self.input_state.current_thickness);
     }
 }

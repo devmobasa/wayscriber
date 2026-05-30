@@ -88,6 +88,7 @@ mod color_picker;
 mod core;
 mod data;
 mod helpers;
+mod input_actions;
 mod onboarding;
 mod render;
 mod toolbar;
@@ -248,18 +249,23 @@ pub(super) struct WaylandState {
 }
 
 #[cfg(tablet)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct PendingStylusFrame {
     pub(super) motion: Option<(f64, f64)>,
     pub(super) pressure: Option<u32>,
     pub(super) down: bool,
     pub(super) up: bool,
+    pub(super) button_presses: Vec<u32>,
 }
 
 #[cfg(tablet)]
 impl PendingStylusFrame {
-    pub(super) fn is_empty(self) -> bool {
-        self.motion.is_none() && self.pressure.is_none() && !self.down && !self.up
+    pub(super) fn is_empty(&self) -> bool {
+        self.motion.is_none()
+            && self.pressure.is_none()
+            && !self.down
+            && !self.up
+            && self.button_presses.is_empty()
     }
 }
 

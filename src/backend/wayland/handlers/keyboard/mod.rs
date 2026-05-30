@@ -166,14 +166,6 @@ impl KeyboardHandler for WaylandState {
         }
 
         self.apply_input_key(key);
-
-        if let Some(action) = self.input_state.take_pending_zoom_action() {
-            self.handle_zoom_action(action);
-        }
-        if let Some(action) = self.input_state.take_pending_preset_action() {
-            self.handle_preset_action(action);
-        }
-        self.drain_clipboard_requests();
     }
 
     fn release_key(
@@ -270,11 +262,6 @@ impl KeyboardHandler for WaylandState {
         debug!("Key repeated: {:?}", key);
 
         self.apply_input_key(key);
-
-        if let Some(action) = self.input_state.take_pending_zoom_action() {
-            self.handle_zoom_action(action);
-        }
-        self.drain_clipboard_requests();
     }
 }
 
@@ -283,50 +270,6 @@ fn should_try_toolbar_key(key: Key, command_palette_open: bool) -> bool {
         return false;
     }
     matches!(key, Key::Tab | Key::Return | Key::Space)
-}
-
-impl WaylandState {
-    fn apply_input_key(&mut self, key: Key) {
-        #[cfg(tablet)]
-        let prev_thickness = self.input_state.current_thickness;
-        let highlight_before = (
-            self.input_state.click_highlight_enabled(),
-            self.input_state.highlight_tool_ring_enabled(),
-            self.input_state.presenter_mode,
-            self.input_state.light_mode,
-        );
-        self.input_state.on_key_press(key);
-        self.input_state.needs_redraw = true;
-        self.sync_overlay_interactivity();
-        let highlight_after = (
-            self.input_state.click_highlight_enabled(),
-            self.input_state.highlight_tool_ring_enabled(),
-            self.input_state.presenter_mode,
-            self.input_state.light_mode,
-        );
-        if highlight_before.2 == highlight_after.2
-            && highlight_before.3 == highlight_after.3
-            && (highlight_before.0 != highlight_after.0 || highlight_before.1 != highlight_after.1)
-        {
-            self.save_click_highlight_preferences();
-        }
-
-        #[cfg(tablet)]
-        if (self.input_state.current_thickness - prev_thickness).abs() > f64::EPSILON {
-            self.stylus_base_thickness = Some(self.input_state.current_thickness);
-            if self.stylus_tip_down {
-                self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
-                self.record_stylus_peak(self.input_state.current_thickness);
-            } else {
-                self.stylus_pressure_thickness = None;
-                self.stylus_peak_thickness = None;
-            }
-        }
-
-        if let Some(action) = self.input_state.take_pending_zoom_action() {
-            self.handle_zoom_action(action);
-        }
-    }
 }
 
 #[cfg(test)]

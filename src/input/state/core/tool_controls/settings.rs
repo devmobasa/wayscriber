@@ -89,8 +89,41 @@ impl InputState {
             self.tool_settings.get_mut(tool).thickness = clamped;
         }
         self.current_thickness = clamped;
+        self.update_initial_pressure_sample(clamped);
         self.needs_redraw = true;
         clamped
+    }
+
+    #[allow(dead_code)] // Used by the binary Wayland backend; the lib target has no backend modules.
+    pub(crate) fn replace_active_drawing_pressure_samples(&mut self, thickness: f64) -> bool {
+        let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS) as f32;
+        let DrawingState::Drawing {
+            point_thicknesses, ..
+        } = &mut self.state
+        else {
+            return false;
+        };
+        if point_thicknesses.is_empty() {
+            return false;
+        }
+
+        point_thicknesses.fill(clamped);
+        self.needs_redraw = true;
+        true
+    }
+
+    fn update_initial_pressure_sample(&mut self, thickness: f64) {
+        let DrawingState::Drawing {
+            points,
+            point_thicknesses,
+            ..
+        } = &mut self.state
+        else {
+            return;
+        };
+        if points.len() == 1 && point_thicknesses.len() == 1 {
+            point_thicknesses[0] = thickness as f32;
+        }
     }
 
     /// Sets or clears an explicit tool override. Returns true if the tool changed.

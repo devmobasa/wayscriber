@@ -57,7 +57,7 @@ mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
     use crate::draw::{Color, FontDescriptor, Shape};
-    use crate::input::{ClickHighlightSettings, EraserMode, MouseButton, Tool};
+    use crate::input::{ClickHighlightSettings, DrawingState, EraserMode, MouseButton, Tool};
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
@@ -191,6 +191,27 @@ mod tests {
             panic!("expected pressure-sensitive stroke");
         };
         let widths: Vec<f32> = points.iter().map(|(_, _, width)| *width).collect();
-        assert_eq!(widths, vec![4.0, 2.0, 6.0]);
+        assert_eq!(widths, vec![2.0, 2.0, 6.0]);
+    }
+
+    #[test]
+    fn first_pressure_sample_replaces_unpressured_stroke_samples() {
+        let mut state = make_state();
+
+        state.set_tool_override(Some(Tool::Pen));
+        assert!(state.set_thickness(32.0));
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        state.on_mouse_motion(10, 0);
+        state.on_mouse_motion(20, 0);
+
+        assert!(state.replace_active_drawing_pressure_samples(2.0));
+
+        let DrawingState::Drawing {
+            point_thicknesses, ..
+        } = &state.state
+        else {
+            panic!("expected active drawing");
+        };
+        assert_eq!(point_thicknesses.as_slice(), &[2.0, 2.0, 2.0]);
     }
 }

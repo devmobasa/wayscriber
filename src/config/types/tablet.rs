@@ -6,7 +6,7 @@ use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode}
 /// Binding for a single stylus barrel button.
 ///
 /// When the button is pressed, `action` is dispatched (e.g.
-/// `"toggle_radial_menu"`).  Set to `null` / omit to ignore the button.
+/// `"toggle_radial_menu"`). Omit `action` to ignore the button.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct StylusButtonBinding {

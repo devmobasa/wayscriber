@@ -334,7 +334,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     if pressed { "pressed" } else { "released" }
                 );
                 if pressed {
-                    state.handle_stylus_button_press(button);
+                    state.queue_stylus_button_press(button);
                 }
             }
             Event::Frame { .. } => {
