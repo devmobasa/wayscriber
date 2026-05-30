@@ -143,9 +143,11 @@ impl WindowHandler for WaylandState {
         {
             let load_result = session::load_snapshot_with_outcome(options);
             let mut load_succeeded = false;
+            let mut loaded_board_data = false;
             match load_result {
                 Ok(outcome) => {
                     load_succeeded = true;
+                    loaded_board_data = outcome.has_board_data();
                     self.handle_session_load_outcome(outcome, "fallback load");
                 }
                 Err(err) => {
@@ -155,7 +157,7 @@ impl WindowHandler for WaylandState {
             // Mark loaded to avoid repeated loads when load succeeded; compositor enter still
             // reloads when it sets a new output identity.
             if load_succeeded {
-                self.session.mark_loaded();
+                self.session.mark_loaded(loaded_board_data);
             }
             self.input_state.needs_redraw = true;
         }

@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use super::super::*;
 use crate::{
+    backend::wayland::session as runtime_session,
     input::state::{OutputFocusAction, UiToastKind},
     notification,
     session::{self, SessionSnapshot},
@@ -129,17 +130,34 @@ impl WaylandState {
             return;
         }
 
-        let save_result = if let Some(snapshot) =
-            session::snapshot_from_input(&self.input_state, &save_options)
-        {
-            session::save_snapshot(&snapshot, &save_options).map(|_| true)
+        let snapshot = session::snapshot_from_input(&self.input_state, &save_options);
+        if self.should_skip_unloaded_contentless_session_save(&save_options, snapshot.as_ref()) {
+            return;
+        }
+
+        let contentless_clear_boundary = self.session.has_loaded_board_data();
+        let saved_board_data = snapshot
+            .as_ref()
+            .is_some_and(session::SessionSnapshot::has_board_data);
+        let save_result = if let Some(snapshot) = snapshot {
+            session::save_snapshot_with_report_and_clear_boundary(
+                &snapshot,
+                &save_options,
+                contentless_clear_boundary,
+            )
+            .map(|report| report.is_some())
         } else if Self::session_persistence_enabled(&save_options) {
             let empty_snapshot = SessionSnapshot {
                 active_board_id: self.input_state.board_id().to_string(),
                 boards: Vec::new(),
                 tool_state: None,
             };
-            session::save_snapshot(&empty_snapshot, &save_options).map(|_| true)
+            session::save_snapshot_with_report_and_clear_boundary(
+                &empty_snapshot,
+                &save_options,
+                contentless_clear_boundary,
+            )
+            .map(|report| report.is_some())
         } else {
             Ok(false)
         };
@@ -153,7 +171,7 @@ impl WaylandState {
                     runtime_options.set_output_identity(output_identity.as_deref());
                 }
                 let _ = self.input_state.take_session_dirty();
-                self.session.mark_saved(Instant::now());
+                self.session.mark_saved(Instant::now(), saved_board_data);
                 info!(
                     "Persisted session before {} (output_identity={:?})",
                     reason,
@@ -183,6 +201,20 @@ impl WaylandState {
                         options.session_file_path().display()
                     );
                     session::apply_snapshot(&mut self.input_state, *snapshot, &options);
+                }
+            }
+            session::LoadSnapshotOutcome::LoadedFromBackup(snapshot) => {
+                if let Some(options) = self.session_options().cloned() {
+                    warn!(
+                        "Restoring session {} from backup {} because the primary session had no board data",
+                        context,
+                        options.backup_file_path().display()
+                    );
+                    session::apply_snapshot(&mut self.input_state, *snapshot, &options);
+                    self.input_state.set_ui_toast(
+                        UiToastKind::Warning,
+                        "Restored drawings from the session backup; the primary session had no board data.",
+                    );
                 }
             }
             session::LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => {
@@ -245,6 +277,27 @@ impl WaylandState {
             info!(
                 "Skipping session save to {} because a previous oversized compressed session was left protected and no session changes have been made",
                 session_path.display()
+            );
+        }
+        skip
+    }
+
+    fn should_skip_unloaded_contentless_session_save(
+        &self,
+        options: &session::SessionOptions,
+        snapshot: Option<&SessionSnapshot>,
+    ) -> bool {
+        let skip = runtime_session::should_skip_unloaded_contentless_save(
+            self.session.has_loaded_board_data(),
+            self.session.is_dirty(),
+            self.input_state.is_session_dirty(),
+            snapshot.is_some_and(SessionSnapshot::has_board_data),
+            runtime_session::has_session_artifact(options),
+        );
+        if skip {
+            info!(
+                "Skipping session save to {} because no session was loaded, no session changes were recorded, and the current snapshot has no board data",
+                options.session_file_path().display()
             );
         }
         skip

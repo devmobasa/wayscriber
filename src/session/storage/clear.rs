@@ -9,11 +9,16 @@ use crate::session::options::SessionOptions;
 pub fn clear_session(options: &SessionOptions) -> Result<ClearOutcome> {
     let session_path = options.session_file_path();
     let backup_path = options.backup_file_path();
+    let backup_recovery_marker_path = options.backup_recovery_marker_file_path();
     let recovery_path = options.recovery_file_path();
+    let clear_marker_path = options.clear_marker_file_path();
     let lock_path = options.lock_file_path();
 
-    let mut removed_session = remove_file_if_exists(&session_path)?;
+    let removed_primary_session = remove_file_if_exists(&session_path)?;
+    let removed_clear_marker = remove_file_if_exists(&clear_marker_path)?;
+    let mut removed_session = removed_primary_session || removed_clear_marker;
     let mut removed_backup = remove_file_if_exists(&backup_path)?;
+    removed_backup = remove_file_if_exists(&backup_recovery_marker_path)? || removed_backup;
     let mut removed_recovery = remove_recovery_files(&recovery_path)?;
     let mut removed_lock = remove_file_if_exists(&lock_path)?;
 
@@ -21,20 +26,19 @@ pub fn clear_session(options: &SessionOptions) -> Result<ClearOutcome> {
         let prefix = options.file_prefix();
         let base_dir = &options.base_dir;
 
-        if !removed_session {
-            removed_session = remove_matching_files(base_dir, &prefix, ".json")? || removed_session;
-        }
+        let removed_matching_sessions = remove_matching_files(base_dir, &prefix, ".json")?;
+        let removed_matching_clear_markers =
+            remove_matching_files(base_dir, &prefix, ".json.cleared")?;
+        removed_session =
+            removed_matching_sessions || removed_matching_clear_markers || removed_session;
 
-        if !removed_backup {
-            removed_backup =
-                remove_matching_files(base_dir, &prefix, ".json.bak")? || removed_backup;
-        }
+        removed_backup = remove_matching_files(base_dir, &prefix, ".json.bak")? || removed_backup;
+        removed_backup =
+            remove_matching_files(base_dir, &prefix, ".json.bak.recoverable")? || removed_backup;
 
         removed_recovery = remove_matching_recovery_files(base_dir, &prefix)? || removed_recovery;
 
-        if !removed_lock {
-            removed_lock = remove_matching_files(base_dir, &prefix, ".lock")? || removed_lock;
-        }
+        removed_lock = remove_matching_files(base_dir, &prefix, ".lock")? || removed_lock;
     }
 
     Ok(ClearOutcome {
@@ -100,7 +104,7 @@ fn remove_matching_files(dir: &Path, prefix: &str, suffix: &str) -> Result<bool>
                 .file_name()
                 .and_then(|n| n.to_str())
                 .map(|s| s.to_string())
-                && name.starts_with(prefix)
+                && name_matches_session_prefix(&name, prefix)
                 && name.ends_with(suffix)
             {
                 fs::remove_file(&path)
@@ -122,7 +126,7 @@ fn remove_matching_recovery_files(dir: &Path, prefix: &str) -> Result<bool> {
                 continue;
             }
             if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && name.starts_with(prefix)
+                && name_matches_session_prefix(name, prefix)
                 && name.contains(".json.recovery")
             {
                 fs::remove_file(&path)
@@ -132,4 +136,9 @@ fn remove_matching_recovery_files(dir: &Path, prefix: &str) -> Result<bool> {
         }
     }
     Ok(removed)
+}
+
+fn name_matches_session_prefix(name: &str, prefix: &str) -> bool {
+    name.strip_prefix(prefix)
+        .is_some_and(|rest| rest.starts_with('.') || rest.starts_with('-'))
 }

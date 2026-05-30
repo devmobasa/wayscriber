@@ -14,9 +14,26 @@ fn clear_session_removes_all_variants_for_prefix() {
     let base_dir = &options.base_dir;
     std::fs::write(base_dir.join("session-display_1.json"), b"{}").unwrap();
     std::fs::write(base_dir.join("session-display_1-DP_1.json"), b"{}").unwrap();
+    std::fs::write(base_dir.join("session-display_1.json.cleared"), b"{}").unwrap();
+    std::fs::write(base_dir.join("session-display_1-DP_1.json.cleared"), b"{}").unwrap();
     std::fs::write(base_dir.join("session-display_1.json.bak"), b"{}").unwrap();
     std::fs::write(base_dir.join("session-display_1-DP_1.json.bak"), b"{}").unwrap();
+    std::fs::write(
+        base_dir.join("session-display_1.json.bak.recoverable"),
+        b"{}",
+    )
+    .unwrap();
+    std::fs::write(
+        base_dir.join("session-display_1-DP_1.json.bak.recoverable"),
+        b"{}",
+    )
+    .unwrap();
     std::fs::write(base_dir.join("session-display_1.json.recovery"), b"{}").unwrap();
+    std::fs::write(
+        base_dir.join("session-display_1.json.recovery.recoverable"),
+        b"{}",
+    )
+    .unwrap();
     std::fs::write(
         base_dir.join("session-display_1.json.recovery.empty"),
         b"{}",
@@ -50,12 +67,34 @@ fn clear_session_removes_all_variants_for_prefix() {
         "primary session file should be removed"
     );
     assert!(
+        !base_dir.join("session-display_1.json.cleared").exists(),
+        "primary clear marker should be removed"
+    );
+    assert!(
+        !base_dir
+            .join("session-display_1-DP_1.json.cleared")
+            .exists(),
+        "per-output clear marker should be removed"
+    );
+    assert!(
         !base_dir.join("session-display_1.json.bak").exists(),
         "primary backup file should be removed"
     );
     assert!(
+        !base_dir
+            .join("session-display_1.json.bak.recoverable")
+            .exists(),
+        "primary backup recovery marker should be removed"
+    );
+    assert!(
         !base_dir.join("session-display_1.json.recovery").exists(),
         "primary recovery file should be removed"
+    );
+    assert!(
+        !base_dir
+            .join("session-display_1.json.recovery.recoverable")
+            .exists(),
+        "primary recovery recoverable marker should be removed"
     );
     assert!(
         !base_dir
@@ -76,6 +115,83 @@ fn clear_session_removes_all_variants_for_prefix() {
 
     // Per-output variants may or may not be removed depending on identity resolution,
     // so we only assert that the primary files are gone.
+}
+
+#[test]
+fn clear_session_keeps_neighbor_display_prefix_variants() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "wayland-1");
+    options.per_output = true;
+
+    let base_dir = &options.base_dir;
+    for name in [
+        "session-wayland_1.json",
+        "session-wayland_1-DP_1.json",
+        "session-wayland_1.json.cleared",
+        "session-wayland_1-DP_1.json.cleared",
+        "session-wayland_1.json.bak",
+        "session-wayland_1-DP_1.json.bak",
+        "session-wayland_1.json.bak.recoverable",
+        "session-wayland_1-DP_1.json.bak.recoverable",
+        "session-wayland_1.json.recovery",
+        "session-wayland_1.json.recovery.recoverable",
+        "session-wayland_1.json.recovery.empty",
+        "session-wayland_1-DP_1.json.recovery.too-large",
+        "session-wayland_1.lock",
+        "session-wayland_1-DP_1.lock",
+        "session-wayland_10.json",
+        "session-wayland_10-DP_1.json",
+        "session-wayland_10.json.cleared",
+        "session-wayland_10.json.bak",
+        "session-wayland_10.json.bak.recoverable",
+        "session-wayland_10.json.recovery",
+        "session-wayland_10.json.recovery.recoverable",
+        "session-wayland_10.json.recovery.empty",
+        "session-wayland_10.lock",
+    ] {
+        std::fs::write(base_dir.join(name), b"{}").unwrap();
+    }
+
+    clear_session(&options).expect("clear_session should succeed");
+
+    for removed in [
+        "session-wayland_1.json",
+        "session-wayland_1-DP_1.json",
+        "session-wayland_1.json.cleared",
+        "session-wayland_1-DP_1.json.cleared",
+        "session-wayland_1.json.bak",
+        "session-wayland_1-DP_1.json.bak",
+        "session-wayland_1.json.bak.recoverable",
+        "session-wayland_1-DP_1.json.bak.recoverable",
+        "session-wayland_1.json.recovery",
+        "session-wayland_1.json.recovery.recoverable",
+        "session-wayland_1.json.recovery.empty",
+        "session-wayland_1-DP_1.json.recovery.too-large",
+        "session-wayland_1.lock",
+        "session-wayland_1-DP_1.lock",
+    ] {
+        assert!(
+            !base_dir.join(removed).exists(),
+            "{removed} should be removed"
+        );
+    }
+
+    for preserved in [
+        "session-wayland_10.json",
+        "session-wayland_10-DP_1.json",
+        "session-wayland_10.json.cleared",
+        "session-wayland_10.json.bak",
+        "session-wayland_10.json.bak.recoverable",
+        "session-wayland_10.json.recovery",
+        "session-wayland_10.json.recovery.recoverable",
+        "session-wayland_10.json.recovery.empty",
+        "session-wayland_10.lock",
+    ] {
+        assert!(
+            base_dir.join(preserved).exists(),
+            "{preserved} should not be removed"
+        );
+    }
 }
 
 #[test]

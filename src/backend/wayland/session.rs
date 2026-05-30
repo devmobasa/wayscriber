@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 pub struct SessionState {
     options: Option<SessionOptions>,
     loaded: bool,
+    loaded_board_data: bool,
     dirty: bool,
     dirty_since: Option<Instant>,
     last_dirty_at: Option<Instant>,
@@ -32,6 +33,7 @@ impl SessionState {
         Self {
             options,
             loaded: false,
+            loaded_board_data: false,
             dirty: false,
             dirty_since: None,
             last_dirty_at: None,
@@ -62,9 +64,18 @@ impl SessionState {
         self.loaded
     }
 
-    /// Marks the session as loaded and records the identity used.
-    pub fn mark_loaded(&mut self) {
+    /// Marks the session as loaded and records whether board data is now on disk.
+    pub fn mark_loaded(&mut self, loaded_board_data: bool) {
         self.loaded = true;
+        self.loaded_board_data = loaded_board_data;
+    }
+
+    pub fn has_loaded_board_data(&self) -> bool {
+        self.loaded_board_data
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 
     pub fn record_input_dirty(&mut self, now: Instant, input_dirty: bool) {
@@ -78,7 +89,7 @@ impl SessionState {
         self.last_dirty_at = Some(now);
     }
 
-    pub fn mark_saved(&mut self, now: Instant) {
+    pub fn mark_saved(&mut self, now: Instant, saved_board_data: bool) {
         self.dirty = false;
         self.dirty_since = None;
         self.last_dirty_at = None;
@@ -86,6 +97,7 @@ impl SessionState {
         self.autosave_retry_at = None;
         self.autosave_deferred_until = None;
         self.notified_failure = false;
+        self.loaded_board_data = saved_board_data;
     }
 
     pub fn mark_clean_after_load(&mut self) {
@@ -208,6 +220,54 @@ fn autosave_active(options: &SessionOptions) -> bool {
         && (options.any_enabled() || options.restore_tool_state || options.persist_history)
 }
 
+pub(super) fn has_session_artifact(options: &SessionOptions) -> bool {
+    options.session_file_path().exists()
+        || options.backup_file_path().exists()
+        || options.backup_recovery_marker_file_path().exists()
+        || options.clear_marker_file_path().exists()
+        || options.recovery_recoverable_marker_file_path().exists()
+        || has_recovery_artifact(options)
+}
+
+fn has_recovery_artifact(options: &SessionOptions) -> bool {
+    let recovery_path = options.recovery_file_path();
+    if recovery_path.exists() {
+        return true;
+    }
+    let Some(parent) = recovery_path.parent() else {
+        return false;
+    };
+    let Some(recovery_name) = recovery_path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let preserved_prefix = format!("{recovery_name}.");
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return false;
+    };
+    entries.filter_map(Result::ok).any(|entry| {
+        let path = entry.path();
+        path.is_file()
+            && path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(&preserved_prefix))
+    })
+}
+
+pub(super) fn should_skip_unloaded_contentless_save(
+    loaded_board_data: bool,
+    session_dirty: bool,
+    input_dirty: bool,
+    has_board_data: bool,
+    session_artifact_exists: bool,
+) -> bool {
+    !has_board_data
+        && !loaded_board_data
+        && !session_dirty
+        && !input_dirty
+        && session_artifact_exists
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,7 +338,7 @@ mod tests {
         let now = Instant::now();
         state.record_input_dirty(now, true);
         state.defer_autosave(now, Duration::from_secs(60));
-        state.mark_saved(now);
+        state.mark_saved(now, false);
 
         assert_eq!(state.autosave_deferred_until, None);
     }
@@ -314,5 +374,89 @@ mod tests {
 
         state.mark_clean_after_load();
         assert!(state.should_skip_save_for_protected_path(&path, false));
+    }
+
+    #[test]
+    fn contentless_save_guard_blocks_clean_unloaded_save_when_primary_exists() {
+        assert!(should_skip_unloaded_contentless_save(
+            false, false, false, false, true,
+        ));
+    }
+
+    #[test]
+    fn contentless_save_guard_blocks_clean_unloaded_save_when_only_backup_exists() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let options = SessionOptions::new(temp.path().to_path_buf(), "backup-only");
+        std::fs::write(options.backup_file_path(), b"backup").expect("backup write");
+
+        assert!(has_session_artifact(&options));
+        assert!(should_skip_unloaded_contentless_save(
+            false,
+            false,
+            false,
+            false,
+            has_session_artifact(&options),
+        ));
+    }
+
+    #[test]
+    fn contentless_save_guard_blocks_clean_unloaded_save_when_only_recovery_exists() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let options = SessionOptions::new(temp.path().to_path_buf(), "recovery-only");
+        std::fs::write(options.recovery_file_path(), b"recovery").expect("recovery write");
+
+        assert!(has_session_artifact(&options));
+        assert!(should_skip_unloaded_contentless_save(
+            false,
+            false,
+            false,
+            false,
+            has_session_artifact(&options),
+        ));
+    }
+
+    #[test]
+    fn contentless_save_guard_blocks_clean_loaded_empty_save_when_only_preserved_recovery_exists() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let options = SessionOptions::new(temp.path().to_path_buf(), "preserved-recovery");
+        std::fs::write(
+            options
+                .recovery_file_path()
+                .with_extension("recovery.empty"),
+            b"recovery",
+        )
+        .expect("preserved recovery write");
+
+        assert!(has_session_artifact(&options));
+        assert!(should_skip_unloaded_contentless_save(
+            false,
+            false,
+            false,
+            false,
+            has_session_artifact(&options),
+        ));
+    }
+
+    #[test]
+    fn contentless_save_guard_allows_real_board_data_or_dirty_state() {
+        assert!(!should_skip_unloaded_contentless_save(
+            false, false, false, true, true,
+        ));
+        assert!(!should_skip_unloaded_contentless_save(
+            false, true, false, false, true,
+        ));
+        assert!(!should_skip_unloaded_contentless_save(
+            false, false, true, false, true,
+        ));
+        assert!(!should_skip_unloaded_contentless_save(
+            true, false, false, false, true,
+        ));
+    }
+
+    #[test]
+    fn contentless_save_guard_allows_noop_when_no_session_artifact_exists() {
+        assert!(!should_skip_unloaded_contentless_save(
+            false, false, false, false, false,
+        ));
     }
 }
