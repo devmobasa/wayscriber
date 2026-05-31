@@ -275,6 +275,115 @@ fn validate_render_profiles_ignores_stale_export_profile_for_active_export() {
 }
 
 #[test]
+fn pdf_filename_template_falls_back_to_capture_template() {
+    let mut config = Config::default();
+    config.capture.filename_template = "capture_%Y".to_string();
+    config.export.pdf.filename_template = None;
+    config.export.pdf.all_boards_filename_template = None;
+
+    assert_eq!(
+        config
+            .export
+            .pdf
+            .resolved_filename_template(&config.capture),
+        "capture_%Y"
+    );
+
+    config.export.pdf.filename_template = Some(" board_%Y ".to_string());
+    assert_eq!(
+        config
+            .export
+            .pdf
+            .resolved_filename_template(&config.capture),
+        "board_%Y"
+    );
+
+    assert_eq!(
+        config
+            .export
+            .pdf
+            .resolved_all_boards_filename_template(&config.capture),
+        "board_%Y"
+    );
+
+    config.export.pdf.all_boards_filename_template = Some(" all_%Y ".to_string());
+    assert_eq!(
+        config
+            .export
+            .pdf
+            .resolved_all_boards_filename_template(&config.capture),
+        "all_%Y"
+    );
+}
+
+#[test]
+fn export_pdf_unknown_fields_are_rejected() {
+    let err = toml::from_str::<Config>("[export.pdf]\nunknown = true\n")
+        .expect_err("unknown export.pdf field should fail");
+
+    assert!(err.to_string().contains("unknown"));
+}
+
+#[test]
+fn pdf_label_template_validation_accepts_placeholders_and_literal_braces() {
+    validate_pdf_label_template("{{ {board_name} }} {page_name} {document_page}/{document_pages}")
+        .expect("template should validate");
+
+    let err = validate_pdf_label_template("{board_name} {missing}")
+        .expect_err("unknown placeholder should fail");
+    assert!(err.contains("Unknown"));
+
+    let err =
+        validate_pdf_label_template("{board_name").expect_err("unclosed placeholder should fail");
+    assert!(err.contains("Unclosed"));
+}
+
+#[test]
+fn validate_export_pdf_sanitizes_numbers_colors_and_bad_templates() {
+    let mut config = Config::default();
+    config.export.pdf.custom_width = f64::NAN;
+    config.export.pdf.custom_height = 50_000.0;
+    config.export.pdf.content_source_padding = -1.0;
+    config.export.pdf.labels.template = "{missing}".to_string();
+    config.export.pdf.labels.font_family = "  ".to_string();
+    config.export.pdf.labels.font_size = f64::INFINITY;
+    config.export.pdf.labels.margin = -3.0;
+    config.export.pdf.labels.padding_x = 500.0;
+    config.export.pdf.labels.text_color = [f64::NAN, -1.0, 2.0, 0.5];
+    config.export.pdf.labels.background_color = [0.2, f64::INFINITY, -0.4, 1.5];
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.export.pdf.custom_width, 800.0);
+    assert_eq!(config.export.pdf.custom_height, 14_400.0);
+    assert_eq!(config.export.pdf.content_source_padding, 0.0);
+    assert_eq!(
+        config.export.pdf.labels.template,
+        PDF_LABEL_DEFAULT_TEMPLATE
+    );
+    assert_eq!(config.export.pdf.labels.font_family, "Sans");
+    assert_eq!(config.export.pdf.labels.font_size, 10.0);
+    assert_eq!(config.export.pdf.labels.margin, 0.0);
+    assert_eq!(config.export.pdf.labels.padding_x, 120.0);
+    assert_eq!(config.export.pdf.labels.text_color, [0.1, 0.0, 1.0, 0.5]);
+    assert_eq!(
+        config.export.pdf.labels.background_color,
+        [0.2, 1.0, 0.0, 1.0]
+    );
+}
+
+#[test]
+fn validate_export_pdf_ignores_template_when_label_content_is_not_custom() {
+    let mut config = Config::default();
+    config.export.pdf.labels.content = PdfLabelContentMode::DocumentPage;
+    config.export.pdf.labels.template = "{missing}".to_string();
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.export.pdf.labels.template, "{missing}");
+}
+
+#[test]
 fn validate_clamps_history_delays() {
     let mut config = Config::default();
     config.history.undo_all_delay_ms = 0;

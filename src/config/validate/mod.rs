@@ -4,6 +4,7 @@ mod arrow;
 mod board;
 mod boards;
 mod drawing;
+mod export;
 mod fonts;
 mod history;
 mod keybindings;
@@ -41,6 +42,7 @@ impl Config {
         self.validate_board();
         self.validate_ui();
         self.validate_render_profiles();
+        self.validate_export();
         self.validate_keybindings();
         self.validate_session();
     }

@@ -37,7 +37,7 @@ impl InputState {
                 self.reset_modifiers();
                 true
             }
-            Action::ExportBoardPdfFile => {
+            Action::ExportBoardPdfFile | Action::ExportAllBoardsPdfFile => {
                 log::debug!("Board PDF export action {:?} pending for backend", action);
                 self.set_pending_backend_action(PendingBackendAction::BoardPdfExport(action));
 

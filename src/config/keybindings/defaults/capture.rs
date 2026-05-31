@@ -50,6 +50,10 @@ pub(crate) fn default_export_board_pdf_file() -> Vec<String> {
     Vec::new()
 }
 
+pub(crate) fn default_export_all_boards_pdf_file() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_open_capture_folder() -> Vec<String> {
     vec!["Ctrl+Alt+O".to_string()]
 }

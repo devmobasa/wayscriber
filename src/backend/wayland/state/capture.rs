@@ -223,7 +223,10 @@ impl WaylandState {
             return;
         }
 
-        if !matches!(action, Action::ExportBoardPdfFile) {
+        if !matches!(
+            action,
+            Action::ExportBoardPdfFile | Action::ExportAllBoardsPdfFile
+        ) {
             log::error!(
                 "Non-board-PDF-export action passed to handle_board_pdf_export_action: {:?}",
                 action
@@ -231,11 +234,25 @@ impl WaylandState {
             return;
         }
 
-        let snapshot = self.board_pdf_export_snapshot();
+        let operation = if matches!(action, Action::ExportAllBoardsPdfFile) {
+            ImageOperationKind::AllBoardsPdfExport
+        } else {
+            ImageOperationKind::BoardPdfExport
+        };
+        let snapshot = match self.board_pdf_export_snapshot(action) {
+            Ok(snapshot) => snapshot,
+            Err(err) => {
+                let message = operation.format_error(&err);
+                log::error!("Board PDF export failed: {}", message);
+                self.input_state
+                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                return;
+            }
+        };
         let bytes = match render_board_pdf(&snapshot) {
             Ok(bytes) => bytes,
             Err(err) => {
-                let message = ImageOperationKind::BoardPdfExport.format_error(&err);
+                let message = operation.format_error(&err);
                 log::error!("Board PDF export failed: {}", message);
                 self.input_state
                     .set_ui_toast(crate::input::state::UiToastKind::Error, message);
@@ -257,10 +274,20 @@ impl WaylandState {
             destination,
             save_config: Some(FileSaveConfig {
                 save_directory: expand_tilde(&self.config.capture.save_directory),
-                filename_template: self.config.capture.filename_template.clone(),
+                filename_template: if matches!(action, Action::ExportAllBoardsPdfFile) {
+                    self.config
+                        .export
+                        .pdf
+                        .resolved_all_boards_filename_template(&self.config.capture)
+                } else {
+                    self.config
+                        .export
+                        .pdf
+                        .resolved_filename_template(&self.config.capture)
+                },
                 format: "pdf".to_string(),
             }),
-            operation: ImageOperationKind::BoardPdfExport,
+            operation,
         };
 
         if let Err(err) = self
@@ -307,16 +334,6 @@ impl WaylandState {
         }
     }
 
-    fn board_pdf_export_snapshot(&self) -> BoardPdfExportSnapshot {
-        build_board_pdf_export_snapshot(
-            self.surface.width(),
-            self.surface.height(),
-            self.input_state.boards.active_background(),
-            self.input_state.boards.pan_enabled(),
-            self.input_state.boards.active_pages().pages(),
-        )
-    }
-
     pub(in crate::backend::wayland) fn begin_pending_capture(&mut self, request: CaptureRequest) {
         log::info!("Requesting {:?} capture", request.capture_type);
         if let Err(e) = self.capture.manager_mut().request_capture(
@@ -332,131 +349,5 @@ impl WaylandState {
             self.capture.clear_in_progress();
             self.capture.clear_exit_on_success();
         }
-    }
-}
-
-fn build_board_pdf_export_snapshot(
-    logical_width: u32,
-    logical_height: u32,
-    background: &crate::input::BoardBackground,
-    pan_enabled: bool,
-    frames: &[crate::draw::Frame],
-) -> BoardPdfExportSnapshot {
-    let backdrop = match background {
-        crate::input::BoardBackground::Transparent => CanvasExportBackdropSnapshot::Transparent,
-        crate::input::BoardBackground::Solid(color) => CanvasExportBackdropSnapshot::Solid(*color),
-    };
-    let use_page_offsets = pan_enabled && !background.is_transparent();
-
-    let mut pages = frames
-        .iter()
-        .map(|frame| {
-            let (origin_x, origin_y) = if use_page_offsets {
-                frame.view_offset()
-            } else {
-                (0, 0)
-            };
-            CanvasPageExportSnapshot {
-                frame: frame.clone_without_history(),
-                backdrop: backdrop.clone(),
-                viewport_width: logical_width,
-                viewport_height: logical_height,
-                origin_x,
-                origin_y,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    if pages.is_empty() {
-        pages.push(CanvasPageExportSnapshot {
-            frame: crate::draw::Frame::new(),
-            backdrop,
-            viewport_width: logical_width,
-            viewport_height: logical_height,
-            origin_x: 0,
-            origin_y: 0,
-        });
-    }
-
-    BoardPdfExportSnapshot {
-        logical_width,
-        logical_height,
-        pages,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::draw::{Frame, WHITE};
-    use crate::input::BoardBackground;
-
-    #[test]
-    fn board_pdf_snapshot_preserves_page_order() {
-        let mut first = Frame::new();
-        first.set_page_name(Some("first".to_string()));
-        let mut second = Frame::new();
-        second.set_page_name(Some("second".to_string()));
-
-        let snapshot = build_board_pdf_export_snapshot(
-            800,
-            600,
-            &BoardBackground::Solid(WHITE),
-            true,
-            &[first, second],
-        );
-
-        assert_eq!(snapshot.pages.len(), 2);
-        assert_eq!(snapshot.pages[0].frame.page_name(), Some("first"));
-        assert_eq!(snapshot.pages[1].frame.page_name(), Some("second"));
-    }
-
-    #[test]
-    fn board_pdf_snapshot_uses_per_page_view_offset_for_solid_pannable_boards() {
-        let mut first = Frame::new();
-        assert!(first.set_view_offset(100, -50));
-        let mut second = Frame::new();
-        assert!(second.set_view_offset(-25, 40));
-
-        let snapshot = build_board_pdf_export_snapshot(
-            800,
-            600,
-            &BoardBackground::Solid(WHITE),
-            true,
-            &[first, second],
-        );
-
-        assert_eq!(snapshot.pages[0].origin_x, 100);
-        assert_eq!(snapshot.pages[0].origin_y, -50);
-        assert_eq!(snapshot.pages[1].origin_x, -25);
-        assert_eq!(snapshot.pages[1].origin_y, 40);
-    }
-
-    #[test]
-    fn board_pdf_snapshot_forces_origin_for_transparent_boards() {
-        let mut frame = Frame::new();
-        assert!(frame.set_view_offset(100, -50));
-
-        let snapshot = build_board_pdf_export_snapshot(
-            800,
-            600,
-            &BoardBackground::Transparent,
-            true,
-            &[frame],
-        );
-
-        assert_eq!(snapshot.pages[0].origin_x, 0);
-        assert_eq!(snapshot.pages[0].origin_y, 0);
-    }
-
-    #[test]
-    fn board_pdf_snapshot_normalizes_empty_frame_list_to_blank_page() {
-        let snapshot =
-            build_board_pdf_export_snapshot(800, 600, &BoardBackground::Solid(WHITE), true, &[]);
-
-        assert_eq!(snapshot.pages.len(), 1);
-        assert!(snapshot.pages[0].frame.is_empty());
-        assert_eq!(snapshot.pages[0].viewport_width, 800);
-        assert_eq!(snapshot.pages[0].viewport_height, 600);
     }
 }

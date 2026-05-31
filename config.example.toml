@@ -186,6 +186,7 @@ export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
 export_board_pdf_file = []
+export_all_boards_pdf_file = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]
@@ -974,3 +975,41 @@ copy_to_clipboard = true
 # When false, clipboard-only captures still auto-exit by default.
 # Use --no-exit-after-capture to keep the overlay open for a run.
 exit_after_capture = false
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXPORT SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[export.pdf]
+# Optional PDF filename template. Leave unset or blank to reuse [capture].filename_template.
+# filename_template = "board_%Y-%m-%d_%H%M%S"
+# Optional all-board PDF filename template. Falls back to filename_template, then [capture].
+# all_boards_filename_template = "boards_%Y-%m-%d_%H%M%S"
+
+# page_size: "viewport", "a4", "letter", or "custom"
+page_size = "viewport"
+# orientation: "auto", "portrait", or "landscape"
+orientation = "auto"
+# fit: "viewport", "fit-viewport-to-page", or "fit-content-to-page"
+fit = "viewport"
+# Used only when page_size = "custom" (PDF points)
+custom_width = 800.0
+custom_height = 600.0
+# Source-coordinate padding around content when fit = "fit-content-to-page"
+content_source_padding = 24.0
+
+[export.pdf.labels]
+enabled = false
+# position: "top-left", "top-right", "bottom-left", "bottom-right", or "bottom-center"
+position = "bottom-center"
+# content: "custom-template", "board-and-page", "document-page", "board-name", or "page-name"
+content = "custom-template"
+template = "{board_name} - {page_name} ({document_page}/{document_pages})"
+font_family = "Sans"
+font_size = 10.0
+margin = 12.0
+padding_x = 6.0
+padding_y = 3.0
+text_color = [0.1, 0.1, 0.1, 1.0]
+background_enabled = true
+background_color = [1.0, 1.0, 1.0, 0.85]

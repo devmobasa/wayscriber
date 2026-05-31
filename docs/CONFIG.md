@@ -709,7 +709,8 @@ mappings = [
 - Set `apply_to_ui = false` to preview remapped canvas content while keeping screen-space UI text and controls in the normal theme.
 - Profiles do not recolor the compositor-owned live desktop seen through a transparent overlay.
 - Explicit canvas PNG export applies its resolved export profile to persisted Wayscriber canvas content only, uses the current panned board viewport, respects output scale, and excludes frozen/zoom desktop pixels.
-- Board PDF export writes the active board to a file with one logical viewport-sized PDF page per Wayscriber page. PDF export preserves page order and solid board backgrounds, but does not apply export render profiles.
+- Board PDF export writes the active board or every board to a file with one PDF page per Wayscriber page. PDF export preserves board/page order and solid board backgrounds, but does not apply export render profiles.
+- `[export.pdf]` controls PDF filename fallback, page size, orientation, fit mode, and optional page labels.
 - Explicit canvas export and its clipboard-failure fallback save PNG data as `.png`; screenshot clipboard fallback still uses `[capture].format`.
 - `[capture].enabled` disables compositor screenshot capture actions, not explicit export actions.
 - Board PDF export is file-only; clipboard PDF export is not supported yet.
@@ -724,6 +725,7 @@ mappings = [
 - `export_canvas_clipboard`
 - `export_canvas_clipboard_and_file`
 - `export_board_pdf_file`
+- `export_all_boards_pdf_file`
 
 ### `[capture]` - Screenshot Capture
 
@@ -757,6 +759,49 @@ exit_after_capture = false
 - Clipboard-only shortcuts ignore the save directory automatically.
 - `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.
 - Use `--exit-after-capture` / `--no-exit-after-capture` to override exit behavior per run.
+
+### `[export.pdf]` - PDF Export
+
+Configures explicit PDF exports. If `filename_template` is omitted or blank, active-board PDF
+exports reuse `[capture].filename_template` and save with a `.pdf` extension. All-board PDF exports
+use `all_boards_filename_template`, then `filename_template`, then `[capture].filename_template`.
+
+```toml
+[export.pdf]
+# filename_template = "board_%Y-%m-%d_%H%M%S"
+# all_boards_filename_template = "boards_%Y-%m-%d_%H%M%S"
+page_size = "viewport"       # viewport, a4, letter, custom
+orientation = "auto"         # auto, portrait, landscape
+fit = "viewport"             # viewport, fit-viewport-to-page, fit-content-to-page
+custom_width = 800.0         # PDF points, used with page_size = "custom"
+custom_height = 600.0
+content_source_padding = 24.0 # source units, used with fit-content-to-page
+
+[export.pdf.labels]
+enabled = false
+position = "bottom-center"   # top-left, top-right, bottom-left, bottom-right, bottom-center
+content = "custom-template"  # custom-template, board-and-page, document-page, board-name, page-name
+template = "{board_name} - {page_name} ({document_page}/{document_pages})"
+font_family = "Sans"
+font_size = 10.0
+margin = 12.0
+padding_x = 6.0
+padding_y = 3.0
+text_color = [0.1, 0.1, 0.1, 1.0]
+background_enabled = true
+background_color = [1.0, 1.0, 1.0, 0.85]
+```
+
+`fit = "viewport"` draws the viewport 1:1 without scaling. With the default
+`page_size = "viewport"`, this preserves the legacy export. `fit-viewport-to-page` scales the
+viewport into the configured page size. `fit-content-to-page` scales the page's padded annotation
+bounds into the configured page size, falling back to the viewport for blank pages.
+
+Label templates support `{app_board}`, `{app_boards}`, `{export_board}`, `{export_boards}`,
+`{page}`, `{pages}`, `{document_page}`, `{document_pages}`, `{board_name}`, and `{page_name}`.
+Use `{{` and `}}` for literal braces. `content = "custom-template"` uses `template`; the other
+content modes ignore it. Labels are drawn after canvas content, ellipsized to one line, and omitted
+if the page is too small.
 
 ### `[tablet]` - Tablet/Stylus Input
 
@@ -1026,6 +1071,7 @@ export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
 export_board_pdf_file = []
+export_all_boards_pdf_file = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]

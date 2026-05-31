@@ -177,6 +177,9 @@ fn handle_capture_results(state: &mut WaylandState) {
                         crate::capture::ImageOperationKind::BoardPdfExport => {
                             "Board exported".to_string()
                         }
+                        crate::capture::ImageOperationKind::AllBoardsPdfExport => {
+                            "Boards exported".to_string()
+                        }
                     }
                 } else {
                     message_parts.join(" - ")

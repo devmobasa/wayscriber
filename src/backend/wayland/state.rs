@@ -45,9 +45,8 @@ use crate::input::tablet::TabletSettings;
 use crate::{
     backend::ExitAfterCaptureMode,
     canvas_export::{
-        BoardExportSnapshot, BoardPdfExportSnapshot, CanvasExportBackdropSnapshot,
-        CanvasExportSnapshot, CanvasExportViewport, CanvasPageExportSnapshot, render_board_pdf,
-        render_canvas_png,
+        BoardExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportSnapshot,
+        CanvasExportViewport, render_board_pdf, render_canvas_png,
     },
     capture::{
         CaptureDestination, CaptureManager, DocumentDeliveryRequest, ImageDeliveryRequest,
@@ -91,6 +90,7 @@ mod data;
 mod helpers;
 mod input_actions;
 mod onboarding;
+mod pdf_export;
 mod render;
 mod toolbar;
 mod zoom;

@@ -1,6 +1,7 @@
 mod boards;
 mod capture;
 mod drawing;
+mod export;
 mod history;
 mod keybindings;
 mod performance;
@@ -28,6 +29,7 @@ impl ConfigDraft {
         self.render_profiles
             .apply_to_config(&mut config, &mut errors);
         self.apply_capture(&mut config, &mut errors);
+        self.apply_export(&mut config, &mut errors);
         self.apply_session(&mut config, &mut errors);
         self.apply_tablet(&mut config, &mut errors);
         self.apply_presets(&mut config, &mut errors);

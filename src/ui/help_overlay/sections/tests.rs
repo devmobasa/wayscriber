@@ -47,6 +47,7 @@ fn canvas_export_rows_remain_visible_when_capture_context_is_disabled() {
         Action::ExportCanvasFile,
         Action::ExportCanvasClipboardAndFile,
         Action::ExportBoardPdfFile,
+        Action::ExportAllBoardsPdfFile,
     ] {
         assert!(
             rows.contains(&action_label(action)),

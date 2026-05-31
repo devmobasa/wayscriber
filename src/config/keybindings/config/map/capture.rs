@@ -44,6 +44,10 @@ impl KeybindingsConfig {
             &self.capture.export_board_pdf_file,
             Action::ExportBoardPdfFile,
         )?;
+        inserter.insert_all(
+            &self.capture.export_all_boards_pdf_file,
+            Action::ExportAllBoardsPdfFile,
+        )?;
         inserter.insert_all(&self.capture.open_capture_folder, Action::OpenCaptureFolder)?;
         Ok(())
     }

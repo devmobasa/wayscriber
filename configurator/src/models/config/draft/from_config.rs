@@ -1,8 +1,9 @@
 use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::{
-    EraserModeOption, FontStyleOption, FontWeightOption, PresenterToolBehaviorOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -169,6 +170,46 @@ impl ConfigDraft {
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
             capture_exit_after: config.capture.exit_after_capture,
+            export_pdf_filename_template: config
+                .export
+                .pdf
+                .filename_template
+                .clone()
+                .unwrap_or_default(),
+            export_pdf_all_boards_filename_template: config
+                .export
+                .pdf
+                .all_boards_filename_template
+                .clone()
+                .unwrap_or_default(),
+            export_pdf_page_size: PdfPageSizeOption::from_config(config.export.pdf.page_size),
+            export_pdf_orientation: PdfOrientationOption::from_config(
+                config.export.pdf.orientation,
+            ),
+            export_pdf_fit: PdfFitModeOption::from_config(config.export.pdf.fit),
+            export_pdf_custom_width: format_float(config.export.pdf.custom_width),
+            export_pdf_custom_height: format_float(config.export.pdf.custom_height),
+            export_pdf_content_source_padding: format_float(
+                config.export.pdf.content_source_padding,
+            ),
+            export_pdf_labels_enabled: config.export.pdf.labels.enabled,
+            export_pdf_label_position: PdfLabelPositionOption::from_config(
+                config.export.pdf.labels.position,
+            ),
+            export_pdf_label_content: PdfLabelContentModeOption::from_config(
+                config.export.pdf.labels.content,
+            ),
+            export_pdf_label_template: config.export.pdf.labels.template.clone(),
+            export_pdf_label_font_family: config.export.pdf.labels.font_family.clone(),
+            export_pdf_label_font_size: format_float(config.export.pdf.labels.font_size),
+            export_pdf_label_margin: format_float(config.export.pdf.labels.margin),
+            export_pdf_label_padding_x: format_float(config.export.pdf.labels.padding_x),
+            export_pdf_label_padding_y: format_float(config.export.pdf.labels.padding_y),
+            export_pdf_label_text_color: ColorQuadInput::from(config.export.pdf.labels.text_color),
+            export_pdf_label_background_enabled: config.export.pdf.labels.background_enabled,
+            export_pdf_label_background_color: ColorQuadInput::from(
+                config.export.pdf.labels.background_color,
+            ),
 
             session_persist_transparent: config.session.persist_transparent,
             session_persist_whiteboard: config.session.persist_whiteboard,

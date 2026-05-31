@@ -1,5 +1,8 @@
 use super::*;
-use wayscriber::config::{SessionCompression, SessionStorageMode, StatusPosition};
+use wayscriber::config::{
+    PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
+    SessionCompression, SessionStorageMode, StatusPosition,
+};
 
 #[test]
 fn font_style_option_handles_custom_values() {
@@ -45,6 +48,30 @@ fn session_storage_and_compression_round_trip() {
         compression.to_compression(),
         SessionCompression::On
     ));
+}
+
+#[test]
+fn pdf_export_options_round_trip() {
+    assert_eq!(
+        PdfPageSizeOption::from_config(PdfPageSize::A4).to_config(),
+        PdfPageSize::A4
+    );
+    assert_eq!(
+        PdfOrientationOption::from_config(PdfOrientation::Landscape).to_config(),
+        PdfOrientation::Landscape
+    );
+    assert_eq!(
+        PdfFitModeOption::from_config(PdfFitMode::FitContentToPage).to_config(),
+        PdfFitMode::FitContentToPage
+    );
+    assert_eq!(
+        PdfLabelPositionOption::from_config(PdfLabelPosition::TopRight).to_config(),
+        PdfLabelPosition::TopRight
+    );
+    assert_eq!(
+        PdfLabelContentModeOption::from_config(PdfLabelContentMode::DocumentPage).to_config(),
+        PdfLabelContentMode::DocumentPage
+    );
 }
 
 #[test]

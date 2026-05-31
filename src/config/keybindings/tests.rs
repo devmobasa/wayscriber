@@ -255,6 +255,7 @@ fn build_action_map_includes_canvas_export_bindings() {
     config.capture.export_canvas_clipboard = vec!["Ctrl+Alt+Shift+C".to_string()];
     config.capture.export_canvas_clipboard_and_file = vec!["Ctrl+Alt+Shift+B".to_string()];
     config.capture.export_board_pdf_file = vec!["Ctrl+Alt+Shift+P".to_string()];
+    config.capture.export_all_boards_pdf_file = vec!["Ctrl+Alt+Shift+A".to_string()];
 
     let map = config.build_action_map().unwrap();
 
@@ -273,6 +274,10 @@ fn build_action_map_includes_canvas_export_bindings() {
     assert_eq!(
         map.get(&KeyBinding::parse("Ctrl+Alt+Shift+P").unwrap()),
         Some(&Action::ExportBoardPdfFile)
+    );
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+A").unwrap()),
+        Some(&Action::ExportAllBoardsPdfFile)
     );
 }
 
@@ -306,5 +311,11 @@ fn canvas_export_actions_deserialize_from_config_names() {
             .unwrap()
             .action,
         Action::ExportBoardPdfFile
+    );
+    assert_eq!(
+        toml::from_str::<ActionFixture>("action = \"export_all_boards_pdf_file\"")
+            .unwrap()
+            .action,
+        Action::ExportAllBoardsPdfFile
     );
 }

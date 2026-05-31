@@ -1,11 +1,17 @@
-use iced::Element;
-use iced::widget::{column, scrollable, text};
+use iced::widget::{column, pick_list, scrollable, text};
+use iced::{Element, Length};
 
 use crate::messages::Message;
-use crate::models::{TextField, ToggleField};
+use crate::models::{
+    ColorPickerId, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
+    PdfOrientationOption, PdfPageSizeOption, QuadField, TextField, ToggleField,
+};
 
 use super::super::state::ConfiguratorApp;
-use super::widgets::{labeled_input, toggle_row};
+use super::widgets::{
+    ColorPickerUi, color_quad_picker, labeled_control, labeled_input, labeled_input_with_feedback,
+    toggle_row, validate_f64_range,
+};
 
 impl ConfiguratorApp {
     pub(super) fn capture_tab(&self) -> Element<'_, Message> {
@@ -47,6 +53,196 @@ impl ConfiguratorApp {
                     self.draft.capture_exit_after,
                     self.defaults.capture_exit_after,
                     ToggleField::CaptureExitAfter,
+                ),
+                text("PDF Export").size(20),
+                labeled_input(
+                    "PDF filename template (blank = capture template)",
+                    &self.draft.export_pdf_filename_template,
+                    &self.defaults.export_pdf_filename_template,
+                    TextField::ExportPdfFilenameTemplate,
+                ),
+                labeled_input(
+                    "All boards PDF filename template",
+                    &self.draft.export_pdf_all_boards_filename_template,
+                    &self.defaults.export_pdf_all_boards_filename_template,
+                    TextField::ExportPdfAllBoardsFilenameTemplate,
+                ),
+                labeled_control(
+                    "Page size",
+                    pick_list(
+                        PdfPageSizeOption::list(),
+                        Some(self.draft.export_pdf_page_size),
+                        Message::ExportPdfPageSizeChanged,
+                    )
+                    .width(Length::Fill)
+                    .into(),
+                    self.defaults.export_pdf_page_size.label().to_string(),
+                    self.draft.export_pdf_page_size != self.defaults.export_pdf_page_size,
+                ),
+                labeled_control(
+                    "Orientation",
+                    pick_list(
+                        PdfOrientationOption::list(),
+                        Some(self.draft.export_pdf_orientation),
+                        Message::ExportPdfOrientationChanged,
+                    )
+                    .width(Length::Fill)
+                    .into(),
+                    self.defaults.export_pdf_orientation.label().to_string(),
+                    self.draft.export_pdf_orientation != self.defaults.export_pdf_orientation,
+                ),
+                labeled_control(
+                    "Fit",
+                    pick_list(
+                        PdfFitModeOption::list(),
+                        Some(self.draft.export_pdf_fit),
+                        Message::ExportPdfFitChanged,
+                    )
+                    .width(Length::Fill)
+                    .into(),
+                    self.defaults.export_pdf_fit.label().to_string(),
+                    self.draft.export_pdf_fit != self.defaults.export_pdf_fit,
+                ),
+                labeled_input_with_feedback(
+                    "Custom width (PDF points)",
+                    &self.draft.export_pdf_custom_width,
+                    &self.defaults.export_pdf_custom_width,
+                    TextField::ExportPdfCustomWidth,
+                    Some("Range: 1-14400"),
+                    validate_f64_range(&self.draft.export_pdf_custom_width, 1.0, 14400.0),
+                ),
+                labeled_input_with_feedback(
+                    "Custom height (PDF points)",
+                    &self.draft.export_pdf_custom_height,
+                    &self.defaults.export_pdf_custom_height,
+                    TextField::ExportPdfCustomHeight,
+                    Some("Range: 1-14400"),
+                    validate_f64_range(&self.draft.export_pdf_custom_height, 1.0, 14400.0),
+                ),
+                labeled_input_with_feedback(
+                    "Content source padding",
+                    &self.draft.export_pdf_content_source_padding,
+                    &self.defaults.export_pdf_content_source_padding,
+                    TextField::ExportPdfContentSourcePadding,
+                    Some("Range: 0-4096"),
+                    validate_f64_range(&self.draft.export_pdf_content_source_padding, 0.0, 4096.0,),
+                ),
+                toggle_row(
+                    "Show PDF page labels",
+                    self.draft.export_pdf_labels_enabled,
+                    self.defaults.export_pdf_labels_enabled,
+                    ToggleField::ExportPdfLabelsEnabled,
+                ),
+                labeled_control(
+                    "Label position",
+                    pick_list(
+                        PdfLabelPositionOption::list(),
+                        Some(self.draft.export_pdf_label_position),
+                        Message::ExportPdfLabelPositionChanged,
+                    )
+                    .width(Length::Fill)
+                    .into(),
+                    self.defaults.export_pdf_label_position.label().to_string(),
+                    self.draft.export_pdf_label_position != self.defaults.export_pdf_label_position,
+                ),
+                labeled_control(
+                    "Label content",
+                    pick_list(
+                        PdfLabelContentModeOption::list(),
+                        Some(self.draft.export_pdf_label_content),
+                        Message::ExportPdfLabelContentChanged,
+                    )
+                    .width(Length::Fill)
+                    .into(),
+                    self.defaults.export_pdf_label_content.label().to_string(),
+                    self.draft.export_pdf_label_content != self.defaults.export_pdf_label_content,
+                ),
+                labeled_input(
+                    "Label template",
+                    &self.draft.export_pdf_label_template,
+                    &self.defaults.export_pdf_label_template,
+                    TextField::ExportPdfLabelTemplate,
+                ),
+                labeled_input(
+                    "Label font family",
+                    &self.draft.export_pdf_label_font_family,
+                    &self.defaults.export_pdf_label_font_family,
+                    TextField::ExportPdfLabelFontFamily,
+                ),
+                labeled_input_with_feedback(
+                    "Label font size",
+                    &self.draft.export_pdf_label_font_size,
+                    &self.defaults.export_pdf_label_font_size,
+                    TextField::ExportPdfLabelFontSize,
+                    Some("Range: 1-72"),
+                    validate_f64_range(&self.draft.export_pdf_label_font_size, 1.0, 72.0),
+                ),
+                labeled_input_with_feedback(
+                    "Label margin",
+                    &self.draft.export_pdf_label_margin,
+                    &self.defaults.export_pdf_label_margin,
+                    TextField::ExportPdfLabelMargin,
+                    Some("Range: 0-240"),
+                    validate_f64_range(&self.draft.export_pdf_label_margin, 0.0, 240.0),
+                ),
+                labeled_input_with_feedback(
+                    "Label horizontal padding",
+                    &self.draft.export_pdf_label_padding_x,
+                    &self.defaults.export_pdf_label_padding_x,
+                    TextField::ExportPdfLabelPaddingX,
+                    Some("Range: 0-120"),
+                    validate_f64_range(&self.draft.export_pdf_label_padding_x, 0.0, 120.0),
+                ),
+                labeled_input_with_feedback(
+                    "Label vertical padding",
+                    &self.draft.export_pdf_label_padding_y,
+                    &self.defaults.export_pdf_label_padding_y,
+                    TextField::ExportPdfLabelPaddingY,
+                    Some("Range: 0-120"),
+                    validate_f64_range(&self.draft.export_pdf_label_padding_y, 0.0, 120.0),
+                ),
+                color_quad_picker(
+                    "Label text RGBA (0-1)",
+                    ColorPickerUi {
+                        id: ColorPickerId::ExportPdfLabelText,
+                        is_open: self.color_picker_open == Some(ColorPickerId::ExportPdfLabelText),
+                        show_advanced: self
+                            .color_picker_advanced
+                            .contains(&ColorPickerId::ExportPdfLabelText),
+                        hex_value: self
+                            .color_picker_hex
+                            .get(&ColorPickerId::ExportPdfLabelText)
+                            .map(String::as_str)
+                            .unwrap_or(""),
+                    },
+                    &self.draft.export_pdf_label_text_color,
+                    &self.defaults.export_pdf_label_text_color,
+                    QuadField::ExportPdfLabelText,
+                ),
+                toggle_row(
+                    "Label solid background",
+                    self.draft.export_pdf_label_background_enabled,
+                    self.defaults.export_pdf_label_background_enabled,
+                    ToggleField::ExportPdfLabelBackgroundEnabled,
+                ),
+                color_quad_picker(
+                    "Label background RGBA (0-1)",
+                    ColorPickerUi {
+                        id: ColorPickerId::ExportPdfLabelBackground,
+                        is_open: self.color_picker_open
+                            == Some(ColorPickerId::ExportPdfLabelBackground),
+                        show_advanced: self
+                            .color_picker_advanced
+                            .contains(&ColorPickerId::ExportPdfLabelBackground),
+                        hex_value: self
+                            .color_picker_hex
+                            .get(&ColorPickerId::ExportPdfLabelBackground)
+                            .map(String::as_str)
+                            .unwrap_or(""),
+                    },
+                    &self.draft.export_pdf_label_background_color,
+                    &self.defaults.export_pdf_label_background_color,
+                    QuadField::ExportPdfLabelBackground,
                 )
             ]
             .spacing(12),

@@ -1,4 +1,5 @@
 mod eraser;
+mod export;
 mod font;
 mod presenter;
 #[cfg(feature = "tablet-input")]
@@ -10,6 +11,10 @@ mod tool;
 mod toolbar;
 
 pub use eraser::{EraserModeOption, PresetEraserKindOption, PresetEraserModeOption};
+pub use export::{
+    PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
+    PdfPageSizeOption,
+};
 pub use font::{FontStyleOption, FontWeightOption};
 pub use presenter::PresenterToolBehaviorOption;
 #[cfg(feature = "tablet-input")]

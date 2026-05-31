@@ -9,6 +9,7 @@ pub enum ImageOperationKind {
     Screenshot,
     CanvasExport,
     BoardPdfExport,
+    AllBoardsPdfExport,
 }
 
 impl ImageOperationKind {
@@ -17,6 +18,7 @@ impl ImageOperationKind {
             Self::Screenshot => "Screenshot Captured",
             Self::CanvasExport => "Canvas exported",
             Self::BoardPdfExport => "Board exported",
+            Self::AllBoardsPdfExport => "Boards exported",
         }
     }
 
@@ -25,6 +27,7 @@ impl ImageOperationKind {
             Self::Screenshot => "Screenshot Failed",
             Self::CanvasExport => "Canvas export failed",
             Self::BoardPdfExport => "Board PDF export failed",
+            Self::AllBoardsPdfExport => "All boards PDF export failed",
         }
     }
 
@@ -33,6 +36,7 @@ impl ImageOperationKind {
             Self::Screenshot => "Screenshot Clipboard Failed",
             Self::CanvasExport => "Canvas clipboard failed",
             Self::BoardPdfExport => "Board PDF clipboard failed",
+            Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
         }
     }
 
@@ -41,6 +45,7 @@ impl ImageOperationKind {
             Self::Screenshot => "Clipboard failed",
             Self::CanvasExport => "Canvas clipboard failed",
             Self::BoardPdfExport => "Board PDF clipboard failed",
+            Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
         }
     }
 
@@ -49,6 +54,7 @@ impl ImageOperationKind {
             Self::Screenshot => "Screenshot",
             Self::CanvasExport => "Canvas export",
             Self::BoardPdfExport => "Board PDF export",
+            Self::AllBoardsPdfExport => "All boards PDF export",
         }
     }
 
@@ -76,6 +82,21 @@ impl ImageOperationKind {
                 CaptureError::ImageError(err) => format!("Board PDF export failed: {err}"),
                 CaptureError::Cancelled(reason) => {
                     format!("Board PDF export cancelled: {reason}")
+                }
+                other => other.to_string(),
+            },
+            Self::AllBoardsPdfExport => match err {
+                CaptureError::SaveError(err) => {
+                    format!("Failed to save all boards PDF export: {err}")
+                }
+                CaptureError::ClipboardError(err) => {
+                    format!("All boards PDF export clipboard operation failed: {err}")
+                }
+                CaptureError::ImageError(err) => {
+                    format!("All boards PDF export failed: {err}")
+                }
+                CaptureError::Cancelled(reason) => {
+                    format!("All boards PDF export cancelled: {reason}")
                 }
                 other => other.to_string(),
             },

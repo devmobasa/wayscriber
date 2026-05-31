@@ -24,6 +24,18 @@ impl ColorQuadInput {
         for (index, value) in self.components.iter().enumerate() {
             let parsed = parse_f64(value.trim())
                 .map_err(|err| FormError::new(format!("{field}[{index}]"), err))?;
+            if !parsed.is_finite() {
+                return Err(FormError::new(
+                    format!("{field}[{index}]"),
+                    "Expected a finite numeric value",
+                ));
+            }
+            if !(0.0..=1.0).contains(&parsed) {
+                return Err(FormError::new(
+                    format!("{field}[{index}]"),
+                    "Expected a value between 0 and 1",
+                ));
+            }
             out[index] = parsed;
         }
         Ok(out)

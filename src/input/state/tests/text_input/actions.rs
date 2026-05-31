@@ -83,3 +83,17 @@ fn board_pdf_export_action_sets_pending_backend_action() {
         ))
     );
 }
+
+#[test]
+fn all_boards_pdf_export_action_sets_pending_backend_action() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(Action::ExportAllBoardsPdfFile);
+
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::BoardPdfExport(
+            Action::ExportAllBoardsPdfFile
+        ))
+    );
+}

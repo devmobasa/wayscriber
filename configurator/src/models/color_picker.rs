@@ -12,6 +12,8 @@ pub enum ColorPickerId {
     HelpBg,
     HelpBorder,
     HelpText,
+    ExportPdfLabelText,
+    ExportPdfLabelBackground,
 }
 
 #[derive(Debug, Clone, Copy)]

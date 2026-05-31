@@ -29,8 +29,16 @@ fn board_pdf_export_keybinding_field_is_visible_and_in_capture_tab() {
         KeybindingField::all().contains(&KeybindingField::ExportBoardPdfFile),
         "PDF export field should appear in ordered keybinding list"
     );
+    assert!(
+        KeybindingField::all().contains(&KeybindingField::ExportAllBoardsPdfFile),
+        "All-board PDF export field should appear in ordered keybinding list"
+    );
     assert_eq!(
         KeybindingField::ExportBoardPdfFile.tab(),
+        KeybindingsTabId::CaptureView
+    );
+    assert_eq!(
+        KeybindingField::ExportAllBoardsPdfFile.tab(),
         KeybindingsTabId::CaptureView
     );
 }
@@ -45,5 +53,11 @@ fn board_pdf_export_keybinding_field_reads_and_writes_config() {
     assert_eq!(
         config.capture.export_board_pdf_file,
         vec!["Ctrl+Alt+P".to_string()]
+    );
+
+    KeybindingField::ExportAllBoardsPdfFile.set(&mut config, vec!["Ctrl+Alt+A".to_string()]);
+    assert_eq!(
+        config.capture.export_all_boards_pdf_file,
+        vec!["Ctrl+Alt+A".to_string()]
     );
 }
