@@ -46,7 +46,7 @@ impl InputState {
                     self.invalidate_hit_cache_for(*shape_id);
                 }
             }
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 for action in actions {
                     self.mark_dirty_from_action(action);
                 }
@@ -68,7 +68,7 @@ impl InputState {
             UndoAction::Reorder { shape_id, .. } => {
                 self.invalidate_hit_cache_for(*shape_id);
             }
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 for action in actions {
                     self.invalidate_hit_cache_from_action(action);
                 }
@@ -232,14 +232,16 @@ mod tests {
             .clone();
         let _ = state.take_dirty_regions();
 
-        state.apply_action_side_effects(&UndoAction::Compound(vec![
-            UndoAction::Create {
-                shapes: vec![(0, first)],
-            },
-            UndoAction::Delete {
-                shapes: vec![(1, second)],
-            },
-        ]));
+        state.apply_action_side_effects(&UndoAction::Compound {
+            actions: vec![
+                UndoAction::Create {
+                    shapes: vec![(0, first)],
+                },
+                UndoAction::Delete {
+                    shapes: vec![(1, second)],
+                },
+            ],
+        });
 
         assert!(state.session_dirty);
         assert!(!state.take_dirty_regions().is_empty());

@@ -198,6 +198,79 @@ fn clear_all_can_be_undone_after_restore() {
 }
 
 #[test]
+fn moved_multi_selection_with_history_survives_save_restore() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-multi-move");
+    options.persist_transparent = true;
+    options.persist_history = true;
+
+    let mut input = dummy_input_state();
+    input.update_screen_dimensions(400, 300);
+    let first = input.boards.active_frame_mut().add_shape(Shape::Freehand {
+        points: vec![(10, 10), (20, 20)],
+        color: Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 3.0,
+    });
+    let second = input.boards.active_frame_mut().add_shape(Shape::Freehand {
+        points: vec![(40, 40), (50, 50)],
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 1.0,
+            a: 1.0,
+        },
+        thick: 3.0,
+    });
+    input.set_selection(vec![first, second]);
+
+    assert!(input.translate_selection_with_undo(25, 10));
+    assert_eq!(input.boards.active_frame().undo_stack_len(), 1);
+    assert_eq!(
+        freehand_points(input.boards.active_frame(), first),
+        vec![(35, 20), (45, 30)]
+    );
+    assert_eq!(
+        freehand_points(input.boards.active_frame(), second),
+        vec![(65, 50), (75, 60)]
+    );
+
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+    save_snapshot(&snapshot, &options).expect("save snapshot with compound move history");
+    let data = fs::read_to_string(options.session_file_path()).expect("read session file");
+    assert!(data.contains("\"kind\": \"compound\""));
+    assert!(data.contains("\"actions\""));
+
+    let loaded = load_snapshot(&options)
+        .expect("load snapshot result")
+        .expect("snapshot data");
+
+    let mut restored = dummy_input_state();
+    apply_snapshot(&mut restored, loaded, &options);
+    restored.switch_board(BOARD_ID_TRANSPARENT);
+    let frame = restored.boards.active_frame_mut();
+    assert_eq!(frame.undo_stack_len(), 1);
+    assert_eq!(freehand_points(frame, first), vec![(35, 20), (45, 30)]);
+    assert_eq!(freehand_points(frame, second), vec![(65, 50), (75, 60)]);
+
+    frame.undo_last().expect("compound undo should restore");
+    assert_eq!(freehand_points(frame, first), vec![(10, 10), (20, 20)]);
+    assert_eq!(freehand_points(frame, second), vec![(40, 40), (50, 50)]);
+}
+
+fn freehand_points(frame: &crate::draw::Frame, id: crate::draw::ShapeId) -> Vec<(i32, i32)> {
+    let shape = frame.shape(id).expect("shape exists");
+    match &shape.shape {
+        Shape::Freehand { points, .. } => points.clone(),
+        other => panic!("expected freehand shape, got {other:?}"),
+    }
+}
+
+#[test]
 fn corrupted_history_is_dropped_but_shapes_load() {
     let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-corrupt");

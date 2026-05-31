@@ -14,7 +14,7 @@ impl Frame {
             UndoAction::Modify { before, .. } => Some(before.shape.clone()),
             UndoAction::ModifyImageBounds { .. } => None,
             UndoAction::Reorder { .. } => None,
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 actions.iter().rev().find_map(Self::primary_shape_for_undo)
             }
         }
@@ -28,7 +28,9 @@ impl Frame {
             UndoAction::Modify { after, .. } => Some(after.shape.clone()),
             UndoAction::ModifyImageBounds { .. } => None,
             UndoAction::Reorder { .. } => None,
-            UndoAction::Compound(actions) => actions.iter().find_map(Self::primary_shape_for_redo),
+            UndoAction::Compound { actions } => {
+                actions.iter().find_map(Self::primary_shape_for_redo)
+            }
         }
     }
 

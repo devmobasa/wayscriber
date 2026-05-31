@@ -34,7 +34,7 @@ impl Frame {
             } => {
                 self.move_shape_to(*shape_id, *to);
             }
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 for action in actions {
                     self.apply_action(action);
                 }
@@ -71,7 +71,7 @@ impl Frame {
             UndoAction::Reorder { shape_id, from, .. } => {
                 self.move_shape_to(*shape_id, *from);
             }
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 for action in actions.iter().rev() {
                     self.apply_inverse(action);
                 }

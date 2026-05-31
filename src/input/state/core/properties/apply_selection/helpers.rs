@@ -120,7 +120,7 @@ impl InputState {
         let undo_action = if actions.len() == 1 {
             actions.into_iter().next().unwrap()
         } else {
-            crate::draw::frame::UndoAction::Compound(actions)
+            crate::draw::frame::UndoAction::Compound { actions }
         };
 
         self.boards
