@@ -25,14 +25,20 @@ fn validate_history_drops_actions_exceeding_compound_depth() {
         locked: false,
     };
 
-    let shallow = UndoAction::Compound(vec![UndoAction::Create {
-        shapes: vec![(0, shallow_drawn)],
-    }]);
+    let shallow = UndoAction::Compound {
+        actions: vec![UndoAction::Create {
+            shapes: vec![(0, shallow_drawn)],
+        }],
+    };
 
     // Nested compound to create depth 3.
-    let deep = UndoAction::Compound(vec![UndoAction::Compound(vec![UndoAction::Create {
-        shapes: vec![(0, deep_drawn)],
-    }])]);
+    let deep = UndoAction::Compound {
+        actions: vec![UndoAction::Compound {
+            actions: vec![UndoAction::Create {
+                shapes: vec![(0, deep_drawn)],
+            }],
+        }],
+    };
 
     let mut frame = Frame::new();
     frame.undo_stack = vec![shallow, deep];
@@ -42,7 +48,7 @@ fn validate_history_drops_actions_exceeding_compound_depth() {
     assert_eq!(stats.undo_removed, 1);
 
     match &frame.undo_stack[0] {
-        UndoAction::Compound(actions) => {
+        UndoAction::Compound { actions } => {
             assert_eq!(actions.len(), 1, "shallow compound should be preserved");
         }
         other => panic!("expected compound action, got {:?}", other),

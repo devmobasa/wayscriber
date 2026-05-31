@@ -115,7 +115,9 @@ pub enum UndoAction {
         from: usize,
         to: usize,
     },
-    Compound(Vec<UndoAction>),
+    Compound {
+        actions: Vec<UndoAction>,
+    },
 }
 
 impl UndoAction {

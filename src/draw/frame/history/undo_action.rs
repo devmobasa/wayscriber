@@ -5,7 +5,7 @@ use super::super::types::{ShapeId, UndoAction};
 impl UndoAction {
     pub(super) fn depth(&self) -> usize {
         match self {
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 1 + actions
                     .iter()
                     .map(|action| action.depth())
@@ -24,7 +24,7 @@ impl UndoAction {
             UndoAction::Modify { shape_id, .. }
             | UndoAction::ModifyImageBounds { shape_id, .. } => Some(*shape_id),
             UndoAction::Reorder { shape_id, .. } => Some(*shape_id),
-            UndoAction::Compound(actions) => actions
+            UndoAction::Compound { actions } => actions
                 .iter()
                 .filter_map(|action| action.max_shape_id())
                 .max(),
@@ -40,7 +40,7 @@ impl UndoAction {
             UndoAction::Modify { shape_id, .. }
             | UndoAction::ModifyImageBounds { shape_id, .. }
             | UndoAction::Reorder { shape_id, .. } => !removed.contains(shape_id),
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 actions.retain_mut(|action| action.prune_removed_shapes(removed));
                 !actions.is_empty()
             }
@@ -53,7 +53,7 @@ impl UndoAction {
             UndoAction::Modify { shape_id, .. }
             | UndoAction::ModifyImageBounds { shape_id, .. }
             | UndoAction::Reorder { shape_id, .. } => ids.contains(shape_id),
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 actions.retain_mut(|action| action.validate_against_shapes(ids));
                 !actions.is_empty()
             }
@@ -72,7 +72,7 @@ impl UndoAction {
             | UndoAction::Reorder { shape_id, .. } => {
                 ids.insert(*shape_id);
             }
-            UndoAction::Compound(actions) => {
+            UndoAction::Compound { actions } => {
                 for action in actions {
                     action.collect_ids(ids);
                 }

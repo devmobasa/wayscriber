@@ -11,6 +11,7 @@ use super::types::{
     ToolStateSnapshot,
 };
 use super::{load_snapshot, save_snapshot};
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{Color, FontDescriptor, Frame, Shape};
 use crate::input::EraserMode;
 use crate::session::options::{CompressionMode, SessionOptions};
@@ -1085,6 +1086,108 @@ fn save_snapshot_keeps_empty_pages() {
         .expect("transparent pages should be present");
     assert_eq!(pages.pages.pages.len(), 3);
     assert_eq!(pages.pages.active, 2);
+}
+
+#[test]
+fn save_snapshot_serializes_compound_undo_history() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "compound-history");
+    options.persist_transparent = true;
+    options.persist_history = true;
+
+    let mut frame = Frame::new();
+    let first_id = frame.add_shape(Shape::Line {
+        x1: 0,
+        y1: 0,
+        x2: 10,
+        y2: 10,
+        color: Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 2.0,
+    });
+    let second_id = frame.add_shape(Shape::Line {
+        x1: 20,
+        y1: 20,
+        x2: 30,
+        y2: 30,
+        color: Color {
+            r: 0.0,
+            g: 1.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 2.0,
+    });
+
+    let before_first = snapshot_for_shape(&frame, first_id);
+    let before_second = snapshot_for_shape(&frame, second_id);
+    translate_line(&mut frame, first_id, 5, 0);
+    translate_line(&mut frame, second_id, 5, 0);
+    let after_first = snapshot_for_shape(&frame, first_id);
+    let after_second = snapshot_for_shape(&frame, second_id);
+    frame.push_undo_action(
+        UndoAction::Compound {
+            actions: vec![
+                UndoAction::Modify {
+                    shape_id: first_id,
+                    before: before_first,
+                    after: after_first,
+                },
+                UndoAction::Modify {
+                    shape_id: second_id,
+                    before: before_second,
+                    after: after_second,
+                },
+            ],
+        },
+        usize::MAX,
+    );
+
+    let snapshot = SessionSnapshot {
+        active_board_id: "transparent".to_string(),
+        boards: vec![BoardSnapshot {
+            id: "transparent".to_string(),
+            pages: BoardPagesSnapshot {
+                pages: vec![frame],
+                active: 0,
+            },
+        }],
+        tool_state: None,
+    };
+
+    save_snapshot(&snapshot, &options).expect("save_snapshot should serialize compound history");
+
+    let raw = std::fs::read_to_string(options.session_file_path()).expect("read session json");
+    assert!(raw.contains("\"kind\": \"compound\""));
+    assert!(raw.contains("\"actions\""));
+
+    let loaded = load_snapshot(&options)
+        .expect("load_snapshot should succeed")
+        .expect("snapshot should be present");
+    let page = &loaded.boards[0].pages.pages[0];
+    assert_eq!(page.undo_stack_len(), 1);
+}
+
+fn snapshot_for_shape(frame: &Frame, shape_id: crate::draw::ShapeId) -> ShapeSnapshot {
+    let drawn = frame.shape(shape_id).expect("shape exists");
+    ShapeSnapshot {
+        shape: drawn.shape.clone(),
+        locked: drawn.locked,
+    }
+}
+
+fn translate_line(frame: &mut Frame, shape_id: crate::draw::ShapeId, dx: i32, dy: i32) {
+    let shape = frame.shape_mut(shape_id).expect("shape exists");
+    if let Shape::Line { x1, y1, x2, y2, .. } = &mut shape.shape {
+        *x1 += dx;
+        *y1 += dy;
+        *x2 += dx;
+        *y2 += dy;
+    }
 }
 
 #[test]

@@ -33,7 +33,7 @@ impl InputState {
         let undo_action = if actions.len() == 1 {
             actions.into_iter().next().unwrap()
         } else {
-            UndoAction::Compound(actions)
+            UndoAction::Compound { actions }
         };
 
         self.boards
