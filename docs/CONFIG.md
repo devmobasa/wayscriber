@@ -709,9 +709,10 @@ mappings = [
 - Set `apply_to_ui = false` to preview remapped canvas content while keeping screen-space UI text and controls in the normal theme.
 - Profiles do not recolor the compositor-owned live desktop seen through a transparent overlay.
 - Explicit canvas PNG export applies its resolved export profile to persisted Wayscriber canvas content only, uses the current panned board viewport, respects output scale, and excludes frozen/zoom desktop pixels.
+- Board PDF export writes the active board to a file with one logical viewport-sized PDF page per Wayscriber page. PDF export preserves page order and solid board backgrounds, but does not apply export render profiles.
 - Explicit canvas export and its clipboard-failure fallback save PNG data as `.png`; screenshot clipboard fallback still uses `[capture].format`.
-- `[capture].enabled` disables compositor screenshot capture actions, not explicit canvas export actions.
-- PDF export is out of scope.
+- `[capture].enabled` disables compositor screenshot capture actions, not explicit export actions.
+- Board PDF export is file-only; clipboard PDF export is not supported yet.
 
 **Runtime actions:**
 - `render_profile_next`
@@ -722,6 +723,7 @@ mappings = [
 - `export_canvas_file`
 - `export_canvas_clipboard`
 - `export_canvas_clipboard_and_file`
+- `export_board_pdf_file`
 
 ### `[capture]` - Screenshot Capture
 
@@ -1023,6 +1025,7 @@ capture_file_region = ["Ctrl+Alt+6"]
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
+export_board_pdf_file = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]

@@ -119,6 +119,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::ExportCanvasFile
         | Action::ExportCanvasClipboard
         | Action::ExportCanvasClipboardAndFile
+        | Action::ExportBoardPdfFile
         | Action::ToggleFrozenMode
         | Action::ZoomIn
         | Action::ZoomOut

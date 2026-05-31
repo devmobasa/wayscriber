@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub enum ImageOperationKind {
     Screenshot,
     CanvasExport,
+    BoardPdfExport,
 }
 
 impl ImageOperationKind {
@@ -15,6 +16,7 @@ impl ImageOperationKind {
         match self {
             Self::Screenshot => "Screenshot Captured",
             Self::CanvasExport => "Canvas exported",
+            Self::BoardPdfExport => "Board exported",
         }
     }
 
@@ -22,6 +24,7 @@ impl ImageOperationKind {
         match self {
             Self::Screenshot => "Screenshot Failed",
             Self::CanvasExport => "Canvas export failed",
+            Self::BoardPdfExport => "Board PDF export failed",
         }
     }
 
@@ -29,6 +32,7 @@ impl ImageOperationKind {
         match self {
             Self::Screenshot => "Screenshot Clipboard Failed",
             Self::CanvasExport => "Canvas clipboard failed",
+            Self::BoardPdfExport => "Board PDF clipboard failed",
         }
     }
 
@@ -36,6 +40,7 @@ impl ImageOperationKind {
         match self {
             Self::Screenshot => "Clipboard failed",
             Self::CanvasExport => "Canvas clipboard failed",
+            Self::BoardPdfExport => "Board PDF clipboard failed",
         }
     }
 
@@ -43,6 +48,7 @@ impl ImageOperationKind {
         match self {
             Self::Screenshot => "Screenshot",
             Self::CanvasExport => "Canvas export",
+            Self::BoardPdfExport => "Board PDF export",
         }
     }
 
@@ -58,6 +64,19 @@ impl ImageOperationKind {
                 }
                 CaptureError::ImageError(err) => format!("Canvas export failed: {err}"),
                 CaptureError::Cancelled(reason) => format!("Canvas export cancelled: {reason}"),
+                other => other.to_string(),
+            },
+            Self::BoardPdfExport => match err {
+                CaptureError::SaveError(err) => {
+                    format!("Failed to save board PDF export: {err}")
+                }
+                CaptureError::ClipboardError(err) => {
+                    format!("Board PDF export clipboard operation failed: {err}")
+                }
+                CaptureError::ImageError(err) => format!("Board PDF export failed: {err}"),
+                CaptureError::Cancelled(reason) => {
+                    format!("Board PDF export cancelled: {reason}")
+                }
                 other => other.to_string(),
             },
         }
@@ -94,6 +113,21 @@ pub struct ImageDeliveryRequest {
     pub save_config: Option<crate::capture::file::FileSaveConfig>,
     pub operation: ImageOperationKind,
     pub fallback_format_override: Option<ImageFormatMetadata>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderedDocument {
+    pub bytes: Vec<u8>,
+    pub extension: String,
+    pub mime_type: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct DocumentDeliveryRequest {
+    pub document: RenderedDocument,
+    pub destination: CaptureDestination,
+    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub operation: ImageOperationKind,
 }
 
 /// Type of screenshot capture to perform.

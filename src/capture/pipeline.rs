@@ -4,8 +4,8 @@ use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
     file::FileSaveConfig,
     types::{
-        CaptureDestination, CaptureError, CaptureResult, CaptureType, ImageDeliveryRequest,
-        ImageOperationKind,
+        CaptureDestination, CaptureError, CaptureResult, CaptureType, DocumentDeliveryRequest,
+        ImageDeliveryRequest, ImageOperationKind,
     },
 };
 use tokio::task;
@@ -37,6 +37,7 @@ impl fmt::Debug for CaptureRequest {
 pub(crate) enum CaptureManagerRequest {
     Capture(CaptureRequest),
     DeliverImage(ImageDeliveryRequest),
+    DeliverDocument(DocumentDeliveryRequest),
 }
 
 impl CaptureManagerRequest {
@@ -44,6 +45,7 @@ impl CaptureManagerRequest {
         match self {
             Self::Capture(_) => ImageOperationKind::Screenshot,
             Self::DeliverImage(request) => request.operation,
+            Self::DeliverDocument(request) => request.operation,
         }
     }
 }
@@ -59,6 +61,13 @@ impl fmt::Debug for CaptureManagerRequest {
                 .field("width", &request.image.width)
                 .field("height", &request.image.height)
                 .field("format", &request.image.format)
+                .finish(),
+            Self::DeliverDocument(request) => f
+                .debug_struct("DeliverDocument")
+                .field("destination", &request.destination)
+                .field("operation", &request.operation)
+                .field("extension", &request.document.extension)
+                .field("mime_type", &request.document.mime_type)
                 .finish(),
         }
     }
@@ -95,7 +104,7 @@ pub(crate) async fn perform_capture(
             if let Some(save_config) = request.save_config.clone() {
                 if !save_config.save_directory.as_os_str().is_empty() {
                     Some(
-                        save_image(
+                        save_bytes(
                             Arc::clone(&dependencies.saver),
                             image_data.clone(),
                             save_config,
@@ -112,7 +121,7 @@ pub(crate) async fn perform_capture(
         CaptureDestination::ClipboardAndFile => {
             if let Some(save_config) = request.save_config.clone() {
                 if !save_config.save_directory.as_os_str().is_empty() {
-                    match save_image(
+                    match save_bytes(
                         Arc::clone(&dependencies.saver),
                         image_data.clone(),
                         save_config,
@@ -188,7 +197,7 @@ pub(crate) async fn deliver_image(
             if let Some(config) =
                 save_config.filter(|config| !config.save_directory.as_os_str().is_empty())
             {
-                Some(save_image(Arc::clone(&dependencies.saver), image_data.clone(), config).await?)
+                Some(save_bytes(Arc::clone(&dependencies.saver), image_data.clone(), config).await?)
             } else {
                 None
             }
@@ -197,7 +206,7 @@ pub(crate) async fn deliver_image(
             if let Some(config) =
                 save_config.filter(|config| !config.save_directory.as_os_str().is_empty())
             {
-                match save_image(Arc::clone(&dependencies.saver), image_data.clone(), config).await
+                match save_bytes(Arc::clone(&dependencies.saver), image_data.clone(), config).await
                 {
                     Ok(path) => Some(path),
                     Err(err) => {
@@ -240,12 +249,59 @@ pub(crate) async fn deliver_image(
     })
 }
 
-async fn save_image(
+pub(crate) async fn deliver_document(
+    request: DocumentDeliveryRequest,
+    dependencies: Arc<CaptureDependencies>,
+) -> Result<CaptureResult, CaptureError> {
+    log::info!(
+        "Starting document delivery: {:?} {} {} bytes",
+        request.operation,
+        request.document.mime_type,
+        request.document.bytes.len()
+    );
+
+    if !matches!(request.destination, CaptureDestination::FileOnly) {
+        return Err(CaptureError::ImageError(
+            "PDF clipboard export is not supported yet".to_string(),
+        ));
+    }
+
+    let Some(mut save_config) = request.save_config else {
+        return Err(CaptureError::ImageError(
+            "Board PDF export requires file save configuration".to_string(),
+        ));
+    };
+
+    if save_config.save_directory.as_os_str().is_empty() {
+        return Err(CaptureError::ImageError(
+            "Board PDF export requires a save directory".to_string(),
+        ));
+    }
+
+    save_config.format = request.document.extension.clone();
+    let document_bytes = request.document.bytes;
+    let saved_path = save_bytes(
+        Arc::clone(&dependencies.saver),
+        document_bytes.clone(),
+        save_config,
+    )
+    .await?;
+
+    Ok(CaptureResult {
+        image_data: document_bytes,
+        operation: request.operation,
+        fallback_format_override: None,
+        saved_path: Some(saved_path),
+        copied_to_clipboard: false,
+    })
+}
+
+async fn save_bytes(
     saver: Arc<dyn CaptureFileSaver>,
-    image_data: Vec<u8>,
+    bytes: Vec<u8>,
     config: FileSaveConfig,
 ) -> Result<PathBuf, CaptureError> {
-    task::spawn_blocking(move || saver.save(&image_data, &config))
+    task::spawn_blocking(move || saver.save(&bytes, &config))
         .await
         .map_err(|e| CaptureError::ImageError(format!("Save task failed: {}", e)))?
 }

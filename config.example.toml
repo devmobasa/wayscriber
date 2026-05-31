@@ -185,6 +185,7 @@ capture_file_region = ["Ctrl+Alt+6"]
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
+export_board_pdf_file = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]

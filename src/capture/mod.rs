@@ -26,5 +26,6 @@ pub(crate) use pipeline::CaptureRequest;
 #[allow(unused_imports)]
 pub use types::{
     CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType,
-    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedImage,
+    DocumentDeliveryRequest, ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind,
+    RenderedDocument, RenderedImage,
 };

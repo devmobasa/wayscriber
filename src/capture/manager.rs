@@ -5,10 +5,12 @@ use tokio::sync::{Mutex, mpsc};
 use crate::capture::{
     dependencies::CaptureDependencies,
     file::FileSaveConfig,
-    pipeline::{CaptureManagerRequest, CaptureRequest, deliver_image, perform_capture},
+    pipeline::{
+        CaptureManagerRequest, CaptureRequest, deliver_document, deliver_image, perform_capture,
+    },
     types::{
         CaptureDestination, CaptureError, CaptureOutcome, CaptureStatus, CaptureType,
-        ImageDeliveryRequest,
+        DocumentDeliveryRequest, ImageDeliveryRequest,
     },
 };
 
@@ -66,6 +68,9 @@ impl CaptureManager {
                     }
                     CaptureManagerRequest::DeliverImage(request) => {
                         deliver_image(request, deps_clone.clone()).await
+                    }
+                    CaptureManagerRequest::DeliverDocument(request) => {
+                        deliver_document(request, deps_clone.clone()).await
                     }
                 };
 
@@ -135,6 +140,17 @@ impl CaptureManager {
     ) -> Result<(), CaptureError> {
         self.request_tx
             .send(CaptureManagerRequest::DeliverImage(request))
+            .map_err(|_| CaptureError::ImageError("Capture manager not running".to_string()))?;
+
+        Ok(())
+    }
+
+    pub fn request_document_delivery(
+        &self,
+        request: DocumentDeliveryRequest,
+    ) -> Result<(), CaptureError> {
+        self.request_tx
+            .send(CaptureManagerRequest::DeliverDocument(request))
             .map_err(|_| CaptureError::ImageError("Capture manager not running".to_string()))?;
 
         Ok(())

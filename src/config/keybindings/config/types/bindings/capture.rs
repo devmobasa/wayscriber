@@ -41,6 +41,9 @@ pub struct CaptureKeybindingsConfig {
     #[serde(default = "default_export_canvas_clipboard_and_file")]
     pub export_canvas_clipboard_and_file: Vec<String>,
 
+    #[serde(default = "default_export_board_pdf_file")]
+    pub export_board_pdf_file: Vec<String>,
+
     #[serde(default = "default_open_capture_folder")]
     pub open_capture_folder: Vec<String>,
 }
@@ -60,6 +63,7 @@ impl Default for CaptureKeybindingsConfig {
             export_canvas_file: default_export_canvas_file(),
             export_canvas_clipboard: default_export_canvas_clipboard(),
             export_canvas_clipboard_and_file: default_export_canvas_clipboard_and_file(),
+            export_board_pdf_file: default_export_board_pdf_file(),
             open_capture_folder: default_open_capture_folder(),
         }
     }

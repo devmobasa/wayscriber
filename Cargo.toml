@@ -26,7 +26,7 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 smithay-client-toolkit = { version = "0.20", default-features = false, features = ["calloop", "xkbcommon"] }
 
 # Cairo for drawing
-cairo-rs = { version = "0.22", features = ["png"] }
+cairo-rs = { version = "0.22", features = ["png", "pdf"] }
 
 # Pango for advanced text rendering and font support
 pango = "0.22"

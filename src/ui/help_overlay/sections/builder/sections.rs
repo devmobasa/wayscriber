@@ -431,6 +431,10 @@ pub(super) fn build_main_sections(
             action_label(Action::ExportCanvasClipboardAndFile),
         ),
         row(
+            binding_or_fallback(bindings, Action::ExportBoardPdfFile, NOT_BOUND_LABEL),
+            action_label(Action::ExportBoardPdfFile),
+        ),
+        row(
             binding_or_fallback(bindings, Action::OpenCaptureFolder, NOT_BOUND_LABEL),
             action_label(Action::OpenCaptureFolder),
         ),

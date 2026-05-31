@@ -16,6 +16,23 @@ pub struct CanvasExportSnapshot {
     pub render_profile: Option<RenderColorProfile>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CanvasPageExportSnapshot {
+    pub frame: Frame,
+    pub backdrop: CanvasExportBackdropSnapshot,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
+    pub origin_x: i32,
+    pub origin_y: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoardPdfExportSnapshot {
+    pub logical_width: u32,
+    pub logical_height: u32,
+    pub pages: Vec<CanvasPageExportSnapshot>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CanvasExportViewport {
     pub logical_width: u32,
@@ -90,8 +107,8 @@ fn render_canvas_surface(
             CaptureError::ImageError(format!("Failed to create canvas context: {err}"))
         })?;
 
-        let backdrop = ExportBackdrop::new(&snapshot.backdrop)?;
-        draw_canvas_snapshot(&ctx, snapshot, &backdrop, scale);
+        let page = canvas_page_from_snapshot(snapshot);
+        draw_canvas_page(&ctx, &page, scale as f64)?;
     }
 
     if let Some(profile) = snapshot.render_profile.as_ref() {
@@ -122,24 +139,88 @@ fn render_canvas_surface(
     Ok(surface)
 }
 
-fn draw_canvas_snapshot(
+pub fn draw_canvas_page(
     ctx: &cairo::Context,
-    snapshot: &CanvasExportSnapshot,
+    page: &CanvasPageExportSnapshot,
+    output_scale: f64,
+) -> Result<(), CaptureError> {
+    let backdrop = ExportBackdrop::new(&page.backdrop)?;
+    draw_canvas_page_contents(ctx, page, &backdrop, output_scale);
+    Ok(())
+}
+
+pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, CaptureError> {
+    if snapshot.logical_width == 0 || snapshot.logical_height == 0 {
+        return Err(CaptureError::ImageError(
+            "Board PDF export requires a configured non-empty surface".to_string(),
+        ));
+    }
+    if snapshot.pages.is_empty() {
+        return Err(CaptureError::ImageError(
+            "Board PDF export requires at least one page".to_string(),
+        ));
+    }
+
+    let width = snapshot.logical_width as f64;
+    let height = snapshot.logical_height as f64;
+    let surface = cairo::PdfSurface::for_stream(width, height, Vec::<u8>::new())
+        .map_err(|err| CaptureError::ImageError(format!("Failed to create PDF surface: {err}")))?;
+    let ctx = cairo::Context::new(&surface)
+        .map_err(|err| CaptureError::ImageError(format!("Failed to create PDF context: {err}")))?;
+
+    for page in &snapshot.pages {
+        surface.set_size(width, height).map_err(|err| {
+            CaptureError::ImageError(format!("Failed to set PDF page size: {err}"))
+        })?;
+        draw_canvas_page(&ctx, page, 1.0)?;
+        ctx.show_page()
+            .map_err(|err| CaptureError::ImageError(format!("Failed to finish PDF page: {err}")))?;
+    }
+
+    drop(ctx);
+
+    let stream = surface
+        .finish_output_stream()
+        .map_err(|err| CaptureError::ImageError(format!("Failed to finish PDF output: {err}")))?;
+    let bytes = stream.downcast::<Vec<u8>>().map_err(|_| {
+        CaptureError::ImageError("PDF output stream had unexpected type".to_string())
+    })?;
+    Ok(*bytes)
+}
+
+fn canvas_page_from_snapshot(snapshot: &CanvasExportSnapshot) -> CanvasPageExportSnapshot {
+    CanvasPageExportSnapshot {
+        frame: snapshot.board.frame.clone_without_history(),
+        backdrop: snapshot.backdrop.clone(),
+        viewport_width: snapshot.viewport.logical_width,
+        viewport_height: snapshot.viewport.logical_height,
+        origin_x: snapshot.viewport.origin_x,
+        origin_y: snapshot.viewport.origin_y,
+    }
+}
+
+fn draw_canvas_page_contents(
+    ctx: &cairo::Context,
+    page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
-    scale: i32,
+    output_scale: f64,
 ) {
     let _ = ctx.save();
-    if scale > 1 {
-        ctx.scale(scale as f64, scale as f64);
+    if (output_scale - 1.0).abs() > f64::EPSILON {
+        ctx.scale(output_scale, output_scale);
     }
-    ctx.translate(
-        -(snapshot.viewport.origin_x as f64),
-        -(snapshot.viewport.origin_y as f64),
+    ctx.rectangle(
+        0.0,
+        0.0,
+        page.viewport_width as f64,
+        page.viewport_height as f64,
     );
+    ctx.clip();
+    ctx.translate(-(page.origin_x as f64), -(page.origin_y as f64));
 
     backdrop.paint(ctx);
     let replay_ctx = backdrop.replay_context();
-    for drawn_shape in &snapshot.board.frame.shapes {
+    for drawn_shape in &page.frame.shapes {
         match &drawn_shape.shape {
             Shape::EraserStroke { points, brush } => {
                 render_eraser_stroke(ctx, points, brush, &replay_ctx);
@@ -327,6 +408,17 @@ mod tests {
         }
     }
 
+    fn page_snapshot(frame: Frame) -> CanvasPageExportSnapshot {
+        CanvasPageExportSnapshot {
+            frame,
+            backdrop: CanvasExportBackdropSnapshot::Transparent,
+            viewport_width: 20,
+            viewport_height: 20,
+            origin_x: 0,
+            origin_y: 0,
+        }
+    }
+
     fn pixel(surface: &mut cairo::ImageSurface, x: i32, y: i32) -> u32 {
         surface.flush();
         let stride = surface.stride() as usize;
@@ -390,6 +482,71 @@ mod tests {
         assert_eq!(surface.height(), 20);
         assert_ne!(pixel(&mut surface, 4, 4), 0);
         assert_eq!(pixel(&mut surface, 0, 0), 0);
+    }
+
+    #[test]
+    fn draw_canvas_page_uses_explicit_output_scale() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Rect {
+            x: 4,
+            y: 4,
+            w: 2,
+            h: 2,
+            fill: true,
+            color: RED,
+            thick: 1.0,
+        });
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 20, 20).expect("surface");
+        {
+            let ctx = cairo::Context::new(&surface).expect("context");
+            draw_canvas_page(&ctx, &page_snapshot(frame), 2.0).expect("draw");
+        }
+
+        assert_ne!(pixel(&mut surface, 9, 9), 0);
+        assert_eq!(pixel(&mut surface, 1, 1), 0);
+    }
+
+    #[test]
+    fn render_board_pdf_returns_pdf_bytes() {
+        let pdf = render_board_pdf(&BoardPdfExportSnapshot {
+            logical_width: 64,
+            logical_height: 48,
+            pages: vec![page_snapshot(Frame::new())],
+        })
+        .expect("pdf");
+
+        assert!(pdf.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn render_board_pdf_rejects_zero_dimensions() {
+        let err = render_board_pdf(&BoardPdfExportSnapshot {
+            logical_width: 0,
+            logical_height: 48,
+            pages: vec![page_snapshot(Frame::new())],
+        })
+        .expect_err("zero width should fail");
+
+        assert!(
+            err.to_string().contains("non-empty surface"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn render_board_pdf_rejects_empty_pages() {
+        let err = render_board_pdf(&BoardPdfExportSnapshot {
+            logical_width: 64,
+            logical_height: 48,
+            pages: Vec::new(),
+        })
+        .expect_err("empty pages should fail");
+
+        assert!(
+            err.to_string().contains("at least one page"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

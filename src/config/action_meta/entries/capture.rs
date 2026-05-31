@@ -131,6 +131,17 @@ pub const ENTRIES: &[ActionMeta] = &[
         ]
     ),
     meta!(
+        ExportBoardPdfFile,
+        "Export Board to PDF",
+        Some("Board to PDF"),
+        "Export active board pages as a PDF",
+        Capture,
+        true,
+        true,
+        false,
+        &["export board pdf", "board pdf", "pdf", "export pdf"]
+    ),
+    meta!(
         OpenCaptureFolder,
         "Open Capture Folder",
         None,

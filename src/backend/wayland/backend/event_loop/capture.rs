@@ -36,6 +36,9 @@ pub(super) fn handle_pending_actions(
         match action {
             PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
             PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
+            PendingBackendAction::BoardPdfExport(action) => {
+                state.handle_board_pdf_export_action(action);
+            }
         }
     }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {
@@ -170,6 +173,9 @@ fn handle_capture_results(state: &mut WaylandState) {
                         }
                         crate::capture::ImageOperationKind::CanvasExport => {
                             "Canvas exported".to_string()
+                        }
+                        crate::capture::ImageOperationKind::BoardPdfExport => {
+                            "Board exported".to_string()
                         }
                     }
                 } else {

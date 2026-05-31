@@ -6,10 +6,11 @@ use std::{
 use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
     file::FileSaveConfig,
-    pipeline::{CaptureRequest, deliver_image, perform_capture},
+    pipeline::{CaptureRequest, deliver_document, deliver_image, perform_capture},
     types::{
-        CaptureDestination, CaptureError, CaptureType, ImageDeliveryRequest, ImageFormatMetadata,
-        ImageOperationKind, RenderedImage,
+        CaptureDestination, CaptureError, CaptureType, DocumentDeliveryRequest,
+        ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedDocument,
+        RenderedImage,
     },
 };
 
@@ -64,6 +65,14 @@ fn rendered_png(bytes: Vec<u8>) -> RenderedImage {
         format: ImageFormatMetadata::png(),
         width: 2,
         height: 1,
+    }
+}
+
+fn rendered_pdf(bytes: Vec<u8>) -> RenderedDocument {
+    RenderedDocument {
+        bytes,
+        extension: "pdf".to_string(),
+        mime_type: "application/pdf".to_string(),
     }
 }
 
@@ -151,6 +160,164 @@ async fn deliver_image_file_only_saves_rendered_format_extension() {
     assert_eq!(*saver.calls.lock().unwrap(), 1);
     assert_eq!(configs.lock().unwrap()[0].format, "png");
     assert_eq!(result.saved_path, Some(PathBuf::from("/tmp/canvas.png")));
+}
+
+#[tokio::test]
+async fn deliver_document_file_only_saves_pdf_bytes_with_pdf_extension() {
+    let configs = Arc::new(Mutex::new(Vec::new()));
+    let saver = RecordingSaver {
+        should_fail: false,
+        path: PathBuf::from("/tmp/board.pdf"),
+        calls: Arc::new(Mutex::new(0)),
+        configs: configs.clone(),
+    };
+    let clipboard = RecordingClipboard {
+        should_fail: false,
+        calls: Arc::new(Mutex::new(0)),
+        copied: Arc::new(Mutex::new(Vec::new())),
+    };
+    let deps = CaptureDependencies {
+        source: Arc::new(MockSource {
+            data: Vec::new(),
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        }),
+        saver: Arc::new(saver.clone()),
+        clipboard: Arc::new(clipboard.clone()),
+    };
+    let request = DocumentDeliveryRequest {
+        document: rendered_pdf(b"%PDF-".to_vec()),
+        destination: CaptureDestination::FileOnly,
+        save_config: Some(FileSaveConfig {
+            format: "png".to_string(),
+            ..FileSaveConfig::default()
+        }),
+        operation: ImageOperationKind::BoardPdfExport,
+    };
+
+    let result = deliver_document(request, Arc::new(deps)).await.unwrap();
+
+    assert_eq!(result.operation, ImageOperationKind::BoardPdfExport);
+    assert_eq!(result.image_data, b"%PDF-".to_vec());
+    assert_eq!(result.saved_path, Some(PathBuf::from("/tmp/board.pdf")));
+    assert!(!result.copied_to_clipboard);
+    assert_eq!(*saver.calls.lock().unwrap(), 1);
+    assert_eq!(configs.lock().unwrap()[0].format, "pdf");
+    assert_eq!(*clipboard.calls.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn deliver_document_rejects_clipboard_destinations() {
+    let deps = CaptureDependencies {
+        source: Arc::new(MockSource {
+            data: Vec::new(),
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        }),
+        saver: Arc::new(RecordingSaver {
+            should_fail: false,
+            path: PathBuf::from("/tmp/unused.pdf"),
+            calls: Arc::new(Mutex::new(0)),
+            configs: Arc::new(Mutex::new(Vec::new())),
+        }),
+        clipboard: Arc::new(RecordingClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+            copied: Arc::new(Mutex::new(Vec::new())),
+        }),
+    };
+    let request = DocumentDeliveryRequest {
+        document: rendered_pdf(Vec::new()),
+        destination: CaptureDestination::ClipboardOnly,
+        save_config: Some(FileSaveConfig::default()),
+        operation: ImageOperationKind::BoardPdfExport,
+    };
+
+    let err = deliver_document(request, Arc::new(deps))
+        .await
+        .expect_err("clipboard PDF should fail");
+
+    assert!(
+        err.to_string().contains("not supported yet"),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
+async fn deliver_document_requires_save_config() {
+    let deps = CaptureDependencies {
+        source: Arc::new(MockSource {
+            data: Vec::new(),
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        }),
+        saver: Arc::new(RecordingSaver {
+            should_fail: false,
+            path: PathBuf::from("/tmp/unused.pdf"),
+            calls: Arc::new(Mutex::new(0)),
+            configs: Arc::new(Mutex::new(Vec::new())),
+        }),
+        clipboard: Arc::new(RecordingClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+            copied: Arc::new(Mutex::new(Vec::new())),
+        }),
+    };
+    let request = DocumentDeliveryRequest {
+        document: rendered_pdf(Vec::new()),
+        destination: CaptureDestination::FileOnly,
+        save_config: None,
+        operation: ImageOperationKind::BoardPdfExport,
+    };
+
+    let err = deliver_document(request, Arc::new(deps))
+        .await
+        .expect_err("missing save config should fail");
+
+    assert!(
+        err.to_string().contains("file save configuration"),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
+async fn deliver_document_requires_save_directory() {
+    let deps = CaptureDependencies {
+        source: Arc::new(MockSource {
+            data: Vec::new(),
+            error: Arc::new(Mutex::new(None)),
+            captured_types: Arc::new(Mutex::new(Vec::new())),
+        }),
+        saver: Arc::new(RecordingSaver {
+            should_fail: false,
+            path: PathBuf::from("/tmp/unused.pdf"),
+            calls: Arc::new(Mutex::new(0)),
+            configs: Arc::new(Mutex::new(Vec::new())),
+        }),
+        clipboard: Arc::new(RecordingClipboard {
+            should_fail: false,
+            calls: Arc::new(Mutex::new(0)),
+            copied: Arc::new(Mutex::new(Vec::new())),
+        }),
+    };
+    let request = DocumentDeliveryRequest {
+        document: rendered_pdf(Vec::new()),
+        destination: CaptureDestination::FileOnly,
+        save_config: Some(FileSaveConfig {
+            save_directory: PathBuf::new(),
+            ..FileSaveConfig::default()
+        }),
+        operation: ImageOperationKind::BoardPdfExport,
+    };
+
+    let err = deliver_document(request, Arc::new(deps))
+        .await
+        .expect_err("empty save directory should fail");
+
+    assert!(
+        err.to_string().contains("save directory"),
+        "unexpected error: {err}"
+    );
 }
 
 #[tokio::test]

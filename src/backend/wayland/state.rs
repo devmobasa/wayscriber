@@ -45,12 +45,13 @@ use crate::input::tablet::TabletSettings;
 use crate::{
     backend::ExitAfterCaptureMode,
     canvas_export::{
-        BoardExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportSnapshot,
-        CanvasExportViewport, render_canvas_png,
+        BoardExportSnapshot, BoardPdfExportSnapshot, CanvasExportBackdropSnapshot,
+        CanvasExportSnapshot, CanvasExportViewport, CanvasPageExportSnapshot, render_board_pdf,
+        render_canvas_png,
     },
     capture::{
-        CaptureDestination, CaptureManager, ImageDeliveryRequest, ImageFormatMetadata,
-        ImageOperationKind,
+        CaptureDestination, CaptureManager, DocumentDeliveryRequest, ImageDeliveryRequest,
+        ImageFormatMetadata, ImageOperationKind, RenderedDocument,
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },

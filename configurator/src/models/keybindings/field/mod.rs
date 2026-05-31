@@ -93,6 +93,7 @@ pub enum KeybindingField {
     ExportCanvasFile,
     ExportCanvasClipboard,
     ExportCanvasClipboardAndFile,
+    ExportBoardPdfFile,
     OpenCaptureFolder,
     ToggleFrozenMode,
     ZoomIn,

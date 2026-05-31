@@ -316,6 +316,7 @@ pub(crate) struct PendingClipboardFallback {
 pub enum PendingBackendAction {
     Screenshot(Action),
     CanvasExport(Action),
+    BoardPdfExport(Action),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
