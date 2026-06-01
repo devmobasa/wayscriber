@@ -32,6 +32,7 @@ impl InputState {
 
     pub(super) fn apply_toolbar_close_top_toolbar(&mut self) -> bool {
         self.toolbar_top_visible = false;
+        self.toolbar_shapes_expanded = false;
         self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
         true
     }
@@ -273,9 +274,7 @@ impl InputState {
             self.toolbar_layout_mode = mode;
             self.apply_toolbar_mode_defaults(mode);
             self.toolbar_drawer_open = false;
-            if mode != ToolbarLayoutMode::Simple {
-                self.toolbar_shapes_expanded = false;
-            }
+            self.toolbar_shapes_expanded = false;
             true
         } else {
             false
@@ -283,10 +282,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_shape_picker(&mut self, open: bool) -> bool {
-        let allow = self.toolbar_layout_mode == ToolbarLayoutMode::Simple;
-        let next = allow && open;
-        if self.toolbar_shapes_expanded != next {
-            self.toolbar_shapes_expanded = next;
+        if self.toolbar_shapes_expanded != open {
+            self.toolbar_shapes_expanded = open;
             true
         } else {
             false

@@ -41,6 +41,9 @@ pub(crate) fn route_key_press(state: &mut InputState, key: Key) -> RoutingOutcom
     if let Some(outcome) = adapters::handle_text_input_key(state, key) {
         return outcome;
     }
+    if let Some(outcome) = adapters::handle_building_polygon_key(state, key) {
+        return outcome;
+    }
     if let Some(outcome) = adapters::handle_drawing_escape_cancel_key(state, key) {
         return outcome;
     }

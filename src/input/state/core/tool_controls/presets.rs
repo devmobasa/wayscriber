@@ -31,8 +31,10 @@ impl InputState {
             None => return false,
         };
 
-        if matches!(self.state, DrawingState::TextInput { .. }) {
-            self.cancel_text_input();
+        match self.state {
+            DrawingState::TextInput { .. } => self.cancel_text_input(),
+            DrawingState::BuildingPolygon { .. } => self.cancel_active_interaction(),
+            _ => {}
         }
 
         let legacy_step_marker_preset =
@@ -108,6 +110,9 @@ impl InputState {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();
+        }
+        if let Some(polygon_sides) = preset.polygon_sides {
+            let _ = self.set_polygon_sides(polygon_sides);
         }
         if let Some(show_status_bar) = preset.show_status_bar
             && !(self.presenter_mode && self.presenter_mode_config.hide_status_bar)
@@ -285,6 +290,7 @@ impl InputState {
             arrow_length: Some(self.arrow_length),
             arrow_angle: Some(self.arrow_angle),
             arrow_head_at_end: Some(self.arrow_head_at_end),
+            polygon_sides: Some(self.polygon_sides),
             show_status_bar: Some(self.show_status_bar),
             drag_tools: Some(self.drag_tool_bindings.to_config()),
         }

@@ -145,6 +145,17 @@ impl InputState {
         self.last_canvas_pointer_position = self.canvas_coords_for_screen(x, y);
     }
 
+    pub(crate) fn record_first_stroke_done_for_onboarding(&mut self) {
+        if self.pending_onboarding_usage.first_stroke_done {
+            return;
+        }
+
+        // First-run onboarding card can live outside the stroke bounds. Force a
+        // full repaint so the step transition appears immediately.
+        self.dirty_tracker.mark_full();
+        self.pending_onboarding_usage.first_stroke_done = true;
+    }
+
     /// Updates the undo stack limit for subsequent actions.
     pub fn set_undo_stack_limit(&mut self, limit: usize) {
         self.undo_stack_limit = limit.max(1);
@@ -193,6 +204,13 @@ impl InputState {
             DrawingState::Drawing { .. } => {
                 self.clear_provisional_dirty();
                 self.last_provisional_bounds = None;
+                self.state = DrawingState::Idle;
+                self.needs_redraw = true;
+            }
+            DrawingState::BuildingPolygon { .. } => {
+                self.clear_provisional_dirty();
+                self.last_provisional_bounds = None;
+                self.last_polygon_click = None;
                 self.state = DrawingState::Idle;
                 self.needs_redraw = true;
             }

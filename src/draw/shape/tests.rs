@@ -1,6 +1,6 @@
 use super::types::Shape;
 use super::{EmbeddedImage, EraserBrush};
-use crate::draw::{EraserKind, FontDescriptor, StepMarkerLabel, color::WHITE};
+use crate::draw::{EraserKind, FontDescriptor, PolygonKind, StepMarkerLabel, color::WHITE};
 use crate::util;
 
 #[test]
@@ -105,6 +105,70 @@ fn ellipse_bounding_box_handles_radii_and_stroke() {
     assert_eq!(rect.y, 129);
     assert_eq!(rect.width, 82);
     assert_eq!(rect.height, 42);
+}
+
+#[test]
+fn polygon_bounding_box_covers_vertices_and_stroke() {
+    let shape = Shape::Polygon {
+        kind: PolygonKind::Triangle,
+        points: vec![(10, 20), (30, 40), (5, 35)],
+        fill: false,
+        color: WHITE,
+        thick: 6.0,
+    };
+
+    let rect = shape.bounding_box().expect("polygon should have bounds");
+    assert_eq!(rect.x, 2);
+    assert_eq!(rect.y, 17);
+    assert_eq!(rect.width, 31);
+    assert_eq!(rect.height, 26);
+}
+
+#[test]
+fn polygon_shape_serializes_and_deserializes_with_points() {
+    let shape = Shape::Polygon {
+        kind: PolygonKind::Regular { sides: 6 },
+        points: vec![(10, 20), (30, 20), (40, 35), (30, 50), (10, 50), (0, 35)],
+        fill: true,
+        color: WHITE,
+        thick: 4.0,
+    };
+
+    let json = serde_json::to_string(&shape).expect("serialize polygon shape");
+    let restored: Shape = serde_json::from_str(&json).expect("deserialize polygon shape");
+
+    match restored {
+        Shape::Polygon {
+            kind,
+            points,
+            fill,
+            color,
+            thick,
+        } => {
+            assert_eq!(kind, PolygonKind::Regular { sides: 6 });
+            assert_eq!(
+                points,
+                vec![(10, 20), (30, 20), (40, 35), (30, 50), (10, 50), (0, 35)]
+            );
+            assert!(fill);
+            assert_eq!(color, WHITE);
+            assert_eq!(thick, 4.0);
+        }
+        other => panic!("expected polygon shape, got {other:?}"),
+    }
+}
+
+#[test]
+fn invalid_polygon_has_no_bounds() {
+    let shape = Shape::Polygon {
+        kind: PolygonKind::Freeform,
+        points: vec![(10, 20), (10, 20), (30, 40)],
+        fill: false,
+        color: WHITE,
+        thick: 6.0,
+    };
+
+    assert!(shape.bounding_box().is_none());
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use super::drawing::marker_color_with_opacity;
 use super::*;
 use crate::config::Action;
-use crate::draw::Color;
+use crate::draw::{Color, Shape};
 use std::collections::HashSet;
 
 fn color(r: f64) -> Color {
@@ -50,6 +50,21 @@ fn tool_profile_describes_toolbar_control_groups() {
 }
 
 #[test]
+fn polygon_tools_use_shape_controls_and_rect_settings() {
+    for tool in [
+        Tool::Triangle,
+        Tool::Parallelogram,
+        Tool::Rhombus,
+        Tool::RegularPolygon,
+        Tool::FreeformPolygon,
+    ] {
+        assert_eq!(tool.settings_slot(), ToolSettingsSlot::Rect);
+        assert_eq!(tool.profile().control_group, ToolControlGroup::Shape);
+        assert!(tool.profile().show_fill_toggle());
+    }
+}
+
+#[test]
 fn per_tool_settings_read_and_write_through_catalog_slot() {
     let mut settings = PerToolDrawingSettings::new(color(1.0), 4.0);
     settings.marker = ToolDrawingSettings::new(color(0.5), 12.0);
@@ -80,10 +95,28 @@ fn selectable_tools_expose_actions_from_catalog() {
 fn drag_tools_round_trip_through_descriptor_table() {
     for tool in Tool::ALL {
         let drag_tool = DragTool::from_tool(tool);
-        assert_ne!(drag_tool, DragTool::Default);
-        assert_eq!(drag_tool.as_tool(), Some(tool));
+        if let Some(drag_tool) = drag_tool {
+            assert_ne!(drag_tool, DragTool::Default);
+            assert_eq!(drag_tool.as_tool(), Some(tool));
+        } else {
+            assert_eq!(tool, Tool::FreeformPolygon);
+        }
     }
     assert_eq!(DragTool::Default.as_tool(), None);
+}
+
+#[test]
+fn drag_bindable_tool_list_excludes_freeform_polygon_and_default() {
+    assert_eq!(DragBindableTool::from_tool(Tool::FreeformPolygon), None);
+    assert_eq!(DragBindableTool::from_drag_tool(DragTool::Default), None);
+    assert_eq!(
+        DragBindableTool::from_tool(Tool::RegularPolygon),
+        Some(DragBindableTool::RegularPolygon)
+    );
+    assert_eq!(
+        DragTool::RegularPolygon.as_tool(),
+        Some(Tool::RegularPolygon)
+    );
 }
 
 #[test]
@@ -128,4 +161,29 @@ fn descriptor_exposes_press_motion_and_drawing_behavior() {
 fn marker_opacity_helper_preserves_current_alpha_clamp() {
     assert_eq!(marker_color_with_opacity(color(1.0), 0.0).a, 0.05);
     assert_eq!(marker_color_with_opacity(color(1.0), 2.0).a, 0.9);
+}
+
+#[test]
+fn provisional_polygon_bounds_include_extra_preview_padding() {
+    let stroke = Tool::Triangle.provisional_polygon_stroke(PolygonProvisionalSnapshot {
+        tool: Tool::Triangle,
+        start: (10, 10),
+        current: (60, 50),
+        color: color(1.0),
+        size: 4.0,
+        fill_enabled: false,
+        regular_sides: 5,
+    });
+
+    let ProvisionalToolStroke::Shape(shape @ Shape::Polygon { .. }) = &stroke else {
+        panic!("expected provisional polygon shape");
+    };
+    let base = shape
+        .bounding_box()
+        .expect("polygon preview should have bounds");
+    assert_eq!(
+        stroke.bounds(),
+        base.inflated(PROVISIONAL_POLYGON_DAMAGE_PADDING),
+        "polygon drag preview damage should clear antialias leftovers"
+    );
 }

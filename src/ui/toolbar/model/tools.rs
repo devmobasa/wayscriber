@@ -7,6 +7,11 @@ pub(crate) enum SemanticToolIcon {
     Line,
     Rect,
     Circle,
+    Triangle,
+    Parallelogram,
+    Rhombus,
+    Polygon,
+    FreeformPolygon,
     Arrow,
     Blur,
     Marker,
@@ -36,12 +41,33 @@ const FULL_TOOL_BUTTONS: [Tool; 10] = [
     Tool::Blur,
 ];
 
-const SHAPE_TOOLS: [Tool; 5] = [
+const COMMON_SHAPE_TOOLS: [Tool; 5] = [
     Tool::Line,
     Tool::Rect,
     Tool::Ellipse,
     Tool::Arrow,
     Tool::Blur,
+];
+
+const SHAPE_TOOLS: [Tool; 10] = [
+    Tool::Line,
+    Tool::Rect,
+    Tool::Ellipse,
+    Tool::Arrow,
+    Tool::Blur,
+    Tool::Triangle,
+    Tool::Parallelogram,
+    Tool::Rhombus,
+    Tool::RegularPolygon,
+    Tool::FreeformPolygon,
+];
+
+const POLYGON_TOOLS: [Tool; 5] = [
+    Tool::Triangle,
+    Tool::Parallelogram,
+    Tool::Rhombus,
+    Tool::RegularPolygon,
+    Tool::FreeformPolygon,
 ];
 
 pub(crate) fn top_tool_buttons(simple: bool) -> &'static [Tool] {
@@ -56,6 +82,18 @@ pub(crate) fn shape_tools() -> &'static [Tool] {
     &SHAPE_TOOLS
 }
 
+pub(crate) fn common_shape_tools() -> &'static [Tool] {
+    &COMMON_SHAPE_TOOLS
+}
+
+pub(crate) fn polygon_tools() -> &'static [Tool] {
+    &POLYGON_TOOLS
+}
+
+pub(crate) fn is_polygon_tool(tool: Tool) -> bool {
+    polygon_tools().contains(&tool)
+}
+
 pub(crate) fn semantic_icon_for_tool(tool: Tool) -> SemanticToolIcon {
     match tool {
         Tool::Select => SemanticToolIcon::Select,
@@ -63,6 +101,11 @@ pub(crate) fn semantic_icon_for_tool(tool: Tool) -> SemanticToolIcon {
         Tool::Line => SemanticToolIcon::Line,
         Tool::Rect => SemanticToolIcon::Rect,
         Tool::Ellipse => SemanticToolIcon::Circle,
+        Tool::Triangle => SemanticToolIcon::Triangle,
+        Tool::Parallelogram => SemanticToolIcon::Parallelogram,
+        Tool::Rhombus => SemanticToolIcon::Rhombus,
+        Tool::RegularPolygon => SemanticToolIcon::Polygon,
+        Tool::FreeformPolygon => SemanticToolIcon::FreeformPolygon,
         Tool::Arrow => SemanticToolIcon::Arrow,
         Tool::Blur => SemanticToolIcon::Blur,
         Tool::Marker => SemanticToolIcon::Marker,
@@ -83,11 +126,20 @@ pub(crate) fn default_drag_hint(tool: Tool) -> Option<&'static str> {
 }
 
 pub(crate) fn is_shape_tool(tool: Tool) -> bool {
-    shape_tools().contains(&tool)
+    shape_tools().contains(&tool) || polygon_tools().contains(&tool)
 }
 
 pub(crate) fn is_fill_tool(tool: Tool) -> bool {
-    matches!(tool, Tool::Rect | Tool::Ellipse)
+    matches!(
+        tool,
+        Tool::Rect
+            | Tool::Ellipse
+            | Tool::Triangle
+            | Tool::Parallelogram
+            | Tool::Rhombus
+            | Tool::RegularPolygon
+            | Tool::FreeformPolygon
+    )
 }
 
 pub(crate) fn fill_tool_active(active_tool: Tool, tool_override: Option<Tool>) -> bool {
@@ -102,4 +154,8 @@ pub(crate) fn current_shape_tool(active_tool: Tool, tool_override: Option<Tool>)
 
 pub(crate) fn default_shape_tool() -> Tool {
     Tool::Rect
+}
+
+pub(crate) fn default_polygon_tool() -> Tool {
+    Tool::RegularPolygon
 }

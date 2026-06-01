@@ -14,10 +14,10 @@ use super::super::types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
     DelayedHistory, DrawingState, OutputFocusAction, PendingBackendAction, PendingBoardDelete,
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
-    PendingSelectionClipboardPublish, PresetAction, PresetFeedbackState, PressureThicknessEditMode,
-    PressureThicknessEntryMode, SelectionAxis, SelectionPublishState, StatusChangeHighlight,
-    TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab, UiToastState,
-    ZoomAction,
+    PendingSelectionClipboardPublish, PolygonClickState, PresetAction, PresetFeedbackState,
+    PressureThicknessEditMode, PressureThicknessEntryMode, SelectionAxis, SelectionPublishState,
+    StatusChangeHighlight, TextClickState, TextEditEntryFeedback, TextInputMode, ToolbarDrawerTab,
+    UiToastState, ZoomAction,
 };
 use crate::config::{
     Action, BoardsConfig, KeyBinding, PresenterModeConfig, RadialMenuMouseBinding, ToolPresetConfig,
@@ -182,6 +182,8 @@ pub struct InputState {
     pub toolbar_side_visible: bool,
     /// Whether fill is enabled for fill-capable shapes (rect, ellipse)
     pub fill_enabled: bool,
+    /// Current side count for regular polygon drawing.
+    pub polygon_sides: u8,
     /// Whether the top toolbar is pinned (saved to config, opens at startup)
     pub toolbar_top_pinned: bool,
     /// Whether the side toolbar is pinned (saved to config, opens at startup)
@@ -330,6 +332,8 @@ pub struct InputState {
     pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
     /// Last text/note click used for double-click detection
     pub(crate) last_text_click: Option<TextClickState>,
+    /// Last freeform polygon point click used for double-click completion.
+    pub(crate) last_polygon_click: Option<PolygonClickState>,
     /// Last board picker row click used for double-click detection
     pub(crate) last_board_picker_click: Option<BoardPickerClickState>,
     /// Tracks an in-progress text edit target (existing shape to replace)

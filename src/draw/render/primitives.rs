@@ -94,6 +94,70 @@ pub(super) fn render_ellipse(
     let _ = ctx.stroke();
 }
 
+/// Render a closed polygon outline with optional fill.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_polygon(
+    ctx: &cairo::Context,
+    points: &[(i32, i32)],
+    fill: bool,
+    color: Color,
+    thick: f64,
+) {
+    if !crate::draw::shape::has_minimum_distinct_points(points) {
+        return;
+    }
+
+    let _ = ctx.save();
+    ctx.new_path();
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    ctx.set_line_width(thick);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.move_to(points[0].0 as f64, points[0].1 as f64);
+    for &(x, y) in &points[1..] {
+        ctx.line_to(x as f64, y as f64);
+    }
+    ctx.close_path();
+    if fill {
+        let _ = ctx.fill_preserve();
+    }
+    let _ = ctx.stroke();
+    let _ = ctx.restore();
+}
+
+/// Render the in-progress freeform polygon preview without open-end round cap blobs.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_polygon_preview(
+    ctx: &cairo::Context,
+    points: &[(i32, i32)],
+    fill: bool,
+    color: Color,
+    thick: f64,
+) {
+    if points.len() < 2 {
+        return;
+    }
+
+    let _ = ctx.save();
+    ctx.new_path();
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    ctx.set_line_width(thick);
+    ctx.set_line_cap(cairo::LineCap::Butt);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.move_to(points[0].0 as f64, points[0].1 as f64);
+    for &(x, y) in &points[1..] {
+        ctx.line_to(x as f64, y as f64);
+    }
+    if crate::draw::shape::has_minimum_distinct_points(points) {
+        ctx.close_path();
+        if fill {
+            let _ = ctx.fill_preserve();
+        }
+    }
+    let _ = ctx.stroke();
+    let _ = ctx.restore();
+}
+
 /// Render an arrow (line with arrowhead pointing towards the tip)
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_arrow(
@@ -171,6 +235,30 @@ mod tests {
         let stride = surface.stride() as usize;
         let offset = y as usize * stride + x as usize * 4 + 3;
         surface.data().unwrap()[offset]
+    }
+
+    #[test]
+    fn polygon_preview_uses_butt_caps_for_open_edges() {
+        let (mut surface, ctx) = surface_with_context(90, 70);
+        let red = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        render_polygon_preview(&ctx, &[(20, 35), (70, 35)], false, red, 10.0);
+
+        drop(ctx);
+        assert_eq!(
+            alpha_at(&mut surface, 17, 35),
+            0,
+            "open polygon preview edges should not leave round endpoint blobs"
+        );
+        assert!(
+            alpha_at(&mut surface, 25, 35) > 0,
+            "open polygon preview edge should still render"
+        );
     }
 
     #[test]

@@ -137,6 +137,37 @@ pub(crate) fn handle_text_input_key(state: &mut InputState, key: Key) -> Option<
     None
 }
 
+pub(crate) fn handle_building_polygon_key(
+    state: &mut InputState,
+    key: Key,
+) -> Option<RoutingOutcome> {
+    if !matches!(state.state, DrawingState::BuildingPolygon { .. }) {
+        return None;
+    }
+
+    match key {
+        Key::Return => {
+            state.finish_building_polygon();
+            Some(RoutingOutcome::Finished(
+                ActiveInteractionKind::BuildingPolygon,
+            ))
+        }
+        Key::Escape => {
+            state.cancel_active_interaction();
+            Some(RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(
+                ActiveInteractionKind::BuildingPolygon,
+            )))
+        }
+        Key::Backspace => {
+            state.pop_building_polygon_point();
+            Some(RoutingOutcome::Continued(
+                ActiveInteractionKind::BuildingPolygon,
+            ))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn handle_drawing_escape_cancel_key(
     state: &mut InputState,
     key: Key,

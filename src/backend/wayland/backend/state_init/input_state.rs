@@ -2,7 +2,7 @@ use log::warn;
 use std::collections::HashMap;
 
 use crate::config::{Action, Config, KeyBinding, KeybindingsConfig};
-use crate::draw::FontDescriptor;
+use crate::draw::{FontDescriptor, clamp_regular_sides};
 use crate::input::{ClickHighlightSettings, DragToolBindings, InputState};
 
 pub(super) fn build_input_state(config: &Config) -> InputState {
@@ -51,6 +51,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
     input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
     input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
+    input_state.polygon_sides = clamp_regular_sides(config.drawing.polygon_sides);
     input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
     input_state.show_status_board_badge = config.ui.show_status_board_badge;
     input_state.show_status_page_badge = config.ui.show_status_page_badge;
@@ -201,11 +202,11 @@ mod tests {
     #[test]
     fn build_input_state_applies_drag_tool_bindings() {
         let mut config = Config::default();
-        config.drawing.drag_tool = crate::input::Tool::Arrow;
-        config.drawing.shift_drag_tool = crate::input::Tool::Eraser;
-        config.drawing.ctrl_drag_tool = crate::input::Tool::Pen;
-        config.drawing.ctrl_shift_drag_tool = crate::input::Tool::Rect;
-        config.drawing.tab_drag_tool = crate::input::Tool::Ellipse;
+        config.drawing.drag_tool = crate::input::DragBindableTool::Arrow;
+        config.drawing.shift_drag_tool = crate::input::DragBindableTool::Eraser;
+        config.drawing.ctrl_drag_tool = crate::input::DragBindableTool::Pen;
+        config.drawing.ctrl_shift_drag_tool = crate::input::DragBindableTool::Rect;
+        config.drawing.tab_drag_tool = crate::input::DragBindableTool::Ellipse;
 
         let input = build_input_state(&config);
         assert_eq!(

@@ -68,6 +68,9 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             thick,
             ..
         } => shapes::ellipse_outline_hit(*cx, *cy, *rx, *ry, *thick, point, tolerance),
+        Shape::Polygon { points, thick, .. } => {
+            shapes::polygon_outline_hit(points, *thick, point, tolerance)
+        }
         Shape::Arrow {
             x1,
             y1,
@@ -149,5 +152,38 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             shapes::circle_hit(*x, *y, radius + outline / 2.0, point, tolerance)
         }
         Shape::EraserStroke { .. } => false,
+    }
+}
+
+/// Returns `true` when a point should target a shape for selection or menus.
+///
+/// Stroke erasing intentionally keeps using `hit_test`, while direct point
+/// targeting includes filled interiors for closed fill-capable shapes.
+pub fn hit_test_for_point_targeting(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
+    if hit_test(shape, point, tolerance) {
+        return true;
+    }
+
+    match &shape.shape {
+        Shape::Rect {
+            x,
+            y,
+            w,
+            h,
+            fill: true,
+            ..
+        } => shapes::rect_fill_hit(*x, *y, *w, *h, point),
+        Shape::Ellipse {
+            cx,
+            cy,
+            rx,
+            ry,
+            fill: true,
+            ..
+        } => shapes::ellipse_fill_hit(*cx, *cy, *rx, *ry, point),
+        Shape::Polygon {
+            points, fill: true, ..
+        } => shapes::polygon_fill_hit(points, point),
+        _ => false,
     }
 }

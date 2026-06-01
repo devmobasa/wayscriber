@@ -26,7 +26,7 @@ pub use base::{
     PressureThicknessEntryMode, SelectionAxis, SelectionHandle, TextInputMode, ToolbarDrawerTab,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
-pub(crate) use base::{BoardPickerClickState, TextClickState};
+pub(crate) use base::{BoardPickerClickState, PolygonClickState, TextClickState};
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingBackendAction,
     PendingSelectionClipboardPublish, SelectionPublishState, WayscriberClipboardSelection,

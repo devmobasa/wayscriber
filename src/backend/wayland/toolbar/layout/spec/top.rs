@@ -37,13 +37,18 @@ impl ToolbarLayoutSpec {
             Self::TOP_SIZE_TEXT.1
         };
         let mut height = base_height as f64;
-        if self.layout_mode == ToolbarLayoutMode::Simple && self.shape_picker_open {
+        if self.shape_picker_open {
             let (_, btn_h) = if self.use_icons {
                 (Self::TOP_ICON_BUTTON, Self::TOP_ICON_BUTTON)
             } else {
                 (Self::TOP_TEXT_BUTTON_W, Self::TOP_TEXT_BUTTON_H)
             };
-            height += btn_h + Self::TOP_SHAPE_ROW_GAP;
+            let row_count = if self.layout_mode == ToolbarLayoutMode::Simple {
+                2.0
+            } else {
+                1.0
+            };
+            height += row_count * (btn_h + Self::TOP_SHAPE_ROW_GAP);
         }
 
         let gap = Self::TOP_GAP;
@@ -56,14 +61,10 @@ impl ToolbarLayoutSpec {
             model::top_tool_buttons(self.layout_mode == ToolbarLayoutMode::Simple).len();
         let mut x = Self::TOP_START_X + Self::TOP_HANDLE_SIZE + gap;
         x += tool_count as f64 * (btn_w + gap);
-        if self.layout_mode == ToolbarLayoutMode::Simple {
-            x += btn_w + gap;
-        }
+        x += btn_w + gap; // Shapes/Polygons picker
         let fill_tool_active =
             model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
-        let fill_visible = !self.use_icons
-            && fill_tool_active
-            && !(self.layout_mode == ToolbarLayoutMode::Simple && self.shape_picker_open);
+        let fill_visible = !self.use_icons && fill_tool_active && !self.shape_picker_open;
         if fill_visible {
             x += Self::TOP_TEXT_FILL_W + gap;
         }
@@ -97,7 +98,13 @@ impl ToolbarLayoutSpec {
             Self::TOP_ICON_BUTTON_Y
         } else {
             let (_, btn_h) = self.top_button_size();
-            (height - btn_h) / 2.0
+            let base_height = Self::TOP_SIZE_TEXT.1 as f64;
+            let available = if self.shape_picker_open {
+                base_height
+            } else {
+                height
+            };
+            (available - btn_h) / 2.0
         }
     }
 

@@ -57,12 +57,26 @@ pub(super) fn build_hits(
             fill_anchor = Some((x, btn_size));
         }
         x += btn_size + gap;
-    } else if let (Some(rect_x), Some(circle_end_x)) = (rect_x, circle_end_x) {
-        fill_anchor = Some((rect_x, circle_end_x - rect_x));
+    } else {
+        let current_shape_tool =
+            model::current_shape_tool(snapshot.active_tool, snapshot.tool_override);
+        let current_polygon_tool = current_shape_tool.filter(|tool| model::is_polygon_tool(*tool));
+        hits.push(HitRegion {
+            rect: (x, y, btn_size, btn_size),
+            event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
+            kind: HitKind::Click,
+            tooltip: Some("Polygons".to_string()),
+        });
+        if current_polygon_tool.is_some() {
+            fill_anchor = Some((x, btn_size));
+        } else if let (Some(rect_x), Some(circle_end_x)) = (rect_x, circle_end_x) {
+            fill_anchor = Some((rect_x, circle_end_x - rect_x));
+        }
+        x += btn_size + gap;
     }
 
     if fill_tool_active
-        && !(is_simple && snapshot.shape_picker_open)
+        && !snapshot.shape_picker_open
         && let Some((fill_x, fill_w)) = fill_anchor
     {
         let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
@@ -160,20 +174,46 @@ pub(super) fn build_hits(
         tooltip: None,
     });
 
-    if is_simple && snapshot.shape_picker_open {
-        let shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        let mut shape_x = ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
-        for tool in shape_buttons() {
-            hits.push(HitRegion {
-                rect: (shape_x, shape_y, btn_size, btn_size),
-                event: ToolbarEvent::SelectTool(*tool),
-                kind: HitKind::Click,
-                tooltip: Some(format_binding_label(
-                    tool_tooltip_label(*tool),
-                    snapshot.binding_hints.for_tool(*tool),
-                )),
-            });
-            shape_x += btn_size + gap;
+    if snapshot.shape_picker_open {
+        let mut shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+        push_picker_hits(
+            shape_y,
+            btn_size,
+            gap,
+            if is_simple {
+                model::common_shape_tools()
+            } else {
+                shape_buttons()
+            },
+            snapshot,
+            hits,
+        );
+        if is_simple {
+            shape_y += btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+            push_picker_hits(shape_y, btn_size, gap, shape_buttons(), snapshot, hits);
         }
+    }
+}
+
+fn push_picker_hits(
+    shape_y: f64,
+    btn_size: f64,
+    gap: f64,
+    tools: &[crate::input::Tool],
+    snapshot: &ToolbarSnapshot,
+    hits: &mut Vec<HitRegion>,
+) {
+    let mut shape_x = ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
+    for tool in tools {
+        hits.push(HitRegion {
+            rect: (shape_x, shape_y, btn_size, btn_size),
+            event: ToolbarEvent::SelectTool(*tool),
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                tool_tooltip_label(*tool),
+                snapshot.binding_hints.for_tool(*tool),
+            )),
+        });
+        shape_x += btn_size + gap;
     }
 }

@@ -31,6 +31,7 @@ fn apply_preset_updates_tool_and_settings() {
         arrow_length: Some(25.0),
         arrow_angle: Some(45.0),
         arrow_head_at_end: Some(true),
+        polygon_sides: Some(8),
         show_status_bar: Some(false),
         drag_tools: None,
     });
@@ -49,6 +50,7 @@ fn apply_preset_updates_tool_and_settings() {
     assert_eq!(state.arrow_length, 25.0);
     assert_eq!(state.arrow_angle, 45.0);
     assert!(state.arrow_head_at_end);
+    assert_eq!(state.polygon_sides, 8);
     assert_eq!(state.eraser_kind, EraserKind::Rect);
     assert_eq!(state.eraser_mode, EraserMode::Stroke);
     assert!(!state.show_status_bar);
@@ -81,6 +83,7 @@ fn apply_preset_merges_partial_left_drag_tool_bindings() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: None,
         drag_tools: Some(MouseDragToolsConfig::from_buttons(
             left,

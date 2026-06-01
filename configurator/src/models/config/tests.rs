@@ -369,6 +369,7 @@ fn config_draft_round_trips_presets_and_history() {
         arrow_length: Some(20.0),
         arrow_angle: Some(30.0),
         arrow_head_at_end: Some(true),
+        polygon_sides: Some(7),
         show_status_bar: Some(false),
         drag_tools: None,
     };
@@ -437,6 +438,7 @@ fn preset_tool_change_loads_selected_tool_profile_values() {
             arrow_length: None,
             arrow_angle: None,
             arrow_head_at_end: None,
+            polygon_sides: None,
             show_status_bar: None,
             drag_tools: None,
         }),
@@ -494,6 +496,7 @@ fn preset_visible_edits_update_selected_tool_profile_only() {
             arrow_length: None,
             arrow_angle: None,
             arrow_head_at_end: None,
+            polygon_sides: None,
             show_status_bar: None,
             drag_tools: None,
         }),
@@ -525,11 +528,11 @@ fn preset_visible_edits_update_selected_tool_profile_only() {
 #[test]
 fn config_draft_round_trips_drag_tool_mapping() {
     let mut config = Config::default();
-    config.drawing.drag_tool = Tool::Arrow;
-    config.drawing.shift_drag_tool = Tool::Eraser;
-    config.drawing.ctrl_drag_tool = Tool::Pen;
-    config.drawing.ctrl_shift_drag_tool = Tool::Rect;
-    config.drawing.tab_drag_tool = Tool::Ellipse;
+    config.drawing.drag_tool = wayscriber::input::DragBindableTool::Arrow;
+    config.drawing.shift_drag_tool = wayscriber::input::DragBindableTool::Eraser;
+    config.drawing.ctrl_drag_tool = wayscriber::input::DragBindableTool::Pen;
+    config.drawing.ctrl_shift_drag_tool = wayscriber::input::DragBindableTool::Rect;
+    config.drawing.tab_drag_tool = wayscriber::input::DragBindableTool::Ellipse;
     let mut drag_tools = config.drawing.effective_drag_tools();
     drag_tools.right.drag_tool = DragTool::Pen;
     drag_tools.right.drag_color = Some(ColorSpec::Name("blue".to_string()));
@@ -564,6 +567,20 @@ fn config_draft_round_trips_drag_tool_mapping() {
         config.drawing.tab_drag_tool
     );
     assert_eq!(round_trip.drawing.drag_tools, Some(drag_tools));
+}
+
+#[test]
+fn config_draft_round_trips_polygon_sides() {
+    let mut config = Config::default();
+    config.drawing.polygon_sides = 8;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.drawing_polygon_sides, "8");
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(round_trip.drawing.polygon_sides, 8);
 }
 
 #[test]

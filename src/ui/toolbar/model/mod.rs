@@ -35,8 +35,9 @@ pub(crate) use header::{SideHeaderModel, board_chip_label};
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
 #[allow(unused_imports)]
 pub(crate) use tools::{
-    SemanticToolIcon, current_shape_tool, default_drag_hint, default_shape_tool, fill_tool_active,
-    is_fill_tool, semantic_icon_for_tool, shape_tools, top_tool_buttons,
+    SemanticToolIcon, common_shape_tools, current_shape_tool, default_drag_hint,
+    default_polygon_tool, default_shape_tool, fill_tool_active, is_fill_tool, is_polygon_tool,
+    polygon_tools, semantic_icon_for_tool, shape_tools, top_tool_buttons,
 };
 
 #[cfg(test)]

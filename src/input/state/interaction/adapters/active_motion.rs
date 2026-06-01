@@ -116,6 +116,15 @@ pub(crate) fn handle_active_motion(
         ));
     }
 
+    if let DrawingState::BuildingPolygon { preview, .. } = &mut state.state {
+        *preview = Some((canvas.x(), canvas.y()));
+        state.update_provisional_dirty(canvas.x(), canvas.y());
+        state.needs_redraw = true;
+        return Some(RoutingOutcome::Continued(
+            ActiveInteractionKind::BuildingPolygon,
+        ));
+    }
+
     None
 }
 
@@ -168,7 +177,9 @@ pub(crate) fn releasable_active_kind(state: &InputState) -> Option<ActiveInterac
         DrawingState::PendingTextClick { .. } => Some(ActiveInteractionKind::PendingTextClick),
         DrawingState::ResizingText { .. } => Some(ActiveInteractionKind::ResizingText),
         DrawingState::ResizingSelection { .. } => Some(ActiveInteractionKind::ResizingSelection),
-        DrawingState::Idle | DrawingState::TextInput { .. } => None,
+        DrawingState::Idle
+        | DrawingState::TextInput { .. }
+        | DrawingState::BuildingPolygon { .. } => None,
     }
 }
 

@@ -163,6 +163,9 @@ impl WaylandState {
             DrawingState::Drawing { .. } => {
                 return CursorIcon::Crosshair;
             }
+            DrawingState::BuildingPolygon { .. } => {
+                return CursorIcon::Crosshair;
+            }
             // Selecting (marquee) - use crosshair
             DrawingState::Selecting { .. } => {
                 return CursorIcon::Crosshair;

@@ -6,6 +6,7 @@ fn validate_and_clamp_clamps_out_of_range_values() {
     let mut config = Config::default();
     config.drawing.default_thickness = 80.0;
     config.drawing.default_font_size = 3.0;
+    config.drawing.polygon_sides = 2;
     config.drawing.font_weight = "not-a-real-weight".to_string();
     config.drawing.font_style = "diagonal".to_string();
     config.arrow.length = 100.0;
@@ -21,6 +22,7 @@ fn validate_and_clamp_clamps_out_of_range_values() {
 
     assert_eq!(config.drawing.default_thickness, MAX_STROKE_THICKNESS);
     assert_eq!(config.drawing.default_font_size, 8.0);
+    assert_eq!(config.drawing.polygon_sides, 3);
     assert_eq!(config.drawing.font_weight, "bold");
     assert_eq!(config.drawing.font_style, "normal");
     assert_eq!(config.arrow.length, 50.0);
@@ -55,6 +57,21 @@ fn validate_and_clamp_clamps_out_of_range_values() {
             .iter()
             .all(|c| (0.0..=1.0).contains(c))
     );
+}
+
+#[test]
+fn drawing_polygon_sides_validation_keeps_supported_bounds() {
+    for supported in [3, 12] {
+        let mut config = Config::default();
+        config.drawing.polygon_sides = supported;
+        config.validate_and_clamp();
+        assert_eq!(config.drawing.polygon_sides, supported);
+    }
+
+    let mut config = Config::default();
+    config.drawing.polygon_sides = u8::MAX;
+    config.validate_and_clamp();
+    assert_eq!(config.drawing.polygon_sides, 12);
 }
 
 #[test]
@@ -448,6 +465,7 @@ fn validate_clamps_preset_fields() {
         arrow_length: Some(100.0),
         arrow_angle: Some(5.0),
         arrow_head_at_end: None,
+        polygon_sides: Some(2),
         show_status_bar: None,
         drag_tools: None,
     });
@@ -471,6 +489,7 @@ fn validate_clamps_preset_fields() {
     assert_eq!(preset.font_size, Some(8.0));
     assert_eq!(preset.arrow_length, Some(50.0));
     assert_eq!(preset.arrow_angle, Some(15.0));
+    assert_eq!(preset.polygon_sides, Some(3));
 }
 
 #[test]
@@ -585,12 +604,24 @@ fn validate_does_not_clamp_autosave_interval_to_idle() {
 fn drawing_drag_tool_defaults_match_legacy_mapping() {
     let config = Config::default();
 
-    assert_eq!(config.drawing.drag_tool, crate::input::Tool::Pen);
-    assert_eq!(config.drawing.shift_drag_tool, crate::input::Tool::Line);
-    assert_eq!(config.drawing.ctrl_drag_tool, crate::input::Tool::Rect);
+    assert_eq!(
+        config.drawing.drag_tool,
+        crate::input::DragBindableTool::Pen
+    );
+    assert_eq!(
+        config.drawing.shift_drag_tool,
+        crate::input::DragBindableTool::Line
+    );
+    assert_eq!(
+        config.drawing.ctrl_drag_tool,
+        crate::input::DragBindableTool::Rect
+    );
     assert_eq!(
         config.drawing.ctrl_shift_drag_tool,
-        crate::input::Tool::Arrow
+        crate::input::DragBindableTool::Arrow
     );
-    assert_eq!(config.drawing.tab_drag_tool, crate::input::Tool::Ellipse);
+    assert_eq!(
+        config.drawing.tab_drag_tool,
+        crate::input::DragBindableTool::Ellipse
+    );
 }

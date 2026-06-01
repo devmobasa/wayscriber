@@ -5,6 +5,7 @@ pub(crate) fn active_interaction_kind(state: &InputState) -> Option<ActiveIntera
     match state.state {
         DrawingState::Idle => None,
         DrawingState::Drawing { .. } => Some(ActiveInteractionKind::Drawing),
+        DrawingState::BuildingPolygon { .. } => Some(ActiveInteractionKind::BuildingPolygon),
         DrawingState::TextInput { .. } => Some(ActiveInteractionKind::TextInput),
         DrawingState::PendingTextClick { .. } => Some(ActiveInteractionKind::PendingTextClick),
         DrawingState::MovingSelection { .. } => Some(ActiveInteractionKind::MovingSelection),

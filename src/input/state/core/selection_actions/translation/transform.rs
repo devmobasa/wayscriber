@@ -65,6 +65,12 @@ impl InputState {
                 *cx += dx;
                 *cy += dy;
             }
+            Shape::Polygon { points, .. } => {
+                for point in points {
+                    point.0 += dx;
+                    point.1 += dy;
+                }
+            }
             Shape::Arrow { x1, y1, x2, y2, .. } => {
                 *x1 += dx;
                 *x2 += dx;

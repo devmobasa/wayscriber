@@ -172,7 +172,10 @@ impl InputState {
             let bounds = cached.or_else(|| hit_test::compute_hit_bounds(drawn, tolerance));
             let hit = bounds
                 .as_ref()
-                .map(|rect| rect.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance))
+                .map(|rect| {
+                    rect.contains(x, y)
+                        && hit_test::hit_test_for_point_targeting(drawn, (x, y), tolerance)
+                })
                 .unwrap_or(false);
             (drawn.id, bounds, hit)
         };
@@ -197,7 +200,10 @@ impl InputState {
 
         let hit = bounds
             .as_ref()
-            .map(|rect| rect.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance))
+            .map(|rect| {
+                rect.contains(x, y)
+                    && hit_test::hit_test_for_point_targeting(drawn, (x, y), tolerance)
+            })
             .unwrap_or(false);
 
         if let Some(bounds) = bounds {

@@ -15,10 +15,44 @@ pub(super) fn draw_shape_picker_row(
     y: f64,
     btn_size: f64,
     icon_size: f64,
+    is_simple: bool,
 ) {
-    let shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+    let mut shape_y = y + btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+    draw_picker_row(
+        layout,
+        handle_w,
+        shape_y,
+        btn_size,
+        icon_size,
+        if is_simple {
+            model::common_shape_tools()
+        } else {
+            model::polygon_tools()
+        },
+    );
+    if is_simple {
+        shape_y += btn_size + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+        draw_picker_row(
+            layout,
+            handle_w,
+            shape_y,
+            btn_size,
+            icon_size,
+            model::polygon_tools(),
+        );
+    }
+}
+
+fn draw_picker_row(
+    layout: &mut TopStripLayout,
+    handle_w: f64,
+    shape_y: f64,
+    btn_size: f64,
+    icon_size: f64,
+    tools: &[crate::input::Tool],
+) {
     let mut shape_x = ToolbarLayoutSpec::TOP_START_X + handle_w + layout.gap;
-    for tool in model::shape_tools() {
+    for tool in tools {
         let is_active =
             layout.snapshot.active_tool == *tool || layout.snapshot.tool_override == Some(*tool);
         let is_hover = layout

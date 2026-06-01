@@ -1,9 +1,11 @@
-use crate::draw::render::render_freehand_pressure_borrowed;
+use crate::draw::render::{render_freehand_pressure_borrowed, render_polygon_preview};
 use crate::draw::{
     Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape,
 };
 use crate::input::Tool;
-use crate::input::tool::{ProvisionalToolSnapshot, ProvisionalToolStroke};
+use crate::input::tool::{
+    PolygonProvisionalSnapshot, ProvisionalToolSnapshot, ProvisionalToolStroke,
+};
 
 use super::{DrawingState, InputState};
 
@@ -23,6 +25,19 @@ impl InputState {
         else {
             return ProvisionalToolStroke::None;
         };
+
+        if tool.polygon_template().is_some() {
+            let snapshot = PolygonProvisionalSnapshot {
+                tool: *tool,
+                start: (*start_x, *start_y),
+                current: (current_x, current_y),
+                color: self.active_drag_color_or_current(),
+                size: self.thickness_for_tool(*tool),
+                fill_enabled: self.fill_enabled,
+                regular_sides: self.polygon_sides,
+            };
+            return tool.provisional_polygon_stroke(snapshot);
+        }
 
         let snapshot = ProvisionalToolSnapshot {
             tool: *tool,
@@ -160,6 +175,20 @@ impl InputState {
                 ctx.set_dash(&[6.0, 4.0], 0.0);
                 let _ = ctx.stroke();
                 let _ = ctx.restore();
+                true
+            }
+            DrawingState::BuildingPolygon {
+                points,
+                preview,
+                fill,
+                color,
+                thick,
+            } => {
+                let mut preview_points = points.clone();
+                if let Some(point) = preview.or(Some((current_x, current_y))) {
+                    preview_points.push(point);
+                }
+                render_polygon_preview(ctx, &preview_points, *fill, *color, *thick);
                 true
             }
             _ => false,

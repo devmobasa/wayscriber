@@ -29,6 +29,20 @@ pub(super) fn parse_usize_field<F>(
     }
 }
 
+pub(super) fn parse_u8_field<F>(
+    value: &str,
+    field: &'static str,
+    errors: &mut Vec<FormError>,
+    apply: F,
+) where
+    F: FnOnce(u8),
+{
+    match value.trim().parse::<u8>() {
+        Ok(parsed) => apply(parsed),
+        Err(err) => errors.push(FormError::new(field, err.to_string())),
+    }
+}
+
 pub(super) fn parse_optional_usize_field<F>(
     value: &str,
     field: &'static str,

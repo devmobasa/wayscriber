@@ -25,6 +25,7 @@ pub(super) fn draw_tool_row(
     is_simple: bool,
     current_shape_tool: Option<Tool>,
     shape_icon_tool: Tool,
+    polygon_icon_tool: Tool,
 ) -> ToolRowResult {
     let snapshot = layout.snapshot;
 
@@ -100,8 +101,44 @@ pub(super) fn draw_tool_row(
         });
         fill_anchor = Some((x, btn_size));
         x += btn_size + gap;
-    } else if let (Some(rect_x), Some(circle_end_x)) = (rect_x, circle_end_x) {
-        fill_anchor = Some((rect_x, circle_end_x - rect_x));
+    } else {
+        let current_polygon_tool = current_shape_tool.filter(|tool| model::is_polygon_tool(*tool));
+        let polygons_active = snapshot.shape_picker_open || current_polygon_tool.is_some();
+        let polygons_hover = layout
+            .hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, x, y, btn_size, btn_size))
+            .unwrap_or(false);
+        draw_button(
+            layout.ctx,
+            x,
+            y,
+            btn_size,
+            btn_size,
+            polygons_active,
+            polygons_hover,
+        );
+        set_icon_color(layout.ctx, polygons_hover);
+        let icon_x = x + (btn_size - icon_size) / 2.0;
+        let icon_y = y + (btn_size - icon_size) / 2.0;
+        draw_semantic_tool_icon(
+            layout.ctx,
+            model::semantic_icon_for_tool(polygon_icon_tool),
+            icon_x,
+            icon_y,
+            icon_size,
+        );
+        layout.hits.push(HitRegion {
+            rect: (x, y, btn_size, btn_size),
+            event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
+            kind: HitKind::Click,
+            tooltip: Some("Polygons".to_string()),
+        });
+        if current_polygon_tool.is_some() {
+            fill_anchor = Some((x, btn_size));
+        } else if let (Some(rect_x), Some(circle_end_x)) = (rect_x, circle_end_x) {
+            fill_anchor = Some((rect_x, circle_end_x - rect_x));
+        }
+        x += btn_size + gap;
     }
 
     ToolRowResult {
@@ -123,6 +160,15 @@ pub(crate) fn draw_semantic_tool_icon(
         SemanticToolIcon::Line => toolbar_icons::draw_icon_line(ctx, x, y, size),
         SemanticToolIcon::Rect => toolbar_icons::draw_icon_rect(ctx, x, y, size),
         SemanticToolIcon::Circle => toolbar_icons::draw_icon_circle(ctx, x, y, size),
+        SemanticToolIcon::Triangle => toolbar_icons::draw_icon_triangle(ctx, x, y, size),
+        SemanticToolIcon::Parallelogram => {
+            toolbar_icons::draw_icon_parallelogram(ctx, x, y, size);
+        }
+        SemanticToolIcon::Rhombus => toolbar_icons::draw_icon_rhombus(ctx, x, y, size),
+        SemanticToolIcon::Polygon => toolbar_icons::draw_icon_polygon(ctx, x, y, size),
+        SemanticToolIcon::FreeformPolygon => {
+            toolbar_icons::draw_icon_freeform_polygon(ctx, x, y, size);
+        }
         SemanticToolIcon::Arrow => toolbar_icons::draw_icon_arrow(ctx, x, y, size),
         SemanticToolIcon::Blur => toolbar_icons::draw_icon_blur(ctx, x, y, size),
         SemanticToolIcon::Marker => toolbar_icons::draw_icon_marker(ctx, x, y, size),

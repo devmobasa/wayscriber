@@ -1,8 +1,8 @@
 use crate::util;
 
 use super::geometry::{
-    EPS, distance_point_to_point, distance_point_to_segment, p_as_i32, point_in_triangle,
-    to_i32_pair,
+    EPS, distance_point_to_point, distance_point_to_segment, p_as_i32, point_in_polygon,
+    point_in_triangle, to_i32_pair,
 };
 
 pub(super) fn freehand_hit(
@@ -81,6 +81,43 @@ pub(super) fn rect_outline_hit(
     vertical_hit || horizontal_hit
 }
 
+pub(super) fn rect_fill_hit(x: i32, y: i32, w: i32, h: i32, point: (i32, i32)) -> bool {
+    if w == 0 || h == 0 {
+        return false;
+    }
+
+    let (left, right) = if w >= 0 { (x, x + w) } else { (x + w, x) };
+    let (top, bottom) = if h >= 0 { (y, y + h) } else { (y + h, y) };
+    point.0 >= left && point.0 <= right && point.1 >= top && point.1 <= bottom
+}
+
+pub(super) fn polygon_outline_hit(
+    points: &[(i32, i32)],
+    thickness: f64,
+    point: (i32, i32),
+    tolerance: f64,
+) -> bool {
+    if !crate::draw::shape::has_minimum_distinct_points(points) {
+        return false;
+    }
+
+    let padded = tolerance.max(thickness / 2.0);
+    for edge in points.windows(2) {
+        if distance_point_to_segment(point, edge[0], edge[1]) <= padded {
+            return true;
+        }
+    }
+    distance_point_to_segment(point, points[points.len() - 1], points[0]) <= padded
+}
+
+pub(super) fn polygon_fill_hit(points: &[(i32, i32)], point: (i32, i32)) -> bool {
+    if !crate::draw::shape::has_minimum_distinct_points(points) {
+        return false;
+    }
+
+    point_in_polygon((point.0 as f64, point.1 as f64), points)
+}
+
 pub(super) fn ellipse_outline_hit(
     cx: i32,
     cy: i32,
@@ -117,6 +154,18 @@ pub(super) fn ellipse_outline_hit(
     };
 
     outer && !inner
+}
+
+pub(super) fn ellipse_fill_hit(cx: i32, cy: i32, rx: i32, ry: i32, point: (i32, i32)) -> bool {
+    if rx <= 0 || ry <= 0 {
+        return false;
+    }
+
+    let dx = point.0 as f64 - cx as f64;
+    let dy = point.1 as f64 - cy as f64;
+    let rx = rx as f64;
+    let ry = ry as f64;
+    (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1.0 + EPS
 }
 
 pub(super) fn circle_hit(cx: i32, cy: i32, radius: f64, point: (i32, i32), tolerance: f64) -> bool {

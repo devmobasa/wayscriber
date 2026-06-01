@@ -1,7 +1,7 @@
 use super::*;
 use crate::draw::{
-    ArrowLabel, BLACK, DrawnShape, EmbeddedImage, EraserBrush, EraserKind, FontDescriptor, Shape,
-    StepMarkerLabel,
+    ArrowLabel, BLACK, DrawnShape, EmbeddedImage, EraserBrush, EraserKind, FontDescriptor,
+    PolygonKind, Shape, StepMarkerLabel,
 };
 
 #[test]
@@ -95,6 +95,104 @@ fn ellipse_hit_handles_zero_radius() {
 
     assert!(hit_test(&ellipse, (50, 80), 2.0));
     assert!(!hit_test(&ellipse, (60, 90), 1.0));
+}
+
+#[test]
+fn polygon_hit_tests_closed_outline_only() {
+    let polygon = DrawnShape {
+        id: 3,
+        shape: Shape::Polygon {
+            kind: PolygonKind::Triangle,
+            points: vec![(10, 10), (40, 10), (25, 40)],
+            fill: true,
+            color: BLACK,
+            thick: 2.0,
+        },
+        created_at: 0,
+        locked: false,
+    };
+
+    assert!(hit_test(&polygon, (25, 10), 1.0));
+    assert!(
+        !hit_test(&polygon, (25, 22), 1.0),
+        "generic hit testing remains outline-only for filled polygon interiors"
+    );
+}
+
+#[test]
+fn point_targeting_hits_filled_rect_and_ellipse_interiors() {
+    let rect = DrawnShape {
+        id: 3,
+        shape: Shape::Rect {
+            x: 10,
+            y: 10,
+            w: 40,
+            h: 30,
+            fill: true,
+            color: BLACK,
+            thick: 2.0,
+        },
+        created_at: 0,
+        locked: false,
+    };
+    let ellipse = DrawnShape {
+        id: 4,
+        shape: Shape::Ellipse {
+            cx: 80,
+            cy: 70,
+            rx: 20,
+            ry: 12,
+            fill: true,
+            color: BLACK,
+            thick: 2.0,
+        },
+        created_at: 0,
+        locked: false,
+    };
+
+    assert!(!hit_test(&rect, (30, 25), 1.0));
+    assert!(hit_test_for_point_targeting(&rect, (30, 25), 1.0));
+    assert!(!hit_test(&ellipse, (80, 70), 1.0));
+    assert!(hit_test_for_point_targeting(&ellipse, (80, 70), 1.0));
+}
+
+#[test]
+fn point_targeting_hits_filled_polygon_interior() {
+    let polygon = DrawnShape {
+        id: 3,
+        shape: Shape::Polygon {
+            kind: PolygonKind::Triangle,
+            points: vec![(10, 10), (40, 10), (25, 40)],
+            fill: true,
+            color: BLACK,
+            thick: 2.0,
+        },
+        created_at: 0,
+        locked: false,
+    };
+
+    assert!(
+        hit_test_for_point_targeting(&polygon, (25, 22), 1.0),
+        "filled polygon interiors should be directly targetable"
+    );
+}
+
+#[test]
+fn invalid_polygon_hit_test_is_false() {
+    let polygon = DrawnShape {
+        id: 4,
+        shape: Shape::Polygon {
+            kind: PolygonKind::Freeform,
+            points: vec![(10, 10), (10, 10), (40, 10)],
+            fill: false,
+            color: BLACK,
+            thick: 2.0,
+        },
+        created_at: 0,
+        locked: false,
+    };
+
+    assert!(!hit_test(&polygon, (10, 10), 10.0));
 }
 
 #[test]

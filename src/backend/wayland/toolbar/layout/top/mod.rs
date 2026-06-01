@@ -56,5 +56,5 @@ fn tool_buttons(is_simple: bool) -> &'static [Tool] {
 }
 
 fn shape_buttons() -> &'static [Tool] {
-    model::shape_tools()
+    model::polygon_tools()
 }

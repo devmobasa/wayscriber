@@ -16,7 +16,7 @@ pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 use crate::capture::{ImageOperationKind, file::FileSaveConfig};
 use crate::config::{Action, ToolPresetConfig};
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{Shape, ShapeId};
+use crate::draw::{Color, Shape, ShapeId};
 use crate::input::tool::Tool;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
@@ -43,6 +43,19 @@ pub enum DrawingState {
         points: Vec<(i32, i32)>,
         /// Accumulated thickness values for freehand drawing (pressure sensitivity)
         point_thicknesses: Vec<f32>,
+    },
+    /// Click-to-add freeform polygon construction.
+    BuildingPolygon {
+        /// Committed polygon vertices.
+        points: Vec<(i32, i32)>,
+        /// Current pointer location used for the preview edge.
+        preview: Option<(i32, i32)>,
+        /// Fill setting frozen at the first click.
+        fill: bool,
+        /// Color frozen at the first click.
+        color: Color,
+        /// Stroke thickness frozen at the first click.
+        thick: f64,
     },
     /// Text input mode - user is typing text to place on screen
     TextInput {
@@ -245,6 +258,13 @@ pub(crate) struct TextClickState {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BoardPickerClickState {
     pub row: usize,
+    pub x: i32,
+    pub y: i32,
+    pub at: Instant,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PolygonClickState {
     pub x: i32,
     pub y: i32,
     pub at: Instant,

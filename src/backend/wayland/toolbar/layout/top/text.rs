@@ -6,6 +6,7 @@ use super::shape_buttons;
 use super::tool_buttons;
 use crate::config::{Action, action_label};
 use crate::ui::toolbar::bindings::tool_tooltip_label;
+use crate::ui::toolbar::model;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 pub(super) fn build_hits(
@@ -45,9 +46,17 @@ pub(super) fn build_hits(
             tooltip: Some("Shapes".to_string()),
         });
         x += btn_w + gap;
+    } else {
+        hits.push(HitRegion {
+            rect: (x, y, btn_w, btn_h),
+            event: ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
+            kind: HitKind::Click,
+            tooltip: Some("Polygons".to_string()),
+        });
+        x += btn_w + gap;
     }
 
-    if fill_tool_active {
+    if fill_tool_active && !snapshot.shape_picker_open {
         let fill_w = ToolbarLayoutSpec::TOP_TEXT_FILL_W;
         hits.push(HitRegion {
             rect: (x, y, fill_w, btn_h),
@@ -111,21 +120,49 @@ pub(super) fn build_hits(
         tooltip: None,
     });
 
-    if is_simple && snapshot.shape_picker_open {
-        let shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
-        let mut shape_x = ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
-        for tool in shape_buttons() {
-            let tooltip_label = tool_tooltip_label(*tool);
-            hits.push(HitRegion {
-                rect: (shape_x, shape_y, btn_w, btn_h),
-                event: ToolbarEvent::SelectTool(*tool),
-                kind: HitKind::Click,
-                tooltip: Some(format_binding_label(
-                    tooltip_label,
-                    snapshot.binding_hints.for_tool(*tool),
-                )),
-            });
-            shape_x += btn_w + gap;
+    if snapshot.shape_picker_open {
+        let mut shape_y = y + btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+        push_picker_hits(
+            shape_y,
+            btn_w,
+            btn_h,
+            gap,
+            if is_simple {
+                model::common_shape_tools()
+            } else {
+                shape_buttons()
+            },
+            snapshot,
+            hits,
+        );
+        if is_simple {
+            shape_y += btn_h + ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP;
+            push_picker_hits(shape_y, btn_w, btn_h, gap, shape_buttons(), snapshot, hits);
         }
+    }
+}
+
+fn push_picker_hits(
+    shape_y: f64,
+    btn_w: f64,
+    btn_h: f64,
+    gap: f64,
+    tools: &[crate::input::Tool],
+    snapshot: &ToolbarSnapshot,
+    hits: &mut Vec<HitRegion>,
+) {
+    let mut shape_x = ToolbarLayoutSpec::TOP_START_X + ToolbarLayoutSpec::TOP_HANDLE_SIZE + gap;
+    for tool in tools {
+        let tooltip_label = tool_tooltip_label(*tool);
+        hits.push(HitRegion {
+            rect: (shape_x, shape_y, btn_w, btn_h),
+            event: ToolbarEvent::SelectTool(*tool),
+            kind: HitKind::Click,
+            tooltip: Some(format_binding_label(
+                tooltip_label,
+                snapshot.binding_hints.for_tool(*tool),
+            )),
+        });
+        shape_x += btn_w + gap;
     }
 }

@@ -196,4 +196,101 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
         });
         *y += eraser_card_h + section_gap;
     }
+
+    if tool_context.show_polygon_sides_control {
+        draw_polygon_sides_section(layout, y, label_style);
+    }
+}
+
+fn draw_polygon_sides_section(
+    layout: &mut SidePaletteLayout,
+    y: &mut f64,
+    label_style: UiTextStyle,
+) {
+    let ctx = layout.ctx;
+    let snapshot = layout.snapshot;
+    let hover = layout.hover;
+    let x = layout.x;
+    let card_x = layout.card_x;
+    let card_w = layout.card_w;
+    let content_width = layout.content_width;
+    let section_gap = layout.section_gap;
+    let width = layout.width;
+    let card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
+    let btn_size = ToolbarLayoutSpec::SIDE_NUDGE_SIZE;
+    let icon_size = ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE;
+    let value_w = ToolbarLayoutSpec::SIDE_SLIDER_VALUE_WIDTH;
+    let row_y = *y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
+
+    draw_group_card(ctx, card_x, *y, card_w, card_h);
+    draw_section_label(
+        ctx,
+        label_style,
+        x,
+        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+        "Sides",
+    );
+
+    let minus_x = x;
+    let minus_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, minus_x, row_y, btn_size, btn_size))
+        .unwrap_or(false);
+    draw_button(ctx, minus_x, row_y, btn_size, btn_size, false, minus_hover);
+    set_icon_color(ctx, minus_hover);
+    toolbar_icons::draw_icon_minus(
+        ctx,
+        minus_x + (btn_size - icon_size) / 2.0,
+        row_y + (btn_size - icon_size) / 2.0,
+        icon_size,
+    );
+    layout.hits.push(HitRegion {
+        rect: (minus_x, row_y, btn_size, btn_size),
+        event: ToolbarEvent::NudgePolygonSides(-1),
+        kind: HitKind::Click,
+        tooltip: Some("Decrease polygon sides".to_string()),
+    });
+
+    let plus_x = width - x - btn_size - value_w - 4.0;
+    let plus_hover = hover
+        .map(|(hx, hy)| point_in_rect(hx, hy, plus_x, row_y, btn_size, btn_size))
+        .unwrap_or(false);
+    draw_button(ctx, plus_x, row_y, btn_size, btn_size, false, plus_hover);
+    set_icon_color(ctx, plus_hover);
+    toolbar_icons::draw_icon_plus(
+        ctx,
+        plus_x + (btn_size - icon_size) / 2.0,
+        row_y + (btn_size - icon_size) / 2.0,
+        icon_size,
+    );
+    layout.hits.push(HitRegion {
+        rect: (plus_x, row_y, btn_size, btn_size),
+        event: ToolbarEvent::NudgePolygonSides(1),
+        kind: HitKind::Click,
+        tooltip: Some("Increase polygon sides".to_string()),
+    });
+
+    let value_x = width - x - value_w;
+    draw_label_center(
+        ctx,
+        label_style,
+        value_x,
+        row_y,
+        value_w,
+        btn_size,
+        &snapshot.polygon_sides.to_string(),
+    );
+
+    layout.hits.push(HitRegion {
+        rect: (
+            minus_x + btn_size,
+            row_y,
+            content_width - btn_size * 2.0,
+            btn_size,
+        ),
+        event: ToolbarEvent::SetPolygonSides(snapshot.polygon_sides),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+
+    *y += card_h + section_gap;
 }

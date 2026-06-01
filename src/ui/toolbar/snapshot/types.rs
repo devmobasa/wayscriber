@@ -63,6 +63,8 @@ pub struct ToolContext {
     pub show_eraser_mode: bool,
     /// Whether the marker opacity slider should be shown
     pub show_marker_opacity: bool,
+    /// Whether the regular polygon side-count control should be shown
+    pub show_polygon_sides_control: bool,
     /// Whether font controls should be shown
     pub show_font_controls: bool,
 }
@@ -91,6 +93,7 @@ impl ToolContext {
                 show_eraser_mode: false,
                 // Honor show_marker_opacity_section setting
                 show_marker_opacity: snapshot.show_marker_opacity_section,
+                show_polygon_sides_control: false,
                 show_font_controls: true,
             };
         }
@@ -119,6 +122,9 @@ impl ToolContext {
         if snapshot.show_marker_opacity_section {
             ctx.show_marker_opacity = true;
         }
+        if effective_tool == Tool::RegularPolygon {
+            ctx.show_polygon_sides_control = true;
+        }
 
         ctx
     }
@@ -134,6 +140,7 @@ impl ToolContext {
             show_step_counter: profile.show_step_counter(),
             show_eraser_mode: profile.show_eraser_mode(),
             show_marker_opacity: profile.show_marker_opacity(),
+            show_polygon_sides_control: false,
             show_font_controls: false,
         }
     }
@@ -148,6 +155,7 @@ impl ToolContext {
         let show_marker_opacity =
             snapshot.show_marker_opacity_section || snapshot.thickness_targets_marker;
         let show_font_controls = text_or_note_active || snapshot.show_text_controls;
+        let show_polygon_sides_control = snapshot.active_tool == Tool::RegularPolygon;
 
         Self {
             needs_color: true,
@@ -163,6 +171,7 @@ impl ToolContext {
             show_step_counter,
             show_eraser_mode: snapshot.thickness_targets_eraser,
             show_marker_opacity,
+            show_polygon_sides_control,
             show_font_controls,
         }
     }
@@ -215,6 +224,7 @@ pub struct ToolbarSnapshot {
     pub zoom_active: bool,
     pub zoom_locked: bool,
     pub fill_enabled: bool,
+    pub polygon_sides: u8,
     pub arrow_label_enabled: bool,
     pub arrow_label_next: u32,
     pub step_marker_next: u32,

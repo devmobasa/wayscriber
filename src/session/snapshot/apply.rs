@@ -1,5 +1,5 @@
 use super::types::{BoardPagesSnapshot, SessionSnapshot};
-use crate::draw::BoardPages;
+use crate::draw::{BoardPages, clamp_regular_sides};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{InputState, PerToolDrawingSettings};
 use crate::session::options::SessionOptions;
@@ -96,6 +96,7 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
             if let Some(label_enabled) = tool_state.arrow_label_enabled {
                 input.arrow_label_enabled = label_enabled;
             }
+            input.polygon_sides = clamp_regular_sides(tool_state.polygon_sides);
             input.board_previous_color = tool_state.board_previous_color;
             input.show_status_bar = tool_state.show_status_bar;
         } else {

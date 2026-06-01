@@ -32,6 +32,7 @@ impl ConfigDraft {
                 config.drawing.default_eraser_mode,
             ),
             drawing_default_font_size: format_float(config.drawing.default_font_size),
+            drawing_polygon_sides: config.drawing.polygon_sides.to_string(),
             drawing_marker_opacity: format_float(config.drawing.marker_opacity),
             drawing_hit_test_tolerance: format_float(config.drawing.hit_test_tolerance),
             drawing_hit_test_linear_threshold: config.drawing.hit_test_linear_threshold.to_string(),
@@ -41,13 +42,19 @@ impl ConfigDraft {
             drawing_font_style: style_value,
             drawing_text_background_enabled: config.drawing.text_background_enabled,
             drawing_default_fill_enabled: config.drawing.default_fill_enabled,
-            drawing_drag_tool: ToolOption::from_tool(config.drawing.drag_tool),
-            drawing_shift_drag_tool: ToolOption::from_tool(config.drawing.shift_drag_tool),
-            drawing_ctrl_drag_tool: ToolOption::from_tool(config.drawing.ctrl_drag_tool),
-            drawing_ctrl_shift_drag_tool: ToolOption::from_tool(
+            drawing_drag_tool: ToolOption::from_drag_bindable_tool(config.drawing.drag_tool),
+            drawing_shift_drag_tool: ToolOption::from_drag_bindable_tool(
+                config.drawing.shift_drag_tool,
+            ),
+            drawing_ctrl_drag_tool: ToolOption::from_drag_bindable_tool(
+                config.drawing.ctrl_drag_tool,
+            ),
+            drawing_ctrl_shift_drag_tool: ToolOption::from_drag_bindable_tool(
                 config.drawing.ctrl_shift_drag_tool,
             ),
-            drawing_tab_drag_tool: ToolOption::from_tool(config.drawing.tab_drag_tool),
+            drawing_tab_drag_tool: ToolOption::from_drag_bindable_tool(
+                config.drawing.tab_drag_tool,
+            ),
             drawing_drag_tools,
             drawing_font_style_option: style_option,
             drawing_font_weight_option: weight_option,

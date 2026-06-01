@@ -97,7 +97,6 @@ pub fn render_top_strip(
     let is_simple = snapshot.layout_mode == crate::config::ToolbarLayoutMode::Simple;
     let current_shape_tool =
         model::current_shape_tool(snapshot.active_tool, snapshot.tool_override);
-    let shape_icon_tool = current_shape_tool.unwrap_or_else(model::default_shape_tool);
     let fill_tool_active = model::fill_tool_active(snapshot.active_tool, snapshot.tool_override);
 
     if snapshot.use_icons {
@@ -107,7 +106,6 @@ pub fn render_top_strip(
             handle_w,
             is_simple,
             current_shape_tool,
-            shape_icon_tool,
             fill_tool_active,
         );
     } else {

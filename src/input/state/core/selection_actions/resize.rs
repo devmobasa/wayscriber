@@ -197,6 +197,23 @@ impl InputState {
                     label: label.clone(),
                 }
             }
+            Shape::Polygon {
+                kind,
+                points,
+                fill,
+                color,
+                thick,
+            } => {
+                let scaled_points =
+                    Self::scale_points(points, anchor_x, anchor_y, scale_x, scale_y);
+                Shape::Polygon {
+                    kind: *kind,
+                    points: scaled_points,
+                    fill: *fill,
+                    color: *color,
+                    thick: *thick,
+                }
+            }
             Shape::BlurRect {
                 x,
                 y,

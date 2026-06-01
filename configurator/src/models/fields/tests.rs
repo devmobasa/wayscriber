@@ -82,8 +82,20 @@ fn pdf_export_options_round_trip() {
 fn drag_tool_options_match_button_capabilities() {
     let left = DragToolOption::list_for_button(DragMouseButton::Left);
     assert!(!left.contains(&DragToolOption::Default));
+    assert!(left.contains(&DragToolOption::RegularPolygon));
 
     let right = DragToolOption::list_for_button(DragMouseButton::Right);
     assert!(right.contains(&DragToolOption::Default));
     assert_eq!(right, DragToolOption::list());
+}
+
+#[test]
+fn tool_options_include_freeform_but_drag_options_do_not() {
+    assert!(ToolOption::list().contains(&ToolOption::FreeformPolygon));
+    assert!(ToolOption::list().contains(&ToolOption::RegularPolygon));
+    assert!(
+        !DragToolOption::list()
+            .iter()
+            .any(|option| option.to_tool_option() == Some(ToolOption::FreeformPolygon))
+    );
 }

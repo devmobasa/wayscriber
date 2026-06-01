@@ -66,6 +66,178 @@ fn mouse_drag_creates_shapes_for_each_tool() {
 }
 
 #[test]
+fn regular_polygon_drag_stores_concrete_points_and_side_metadata() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::RegularPolygon)));
+    assert!(state.set_polygon_sides(7));
+
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    state.on_mouse_release(MouseButton::Left, 100, 100);
+
+    let shape = &state.boards.active_frame().shapes[0].shape;
+    match shape {
+        Shape::Polygon {
+            kind: crate::draw::PolygonKind::Regular { sides },
+            points,
+            ..
+        } => {
+            assert_eq!(*sides, 7);
+            assert_eq!(points.len(), 7);
+        }
+        other => panic!("expected regular polygon, got {other:?}"),
+    }
+
+    assert!(state.set_polygon_sides(3));
+    match &state.boards.active_frame().shapes[0].shape {
+        Shape::Polygon {
+            kind: crate::draw::PolygonKind::Regular { sides },
+            points,
+            ..
+        } => {
+            assert_eq!(*sides, 7);
+            assert_eq!(points.len(), 7);
+        }
+        other => panic!("expected regular polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn invalid_drag_polygon_tools_do_not_commit_ghost_shapes() {
+    for (tool, start, end) in [
+        (Tool::Triangle, (10, 10), (10, 10)),
+        (Tool::RegularPolygon, (10, 10), (10, 10)),
+        (Tool::Parallelogram, (0, 0), (1, 10)),
+    ] {
+        let mut state = create_test_input_state();
+        assert!(state.set_tool_override(Some(tool)));
+
+        state.on_mouse_press(MouseButton::Left, start.0, start.1);
+        state.on_mouse_release(MouseButton::Left, end.0, end.1);
+
+        assert!(
+            state.boards.active_frame().shapes.is_empty(),
+            "{tool:?} should not commit an invalid invisible polygon"
+        );
+    }
+}
+
+#[test]
+fn alt_click_selects_filled_polygon_interior() {
+    let mut state = create_test_input_state();
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Polygon {
+        kind: crate::draw::PolygonKind::Triangle,
+        points: vec![(10, 10), (40, 10), (25, 40)],
+        fill: true,
+        color: state.current_color,
+        thick: state.current_thickness,
+    });
+
+    state.modifiers.alt = true;
+    state.on_mouse_press(MouseButton::Left, 25, 22);
+
+    assert_eq!(state.selected_shape_ids(), &[shape_id]);
+}
+
+#[test]
+fn freeform_polygon_double_click_finishes_without_duplicate_vertex() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
+
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    state.on_mouse_press(MouseButton::Left, 20, 0);
+    state.on_mouse_press(MouseButton::Left, 20, 20);
+    state.on_mouse_press(MouseButton::Left, 20, 20);
+
+    assert!(matches!(state.state, DrawingState::Idle));
+    match &state.boards.active_frame().shapes[0].shape {
+        Shape::Polygon {
+            kind: crate::draw::PolygonKind::Freeform,
+            points,
+            ..
+        } => assert_eq!(points, &vec![(0, 0), (20, 0), (20, 20)]),
+        other => panic!("expected freeform polygon, got {other:?}"),
+    }
+}
+
+#[test]
+fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
+
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    state.on_mouse_press(MouseButton::Left, 20, 0);
+    state.on_mouse_press(MouseButton::Left, 20, 20);
+    state.on_mouse_press(MouseButton::Left, 0, 20);
+    state.pop_building_polygon_point();
+    state.on_mouse_press(MouseButton::Left, 0, 20);
+
+    assert!(state.boards.active_frame().shapes.is_empty());
+    match &state.state {
+        DrawingState::BuildingPolygon { points, .. } => {
+            assert_eq!(points, &vec![(0, 0), (20, 0), (20, 20), (0, 20)]);
+        }
+        other => panic!("expected polygon still building, got {other:?}"),
+    }
+}
+
+#[test]
+fn freeform_polygon_commit_records_first_stroke_onboarding() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
+
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    state.on_mouse_press(MouseButton::Left, 20, 0);
+    state.on_mouse_press(MouseButton::Left, 20, 20);
+    state.finish_building_polygon();
+
+    assert!(state.pending_onboarding_usage.first_stroke_done);
+}
+
+#[test]
+fn freeform_polygon_preview_dirty_has_antialias_padding() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    state.on_mouse_motion(20, 20);
+
+    let DrawingState::BuildingPolygon { thick, .. } = state.state else {
+        panic!("expected polygon building state");
+    };
+    let base = crate::draw::shape::bounding_box_for_points(&[(10, 10), (20, 20)], thick)
+        .expect("preview should have bounds");
+    assert_eq!(
+        state.last_provisional_bounds,
+        base.inflated(2),
+        "building polygon damage should be padded to clear antialias leftovers"
+    );
+}
+
+#[test]
+fn freeform_polygon_freezes_style_on_first_click() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
+    let original = state.current_color;
+    let changed = crate::draw::Color {
+        r: 0.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
+
+    state.on_mouse_press(MouseButton::Left, 0, 0);
+    assert!(state.set_color(changed));
+    state.on_mouse_press(MouseButton::Left, 20, 0);
+    state.on_mouse_press(MouseButton::Left, 20, 20);
+    state.finish_building_polygon();
+
+    match &state.boards.active_frame().shapes[0].shape {
+        Shape::Polygon { color, .. } => assert_eq!(*color, original),
+        other => panic!("expected freeform polygon, got {other:?}"),
+    }
+}
+
+#[test]
 fn custom_drag_bindings_remap_default_and_modifier_tools() {
     let mut state = create_test_input_state();
     assert!(state.set_drag_tool_bindings(left_drag_bindings(

@@ -10,6 +10,7 @@ use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::{Action, action_label, action_short_label};
 use crate::input::Tool;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model;
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_SMALL};
@@ -24,7 +25,6 @@ pub(super) fn draw_icon_strip(
     handle_w: f64,
     is_simple: bool,
     current_shape_tool: Option<Tool>,
-    shape_icon_tool: Tool,
     fill_tool_active: bool,
 ) {
     let ctx = layout.ctx;
@@ -48,6 +48,10 @@ pub(super) fn draw_icon_strip(
         weight: cairo::FontWeight::Bold,
         size: ICON_TOGGLE_FONT_SIZE,
     };
+    let shape_icon_tool = current_shape_tool.unwrap_or_else(model::default_shape_tool);
+    let polygon_icon_tool = current_shape_tool
+        .filter(|tool| model::is_polygon_tool(*tool))
+        .unwrap_or_else(model::default_polygon_tool);
 
     let tool_row = draw_tool_row(
         layout,
@@ -59,13 +63,14 @@ pub(super) fn draw_icon_strip(
         is_simple,
         current_shape_tool,
         shape_icon_tool,
+        polygon_icon_tool,
     );
     let divider_x = tool_row.next_x - gap * 0.5;
     draw_divider_vertical(ctx, divider_x, y + 6.0, btn_size - 12.0);
     x = tool_row.next_x;
 
     if fill_tool_active
-        && !(is_simple && snapshot.shape_picker_open)
+        && !snapshot.shape_picker_open
         && let Some((fill_x, fill_w)) = tool_row.fill_anchor
     {
         let fill_y = y + btn_size + ToolbarLayoutSpec::TOP_ICON_FILL_OFFSET;
@@ -132,7 +137,7 @@ pub(super) fn draw_icon_strip(
         tooltip: Some("Text mode".to_string()),
     });
 
-    if is_simple && snapshot.shape_picker_open {
-        draw_shape_picker_row(layout, handle_w, y, btn_size, icon_size);
+    if snapshot.shape_picker_open {
+        draw_shape_picker_row(layout, handle_w, y, btn_size, icon_size, is_simple);
     }
 }

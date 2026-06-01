@@ -27,6 +27,30 @@ pub(crate) fn handle_radial_menu_press(
         .then_some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 
+pub(crate) fn handle_building_polygon_non_left_press(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    if !matches!(state.state, DrawingState::BuildingPolygon { .. }) {
+        return None;
+    }
+
+    let screen = points.screen();
+    let canvas = points.canvas();
+    state.update_pointer_positions(screen.x(), screen.y(), canvas.x(), canvas.y());
+    match button {
+        MouseButton::Right => {
+            state.cancel_active_interaction();
+            Some(RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(
+                ActiveInteractionKind::BuildingPolygon,
+            )))
+        }
+        MouseButton::Middle => Some(RoutingOutcome::Consumed(ConsumedBy::ToolButton)),
+        MouseButton::Left => None,
+    }
+}
+
 pub(crate) fn handle_color_picker_press(
     state: &mut InputState,
     button: MouseButton,
@@ -127,6 +151,10 @@ pub(crate) fn handle_unbound_left_press(
             state.update_text_preview_dirty();
             state.needs_redraw = true;
             RoutingOutcome::Consumed(ConsumedBy::TextInput)
+        }
+        DrawingState::BuildingPolygon { .. } => {
+            state.handle_building_polygon_left_click(canvas.x(), canvas.y());
+            RoutingOutcome::Continued(ActiveInteractionKind::BuildingPolygon)
         }
         DrawingState::Drawing { .. }
         | DrawingState::MovingSelection { .. }

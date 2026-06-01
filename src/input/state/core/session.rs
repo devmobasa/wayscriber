@@ -36,6 +36,7 @@ impl InputState {
             || matches!(
                 self.state,
                 DrawingState::Drawing { .. }
+                    | DrawingState::BuildingPolygon { .. }
                     | DrawingState::PendingTextClick { .. }
                     | DrawingState::MovingSelection { .. }
                     | DrawingState::Selecting { .. }
@@ -85,6 +86,13 @@ mod tests {
                 y: 20,
                 tool: Tool::Pen,
                 shape_id: 1,
+            },
+            DrawingState::BuildingPolygon {
+                points: vec![(10, 20)],
+                preview: None,
+                fill: false,
+                color: BLACK,
+                thick: 2.0,
             },
             DrawingState::MovingSelection {
                 last_x: 10,

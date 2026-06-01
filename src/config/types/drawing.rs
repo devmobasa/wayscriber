@@ -1,5 +1,6 @@
 use crate::config::enums::ColorSpec;
-use crate::input::{DragTool, EraserMode, Tool};
+use crate::draw::shape::REGULAR_POLYGON_DEFAULT_SIDES;
+use crate::input::{DragBindableTool, DragTool, EraserMode};
 use serde::{Deserialize, Serialize};
 
 /// Drawing-related settings.
@@ -34,6 +35,10 @@ pub struct DrawingConfig {
     #[serde(default = "default_fill_enabled")]
     pub default_fill_enabled: bool,
 
+    /// Default side count for the regular polygon tool (valid range: 3 - 12)
+    #[serde(default = "default_polygon_sides")]
+    pub polygon_sides: u8,
+
     /// Default font size for text mode in points (valid range: 8.0 - 72.0)
     #[serde(default = "default_font_size")]
     pub default_font_size: f64,
@@ -52,23 +57,23 @@ pub struct DrawingConfig {
 
     /// Tool used for drag with no modifier.
     #[serde(default = "default_drag_tool")]
-    pub drag_tool: Tool,
+    pub drag_tool: DragBindableTool,
 
     /// Tool used for Shift+drag.
     #[serde(default = "default_shift_drag_tool")]
-    pub shift_drag_tool: Tool,
+    pub shift_drag_tool: DragBindableTool,
 
     /// Tool used for Ctrl+drag.
     #[serde(default = "default_ctrl_drag_tool")]
-    pub ctrl_drag_tool: Tool,
+    pub ctrl_drag_tool: DragBindableTool,
 
     /// Tool used for Ctrl+Shift+drag.
     #[serde(default = "default_ctrl_shift_drag_tool")]
-    pub ctrl_shift_drag_tool: Tool,
+    pub ctrl_shift_drag_tool: DragBindableTool,
 
     /// Tool used for Tab+drag.
     #[serde(default = "default_tab_drag_tool")]
-    pub tab_drag_tool: Tool,
+    pub tab_drag_tool: DragBindableTool,
 
     /// Optional per-mouse-button drag tool mapping.
     ///
@@ -106,6 +111,7 @@ impl Default for DrawingConfig {
             default_eraser_mode: default_eraser_mode(),
             marker_opacity: default_marker_opacity(),
             default_fill_enabled: default_fill_enabled(),
+            polygon_sides: default_polygon_sides(),
             default_font_size: default_font_size(),
             hit_test_tolerance: default_hit_test_tolerance(),
             hit_test_linear_threshold: default_hit_test_threshold(),
@@ -148,11 +154,11 @@ pub struct MouseDragToolsConfig {
 
 impl MouseDragToolsConfig {
     pub fn from_legacy(
-        drag_tool: Tool,
-        shift_drag_tool: Tool,
-        ctrl_drag_tool: Tool,
-        ctrl_shift_drag_tool: Tool,
-        tab_drag_tool: Tool,
+        drag_tool: DragBindableTool,
+        shift_drag_tool: DragBindableTool,
+        ctrl_drag_tool: DragBindableTool,
+        ctrl_shift_drag_tool: DragBindableTool,
+        tab_drag_tool: DragBindableTool,
     ) -> Self {
         Self {
             left: DragButtonConfig::from_legacy(
@@ -277,22 +283,22 @@ pub struct DragButtonConfig {
 
 impl DragButtonConfig {
     pub fn from_legacy(
-        drag_tool: Tool,
-        shift_drag_tool: Tool,
-        ctrl_drag_tool: Tool,
-        ctrl_shift_drag_tool: Tool,
-        tab_drag_tool: Tool,
+        drag_tool: DragBindableTool,
+        shift_drag_tool: DragBindableTool,
+        ctrl_drag_tool: DragBindableTool,
+        ctrl_shift_drag_tool: DragBindableTool,
+        tab_drag_tool: DragBindableTool,
     ) -> Self {
         Self {
-            drag_tool: DragTool::from_tool(drag_tool),
+            drag_tool: drag_tool.to_drag_tool(),
             drag_color: None,
-            shift_drag_tool: DragTool::from_tool(shift_drag_tool),
+            shift_drag_tool: shift_drag_tool.to_drag_tool(),
             shift_drag_color: None,
-            ctrl_drag_tool: DragTool::from_tool(ctrl_drag_tool),
+            ctrl_drag_tool: ctrl_drag_tool.to_drag_tool(),
             ctrl_drag_color: None,
-            ctrl_shift_drag_tool: DragTool::from_tool(ctrl_shift_drag_tool),
+            ctrl_shift_drag_tool: ctrl_shift_drag_tool.to_drag_tool(),
             ctrl_shift_drag_color: None,
-            tab_drag_tool: DragTool::from_tool(tab_drag_tool),
+            tab_drag_tool: tab_drag_tool.to_drag_tool(),
             tab_drag_color: None,
         }
     }
@@ -404,6 +410,10 @@ fn default_fill_enabled() -> bool {
     false
 }
 
+fn default_polygon_sides() -> u8 {
+    REGULAR_POLYGON_DEFAULT_SIDES
+}
+
 fn default_font_size() -> f64 {
     32.0
 }
@@ -436,24 +446,24 @@ fn default_undo_stack_limit() -> usize {
     100
 }
 
-fn default_drag_tool() -> Tool {
-    Tool::Pen
+fn default_drag_tool() -> DragBindableTool {
+    DragBindableTool::Pen
 }
 
-fn default_shift_drag_tool() -> Tool {
-    Tool::Line
+fn default_shift_drag_tool() -> DragBindableTool {
+    DragBindableTool::Line
 }
 
-fn default_ctrl_drag_tool() -> Tool {
-    Tool::Rect
+fn default_ctrl_drag_tool() -> DragBindableTool {
+    DragBindableTool::Rect
 }
 
-fn default_ctrl_shift_drag_tool() -> Tool {
-    Tool::Arrow
+fn default_ctrl_shift_drag_tool() -> DragBindableTool {
+    DragBindableTool::Arrow
 }
 
-fn default_tab_drag_tool() -> Tool {
-    Tool::Ellipse
+fn default_tab_drag_tool() -> DragBindableTool {
+    DragBindableTool::Ellipse
 }
 
 fn default_button_behavior_drag_tool() -> DragTool {

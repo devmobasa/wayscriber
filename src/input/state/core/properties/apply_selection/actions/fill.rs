@@ -8,7 +8,9 @@ impl InputState {
     ) -> bool {
         let target = if direction == 0 {
             self.selection_bool_target(|shape| match shape {
-                Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } => Some(*fill),
+                Shape::Rect { fill, .. }
+                | Shape::Ellipse { fill, .. }
+                | Shape::Polygon { fill, .. } => Some(*fill),
                 _ => None,
             })
         } else {
@@ -21,9 +23,18 @@ impl InputState {
         };
 
         let result = self.apply_selection_change(
-            |shape| matches!(shape, Shape::Rect { .. } | Shape::Ellipse { .. }),
+            |shape| {
+                matches!(
+                    shape,
+                    Shape::Rect { .. } | Shape::Ellipse { .. } | Shape::Polygon { .. }
+                )
+            },
             |shape| match shape {
-                Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } if *fill != target => {
+                Shape::Rect { fill, .. }
+                | Shape::Ellipse { fill, .. }
+                | Shape::Polygon { fill, .. }
+                    if *fill != target =>
+                {
                     *fill = target;
                     true
                 }

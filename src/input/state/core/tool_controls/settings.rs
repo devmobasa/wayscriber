@@ -1,7 +1,7 @@
 use super::super::base::{
     DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, UiToastKind,
 };
-use crate::draw::{Color, FontDescriptor};
+use crate::draw::{Color, FontDescriptor, clamp_regular_sides};
 use crate::input::{
     DragBinding, MouseButton,
     modifiers::DragToolBindings,
@@ -154,8 +154,7 @@ impl InputState {
             self.state,
             DrawingState::Idle | DrawingState::TextInput { .. }
         ) {
-            self.state = DrawingState::Idle;
-            self.end_pointer_drag();
+            self.cancel_active_interaction();
         }
 
         self.sync_current_settings_from_active_tool();
@@ -362,5 +361,26 @@ impl InputState {
         self.needs_redraw = true;
         self.mark_session_dirty();
         true
+    }
+
+    pub fn set_polygon_sides(&mut self, sides: u8) -> bool {
+        let clamped = clamp_regular_sides(sides);
+        if self.polygon_sides == clamped {
+            return false;
+        }
+        self.polygon_sides = clamped;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.mark_session_dirty();
+        true
+    }
+
+    pub fn nudge_polygon_sides(&mut self, delta: i8) -> bool {
+        let next = if delta.is_negative() {
+            self.polygon_sides.saturating_sub(delta.unsigned_abs())
+        } else {
+            self.polygon_sides.saturating_add(delta as u8)
+        };
+        self.set_polygon_sides(next)
     }
 }

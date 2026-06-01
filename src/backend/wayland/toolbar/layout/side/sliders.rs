@@ -40,6 +40,37 @@ pub(super) fn push_thickness_hits(
         tooltip: None,
     });
 
+    let mut next_y = y + ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + ctx.section_gap;
+    if crate::ui::toolbar::snapshot::ToolContext::from_snapshot(ctx.snapshot)
+        .show_polygon_sides_control
+    {
+        next_y = push_polygon_sides_hits(ctx, next_y, hits);
+    }
+    next_y
+}
+
+fn push_polygon_sides_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut Vec<HitRegion>) -> f64 {
+    let row_y = y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
+    let btn = ToolbarLayoutSpec::SIDE_NUDGE_SIZE;
+    hits.push(HitRegion {
+        rect: (ctx.x, row_y, btn, btn),
+        event: ToolbarEvent::NudgePolygonSides(-1),
+        kind: HitKind::Click,
+        tooltip: Some("Decrease polygon sides".to_string()),
+    });
+    hits.push(HitRegion {
+        rect: (ctx.x + ctx.content_width - btn, row_y, btn, btn),
+        event: ToolbarEvent::NudgePolygonSides(1),
+        kind: HitKind::Click,
+        tooltip: Some("Increase polygon sides".to_string()),
+    });
+    hits.push(HitRegion {
+        rect: (ctx.x + btn, row_y, ctx.content_width - btn * 2.0, btn),
+        event: ToolbarEvent::SetPolygonSides(ctx.snapshot.polygon_sides),
+        kind: HitKind::Click,
+        tooltip: None,
+    });
+
     y + ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + ctx.section_gap
 }
 

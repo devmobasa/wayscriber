@@ -72,6 +72,56 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        SelectTriangleTool,
+        "Triangle Tool",
+        Some("Triangle"),
+        "Draw triangles",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        SelectParallelogramTool,
+        "Parallelogram Tool",
+        Some("Parallelogram"),
+        "Draw parallelograms",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        SelectRhombusTool,
+        "Rhombus Tool",
+        Some("Rhombus"),
+        "Draw rhombuses",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        SelectRegularPolygonTool,
+        "Regular Polygon Tool",
+        Some("Polygon"),
+        "Draw regular polygons",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        SelectFreeformPolygonTool,
+        "Freeform Polygon Tool",
+        Some("Freeform"),
+        "Build polygons by clicking vertices",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         SelectArrowTool,
         "Arrow Tool",
         Some("Arrow"),

@@ -17,6 +17,8 @@ pub enum ToolbarEvent {
     SetFont(FontDescriptor),
     SetFontSize(f64),
     ToggleFill(bool),
+    SetPolygonSides(u8),
+    NudgePolygonSides(i8),
     ToggleArrowLabels(bool),
     ResetArrowLabelCounter,
     ResetStepMarkerCounter,

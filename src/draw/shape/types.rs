@@ -2,6 +2,7 @@ use super::bounds::{
     bounding_box_for_arrow, bounding_box_for_blur, bounding_box_for_ellipse,
     bounding_box_for_eraser, bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
 };
+use super::polygon::{PolygonKind, bounding_box_for_polygon};
 use super::step_marker::step_marker_bounds;
 use super::text::{bounding_box_for_sticky_note, bounding_box_for_text};
 use crate::draw::color::Color;
@@ -127,6 +128,19 @@ pub enum Shape {
         /// Border color
         color: Color,
         /// Border thickness in pixels
+        thick: f64,
+    },
+    /// Generic closed polygon, including named generated polygons and freeform polygons.
+    Polygon {
+        /// Polygon metadata used by UI labels and future editing.
+        kind: PolygonKind,
+        /// Concrete persisted vertices. These are the source of truth for rendering.
+        points: Vec<(i32, i32)>,
+        /// Whether to fill the polygon.
+        fill: bool,
+        /// Border/fill color.
+        color: Color,
+        /// Border thickness in pixels.
         thick: f64,
     },
     /// Arrow with directional head (drawn with Ctrl+Shift modifiers)
@@ -300,6 +314,7 @@ impl Shape {
                 thick,
                 ..
             } => bounding_box_for_ellipse(*cx, *cy, *rx, *ry, *thick),
+            Shape::Polygon { points, thick, .. } => bounding_box_for_polygon(points, *thick),
             Shape::Arrow {
                 x1,
                 y1,
@@ -369,6 +384,7 @@ impl Shape {
             Shape::Line { .. } => "Line",
             Shape::Rect { .. } => "Rectangle",
             Shape::Ellipse { .. } => "Ellipse",
+            Shape::Polygon { kind, .. } => kind.label(),
             Shape::Arrow { .. } => "Arrow",
             Shape::BlurRect { .. } => "Blur",
             Shape::Text { .. } => "Text",

@@ -23,6 +23,7 @@ impl InputState {
                         | Shape::Line { .. }
                         | Shape::Rect { .. }
                         | Shape::Ellipse { .. }
+                        | Shape::Polygon { .. }
                         | Shape::Arrow { .. }
                         | Shape::BlurRect { .. }
                         | Shape::MarkerStroke { .. }
@@ -33,6 +34,7 @@ impl InputState {
                 | Shape::Line { thick, .. }
                 | Shape::Rect { thick, .. }
                 | Shape::Ellipse { thick, .. }
+                | Shape::Polygon { thick, .. }
                 | Shape::Arrow { thick, .. }
                 | Shape::BlurRect {
                     strength: thick, ..

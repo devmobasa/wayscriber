@@ -44,6 +44,21 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_select_ellipse_tool")]
     pub select_ellipse_tool: Vec<String>,
 
+    #[serde(default = "default_select_triangle_tool")]
+    pub select_triangle_tool: Vec<String>,
+
+    #[serde(default = "default_select_parallelogram_tool")]
+    pub select_parallelogram_tool: Vec<String>,
+
+    #[serde(default = "default_select_rhombus_tool")]
+    pub select_rhombus_tool: Vec<String>,
+
+    #[serde(default = "default_select_regular_polygon_tool")]
+    pub select_regular_polygon_tool: Vec<String>,
+
+    #[serde(default = "default_select_freeform_polygon_tool")]
+    pub select_freeform_polygon_tool: Vec<String>,
+
     #[serde(default = "default_select_arrow_tool")]
     pub select_arrow_tool: Vec<String>,
 
@@ -85,6 +100,11 @@ impl Default for ToolKeybindingsConfig {
             select_line_tool: default_select_line_tool(),
             select_rect_tool: default_select_rect_tool(),
             select_ellipse_tool: default_select_ellipse_tool(),
+            select_triangle_tool: default_select_triangle_tool(),
+            select_parallelogram_tool: default_select_parallelogram_tool(),
+            select_rhombus_tool: default_select_rhombus_tool(),
+            select_regular_polygon_tool: default_select_regular_polygon_tool(),
+            select_freeform_polygon_tool: default_select_freeform_polygon_tool(),
             select_arrow_tool: default_select_arrow_tool(),
             select_blur_tool: default_select_blur_tool(),
             select_highlight_tool: default_select_highlight_tool(),
