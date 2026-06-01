@@ -1,15 +1,16 @@
 use super::super::color::ColorInput;
 use super::super::fields::{
     DragMouseButton, DragToolField, DragToolOption, FontWeightOption, PdfFitModeOption,
-    PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption, QuadField,
-    SessionStorageModeOption, TextField, ToggleField, ToolOption, TripletField,
+    PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, QuadField, SessionStorageModeOption, TextField, ToggleField,
+    ToolOption, TripletField,
 };
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
     ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
-    PdfPageSize, PresetToolStatesConfig, RenderColorMappingConfig, RenderProfileConfig,
-    RenderProfileExportMode, ToolPresetConfig, XdgFocusLossBehavior,
+    PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, RenderColorMappingConfig,
+    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, XdgFocusLossBehavior,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -118,6 +119,7 @@ fn config_draft_round_trips_pdf_export() {
     config.export.pdf.page_size = PdfPageSize::Letter;
     config.export.pdf.orientation = PdfOrientation::Landscape;
     config.export.pdf.fit = PdfFitMode::FitContentToPage;
+    config.export.pdf.transparent_background = PdfTransparentBackground::Desktop;
     config.export.pdf.custom_width = 900.0;
     config.export.pdf.custom_height = 700.0;
     config.export.pdf.content_source_padding = 32.0;
@@ -141,6 +143,10 @@ fn config_draft_round_trips_pdf_export() {
         PdfOrientationOption::Landscape
     );
     assert_eq!(draft.export_pdf_fit, PdfFitModeOption::FitContentToPage);
+    assert_eq!(
+        draft.export_pdf_transparent_background,
+        PdfTransparentBackgroundOption::Desktop
+    );
 
     let round_trip = draft
         .to_config(&Config::default())
@@ -161,6 +167,10 @@ fn config_draft_round_trips_pdf_export() {
     assert_eq!(round_trip.export.pdf.page_size, PdfPageSize::Letter);
     assert_eq!(round_trip.export.pdf.orientation, PdfOrientation::Landscape);
     assert_eq!(round_trip.export.pdf.fit, PdfFitMode::FitContentToPage);
+    assert_eq!(
+        round_trip.export.pdf.transparent_background,
+        PdfTransparentBackground::Desktop
+    );
     assert_eq!(round_trip.export.pdf.content_source_padding, 32.0);
     assert!(round_trip.export.pdf.labels.enabled);
     assert_eq!(

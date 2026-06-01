@@ -2,8 +2,8 @@ use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, SessionCompressionOption,
+    SessionStorageModeOption, StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -187,6 +187,9 @@ impl ConfigDraft {
                 config.export.pdf.orientation,
             ),
             export_pdf_fit: PdfFitModeOption::from_config(config.export.pdf.fit),
+            export_pdf_transparent_background: PdfTransparentBackgroundOption::from_config(
+                config.export.pdf.transparent_background,
+            ),
             export_pdf_custom_width: format_float(config.export.pdf.custom_width),
             export_pdf_custom_height: format_float(config.export.pdf.custom_height),
             export_pdf_content_source_padding: format_float(

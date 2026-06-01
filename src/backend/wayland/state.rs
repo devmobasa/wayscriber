@@ -45,12 +45,14 @@ use crate::input::tablet::TabletSettings;
 use crate::{
     backend::ExitAfterCaptureMode,
     canvas_export::{
-        BoardExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportSnapshot,
-        CanvasExportViewport, render_board_pdf, render_canvas_png,
+        BoardExportSnapshot, BoardPdfExportSnapshot, CanvasExportBackdropSnapshot,
+        CanvasExportSnapshot, CanvasExportViewport, render_board_pdf, render_canvas_png,
     },
     capture::{
-        CaptureDestination, CaptureManager, DocumentDeliveryRequest, ImageDeliveryRequest,
-        ImageFormatMetadata, ImageOperationKind, RenderedDocument,
+        CaptureDestination, CaptureManager, DesktopBackdropCaptureRequest,
+        DesktopBackdropCaptureResult, DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
+        DocumentDeliveryRequest, ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind,
+        RenderedDocument,
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },
@@ -63,7 +65,7 @@ use crate::{
 use self::data::{MoveDrag, StateData};
 pub use self::data::{MoveDragKind, OverlaySuppression};
 use super::{
-    capture::CaptureState,
+    capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
     clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion},
     frozen::FrozenState,
     overlay_passthrough::set_surface_clickthrough,

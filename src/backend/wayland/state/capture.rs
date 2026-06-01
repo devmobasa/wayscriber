@@ -26,6 +26,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn show_overlay(&mut self) {
         self.input_state.clear_click_highlights();
         self.exit_overlay_suppression(OverlaySuppression::Capture);
+        self.exit_overlay_suppression(OverlaySuppression::DesktopBackdrop);
     }
 
     /// Handles capture actions by delegating to the CaptureManager.
@@ -131,7 +132,18 @@ impl WaylandState {
         self.capture.set_exit_on_success(exit_on_success);
 
         // Suppress overlay before capture to prevent capturing the overlay itself
-        self.enter_overlay_suppression(OverlaySuppression::Capture);
+        if !self.enter_overlay_suppression(OverlaySuppression::Capture) {
+            log::warn!(
+                "Capture action {:?} requested while overlay is suppressed; ignoring",
+                action
+            );
+            self.capture.clear_exit_on_success();
+            self.input_state.set_ui_toast(
+                crate::input::state::UiToastKind::Warning,
+                "Capture is already preparing another overlay operation.",
+            );
+            return;
+        }
         self.capture.mark_in_progress();
 
         let request = CaptureRequest {
@@ -144,7 +156,8 @@ impl WaylandState {
             "Queued {:?} capture; waiting for suppression frame",
             request.capture_type
         );
-        self.capture.queue_preflight(request);
+        self.capture
+            .queue_preflight(CapturePreflightRequest::Screenshot(request));
     }
 
     pub(in crate::backend::wayland) fn handle_canvas_export_action(&mut self, action: Action) {
@@ -239,6 +252,40 @@ impl WaylandState {
         } else {
             ImageOperationKind::BoardPdfExport
         };
+
+        let destination = CaptureDestination::FileOnly;
+        let exit_on_success = self.should_exit_after_capture(destination);
+        let save_config = self.board_pdf_save_config(action);
+
+        if self.should_capture_desktop_for_pdf_export(action) {
+            let request = self.desktop_backdrop_capture_request(operation);
+            if !self.enter_overlay_suppression(OverlaySuppression::DesktopBackdrop) {
+                log::warn!(
+                    "Board PDF export action {:?} requested while overlay is suppressed; ignoring",
+                    action
+                );
+                self.input_state.set_ui_toast(
+                    crate::input::state::UiToastKind::Warning,
+                    "Board PDF export is already preparing another overlay operation.",
+                );
+                return;
+            }
+            self.capture.set_exit_on_success(exit_on_success);
+            self.capture.mark_in_progress();
+            self.capture.set_pending_pdf_export(PendingPdfExport {
+                action,
+                operation,
+                save_config,
+            });
+            log::info!(
+                "Queued {:?} desktop backdrop capture for PDF export; waiting for suppression frame",
+                operation
+            );
+            self.capture
+                .queue_preflight(CapturePreflightRequest::DesktopBackdrop(request));
+            return;
+        }
+
         let snapshot = match self.board_pdf_export_snapshot(action) {
             Ok(snapshot) => snapshot,
             Err(err) => {
@@ -249,6 +296,61 @@ impl WaylandState {
                 return;
             }
         };
+
+        self.queue_board_pdf_document_delivery(snapshot, save_config, operation, exit_on_success);
+    }
+
+    pub(in crate::backend::wayland) fn finish_pending_board_pdf_export_with_backdrop(
+        &mut self,
+        backdrop: DesktopBackdropCaptureResult,
+        exit_on_success: bool,
+    ) {
+        let Some(pending) = self.capture.take_pending_pdf_export() else {
+            let message =
+                "Board PDF export failed: desktop backdrop completed without pending PDF export"
+                    .to_string();
+            log::error!("{message}");
+            self.input_state
+                .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+            return;
+        };
+
+        let snapshot = match self.board_pdf_export_snapshot_with_desktop_backdrop(
+            pending.action,
+            CanvasExportBackdropSnapshot::PersistedImage {
+                data: backdrop.data,
+                width: backdrop.width,
+                height: backdrop.height,
+                stride: backdrop.stride,
+                logical_to_image_scale_x: backdrop.logical_to_image_scale_x,
+                logical_to_image_scale_y: backdrop.logical_to_image_scale_y,
+            },
+        ) {
+            Ok(snapshot) => snapshot,
+            Err(err) => {
+                let message = pending.operation.format_error(&err);
+                log::error!("Board PDF export failed after desktop capture: {}", message);
+                self.input_state
+                    .set_ui_toast(crate::input::state::UiToastKind::Error, message);
+                return;
+            }
+        };
+
+        self.queue_board_pdf_document_delivery(
+            snapshot,
+            pending.save_config,
+            pending.operation,
+            exit_on_success,
+        );
+    }
+
+    fn queue_board_pdf_document_delivery(
+        &mut self,
+        snapshot: BoardPdfExportSnapshot,
+        save_config: FileSaveConfig,
+        operation: ImageOperationKind,
+        exit_on_success: bool,
+    ) {
         let bytes = match render_board_pdf(&snapshot) {
             Ok(bytes) => bytes,
             Err(err) => {
@@ -260,9 +362,7 @@ impl WaylandState {
             }
         };
 
-        let destination = CaptureDestination::FileOnly;
-        self.capture
-            .set_exit_on_success(self.should_exit_after_capture(destination));
+        self.capture.set_exit_on_success(exit_on_success);
         self.capture.mark_in_progress();
 
         let request = DocumentDeliveryRequest {
@@ -271,22 +371,8 @@ impl WaylandState {
                 extension: "pdf".to_string(),
                 mime_type: "application/pdf".to_string(),
             },
-            destination,
-            save_config: Some(FileSaveConfig {
-                save_directory: expand_tilde(&self.config.capture.save_directory),
-                filename_template: if matches!(action, Action::ExportAllBoardsPdfFile) {
-                    self.config
-                        .export
-                        .pdf
-                        .resolved_all_boards_filename_template(&self.config.capture)
-                } else {
-                    self.config
-                        .export
-                        .pdf
-                        .resolved_filename_template(&self.config.capture)
-                },
-                format: "pdf".to_string(),
-            }),
+            destination: CaptureDestination::FileOnly,
+            save_config: Some(save_config),
             operation,
         };
 
@@ -303,6 +389,56 @@ impl WaylandState {
                 format!("Board PDF export failed: {err}"),
             );
         }
+    }
+
+    fn board_pdf_save_config(&self, action: Action) -> FileSaveConfig {
+        FileSaveConfig {
+            save_directory: expand_tilde(&self.config.capture.save_directory),
+            filename_template: if matches!(action, Action::ExportAllBoardsPdfFile) {
+                self.config
+                    .export
+                    .pdf
+                    .resolved_all_boards_filename_template(&self.config.capture)
+            } else {
+                self.config
+                    .export
+                    .pdf
+                    .resolved_filename_template(&self.config.capture)
+            },
+            format: "pdf".to_string(),
+        }
+    }
+
+    fn should_capture_desktop_for_pdf_export(&self, action: Action) -> bool {
+        self.config.export.pdf.transparent_background
+            == crate::config::PdfTransparentBackground::Desktop
+            && self.board_pdf_export_scope_has_transparent_pages(action)
+    }
+
+    fn desktop_backdrop_capture_request(
+        &self,
+        operation: ImageOperationKind,
+    ) -> DesktopBackdropCaptureRequest {
+        DesktopBackdropCaptureRequest {
+            logical_width: self.surface.width(),
+            logical_height: self.surface.height(),
+            scale: self.surface.scale(),
+            geometry: self.desktop_backdrop_geometry(),
+            operation,
+        }
+    }
+
+    fn desktop_backdrop_geometry(&self) -> Option<DesktopBackdropGeometry> {
+        let output = self.surface.current_output()?;
+        let active_info = self.output_state.info(&output)?;
+        let active = desktop_backdrop_output_geometry_from_info(&active_info)?;
+        let mut outputs = Vec::new();
+        for output in self.output_state.outputs() {
+            let info = self.output_state.info(&output)?;
+            outputs.push(desktop_backdrop_output_geometry_from_info(&info)?);
+        }
+
+        DesktopBackdropGeometry::from_outputs(active, &outputs, active_info.scale_factor.max(1))
     }
 
     fn canvas_export_snapshot(&self) -> CanvasExportSnapshot {
@@ -334,20 +470,135 @@ impl WaylandState {
         }
     }
 
-    pub(in crate::backend::wayland) fn begin_pending_capture(&mut self, request: CaptureRequest) {
-        log::info!("Requesting {:?} capture", request.capture_type);
-        if let Err(e) = self.capture.manager_mut().request_capture(
-            request.capture_type,
-            request.destination,
-            request.save_config,
-        ) {
+    pub(in crate::backend::wayland) fn begin_pending_capture(
+        &mut self,
+        request: CapturePreflightRequest,
+    ) {
+        let result = match request {
+            CapturePreflightRequest::Screenshot(request) => {
+                log::info!("Requesting {:?} capture", request.capture_type);
+                self.capture.manager_mut().request_capture(
+                    request.capture_type,
+                    request.destination,
+                    request.save_config,
+                )
+            }
+            CapturePreflightRequest::DesktopBackdrop(request) => {
+                log::info!(
+                    "Requesting desktop backdrop capture for {:?}",
+                    request.operation
+                );
+                self.capture
+                    .manager_mut()
+                    .request_desktop_backdrop_capture(request)
+            }
+        };
+
+        if let Err(e) = result {
             log::error!("Failed to request capture: {}", e);
             self.capture.clear_preflight();
-
-            // Restore overlay on error
+            self.capture.clear_pending_pdf_export();
             self.show_overlay();
             self.capture.clear_in_progress();
             self.capture.clear_exit_on_success();
+        }
+    }
+}
+
+fn desktop_backdrop_output_geometry_from_info(
+    info: &smithay_client_toolkit::output::OutputInfo,
+) -> Option<DesktopBackdropOutputGeometry> {
+    let (logical_x, logical_y) = info.logical_position?;
+    let (logical_width, logical_height) = info.logical_size?;
+    if logical_width <= 0 || logical_height <= 0 {
+        return None;
+    }
+    let (physical_width, physical_height) = current_or_preferred_mode_size(info)
+        .map(|(width, height)| transformed_output_size(width, height, info.transform))
+        .or_else(|| {
+            let scale = u32::try_from(info.scale_factor.max(1)).ok()?;
+            Some((
+                u32::try_from(logical_width).ok()?.checked_mul(scale)?,
+                u32::try_from(logical_height).ok()?.checked_mul(scale)?,
+            ))
+        })?;
+    if physical_width == 0 || physical_height == 0 {
+        return None;
+    }
+
+    Some(DesktopBackdropOutputGeometry {
+        logical_x,
+        logical_y,
+        logical_width: logical_width as u32,
+        logical_height: logical_height as u32,
+        physical_width,
+        physical_height,
+    })
+}
+
+fn current_or_preferred_mode_size(
+    info: &smithay_client_toolkit::output::OutputInfo,
+) -> Option<(u32, u32)> {
+    info.modes
+        .iter()
+        .find(|mode| mode.current)
+        .or_else(|| info.modes.iter().find(|mode| mode.preferred))
+        .and_then(|mode| {
+            Some((
+                u32::try_from(mode.dimensions.0).ok()?,
+                u32::try_from(mode.dimensions.1).ok()?,
+            ))
+        })
+        .filter(|(width, height)| *width > 0 && *height > 0)
+}
+
+fn transformed_output_size(width: u32, height: u32, transform: wl_output::Transform) -> (u32, u32) {
+    if matches!(
+        transform,
+        wl_output::Transform::_90
+            | wl_output::Transform::_270
+            | wl_output::Transform::Flipped90
+            | wl_output::Transform::Flipped270
+    ) {
+        (height, width)
+    } else {
+        (width, height)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transformed_output_size_keeps_unrotated_transforms() {
+        assert_eq!(
+            transformed_output_size(3840, 2160, wl_output::Transform::Normal),
+            (3840, 2160)
+        );
+        assert_eq!(
+            transformed_output_size(3840, 2160, wl_output::Transform::_180),
+            (3840, 2160)
+        );
+        assert_eq!(
+            transformed_output_size(3840, 2160, wl_output::Transform::Flipped),
+            (3840, 2160)
+        );
+        assert_eq!(
+            transformed_output_size(3840, 2160, wl_output::Transform::Flipped180),
+            (3840, 2160)
+        );
+    }
+
+    #[test]
+    fn transformed_output_size_swaps_rotated_transforms() {
+        for transform in [
+            wl_output::Transform::_90,
+            wl_output::Transform::_270,
+            wl_output::Transform::Flipped90,
+            wl_output::Transform::Flipped270,
+        ] {
+            assert_eq!(transformed_output_size(3840, 2160, transform), (2160, 3840));
         }
     }
 }

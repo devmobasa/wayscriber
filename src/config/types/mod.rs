@@ -31,7 +31,7 @@ pub use drawing::{DragButtonConfig, DrawingConfig, MouseDragToolsConfig};
 pub use export::{
     ExportConfig, PDF_LABEL_DEFAULT_TEMPLATE, PDF_LABEL_PLACEHOLDERS, PdfExportConfig, PdfFitMode,
     PdfLabelConfig, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
-    validate_pdf_label_template,
+    PdfTransparentBackground, validate_pdf_label_template,
 };
 pub use help_overlay::HelpOverlayStyle;
 pub use history::HistoryConfig;

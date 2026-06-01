@@ -9,11 +9,11 @@ use crate::models::{
     DragMouseButton, DragToolField, DragToolOption, EraserModeOption, FontStyleOption,
     FontWeightOption, KeybindingField, KeybindingsTabId, NamedColorOption, OverrideOption,
     PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
-    PdfPageSizeOption, PresenterToolBehaviorOption, PresetEraserKindOption, PresetEraserModeOption,
-    PresetTextField, PresetToggleField, QuadField, RenderProfileExportOption,
-    RenderProfileMappingSide, RenderProfileTextField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TabId, TextField, ToggleField, ToolOption,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
+    PdfPageSizeOption, PdfTransparentBackgroundOption, PresenterToolBehaviorOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    RenderProfileExportOption, RenderProfileMappingSide, RenderProfileTextField,
+    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
+    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField, UiTabId,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -83,6 +83,7 @@ pub enum Message {
     ExportPdfPageSizeChanged(PdfPageSizeOption),
     ExportPdfOrientationChanged(PdfOrientationOption),
     ExportPdfFitChanged(PdfFitModeOption),
+    ExportPdfTransparentBackgroundChanged(PdfTransparentBackgroundOption),
     ExportPdfLabelPositionChanged(PdfLabelPositionOption),
     ExportPdfLabelContentChanged(PdfLabelContentModeOption),
     BufferCountChanged(u32),

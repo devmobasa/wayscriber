@@ -4,8 +4,8 @@ use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PresenterToolBehaviorOption, SessionCompressionOption, SessionStorageModeOption,
-    StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, SessionCompressionOption,
+    SessionStorageModeOption, StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -143,6 +143,7 @@ pub struct ConfigDraft {
     pub export_pdf_page_size: PdfPageSizeOption,
     pub export_pdf_orientation: PdfOrientationOption,
     pub export_pdf_fit: PdfFitModeOption,
+    pub export_pdf_transparent_background: PdfTransparentBackgroundOption,
     pub export_pdf_custom_width: String,
     pub export_pdf_custom_height: String,
     pub export_pdf_content_source_padding: String,

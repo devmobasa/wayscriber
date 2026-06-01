@@ -22,8 +22,9 @@ pub use daemon::{
 pub use fields::{
     DragColorOption, DragMouseButton, DragToolField, DragToolOption, EraserModeOption,
     FontStyleOption, FontWeightOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
-    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption, PresenterToolBehaviorOption,
-    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresetEraserKindOption,
+    PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
     ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
 };

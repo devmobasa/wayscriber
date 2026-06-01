@@ -143,6 +143,9 @@ impl ConfiguratorApp {
                 self.handle_export_pdf_orientation_changed(option)
             }
             Message::ExportPdfFitChanged(option) => self.handle_export_pdf_fit_changed(option),
+            Message::ExportPdfTransparentBackgroundChanged(option) => {
+                self.handle_export_pdf_transparent_background_changed(option)
+            }
             Message::ExportPdfLabelPositionChanged(option) => {
                 self.handle_export_pdf_label_position_changed(option)
             }

@@ -4,7 +4,8 @@ use iced::{Element, Length};
 use crate::messages::Message;
 use crate::models::{
     ColorPickerId, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
-    PdfOrientationOption, PdfPageSizeOption, QuadField, TextField, ToggleField,
+    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption, QuadField, TextField,
+    ToggleField,
 };
 
 use super::super::state::ConfiguratorApp;
@@ -102,6 +103,22 @@ impl ConfiguratorApp {
                     .into(),
                     self.defaults.export_pdf_fit.label().to_string(),
                     self.draft.export_pdf_fit != self.defaults.export_pdf_fit,
+                ),
+                labeled_control(
+                    "Transparent page background",
+                    pick_list(
+                        PdfTransparentBackgroundOption::list(),
+                        Some(self.draft.export_pdf_transparent_background),
+                        Message::ExportPdfTransparentBackgroundChanged,
+                    )
+                    .width(Length::Fill)
+                    .into(),
+                    self.defaults
+                        .export_pdf_transparent_background
+                        .label()
+                        .to_string(),
+                    self.draft.export_pdf_transparent_background
+                        != self.defaults.export_pdf_transparent_background,
                 ),
                 labeled_input_with_feedback(
                     "Custom width (PDF points)",

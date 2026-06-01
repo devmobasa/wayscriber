@@ -1,5 +1,6 @@
 use wayscriber::config::{
     PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
+    PdfTransparentBackground,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,6 +135,45 @@ impl PdfFitModeOption {
 }
 
 impl std::fmt::Display for PdfFitModeOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdfTransparentBackgroundOption {
+    None,
+    Desktop,
+}
+
+impl PdfTransparentBackgroundOption {
+    pub fn list() -> Vec<Self> {
+        vec![Self::None, Self::Desktop]
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Desktop => "Live desktop",
+        }
+    }
+
+    pub fn to_config(self) -> PdfTransparentBackground {
+        match self {
+            Self::None => PdfTransparentBackground::None,
+            Self::Desktop => PdfTransparentBackground::Desktop,
+        }
+    }
+
+    pub fn from_config(value: PdfTransparentBackground) -> Self {
+        match value {
+            PdfTransparentBackground::None => Self::None,
+            PdfTransparentBackground::Desktop => Self::Desktop,
+        }
+    }
+}
+
+impl std::fmt::Display for PdfTransparentBackgroundOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }

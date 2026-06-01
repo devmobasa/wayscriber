@@ -1,7 +1,7 @@
 use super::*;
 use wayscriber::config::{
     PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
-    SessionCompression, SessionStorageMode, StatusPosition,
+    PdfTransparentBackground, SessionCompression, SessionStorageMode, StatusPosition,
 };
 
 #[test]
@@ -63,6 +63,10 @@ fn pdf_export_options_round_trip() {
     assert_eq!(
         PdfFitModeOption::from_config(PdfFitMode::FitContentToPage).to_config(),
         PdfFitMode::FitContentToPage
+    );
+    assert_eq!(
+        PdfTransparentBackgroundOption::from_config(PdfTransparentBackground::Desktop).to_config(),
+        PdfTransparentBackground::Desktop
     );
     assert_eq!(
         PdfLabelPositionOption::from_config(PdfLabelPosition::TopRight).to_config(),

@@ -568,7 +568,7 @@ Press <kbd>F1</kbd>/<kbd>F10</kbd> for help or <kbd>Shift+F1</kbd> for quick ref
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
 Requires `wl-clipboard`, `grim`, `slurp` (installed automatically by deb/rpm/AUR packages). Falls back to xdg-desktop-portal if missing.
-Canvas export commands are available in the command palette and keybindings. `export_board_pdf_file` saves the active board as a multi-page PDF, `export_all_boards_pdf_file` saves every board in board order, and both PDF actions are unbound by default.
+Canvas export commands are available in the command palette and keybindings. `export_board_pdf_file` saves the active board as a multi-page PDF, `export_all_boards_pdf_file` saves every board in board order, and both PDF actions are unbound by default. PDF exports keep transparent pages blank unless `[export.pdf] transparent_background = "desktop"` is set, which captures the live desktop behind the overlay for transparent pages only.
 Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the overlay closes after a capture. `--about` opens the About window.
 
 ---

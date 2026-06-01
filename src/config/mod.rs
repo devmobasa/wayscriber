@@ -41,11 +41,11 @@ pub use types::{
     ExportConfig, HelpOverlayStyle, HistoryConfig, MouseDragToolsConfig,
     PDF_LABEL_DEFAULT_TEMPLATE, PDF_LABEL_PLACEHOLDERS, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN,
     PdfExportConfig, PdfFitMode, PdfLabelConfig, PdfLabelContentMode, PdfLabelPosition,
-    PdfOrientation, PdfPageSize, PerformanceConfig, PresenterModeConfig, PresenterToolBehavior,
-    PresetSlotsConfig, PresetToolSettingConfig, PresetToolStatesConfig, RenderColorMappingConfig,
-    RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig, SessionCompression,
-    SessionConfig, SessionStorageMode, StatusBarStyle, ToolPresetConfig, ToolbarConfig,
-    ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
+    PdfOrientation, PdfPageSize, PdfTransparentBackground, PerformanceConfig, PresenterModeConfig,
+    PresenterToolBehavior, PresetSlotsConfig, PresetToolSettingConfig, PresetToolStatesConfig,
+    RenderColorMappingConfig, RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig,
+    SessionCompression, SessionConfig, SessionStorageMode, StatusBarStyle, ToolPresetConfig,
+    ToolbarConfig, ToolbarLayoutMode, ToolbarModeOverride, ToolbarModeOverrides, UiConfig,
     validate_pdf_label_template,
 };
 #[cfg(tablet)]

@@ -773,6 +773,7 @@ use `all_boards_filename_template`, then `filename_template`, then `[capture].fi
 page_size = "viewport"       # viewport, a4, letter, custom
 orientation = "auto"         # auto, portrait, landscape
 fit = "viewport"             # viewport, fit-viewport-to-page, fit-content-to-page
+transparent_background = "none" # none, desktop
 custom_width = 800.0         # PDF points, used with page_size = "custom"
 custom_height = 600.0
 content_source_padding = 24.0 # source units, used with fit-content-to-page
@@ -796,6 +797,11 @@ background_color = [1.0, 1.0, 1.0, 0.85]
 `page_size = "viewport"`, this preserves the legacy export. `fit-viewport-to-page` scales the
 viewport into the configured page size. `fit-content-to-page` scales the page's padded annotation
 bounds into the configured page size, falling back to the viewport for blank pages.
+
+`transparent_background = "desktop"` is opt-in. It hides the overlay, captures the live desktop
+visible on the active output, and uses that image behind transparent PDF pages. Solid boards keep
+their configured background. If the desktop capture is denied or the active output cannot be
+isolated, the PDF export fails and no file is saved.
 
 Label templates support `{app_board}`, `{app_boards}`, `{export_board}`, `{export_boards}`,
 `{page}`, `{pages}`, `{document_page}`, `{document_pages}`, `{board_name}`, and `{page_name}`.

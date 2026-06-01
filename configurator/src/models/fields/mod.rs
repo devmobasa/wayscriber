@@ -13,7 +13,7 @@ mod toolbar;
 pub use eraser::{EraserModeOption, PresetEraserKindOption, PresetEraserModeOption};
 pub use export::{
     PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
-    PdfPageSizeOption,
+    PdfPageSizeOption, PdfTransparentBackgroundOption,
 };
 pub use font::{FontStyleOption, FontWeightOption};
 pub use presenter::PresenterToolBehaviorOption;

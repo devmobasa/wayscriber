@@ -35,6 +35,7 @@ pub struct PdfExportConfig {
     pub page_size: PdfPageSize,
     pub orientation: PdfOrientation,
     pub fit: PdfFitMode,
+    pub transparent_background: PdfTransparentBackground,
     pub custom_width: f64,
     pub custom_height: f64,
     pub content_source_padding: f64,
@@ -49,6 +50,7 @@ impl Default for PdfExportConfig {
             page_size: PdfPageSize::Viewport,
             orientation: PdfOrientation::Auto,
             fit: PdfFitMode::Viewport,
+            transparent_background: PdfTransparentBackground::None,
             custom_width: 800.0,
             custom_height: 600.0,
             content_source_padding: 24.0,
@@ -112,6 +114,15 @@ pub enum PdfFitMode {
     Viewport,
     FitViewportToPage,
     FitContentToPage,
+}
+
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum PdfTransparentBackground {
+    #[default]
+    None,
+    Desktop,
 }
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]

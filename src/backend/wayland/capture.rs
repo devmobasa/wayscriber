@@ -3,7 +3,13 @@
 //! Keeps the capture manager and in-progress flag together so the main
 //! Wayland loop can coordinate capture requests and results.
 
-use crate::capture::{CaptureManager, CaptureRequest};
+use crate::{
+    capture::{
+        CaptureManager, CaptureRequest, DesktopBackdropCaptureRequest, ImageOperationKind,
+        file::FileSaveConfig,
+    },
+    config::Action,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CapturePreflight {
@@ -11,13 +17,39 @@ enum CapturePreflight {
     AwaitingRender,
     AwaitingFrame,
 }
+
+#[derive(Clone)]
+pub(in crate::backend::wayland) enum CapturePreflightRequest {
+    Screenshot(CaptureRequest),
+    DesktopBackdrop(DesktopBackdropCaptureRequest),
+}
+
+impl std::fmt::Debug for CapturePreflightRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Screenshot(request) => f.debug_tuple("Screenshot").field(request).finish(),
+            Self::DesktopBackdrop(request) => {
+                f.debug_tuple("DesktopBackdrop").field(request).finish()
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::backend::wayland) struct PendingPdfExport {
+    pub action: Action,
+    pub operation: ImageOperationKind,
+    pub save_config: FileSaveConfig,
+}
+
 /// Tracks capture manager state and in-progress flag.
 pub struct CaptureState {
     manager: CaptureManager,
     in_progress: bool,
     exit_on_success: bool,
     preflight: CapturePreflight,
-    pending_request: Option<CaptureRequest>,
+    pending_request: Option<CapturePreflightRequest>,
+    pending_pdf_export: Option<PendingPdfExport>,
 }
 
 impl CaptureState {
@@ -29,6 +61,7 @@ impl CaptureState {
             exit_on_success: false,
             preflight: CapturePreflight::None,
             pending_request: None,
+            pending_pdf_export: None,
         }
     }
 
@@ -43,7 +76,7 @@ impl CaptureState {
     }
 
     /// Queue a capture request that should wait for a suppression render + frame callback.
-    pub fn queue_preflight(&mut self, request: CaptureRequest) {
+    pub fn queue_preflight(&mut self, request: CapturePreflightRequest) {
         self.pending_request = Some(request);
         self.preflight = CapturePreflight::AwaitingRender;
     }
@@ -67,7 +100,7 @@ impl CaptureState {
     }
 
     /// Take the queued request once the suppression frame callback fires.
-    pub fn take_preflight_request(&mut self) -> Option<CaptureRequest> {
+    pub fn take_preflight_request(&mut self) -> Option<CapturePreflightRequest> {
         if matches!(self.preflight, CapturePreflight::AwaitingFrame) {
             self.preflight = CapturePreflight::None;
             return self.pending_request.take();
@@ -79,6 +112,18 @@ impl CaptureState {
     pub fn clear_preflight(&mut self) {
         self.preflight = CapturePreflight::None;
         self.pending_request = None;
+    }
+
+    pub fn set_pending_pdf_export(&mut self, request: PendingPdfExport) {
+        self.pending_pdf_export = Some(request);
+    }
+
+    pub fn take_pending_pdf_export(&mut self) -> Option<PendingPdfExport> {
+        self.pending_pdf_export.take()
+    }
+
+    pub fn clear_pending_pdf_export(&mut self) {
+        self.pending_pdf_export = None;
     }
 
     /// Marks capture as started.
@@ -124,12 +169,15 @@ mod tests {
             save_config: None,
         };
 
-        state.queue_preflight(request);
+        state.queue_preflight(CapturePreflightRequest::Screenshot(request));
         assert!(state.preflight_pending());
         assert!(state.take_preflight_request().is_none());
 
         state.mark_preflight_rendered();
-        assert!(state.take_preflight_request().is_some());
+        assert!(matches!(
+            state.take_preflight_request(),
+            Some(CapturePreflightRequest::Screenshot(_))
+        ));
         assert!(!state.preflight_pending());
     }
 }

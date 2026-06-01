@@ -992,6 +992,9 @@ page_size = "viewport"
 orientation = "auto"
 # fit: "viewport", "fit-viewport-to-page", or "fit-content-to-page"
 fit = "viewport"
+# transparent_background: "none" keeps transparent PDF pages blank; "desktop" captures
+# the live desktop after hiding the overlay and places it behind transparent pages.
+transparent_background = "none"
 # Used only when page_size = "custom" (PDF points)
 custom_width = 800.0
 custom_height = 600.0

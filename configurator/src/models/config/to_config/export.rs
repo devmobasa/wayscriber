@@ -11,6 +11,8 @@ impl ConfigDraft {
         config.export.pdf.page_size = self.export_pdf_page_size.to_config();
         config.export.pdf.orientation = self.export_pdf_orientation.to_config();
         config.export.pdf.fit = self.export_pdf_fit.to_config();
+        config.export.pdf.transparent_background =
+            self.export_pdf_transparent_background.to_config();
         parse_pdf_number(
             &self.export_pdf_custom_width,
             "export.pdf.custom_width",

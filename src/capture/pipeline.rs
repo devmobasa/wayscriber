@@ -4,7 +4,8 @@ use crate::capture::{
     dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
     file::FileSaveConfig,
     types::{
-        CaptureDestination, CaptureError, CaptureResult, CaptureType, DocumentDeliveryRequest,
+        CaptureDestination, CaptureError, CaptureResult, CaptureType,
+        DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DocumentDeliveryRequest,
         ImageDeliveryRequest, ImageOperationKind,
     },
 };
@@ -36,6 +37,7 @@ impl fmt::Debug for CaptureRequest {
 #[derive(Clone)]
 pub(crate) enum CaptureManagerRequest {
     Capture(CaptureRequest),
+    CaptureDesktopBackdrop(DesktopBackdropCaptureRequest),
     DeliverImage(ImageDeliveryRequest),
     DeliverDocument(DocumentDeliveryRequest),
 }
@@ -44,6 +46,7 @@ impl CaptureManagerRequest {
     pub(crate) fn operation(&self) -> ImageOperationKind {
         match self {
             Self::Capture(_) => ImageOperationKind::Screenshot,
+            Self::CaptureDesktopBackdrop(request) => request.operation,
             Self::DeliverImage(request) => request.operation,
             Self::DeliverDocument(request) => request.operation,
         }
@@ -54,6 +57,14 @@ impl fmt::Debug for CaptureManagerRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Capture(request) => f.debug_tuple("Capture").field(request).finish(),
+            Self::CaptureDesktopBackdrop(request) => f
+                .debug_struct("CaptureDesktopBackdrop")
+                .field("logical_width", &request.logical_width)
+                .field("logical_height", &request.logical_height)
+                .field("scale", &request.scale)
+                .field("geometry", &request.geometry)
+                .field("operation", &request.operation)
+                .finish(),
             Self::DeliverImage(request) => f
                 .debug_struct("DeliverImage")
                 .field("destination", &request.destination)
@@ -71,6 +82,11 @@ impl fmt::Debug for CaptureManagerRequest {
                 .finish(),
         }
     }
+}
+
+pub(crate) enum CaptureManagerResult {
+    Capture(CaptureResult),
+    DesktopBackdrop(DesktopBackdropCaptureResult),
 }
 
 pub(crate) async fn perform_capture(
