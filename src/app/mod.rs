@@ -12,6 +12,7 @@ use env::env_flag_enabled;
 use session::run_session_cli_commands;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use usage::{log_overlay_controls, print_usage};
 
@@ -58,6 +59,30 @@ fn maybe_detach_active(cli: &Cli) -> anyhow::Result<bool> {
     Ok(true)
 }
 
+fn normalized_named_session_file(cli: &Cli) -> anyhow::Result<Option<PathBuf>> {
+    let Some(raw_path) = cli.session_file.as_ref() else {
+        return Ok(None);
+    };
+    let raw = raw_path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
+    Ok(Some(crate::session::normalize_named_session_file_arg(raw)))
+}
+
+fn preflight_named_overlay_session(
+    cli: &Cli,
+    path: Option<&std::path::Path>,
+) -> anyhow::Result<()> {
+    let Some(path) = path else {
+        return Ok(());
+    };
+    if cli.active || cli.freeze {
+        crate::session::validate_named_session_file_for_foreground(path)?;
+        crate::backend::preflight_wayland_connection()?;
+    }
+    Ok(())
+}
+
 #[cfg(unix)]
 fn detach_from_tty() {
     // Start a new session to drop the controlling terminal (prevents stuck shells).
@@ -89,7 +114,11 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         detach_from_tty();
     }
 
-    let session_override = if cli.resume_session {
+    let named_session_file = normalized_named_session_file(&cli)?;
+    preflight_named_overlay_session(&cli, named_session_file.as_deref())?;
+
+    let named_overlay_session = named_session_file.is_some() && (cli.active || cli.freeze);
+    let session_override = if named_overlay_session || cli.resume_session {
         Some(true)
     } else if cli.no_resume_session {
         Some(false)
@@ -130,10 +159,10 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     // Check for Wayland environment
-    if std::env::var("WAYLAND_DISPLAY").is_err() && (cli.daemon || cli.active) {
-        log::error!("WAYLAND_DISPLAY not set - this application requires Wayland.");
-        log::error!("Please run on a Wayland compositor (Hyprland, Sway, etc.).");
-        return Err(anyhow::anyhow!("Wayland environment required"));
+    if std::env::var("WAYLAND_DISPLAY").is_err() && (cli.daemon || cli.active || cli.freeze) {
+        return Err(anyhow::anyhow!(
+            "WAYLAND_DISPLAY not set - this application requires Wayland."
+        ));
     }
 
     if cli.daemon {
@@ -168,7 +197,12 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         };
 
         // Run Wayland backend
-        crate::backend::run_wayland(cli.mode, cli.freeze, exit_after_capture_mode)?;
+        crate::backend::run_wayland(
+            cli.mode,
+            cli.freeze,
+            exit_after_capture_mode,
+            named_session_file,
+        )?;
 
         log::info!("Annotation overlay closed.");
     } else {

@@ -13,7 +13,9 @@ pub use apply::apply_snapshot;
 pub use capture::snapshot_from_input;
 pub(crate) use compression::DEFAULT_MAX_EXPANDED_SESSION_BYTES;
 pub use load::load_snapshot;
-pub(crate) use load::{LoadSnapshotOutcome, load_snapshot_inner, load_snapshot_with_outcome};
+pub(crate) use load::{
+    LoadSnapshotOutcome, LoadedSnapshot, load_snapshot_inner, load_snapshot_with_outcome,
+};
 pub use save::save_snapshot;
 pub(crate) use save::{
     SaveLimitExceeded, SaveSnapshotOutcome, SaveSnapshotReport, SnapshotPayloadEstimate,

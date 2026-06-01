@@ -185,6 +185,10 @@ pub(crate) fn print_usage() {
     );
     println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
     println!("  wayscriber --freeze          Start overlay already frozen");
+    println!("  wayscriber --active --session-file PATH  Use a named session file");
+    println!("  wayscriber --freeze --session-file PATH  Use a named session file");
+    println!("  wayscriber --session-info [--session-file PATH]  Inspect saved session data");
+    println!("  wayscriber --clear-session [--session-file PATH]  Remove saved session data");
     println!(
         "  wayscriber --exit-after-capture  Exit overlay after a capture completes (override auto clipboard exit)"
     );

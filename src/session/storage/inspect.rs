@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
 use log::warn;
 use std::fs::{self, OpenOptions};
+use std::io::ErrorKind;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use super::types::{FrameCounts, HistoryCounts, HistoryDepth, SessionInspection};
@@ -17,6 +20,7 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let mut metadata = fs::metadata(&session_path).ok();
 
     if metadata.is_none()
+        && !options.is_named_file()
         && options.per_output
         && options.output_identity().is_none()
         && let Some((path, identity)) = find_existing_variant(&options.base_dir, &prefix, ".json")
@@ -33,6 +37,7 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let mut backup_path = options.backup_file_path();
     let mut backup_meta = fs::metadata(&backup_path).ok();
     if backup_meta.is_none()
+        && !options.is_named_file()
         && options.per_output
         && options.output_identity().is_none()
         && let Some((path, _)) = find_existing_variant(&options.base_dir, &prefix, ".json.bak")
@@ -52,26 +57,13 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let mut file_version = None;
 
     if exists {
-        let lock_path = session_path.with_extension("lock");
-        let lock_file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&lock_path)
-            .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
-        lock_shared(&lock_file)
-            .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
-
-        let loaded = snapshot::load_snapshot_inner(&session_path, options);
-
-        if let Err(err) = unlock(&lock_file) {
-            warn!(
-                "failed to unlock session file {}: {}",
-                lock_path.display(),
-                err
-            );
+        let mut lock_options = options.clone();
+        if !options.is_named_file()
+            && let Some(identity) = session_identity.as_deref()
+        {
+            lock_options.set_output_identity(Some(identity));
         }
+        let loaded = load_snapshot_for_inspection(&session_path, options, &lock_options);
 
         if let Some(loaded) = loaded? {
             let snapshot = loaded.snapshot;
@@ -116,6 +108,83 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         compressed,
         file_version,
     })
+}
+
+fn load_snapshot_for_inspection(
+    session_path: &Path,
+    options: &SessionOptions,
+    lock_options: &SessionOptions,
+) -> Result<Option<snapshot::LoadedSnapshot>> {
+    let lock_path = lock_options.lock_file_path();
+    if options.is_named_file() {
+        let Some(lock_file) = open_named_inspection_lock(&lock_path)? else {
+            return snapshot::load_snapshot_inner(session_path, options);
+        };
+        return load_snapshot_with_shared_lock(session_path, options, &lock_path, &lock_file);
+    }
+
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&lock_path)
+        .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
+
+    load_snapshot_with_shared_lock(session_path, options, &lock_path, &lock_file)
+}
+
+fn open_named_inspection_lock(lock_path: &Path) -> Result<Option<fs::File>> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW);
+
+    let lock_file = match options.open(lock_path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(err) => {
+            return Err(err).with_context(|| {
+                format!("failed to open session lock file {}", lock_path.display())
+            });
+        }
+    };
+    let metadata = lock_file.metadata().with_context(|| {
+        format!(
+            "failed to inspect session lock file {}",
+            lock_path.display()
+        )
+    })?;
+    if !metadata.is_file() {
+        return Err(anyhow::anyhow!(
+            "session lock file is not a regular file: {}",
+            lock_path.display()
+        ));
+    }
+
+    Ok(Some(lock_file))
+}
+
+fn load_snapshot_with_shared_lock(
+    session_path: &Path,
+    options: &SessionOptions,
+    lock_path: &Path,
+    lock_file: &fs::File,
+) -> Result<Option<snapshot::LoadedSnapshot>> {
+    lock_shared(lock_file)
+        .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
+
+    let loaded = snapshot::load_snapshot_inner(session_path, options);
+
+    if let Err(err) = unlock(lock_file) {
+        warn!(
+            "failed to unlock session file {}: {}",
+            lock_path.display(),
+            err
+        );
+    }
+
+    loaded
 }
 
 fn board_pages<'a>(

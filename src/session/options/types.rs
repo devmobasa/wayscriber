@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::identifiers::sanitize_identifier;
@@ -20,9 +21,19 @@ pub enum CompressionMode {
     Auto,
 }
 
+/// Where session artifacts are stored for this run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionTarget {
+    /// Existing configured storage under the app-owned session directory.
+    Configured,
+    /// Direct user-selected session file. Sidecars are derived from this exact path.
+    NamedFile(PathBuf),
+}
+
 /// Runtime options derived from configuration for session persistence.
 #[derive(Debug, Clone)]
 pub struct SessionOptions {
+    pub target: SessionTarget,
     pub base_dir: PathBuf,
     pub persist_transparent: bool,
     pub persist_whiteboard: bool,
@@ -50,6 +61,7 @@ impl SessionOptions {
         let raw_display = display_id.into();
         let display_id = sanitize_identifier(&raw_display);
         Self {
+            target: SessionTarget::Configured,
             base_dir,
             persist_transparent: false,
             persist_whiteboard: false,
@@ -86,41 +98,101 @@ impl SessionOptions {
         }
     }
 
+    pub fn is_named_file(&self) -> bool {
+        matches!(self.target, SessionTarget::NamedFile(_))
+    }
+
+    pub fn set_named_file_target(&mut self, path: PathBuf) {
+        self.base_dir = session_file_parent_dir(&path);
+        self.target = SessionTarget::NamedFile(path);
+        self.output_identity = None;
+        self.per_output = false;
+    }
+
+    pub fn force_resume_persistence(&mut self) {
+        self.persist_transparent = true;
+        self.persist_whiteboard = true;
+        self.persist_blackboard = true;
+        self.persist_history = true;
+        self.restore_tool_state = true;
+    }
+
     pub fn session_file_path(&self) -> PathBuf {
-        self.base_dir
-            .join(format!("{}.json", self.session_file_stem()))
+        match &self.target {
+            SessionTarget::Configured => self
+                .base_dir
+                .join(format!("{}.json", self.session_file_stem())),
+            SessionTarget::NamedFile(path) => path.clone(),
+        }
     }
 
     pub fn backup_file_path(&self) -> PathBuf {
-        self.base_dir
-            .join(format!("{}.json.bak", self.session_file_stem()))
+        match &self.target {
+            SessionTarget::Configured => self
+                .base_dir
+                .join(format!("{}.json.bak", self.session_file_stem())),
+            SessionTarget::NamedFile(path) => append_path_suffix(path, ".bak"),
+        }
     }
 
     pub fn backup_recovery_marker_file_path(&self) -> PathBuf {
-        self.base_dir
-            .join(format!("{}.json.bak.recoverable", self.session_file_stem()))
+        match &self.target {
+            SessionTarget::Configured => self
+                .base_dir
+                .join(format!("{}.json.bak.recoverable", self.session_file_stem())),
+            SessionTarget::NamedFile(path) => append_path_suffix(path, ".bak.recoverable"),
+        }
     }
 
     pub fn recovery_file_path(&self) -> PathBuf {
-        self.base_dir
-            .join(format!("{}.json.recovery", self.session_file_stem()))
+        match &self.target {
+            SessionTarget::Configured => self
+                .base_dir
+                .join(format!("{}.json.recovery", self.session_file_stem())),
+            SessionTarget::NamedFile(path) => append_path_suffix(path, ".recovery"),
+        }
     }
 
     pub fn recovery_recoverable_marker_file_path(&self) -> PathBuf {
-        self.base_dir.join(format!(
-            "{}.json.recovery.recoverable",
-            self.session_file_stem()
-        ))
+        match &self.target {
+            SessionTarget::Configured => self.base_dir.join(format!(
+                "{}.json.recovery.recoverable",
+                self.session_file_stem()
+            )),
+            SessionTarget::NamedFile(path) => append_path_suffix(path, ".recovery.recoverable"),
+        }
     }
 
     pub fn clear_marker_file_path(&self) -> PathBuf {
-        self.base_dir
-            .join(format!("{}.json.cleared", self.session_file_stem()))
+        match &self.target {
+            SessionTarget::Configured => self
+                .base_dir
+                .join(format!("{}.json.cleared", self.session_file_stem())),
+            SessionTarget::NamedFile(path) => append_path_suffix(path, ".cleared"),
+        }
     }
 
     pub fn lock_file_path(&self) -> PathBuf {
-        self.base_dir
-            .join(format!("{}.lock", self.session_file_stem()))
+        match &self.target {
+            SessionTarget::Configured => self
+                .base_dir
+                .join(format!("{}.lock", self.session_file_stem())),
+            SessionTarget::NamedFile(path) => append_path_suffix(path, ".lock"),
+        }
+    }
+
+    pub(crate) fn recovery_backup_file_path(&self) -> PathBuf {
+        append_path_suffix(&self.recovery_file_path(), ".bak")
+    }
+
+    pub(crate) fn corrupt_artifact_backup_file_path(&self, artifact_path: &Path) -> PathBuf {
+        if artifact_path == self.session_file_path().as_path() {
+            return self.backup_file_path();
+        }
+        if artifact_path == self.recovery_file_path().as_path() {
+            return self.recovery_backup_file_path();
+        }
+        replace_path_extension(artifact_path, "recovery.bak")
     }
 
     pub fn file_prefix(&self) -> String {
@@ -155,4 +227,23 @@ impl SessionOptions {
     pub fn output_identity(&self) -> Option<&str> {
         self.output_identity.as_deref()
     }
+}
+
+pub(crate) fn session_file_parent_dir(path: &Path) -> PathBuf {
+    path.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+pub(crate) fn append_path_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut raw = OsString::from(path.as_os_str());
+    raw.push(suffix);
+    PathBuf::from(raw)
+}
+
+fn replace_path_extension(path: &Path, extension: &str) -> PathBuf {
+    let mut path = path.to_path_buf();
+    path.set_extension(extension);
+    path
 }

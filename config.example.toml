@@ -684,6 +684,9 @@ autosave_failure_backoff_ms = 5000
 # Storage location: "auto" (XDG data dir), "config" (next to config), or "custom"
 storage = "auto"
 
+# CLI note: --session-file PATH bypasses this storage directory for that run and
+# saves to exactly PATH, without creating missing parent directories.
+
 # Store separate sessions per monitor (set false to reuse one file per display)
 per_output = true
 

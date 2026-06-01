@@ -2,7 +2,7 @@ use super::compression::{DEFAULT_MAX_EXPANDED_SESSION_BYTES, compress_bytes, tem
 use super::types::{
     BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
 };
-use crate::session::lock::{lock_exclusive, unlock};
+use crate::session::lock::{lock_exclusive, open_runtime_lock_file, unlock};
 use crate::session::options::{CompressionMode, SessionOptions};
 use crate::time_utils::now_rfc3339;
 use anyhow::{Context, Result, anyhow};
@@ -280,20 +280,10 @@ fn save_snapshot_with_expanded_limit_and_strategy(
         return Ok(None);
     }
 
-    fs::create_dir_all(&options.base_dir).with_context(|| {
-        format!(
-            "failed to create session directory {}",
-            options.base_dir.display()
-        )
-    })?;
+    prepare_session_parent_for_save(options)?;
 
     let lock_path = options.lock_file_path();
-    let lock_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&lock_path)
+    let lock_file = open_runtime_lock_file(&lock_path, options.is_named_file())
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
     let lock_started = Instant::now();
     lock_exclusive(&lock_file)
@@ -343,6 +333,21 @@ fn save_snapshot_with_expanded_limit_and_strategy(
     }
 
     result
+}
+
+fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
+    if options.is_named_file() {
+        crate::session::validate_named_session_file_for_foreground(&options.session_file_path())?;
+        return Ok(());
+    }
+
+    fs::create_dir_all(&options.base_dir).with_context(|| {
+        format!(
+            "failed to create session directory {}",
+            options.base_dir.display()
+        )
+    })?;
+    Ok(())
 }
 
 fn save_snapshot_inner(

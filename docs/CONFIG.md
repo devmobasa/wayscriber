@@ -887,10 +887,14 @@ Use the CLI helpers for quick maintenance:
 
 - `wayscriber --session-info` prints the active storage path, file details, and shape counts.
 - `wayscriber --clear-session` removes the session file, backup, and lock.
+- `wayscriber --active --session-file ~/Documents/lecture-04.wayscriber-session` opens and saves a named session file directly.
+- `wayscriber --freeze --session-file ~/Documents/lecture-04.wayscriber-session` starts frozen mode with that same named session target.
+- `wayscriber --session-info --session-file <path>` and `wayscriber --clear-session --session-file <path>` inspect or remove only that named file and its sidecars.
 
 Session overrides and recovery:
 
 - CLI flags: `--resume-session` forces persistence on, `--no-resume-session` forces it off for the current run. The environment variable `WAYSCRIBER_RESUME_SESSION=1/0` does the same.
+- `--session-file` implies session persistence for that overlay run and conflicts with `--no-resume-session`. Named sessions use the exact selected file path; Wayscriber does not create missing parent directories or fall back to configured storage.
 - Size fallback: if visible drawings fit but persisted undo/redo history would exceed save or restore safety limits, autosave saves the drawings and warns once per run that history was trimmed or omitted.
 - Image paste guard: when a pasted image would push visible session data over `max_file_size_mb`, Wayscriber blocks the paste and points you to `[session] max_file_size_mb`; when only undo history is at risk, the paste is allowed with a warning.
 - Load safety: compressed session files are checked against an internal expanded-size cap while saving and loading. If an existing file expands beyond that cap, wayscriber refuses to load it, leaves the primary session file unchanged, and avoids overwriting it until session data changes.

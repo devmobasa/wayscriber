@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 
@@ -6,7 +6,7 @@ use crate::config::{SessionCompression, SessionConfig, SessionStorageMode};
 use crate::paths::{data_dir, expand_tilde};
 
 use super::identifiers::resolve_display_id;
-use super::types::{CompressionMode, SessionOptions};
+use super::types::{CompressionMode, SessionOptions, session_file_parent_dir};
 use std::time::Duration;
 
 /// Build runtime session options from configuration values.
@@ -15,7 +15,23 @@ pub fn options_from_config(
     config_dir: &Path,
     display_id: Option<&str>,
 ) -> Result<SessionOptions> {
-    let base_dir = match session_cfg.storage {
+    let base_dir = configured_base_dir(session_cfg, config_dir)?;
+    Ok(options_from_settings(session_cfg, base_dir, display_id))
+}
+
+pub fn options_from_config_for_named_file(
+    session_cfg: &SessionConfig,
+    path: PathBuf,
+    display_id: Option<&str>,
+) -> SessionOptions {
+    let base_dir = session_file_parent_dir(&path);
+    let mut options = options_from_settings(session_cfg, base_dir, display_id);
+    options.set_named_file_target(path);
+    options
+}
+
+fn configured_base_dir(session_cfg: &SessionConfig, config_dir: &Path) -> Result<PathBuf> {
+    Ok(match session_cfg.storage {
         SessionStorageMode::Auto => {
             let root = data_dir().unwrap_or_else(|| config_dir.to_path_buf());
             root.join("wayscriber")
@@ -33,8 +49,14 @@ pub fn options_from_config(
             }
             expanded
         }
-    };
+    })
+}
 
+fn options_from_settings(
+    session_cfg: &SessionConfig,
+    base_dir: PathBuf,
+    display_id: Option<&str>,
+) -> SessionOptions {
     let mut options = SessionOptions::new(base_dir, resolve_display_id(display_id));
     options.persist_transparent = session_cfg.persist_transparent;
     options.persist_whiteboard = session_cfg.persist_whiteboard;
@@ -66,5 +88,5 @@ pub fn options_from_config(
     options.backup_retention = session_cfg.backup_retention;
     options.per_output = session_cfg.per_output;
 
-    Ok(options)
+    options
 }

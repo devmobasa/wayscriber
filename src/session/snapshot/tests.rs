@@ -19,6 +19,11 @@ use crate::test_temp::tempdir;
 use crate::time_utils::now_rfc3339;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
+#[cfg(unix)]
+use std::{
+    ffi::CString,
+    os::unix::{ffi::OsStrExt, fs::symlink},
+};
 
 fn sample_frame() -> Frame {
     let mut frame = Frame::new();
@@ -109,6 +114,20 @@ fn write_contentless_session(path: &Path) {
     .expect("contentless session write");
 }
 
+#[cfg(unix)]
+fn make_fifo(path: &Path) {
+    let raw_path = CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
+    // SAFETY: raw_path is a valid, NUL-terminated filesystem path for this process.
+    let result = unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) };
+    assert_eq!(
+        result,
+        0,
+        "mkfifo {} failed: {}",
+        path.display(),
+        std::io::Error::last_os_error()
+    );
+}
+
 fn set_modified(path: &Path, modified: SystemTime) {
     std::fs::File::options()
         .write(true)
@@ -141,6 +160,129 @@ fn save_snapshot_respects_auto_compression_threshold() {
     save_snapshot(&snapshot, &compressed).expect("save_snapshot should succeed");
     let compressed_bytes = std::fs::read(compressed.session_file_path()).unwrap();
     assert!(is_gzip(&compressed_bytes), "expected gzip payload");
+}
+
+#[test]
+fn save_named_file_fails_when_parent_is_missing_without_creating_it() {
+    let temp = tempdir().unwrap();
+    let missing_parent = temp.path().join("missing-parent");
+    let named_path = missing_parent.join("session.wayscriber-session");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+
+    let err = save_snapshot(&snapshot, &options).expect_err("named save should fail");
+
+    assert!(
+        err.to_string()
+            .contains("named session parent directory does not exist"),
+        "unexpected error: {err:#}"
+    );
+    assert!(
+        !missing_parent.exists(),
+        "named save must not create the missing parent"
+    );
+    assert!(
+        !temp.path().join("configured").exists(),
+        "named save must not fall back to configured storage"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn save_named_file_rejects_symlink_lock_without_truncating_target() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("session.wayscriber-session");
+    let lock_target = temp.path().join("lock-target");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-symlink-save");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+    std::fs::write(&lock_target, b"preserve me").expect("write lock target");
+    symlink(&lock_target, options.lock_file_path()).expect("create lock symlink");
+
+    let err =
+        save_snapshot(&snapshot, &options).expect_err("named save should reject symlink lock");
+
+    assert!(
+        err.to_string().contains("failed to open session lock file"),
+        "{err:#}"
+    );
+    assert_eq!(
+        std::fs::read(&lock_target).expect("read lock target"),
+        b"preserve me",
+        "named save must not truncate a symlink lock target"
+    );
+    assert!(
+        !options.session_file_path().exists(),
+        "failed named save should not create the session file"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn save_named_file_rejects_fifo_lock_without_blocking() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("session.wayscriber-session");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-fifo-save");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+    make_fifo(&options.lock_file_path());
+
+    let err = save_snapshot(&snapshot, &options).expect_err("named save should reject fifo lock");
+
+    assert!(
+        format!("{err:#}").contains("session lock file is not a regular file"),
+        "{err:#}"
+    );
+    assert!(
+        !options.session_file_path().exists(),
+        "failed named save should not create the session file"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_file_rejects_symlink_lock_without_truncating_target() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("session.wayscriber-session");
+    let lock_target = temp.path().join("lock-target");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-symlink-load");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+    save_snapshot(&snapshot, &options).expect("save named snapshot");
+    std::fs::remove_file(options.lock_file_path()).expect("remove regular lock");
+    std::fs::write(&lock_target, b"preserve me").expect("write lock target");
+    symlink(&lock_target, options.lock_file_path()).expect("create lock symlink");
+
+    let err = load_snapshot(&options).expect_err("named load should reject symlink lock");
+
+    assert!(
+        err.to_string().contains("failed to open session lock file"),
+        "{err:#}"
+    );
+    assert_eq!(
+        std::fs::read(&lock_target).expect("read lock target"),
+        b"preserve me",
+        "named load must not truncate a symlink lock target"
+    );
+}
+
+#[test]
+fn configured_save_still_creates_session_base_directory() {
+    let temp = tempdir().unwrap();
+    let base_dir = temp.path().join("configured");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(base_dir.clone(), "configured");
+    options.persist_transparent = true;
+
+    save_snapshot(&snapshot, &options).expect("configured save should create base dir");
+
+    assert!(base_dir.is_dir());
+    assert!(options.session_file_path().is_file());
 }
 
 #[test]
@@ -185,6 +327,43 @@ fn load_snapshot_inner_refuses_compressed_payload_over_expanded_limit() {
     assert!(
         err.to_string().contains("exceeds the safety limit"),
         "unexpected error: {err:#}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_snapshot_inner_rejects_fifo_without_opening_it() {
+    let temp = tempdir().unwrap();
+    let path = temp.path().join("session-fifo.wayscriber-session");
+    make_fifo(&path);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "fifo");
+    options.persist_transparent = true;
+
+    let err = match load_snapshot_inner(&path, &options) {
+        Ok(_) => panic!("FIFO session artifact should be rejected before open/read"),
+        Err(err) => err,
+    };
+    assert!(
+        err.to_string().contains("not a regular file"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_snapshot_skips_fifo_recovery_without_opening_it() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "fifo-recovery");
+    options.persist_transparent = true;
+    make_fifo(&options.recovery_file_path());
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("non-regular recovery should be skipped without failing");
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert!(
+        options.recovery_file_path().exists(),
+        "non-regular recovery should not be renamed or backed up"
     );
 }
 

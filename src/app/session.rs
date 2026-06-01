@@ -5,11 +5,30 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     let config_dir = crate::config::Config::config_directory_from_source(&loaded.source)?;
     let display_env = std::env::var("WAYLAND_DISPLAY").ok();
 
-    let options = crate::session::options_from_config(
-        &loaded.config.session,
-        &config_dir,
-        display_env.as_deref(),
-    )?;
+    let options = if let Some(raw_path) = cli.session_file.as_ref() {
+        let raw = raw_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
+        let path = crate::session::normalize_named_session_file_arg(raw);
+        if cli.clear_session {
+            crate::session::validate_named_session_file_for_clear(&path)?;
+        } else {
+            crate::session::validate_named_session_file_for_info(&path)?;
+        }
+        let mut options = crate::session::options_from_config_for_named_file(
+            &loaded.config.session,
+            path,
+            display_env.as_deref(),
+        );
+        options.force_resume_persistence();
+        options
+    } else {
+        crate::session::options_from_config(
+            &loaded.config.session,
+            &config_dir,
+            display_env.as_deref(),
+        )?
+    };
 
     if cli.clear_session {
         let outcome = crate::session::clear_session(&options)?;

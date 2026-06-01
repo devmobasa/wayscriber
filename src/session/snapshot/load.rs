@@ -9,12 +9,14 @@ use super::types::{
 };
 use crate::draw::Frame;
 use crate::draw::frame::MAX_COMPOUND_DEPTH;
-use crate::session::lock::{lock_shared, unlock};
+use crate::session::lock::{lock_shared, open_runtime_lock_file, unlock};
 use crate::session::options::SessionOptions;
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use serde_json::Value;
-use std::fs::{self, File, OpenOptions};
+use std::error::Error;
+use std::fmt;
+use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -33,6 +35,9 @@ pub(crate) enum LoadSnapshotOutcome {
     LoadedFromBackup(Box<SessionSnapshot>),
     LoadedFromRecovery(Box<SessionSnapshot>),
     Empty,
+    NonRegularArtifact {
+        path: PathBuf,
+    },
     ExpandedTooLarge {
         path: PathBuf,
         max_expanded_size: u64,
@@ -46,7 +51,7 @@ impl LoadSnapshotOutcome {
             Self::Loaded(snapshot)
             | Self::LoadedFromBackup(snapshot)
             | Self::LoadedFromRecovery(snapshot) => snapshot.has_board_data(),
-            Self::Empty | Self::ExpandedTooLarge { .. } => false,
+            Self::Empty | Self::NonRegularArtifact { .. } | Self::ExpandedTooLarge { .. } => false,
         }
     }
 }
@@ -58,7 +63,9 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
         LoadSnapshotOutcome::Loaded(snapshot)
         | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => Ok(Some(*snapshot)),
-        LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::ExpandedTooLarge { .. } => Ok(None),
+        LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::NonRegularArtifact { .. }
+        | LoadSnapshotOutcome::ExpandedTooLarge { .. } => Ok(None),
     }
 }
 
@@ -135,6 +142,13 @@ pub(super) fn load_snapshot_with_expanded_limit(
                 );
                 preserve_unloadable_recovery(&recovery_path, "empty");
             }
+            LoadSnapshotOutcome::NonRegularArtifact { path } => {
+                warn!(
+                    "Session recovery artifact {} is not a regular file; falling back to normal session {}",
+                    path.display(),
+                    session_path.display()
+                );
+            }
             LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
                 warn!(
                     "Session recovery artifact {} exceeded the expanded load safety cap; preserving it and falling back to normal session {}",
@@ -165,8 +179,21 @@ fn load_snapshot_path_with_outcome(
     label: &str,
     corrupt_load_action: CorruptLoadAction,
 ) -> Result<LoadSnapshotOutcome> {
-    let metadata = fs::metadata(session_path)
-        .with_context(|| format!("failed to stat session file {}", session_path.display()))?;
+    let metadata = match session_artifact_metadata(session_path) {
+        Ok(metadata) => metadata,
+        Err(err) if err.downcast_ref::<NonRegularSessionArtifact>().is_some() => {
+            warn!(
+                "Refusing to load non-regular {} {}; continuing with defaults: {}",
+                label,
+                session_path.display(),
+                err
+            );
+            return Ok(LoadSnapshotOutcome::NonRegularArtifact {
+                path: session_path.to_path_buf(),
+            });
+        }
+        Err(err) => return Err(err),
+    };
     info!(
         "{} file present at {} ({} bytes, per_output={}, output_identity={:?})",
         label,
@@ -207,12 +234,7 @@ fn load_snapshot_path_with_outcome(
     }
 
     let lock_path = options.lock_file_path();
-    let lock_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&lock_path)
+    let lock_file = open_runtime_lock_file(&lock_path, options.is_named_file())
         .with_context(|| format!("failed to open session lock file {}", lock_path.display()))?;
     lock_shared(&lock_file)
         .with_context(|| format!("failed to acquire shared lock {}", lock_path.display()))?;
@@ -260,6 +282,17 @@ fn load_snapshot_path_with_outcome(
             Ok(LoadSnapshotOutcome::ExpandedTooLarge {
                 path: session_path.to_path_buf(),
                 max_expanded_size,
+            })
+        }
+        Err(err) if err.downcast_ref::<NonRegularSessionArtifact>().is_some() => {
+            warn!(
+                "Refusing to load non-regular {} {}; continuing with defaults: {}",
+                label,
+                session_path.display(),
+                err
+            );
+            Ok(LoadSnapshotOutcome::NonRegularArtifact {
+                path: session_path.to_path_buf(),
             })
         }
         Err(err) => {
@@ -343,7 +376,9 @@ fn load_normal_session_or_empty(
                 return Ok(LoadSnapshotOutcome::Loaded(snapshot));
             }
             LoadSnapshotOutcome::Loaded(_) => {}
-            LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::ExpandedTooLarge { .. } => {}
+            LoadSnapshotOutcome::Empty
+            | LoadSnapshotOutcome::NonRegularArtifact { .. }
+            | LoadSnapshotOutcome::ExpandedTooLarge { .. } => {}
             LoadSnapshotOutcome::LoadedFromBackup(_)
             | LoadSnapshotOutcome::LoadedFromRecovery(_) => {}
         }
@@ -471,7 +506,7 @@ fn load_contentful_backup(
             );
             Ok(None)
         }
-        LoadSnapshotOutcome::Empty => Ok(None),
+        LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::NonRegularArtifact { .. } => Ok(None),
         LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
             warn!(
                 "Session backup {} is too large to restore; keeping primary session",
@@ -522,7 +557,9 @@ fn load_contentful_recovery(
         CorruptLoadAction::Backup,
     )? {
         LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => Ok(Some(snapshot)),
-        LoadSnapshotOutcome::Loaded(_) | LoadSnapshotOutcome::Empty => Ok(None),
+        LoadSnapshotOutcome::Loaded(_)
+        | LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::NonRegularArtifact { .. } => Ok(None),
         LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
             preserve_unloadable_recovery(&path, "too-large");
             Ok(None)
@@ -620,28 +657,19 @@ fn preserve_unloadable_recovery(path: &Path, reason: &str) {
 }
 
 fn preserved_recovery_path(path: &Path, reason: &str) -> PathBuf {
-    let base_extension = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .filter(|extension| !extension.is_empty())
-        .map_or_else(
-            || reason.to_string(),
-            |extension| format!("{extension}.{reason}"),
-        );
-
     for index in 0..100 {
-        let extension = if index == 0 {
-            base_extension.clone()
+        let suffix = if index == 0 {
+            format!(".{reason}")
         } else {
-            format!("{base_extension}.{index}")
+            format!(".{reason}.{index}")
         };
-        let candidate = path.with_extension(extension);
+        let candidate = crate::session::append_path_suffix(path, &suffix);
         if !candidate.exists() {
             return candidate;
         }
     }
 
-    path.with_extension(format!("{base_extension}.100"))
+    crate::session::append_path_suffix(path, &format!(".{reason}.100"))
 }
 
 fn should_prefer_recovery(
@@ -673,6 +701,7 @@ pub(super) fn load_snapshot_inner_with_expanded_limit(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<Option<LoadedSnapshot>> {
+    session_artifact_metadata(session_path)?;
     let mut file_bytes = Vec::new();
     {
         let mut file = File::open(session_path)
@@ -814,6 +843,35 @@ pub(super) fn load_snapshot_inner_with_expanded_limit(
     }))
 }
 
+#[derive(Debug)]
+struct NonRegularSessionArtifact {
+    path: PathBuf,
+}
+
+impl fmt::Display for NonRegularSessionArtifact {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "session artifact is not a regular file: {}",
+            self.path.display()
+        )
+    }
+}
+
+impl Error for NonRegularSessionArtifact {}
+
+fn session_artifact_metadata(session_path: &Path) -> Result<fs::Metadata> {
+    let metadata = fs::metadata(session_path)
+        .with_context(|| format!("failed to stat session file {}", session_path.display()))?;
+    if metadata.is_file() {
+        return Ok(metadata);
+    }
+    Err(NonRegularSessionArtifact {
+        path: session_path.to_path_buf(),
+    }
+    .into())
+}
+
 fn board_pages_from_file(
     pages: Option<Vec<Frame>>,
     active: Option<usize>,
@@ -863,7 +921,7 @@ fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Resu
     let backup_path = if session_path == primary_path.as_path() {
         options.backup_file_path()
     } else {
-        session_path.with_extension("recovery.bak")
+        options.corrupt_artifact_backup_file_path(session_path)
     };
     fs::write(&backup_path, &bytes)
         .with_context(|| format!("failed to write session backup {}", backup_path.display()))?;
