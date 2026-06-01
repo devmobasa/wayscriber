@@ -26,8 +26,8 @@ pub use drag::{DragBindableTool, DragTool};
 )]
 pub(crate) use drawing::ToolUsage;
 pub(crate) use drawing::{
-    FinishedToolStroke, PolygonProvisionalSnapshot, PolygonStrokeSnapshot, ProvisionalToolSnapshot,
-    ProvisionalToolStroke, ToolStrokeSnapshot,
+    FinishedToolStroke, PROVISIONAL_POLYGON_DAMAGE_PADDING, PolygonProvisionalSnapshot,
+    PolygonStrokeSnapshot, ProvisionalToolSnapshot, ProvisionalToolStroke, ToolStrokeSnapshot,
 };
 pub use kind::Tool;
 pub(crate) use profile::{ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSource};

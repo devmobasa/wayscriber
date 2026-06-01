@@ -92,6 +92,18 @@ echo ""
 echo "✅ Installation complete!"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Binary check"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Installed: $INSTALLED_BINARY"
+ls -l "$INSTALLED_BINARY"
+echo "SHA256:  $(sha256sum "$INSTALLED_BINARY" | cut -d' ' -f1)"
+if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+    echo "PATH:     $(command -v "$BINARY_NAME")"
+else
+    echo "PATH:     not found in PATH"
+fi
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Setup Instructions"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
@@ -172,7 +184,12 @@ case $REPLY in
             # Enable and start the service
             systemctl --user daemon-reload
             systemctl --user enable wayscriber.service
-            systemctl --user start wayscriber.service
+            if systemctl --user restart wayscriber.service; then
+                echo "✅ Service restarted"
+            else
+                echo "⚠️  Restart failed; attempting start"
+                systemctl --user start wayscriber.service
+            fi
 
             echo "✅ Service enabled and started"
             echo ""
@@ -180,6 +197,7 @@ case $REPLY in
             systemctl --user status wayscriber.service --no-pager -l
             echo ""
             echo "Commands:"
+            echo "  Restart: systemctl --user restart wayscriber.service"
             echo "  Start:   systemctl --user start wayscriber"
             echo "  Stop:    systemctl --user stop wayscriber"
             echo "  Status:  systemctl --user status wayscriber"

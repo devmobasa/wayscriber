@@ -1,7 +1,6 @@
-use crate::draw::render::render_freehand_pressure_borrowed;
+use crate::draw::render::{render_freehand_pressure_borrowed, render_polygon_preview};
 use crate::draw::{
-    Color, PolygonKind, Shape, render_freehand_borrowed, render_marker_stroke_borrowed,
-    render_shape,
+    Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape,
 };
 use crate::input::Tool;
 use crate::input::tool::{
@@ -189,20 +188,7 @@ impl InputState {
                 if let Some(point) = preview.or(Some((current_x, current_y))) {
                     preview_points.push(point);
                 }
-                if preview_points.len() >= 3 {
-                    render_shape(
-                        ctx,
-                        &Shape::Polygon {
-                            kind: PolygonKind::Freeform,
-                            points: preview_points,
-                            fill: *fill,
-                            color: *color,
-                            thick: *thick,
-                        },
-                    );
-                } else {
-                    render_freehand_borrowed(ctx, &preview_points, *color, *thick);
-                }
+                render_polygon_preview(ctx, &preview_points, *fill, *color, *thick);
                 true
             }
             _ => false,

@@ -194,6 +194,26 @@ fn freeform_polygon_commit_records_first_stroke_onboarding() {
 }
 
 #[test]
+fn freeform_polygon_preview_dirty_has_antialias_padding() {
+    let mut state = create_test_input_state();
+    assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
+
+    state.on_mouse_press(MouseButton::Left, 10, 10);
+    state.on_mouse_motion(20, 20);
+
+    let DrawingState::BuildingPolygon { thick, .. } = state.state else {
+        panic!("expected polygon building state");
+    };
+    let base = crate::draw::shape::bounding_box_for_points(&[(10, 10), (20, 20)], thick)
+        .expect("preview should have bounds");
+    assert_eq!(
+        state.last_provisional_bounds,
+        base.inflated(2),
+        "building polygon damage should be padded to clear antialias leftovers"
+    );
+}
+
+#[test]
 fn freeform_polygon_freezes_style_on_first_click() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));

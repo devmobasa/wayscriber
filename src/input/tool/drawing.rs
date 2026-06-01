@@ -8,6 +8,8 @@ use crate::input::tool::{
 };
 use crate::util::{self, Rect};
 
+pub(crate) const PROVISIONAL_POLYGON_DAMAGE_PADDING: i32 = 2;
+
 /// Immutable inputs needed to turn one completed drag into an app-level outcome.
 pub(crate) struct ToolStrokeSnapshot {
     pub(crate) tool: Tool,
@@ -424,7 +426,14 @@ impl<'a> ProvisionalToolStroke<'a> {
                 bounding_box_for_points(points, inflated)
             }
             Self::EraserPreview { points, size } => bounding_box_for_eraser(points, *size),
-            Self::Shape(shape) => shape.bounding_box(),
+            Self::Shape(shape) => {
+                let bounds = shape.bounding_box();
+                if matches!(shape, Shape::Polygon { .. }) {
+                    bounds.and_then(|rect| rect.inflated(PROVISIONAL_POLYGON_DAMAGE_PADDING))
+                } else {
+                    bounds
+                }
+            }
             Self::BlurReplayPreview(params) => {
                 bounding_box_for_blur(params.x, params.y, params.w, params.h)
             }

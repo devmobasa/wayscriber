@@ -2,6 +2,7 @@ use super::base::{DrawingState, InputState, TextInputMode};
 use crate::draw::shape::{
     bounding_box_for_points, bounding_box_for_sticky_note, bounding_box_for_text,
 };
+use crate::input::tool::PROVISIONAL_POLYGON_DAMAGE_PADDING;
 use crate::util::Rect;
 
 impl InputState {
@@ -51,6 +52,7 @@ impl InputState {
                     preview_points.push(point);
                 }
                 bounding_box_for_points(&preview_points, *thick)
+                    .and_then(|rect| rect.inflated(PROVISIONAL_POLYGON_DAMAGE_PADDING))
             }
             _ => None,
         }
