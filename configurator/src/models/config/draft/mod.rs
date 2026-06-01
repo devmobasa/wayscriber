@@ -2,9 +2,10 @@ mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::{
-    EraserModeOption, FontStyleOption, FontWeightOption, PresenterToolBehaviorOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, SessionCompressionOption,
+    SessionStorageModeOption, StatusPositionOption, ToolOption, ToolbarLayoutModeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -137,6 +138,27 @@ pub struct ConfigDraft {
     pub capture_format: String,
     pub capture_copy_to_clipboard: bool,
     pub capture_exit_after: bool,
+    pub export_pdf_filename_template: String,
+    pub export_pdf_all_boards_filename_template: String,
+    pub export_pdf_page_size: PdfPageSizeOption,
+    pub export_pdf_orientation: PdfOrientationOption,
+    pub export_pdf_fit: PdfFitModeOption,
+    pub export_pdf_transparent_background: PdfTransparentBackgroundOption,
+    pub export_pdf_custom_width: String,
+    pub export_pdf_custom_height: String,
+    pub export_pdf_content_source_padding: String,
+    pub export_pdf_labels_enabled: bool,
+    pub export_pdf_label_position: PdfLabelPositionOption,
+    pub export_pdf_label_content: PdfLabelContentModeOption,
+    pub export_pdf_label_template: String,
+    pub export_pdf_label_font_family: String,
+    pub export_pdf_label_font_size: String,
+    pub export_pdf_label_margin: String,
+    pub export_pdf_label_padding_x: String,
+    pub export_pdf_label_padding_y: String,
+    pub export_pdf_label_text_color: ColorQuadInput,
+    pub export_pdf_label_background_enabled: bool,
+    pub export_pdf_label_background_color: ColorQuadInput,
 
     pub session_persist_transparent: bool,
     pub session_persist_whiteboard: bool,

@@ -136,6 +136,22 @@ impl ConfiguratorApp {
             Message::PresenterToolBehaviorChanged(option) => {
                 self.handle_presenter_tool_behavior_changed(option)
             }
+            Message::ExportPdfPageSizeChanged(option) => {
+                self.handle_export_pdf_page_size_changed(option)
+            }
+            Message::ExportPdfOrientationChanged(option) => {
+                self.handle_export_pdf_orientation_changed(option)
+            }
+            Message::ExportPdfFitChanged(option) => self.handle_export_pdf_fit_changed(option),
+            Message::ExportPdfTransparentBackgroundChanged(option) => {
+                self.handle_export_pdf_transparent_background_changed(option)
+            }
+            Message::ExportPdfLabelPositionChanged(option) => {
+                self.handle_export_pdf_label_position_changed(option)
+            }
+            Message::ExportPdfLabelContentChanged(option) => {
+                self.handle_export_pdf_label_content_changed(option)
+            }
             Message::BufferCountChanged(count) => self.handle_buffer_count_changed(count),
             Message::KeybindingChanged(field, value) => {
                 self.handle_keybinding_changed(field, value)

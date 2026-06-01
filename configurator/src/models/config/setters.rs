@@ -189,6 +189,10 @@ impl ConfigDraft {
             ToggleField::CaptureEnabled => self.capture_enabled = value,
             ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
             ToggleField::CaptureExitAfter => self.capture_exit_after = value,
+            ToggleField::ExportPdfLabelsEnabled => self.export_pdf_labels_enabled = value,
+            ToggleField::ExportPdfLabelBackgroundEnabled => {
+                self.export_pdf_label_background_enabled = value;
+            }
             ToggleField::SessionPersistTransparent => {
                 self.session_persist_transparent = value;
             }
@@ -275,6 +279,21 @@ impl ConfigDraft {
             TextField::CaptureSaveDirectory => self.capture_save_directory = value,
             TextField::CaptureFilename => self.capture_filename_template = value,
             TextField::CaptureFormat => self.capture_format = value,
+            TextField::ExportPdfFilenameTemplate => self.export_pdf_filename_template = value,
+            TextField::ExportPdfAllBoardsFilenameTemplate => {
+                self.export_pdf_all_boards_filename_template = value
+            }
+            TextField::ExportPdfCustomWidth => self.export_pdf_custom_width = value,
+            TextField::ExportPdfCustomHeight => self.export_pdf_custom_height = value,
+            TextField::ExportPdfContentSourcePadding => {
+                self.export_pdf_content_source_padding = value
+            }
+            TextField::ExportPdfLabelTemplate => self.export_pdf_label_template = value,
+            TextField::ExportPdfLabelFontFamily => self.export_pdf_label_font_family = value,
+            TextField::ExportPdfLabelFontSize => self.export_pdf_label_font_size = value,
+            TextField::ExportPdfLabelMargin => self.export_pdf_label_margin = value,
+            TextField::ExportPdfLabelPaddingX => self.export_pdf_label_padding_x = value,
+            TextField::ExportPdfLabelPaddingY => self.export_pdf_label_padding_y = value,
             TextField::ToolbarTopOffset => self.ui_toolbar_top_offset = value,
             TextField::ToolbarTopOffsetY => self.ui_toolbar_top_offset_y = value,
             TextField::ToolbarSideOffset => self.ui_toolbar_side_offset = value,
@@ -328,6 +347,12 @@ impl ConfigDraft {
             QuadField::HighlightFill => self.click_highlight_fill_color.set_component(index, value),
             QuadField::HighlightOutline => self
                 .click_highlight_outline_color
+                .set_component(index, value),
+            QuadField::ExportPdfLabelText => {
+                self.export_pdf_label_text_color.set_component(index, value)
+            }
+            QuadField::ExportPdfLabelBackground => self
+                .export_pdf_label_background_color
                 .set_component(index, value),
         }
     }

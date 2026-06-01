@@ -19,6 +19,7 @@ fn json_schema_includes_expected_sections() {
         "board",
         "keybindings",
         "capture",
+        "export",
         "session",
     ] {
         assert!(properties.contains_key(key), "missing schema field {key}");

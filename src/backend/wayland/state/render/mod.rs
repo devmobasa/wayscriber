@@ -8,17 +8,12 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
         debug!("=== RENDER START ===");
         let board_is_transparent = self.input_state.board_is_transparent();
-        let suppression =
-            if self.data.overlay_suppression == OverlaySuppression::Zoom && !board_is_transparent {
-                OverlaySuppression::None
-            } else {
-                self.data.overlay_suppression
-            };
-        let render_canvas = !matches!(
-            suppression,
-            OverlaySuppression::Frozen | OverlaySuppression::Zoom
-        );
-        let render_ui = suppression == OverlaySuppression::None;
+        let suppression = self
+            .data
+            .overlay_suppression
+            .effective_for_board(board_is_transparent);
+        let render_canvas = suppression.renders_canvas();
+        let render_ui = suppression.renders_ui();
 
         // Create pool if needed
         let buffer_count = self.config.performance.buffer_count as usize;
@@ -312,7 +307,7 @@ impl WaylandState {
         // Render toolbar overlays if visible, only when state/hover changed.
         self.render_layer_toolbars_if_needed();
 
-        if self.data.overlay_suppression == OverlaySuppression::Capture {
+        if self.capture_suppressed() {
             self.capture.mark_preflight_rendered();
         }
 

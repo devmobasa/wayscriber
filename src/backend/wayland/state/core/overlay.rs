@@ -8,12 +8,18 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn overlay_blocks_event_loop(&self) -> bool {
         matches!(
             self.data.overlay_suppression,
-            OverlaySuppression::Capture | OverlaySuppression::Frozen | OverlaySuppression::Zoom
+            OverlaySuppression::Capture
+                | OverlaySuppression::DesktopBackdrop
+                | OverlaySuppression::Frozen
+                | OverlaySuppression::Zoom
         )
     }
 
     pub(in crate::backend::wayland) fn capture_suppressed(&self) -> bool {
-        self.data.overlay_suppression == OverlaySuppression::Capture
+        matches!(
+            self.data.overlay_suppression,
+            OverlaySuppression::Capture | OverlaySuppression::DesktopBackdrop
+        )
     }
 
     pub(in crate::backend::wayland) fn overlay_passthrough_requested(&self) -> bool {
@@ -45,14 +51,16 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn enter_overlay_suppression(
         &mut self,
         reason: OverlaySuppression,
-    ) {
+    ) -> bool {
         if self.data.overlay_suppression != OverlaySuppression::None {
-            return;
+            return false;
         }
         self.data.overlay_suppression = reason;
         self.sync_overlay_interactivity();
+        self.buffer_damage.mark_all_full();
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
+        true
     }
 
     pub(in crate::backend::wayland) fn exit_overlay_suppression(
@@ -64,6 +72,7 @@ impl WaylandState {
         }
         self.data.overlay_suppression = OverlaySuppression::None;
         self.sync_overlay_interactivity();
+        self.buffer_damage.mark_all_full();
         self.input_state.needs_redraw = true;
         self.toolbar.mark_dirty();
     }

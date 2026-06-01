@@ -4,9 +4,11 @@ use crate::messages::Message;
 use crate::models::{
     ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
     EraserModeOption, FontStyleOption, FontWeightOption, KeybindingField, NamedColorOption,
-    OverrideOption, PresenterToolBehaviorOption, QuadField, SessionCompressionOption,
-    SessionStorageModeOption, StatusPositionOption, TextField, ToggleField,
-    ToolbarLayoutModeOption, ToolbarOverrideField, TripletField,
+    OverrideOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
+    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
+    PresenterToolBehaviorOption, QuadField, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
+    TripletField,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -196,6 +198,66 @@ impl ConfiguratorApp {
         Task::none()
     }
 
+    pub(super) fn handle_export_pdf_page_size_changed(
+        &mut self,
+        option: PdfPageSizeOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.export_pdf_page_size = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_export_pdf_orientation_changed(
+        &mut self,
+        option: PdfOrientationOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.export_pdf_orientation = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_export_pdf_fit_changed(
+        &mut self,
+        option: PdfFitModeOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.export_pdf_fit = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_export_pdf_transparent_background_changed(
+        &mut self,
+        option: PdfTransparentBackgroundOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.export_pdf_transparent_background = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_export_pdf_label_position_changed(
+        &mut self,
+        option: PdfLabelPositionOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.export_pdf_label_position = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
+    pub(super) fn handle_export_pdf_label_content_changed(
+        &mut self,
+        option: PdfLabelContentModeOption,
+    ) -> Task<Message> {
+        self.status = StatusMessage::idle();
+        self.draft.export_pdf_label_content = option;
+        self.refresh_dirty_flag();
+        Task::none()
+    }
+
     pub(super) fn handle_buffer_count_changed(&mut self, count: u32) -> Task<Message> {
         self.status = StatusMessage::idle();
         self.draft.performance_buffer_count = count;
@@ -272,6 +334,8 @@ fn quad_field_picker_id(field: QuadField) -> Option<ColorPickerId> {
         QuadField::HelpBg => Some(ColorPickerId::HelpBg),
         QuadField::HelpBorder => Some(ColorPickerId::HelpBorder),
         QuadField::HelpText => Some(ColorPickerId::HelpText),
+        QuadField::ExportPdfLabelText => Some(ColorPickerId::ExportPdfLabelText),
+        QuadField::ExportPdfLabelBackground => Some(ColorPickerId::ExportPdfLabelBackground),
     }
 }
 

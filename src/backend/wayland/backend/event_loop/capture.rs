@@ -36,6 +36,9 @@ pub(super) fn handle_pending_actions(
         match action {
             PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
             PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
+            PendingBackendAction::BoardPdfExport(action) => {
+                state.handle_board_pdf_export_action(action);
+            }
         }
     }
     if let Some(action) = state.input_state.take_pending_output_focus_action() {
@@ -171,6 +174,12 @@ fn handle_capture_results(state: &mut WaylandState) {
                         crate::capture::ImageOperationKind::CanvasExport => {
                             "Canvas exported".to_string()
                         }
+                        crate::capture::ImageOperationKind::BoardPdfExport => {
+                            "Board exported".to_string()
+                        }
+                        crate::capture::ImageOperationKind::AllBoardsPdfExport => {
+                            "Boards exported".to_string()
+                        }
                     }
                 } else {
                     message_parts.join(" - ")
@@ -200,7 +209,11 @@ fn handle_capture_results(state: &mut WaylandState) {
                 should_exit = exit_after_capture;
             }
         }
+        CaptureOutcome::DesktopBackdropSuccess(backdrop) => {
+            state.finish_pending_board_pdf_export_with_backdrop(backdrop, exit_after_capture);
+        }
         CaptureOutcome::Failed { operation, message } => {
+            state.capture.clear_pending_pdf_export();
             let friendly_error =
                 if matches!(operation, crate::capture::ImageOperationKind::Screenshot) {
                     friendly_capture_error(&message)
@@ -221,6 +234,7 @@ fn handle_capture_results(state: &mut WaylandState) {
             );
         }
         CaptureOutcome::Cancelled { operation, reason } => {
+            state.capture.clear_pending_pdf_export();
             info!("{} cancelled: {}", operation.saved_log_label(), reason);
         }
     }

@@ -117,3 +117,41 @@ fn color_quad_input_summary_trims_components() {
 
     assert_eq!(input.summary(), "0.1, 0.2, 0.3, 0.4");
 }
+
+#[test]
+fn color_quad_input_rejects_out_of_range_component() {
+    let input = ColorQuadInput {
+        components: [
+            "0.1".to_string(),
+            "1.5".to_string(),
+            "0.3".to_string(),
+            "0.4".to_string(),
+        ],
+    };
+
+    let err = input
+        .to_array("export.pdf.labels.text_color")
+        .expect_err("expected out-of-range error");
+
+    assert_eq!(err.field, "export.pdf.labels.text_color[1]");
+    assert!(err.message.contains("between 0 and 1"));
+}
+
+#[test]
+fn color_quad_input_rejects_non_finite_component() {
+    let input = ColorQuadInput {
+        components: [
+            "0.1".to_string(),
+            "0.2".to_string(),
+            "nan".to_string(),
+            "0.4".to_string(),
+        ],
+    };
+
+    let err = input
+        .to_array("export.pdf.labels.text_color")
+        .expect_err("expected non-finite error");
+
+    assert_eq!(err.field, "export.pdf.labels.text_color[2]");
+    assert!(err.message.contains("finite"));
+}

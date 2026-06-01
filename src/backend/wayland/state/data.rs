@@ -13,8 +13,30 @@ pub enum OverlaySuppression {
     #[default]
     None,
     Capture,
+    DesktopBackdrop,
     Frozen,
     Zoom,
+}
+
+impl OverlaySuppression {
+    pub(in crate::backend::wayland) fn effective_for_board(
+        self,
+        board_is_transparent: bool,
+    ) -> Self {
+        if self == Self::Zoom && !board_is_transparent {
+            Self::None
+        } else {
+            self
+        }
+    }
+
+    pub(in crate::backend::wayland) fn renders_canvas(self) -> bool {
+        !matches!(self, Self::DesktopBackdrop | Self::Frozen | Self::Zoom)
+    }
+
+    pub(in crate::backend::wayland) fn renders_ui(self) -> bool {
+        self == Self::None
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -166,5 +188,38 @@ impl StateData {
             xdg_explicit_close_requested: false,
             render_profile_ui_baseline: Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OverlaySuppression;
+
+    #[test]
+    fn desktop_backdrop_suppression_hides_canvas_and_ui() {
+        let suppression = OverlaySuppression::DesktopBackdrop.effective_for_board(true);
+
+        assert!(!suppression.renders_canvas());
+        assert!(!suppression.renders_ui());
+    }
+
+    #[test]
+    fn normal_capture_suppression_keeps_canvas_without_ui() {
+        let suppression = OverlaySuppression::Capture.effective_for_board(true);
+
+        assert!(suppression.renders_canvas());
+        assert!(!suppression.renders_ui());
+    }
+
+    #[test]
+    fn zoom_suppression_only_applies_on_transparent_boards() {
+        assert_eq!(
+            OverlaySuppression::Zoom.effective_for_board(false),
+            OverlaySuppression::None
+        );
+        assert_eq!(
+            OverlaySuppression::Zoom.effective_for_board(true),
+            OverlaySuppression::Zoom
+        );
     }
 }

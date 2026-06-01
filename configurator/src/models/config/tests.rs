@@ -1,13 +1,16 @@
 use super::super::color::ColorInput;
 use super::super::fields::{
-    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, QuadField,
-    SessionStorageModeOption, TextField, ToggleField, ToolOption, TripletField,
+    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, QuadField, SessionStorageModeOption, TextField, ToggleField,
+    ToolOption, TripletField,
 };
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{
-    ColorSpec, Config, PresetToolStatesConfig, RenderColorMappingConfig, RenderProfileConfig,
-    RenderProfileExportMode, ToolPresetConfig, XdgFocusLossBehavior,
+    ColorSpec, Config, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation,
+    PdfPageSize, PdfTransparentBackground, PresetToolStatesConfig, RenderColorMappingConfig,
+    RenderProfileConfig, RenderProfileExportMode, ToolPresetConfig, XdgFocusLossBehavior,
 };
 use wayscriber::input::{DragTool, PerToolDrawingSettings, Tool};
 
@@ -105,6 +108,153 @@ fn config_draft_round_trips_render_profiles() {
     assert_eq!(
         round_trip.render_profiles.profiles[0].mappings[0].from,
         "#000000"
+    );
+}
+
+#[test]
+fn config_draft_round_trips_pdf_export() {
+    let mut config = Config::default();
+    config.export.pdf.filename_template = Some("board_%Y".to_string());
+    config.export.pdf.all_boards_filename_template = Some("all_%Y".to_string());
+    config.export.pdf.page_size = PdfPageSize::Letter;
+    config.export.pdf.orientation = PdfOrientation::Landscape;
+    config.export.pdf.fit = PdfFitMode::FitContentToPage;
+    config.export.pdf.transparent_background = PdfTransparentBackground::Desktop;
+    config.export.pdf.custom_width = 900.0;
+    config.export.pdf.custom_height = 700.0;
+    config.export.pdf.content_source_padding = 32.0;
+    config.export.pdf.labels.enabled = true;
+    config.export.pdf.labels.position = PdfLabelPosition::TopRight;
+    config.export.pdf.labels.content = PdfLabelContentMode::BoardAndPage;
+    config.export.pdf.labels.template = "{board_name} {page}/{pages}".to_string();
+    config.export.pdf.labels.font_family = "Serif".to_string();
+    config.export.pdf.labels.font_size = 12.0;
+    config.export.pdf.labels.margin = 18.0;
+    config.export.pdf.labels.padding_x = 7.0;
+    config.export.pdf.labels.padding_y = 4.0;
+    config.export.pdf.labels.text_color = [0.2, 0.3, 0.4, 0.9];
+    config.export.pdf.labels.background_enabled = false;
+    config.export.pdf.labels.background_color = [0.8, 0.7, 0.6, 0.5];
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.export_pdf_page_size, PdfPageSizeOption::Letter);
+    assert_eq!(
+        draft.export_pdf_orientation,
+        PdfOrientationOption::Landscape
+    );
+    assert_eq!(draft.export_pdf_fit, PdfFitModeOption::FitContentToPage);
+    assert_eq!(
+        draft.export_pdf_transparent_background,
+        PdfTransparentBackgroundOption::Desktop
+    );
+
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("expected PDF export to round trip");
+
+    assert_eq!(
+        round_trip.export.pdf.filename_template.as_deref(),
+        Some("board_%Y")
+    );
+    assert_eq!(
+        round_trip
+            .export
+            .pdf
+            .all_boards_filename_template
+            .as_deref(),
+        Some("all_%Y")
+    );
+    assert_eq!(round_trip.export.pdf.page_size, PdfPageSize::Letter);
+    assert_eq!(round_trip.export.pdf.orientation, PdfOrientation::Landscape);
+    assert_eq!(round_trip.export.pdf.fit, PdfFitMode::FitContentToPage);
+    assert_eq!(
+        round_trip.export.pdf.transparent_background,
+        PdfTransparentBackground::Desktop
+    );
+    assert_eq!(round_trip.export.pdf.content_source_padding, 32.0);
+    assert!(round_trip.export.pdf.labels.enabled);
+    assert_eq!(
+        round_trip.export.pdf.labels.position,
+        PdfLabelPosition::TopRight
+    );
+    assert_eq!(
+        round_trip.export.pdf.labels.content,
+        PdfLabelContentMode::BoardAndPage
+    );
+    assert!(!round_trip.export.pdf.labels.background_enabled);
+    assert_eq!(
+        round_trip.export.pdf.labels.text_color,
+        [0.2, 0.3, 0.4, 0.9]
+    );
+    assert_eq!(
+        round_trip.export.pdf.labels.background_color,
+        [0.8, 0.7, 0.6, 0.5]
+    );
+    assert_eq!(
+        round_trip.export.pdf.labels.template,
+        "{board_name} {page}/{pages}"
+    );
+}
+
+#[test]
+fn config_draft_blocks_invalid_pdf_export_values() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.export_pdf_label_template = "{missing}".to_string();
+    draft.export_pdf_custom_width = "0".to_string();
+    draft.export_pdf_content_source_padding = "-1".to_string();
+    draft.export_pdf_label_font_size = "nan".to_string();
+    draft
+        .export_pdf_label_text_color
+        .set_component(2, "nope".to_string());
+    draft
+        .export_pdf_label_background_color
+        .set_component(0, "1.5".to_string());
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("expected PDF validation errors");
+    let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+    assert!(fields.contains(&"export.pdf.labels.template"));
+    assert!(fields.contains(&"export.pdf.custom_width"));
+    assert!(fields.contains(&"export.pdf.content_source_padding"));
+    assert!(fields.contains(&"export.pdf.labels.font_size"));
+    assert!(fields.contains(&"export.pdf.labels.text_color[2]"));
+    assert!(fields.contains(&"export.pdf.labels.background_color[0]"));
+}
+
+#[test]
+fn config_draft_blocks_empty_custom_pdf_template() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.export_pdf_label_content = PdfLabelContentModeOption::CustomTemplate;
+    draft.export_pdf_label_template = "   ".to_string();
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("expected empty template validation error");
+
+    assert!(errors.iter().any(|err| {
+        err.field == "export.pdf.labels.template" && err.message.contains("non-empty")
+    }));
+}
+
+#[test]
+fn config_draft_ignores_invalid_pdf_template_for_non_custom_label_content() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.export_pdf_label_content = PdfLabelContentModeOption::DocumentPage;
+    draft.export_pdf_label_template = "{missing}".to_string();
+
+    let round_trip = draft
+        .to_config(&Config::default())
+        .expect("non-custom label content should ignore template errors");
+
+    assert_eq!(
+        round_trip.export.pdf.labels.content,
+        PdfLabelContentMode::DocumentPage
+    );
+    assert_eq!(
+        round_trip.export.pdf.labels.template,
+        Config::default().export.pdf.labels.template
     );
 }
 

@@ -227,6 +227,8 @@ impl InputState {
                         match fallback.operation {
                             ImageOperationKind::Screenshot => "Screenshot saved",
                             ImageOperationKind::CanvasExport => "Canvas exported",
+                            ImageOperationKind::BoardPdfExport => "Board exported",
+                            ImageOperationKind::AllBoardsPdfExport => "Boards exported",
                         },
                     );
                 }

@@ -15,6 +15,7 @@ pub mod sources;
 pub mod types;
 
 mod dependencies;
+mod desktop_backdrop;
 mod manager;
 mod pipeline;
 #[cfg(test)]
@@ -26,5 +27,7 @@ pub(crate) use pipeline::CaptureRequest;
 #[allow(unused_imports)]
 pub use types::{
     CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType,
-    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedImage,
+    DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DesktopBackdropGeometry,
+    DesktopBackdropOutputGeometry, DocumentDeliveryRequest, ImageDeliveryRequest,
+    ImageFormatMetadata, ImageOperationKind, RenderedDocument, RenderedImage,
 };

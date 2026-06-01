@@ -116,6 +116,8 @@ impl ConfiguratorApp {
             ColorPickerId::HelpBg,
             ColorPickerId::HelpBorder,
             ColorPickerId::HelpText,
+            ColorPickerId::ExportPdfLabelText,
+            ColorPickerId::ExportPdfLabelBackground,
         ] {
             self.sync_color_picker_hex_for_id(id);
         }
@@ -186,6 +188,12 @@ impl ConfiguratorApp {
             }
             ColorPickerId::HelpText => {
                 self.apply_quad_rgb(QuadField::HelpText, values, alpha);
+            }
+            ColorPickerId::ExportPdfLabelText => {
+                self.apply_quad_rgb(QuadField::ExportPdfLabelText, values, alpha);
+            }
+            ColorPickerId::ExportPdfLabelBackground => {
+                self.apply_quad_rgb(QuadField::ExportPdfLabelBackground, values, alpha);
             }
         }
 
@@ -264,6 +272,15 @@ impl ConfiguratorApp {
                 let values = parse_quad_values(&self.draft.help_text_color.components);
                 Some(([values[0], values[1], values[2]], Some(values[3])))
             }
+            ColorPickerId::ExportPdfLabelText => {
+                let values = parse_quad_values(&self.draft.export_pdf_label_text_color.components);
+                Some(([values[0], values[1], values[2]], Some(values[3])))
+            }
+            ColorPickerId::ExportPdfLabelBackground => {
+                let values =
+                    parse_quad_values(&self.draft.export_pdf_label_background_color.components);
+                Some(([values[0], values[1], values[2]], Some(values[3])))
+            }
         }
     }
 
@@ -281,6 +298,8 @@ impl ConfiguratorApp {
                 | ColorPickerId::HelpBg
                 | ColorPickerId::HelpBorder
                 | ColorPickerId::HelpText
+                | ColorPickerId::ExportPdfLabelText
+                | ColorPickerId::ExportPdfLabelBackground
         )
     }
 }

@@ -87,6 +87,7 @@ impl CompositorHandler for WaylandState {
                 warn!("Capture preflight completed without capture suppression; cancelling");
                 self.capture.clear_in_progress();
                 self.capture.clear_exit_on_success();
+                self.capture.clear_pending_pdf_export();
                 self.show_overlay();
             } else {
                 self.begin_pending_capture(request);

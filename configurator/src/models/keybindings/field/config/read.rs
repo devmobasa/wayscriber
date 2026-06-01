@@ -111,6 +111,8 @@ impl KeybindingField {
             Self::ExportCanvasFile => &config.capture.export_canvas_file,
             Self::ExportCanvasClipboard => &config.capture.export_canvas_clipboard,
             Self::ExportCanvasClipboardAndFile => &config.capture.export_canvas_clipboard_and_file,
+            Self::ExportBoardPdfFile => &config.capture.export_board_pdf_file,
+            Self::ExportAllBoardsPdfFile => &config.capture.export_all_boards_pdf_file,
             Self::OpenCaptureFolder => &config.capture.open_capture_folder,
             Self::ToggleFrozenMode => &config.zoom.toggle_frozen_mode,
             Self::ZoomIn => &config.zoom.zoom_in,

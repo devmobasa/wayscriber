@@ -37,6 +37,15 @@ impl InputState {
                 self.reset_modifiers();
                 true
             }
+            Action::ExportBoardPdfFile | Action::ExportAllBoardsPdfFile => {
+                log::debug!("Board PDF export action {:?} pending for backend", action);
+                self.set_pending_backend_action(PendingBackendAction::BoardPdfExport(action));
+
+                // Clear modifiers to prevent them from being "stuck" after capture
+                // (portal dialog causes key releases to be missed or focus to flicker)
+                self.reset_modifiers();
+                true
+            }
             Action::ToggleFrozenMode => {
                 log::info!("Toggle frozen mode requested");
                 self.request_frozen_toggle();

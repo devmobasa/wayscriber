@@ -2,9 +2,9 @@ use super::keybindings::KeybindingsConfig;
 #[cfg(tablet)]
 use super::types::TabletInputConfig;
 use super::types::{
-    ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, HistoryConfig,
-    PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, RenderProfilesConfig, SessionConfig,
-    UiConfig,
+    ArrowConfig, BoardConfig, BoardsConfig, CaptureConfig, DrawingConfig, ExportConfig,
+    HistoryConfig, PerformanceConfig, PresenterModeConfig, PresetSlotsConfig, RenderProfilesConfig,
+    SessionConfig, UiConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -89,6 +89,10 @@ pub struct Config {
     #[serde(default)]
     pub capture: CaptureConfig,
 
+    /// Explicit file export settings
+    #[serde(default)]
+    pub export: ExportConfig,
+
     /// Tablet/stylus input settings (feature-gated)
     #[cfg(tablet)]
     #[serde(default)]
@@ -114,6 +118,7 @@ impl Default for Config {
             board: BoardConfig::default(),
             keybindings: KeybindingsConfig::default(),
             capture: CaptureConfig::default(),
+            export: ExportConfig::default(),
             #[cfg(tablet)]
             tablet: TabletInputConfig::default(),
             session: SessionConfig::default(),

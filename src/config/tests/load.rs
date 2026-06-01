@@ -49,6 +49,36 @@ fn click_highlight_force_in_light_mode_defaults_true_and_parses_false() {
 }
 
 #[test]
+fn pdf_transparent_background_defaults_to_none() {
+    assert_eq!(
+        Config::default().export.pdf.transparent_background,
+        PdfTransparentBackground::None
+    );
+}
+
+#[test]
+fn pdf_transparent_background_parses_desktop() {
+    let config: Config = toml::from_str("[export.pdf]\ntransparent_background = 'desktop'\n")
+        .expect("desktop transparent background should parse");
+
+    assert_eq!(
+        config.export.pdf.transparent_background,
+        PdfTransparentBackground::Desktop
+    );
+}
+
+#[test]
+fn pdf_transparent_background_rejects_unknown_values() {
+    let err = toml::from_str::<Config>("[export.pdf]\ntransparent_background = 'wallpaper'\n")
+        .expect_err("unknown transparent background should be rejected");
+
+    assert!(
+        err.to_string().contains("wallpaper"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn load_parses_mouse_button_drag_tool_bindings() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);

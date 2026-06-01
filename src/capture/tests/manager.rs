@@ -6,7 +6,8 @@ use std::{
 use tokio::time::{Duration, sleep};
 
 use crate::capture::{
-    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedImage,
+    DocumentDeliveryRequest, ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind,
+    RenderedDocument, RenderedImage,
     dependencies::CaptureDependencies,
     file::FileSaveConfig,
     manager::CaptureManager,
@@ -31,6 +32,14 @@ fn rendered_png(bytes: Vec<u8>) -> RenderedImage {
         format: ImageFormatMetadata::png(),
         width: 1,
         height: 1,
+    }
+}
+
+fn rendered_pdf(bytes: Vec<u8>) -> RenderedDocument {
+    RenderedDocument {
+        bytes,
+        extension: "pdf".to_string(),
+        mime_type: "application/pdf".to_string(),
     }
 }
 
@@ -215,6 +224,56 @@ async fn request_image_delivery_queues_manager_backed_path() {
 }
 
 #[tokio::test]
+async fn request_document_delivery_reports_board_pdf_success() {
+    let captured_types = Arc::new(Mutex::new(Vec::new()));
+    let source = MockSource {
+        data: vec![99],
+        error: Arc::new(Mutex::new(None)),
+        captured_types: captured_types.clone(),
+    };
+    let saver = MockSaver {
+        should_fail: false,
+        path: PathBuf::from("/tmp/board.pdf"),
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let saver_handle = saver.clone();
+    let clipboard = MockClipboard {
+        should_fail: false,
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let deps = CaptureDependencies {
+        source: Arc::new(source),
+        saver: Arc::new(saver),
+        clipboard: Arc::new(clipboard),
+    };
+    let manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+
+    manager
+        .request_document_delivery(DocumentDeliveryRequest {
+            document: rendered_pdf(b"%PDF-".to_vec()),
+            destination: CaptureDestination::FileOnly,
+            save_config: Some(FileSaveConfig::default()),
+            operation: ImageOperationKind::BoardPdfExport,
+        })
+        .unwrap();
+
+    let outcome = wait_for_manager_outcome(&manager).await;
+
+    match outcome {
+        Some(CaptureOutcome::Success(result)) => {
+            assert_eq!(result.operation, ImageOperationKind::BoardPdfExport);
+            assert_eq!(result.image_data, b"%PDF-".to_vec());
+            assert_eq!(result.saved_path, Some(PathBuf::from("/tmp/board.pdf")));
+            assert!(!result.copied_to_clipboard);
+        }
+        other => panic!("Expected success outcome, got {other:?}"),
+    }
+    assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
+    assert!(captured_types.lock().unwrap().is_empty());
+    assert_eq!(manager.get_status().await, CaptureStatus::Success);
+}
+
+#[tokio::test]
 async fn request_image_delivery_records_canvas_save_failure() {
     let captured_types = Arc::new(Mutex::new(Vec::new()));
     let source = MockSource {
@@ -272,6 +331,61 @@ async fn request_image_delivery_records_canvas_save_failure() {
         CaptureStatus::Failed(ref message)
             if message.contains("Failed to save canvas export")
                 && !message.to_lowercase().contains("screenshot")
+    ));
+}
+
+#[tokio::test]
+async fn request_document_delivery_records_board_pdf_save_failure() {
+    let captured_types = Arc::new(Mutex::new(Vec::new()));
+    let source = MockSource {
+        data: vec![99],
+        error: Arc::new(Mutex::new(None)),
+        captured_types: captured_types.clone(),
+    };
+    let saver = MockSaver {
+        should_fail: true,
+        path: PathBuf::from("/tmp/board.pdf"),
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let saver_handle = saver.clone();
+    let clipboard = MockClipboard {
+        should_fail: false,
+        calls: Arc::new(Mutex::new(0)),
+    };
+    let deps = CaptureDependencies {
+        source: Arc::new(source),
+        saver: Arc::new(saver),
+        clipboard: Arc::new(clipboard),
+    };
+    let manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+
+    manager
+        .request_document_delivery(DocumentDeliveryRequest {
+            document: rendered_pdf(b"%PDF-".to_vec()),
+            destination: CaptureDestination::FileOnly,
+            save_config: Some(FileSaveConfig::default()),
+            operation: ImageOperationKind::BoardPdfExport,
+        })
+        .unwrap();
+
+    let outcome = wait_for_manager_outcome(&manager).await;
+
+    match outcome {
+        Some(CaptureOutcome::Failed { operation, message }) => {
+            assert_eq!(operation, ImageOperationKind::BoardPdfExport);
+            assert!(
+                message.contains("Failed to save board PDF export"),
+                "unexpected failure message: {message}"
+            );
+        }
+        other => panic!("Expected failure outcome, got {other:?}"),
+    }
+    assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
+    assert!(captured_types.lock().unwrap().is_empty());
+    assert!(matches!(
+        manager.get_status().await,
+        CaptureStatus::Failed(ref message)
+            if message.contains("Failed to save board PDF export")
     ));
 }
 

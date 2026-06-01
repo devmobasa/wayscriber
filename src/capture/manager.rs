@@ -4,11 +4,15 @@ use tokio::sync::{Mutex, mpsc};
 
 use crate::capture::{
     dependencies::CaptureDependencies,
+    desktop_backdrop::capture_desktop_backdrop,
     file::FileSaveConfig,
-    pipeline::{CaptureManagerRequest, CaptureRequest, deliver_image, perform_capture},
+    pipeline::{
+        CaptureManagerRequest, CaptureManagerResult, CaptureRequest, deliver_document,
+        deliver_image, perform_capture,
+    },
     types::{
         CaptureDestination, CaptureError, CaptureOutcome, CaptureStatus, CaptureType,
-        ImageDeliveryRequest,
+        DesktopBackdropCaptureRequest, DocumentDeliveryRequest, ImageDeliveryRequest,
     },
 };
 
@@ -62,18 +66,38 @@ impl CaptureManager {
 
                 let outcome = match request {
                     CaptureManagerRequest::Capture(request) => {
-                        perform_capture(request, deps_clone.clone()).await
+                        perform_capture(request, deps_clone.clone())
+                            .await
+                            .map(CaptureManagerResult::Capture)
+                    }
+                    CaptureManagerRequest::CaptureDesktopBackdrop(request) => {
+                        capture_desktop_backdrop(request, deps_clone.clone())
+                            .await
+                            .map(CaptureManagerResult::DesktopBackdrop)
                     }
                     CaptureManagerRequest::DeliverImage(request) => {
-                        deliver_image(request, deps_clone.clone()).await
+                        deliver_image(request, deps_clone.clone())
+                            .await
+                            .map(CaptureManagerResult::Capture)
+                    }
+                    CaptureManagerRequest::DeliverDocument(request) => {
+                        deliver_document(request, deps_clone.clone())
+                            .await
+                            .map(CaptureManagerResult::Capture)
                     }
                 };
 
                 match outcome {
-                    Ok(result) => {
+                    Ok(CaptureManagerResult::Capture(result)) => {
                         log::info!("Image operation successful: {:?}", result.saved_path);
                         *status_clone.lock().await = CaptureStatus::Success;
                         *result_clone.lock().await = Some(CaptureOutcome::Success(result));
+                    }
+                    Ok(CaptureManagerResult::DesktopBackdrop(result)) => {
+                        log::info!("Desktop backdrop capture successful");
+                        *status_clone.lock().await = CaptureStatus::Success;
+                        *result_clone.lock().await =
+                            Some(CaptureOutcome::DesktopBackdropSuccess(result));
                     }
                     Err(CaptureError::Cancelled(reason)) => {
                         log::info!("Image operation cancelled: {}", reason);
@@ -129,12 +153,34 @@ impl CaptureManager {
         Ok(())
     }
 
+    pub fn request_desktop_backdrop_capture(
+        &self,
+        request: DesktopBackdropCaptureRequest,
+    ) -> Result<(), CaptureError> {
+        self.request_tx
+            .send(CaptureManagerRequest::CaptureDesktopBackdrop(request))
+            .map_err(|_| CaptureError::ImageError("Capture manager not running".to_string()))?;
+
+        Ok(())
+    }
+
     pub fn request_image_delivery(
         &self,
         request: ImageDeliveryRequest,
     ) -> Result<(), CaptureError> {
         self.request_tx
             .send(CaptureManagerRequest::DeliverImage(request))
+            .map_err(|_| CaptureError::ImageError("Capture manager not running".to_string()))?;
+
+        Ok(())
+    }
+
+    pub fn request_document_delivery(
+        &self,
+        request: DocumentDeliveryRequest,
+    ) -> Result<(), CaptureError> {
+        self.request_tx
+            .send(CaptureManagerRequest::DeliverDocument(request))
             .map_err(|_| CaptureError::ImageError("Capture manager not running".to_string()))?;
 
         Ok(())
