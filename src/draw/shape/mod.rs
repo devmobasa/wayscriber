@@ -2,16 +2,22 @@
 
 mod arrow_label;
 mod bounds;
+mod polygon;
 mod step_marker;
 mod text;
 mod text_cache;
 mod types;
 
+pub use polygon::{
+    PolygonKind, REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES,
+    REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides,
+};
 pub use text_cache::invalidate_text_cache;
 pub use types::{ArrowLabel, EmbeddedImage, EraserBrush, EraserKind, Shape, StepMarkerLabel};
 
 pub(crate) use arrow_label::{ARROW_LABEL_BACKGROUND, arrow_label_layout};
 pub(crate) use bounds::{bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points};
+pub(crate) use polygon::{PolygonTemplate, generated_points, has_minimum_distinct_points};
 pub(crate) use step_marker::{step_marker_outline_thickness, step_marker_radius};
 pub(crate) use text::{
     bounding_box_for_sticky_note, bounding_box_for_text, sticky_note_layout,

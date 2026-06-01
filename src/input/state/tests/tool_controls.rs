@@ -1,7 +1,7 @@
 use super::*;
 use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
 use crate::input::{DragBinding, DragToolBindings, PerToolDrawingSettings};
-use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarSnapshot};
+use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
 #[test]
 fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
@@ -285,6 +285,46 @@ fn toolbar_context_matches_tool_profiles_for_each_tool() {
         );
         assert!(!context.show_font_controls, "{tool:?} font controls");
     }
+}
+
+#[test]
+fn toolbar_context_exposes_polygon_shape_controls() {
+    let mut state = create_test_input_state();
+
+    for tool in [
+        Tool::Triangle,
+        Tool::Parallelogram,
+        Tool::Rhombus,
+        Tool::RegularPolygon,
+        Tool::FreeformPolygon,
+    ] {
+        assert!(state.set_tool_override(Some(tool)));
+        let snapshot = ToolbarSnapshot::from_input(&state);
+        let context = ToolContext::from_snapshot(&snapshot);
+
+        assert_eq!(context.tool_options_kind, ToolOptionsKind::Shape);
+        assert!(context.show_fill_toggle);
+        assert_eq!(
+            context.show_polygon_sides_control,
+            tool == Tool::RegularPolygon,
+            "{tool:?} sides control"
+        );
+    }
+}
+
+#[test]
+fn polygon_side_controls_clamp_and_mark_session_dirty() {
+    let mut state = create_test_input_state();
+    state.clear_session_dirty();
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetPolygonSides(2)));
+    assert_eq!(state.polygon_sides, 3);
+    assert!(state.is_session_dirty());
+
+    state.clear_session_dirty();
+    assert!(state.apply_toolbar_event(ToolbarEvent::NudgePolygonSides(99)));
+    assert_eq!(state.polygon_sides, 12);
+    assert!(state.is_session_dirty());
 }
 
 #[test]
@@ -708,6 +748,7 @@ fn apply_full_preset_restores_all_tool_settings() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: None,
         drag_tools: None,
     });
@@ -790,6 +831,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: None,
         drag_tools: None,
     });
@@ -808,6 +850,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: None,
         drag_tools: None,
     });
@@ -854,6 +897,7 @@ fn legacy_preset_changes_only_selected_tool_settings() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: None,
         drag_tools: None,
     });
@@ -891,6 +935,7 @@ fn legacy_step_marker_preset_uses_font_derived_size() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: None,
         drag_tools: None,
     });
@@ -927,6 +972,7 @@ fn full_step_marker_preset_uses_captured_profile_size() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: None,
         drag_tools: None,
     });

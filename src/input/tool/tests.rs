@@ -50,6 +50,21 @@ fn tool_profile_describes_toolbar_control_groups() {
 }
 
 #[test]
+fn polygon_tools_use_shape_controls_and_rect_settings() {
+    for tool in [
+        Tool::Triangle,
+        Tool::Parallelogram,
+        Tool::Rhombus,
+        Tool::RegularPolygon,
+        Tool::FreeformPolygon,
+    ] {
+        assert_eq!(tool.settings_slot(), ToolSettingsSlot::Rect);
+        assert_eq!(tool.profile().control_group, ToolControlGroup::Shape);
+        assert!(tool.profile().show_fill_toggle());
+    }
+}
+
+#[test]
 fn per_tool_settings_read_and_write_through_catalog_slot() {
     let mut settings = PerToolDrawingSettings::new(color(1.0), 4.0);
     settings.marker = ToolDrawingSettings::new(color(0.5), 12.0);
@@ -80,10 +95,28 @@ fn selectable_tools_expose_actions_from_catalog() {
 fn drag_tools_round_trip_through_descriptor_table() {
     for tool in Tool::ALL {
         let drag_tool = DragTool::from_tool(tool);
-        assert_ne!(drag_tool, DragTool::Default);
-        assert_eq!(drag_tool.as_tool(), Some(tool));
+        if let Some(drag_tool) = drag_tool {
+            assert_ne!(drag_tool, DragTool::Default);
+            assert_eq!(drag_tool.as_tool(), Some(tool));
+        } else {
+            assert_eq!(tool, Tool::FreeformPolygon);
+        }
     }
     assert_eq!(DragTool::Default.as_tool(), None);
+}
+
+#[test]
+fn drag_bindable_tool_list_excludes_freeform_polygon_and_default() {
+    assert_eq!(DragBindableTool::from_tool(Tool::FreeformPolygon), None);
+    assert_eq!(DragBindableTool::from_drag_tool(DragTool::Default), None);
+    assert_eq!(
+        DragBindableTool::from_tool(Tool::RegularPolygon),
+        Some(DragBindableTool::RegularPolygon)
+    );
+    assert_eq!(
+        DragTool::RegularPolygon.as_tool(),
+        Some(Tool::RegularPolygon)
+    );
 }
 
 #[test]

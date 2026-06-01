@@ -23,6 +23,8 @@ impl InputState {
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
             ToolbarEvent::SetFontSize(size) => self.apply_toolbar_set_font_size(size),
             ToolbarEvent::ToggleFill(enable) => self.apply_toolbar_toggle_fill(enable),
+            ToolbarEvent::SetPolygonSides(sides) => self.apply_toolbar_set_polygon_sides(sides),
+            ToolbarEvent::NudgePolygonSides(delta) => self.apply_toolbar_nudge_polygon_sides(delta),
             ToolbarEvent::ToggleArrowLabels(enable) => {
                 self.apply_toolbar_toggle_arrow_labels(enable)
             }

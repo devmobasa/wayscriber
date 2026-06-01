@@ -15,6 +15,7 @@ impl InputState {
                         | Shape::Line { .. }
                         | Shape::Rect { .. }
                         | Shape::Ellipse { .. }
+                        | Shape::Polygon { .. }
                         | Shape::Arrow { .. }
                         | Shape::MarkerStroke { .. }
                         | Shape::Text { .. }
@@ -28,6 +29,7 @@ impl InputState {
                 | Shape::Line { color, .. }
                 | Shape::Rect { color, .. }
                 | Shape::Ellipse { color, .. }
+                | Shape::Polygon { color, .. }
                 | Shape::Arrow { color, .. }
                 | Shape::Text { color, .. }
                 | Shape::StepMarker { color, .. }
@@ -78,6 +80,7 @@ impl InputState {
                         | Shape::Line { .. }
                         | Shape::Rect { .. }
                         | Shape::Ellipse { .. }
+                        | Shape::Polygon { .. }
                         | Shape::Arrow { .. }
                         | Shape::MarkerStroke { .. }
                         | Shape::Text { .. }
@@ -91,6 +94,7 @@ impl InputState {
                 | Shape::Line { color, .. }
                 | Shape::Rect { color, .. }
                 | Shape::Ellipse { color, .. }
+                | Shape::Polygon { color, .. }
                 | Shape::Arrow { color, .. }
                 | Shape::Text { color, .. }
                 | Shape::StepMarker { color, .. }

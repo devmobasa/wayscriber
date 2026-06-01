@@ -1,4 +1,3 @@
-use crate::config::ToolbarLayoutMode;
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{DrawingState, EraserMode, InputState, Tool};
 
@@ -18,7 +17,7 @@ impl InputState {
         } else {
             self.set_tool_override(Some(tool))
         };
-        if self.toolbar_layout_mode == ToolbarLayoutMode::Simple && self.toolbar_shapes_expanded {
+        if self.toolbar_shapes_expanded {
             self.toolbar_shapes_expanded = false;
             changed = true;
         }
@@ -51,6 +50,14 @@ impl InputState {
 
     pub(super) fn apply_toolbar_toggle_fill(&mut self, enable: bool) -> bool {
         self.set_fill_enabled(enable)
+    }
+
+    pub(super) fn apply_toolbar_set_polygon_sides(&mut self, sides: u8) -> bool {
+        self.set_polygon_sides(sides)
+    }
+
+    pub(super) fn apply_toolbar_nudge_polygon_sides(&mut self, delta: i8) -> bool {
+        self.nudge_polygon_sides(delta)
     }
 
     pub(super) fn apply_toolbar_toggle_arrow_labels(&mut self, enable: bool) -> bool {

@@ -1,4 +1,4 @@
-use crate::draw::{Color, EraserKind, FontDescriptor, Frame};
+use crate::draw::{Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES};
 use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +72,8 @@ pub struct ToolStateSnapshot {
     pub arrow_head_at_end: Option<bool>,
     #[serde(default)]
     pub arrow_label_enabled: Option<bool>,
+    #[serde(default = "default_polygon_sides_for_snapshot")]
+    pub polygon_sides: u8,
     pub board_previous_color: Option<Color>,
     pub show_status_bar: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,6 +99,7 @@ impl ToolStateSnapshot {
             arrow_angle: input.arrow_angle,
             arrow_head_at_end: Some(input.arrow_head_at_end),
             arrow_label_enabled: Some(input.arrow_label_enabled),
+            polygon_sides: input.polygon_sides,
             board_previous_color: input.board_previous_color,
             show_status_bar: input.session_show_status_bar(),
             tool_settings: Some(input.tool_settings.clone()),
@@ -114,6 +117,10 @@ fn default_eraser_kind_for_snapshot() -> EraserKind {
 
 fn default_eraser_mode_for_snapshot() -> EraserMode {
     EraserMode::Brush
+}
+
+fn default_polygon_sides_for_snapshot() -> u8 {
+    REGULAR_POLYGON_DEFAULT_SIDES
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -6,6 +6,11 @@ use crate::input::state::InputState;
 
 pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -> RoutingOutcome {
     let points = event.points();
+    if let Some(outcome) =
+        adapters::handle_building_polygon_non_left_press(state, event.button(), points)
+    {
+        return outcome;
+    }
     if let Some(outcome) = adapters::handle_radial_menu_press(state, event.button(), points) {
         return outcome;
     }

@@ -32,8 +32,9 @@ pub use render::{
 };
 #[allow(unused_imports)]
 pub use shape::{
-    ArrowLabel, EmbeddedImage, EraserBrush, EraserKind, Shape, StepMarkerLabel,
-    invalidate_text_cache,
+    ArrowLabel, EmbeddedImage, EraserBrush, EraserKind, PolygonKind, REGULAR_POLYGON_DEFAULT_SIDES,
+    REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, Shape, StepMarkerLabel,
+    clamp_regular_sides, invalidate_text_cache,
 };
 
 // Re-export color constants for public API (unused internally but part of public interface)

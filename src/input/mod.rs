@@ -28,7 +28,7 @@ pub use state::{
 #[cfg(tablet)]
 #[allow(unused_imports)]
 pub use tablet::TabletSettings;
-pub use tool::{DragTool, EraserMode, PerToolDrawingSettings, Tool};
+pub use tool::{DragBindableTool, DragTool, EraserMode, PerToolDrawingSettings, Tool};
 
 // Re-export for public API (unused internally but part of public interface)
 #[allow(unused_imports)]

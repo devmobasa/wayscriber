@@ -19,14 +19,15 @@ pub(crate) use catalog::{
     ToolDrawingBehavior, ToolMotionBehavior, ToolMotionSizeSource, ToolPathKind, ToolPressBehavior,
     ToolPressureBehavior,
 };
-pub use drag::DragTool;
+pub use drag::{DragBindableTool, DragTool};
 #[expect(
     unused_imports,
     reason = "FinishedToolStroke exposes usage metadata to crate callers"
 )]
 pub(crate) use drawing::ToolUsage;
 pub(crate) use drawing::{
-    FinishedToolStroke, ProvisionalToolSnapshot, ProvisionalToolStroke, ToolStrokeSnapshot,
+    FinishedToolStroke, PolygonProvisionalSnapshot, PolygonStrokeSnapshot, ProvisionalToolSnapshot,
+    ProvisionalToolStroke, ToolStrokeSnapshot,
 };
 pub use kind::Tool;
 pub(crate) use profile::{ToolControlGroup, ToolProfile, ToolSettingsSlot, ToolSizeSource};

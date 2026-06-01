@@ -47,6 +47,14 @@ impl ConfiguratorApp {
                     TextField::DrawingFontSize,
                     Some("Range: 8-72 pt"),
                     validate_f64_range(&self.draft.drawing_default_font_size, 8.0, 72.0),
+                ),
+                labeled_input_with_feedback(
+                    "Polygon sides",
+                    &self.draft.drawing_polygon_sides,
+                    &self.defaults.drawing_polygon_sides,
+                    TextField::DrawingPolygonSides,
+                    Some("Range: 3-12"),
+                    validate_usize_range(&self.draft.drawing_polygon_sides, 3, 12),
                 )
             ]
             .spacing(12),

@@ -50,6 +50,26 @@ pub(crate) fn default_select_ellipse_tool() -> Vec<String> {
     Vec::new()
 }
 
+pub(crate) fn default_select_triangle_tool() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_select_parallelogram_tool() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_select_rhombus_tool() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_select_regular_polygon_tool() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_select_freeform_polygon_tool() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_select_arrow_tool() -> Vec<String> {
     Vec::new()
 }

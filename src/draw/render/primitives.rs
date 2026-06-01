@@ -94,6 +94,37 @@ pub(super) fn render_ellipse(
     let _ = ctx.stroke();
 }
 
+/// Render a closed polygon outline with optional fill.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_polygon(
+    ctx: &cairo::Context,
+    points: &[(i32, i32)],
+    fill: bool,
+    color: Color,
+    thick: f64,
+) {
+    if !crate::draw::shape::has_minimum_distinct_points(points) {
+        return;
+    }
+
+    let _ = ctx.save();
+    ctx.new_path();
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    ctx.set_line_width(thick);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.set_line_join(cairo::LineJoin::Round);
+    ctx.move_to(points[0].0 as f64, points[0].1 as f64);
+    for &(x, y) in &points[1..] {
+        ctx.line_to(x as f64, y as f64);
+    }
+    ctx.close_path();
+    if fill {
+        let _ = ctx.fill_preserve();
+    }
+    let _ = ctx.stroke();
+    let _ = ctx.restore();
+}
+
 /// Render an arrow (line with arrowhead pointing towards the tip)
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_arrow(

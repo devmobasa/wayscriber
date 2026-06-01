@@ -81,6 +81,7 @@ pub enum TextField {
     DrawingThickness,
     DrawingEraserSize,
     DrawingFontSize,
+    DrawingPolygonSides,
     DrawingMarkerOpacity,
     DrawingFontFamily,
     DrawingFontWeight,

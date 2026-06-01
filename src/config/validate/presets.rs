@@ -1,4 +1,5 @@
 use super::Config;
+use crate::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 use super::super::types::{PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, ToolPresetConfig};
@@ -100,6 +101,19 @@ impl Config {
                     slot
                 );
                 *angle = angle.clamp(15.0, 60.0);
+            }
+
+            if let Some(sides) = preset.polygon_sides.as_mut()
+                && !(REGULAR_POLYGON_MIN_SIDES..=REGULAR_POLYGON_MAX_SIDES).contains(sides)
+            {
+                log::warn!(
+                    "Invalid polygon_sides {} in preset slot {}, clamping to {}-{} range",
+                    *sides,
+                    slot,
+                    REGULAR_POLYGON_MIN_SIDES,
+                    REGULAR_POLYGON_MAX_SIDES
+                );
+                *sides = clamp_regular_sides(*sides);
             }
         };
 

@@ -23,6 +23,7 @@ pub struct ConfigDraft {
     pub drawing_default_eraser_size: String,
     pub drawing_default_eraser_mode: EraserModeOption,
     pub drawing_default_font_size: String,
+    pub drawing_polygon_sides: String,
     pub drawing_marker_opacity: String,
     pub drawing_hit_test_tolerance: String,
     pub drawing_hit_test_linear_threshold: String,

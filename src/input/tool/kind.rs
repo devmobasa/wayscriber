@@ -18,6 +18,16 @@ pub enum Tool {
     Rect,
     /// Ellipse/circle outline - from center outward (Tab)
     Ellipse,
+    /// Triangle generated from drag bounds.
+    Triangle,
+    /// Parallelogram generated from drag bounds.
+    Parallelogram,
+    /// Rhombus/diamond generated from drag bounds.
+    Rhombus,
+    /// Regular polygon generated from drag bounds.
+    RegularPolygon,
+    /// Click-to-add freeform polygon.
+    FreeformPolygon,
     /// Arrow with directional head (Ctrl+Shift)
     Arrow,
     /// Privacy blur rectangle over the captured background

@@ -102,6 +102,43 @@ fn load_parses_mouse_button_drag_tool_bindings() {
 }
 
 #[test]
+fn legacy_drag_fields_accept_drag_bindable_polygon_tools() {
+    let config: Config =
+        toml::from_str("[drawing]\ndrag_tool = 'regular-polygon'\nshift_drag_tool = 'triangle'\n")
+            .expect("drag-bindable polygon tools should parse");
+
+    assert_eq!(
+        config.drawing.drag_tool,
+        crate::input::DragBindableTool::RegularPolygon
+    );
+    assert_eq!(
+        config.drawing.shift_drag_tool,
+        crate::input::DragBindableTool::Triangle
+    );
+    let drag_tools = config.drawing.effective_drag_tools();
+    assert_eq!(
+        drag_tools.left.drag_tool,
+        crate::input::DragTool::RegularPolygon
+    );
+    assert_eq!(
+        drag_tools.left.shift_drag_tool,
+        crate::input::DragTool::Triangle
+    );
+}
+
+#[test]
+fn drag_config_rejects_freeform_polygon() {
+    let legacy_err = toml::from_str::<Config>("[drawing]\ndrag_tool = 'freeform-polygon'\n")
+        .expect_err("freeform polygon must not parse in legacy drag fields");
+    assert!(legacy_err.to_string().contains("freeform-polygon"));
+
+    let per_button_err =
+        toml::from_str::<Config>("[drawing.drag_tools.left]\ndrag_tool = 'freeform-polygon'\n")
+            .expect_err("freeform polygon must not parse in per-button drag fields");
+    assert!(per_button_err.to_string().contains("freeform-polygon"));
+}
+
+#[test]
 fn effective_drag_tools_preserve_legacy_left_when_only_right_is_configured() {
     with_temp_config_home(|config_root| {
         let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);

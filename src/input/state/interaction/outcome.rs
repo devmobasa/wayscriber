@@ -29,6 +29,7 @@ pub(crate) enum ConsumedBy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ActiveInteractionKind {
     Drawing,
+    BuildingPolygon,
     TextInput,
     PendingTextClick,
     MovingSelection,

@@ -1,8 +1,8 @@
 use super::super::draft::ConfigDraft;
-use super::super::parse::{parse_field, parse_usize_field};
+use super::super::parse::{parse_field, parse_u8_field, parse_usize_field};
 use crate::models::error::FormError;
 use wayscriber::config::Config;
-use wayscriber::input::Tool;
+use wayscriber::input::{DragBindableTool, DragTool};
 
 impl ConfigDraft {
     pub(super) fn apply_drawing(&self, config: &mut Config, errors: &mut Vec<FormError>) {
@@ -29,6 +29,12 @@ impl ConfigDraft {
             errors,
             |value| config.drawing.default_font_size = value,
         );
+        parse_u8_field(
+            &self.drawing_polygon_sides,
+            "drawing.polygon_sides",
+            errors,
+            |value| config.drawing.polygon_sides = value,
+        );
         parse_field(
             &self.drawing_marker_opacity,
             "drawing.marker_opacity",
@@ -40,17 +46,26 @@ impl ConfigDraft {
         config.drawing.font_style = self.drawing_font_style.clone();
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
-        config.drawing.drag_tool = legacy_tool(self.drawing_drag_tools.left.drag_tool, Tool::Pen);
-        config.drawing.shift_drag_tool =
-            legacy_tool(self.drawing_drag_tools.left.shift_drag_tool, Tool::Line);
-        config.drawing.ctrl_drag_tool =
-            legacy_tool(self.drawing_drag_tools.left.ctrl_drag_tool, Tool::Rect);
+        config.drawing.drag_tool = legacy_tool(
+            self.drawing_drag_tools.left.drag_tool,
+            DragBindableTool::Pen,
+        );
+        config.drawing.shift_drag_tool = legacy_tool(
+            self.drawing_drag_tools.left.shift_drag_tool,
+            DragBindableTool::Line,
+        );
+        config.drawing.ctrl_drag_tool = legacy_tool(
+            self.drawing_drag_tools.left.ctrl_drag_tool,
+            DragBindableTool::Rect,
+        );
         config.drawing.ctrl_shift_drag_tool = legacy_tool(
             self.drawing_drag_tools.left.ctrl_shift_drag_tool,
-            Tool::Arrow,
+            DragBindableTool::Arrow,
         );
-        config.drawing.tab_drag_tool =
-            legacy_tool(self.drawing_drag_tools.left.tab_drag_tool, Tool::Ellipse);
+        config.drawing.tab_drag_tool = legacy_tool(
+            self.drawing_drag_tools.left.tab_drag_tool,
+            DragBindableTool::Ellipse,
+        );
         config.drawing.drag_tools = Some(self.drawing_drag_tools.clone());
         parse_field(
             &self.drawing_hit_test_tolerance,
@@ -81,6 +96,6 @@ impl ConfigDraft {
     }
 }
 
-fn legacy_tool(tool: wayscriber::input::DragTool, fallback: Tool) -> Tool {
-    tool.as_tool().unwrap_or(fallback)
+fn legacy_tool(tool: DragTool, fallback: DragBindableTool) -> DragBindableTool {
+    DragBindableTool::from_drag_tool(tool).unwrap_or(fallback)
 }

@@ -37,6 +37,7 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
         arrow_length: None,
         arrow_angle: None,
         arrow_head_at_end: None,
+        polygon_sides: None,
         show_status_bar: Some(true),
         drag_tools: None,
     };

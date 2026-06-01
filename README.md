@@ -201,7 +201,7 @@ For distro-specific package details, see [Installation](#installation). For keyb
 
 ### Drawing & Editing
 - Freehand pen, highlighter, eraser (circle/rect)
-- Shapes: lines, rectangles, ellipses (with fill toggle)
+- Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows with optional auto-numbered labels
 - Step markers for walkthroughs
 - Multiline text & sticky notes with smoothing
@@ -611,12 +611,14 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Rectangle | <kbd>Ctrl</kbd> + drag |
 | Ellipse/Circle | <kbd>Tab</kbd> + drag |
 | Arrow | <kbd>Ctrl+Shift</kbd> + drag |
+| Triangle / parallelogram / rhombus / regular polygon | Toolbar Polygons picker (bindable) |
+| Freeform polygon | Toolbar Polygons picker, then click vertices; <kbd>Enter</kbd> or double-click to finish |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to position, type, <kbd>Enter</kbd> to finish |
 | Sticky note | <kbd>N</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
 
-Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_tool`, `shift_drag_tool`, `ctrl_drag_tool`, `ctrl_shift_drag_tool`, `tab_drag_tool`) or in the configurator Drawing tab. For per-button workflows, use `[drawing.drag_tools.left]`, `[drawing.drag_tools.right]`, and `[drawing.drag_tools.middle]`; each binding can set a tool and optional color.
+The polygon tools are available from the toolbar picker; their default keybindings are intentionally empty. Drag modifier mappings are configurable in `config.toml` via `[drawing]` (`drag_tool`, `shift_drag_tool`, `ctrl_drag_tool`, `ctrl_shift_drag_tool`, `tab_drag_tool`) or in the configurator Drawing tab. For per-button workflows, use `[drawing.drag_tools.left]`, `[drawing.drag_tools.right]`, and `[drawing.drag_tools.middle]`; each binding can set a tool and optional color. Freeform polygon is selectable but not drag-bindable.
 
 </details>
 
@@ -757,6 +759,7 @@ wayscriber-configurator   # or press F11
 [drawing]
 default_color = "red"
 default_thickness = 3.0
+polygon_sides = 5
 
 [drawing.drag_tools.right]
 drag_tool = "pen"

@@ -32,6 +32,20 @@ impl KeybindingsConfig {
         inserter.insert_all(&self.tools.select_line_tool, Action::SelectLineTool)?;
         inserter.insert_all(&self.tools.select_rect_tool, Action::SelectRectTool)?;
         inserter.insert_all(&self.tools.select_ellipse_tool, Action::SelectEllipseTool)?;
+        inserter.insert_all(&self.tools.select_triangle_tool, Action::SelectTriangleTool)?;
+        inserter.insert_all(
+            &self.tools.select_parallelogram_tool,
+            Action::SelectParallelogramTool,
+        )?;
+        inserter.insert_all(&self.tools.select_rhombus_tool, Action::SelectRhombusTool)?;
+        inserter.insert_all(
+            &self.tools.select_regular_polygon_tool,
+            Action::SelectRegularPolygonTool,
+        )?;
+        inserter.insert_all(
+            &self.tools.select_freeform_polygon_tool,
+            Action::SelectFreeformPolygonTool,
+        )?;
         inserter.insert_all(&self.tools.select_arrow_tool, Action::SelectArrowTool)?;
         inserter.insert_all(&self.tools.select_blur_tool, Action::SelectBlurTool)?;
         inserter.insert_all(

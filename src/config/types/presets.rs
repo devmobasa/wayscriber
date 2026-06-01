@@ -66,6 +66,10 @@ pub struct ToolPresetConfig {
     #[serde(default)]
     pub arrow_head_at_end: Option<bool>,
 
+    /// Optional regular polygon side count override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub polygon_sides: Option<u8>,
+
     /// Optional status bar visibility override.
     #[serde(default)]
     pub show_status_bar: Option<bool>,

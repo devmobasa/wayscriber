@@ -1,4 +1,5 @@
 use super::Config;
+use crate::draw::shape::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 impl Config {
@@ -50,6 +51,21 @@ impl Config {
                 self.drawing.default_font_size
             );
             self.drawing.default_font_size = self.drawing.default_font_size.clamp(8.0, 72.0);
+        }
+
+        if !(REGULAR_POLYGON_MIN_SIDES..=REGULAR_POLYGON_MAX_SIDES)
+            .contains(&self.drawing.polygon_sides)
+        {
+            log::warn!(
+                "Invalid polygon_sides {}, clamping to {}-{} range",
+                self.drawing.polygon_sides,
+                REGULAR_POLYGON_MIN_SIDES,
+                REGULAR_POLYGON_MAX_SIDES
+            );
+            self.drawing.polygon_sides = self
+                .drawing
+                .polygon_sides
+                .clamp(REGULAR_POLYGON_MIN_SIDES, REGULAR_POLYGON_MAX_SIDES);
         }
 
         if !(1.0..=20.0).contains(&self.drawing.hit_test_tolerance) {

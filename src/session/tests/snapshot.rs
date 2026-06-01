@@ -114,6 +114,7 @@ fn apply_snapshot_restores_tool_state() {
     input.arrow_angle = 45.0;
     input.arrow_head_at_end = true;
     input.arrow_label_enabled = true;
+    input.polygon_sides = 9;
     input.board_previous_color = Some(Color {
         r: 0.9,
         g: 0.2,
@@ -148,6 +149,7 @@ fn apply_snapshot_restores_tool_state() {
     assert_eq!(restored.arrow_angle, 45.0);
     assert!(restored.arrow_head_at_end);
     assert!(restored.arrow_label_enabled);
+    assert_eq!(restored.polygon_sides, 9);
     assert_eq!(
         restored.board_previous_color,
         Some(Color {
@@ -158,6 +160,21 @@ fn apply_snapshot_restores_tool_state() {
         })
     );
     assert!(!restored.show_status_bar);
+}
+
+#[test]
+fn apply_snapshot_clamps_restored_polygon_sides() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-polygon-sides");
+    options.restore_tool_state = true;
+
+    let mut input = dummy_input_state();
+    input.polygon_sides = 255;
+    let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
+
+    let mut restored = dummy_input_state();
+    apply_snapshot(&mut restored, snapshot, &options);
+
+    assert_eq!(restored.polygon_sides, 12);
 }
 
 #[test]
@@ -194,6 +211,7 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
             arrow_angle: 30.0,
             arrow_head_at_end: Some(false),
             arrow_label_enabled: Some(false),
+            polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
             show_status_bar: true,
             tool_settings: None,
@@ -243,6 +261,7 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             arrow_angle: 30.0,
             arrow_head_at_end: Some(false),
             arrow_label_enabled: Some(false),
+            polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
             show_status_bar: true,
             tool_settings: Some(tool_settings),
@@ -289,6 +308,7 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             arrow_angle: 30.0,
             arrow_head_at_end: Some(false),
             arrow_label_enabled: Some(false),
+            polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
             show_status_bar: true,
             tool_settings: None,

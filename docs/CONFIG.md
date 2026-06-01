@@ -44,8 +44,11 @@ default_eraser_mode = "brush"
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
-# Default fill state for rectangle/ellipse tools
+# Default fill state for fill-capable shape tools
 default_fill_enabled = false
+
+# Default side count for the Regular Polygon tool (3 - 12)
+polygon_sides = 5
 
 # Default font size for text mode (8.0 - 72.0)
 # Can be adjusted at runtime with <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll
@@ -63,6 +66,8 @@ hit_test_linear_threshold = 400
 undo_stack_limit = 100
 
 # Drag gesture tool mapping
+# Flat drag fields accept only drag-bindable tools. Freeform polygon is
+# selectable from the toolbar picker but is not valid here.
 drag_tool = "pen"
 shift_drag_tool = "line"
 ctrl_drag_tool = "rect"
@@ -93,6 +98,7 @@ drag_tool = "default"
 - **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-50px)
 - **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
+- **Regular polygon sides**: Use the side toolbar Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
 **Defaults:**
@@ -102,6 +108,7 @@ drag_tool = "default"
 - Eraser mode: Brush
 - Marker opacity: 0.32
 - Fill enabled: false
+- Polygon sides: 5
 - Font size: 32.0px
 - Font family/weight/style: Sans / bold / normal
 - Text background: false
@@ -191,7 +198,7 @@ size = 28.0
 ```
 
 **Required fields:** `tool`, `color`, `size`  
-**Optional fields:** `tool_settings`, `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `show_status_bar`, `drag_tools`
+**Optional fields:** `tool_settings`, `eraser_kind`, `eraser_mode`, `marker_opacity`, `fill_enabled`, `font_size`, `text_background_enabled`, `arrow_length`, `arrow_angle`, `arrow_head_at_end`, `polygon_sides`, `show_status_bar`, `drag_tools`
 
 When `tool_settings` is present, applying the preset restores the full drawing profile for all
 tools, including StepMarker size and Eraser size, then activates `tool`. Legacy presets without
@@ -565,6 +572,7 @@ force_inline = false
 - **Settings**: `show_settings_section` hides/shows the settings footer (config buttons and toggles).
 - **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
+- **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
@@ -966,6 +974,11 @@ toggle_eraser_mode = ["Ctrl+Shift+E"]
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []
+select_triangle_tool = []
+select_parallelogram_tool = []
+select_rhombus_tool = []
+select_regular_polygon_tool = []
+select_freeform_polygon_tool = []
 select_arrow_tool = []
 select_blur_tool = []
 select_highlight_tool = []
@@ -1036,7 +1049,7 @@ render_profile_off = []
 # Toggle click highlight (visual mouse halo)
 toggle_click_highlight = ["Ctrl+Shift+H"]
 
-# Toggle fill for rectangle/ellipse
+# Toggle fill for fill-capable shapes
 toggle_fill = []
 
 # Optional keyboard binding to toggle radial menu at cursor

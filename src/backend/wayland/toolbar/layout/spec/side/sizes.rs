@@ -51,6 +51,9 @@ impl ToolbarLayoutSpec {
             if tool_context.show_eraser_mode {
                 add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
             }
+            if tool_context.show_polygon_sides_control {
+                add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
+            }
         }
 
         // Arrow controls: only when arrow tool is active

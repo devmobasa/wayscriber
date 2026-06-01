@@ -45,6 +45,11 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SelectLineTool
         | Action::SelectRectTool
         | Action::SelectEllipseTool
+        | Action::SelectTriangleTool
+        | Action::SelectParallelogramTool
+        | Action::SelectRhombusTool
+        | Action::SelectRegularPolygonTool
+        | Action::SelectFreeformPolygonTool
         | Action::SelectArrowTool
         | Action::SelectBlurTool
         | Action::SelectHighlightTool

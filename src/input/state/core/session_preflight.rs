@@ -407,7 +407,8 @@ fn estimate_shape_storage(shape: &Shape) -> CloneStorageEstimate {
     match shape {
         Shape::Freehand { points, .. }
         | Shape::MarkerStroke { points, .. }
-        | Shape::EraserStroke { points, .. } => {
+        | Shape::EraserStroke { points, .. }
+        | Shape::Polygon { points, .. } => {
             estimate.add_non_image_shape(
                 NON_IMAGE_SHAPE_RAW_OVERHEAD_BYTES
                     .saturating_add(usize_to_u64(points.len()).saturating_mul(POINT_JSON_BYTES)),

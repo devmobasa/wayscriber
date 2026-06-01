@@ -86,6 +86,11 @@ toggle_eraser_mode = ["Ctrl+Shift+E"]
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []
+select_triangle_tool = []
+select_parallelogram_tool = []
+select_rhombus_tool = []
+select_regular_polygon_tool = []
+select_freeform_polygon_tool = []
 select_arrow_tool = []
 select_blur_tool = []
 select_highlight_tool = []
@@ -145,7 +150,7 @@ render_profile_next = []
 render_profile_previous = []
 render_profile_off = []
 
-# Toggle fill for rectangle/ellipse
+# Toggle fill for fill-capable shapes
 toggle_fill = []
 
 # Optional keyboard binding to toggle radial menu at cursor
@@ -725,8 +730,11 @@ default_eraser_mode = "brush"
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
-# Default fill state for shapes (rect/ellipse)
+# Default fill state for fill-capable shapes
 default_fill_enabled = false
+
+# Default regular polygon side count (3 - 12)
+polygon_sides = 5
 
 # Default font size for text mode (8.0 - 72.0)
 default_font_size = 32.0
@@ -741,7 +749,9 @@ hit_test_linear_threshold = 400
 undo_stack_limit = 100
 
 # Drag gesture tool mapping (defaults match existing behavior)
-# Allowed values use kebab-case tool names, e.g. "pen", "arrow", "eraser"
+# Allowed values use kebab-case drag-bindable tool names, e.g. "pen",
+# "arrow", "eraser", "triangle", "regular-polygon".
+# Freeform polygon is selectable from the toolbar picker but is not drag-bindable.
 drag_tool = "pen"
 shift_drag_tool = "line"
 ctrl_drag_tool = "rect"
@@ -819,7 +829,9 @@ slot_count = 5
 [presets.slot_1]
 # Optional label shown in UI tooltips
 name = "Red pen"
-# Tool: "pen", "line", "rect", "ellipse", "arrow", "marker", "highlight", "eraser", "select"
+# Tool: "pen", "line", "rect", "ellipse", "triangle", "parallelogram",
+# "rhombus", "regular-polygon", "freeform-polygon", "arrow", "marker",
+# "highlight", "eraser", "select"
 tool = "pen"
 # Color: name or RGB array
 color = "red"

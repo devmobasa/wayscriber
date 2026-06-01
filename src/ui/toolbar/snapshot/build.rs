@@ -127,6 +127,7 @@ impl ToolbarSnapshot {
             zoom_active: state.zoom_active(),
             zoom_locked: state.zoom_locked(),
             fill_enabled: state.fill_enabled,
+            polygon_sides: state.polygon_sides,
             arrow_label_enabled: state.arrow_label_enabled,
             arrow_label_next: state.arrow_label_counter.max(1),
             step_marker_next: state.step_marker_counter.max(1),

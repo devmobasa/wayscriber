@@ -1,4 +1,7 @@
-use crate::draw::shape::{bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points};
+use crate::draw::shape::{
+    PolygonTemplate, bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points,
+    generated_points, has_minimum_distinct_points,
+};
 use crate::draw::{ArrowLabel, BlurRectParams, Color, EraserBrush, EraserKind, Shape};
 use crate::input::tool::{
     EraserMode, Tool, ToolDrawingBehavior, ToolPathKind, ToolPressureBehavior,
@@ -25,6 +28,17 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) eraser_size: f64,
     pub(crate) eraser_kind: EraserKind,
     pub(crate) pressure_variation_threshold: f64,
+}
+
+/// Immutable inputs needed to turn one completed polygon drag into a shape.
+pub(crate) struct PolygonStrokeSnapshot {
+    pub(crate) tool: Tool,
+    pub(crate) start: (i32, i32),
+    pub(crate) end: (i32, i32),
+    pub(crate) color: Color,
+    pub(crate) size: f64,
+    pub(crate) fill_enabled: bool,
+    pub(crate) regular_sides: u8,
 }
 
 pub(crate) enum FinishedToolStroke {
@@ -56,6 +70,17 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) arrow_head_at_end: bool,
     pub(crate) arrow_label: Option<ArrowLabel>,
     pub(crate) step_marker_label: Option<crate::draw::StepMarkerLabel>,
+}
+
+/// Borrowed inputs needed to render the current live polygon preview.
+pub(crate) struct PolygonProvisionalSnapshot {
+    pub(crate) tool: Tool,
+    pub(crate) start: (i32, i32),
+    pub(crate) current: (i32, i32),
+    pub(crate) color: Color,
+    pub(crate) size: f64,
+    pub(crate) fill_enabled: bool,
+    pub(crate) regular_sides: u8,
 }
 
 pub(crate) enum ProvisionalToolStroke<'a> {
@@ -130,6 +155,10 @@ impl Tool {
                     thick: snapshot.size,
                 }
             }),
+            ToolDrawingBehavior::Polygon(_) => {
+                debug_assert!(false, "polygon strokes require PolygonStrokeSnapshot");
+                FinishedToolStroke::Noop
+            }
             ToolDrawingBehavior::Arrow => {
                 let usage = ToolUsage {
                     bump_arrow_label: snapshot.arrow_label.is_some(),
@@ -256,6 +285,10 @@ impl Tool {
                     thick: snapshot.size,
                 })
             }
+            ToolDrawingBehavior::Polygon(_) => {
+                debug_assert!(false, "polygon previews require PolygonProvisionalSnapshot");
+                ProvisionalToolStroke::None
+            }
             ToolDrawingBehavior::Arrow => ProvisionalToolStroke::Shape(Shape::Arrow {
                 x1: snapshot.start.0,
                 y1: snapshot.start.1,
@@ -295,6 +328,83 @@ impl Tool {
             },
         }
     }
+
+    pub(crate) fn polygon_template(self) -> Option<PolygonTemplate> {
+        match self.drawing_behavior() {
+            ToolDrawingBehavior::Polygon(template) => Some(template),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn finish_polygon_stroke(
+        self,
+        snapshot: PolygonStrokeSnapshot,
+    ) -> FinishedToolStroke {
+        debug_assert_eq!(self, snapshot.tool);
+        let Some(template) = self.polygon_template() else {
+            debug_assert!(false, "non-polygon tool cannot finish a polygon stroke");
+            return FinishedToolStroke::Noop;
+        };
+        finish_polygon(snapshot, ToolUsage::default(), template)
+    }
+
+    pub(crate) fn provisional_polygon_stroke(
+        self,
+        snapshot: PolygonProvisionalSnapshot,
+    ) -> ProvisionalToolStroke<'static> {
+        debug_assert_eq!(self, snapshot.tool);
+        let Some(template) = self.polygon_template() else {
+            debug_assert!(false, "non-polygon tool cannot preview a polygon stroke");
+            return ProvisionalToolStroke::None;
+        };
+        provisional_polygon(snapshot, template)
+    }
+}
+
+fn finish_polygon(
+    snapshot: PolygonStrokeSnapshot,
+    usage: ToolUsage,
+    template: PolygonTemplate,
+) -> FinishedToolStroke {
+    let points = generated_points(
+        template,
+        snapshot.start,
+        snapshot.end,
+        snapshot.regular_sides,
+    );
+    if !has_minimum_distinct_points(&points) {
+        return FinishedToolStroke::Noop;
+    }
+
+    FinishedToolStroke::Shape {
+        shape: Shape::Polygon {
+            kind: template.kind(snapshot.regular_sides),
+            points,
+            fill: snapshot.fill_enabled,
+            color: snapshot.color,
+            thick: snapshot.size,
+        },
+        usage,
+    }
+}
+
+fn provisional_polygon(
+    snapshot: PolygonProvisionalSnapshot,
+    template: PolygonTemplate,
+) -> ProvisionalToolStroke<'static> {
+    let points = generated_points(
+        template,
+        snapshot.start,
+        snapshot.current,
+        snapshot.regular_sides,
+    );
+    ProvisionalToolStroke::Shape(Shape::Polygon {
+        kind: template.kind(snapshot.regular_sides),
+        points,
+        fill: snapshot.fill_enabled,
+        color: snapshot.color,
+        thick: snapshot.size,
+    })
 }
 
 impl<'a> ProvisionalToolStroke<'a> {

@@ -1,5 +1,5 @@
 use super::highlight::render_click_highlight;
-use super::primitives::{render_arrow, render_ellipse, render_line, render_rect};
+use super::primitives::{render_arrow, render_ellipse, render_line, render_polygon, render_rect};
 use super::strokes::render_freehand_borrowed;
 use crate::draw::frame::DrawnShape;
 use crate::draw::shape::{step_marker_outline_thickness, step_marker_radius};
@@ -81,6 +81,9 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             ..
         } => {
             render_ellipse(ctx, *cx, *cy, *rx, *ry, *fill, glow, thick + outline_width);
+        }
+        Shape::Polygon { points, thick, .. } => {
+            render_polygon(ctx, points, false, glow, thick + outline_width);
         }
         Shape::Arrow {
             x1,

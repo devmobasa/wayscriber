@@ -9,7 +9,7 @@ use super::super::types::{
 };
 use super::structs::InputState;
 use crate::config::{Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, RadialMenuMouseBinding};
-use crate::draw::{DirtyTracker, EraserKind, FontDescriptor};
+use crate::draw::{DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES};
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::{
     BoardManager,
@@ -133,6 +133,7 @@ impl InputState {
             toolbar_top_visible: true,
             toolbar_side_visible: true,
             fill_enabled,
+            polygon_sides: REGULAR_POLYGON_DEFAULT_SIDES,
             toolbar_top_pinned: true,
             toolbar_side_pinned: true,
             toolbar_use_icons: true, // Default to icon mode
@@ -206,6 +207,7 @@ impl InputState {
             active_clipboard_paste_request_id: None,
             last_capture_path: None,
             last_text_click: None,
+            last_polygon_click: None,
             last_board_picker_click: None,
             text_edit_target: None,
             text_edit_entry_feedback: None,

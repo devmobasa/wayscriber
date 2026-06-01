@@ -213,6 +213,7 @@ fn tool_display_name(input_state: &InputState, tool: Tool) -> &'static str {
             TextInputMode::StickyNote => action_display_label(Action::EnterStickyNoteMode),
         },
         DrawingState::Drawing { tool, .. } => tool_action_label(*tool),
+        DrawingState::BuildingPolygon { .. } => "Freeform Polygon",
         DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Selecting { .. } => "Select",
         DrawingState::ResizingText { .. } | DrawingState::ResizingSelection { .. } => "Resize",

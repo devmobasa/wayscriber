@@ -36,7 +36,7 @@ impl DragBinding {
 
     pub fn from_tool(tool: Tool) -> Self {
         Self {
-            tool: DragTool::from_tool(tool),
+            tool: DragTool::from_tool(tool).unwrap_or(DragTool::Default),
             color: None,
         }
     }

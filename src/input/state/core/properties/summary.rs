@@ -71,6 +71,7 @@ pub(super) fn shape_color(shape: &Shape) -> Option<Color> {
         | Shape::Line { color, .. }
         | Shape::Rect { color, .. }
         | Shape::Ellipse { color, .. }
+        | Shape::Polygon { color, .. }
         | Shape::Arrow { color, .. }
         | Shape::Text { color, .. }
         | Shape::StepMarker { color, .. } => Some(*color),
@@ -86,6 +87,7 @@ pub(super) fn shape_thickness(shape: &Shape) -> Option<f64> {
         | Shape::Line { thick, .. }
         | Shape::Rect { thick, .. }
         | Shape::Ellipse { thick, .. }
+        | Shape::Polygon { thick, .. }
         | Shape::Arrow { thick, .. }
         | Shape::BlurRect {
             strength: thick, ..
@@ -97,7 +99,9 @@ pub(super) fn shape_thickness(shape: &Shape) -> Option<f64> {
 
 pub(super) fn shape_fill(shape: &Shape) -> Option<bool> {
     match shape {
-        Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } => Some(*fill),
+        Shape::Rect { fill, .. } | Shape::Ellipse { fill, .. } | Shape::Polygon { fill, .. } => {
+            Some(*fill)
+        }
         _ => None,
     }
 }

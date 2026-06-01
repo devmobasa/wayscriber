@@ -238,6 +238,7 @@ impl ConfigDraft {
             TextField::DrawingThickness => self.drawing_default_thickness = value,
             TextField::DrawingEraserSize => self.drawing_default_eraser_size = value,
             TextField::DrawingFontSize => self.drawing_default_font_size = value,
+            TextField::DrawingPolygonSides => self.drawing_polygon_sides = value,
             TextField::DrawingMarkerOpacity => self.drawing_marker_opacity = value,
             TextField::DrawingFontFamily => self.drawing_font_family = value,
             TextField::DrawingFontWeight => {

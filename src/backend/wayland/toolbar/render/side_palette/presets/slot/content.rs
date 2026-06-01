@@ -121,6 +121,15 @@ fn draw_preset_icon(ctx: &cairo::Context, tool: Tool, x: f64, y: f64, size: f64)
         SemanticToolIcon::Line => toolbar_icons::draw_icon_line(ctx, x, y, size),
         SemanticToolIcon::Rect => toolbar_icons::draw_icon_rect(ctx, x, y, size),
         SemanticToolIcon::Circle => toolbar_icons::draw_icon_circle(ctx, x, y, size),
+        SemanticToolIcon::Triangle => toolbar_icons::draw_icon_triangle(ctx, x, y, size),
+        SemanticToolIcon::Parallelogram => {
+            toolbar_icons::draw_icon_parallelogram(ctx, x, y, size);
+        }
+        SemanticToolIcon::Rhombus => toolbar_icons::draw_icon_rhombus(ctx, x, y, size),
+        SemanticToolIcon::Polygon => toolbar_icons::draw_icon_polygon(ctx, x, y, size),
+        SemanticToolIcon::FreeformPolygon => {
+            toolbar_icons::draw_icon_freeform_polygon(ctx, x, y, size);
+        }
         SemanticToolIcon::Arrow => toolbar_icons::draw_icon_arrow(ctx, x, y, size),
         SemanticToolIcon::Blur => toolbar_icons::draw_icon_blur(ctx, x, y, size),
         SemanticToolIcon::Marker => toolbar_icons::draw_icon_marker(ctx, x, y, size),

@@ -58,6 +58,30 @@ pub(super) fn point_in_triangle(
     u >= -EPS && v >= -EPS && (u + v) <= 1.0 + EPS
 }
 
+pub(super) fn point_in_polygon(point: (f64, f64), points: &[(i32, i32)]) -> bool {
+    if points.len() < 3 {
+        return false;
+    }
+
+    // Even-odd point targeting intentionally approximates Cairo's default non-zero fill rule;
+    // simple polygons match, but self-intersecting freeform polygons can differ.
+    let (px, py) = point;
+    let mut inside = false;
+    let mut previous = points[points.len() - 1];
+    for &current in points {
+        let (x1, y1) = (previous.0 as f64, previous.1 as f64);
+        let (x2, y2) = (current.0 as f64, current.1 as f64);
+        if (y1 > py) != (y2 > py) {
+            let intersection_x = (x2 - x1) * (py - y1) / (y2 - y1) + x1;
+            if px < intersection_x {
+                inside = !inside;
+            }
+        }
+        previous = current;
+    }
+    inside
+}
+
 pub(super) fn to_i32_pair(p: (f64, f64)) -> (i32, i32) {
     (p.0.round() as i32, p.1.round() as i32)
 }
