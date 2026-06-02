@@ -22,6 +22,8 @@ pub mod session;
 pub mod shortcut_hint;
 pub mod systemd_user_service;
 #[cfg(test)]
+pub(crate) mod test_env;
+#[cfg(test)]
 pub(crate) mod test_temp;
 pub mod time_utils;
 pub mod toolbar_icons;

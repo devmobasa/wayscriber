@@ -1,20 +1,15 @@
 use std::path::Path;
-use std::sync::Mutex;
 
 use crate::test_temp::TempDir;
-
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 pub(crate) fn with_temp_config_home<F, T>(f: F) -> T
 where
     F: FnOnce(&Path) -> T,
 {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let temp = TempDir::new().expect("tempdir");
     let original = std::env::var_os("XDG_CONFIG_HOME");
-    // SAFETY: tests serialize access via the mutex above and restore the previous value.
+    // SAFETY: tests serialize process environment access and restore the previous value.
     unsafe {
         std::env::set_var("XDG_CONFIG_HOME", temp.path());
     }

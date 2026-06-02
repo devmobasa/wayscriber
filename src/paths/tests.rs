@@ -1,15 +1,10 @@
 use super::*;
 use std::env;
-use std::sync::Mutex;
-
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
 #[cfg(unix)]
 fn tray_action_prefers_runtime_dir_when_set() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev = env::var_os("XDG_RUNTIME_DIR");
     // SAFETY: serialised via ENV_MUTEX
@@ -37,9 +32,7 @@ fn tray_action_prefers_runtime_dir_when_set() {
 
 #[test]
 fn config_dir_prefers_xdg_config_home_when_set() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
 
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
@@ -71,9 +64,7 @@ fn config_dir_prefers_xdg_config_home_when_set() {
 
 #[test]
 fn config_dir_falls_back_to_home_config() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
 
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
@@ -105,9 +96,7 @@ fn config_dir_falls_back_to_home_config() {
 
 #[test]
 fn data_dir_prefers_xdg_data_home_when_set() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
 
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
@@ -139,9 +128,7 @@ fn data_dir_prefers_xdg_data_home_when_set() {
 
 #[test]
 fn data_dir_falls_back_to_home_share() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
 
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
@@ -173,9 +160,7 @@ fn data_dir_falls_back_to_home_share() {
 
 #[test]
 fn pictures_dir_prefers_xdg_when_set() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
 
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
@@ -207,9 +192,7 @@ fn pictures_dir_prefers_xdg_when_set() {
 
 #[test]
 fn pictures_dir_falls_back_to_home() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
 
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
@@ -241,9 +224,7 @@ fn pictures_dir_falls_back_to_home() {
 
 #[test]
 fn expand_tilde_replaces_home() {
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = crate::test_env::lock();
 
     let tmp = crate::test_temp::tempdir().unwrap();
     let prev_home = env::var_os("HOME");
