@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 use super::types::{FrameCounts, HistoryCounts, HistoryDepth, SessionInspection};
 use crate::session::lock::{lock_shared, unlock};
 use crate::session::options::SessionOptions;
+use crate::session::primary::{
+    PrimaryTargetKind, PrimaryTargetState, inspect_named_primary_target,
+};
 use crate::session::snapshot;
 use crate::session::snapshot::BoardPagesSnapshot;
 
@@ -17,7 +20,10 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let prefix = options.file_prefix();
     let mut session_path = options.session_file_path();
     let mut session_identity = options.output_identity().map(|s| s.to_string());
-    let mut metadata = fs::metadata(&session_path).ok();
+    if options.is_named_file() {
+        crate::session::validate_named_session_file_for_info(&session_path)?;
+    }
+    let mut metadata = primary_metadata_for_inspection(&session_path, options)?;
 
     if metadata.is_none()
         && !options.is_named_file()
@@ -108,6 +114,27 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
         compressed,
         file_version,
     })
+}
+
+fn primary_metadata_for_inspection(
+    session_path: &Path,
+    options: &SessionOptions,
+) -> Result<Option<fs::Metadata>> {
+    if !options.is_named_file() {
+        return Ok(fs::metadata(session_path).ok());
+    }
+
+    match inspect_named_primary_target(session_path)? {
+        PrimaryTargetState::Missing => Ok(None),
+        PrimaryTargetState::Present {
+            metadata,
+            kind: PrimaryTargetKind::Regular,
+        } => Ok(Some(metadata)),
+        PrimaryTargetState::Present { kind, .. } => Err(anyhow::anyhow!(
+            "named session primary target is not a regular file ({kind:?}): {}",
+            session_path.display()
+        )),
+    }
 }
 
 fn load_snapshot_for_inspection(

@@ -4,8 +4,10 @@
 //! to disk with locking, optional compression, and backup rotation, and restores
 //! the state on startup when requested.
 
+pub mod catalog;
 mod lock;
 mod options;
+mod primary;
 mod snapshot;
 mod storage;
 

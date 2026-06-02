@@ -8,6 +8,9 @@ use crate::session::options::SessionOptions;
 /// Remove persisted session files (session, backup, and lock).
 pub fn clear_session(options: &SessionOptions) -> Result<ClearOutcome> {
     let session_path = options.session_file_path();
+    if options.is_named_file() {
+        crate::session::validate_named_session_file_for_clear(&session_path)?;
+    }
     let backup_path = options.backup_file_path();
     let backup_recovery_marker_path = options.backup_recovery_marker_file_path();
     let recovery_path = options.recovery_file_path();

@@ -2,7 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 #[cfg(unix)]
-use std::{ffi::CString, os::unix::ffi::OsStrExt};
+use std::{
+    ffi::CString,
+    os::unix::{ffi::OsStrExt, fs::symlink},
+};
 
 use super::config::options_from_config;
 use super::identifiers::{resolve_display_id, sanitize_identifier};
@@ -245,6 +248,37 @@ fn named_file_validation_rejects_fifo_target() {
         let err = result.expect_err(label);
         assert!(
             err.to_string().contains("regular session file"),
+            "{label}: {err:#}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn named_file_validation_rejects_symlink_target() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    fs::write(&target, b"{}").expect("write symlink target");
+    symlink(&target, &link).expect("create session symlink");
+
+    for (label, result) in [
+        (
+            "foreground",
+            validation::validate_named_session_file_for_foreground(&link),
+        ),
+        (
+            "info",
+            validation::validate_named_session_file_for_info(&link),
+        ),
+        (
+            "clear",
+            validation::validate_named_session_file_for_clear(&link),
+        ),
+    ] {
+        let err = result.expect_err(label);
+        assert!(
+            err.to_string().contains("not a symlink"),
             "{label}: {err:#}"
         );
     }

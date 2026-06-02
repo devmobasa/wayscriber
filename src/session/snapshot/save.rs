@@ -332,6 +332,10 @@ fn save_snapshot_with_expanded_limit_and_strategy(
         );
     }
 
+    if matches!(&result, Ok(Some(_))) {
+        crate::session::catalog::record_named_session_saved(options);
+    }
+
     result
 }
 

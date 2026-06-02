@@ -5,7 +5,10 @@ use crate::session::{
     CompressionMode, SessionOptions, SessionSnapshot, ToolStateSnapshot, save_snapshot,
 };
 #[cfg(unix)]
-use std::{ffi::CString, os::unix::ffi::OsStrExt};
+use std::{
+    ffi::CString,
+    os::unix::{ffi::OsStrExt, fs::symlink},
+};
 
 fn transparent_line_snapshot() -> SessionSnapshot {
     let mut frame = Frame::new();
@@ -438,6 +441,40 @@ fn clear_named_file_removes_only_selected_artifacts() {
         let path = crate::session::append_path_suffix(&sibling, suffix);
         assert!(path.exists(), "{} should be preserved", path.display());
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn clear_named_file_rejects_symlink_primary_without_removing_artifacts() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "display");
+    options.set_named_file_target(link.clone());
+
+    std::fs::write(&target, b"target").expect("write target session");
+    symlink(&target, &link).expect("create symlink primary");
+    std::fs::write(options.backup_file_path(), b"backup").expect("write backup sidecar");
+
+    let err = clear_session(&options).expect_err("symlink primary should reject clear");
+
+    assert!(err.to_string().contains("not a symlink"), "{err:#}");
+    assert!(
+        std::fs::symlink_metadata(&link)
+            .expect("symlink should remain")
+            .file_type()
+            .is_symlink(),
+        "clear must not remove the symlink primary"
+    );
+    assert_eq!(
+        std::fs::read(&target).expect("target remains"),
+        b"target",
+        "clear must not affect the symlink target"
+    );
+    assert!(
+        options.backup_file_path().exists(),
+        "clear must not remove selected sidecars after primary validation fails"
+    );
 }
 
 #[cfg(unix)]

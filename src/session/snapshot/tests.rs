@@ -106,6 +106,30 @@ fn contentless_session_file() -> SessionFile {
     }
 }
 
+fn sample_session_file() -> SessionFile {
+    SessionFile {
+        version: CURRENT_VERSION,
+        last_modified: now_rfc3339(),
+        active_board_id: Some("transparent".to_string()),
+        active_mode: None,
+        boards: vec![BoardFile {
+            id: "transparent".to_string(),
+            pages: vec![sample_frame()],
+            active_page: 0,
+        }],
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: None,
+        whiteboard_pages: None,
+        blackboard_pages: None,
+        transparent_active_page: None,
+        whiteboard_active_page: None,
+        blackboard_active_page: None,
+        tool_state: None,
+    }
+}
+
 fn write_contentless_session(path: &Path) {
     std::fs::write(
         path,
@@ -352,6 +376,60 @@ fn load_snapshot_inner_rejects_fifo_without_opening_it() {
 
 #[cfg(unix)]
 #[test]
+fn load_named_primary_rejects_symlink_without_following_target() {
+    let temp = tempdir().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    std::fs::write(&target, b"{not valid json").expect("write invalid target");
+    symlink(&target, &link).expect("create primary symlink");
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "symlink-primary");
+    options.persist_transparent = true;
+    options.set_named_file_target(link.clone());
+
+    let err = match load_snapshot_inner(&link, &options) {
+        Ok(_) => panic!("symlink primary should reject"),
+        Err(err) => err,
+    };
+
+    assert!(
+        err.to_string().contains("symlink"),
+        "unexpected error: {err:#}"
+    );
+    assert!(
+        !options.backup_file_path().exists(),
+        "rejected symlink target should not be backed up or mutated"
+    );
+}
+
+#[test]
+fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("corrupt.wayscriber-session");
+    std::fs::write(&named_path, b"{not valid json").expect("write corrupt named primary");
+
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-corrupt");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("corrupt named primary should be handled");
+
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert_eq!(
+        std::fs::read(&named_path).expect("named primary remains"),
+        b"{not valid json",
+        "named corrupt backup must not remove the selected primary path"
+    );
+    assert_eq!(
+        std::fs::read(options.backup_file_path()).expect("backup bytes"),
+        b"{not valid json",
+        "named corrupt primary should still be backed up for diagnostics"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn load_snapshot_skips_fifo_recovery_without_opening_it() {
     let temp = tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "fifo-recovery");
@@ -408,27 +486,7 @@ fn load_snapshot_reports_successful_recovery_source() {
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
 
-    let recovery_file = SessionFile {
-        version: CURRENT_VERSION,
-        last_modified: now_rfc3339(),
-        active_board_id: Some("transparent".to_string()),
-        active_mode: None,
-        boards: vec![BoardFile {
-            id: "transparent".to_string(),
-            pages: vec![sample_frame()],
-            active_page: 0,
-        }],
-        transparent: None,
-        whiteboard: None,
-        blackboard: None,
-        transparent_pages: None,
-        whiteboard_pages: None,
-        blackboard_pages: None,
-        transparent_active_page: None,
-        whiteboard_active_page: None,
-        blackboard_active_page: None,
-        tool_state: None,
-    };
+    let recovery_file = sample_session_file();
     std::fs::write(
         options.recovery_file_path(),
         serde_json::to_vec_pretty(&recovery_file).expect("recovery json"),
@@ -440,6 +498,32 @@ fn load_snapshot_reports_successful_recovery_source() {
     assert!(
         matches!(outcome, LoadSnapshotOutcome::LoadedFromRecovery(_)),
         "valid recovery should be surfaced in the load outcome"
+    );
+}
+
+#[test]
+fn load_snapshot_prefers_valid_recovery_when_primary_is_non_regular() {
+    let temp = tempdir().unwrap();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "nonregular-recovery");
+    options.persist_transparent = true;
+    std::fs::create_dir(options.session_file_path()).expect("primary directory");
+    std::fs::write(
+        options.recovery_file_path(),
+        serde_json::to_vec_pretty(&sample_session_file()).expect("recovery json"),
+    )
+    .expect("recovery write");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("valid recovery should load over non-regular primary");
+
+    assert!(
+        matches!(outcome, LoadSnapshotOutcome::LoadedFromRecovery(_)),
+        "valid recovery should win before the non-regular primary outcome"
+    );
+    assert!(
+        options.session_file_path().is_dir(),
+        "non-regular primary should be left in place"
     );
 }
 

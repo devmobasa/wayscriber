@@ -1,4 +1,6 @@
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -300,6 +302,105 @@ fn named_session_clear_missing_parent_reports_no_artifacts() {
     .success()
     .stdout_contains(&format!("Session file: {}", named_path.display()))
     .stdout_contains("No session artefacts found");
+}
+
+#[cfg(unix)]
+#[test]
+fn named_session_info_rejects_symlink_primary() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    fs::write(&target, b"{}").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--session-info")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
+}
+
+#[cfg(unix)]
+#[test]
+fn named_session_clear_rejects_symlink_primary_without_removing_artifacts() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    let mut backup_raw = std::ffi::OsString::from(link.as_os_str());
+    backup_raw.push(".bak");
+    let backup = PathBuf::from(backup_raw);
+    fs::write(&target, b"target").unwrap();
+    fs::write(&backup, b"backup").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--clear-session")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
+
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read(&target).unwrap(), b"target");
+    assert_eq!(fs::read(&backup).unwrap(), b"backup");
+}
+
+#[cfg(unix)]
+#[test]
+fn active_named_session_rejects_symlink_primary_before_wayland_preflight() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    fs::write(&target, b"{}").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env("WAYSCRIBER_NO_DETACH", "1")
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--active")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
+}
+
+#[cfg(unix)]
+#[test]
+fn freeze_named_session_rejects_symlink_primary_before_wayland_preflight() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    fs::write(&target, b"{}").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env("WAYSCRIBER_NO_DETACH", "1")
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--freeze")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
 }
 
 #[test]

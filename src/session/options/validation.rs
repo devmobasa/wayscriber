@@ -7,6 +7,7 @@ use anyhow::{Context, Result, anyhow};
 
 use crate::paths::expand_tilde;
 
+use super::super::primary::{PrimaryTargetKind, PrimaryTargetState, inspect_named_primary_target};
 use super::types::session_file_parent_dir;
 
 static NEXT_WRITE_PROBE_ID: AtomicU64 = AtomicU64::new(0);
@@ -117,19 +118,33 @@ fn validate_named_session_file_shape(path: &Path) -> Result<()> {
         ));
     }
 
-    match fs::metadata(path) {
-        Ok(metadata) if metadata.is_dir() => Err(anyhow!(
+    match inspect_named_primary_target(path)? {
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Directory,
+            ..
+        } => Err(anyhow!(
             "--session-file must name a session file, not a directory: {}",
             path.display()
         )),
-        Ok(metadata) if metadata.is_file() => Ok(()),
-        Ok(_) => Err(anyhow!(
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Regular,
+            ..
+        }
+        | PrimaryTargetState::Missing => Ok(()),
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Symlink,
+            ..
+        } => Err(anyhow!(
+            "--session-file must name a regular session file, not a symlink: {}",
+            path.display()
+        )),
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Special,
+            ..
+        } => Err(anyhow!(
             "--session-file must name a regular session file, not a special file: {}",
             path.display()
         )),
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
-        Err(err) => Err(err)
-            .with_context(|| format!("failed to inspect named session path {}", path.display())),
     }
 }
 

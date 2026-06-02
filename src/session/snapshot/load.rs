@@ -11,12 +11,14 @@ use crate::draw::Frame;
 use crate::draw::frame::MAX_COMPOUND_DEPTH;
 use crate::session::lock::{lock_shared, open_runtime_lock_file, unlock};
 use crate::session::options::SessionOptions;
+use crate::session::primary::{
+    is_non_regular_session_artifact, open_session_artifact_for_read, session_artifact_metadata,
+    session_artifact_metadata_if_exists,
+};
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use serde_json::Value;
-use std::error::Error;
-use std::fmt;
-use std::fs::{self, File};
+use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -77,6 +79,15 @@ pub(super) fn load_snapshot_with_expanded_limit(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<LoadSnapshotOutcome> {
+    let outcome = load_snapshot_with_expanded_limit_inner(options, max_expanded_size)?;
+    record_named_session_opened_for_outcome(options, &outcome);
+    Ok(outcome)
+}
+
+fn load_snapshot_with_expanded_limit_inner(
+    options: &SessionOptions,
+    max_expanded_size: u64,
+) -> Result<LoadSnapshotOutcome> {
     if !options.any_enabled() && !options.restore_tool_state {
         info!(
             "Session load skipped: persistence disabled (base_dir={}, file={})",
@@ -88,7 +99,21 @@ pub(super) fn load_snapshot_with_expanded_limit(
 
     let session_path = options.session_file_path();
     let recovery_path = options.recovery_file_path();
-    let session_metadata = fs::metadata(&session_path).ok();
+    let (session_metadata, non_regular_primary_path) = match initial_session_metadata(
+        &session_path,
+        options,
+    ) {
+        Ok(metadata) => (metadata, None),
+        Err(err) if is_non_regular_session_artifact(&err) => {
+            warn!(
+                "Primary session {} is not a regular file; checking recovery before refusing to load it: {}",
+                session_path.display(),
+                err
+            );
+            (None, Some(session_path.clone()))
+        }
+        Err(err) => return Err(err),
+    };
     let recovery_metadata = fs::metadata(&recovery_path).ok();
     let clear_marker_metadata = fs::metadata(options.clear_marker_file_path()).ok();
     let backup_recovery_marker_metadata =
@@ -105,6 +130,9 @@ pub(super) fn load_snapshot_with_expanded_limit(
             recovery_metadata,
             clear_marker_metadata.as_ref(),
         ) {
+            if let Some(path) = non_regular_primary_path.as_ref() {
+                return Ok(LoadSnapshotOutcome::NonRegularArtifact { path: path.clone() });
+            }
             return load_normal_session_or_empty(
                 options,
                 &session_path,
@@ -160,6 +188,10 @@ pub(super) fn load_snapshot_with_expanded_limit(
         }
     }
 
+    if let Some(path) = non_regular_primary_path {
+        return Ok(LoadSnapshotOutcome::NonRegularArtifact { path });
+    }
+
     load_normal_session_or_empty(
         options,
         &session_path,
@@ -171,6 +203,17 @@ pub(super) fn load_snapshot_with_expanded_limit(
     )
 }
 
+fn initial_session_metadata(
+    session_path: &Path,
+    options: &SessionOptions,
+) -> Result<Option<fs::Metadata>> {
+    session_artifact_metadata_if_exists(session_path, is_named_primary_path(session_path, options))
+}
+
+fn is_named_primary_path(session_path: &Path, options: &SessionOptions) -> bool {
+    options.is_named_file() && session_path == options.session_file_path().as_path()
+}
+
 fn load_snapshot_path_with_outcome(
     session_path: &Path,
     options: &SessionOptions,
@@ -179,9 +222,10 @@ fn load_snapshot_path_with_outcome(
     label: &str,
     corrupt_load_action: CorruptLoadAction,
 ) -> Result<LoadSnapshotOutcome> {
-    let metadata = match session_artifact_metadata(session_path) {
+    let no_follow = is_named_primary_path(session_path, options);
+    let metadata = match session_artifact_metadata(session_path, no_follow) {
         Ok(metadata) => metadata,
-        Err(err) if err.downcast_ref::<NonRegularSessionArtifact>().is_some() => {
+        Err(err) if is_non_regular_session_artifact(&err) => {
             warn!(
                 "Refusing to load non-regular {} {}; continuing with defaults: {}",
                 label,
@@ -284,7 +328,7 @@ fn load_snapshot_path_with_outcome(
                 max_expanded_size,
             })
         }
-        Err(err) if err.downcast_ref::<NonRegularSessionArtifact>().is_some() => {
+        Err(err) if is_non_regular_session_artifact(&err) => {
             warn!(
                 "Refusing to load non-regular {} {}; continuing with defaults: {}",
                 label,
@@ -322,6 +366,22 @@ fn load_snapshot_path_with_outcome(
             }
             Ok(LoadSnapshotOutcome::Empty)
         }
+    }
+}
+
+fn record_named_session_opened_for_outcome(
+    options: &SessionOptions,
+    outcome: &LoadSnapshotOutcome,
+) {
+    if options.is_named_file()
+        && matches!(
+            outcome,
+            LoadSnapshotOutcome::Loaded(_)
+                | LoadSnapshotOutcome::LoadedFromBackup(_)
+                | LoadSnapshotOutcome::LoadedFromRecovery(_)
+        )
+    {
+        crate::session::catalog::record_named_session_opened(options);
     }
 }
 
@@ -701,11 +761,10 @@ pub(super) fn load_snapshot_inner_with_expanded_limit(
     options: &SessionOptions,
     max_expanded_size: u64,
 ) -> Result<Option<LoadedSnapshot>> {
-    session_artifact_metadata(session_path)?;
+    let no_follow = is_named_primary_path(session_path, options);
     let mut file_bytes = Vec::new();
     {
-        let mut file = File::open(session_path)
-            .with_context(|| format!("failed to open session file {}", session_path.display()))?;
+        let mut file = open_session_artifact_for_read(session_path, no_follow)?;
         file.read_to_end(&mut file_bytes)
             .context("failed to read session file")?;
     }
@@ -843,35 +902,6 @@ pub(super) fn load_snapshot_inner_with_expanded_limit(
     }))
 }
 
-#[derive(Debug)]
-struct NonRegularSessionArtifact {
-    path: PathBuf,
-}
-
-impl fmt::Display for NonRegularSessionArtifact {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "session artifact is not a regular file: {}",
-            self.path.display()
-        )
-    }
-}
-
-impl Error for NonRegularSessionArtifact {}
-
-fn session_artifact_metadata(session_path: &Path) -> Result<fs::Metadata> {
-    let metadata = fs::metadata(session_path)
-        .with_context(|| format!("failed to stat session file {}", session_path.display()))?;
-    if metadata.is_file() {
-        return Ok(metadata);
-    }
-    Err(NonRegularSessionArtifact {
-        path: session_path.to_path_buf(),
-    }
-    .into())
-}
-
 fn board_pages_from_file(
     pages: Option<Vec<Frame>>,
     active: Option<usize>,
@@ -915,8 +945,8 @@ fn resolved_active_board_id(requested: Option<String>, boards: &[BoardSnapshot])
 }
 
 fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Result<()> {
-    let bytes = fs::read(session_path)
-        .with_context(|| format!("failed to read corrupt session {}", session_path.display()))?;
+    let named_primary = is_named_primary_path(session_path, options);
+    let bytes = read_corrupt_session_bytes(session_path, named_primary)?;
     let primary_path = options.session_file_path();
     let backup_path = if session_path == primary_path.as_path() {
         options.backup_file_path()
@@ -925,6 +955,14 @@ fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Resu
     };
     fs::write(&backup_path, &bytes)
         .with_context(|| format!("failed to write session backup {}", backup_path.display()))?;
+    if named_primary {
+        debug!(
+            "Backed up corrupt named session primary {} to {}; leaving the selected primary in place",
+            session_path.display(),
+            backup_path.display()
+        );
+        return Ok(());
+    }
     fs::remove_file(session_path).with_context(|| {
         format!(
             "failed to remove corrupt session {}",
@@ -932,4 +970,17 @@ fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Resu
         )
     })?;
     Ok(())
+}
+
+fn read_corrupt_session_bytes(session_path: &Path, no_follow: bool) -> Result<Vec<u8>> {
+    if !no_follow {
+        return fs::read(session_path)
+            .with_context(|| format!("failed to read corrupt session {}", session_path.display()));
+    }
+
+    let mut file = open_session_artifact_for_read(session_path, true)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .with_context(|| format!("failed to read corrupt session {}", session_path.display()))?;
+    Ok(bytes)
 }
