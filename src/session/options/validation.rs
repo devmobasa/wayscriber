@@ -7,7 +7,10 @@ use anyhow::{Context, Result, anyhow};
 
 use crate::paths::expand_tilde;
 
-use super::super::primary::{PrimaryTargetKind, PrimaryTargetState, inspect_named_primary_target};
+use super::super::primary::{
+    PrimaryTargetKind, PrimaryTargetState, inspect_named_primary_target,
+    open_session_artifact_for_read,
+};
 use super::types::session_file_parent_dir;
 
 static NEXT_WRITE_PROBE_ID: AtomicU64 = AtomicU64::new(0);
@@ -38,6 +41,50 @@ pub fn validate_named_session_file_for_clear(path: &Path) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+pub fn validate_named_session_file_for_open(path: &Path) -> Result<()> {
+    validate_named_session_file_shape(path)?;
+    let parent = require_existing_parent_dir(path)?;
+
+    match inspect_named_primary_target(path)? {
+        PrimaryTargetState::Missing => Err(anyhow!(
+            "named session file does not exist: {}",
+            path.display()
+        )),
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Regular,
+            ..
+        } => {
+            validate_parent_writable_by_probe(
+                &parent,
+                "named session parent directory is not writable",
+            )?;
+            open_session_artifact_for_read(path, true).map(drop)?;
+            Ok(())
+        }
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Directory,
+            ..
+        } => Err(anyhow!(
+            "--session-file must name a session file, not a directory: {}",
+            path.display()
+        )),
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Symlink,
+            ..
+        } => Err(anyhow!(
+            "--session-file must name a regular session file, not a symlink: {}",
+            path.display()
+        )),
+        PrimaryTargetState::Present {
+            kind: PrimaryTargetKind::Special,
+            ..
+        } => Err(anyhow!(
+            "--session-file must name a regular session file, not a special file: {}",
+            path.display()
+        )),
+    }
 }
 
 fn require_existing_parent_dir(path: &Path) -> Result<PathBuf> {

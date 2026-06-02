@@ -3,6 +3,7 @@ use super::{
     BoardState,
 };
 use crate::draw::{BoardPages, Frame, PageDeleteOutcome as CanvasPageDeleteOutcome};
+use std::collections::HashSet;
 
 impl BoardManager {
     pub fn board_count(&self) -> usize {
@@ -212,6 +213,48 @@ impl BoardManager {
             return true;
         }
         false
+    }
+
+    pub(crate) fn release_session_replace_slot(&mut self, keep_ids: &HashSet<String>) -> bool {
+        if self.boards.len() < self.max_count {
+            return true;
+        }
+
+        let candidate = self
+            .boards
+            .iter()
+            .position(|board| {
+                !keep_ids.contains(&board.spec.id)
+                    && !board.spec.pinned
+                    && board.spec.id != BOARD_ID_TRANSPARENT
+            })
+            .or_else(|| {
+                self.boards.iter().position(|board| {
+                    !keep_ids.contains(&board.spec.id) && board.spec.id != BOARD_ID_TRANSPARENT
+                })
+            });
+
+        let Some(index) = candidate else {
+            return false;
+        };
+
+        let removed_id = self.boards[index].spec.id.clone();
+        self.boards.remove(index);
+        if self.boards.is_empty() {
+            self.active_index = 0;
+        } else if self.active_index >= self.boards.len() {
+            self.active_index = self.boards.len() - 1;
+        } else if index < self.active_index {
+            self.active_index = self.active_index.saturating_sub(1);
+        }
+        if self.default_board_id == removed_id {
+            self.default_board_id = self.boards.get(self.active_index).map_or_else(
+                || BOARD_ID_TRANSPARENT.to_string(),
+                |board| board.spec.id.clone(),
+            );
+        }
+        self.bump_board_identity_generation();
+        true
     }
 
     /// Insert a board at the given index.

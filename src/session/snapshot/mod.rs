@@ -10,11 +10,13 @@ mod types;
 mod tests;
 
 pub use apply::apply_snapshot;
+pub(crate) use apply::apply_snapshot_replacing_boards;
 pub use capture::snapshot_from_input;
 pub(crate) use compression::DEFAULT_MAX_EXPANDED_SESSION_BYTES;
 pub use load::load_snapshot;
 pub(crate) use load::{
-    LoadSnapshotOutcome, LoadedSnapshot, load_snapshot_inner, load_snapshot_with_outcome,
+    LoadSnapshotOutcome, LoadedSnapshot, load_named_session_candidate, load_snapshot_inner,
+    load_snapshot_with_outcome,
 };
 pub use save::save_snapshot;
 pub(crate) use save::{

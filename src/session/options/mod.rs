@@ -14,4 +14,5 @@ pub use types::{
 pub use validation::{
     normalize_named_session_file_arg, validate_named_session_file_for_clear,
     validate_named_session_file_for_foreground, validate_named_session_file_for_info,
+    validate_named_session_file_for_open,
 };

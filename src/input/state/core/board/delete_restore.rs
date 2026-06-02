@@ -45,11 +45,31 @@ impl InputState {
     pub(crate) fn clear_pending_delete_confirmations(&mut self) {
         self.pending_board_delete = None;
         self.pending_page_delete = None;
-        if self.ui_toast.as_ref().is_some_and(|toast| {
-            toast.action.as_ref().is_some_and(|action| {
-                matches!(action.action, Action::BoardDelete | Action::PageDelete)
-            })
-        }) {
+        self.clear_delete_action_toast(false);
+    }
+
+    pub(crate) fn clear_session_delete_restore_state(&mut self) {
+        self.pending_board_delete = None;
+        self.pending_page_delete = None;
+        self.deleted_boards.clear();
+        self.deleted_pages.clear();
+        self.clear_delete_action_toast(true);
+    }
+
+    fn clear_delete_action_toast(&mut self, include_restore_actions: bool) {
+        let has_delete_action = self.ui_toast.as_ref().is_some_and(|toast| {
+            toast
+                .action
+                .as_ref()
+                .is_some_and(|action| match action.action {
+                    Action::BoardDelete | Action::PageDelete => true,
+                    Action::BoardRestoreDeleted | Action::PageRestoreDeleted => {
+                        include_restore_actions
+                    }
+                    _ => false,
+                })
+        });
+        if has_delete_action {
             self.ui_toast = None;
             self.ui_toast_bounds = None;
             self.needs_redraw = true;

@@ -1,4 +1,107 @@
-use super::base::{DrawingState, InputState};
+use super::base::{DrawingState, InputState, TextEditEntryFeedback, TextInputMode};
+use super::index::SpatialGrid;
+use super::{ColorPickerPopupLayout, ColorPickerPopupState};
+use crate::draw::frame::ShapeSnapshot;
+use crate::draw::{Color, DirtyTracker, FontDescriptor, ShapeId};
+use crate::input::state::core::base::PolygonClickState;
+use crate::input::state::highlight::ClickHighlightState;
+use crate::input::tool::PerToolDrawingSettings;
+use crate::input::{BoardManager, MouseButton};
+use crate::util::Rect;
+use std::collections::HashMap;
+
+#[allow(dead_code)]
+struct ActiveInteractionRollback {
+    boards: BoardManager,
+    state: DrawingState,
+    active_drag_button: Option<MouseButton>,
+    active_drag_color: Option<Color>,
+    current_color: Color,
+    current_thickness: f64,
+    tool_settings: PerToolDrawingSettings,
+    current_font_size: f64,
+    font_descriptor: FontDescriptor,
+    text_background_enabled: bool,
+    text_wrap_width: Option<i32>,
+    text_input_mode: TextInputMode,
+    text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
+    text_edit_entry_feedback: Option<TextEditEntryFeedback>,
+    color_picker_popup_state: ColorPickerPopupState,
+    color_picker_popup_layout: Option<ColorPickerPopupLayout>,
+    active_preset_slot: Option<usize>,
+    click_highlight: ClickHighlightState,
+    needs_redraw: bool,
+    session_dirty: bool,
+    dirty_tracker: DirtyTracker,
+    last_provisional_bounds: Option<Rect>,
+    last_text_preview_bounds: Option<Rect>,
+    last_polygon_click: Option<PolygonClickState>,
+    hit_test_cache: HashMap<ShapeId, Rect>,
+    spatial_index: Option<SpatialGrid>,
+}
+
+#[allow(dead_code)]
+impl ActiveInteractionRollback {
+    fn capture(input: &InputState) -> Self {
+        Self {
+            boards: input.boards.clone_preserving_identity_generation(),
+            state: input.state.clone(),
+            active_drag_button: input.active_drag_button,
+            active_drag_color: input.active_drag_color,
+            current_color: input.current_color,
+            current_thickness: input.current_thickness,
+            tool_settings: input.tool_settings.clone(),
+            current_font_size: input.current_font_size,
+            font_descriptor: input.font_descriptor.clone(),
+            text_background_enabled: input.text_background_enabled,
+            text_wrap_width: input.text_wrap_width,
+            text_input_mode: input.text_input_mode,
+            text_edit_target: input.text_edit_target.clone(),
+            text_edit_entry_feedback: input.text_edit_entry_feedback.clone(),
+            color_picker_popup_state: input.color_picker_popup_state.clone(),
+            color_picker_popup_layout: input.color_picker_popup_layout,
+            active_preset_slot: input.active_preset_slot,
+            click_highlight: input.click_highlight.clone(),
+            needs_redraw: input.needs_redraw,
+            session_dirty: input.session_dirty,
+            dirty_tracker: input.dirty_tracker.clone(),
+            last_provisional_bounds: input.last_provisional_bounds,
+            last_text_preview_bounds: input.last_text_preview_bounds,
+            last_polygon_click: input.last_polygon_click,
+            hit_test_cache: input.hit_test_cache.clone(),
+            spatial_index: input.spatial_index.clone(),
+        }
+    }
+
+    fn restore(self, input: &mut InputState) {
+        input.boards = self.boards;
+        input.state = self.state;
+        input.active_drag_button = self.active_drag_button;
+        input.active_drag_color = self.active_drag_color;
+        input.current_color = self.current_color;
+        input.current_thickness = self.current_thickness;
+        input.tool_settings = self.tool_settings;
+        input.current_font_size = self.current_font_size;
+        input.font_descriptor = self.font_descriptor;
+        input.text_background_enabled = self.text_background_enabled;
+        input.text_wrap_width = self.text_wrap_width;
+        input.text_input_mode = self.text_input_mode;
+        input.text_edit_target = self.text_edit_target;
+        input.text_edit_entry_feedback = self.text_edit_entry_feedback;
+        input.color_picker_popup_state = self.color_picker_popup_state;
+        input.color_picker_popup_layout = self.color_picker_popup_layout;
+        input.active_preset_slot = self.active_preset_slot;
+        input.click_highlight = self.click_highlight;
+        input.needs_redraw = self.needs_redraw;
+        input.session_dirty = self.session_dirty;
+        input.dirty_tracker = self.dirty_tracker;
+        input.last_provisional_bounds = self.last_provisional_bounds;
+        input.last_text_preview_bounds = self.last_text_preview_bounds;
+        input.last_polygon_click = self.last_polygon_click;
+        input.hit_test_cache = self.hit_test_cache;
+        input.spatial_index = self.spatial_index;
+    }
+}
 
 impl InputState {
     /// Marks session data as dirty for autosave tracking.
@@ -47,6 +150,31 @@ impl InputState {
             || self.board_picker_is_page_dragging()
             || self.color_picker_popup_is_dragging()
     }
+
+    fn has_cancelable_session_capture_interaction(&self) -> bool {
+        self.has_active_pointer_interaction()
+            || matches!(self.state, DrawingState::TextInput { .. })
+            || self.is_color_picker_popup_open()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn with_active_interaction_canceled_for_capture<T>(
+        &mut self,
+        capture: impl FnOnce(&Self) -> T,
+    ) -> T {
+        if !self.has_cancelable_session_capture_interaction() {
+            return capture(self);
+        }
+
+        let rollback = ActiveInteractionRollback::capture(self);
+        self.cancel_active_interaction();
+        if self.is_color_picker_popup_open() {
+            self.close_color_picker_popup(true);
+        }
+        let value = capture(self);
+        rollback.restore(self);
+        value
+    }
 }
 
 #[cfg(test)]
@@ -55,9 +183,10 @@ mod tests {
     use crate::draw::{BLACK, Shape};
     use crate::input::state::core::board_picker::{BoardPickerDrag, BoardPickerPageDrag};
     use crate::input::state::test_support::make_test_input_state;
-    use crate::input::{DrawingState, MouseButton, SelectionHandle, Tool};
+    use crate::input::{BOARD_ID_BLACKBOARD, DrawingState, MouseButton, SelectionHandle, Tool};
     use crate::util::Rect;
     use std::sync::Arc;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn active_pointer_interaction_tracks_drag_button() {
@@ -150,6 +279,28 @@ mod tests {
         state.open_color_picker_popup();
         state.color_picker_popup_set_dragging(true);
         assert!(state.has_active_pointer_interaction());
+    }
+
+    #[test]
+    fn session_capture_rollback_preserves_board_delete_confirmation_identity() {
+        let mut state = make_test_input_state();
+        state.switch_board(BOARD_ID_BLACKBOARD);
+        assert_eq!(state.board_id(), BOARD_ID_BLACKBOARD);
+        let requested_at = Instant::now();
+
+        state.delete_active_board_at(requested_at);
+        assert!(state.has_pending_board_delete());
+        state.begin_pointer_drag(MouseButton::Left, None);
+
+        state.with_active_interaction_canceled_for_capture(|input| {
+            assert!(!input.has_active_pointer_interaction());
+        });
+        assert!(state.has_active_pointer_interaction());
+
+        state.delete_active_board_at(requested_at + Duration::from_millis(1));
+
+        assert!(!state.boards.has_board(BOARD_ID_BLACKBOARD));
+        assert!(!state.has_pending_board_delete());
     }
 
     fn test_shape_snapshot() -> ShapeSnapshot {

@@ -27,7 +27,7 @@ use std::time::Instant;
 ///
 /// Tracks whether the user is idle, actively drawing a shape, or entering text.
 /// State transitions occur based on mouse and keyboard events.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DrawingState {
     /// Not actively drawing - waiting for user input
     Idle,

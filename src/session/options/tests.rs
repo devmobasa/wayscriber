@@ -4,7 +4,10 @@ use std::sync::Mutex;
 #[cfg(unix)]
 use std::{
     ffi::CString,
-    os::unix::{ffi::OsStrExt, fs::symlink},
+    os::unix::{
+        ffi::OsStrExt,
+        fs::{PermissionsExt, symlink},
+    },
 };
 
 use super::config::options_from_config;
@@ -182,6 +185,25 @@ fn named_file_foreground_validation_accepts_writable_parent_and_cleans_probe() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn named_file_open_validation_rejects_existing_session_in_readonly_parent() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let parent = temp.path().join("readonly-parent");
+    fs::create_dir(&parent).expect("create parent");
+    let path = parent.join("lecture-04.wayscriber-session");
+    fs::write(&path, b"{}").expect("write session file");
+
+    let _guard = readonly_dir_guard(&parent);
+    if can_create_probe(&parent) {
+        return;
+    }
+
+    let err = validation::validate_named_session_file_for_open(&path)
+        .expect_err("open validation should reject read-only parent");
+    assert!(err.to_string().contains("not writable"), "{err:#}");
+}
+
 #[test]
 fn named_file_offline_validation_allows_missing_parent() {
     let temp = crate::test_temp::tempdir().unwrap();
@@ -326,6 +348,52 @@ fn named_file_validation_rejects_parent_with_write_bits_but_no_effective_access(
         clear_err.to_string().contains("not writable for cleanup"),
         "{clear_err:#}"
     );
+}
+
+#[cfg(unix)]
+struct ReadonlyDirGuard {
+    path: PathBuf,
+    original_mode: u32,
+}
+
+#[cfg(unix)]
+impl Drop for ReadonlyDirGuard {
+    fn drop(&mut self) {
+        let _ = fs::set_permissions(&self.path, fs::Permissions::from_mode(self.original_mode));
+    }
+}
+
+#[cfg(unix)]
+fn readonly_dir_guard(path: &Path) -> ReadonlyDirGuard {
+    let original_mode = fs::metadata(path)
+        .expect("parent metadata")
+        .permissions()
+        .mode();
+    fs::set_permissions(path, fs::Permissions::from_mode(0o555)).expect("make parent read-only");
+    ReadonlyDirGuard {
+        path: path.to_path_buf(),
+        original_mode,
+    }
+}
+
+#[cfg(unix)]
+fn can_create_probe(parent: &Path) -> bool {
+    let probe = parent.join(format!(
+        ".wayscriber-session-open-manual-access-test-{}",
+        std::process::id()
+    ));
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
+        Ok(file) => {
+            drop(file);
+            let _ = fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 #[cfg(unix)]

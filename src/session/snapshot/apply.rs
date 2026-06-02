@@ -1,16 +1,34 @@
 use super::types::{BoardPagesSnapshot, SessionSnapshot};
 use crate::draw::{BoardPages, clamp_regular_sides};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use crate::input::{InputState, PerToolDrawingSettings};
+use crate::input::{BOARD_ID_TRANSPARENT, InputState, PerToolDrawingSettings};
 use crate::session::options::SessionOptions;
+use anyhow::{Result, anyhow};
+use std::collections::HashSet;
 
 /// Apply a session snapshot to the live [`InputState`].
 pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options: &SessionOptions) {
+    apply_snapshot_inner(input, snapshot, options, None);
+}
+
+fn apply_snapshot_inner(
+    input: &mut InputState,
+    snapshot: SessionSnapshot,
+    options: &SessionOptions,
+    replacement_board_ids: Option<&HashSet<String>>,
+) {
     let runtime_history_limit = options.effective_history_limit(input.undo_stack_limit);
     let board_generation_before = input.boards.board_identity_generation();
     input.clear_pending_delete_confirmations();
 
     for board in &snapshot.boards {
+        if !input.boards.has_board(&board.id)
+            && let Some(replacement_board_ids) = replacement_board_ids
+        {
+            input
+                .boards
+                .release_session_replace_slot(replacement_board_ids);
+        }
         let pages = snapshot_to_board_pages(board.pages.clone());
         if input.boards.set_board_pages(&board.id, pages)
             && let Some(board_state) = input
@@ -106,6 +124,62 @@ pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options
 
     input.sync_step_marker_counter();
     input.needs_redraw = true;
+}
+
+/// Replace live board page contents with a session snapshot.
+///
+/// Startup restore keeps any boards that are absent from an older or partial
+/// snapshot. Runtime session switching needs stronger replacement semantics so
+/// pages from the previously opened session cannot leak into the newly opened
+/// one.
+#[allow(dead_code)]
+pub(crate) fn apply_snapshot_replacing_boards(
+    input: &mut InputState,
+    snapshot: SessionSnapshot,
+    options: &SessionOptions,
+) -> Result<()> {
+    let replacement_board_ids = snapshot
+        .boards
+        .iter()
+        .map(|board| board.id.clone())
+        .collect::<HashSet<_>>();
+    let preserves_overlay = input.boards.has_board(BOARD_ID_TRANSPARENT)
+        && !replacement_board_ids.contains(BOARD_ID_TRANSPARENT);
+    let available_slots = input
+        .boards
+        .max_count()
+        .saturating_sub(usize::from(preserves_overlay));
+    if replacement_board_ids.len() > available_slots {
+        return Err(anyhow!(
+            "session snapshot contains {} boards but the current runtime allows {} while preserving the overlay board",
+            replacement_board_ids.len(),
+            available_slots
+        ));
+    }
+    clear_board_pages(input);
+    apply_snapshot_inner(input, snapshot, options, Some(&replacement_board_ids));
+    input.dirty_tracker.mark_full();
+    input.sync_canvas_pointer_to_current_transform();
+    Ok(())
+}
+
+fn clear_board_pages(input: &mut InputState) {
+    input.cancel_active_interaction();
+    if input.is_board_picker_open() {
+        input.close_board_picker();
+    }
+    if input.is_color_picker_popup_open() {
+        input.close_color_picker_popup(true);
+    }
+    input.clear_selection();
+    input.close_context_menu();
+    input.invalidate_hit_cache();
+    input.sync_canvas_pointer_to_current_transform();
+    input.clear_session_delete_restore_state();
+    for board in input.boards.board_states_mut() {
+        board.pages = BoardPages::new();
+        board.pages.bump_generation();
+    }
 }
 
 fn snapshot_to_board_pages(pages: BoardPagesSnapshot) -> BoardPages {

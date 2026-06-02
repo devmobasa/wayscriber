@@ -83,6 +83,14 @@ pub(crate) fn open_runtime_lock_file(lock_path: &Path, named: bool) -> io::Resul
         .open(lock_path)
 }
 
+#[allow(dead_code)]
+pub(crate) fn open_existing_runtime_lock_file_for_read(
+    lock_path: &Path,
+    named: bool,
+) -> io::Result<Option<File>> {
+    open_existing_lock_file_for_read(lock_path, named)
+}
+
 fn open_or_create_named_lock_file(lock_path: &Path) -> io::Result<File> {
     for _ in 0..2 {
         match create_named_lock_file(lock_path) {
@@ -123,6 +131,33 @@ fn open_existing_named_lock_file(lock_path: &Path) -> io::Result<File> {
     ensure_regular_lock_file(lock_path, file)
 }
 
+#[allow(dead_code)]
+fn open_existing_lock_file_for_read(lock_path: &Path, no_follow: bool) -> io::Result<Option<File>> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    if no_follow {
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+
+    let file = match options.open(lock_path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(err) if no_follow && open_error_is_symlink(&err) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "session lock file is a symlink, not a regular file: {}",
+                    lock_path.display()
+                ),
+            ));
+        }
+        Err(err) => return Err(err),
+    };
+
+    ensure_regular_lock_file(lock_path, file).map(Some)
+}
+
 fn ensure_regular_lock_file(lock_path: &Path, file: File) -> io::Result<File> {
     let metadata = file.metadata()?;
     if !metadata.is_file() {
@@ -136,4 +171,16 @@ fn ensure_regular_lock_file(lock_path: &Path, file: File) -> io::Result<File> {
     }
 
     Ok(file)
+}
+
+#[cfg(unix)]
+#[allow(dead_code)]
+fn open_error_is_symlink(err: &io::Error) -> bool {
+    err.raw_os_error() == Some(libc::ELOOP)
+}
+
+#[cfg(not(unix))]
+#[allow(dead_code)]
+fn open_error_is_symlink(_err: &io::Error) -> bool {
+    false
 }
