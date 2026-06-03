@@ -124,6 +124,24 @@ impl SessionState {
         self.notified_failure = false;
     }
 
+    fn commit_runtime_save_as(
+        &mut self,
+        options: SessionOptions,
+        now: Instant,
+        saved_board_data: bool,
+    ) {
+        self.options = Some(options);
+        self.loaded = true;
+        self.loaded_board_data = saved_board_data;
+        self.dirty = false;
+        self.dirty_since = None;
+        self.last_dirty_at = None;
+        self.last_save_at = Some(now);
+        self.autosave_retry_at = None;
+        self.autosave_deferred_until = None;
+        self.notified_failure = false;
+    }
+
     pub fn mark_autosave_failure(&mut self, now: Instant, backoff: Duration) -> bool {
         self.autosave_retry_at = Some(now + backoff);
         if self.notified_failure {
@@ -246,6 +264,18 @@ pub(in crate::backend::wayland) struct RuntimeOpenSessionReport {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct RuntimeSaveAsSessionReport {
+    pub previous_path: PathBuf,
+    pub saved_path: PathBuf,
+    pub switched_target: bool,
+    pub saved: bool,
+    pub saved_board_data: bool,
+    pub outcome: Option<stored_session::SaveSnapshotOutcome>,
+    pub written_size: Option<usize>,
+}
+
+#[allow(dead_code)]
 pub(in crate::backend::wayland) fn open_named_session_runtime(
     input_state: &mut InputState,
     session_state: &mut SessionState,
@@ -315,6 +345,70 @@ pub(in crate::backend::wayland) fn open_named_session_runtime(
         opened_path,
         saved_current,
         loaded_board_data,
+    })
+}
+
+#[allow(dead_code)]
+pub(in crate::backend::wayland) fn save_named_session_as_runtime(
+    input_state: &mut InputState,
+    session_state: &mut SessionState,
+    target_path: &Path,
+    overwrite: stored_session::SaveAsOverwrite,
+    now: Instant,
+) -> Result<RuntimeSaveAsSessionReport> {
+    let current_options = session_state
+        .options()
+        .cloned()
+        .ok_or_else(|| anyhow!("cannot save session as without active session options"))?;
+    let previous_path = current_options.session_file_path();
+
+    stored_session::validate_named_session_file_for_foreground(target_path)?;
+    if stored_session::catalog::session_paths_match(&previous_path, target_path) {
+        let saved = save_current_session_before_runtime_open(
+            input_state,
+            session_state,
+            &current_options,
+            now,
+        )?;
+        return Ok(RuntimeSaveAsSessionReport {
+            previous_path: previous_path.clone(),
+            saved_path: previous_path,
+            switched_target: false,
+            saved,
+            saved_board_data: session_state.has_loaded_board_data(),
+            outcome: None,
+            written_size: None,
+        });
+    }
+
+    let mut target_options = current_options;
+    target_options.set_named_file_target(target_path.to_path_buf());
+    target_options.force_resume_persistence();
+
+    let snapshot = input_state
+        .with_active_interaction_canceled_for_capture(|input_state| {
+            stored_session::snapshot_from_input(input_state, &target_options)
+        })
+        .ok_or_else(|| anyhow!("Save Session As has no session data to write"))?;
+    let saved_board_data = snapshot.has_board_data();
+    let save_report =
+        stored_session::save_snapshot_as_with_report(&snapshot, &target_options, overwrite)?;
+
+    input_state.set_session_preflight_options(Some(target_options.clone()));
+    let _ = input_state.take_session_dirty();
+    input_state.clear_session_dirty();
+    let saved_path = target_options.session_file_path();
+    session_state.commit_runtime_save_as(target_options.clone(), now, saved_board_data);
+    stored_session::catalog::record_named_session_saved(&target_options);
+
+    Ok(RuntimeSaveAsSessionReport {
+        previous_path,
+        saved_path,
+        switched_target: true,
+        saved: true,
+        saved_board_data,
+        outcome: Some(save_report.outcome),
+        written_size: Some(save_report.written_size),
     })
 }
 
@@ -693,6 +787,257 @@ mod tests {
                 path.display()
             );
         }
+    }
+
+    fn loaded_line_x2(options: &SessionOptions) -> i32 {
+        let outcome = stored_session::load_snapshot_with_outcome(options).expect("load session");
+        let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+            panic!("expected loaded snapshot, got {outcome:?}");
+        };
+        let shape = &snapshot.boards[0].pages.pages[0].shapes[0].shape;
+        let Shape::Line { x2, .. } = shape else {
+            panic!("expected saved line, got {shape:?}");
+        };
+        *x2
+    }
+
+    #[test]
+    fn runtime_save_as_new_path_writes_and_switches_active_target() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let _env = EnvGuard::set_xdg_data_home(temp.path());
+        let current_options = named_options(temp.path(), "current-save-as-new");
+        let target_options = named_options(temp.path(), "target-save-as-new");
+
+        let mut input = test_input_state();
+        add_line(&mut input, 51);
+        input.mark_session_dirty();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+
+        let report = save_named_session_as_runtime(
+            &mut input,
+            &mut session_state,
+            &target_options.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+            Instant::now(),
+        )
+        .expect("runtime save as");
+
+        assert_eq!(report.previous_path, current_options.session_file_path());
+        assert_eq!(report.saved_path, target_options.session_file_path());
+        assert!(report.switched_target);
+        assert!(report.saved);
+        assert!(report.saved_board_data);
+        assert_eq!(
+            report.outcome,
+            Some(stored_session::SaveSnapshotOutcome::Full)
+        );
+        assert_eq!(
+            session_state
+                .options()
+                .map(SessionOptions::session_file_path),
+            Some(target_options.session_file_path())
+        );
+        assert!(!session_state.is_dirty());
+        assert!(!input.is_session_dirty());
+        assert_eq!(loaded_line_x2(&target_options), 51);
+
+        let recent = stored_session::catalog::recent_sessions().expect("recent sessions");
+        let target_entry = recent
+            .iter()
+            .find(|entry| entry.path == target_options.session_file_path().display().to_string())
+            .expect("target catalog entry");
+        assert!(
+            target_entry.last_saved_at_millis.is_some(),
+            "Save As should catalog the target only after commit"
+        );
+    }
+
+    #[test]
+    fn runtime_save_as_rejects_existing_target_without_confirmation() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-save-as-existing");
+        let target_options = named_options(temp.path(), "target-save-as-existing");
+        stored_session::save_snapshot(&snapshot_for_board("transparent", 17), &target_options)
+            .expect("save existing target");
+        let before =
+            std::fs::read(target_options.session_file_path()).expect("existing target bytes");
+
+        let mut input = test_input_state();
+        add_line(&mut input, 88);
+        input.mark_session_dirty();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+
+        let err = save_named_session_as_runtime(
+            &mut input,
+            &mut session_state,
+            &target_options.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+            Instant::now(),
+        )
+        .expect_err("existing target should require confirmation");
+
+        assert!(
+            format!("{err:#}").contains("overwrite confirmation required"),
+            "{err:#}"
+        );
+        assert_eq!(
+            session_state
+                .options()
+                .map(SessionOptions::session_file_path),
+            Some(current_options.session_file_path())
+        );
+        assert!(input.is_session_dirty());
+        assert_eq!(
+            std::fs::read(target_options.session_file_path()).expect("target unchanged"),
+            before
+        );
+        assert_eq!(loaded_line_x2(&target_options), 17);
+    }
+
+    #[test]
+    fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-save-as-sidecar");
+        let target_options = named_options(temp.path(), "target-save-as-sidecar");
+        std::fs::write(target_options.clear_marker_file_path(), b"stale clear")
+            .expect("stale clear");
+
+        let mut input = test_input_state();
+        add_line(&mut input, 88);
+        input.mark_session_dirty();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+
+        let err = save_named_session_as_runtime(
+            &mut input,
+            &mut session_state,
+            &target_options.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+            Instant::now(),
+        )
+        .expect_err("existing sidecar should require confirmation");
+
+        assert!(
+            format!("{err:#}").contains("overwrite confirmation required"),
+            "{err:#}"
+        );
+        assert_eq!(
+            session_state
+                .options()
+                .map(SessionOptions::session_file_path),
+            Some(current_options.session_file_path())
+        );
+        assert!(input.is_session_dirty());
+        assert!(target_options.clear_marker_file_path().exists());
+        assert!(!target_options.session_file_path().exists());
+    }
+
+    #[test]
+    fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let _env = EnvGuard::set_xdg_data_home(temp.path());
+        let current_options = named_options(temp.path(), "current-save-as-overwrite");
+        let target_options = named_options(temp.path(), "target-save-as-overwrite");
+        std::fs::write(target_options.session_file_path(), b"old primary").expect("old primary");
+        std::fs::write(target_options.backup_file_path(), b"old backup").expect("old backup");
+        std::fs::write(target_options.recovery_file_path(), b"old recovery").expect("old recovery");
+        let preserved_recovery = target_options
+            .recovery_file_path()
+            .with_extension("recovery.preserved");
+        std::fs::write(&preserved_recovery, b"old preserved recovery")
+            .expect("old preserved recovery");
+        std::fs::write(target_options.clear_marker_file_path(), b"old clear").expect("old clear");
+        std::fs::write(target_options.lock_file_path(), b"lock").expect("old lock");
+
+        let mut input = test_input_state();
+        add_line(&mut input, 63);
+        input.mark_session_dirty();
+        let mut session_state = SessionState::new(Some(current_options));
+
+        save_named_session_as_runtime(
+            &mut input,
+            &mut session_state,
+            &target_options.session_file_path(),
+            stored_session::SaveAsOverwrite::ConfirmReplace,
+            Instant::now(),
+        )
+        .expect("confirmed overwrite");
+
+        assert_eq!(
+            session_state
+                .options()
+                .map(SessionOptions::session_file_path),
+            Some(target_options.session_file_path())
+        );
+        assert_eq!(loaded_line_x2(&target_options), 63);
+        assert!(!target_options.backup_file_path().exists());
+        assert!(!target_options.recovery_file_path().exists());
+        assert!(!preserved_recovery.exists());
+        assert!(!target_options.clear_marker_file_path().exists());
+        assert!(
+            target_options.lock_file_path().exists(),
+            "Save As must not delete the target lock sidecar"
+        );
+    }
+
+    #[test]
+    fn runtime_save_as_current_target_noop_does_not_require_overwrite_cleanup() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-save-as-self");
+        std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
+
+        let mut input = test_input_state();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+        let report = save_named_session_as_runtime(
+            &mut input,
+            &mut session_state,
+            &current_options.session_file_path(),
+            stored_session::SaveAsOverwrite::Deny,
+            Instant::now(),
+        )
+        .expect("current target save as");
+
+        assert!(!report.switched_target);
+        assert!(!report.saved);
+        assert!(
+            current_options.backup_file_path().exists(),
+            "current-target Save As must not perform overwrite cleanup"
+        );
+        assert_eq!(
+            session_state
+                .options()
+                .map(SessionOptions::session_file_path),
+            Some(current_options.session_file_path())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-save-as-symlink");
+        std::fs::write(current_options.session_file_path(), b"current primary")
+            .expect("current primary");
+        let symlink_path = temp.path().join("current-save-as-link.wayscriber-session");
+        symlink(current_options.session_file_path(), &symlink_path).expect("target symlink");
+
+        let mut input = test_input_state();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+        let err = save_named_session_as_runtime(
+            &mut input,
+            &mut session_state,
+            &symlink_path,
+            stored_session::SaveAsOverwrite::Deny,
+            Instant::now(),
+        )
+        .expect_err("symlink target should be rejected before identity shortcut");
+
+        assert!(format!("{err:#}").contains("symlink"), "{err:#}");
+        assert_eq!(
+            session_state
+                .options()
+                .map(SessionOptions::session_file_path),
+            Some(current_options.session_file_path())
+        );
     }
 
     #[test]

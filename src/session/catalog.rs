@@ -78,6 +78,14 @@ pub fn session_path_identity(path: &Path) -> CatalogPathIdentity {
     }
 }
 
+/// Return true when two paths identify the same session target by exact or
+/// canonical identity without requiring the primary file to exist.
+pub fn session_paths_match(a: &Path, b: &Path) -> bool {
+    let a = session_path_identity(a);
+    let b = session_path_identity(b);
+    catalog_identities_match(&a, &b)
+}
+
 /// Upsert a session in the catalog and mark it opened or saved.
 pub fn upsert_session_event(path: &Path, event: CatalogEvent) -> Result<CatalogEntry> {
     with_catalog_write(|catalog| catalog.upsert(path, event))
@@ -205,6 +213,16 @@ impl CatalogFile {
         self.sessions
             .iter()
             .position(|entry| entry_matches_identity(entry, identity))
+    }
+}
+
+fn catalog_identities_match(a: &CatalogPathIdentity, b: &CatalogPathIdentity) -> bool {
+    if a.exact_path == b.exact_path {
+        return true;
+    }
+    match (a.canonical_path.as_deref(), b.canonical_path.as_deref()) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
     }
 }
 
