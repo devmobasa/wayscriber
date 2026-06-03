@@ -9,6 +9,7 @@ use crate::input::tool::PerToolDrawingSettings;
 use crate::input::{BoardManager, MouseButton};
 use crate::util::Rect;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 #[allow(dead_code)]
 struct ActiveInteractionRollback {
@@ -130,6 +131,26 @@ impl InputState {
     #[allow(dead_code)]
     pub(crate) fn is_session_dirty(&self) -> bool {
         self.session_dirty
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn pending_save_as_overwrite(&self) -> Option<&Path> {
+        self.pending_save_as_overwrite.as_deref()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_pending_save_as_overwrite(&mut self, path: PathBuf) {
+        self.pending_save_as_overwrite = Some(path);
+        self.needs_redraw = true;
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn clear_pending_save_as_overwrite(&mut self) -> Option<PathBuf> {
+        let previous = self.pending_save_as_overwrite.take();
+        if previous.is_some() {
+            self.needs_redraw = true;
+        }
+        previous
     }
 
     /// Returns true while pointer-driven work is in progress and autosave should wait.

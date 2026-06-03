@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::input::state::PRESET_FEEDBACK_DURATION_MS;
@@ -189,6 +190,7 @@ impl ToolbarSnapshot {
             active_session_name: None,
             active_session_path: None,
             recent_sessions: Vec::new(),
+            pending_save_as_overwrite_path: state.pending_save_as_overwrite().map(PathBuf::from),
         }
     }
 }

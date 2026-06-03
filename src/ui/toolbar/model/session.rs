@@ -13,6 +13,7 @@ pub(crate) struct ToolbarSessionModel {
     pub(crate) active_path_label: String,
     pub(crate) buttons: Vec<ToolbarSessionButton>,
     pub(crate) recents: Vec<ToolbarSessionRecent>,
+    pub(crate) overwrite_confirmation: Option<ToolbarSessionOverwriteConfirmation>,
 }
 
 impl ToolbarSessionModel {
@@ -48,12 +49,20 @@ impl ToolbarSessionModel {
         } else {
             Vec::new()
         };
+        let overwrite_confirmation = snapshot
+            .pending_save_as_overwrite_path
+            .as_ref()
+            .map(|path| ToolbarSessionOverwriteConfirmation {
+                label: session_path_label(path),
+                path: path.clone(),
+            });
 
         Some(Self {
             active_name,
             active_path_label,
             buttons,
             recents,
+            overwrite_confirmation,
         })
     }
 
@@ -67,6 +76,22 @@ impl ToolbarSessionModel {
 
     pub(crate) fn button_rows(&self) -> usize {
         self.buttons.len().div_ceil(self.button_columns())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ToolbarSessionOverwriteConfirmation {
+    pub(crate) label: String,
+    pub(crate) path: PathBuf,
+}
+
+impl ToolbarSessionOverwriteConfirmation {
+    pub(crate) fn confirm_event(&self) -> ToolbarEvent {
+        ToolbarEvent::SaveSessionAsConfirm(self.path.clone())
+    }
+
+    pub(crate) fn cancel_event(&self) -> ToolbarEvent {
+        ToolbarEvent::SaveSessionAsCancel
     }
 }
 
@@ -106,6 +131,13 @@ impl ToolbarSessionRecent {
     }
 }
 
+fn session_path_label(path: &std::path::Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,6 +172,7 @@ mod tests {
         assert_eq!(model.button_rows(), 2);
         assert!(model.buttons.iter().all(|button| button.enabled));
         assert_eq!(model.recents.len(), MAX_RECENT_SESSIONS);
+        assert!(model.overwrite_confirmation.is_none());
     }
 
     #[test]
@@ -163,6 +196,30 @@ mod tests {
         ));
         assert!(model.recents.is_empty());
         assert_eq!(model.active_path_label, "No persisted session target");
+    }
+
+    #[test]
+    fn session_model_exposes_pending_save_as_overwrite_confirmation() {
+        let mut snapshot = app_snapshot();
+        let target = PathBuf::from("/tmp/existing.wayscriber-session");
+        snapshot.active_session_path = Some(PathBuf::from("/tmp/current.wayscriber-session"));
+        snapshot.pending_save_as_overwrite_path = Some(target.clone());
+
+        let model = ToolbarSessionModel::from_snapshot(&snapshot).expect("session model");
+        let confirmation = model
+            .overwrite_confirmation
+            .as_ref()
+            .expect("overwrite confirmation");
+
+        assert_eq!(confirmation.label, "existing.wayscriber-session");
+        assert!(matches!(
+            confirmation.confirm_event(),
+            ToolbarEvent::SaveSessionAsConfirm(path) if path == target
+        ));
+        assert!(matches!(
+            confirmation.cancel_event(),
+            ToolbarEvent::SaveSessionAsCancel
+        ));
     }
 
     #[test]

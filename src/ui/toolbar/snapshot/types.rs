@@ -328,4 +328,6 @@ pub struct ToolbarSnapshot {
     pub active_session_path: Option<PathBuf>,
     /// Recent persisted sessions from the catalog.
     pub recent_sessions: Vec<SessionRecentSnapshot>,
+    /// Save Session As target waiting for explicit overwrite confirmation.
+    pub pending_save_as_overwrite_path: Option<PathBuf>,
 }

@@ -432,6 +432,28 @@ pub(in crate::backend::wayland) fn save_named_session_as_runtime(
 }
 
 #[allow(dead_code)]
+pub(in crate::backend::wayland) fn save_named_session_as_requires_overwrite(
+    session_state: &SessionState,
+    target_path: &Path,
+) -> Result<bool> {
+    let current_options = session_state
+        .options()
+        .cloned()
+        .ok_or_else(|| anyhow!("cannot save session as without active session options"))?;
+    let previous_path = current_options.session_file_path();
+
+    stored_session::validate_named_session_file_for_foreground(target_path)?;
+    if stored_session::catalog::session_paths_match(&previous_path, target_path) {
+        return Ok(false);
+    }
+
+    let mut target_options = current_options;
+    target_options.set_named_file_target(target_path.to_path_buf());
+    target_options.force_resume_persistence();
+    stored_session::save_snapshot_as_requires_overwrite(&target_options)
+}
+
+#[allow(dead_code)]
 pub(in crate::backend::wayland) fn clear_current_session_runtime(
     input_state: &mut InputState,
     session_state: &mut SessionState,
@@ -987,6 +1009,58 @@ mod tests {
         assert!(input.is_session_dirty());
         assert!(target_options.clear_marker_file_path().exists());
         assert!(!target_options.session_file_path().exists());
+    }
+
+    #[test]
+    fn runtime_save_as_overwrite_preflight_reports_existing_artifacts() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-save-as-preflight");
+        let fresh_options = named_options(temp.path(), "fresh-save-as-preflight");
+        let primary_options = named_options(temp.path(), "primary-save-as-preflight");
+        let sidecar_options = named_options(temp.path(), "sidecar-save-as-preflight");
+        stored_session::save_snapshot(&snapshot_for_board("transparent", 17), &primary_options)
+            .expect("save existing target");
+        std::fs::write(sidecar_options.clear_marker_file_path(), b"stale clear")
+            .expect("stale clear");
+        let session_state = SessionState::new(Some(current_options));
+
+        assert!(
+            !save_named_session_as_requires_overwrite(
+                &session_state,
+                &fresh_options.session_file_path()
+            )
+            .expect("fresh preflight")
+        );
+        assert!(
+            save_named_session_as_requires_overwrite(
+                &session_state,
+                &primary_options.session_file_path()
+            )
+            .expect("primary preflight")
+        );
+        assert!(
+            save_named_session_as_requires_overwrite(
+                &session_state,
+                &sidecar_options.session_file_path()
+            )
+            .expect("sidecar preflight")
+        );
+    }
+
+    #[test]
+    fn runtime_save_as_overwrite_preflight_skips_current_target() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-save-as-preflight-self");
+        std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
+        let session_state = SessionState::new(Some(current_options.clone()));
+
+        assert!(
+            !save_named_session_as_requires_overwrite(
+                &session_state,
+                &current_options.session_file_path()
+            )
+            .expect("current target preflight")
+        );
     }
 
     #[test]

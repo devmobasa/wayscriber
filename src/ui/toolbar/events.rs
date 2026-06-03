@@ -65,6 +65,8 @@ pub enum ToolbarEvent {
     OpenSession,
     OpenRecentSession(PathBuf),
     SaveSessionAs,
+    SaveSessionAsConfirm(PathBuf),
+    SaveSessionAsCancel,
     SessionInfo,
     ClearSession,
     OpenConfigurator,

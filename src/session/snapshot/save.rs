@@ -342,6 +342,19 @@ pub(crate) fn save_snapshot_as_with_report(
 }
 
 #[allow(dead_code)]
+pub(crate) fn save_snapshot_as_requires_overwrite(options: &SessionOptions) -> Result<bool> {
+    if !options.is_named_file() {
+        return Err(anyhow!(
+            "Save Session As requires a named session file target"
+        ));
+    }
+
+    let session_path = options.session_file_path();
+    crate::session::validate_named_session_file_for_foreground(&session_path)?;
+    Ok(collect_save_as_artifacts(options)?.has_any())
+}
+
+#[allow(dead_code)]
 pub(crate) fn save_snapshot_autosave_with_report(
     snapshot: &SessionSnapshot,
     options: &SessionOptions,

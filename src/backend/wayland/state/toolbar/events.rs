@@ -485,6 +485,14 @@ impl WaylandState {
                 self.handle_toolbar_save_session_as(conn, qh);
                 true
             }
+            ToolbarEvent::SaveSessionAsConfirm(path) => {
+                self.handle_toolbar_save_session_as_confirm(path);
+                true
+            }
+            ToolbarEvent::SaveSessionAsCancel => {
+                self.handle_toolbar_save_session_as_cancel();
+                true
+            }
             ToolbarEvent::SessionInfo => {
                 self.handle_toolbar_session_info();
                 true
@@ -568,6 +576,7 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
+        self.clear_toolbar_save_as_overwrite_prompt();
         let current_path = self.current_session_file_path();
         match self.choose_session_file_with_overlay_suppressed(
             SessionFileDialogMode::Open,
@@ -582,6 +591,7 @@ impl WaylandState {
     }
 
     fn handle_toolbar_open_session_path(&mut self, path: &Path) {
+        self.clear_toolbar_save_as_overwrite_prompt();
         match self.open_named_session_runtime(path) {
             Ok(report) => self.set_session_toolbar_info(format!(
                 "Opened session {}",
@@ -596,6 +606,7 @@ impl WaylandState {
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
     ) {
+        self.clear_toolbar_save_as_overwrite_prompt();
         let current_path = self.current_session_file_path();
         match self.choose_session_file_with_overlay_suppressed(
             SessionFileDialogMode::SaveAs,
@@ -605,20 +616,72 @@ impl WaylandState {
         ) {
             Ok(Some(path)) => {
                 let path = ensure_save_as_extension(path);
-                match self
-                    .save_named_session_as_runtime(&path, crate::session::SaveAsOverwrite::Deny)
-                {
-                    Ok(report) => self.set_session_toolbar_info(format!(
-                        "Saved session as {}",
-                        session_display_name(&report.saved_path)
-                    )),
+                match self.save_named_session_as_requires_overwrite(&path) {
+                    Ok(true) => {
+                        self.input_state.set_pending_save_as_overwrite(path.clone());
+                        self.set_session_toolbar_info(format!(
+                            "Replace existing session {}?",
+                            session_display_name(&path)
+                        ));
+                    }
+                    Ok(false) => {
+                        self.commit_toolbar_save_session_as(
+                            &path,
+                            crate::session::SaveAsOverwrite::Deny,
+                        );
+                    }
                     Err(err) => {
-                        self.set_session_toolbar_error(format!("Save session failed: {err:#}"))
+                        self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
                     }
                 }
             }
             Ok(None) => {}
             Err(err) => self.set_session_toolbar_error(format!("Save session failed: {err:#}")),
+        }
+    }
+
+    fn handle_toolbar_save_session_as_confirm(&mut self, path: &Path) {
+        let Some(pending_path) = self
+            .input_state
+            .pending_save_as_overwrite()
+            .map(PathBuf::from)
+        else {
+            self.set_session_toolbar_error("Save session failed: no overwrite target pending");
+            return;
+        };
+        if !catalog::session_paths_match(&pending_path, path) {
+            self.clear_toolbar_save_as_overwrite_prompt();
+            self.set_session_toolbar_error("Save session failed: overwrite target changed");
+            return;
+        }
+
+        self.clear_toolbar_save_as_overwrite_prompt();
+        self.commit_toolbar_save_session_as(path, crate::session::SaveAsOverwrite::ConfirmReplace);
+    }
+
+    fn handle_toolbar_save_session_as_cancel(&mut self) {
+        if self.clear_toolbar_save_as_overwrite_prompt() {
+            self.set_session_toolbar_info("Save As canceled");
+        }
+    }
+
+    fn commit_toolbar_save_session_as(
+        &mut self,
+        path: &Path,
+        overwrite: crate::session::SaveAsOverwrite,
+    ) {
+        match self.save_named_session_as_runtime(path, overwrite) {
+            Ok(report) => {
+                self.clear_toolbar_save_as_overwrite_prompt();
+                self.set_session_toolbar_info(format!(
+                    "Saved session as {}",
+                    session_display_name(&report.saved_path)
+                ));
+            }
+            Err(err) => {
+                self.clear_toolbar_save_as_overwrite_prompt();
+                self.set_session_toolbar_error(format!("Save session failed: {err:#}"));
+            }
         }
     }
 
@@ -637,6 +700,7 @@ impl WaylandState {
     }
 
     fn handle_toolbar_clear_session(&mut self) {
+        self.clear_toolbar_save_as_overwrite_prompt();
         match self.clear_current_session_runtime() {
             Ok(report) => self.set_session_toolbar_info(format!(
                 "Cleared session {}",
@@ -644,6 +708,14 @@ impl WaylandState {
             )),
             Err(err) => self.set_session_toolbar_error(format!("Clear session failed: {err:#}")),
         }
+    }
+
+    fn clear_toolbar_save_as_overwrite_prompt(&mut self) -> bool {
+        let cleared = self.input_state.clear_pending_save_as_overwrite().is_some();
+        if cleared {
+            self.mark_session_toolbar_changed();
+        }
+        cleared
     }
 
     fn set_session_toolbar_info(&mut self, message: impl Into<String>) {
@@ -828,6 +900,10 @@ mod tests {
                 "/tmp/recent.wayscriber-session",
             )),
             ToolbarEvent::SaveSessionAs,
+            ToolbarEvent::SaveSessionAsConfirm(std::path::PathBuf::from(
+                "/tmp/existing.wayscriber-session",
+            )),
+            ToolbarEvent::SaveSessionAsCancel,
             ToolbarEvent::SessionInfo,
             ToolbarEvent::ClearSession,
         ];

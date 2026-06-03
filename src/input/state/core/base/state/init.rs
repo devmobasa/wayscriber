@@ -105,6 +105,7 @@ impl InputState {
             needs_redraw: true,
             session_dirty: false,
             session_preflight_options: None,
+            pending_save_as_overwrite: None,
             show_help: false,
             help_overlay_page: 0,
             help_overlay_search: String::new(),

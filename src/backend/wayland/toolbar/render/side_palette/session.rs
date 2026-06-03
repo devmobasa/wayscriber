@@ -74,11 +74,25 @@ pub(super) fn draw_session_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     let mut row_y = meta_y
         + ToolbarLayoutSpec::SIDE_SESSION_META_HEIGHT
         + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
-    let buttons_h = draw_session_buttons(layout, &model, row_y, label_style);
-    row_y += buttons_h + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
+    let controls_h = draw_session_controls(layout, &model, row_y, label_style, meta_style);
+    row_y += controls_h + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
     draw_recent_sessions(layout, &model, row_y, meta_style);
 
     *y += card_h + layout.section_gap;
+}
+
+fn draw_session_controls(
+    layout: &mut SidePaletteLayout,
+    model: &ToolbarSessionModel,
+    y: f64,
+    label_style: UiTextStyle<'static>,
+    meta_style: UiTextStyle<'static>,
+) -> f64 {
+    if model.overwrite_confirmation.is_some() {
+        draw_save_as_overwrite_confirmation(layout, model, y, label_style, meta_style)
+    } else {
+        draw_session_buttons(layout, model, y, label_style)
+    }
 }
 
 fn draw_session_buttons(
@@ -105,6 +119,60 @@ fn draw_session_buttons(
         draw_session_button(layout, button, item.x, item.y, item.w, item.h, label_style);
     }
     grid.height
+}
+
+fn draw_save_as_overwrite_confirmation(
+    layout: &mut SidePaletteLayout,
+    model: &ToolbarSessionModel,
+    y: f64,
+    label_style: UiTextStyle<'static>,
+    meta_style: UiTextStyle<'static>,
+) -> f64 {
+    let Some(confirmation) = model.overwrite_confirmation.as_ref() else {
+        return 0.0;
+    };
+    let message = format!("Replace {}?", truncate_label(&confirmation.label, 20));
+    draw_text_baseline(layout.ctx, meta_style, &message, layout.x, y + 11.0, None);
+
+    let button_gap = ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
+    let button_h = ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT;
+    let button_y = y + ToolbarLayoutSpec::SIDE_SESSION_CONFIRM_LABEL_HEIGHT;
+    let button_w = row_item_width(layout.content_width, 2, button_gap);
+    let grid = grid_layout(
+        layout.x, button_y, button_w, button_h, button_gap, button_gap, 2, 2,
+    );
+    let actions = [
+        ("Replace", confirmation.confirm_event(), true),
+        ("Cancel", confirmation.cancel_event(), false),
+    ];
+    for (item, (label, event, destructive)) in grid.items.iter().zip(actions) {
+        let hover = layout
+            .hover
+            .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
+            .unwrap_or(false);
+        if destructive {
+            draw_destructive_button(layout.ctx, item.x, item.y, item.w, item.h, hover);
+        } else {
+            draw_button(layout.ctx, item.x, item.y, item.w, item.h, false, hover);
+        }
+        draw_label_center(
+            layout.ctx,
+            label_style,
+            item.x,
+            item.y,
+            item.w,
+            item.h,
+            label,
+        );
+        layout.hits.push(HitRegion {
+            rect: (item.x, item.y, item.w, item.h),
+            event,
+            kind: HitKind::Click,
+            tooltip: Some(label.to_string()),
+        });
+    }
+
+    ToolbarLayoutSpec::SIDE_SESSION_CONFIRM_LABEL_HEIGHT + grid.height
 }
 
 fn draw_session_button(

@@ -288,6 +288,59 @@ fn side_session_static_hits_include_model_controls_and_recents() {
 }
 
 #[test]
+fn side_session_overwrite_confirmation_hits_replace_action_buttons() {
+    let mut state = create_test_input_state();
+    state.toolbar_drawer_open = true;
+    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    let mut snapshot = snapshot_from_state(&state);
+    let target = std::path::PathBuf::from("/tmp/existing.wayscriber-session");
+    snapshot.active_session_path =
+        Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
+    snapshot.active_session_name = Some("current.wayscriber-session".to_string());
+    snapshot.pending_save_as_overwrite_path = Some(target.clone());
+
+    let (w, h) = side_size(&snapshot);
+    let mut static_hits = Vec::new();
+    build_side_hits(w as f64, h as f64, &snapshot, &mut static_hits);
+    assert_session_overwrite_confirmation_hits(&static_hits, &target);
+
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let mut rendered_hits = Vec::new();
+    crate::backend::wayland::toolbar::render_side_palette(
+        &ctx,
+        w as f64,
+        h as f64,
+        &snapshot,
+        &mut rendered_hits,
+        None,
+        None,
+    )
+    .unwrap();
+    assert_session_overwrite_confirmation_hits(&rendered_hits, &target);
+}
+
+fn assert_session_overwrite_confirmation_hits(
+    hits: &[crate::backend::wayland::toolbar::hit::HitRegion],
+    target: &std::path::Path,
+) {
+    assert!(hits.iter().any(|hit| matches!(
+        &hit.event,
+        ToolbarEvent::SaveSessionAsConfirm(path) if path == target
+    )));
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SaveSessionAsCancel))
+    );
+    assert!(
+        !hits
+            .iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SaveSessionAs)),
+        "pending overwrite prompt should replace the Save As action grid"
+    );
+}
+
+#[test]
 fn font_size_nudge_hits_use_slider_spec_step() {
     let mut state = create_test_input_state();
     state.show_text_controls = true;

@@ -19,31 +19,55 @@ pub(super) fn push_session_hits(
         + ToolbarLayoutSpec::SIDE_SESSION_META_HEIGHT
         + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
 
-    let button_gap = ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
-    let button_h = ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT;
-    let columns = model.button_columns();
-    let button_w = row_item_width(ctx.content_width, columns, button_gap);
-    let button_layout = grid_layout(
-        ctx.x,
-        row_y,
-        button_w,
-        button_h,
-        button_gap,
-        button_gap,
-        columns,
-        model.buttons.len(),
-    );
-    for (item, button) in button_layout.items.iter().zip(model.buttons.iter()) {
-        if button.enabled {
+    let controls_h = if let Some(confirmation) = model.overwrite_confirmation.as_ref() {
+        let button_gap = ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
+        let button_h = ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT;
+        let button_y = row_y + ToolbarLayoutSpec::SIDE_SESSION_CONFIRM_LABEL_HEIGHT;
+        let button_w = row_item_width(ctx.content_width, 2, button_gap);
+        let button_layout = grid_layout(
+            ctx.x, button_y, button_w, button_h, button_gap, button_gap, 2, 2,
+        );
+        let actions = [
+            ("Replace", confirmation.confirm_event()),
+            ("Cancel", confirmation.cancel_event()),
+        ];
+        for (item, (label, event)) in button_layout.items.iter().zip(actions) {
             hits.push(HitRegion {
                 rect: (item.x, item.y, item.w, item.h),
-                event: button.event.clone(),
+                event,
                 kind: HitKind::Click,
-                tooltip: Some(button.label.to_string()),
+                tooltip: Some(label.to_string()),
             });
         }
-    }
-    row_y += button_layout.height + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
+        ToolbarLayoutSpec::SIDE_SESSION_CONFIRM_LABEL_HEIGHT + button_layout.height
+    } else {
+        let button_gap = ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
+        let button_h = ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT;
+        let columns = model.button_columns();
+        let button_w = row_item_width(ctx.content_width, columns, button_gap);
+        let button_layout = grid_layout(
+            ctx.x,
+            row_y,
+            button_w,
+            button_h,
+            button_gap,
+            button_gap,
+            columns,
+            model.buttons.len(),
+        );
+        for (item, button) in button_layout.items.iter().zip(model.buttons.iter()) {
+            if button.enabled {
+                hits.push(HitRegion {
+                    rect: (item.x, item.y, item.w, item.h),
+                    event: button.event.clone(),
+                    kind: HitKind::Click,
+                    tooltip: Some(button.label.to_string()),
+                });
+            }
+        }
+        button_layout.height
+    };
+    row_y += controls_h + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
 
     for recent in &model.recents {
         let tooltip_path = recent.path.display().to_string();

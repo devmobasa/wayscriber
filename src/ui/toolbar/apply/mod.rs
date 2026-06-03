@@ -139,6 +139,8 @@ impl InputState {
             ToolbarEvent::OpenSession
             | ToolbarEvent::OpenRecentSession(_)
             | ToolbarEvent::SaveSessionAs
+            | ToolbarEvent::SaveSessionAsConfirm(_)
+            | ToolbarEvent::SaveSessionAsCancel
             | ToolbarEvent::SessionInfo
             | ToolbarEvent::ClearSession => false,
             ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. } => false,
