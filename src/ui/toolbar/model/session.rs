@@ -5,6 +5,7 @@ use crate::input::ToolbarDrawerTab;
 use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSnapshot};
 
 const MAX_RECENT_SESSIONS: usize = 3;
+pub(crate) const SESSION_BUTTON_COLUMNS: usize = 3;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ToolbarSessionModel {
@@ -33,7 +34,9 @@ impl ToolbarSessionModel {
         let buttons = vec![
             ToolbarSessionButton::new(ToolbarEvent::OpenSession, "Open", target_active),
             ToolbarSessionButton::new(ToolbarEvent::SaveSessionAs, "Save As", target_active),
+            ToolbarSessionButton::new(ToolbarEvent::SessionInfo, "Info", target_active),
             ToolbarSessionButton::new(ToolbarEvent::ClearSession, "Clear", target_active),
+            ToolbarSessionButton::new(ToolbarEvent::OpenConfigurator, "Manager", true),
         ];
         let recents = if target_active {
             snapshot
@@ -56,6 +59,14 @@ impl ToolbarSessionModel {
 
     pub(crate) fn has_recent_sessions(&self) -> bool {
         !self.recents.is_empty()
+    }
+
+    pub(crate) fn button_columns(&self) -> usize {
+        self.buttons.len().min(SESSION_BUTTON_COLUMNS).max(1)
+    }
+
+    pub(crate) fn button_rows(&self) -> usize {
+        self.buttons.len().div_ceil(self.button_columns())
     }
 }
 
@@ -124,7 +135,9 @@ mod tests {
 
         assert_eq!(model.active_name, "lecture.wayscriber-session");
         assert!(model.active_path_label.contains("/tmp/lecture"));
-        assert_eq!(model.buttons.len(), 3);
+        assert_eq!(model.buttons.len(), 5);
+        assert_eq!(model.button_columns(), SESSION_BUTTON_COLUMNS);
+        assert_eq!(model.button_rows(), 2);
         assert!(model.buttons.iter().all(|button| button.enabled));
         assert_eq!(model.recents.len(), MAX_RECENT_SESSIONS);
     }
@@ -142,6 +155,12 @@ mod tests {
         assert!(!model.buttons[0].enabled);
         assert!(!model.buttons[1].enabled);
         assert!(!model.buttons[2].enabled);
+        assert!(!model.buttons[3].enabled);
+        assert!(model.buttons[4].enabled);
+        assert!(matches!(
+            model.buttons[4].event,
+            ToolbarEvent::OpenConfigurator
+        ));
         assert!(model.recents.is_empty());
         assert_eq!(model.active_path_label, "No persisted session target");
     }

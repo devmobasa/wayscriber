@@ -74,9 +74,8 @@ pub(super) fn draw_session_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     let mut row_y = meta_y
         + ToolbarLayoutSpec::SIDE_SESSION_META_HEIGHT
         + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
-    draw_session_buttons(layout, &model, row_y, label_style);
-    row_y +=
-        ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
+    let buttons_h = draw_session_buttons(layout, &model, row_y, label_style);
+    row_y += buttons_h + ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
     draw_recent_sessions(layout, &model, row_y, meta_style);
 
     *y += card_h + layout.section_gap;
@@ -87,23 +86,25 @@ fn draw_session_buttons(
     model: &ToolbarSessionModel,
     y: f64,
     label_style: UiTextStyle<'static>,
-) {
+) -> f64 {
     let button_gap = ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
     let button_h = ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT;
-    let button_w = row_item_width(layout.content_width, model.buttons.len(), button_gap);
+    let columns = model.button_columns();
+    let button_w = row_item_width(layout.content_width, columns, button_gap);
     let grid = grid_layout(
         layout.x,
         y,
         button_w,
         button_h,
         button_gap,
-        0.0,
-        model.buttons.len().max(1),
+        button_gap,
+        columns,
         model.buttons.len(),
     );
     for (item, button) in grid.items.iter().zip(model.buttons.iter()) {
         draw_session_button(layout, button, item.x, item.y, item.w, item.h, label_style);
     }
+    grid.height
 }
 
 fn draw_session_button(
@@ -142,8 +143,14 @@ fn draw_session_button(
             ToolbarEvent::SaveSessionAs => {
                 toolbar_icons::draw_icon_save(layout.ctx, icon_x, icon_y, icon_size)
             }
+            ToolbarEvent::SessionInfo => {
+                toolbar_icons::draw_icon_info(layout.ctx, icon_x, icon_y, icon_size)
+            }
             ToolbarEvent::ClearSession => {
                 toolbar_icons::draw_icon_clear(layout.ctx, icon_x, icon_y, icon_size)
+            }
+            ToolbarEvent::OpenConfigurator => {
+                toolbar_icons::draw_icon_settings(layout.ctx, icon_x, icon_y, icon_size)
             }
             _ => {}
         }

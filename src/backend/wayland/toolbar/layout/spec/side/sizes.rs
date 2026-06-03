@@ -323,7 +323,13 @@ impl ToolbarLayoutSpec {
         let Some(session) = ToolbarSessionModel::from_snapshot(snapshot) else {
             return 0.0;
         };
-        let buttons_h = Self::SIDE_SESSION_BUTTON_HEIGHT;
+        let button_rows = session.button_rows();
+        let buttons_h = if button_rows == 0 {
+            0.0
+        } else {
+            Self::SIDE_SESSION_BUTTON_HEIGHT * button_rows as f64
+                + Self::SIDE_SESSION_ROW_GAP * (button_rows as f64 - 1.0)
+        };
         let recents_h = if session.has_recent_sessions() {
             Self::SIDE_SESSION_ROW_GAP
                 + session.recents.len() as f64

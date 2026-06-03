@@ -72,6 +72,56 @@ fn session_display_name(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
+fn session_info_summary(inspection: &crate::session::SessionInspection) -> String {
+    let name = session_display_name(&inspection.session_path);
+    if !inspection.exists {
+        return if inspection.backup_exists {
+            match inspection.backup_size_bytes {
+                Some(size) => format!(
+                    "Session {name}: no primary file, backup {}",
+                    format_byte_count(size)
+                ),
+                None => format!("Session {name}: no primary file, backup present"),
+            }
+        } else {
+            format!("Session {name}: no saved file yet")
+        };
+    }
+
+    let size = inspection
+        .size_bytes
+        .map(format_byte_count)
+        .unwrap_or_else(|| "unknown size".to_string());
+    let shapes = inspection
+        .frame_counts
+        .map(|counts| {
+            format!(
+                ", shapes T/W/B {}/{}/{}",
+                counts.transparent, counts.whiteboard, counts.blackboard
+            )
+        })
+        .unwrap_or_default();
+    let history = if inspection.history_present {
+        "history"
+    } else {
+        "no history"
+    };
+    format!("Session {name}: {size}{shapes}, {history}")
+}
+
+fn format_byte_count(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KiB", bytes as f64 / KIB)
+    } else {
+        format!("{:.1} MiB", bytes as f64 / MIB)
+    }
+}
+
 fn recent_session_snapshots(
     current_path: Option<&Path>,
 ) -> Vec<crate::ui::toolbar::SessionRecentSnapshot> {
@@ -435,6 +485,10 @@ impl WaylandState {
                 self.handle_toolbar_save_session_as(conn, qh);
                 true
             }
+            ToolbarEvent::SessionInfo => {
+                self.handle_toolbar_session_info();
+                true
+            }
             ToolbarEvent::ClearSession => {
                 self.handle_toolbar_clear_session();
                 true
@@ -565,6 +619,20 @@ impl WaylandState {
             }
             Ok(None) => {}
             Err(err) => self.set_session_toolbar_error(format!("Save session failed: {err:#}")),
+        }
+    }
+
+    fn handle_toolbar_session_info(&mut self) {
+        let Some(options) = self.session.options().cloned() else {
+            self.set_session_toolbar_error(
+                "Session info unavailable: no active persisted session target",
+            );
+            return;
+        };
+
+        match crate::session::inspect_session(&options) {
+            Ok(inspection) => self.set_session_toolbar_info(session_info_summary(&inspection)),
+            Err(err) => self.set_session_toolbar_error(format!("Session info failed: {err:#}")),
         }
     }
 
@@ -760,6 +828,7 @@ mod tests {
                 "/tmp/recent.wayscriber-session",
             )),
             ToolbarEvent::SaveSessionAs,
+            ToolbarEvent::SessionInfo,
             ToolbarEvent::ClearSession,
         ];
 
@@ -998,6 +1067,74 @@ mod tests {
         assert_eq!(
             ensure_save_as_extension(PathBuf::from("/tmp/lecture.session")),
             PathBuf::from("/tmp/lecture.session")
+        );
+    }
+
+    fn inspection_for_summary(path: &str) -> crate::session::SessionInspection {
+        crate::session::SessionInspection {
+            session_path: PathBuf::from(path),
+            exists: true,
+            size_bytes: Some(14_600),
+            modified: None,
+            backup_path: PathBuf::from(format!("{path}.bak")),
+            backup_exists: false,
+            backup_size_bytes: None,
+            active_identity: None,
+            per_output: false,
+            persist_transparent: true,
+            persist_whiteboard: true,
+            persist_blackboard: true,
+            persist_history: true,
+            restore_tool_state: true,
+            history_limit: None,
+            frame_counts: Some(crate::session::FrameCounts {
+                transparent: 3,
+                whiteboard: 2,
+                blackboard: 1,
+            }),
+            history_counts: None,
+            history_present: true,
+            tool_state_present: true,
+            compressed: true,
+            file_version: Some(1),
+        }
+    }
+
+    #[test]
+    fn session_info_summary_reports_saved_counts() {
+        let inspection = inspection_for_summary("/tmp/lecture.wayscriber-session");
+
+        assert_eq!(
+            session_info_summary(&inspection),
+            "Session lecture.wayscriber-session: 14.3 KiB, shapes T/W/B 3/2/1, history"
+        );
+    }
+
+    #[test]
+    fn session_info_summary_reports_missing_session() {
+        let mut inspection = inspection_for_summary("/tmp/missing.wayscriber-session");
+        inspection.exists = false;
+        inspection.size_bytes = None;
+        inspection.frame_counts = None;
+        inspection.history_present = false;
+
+        assert_eq!(
+            session_info_summary(&inspection),
+            "Session missing.wayscriber-session: no saved file yet"
+        );
+    }
+
+    #[test]
+    fn session_info_summary_reports_backup_without_primary() {
+        let mut inspection = inspection_for_summary("/tmp/recovered.wayscriber-session");
+        inspection.exists = false;
+        inspection.size_bytes = None;
+        inspection.backup_exists = true;
+        inspection.backup_size_bytes = Some(4096);
+
+        assert_eq!(
+            session_info_summary(&inspection),
+            "Session recovered.wayscriber-session: no primary file, backup 4.0 KiB"
         );
     }
 

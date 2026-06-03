@@ -21,15 +21,16 @@ pub(super) fn push_session_hits(
 
     let button_gap = ToolbarLayoutSpec::SIDE_SESSION_ROW_GAP;
     let button_h = ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT;
-    let button_w = row_item_width(ctx.content_width, model.buttons.len(), button_gap);
+    let columns = model.button_columns();
+    let button_w = row_item_width(ctx.content_width, columns, button_gap);
     let button_layout = grid_layout(
         ctx.x,
         row_y,
         button_w,
         button_h,
         button_gap,
-        0.0,
-        model.buttons.len().max(1),
+        button_gap,
+        columns,
         model.buttons.len(),
     );
     for (item, button) in button_layout.items.iter().zip(model.buttons.iter()) {
