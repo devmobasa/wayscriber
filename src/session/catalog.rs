@@ -128,6 +128,26 @@ pub fn forget_session_by_path(path: &Path) -> Result<bool> {
     })
 }
 
+/// Rename a catalog entry's display name only. Session files are untouched.
+#[allow(dead_code)]
+pub fn rename_session_display_name_by_id(
+    id: &str,
+    display_name: &str,
+) -> Result<Option<CatalogEntry>> {
+    let display_name = display_name.trim();
+    if display_name.is_empty() {
+        return Err(anyhow!("session display name cannot be empty"));
+    }
+
+    with_catalog_write(|catalog| {
+        let Some(entry) = catalog.sessions.iter_mut().find(|entry| entry.id == id) else {
+            return Ok(None);
+        };
+        entry.display_name = display_name.to_string();
+        Ok(Some(entry.clone()))
+    })
+}
+
 pub(crate) fn record_named_session_opened(options: &SessionOptions) {
     if !options.is_named_file() {
         return;
@@ -190,7 +210,9 @@ impl CatalogFile {
             let entry = &mut self.sessions[index];
             entry.path = path_to_string(&identity.exact_path)?;
             entry.canonical_path = optional_path_to_string(identity.canonical_path.as_deref())?;
-            entry.display_name = display_name_for_path(&identity.exact_path);
+            if entry.display_name.trim().is_empty() {
+                entry.display_name = display_name_for_path(&identity.exact_path);
+            }
             apply_event(entry, event, now);
             return Ok(entry.clone());
         }

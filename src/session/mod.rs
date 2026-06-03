@@ -4,6 +4,7 @@
 //! to disk with locking, optional compression, and backup rotation, and restores
 //! the state on startup when requested.
 
+pub mod artifacts;
 pub mod catalog;
 mod lock;
 mod options;
@@ -11,6 +12,11 @@ mod primary;
 mod snapshot;
 mod storage;
 
+#[allow(unused_imports)]
+pub use artifacts::{
+    NamedSessionClearOutcome, SessionArtifactPaths, clear_named_session_non_lock_artifacts,
+    named_session_artifact_paths, named_session_non_lock_artifact_paths,
+};
 pub use lock::try_lock_exclusive;
 pub(crate) use options::append_path_suffix;
 #[allow(unused_imports)]

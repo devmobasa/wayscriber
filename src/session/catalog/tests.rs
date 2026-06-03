@@ -201,6 +201,66 @@ fn forget_by_path_removes_metadata_only() {
 }
 
 #[test]
+fn rename_display_name_changes_metadata_only_and_allows_duplicates() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let left = temp.path().join("left.wayscriber-session");
+    let right = temp.path().join("right.wayscriber-session");
+    fs::write(&left, b"{}").unwrap();
+    fs::write(&right, b"{}").unwrap();
+    let left_entry = upsert_session_event(&left, CatalogEvent::Saved).unwrap();
+    upsert_session_event(&right, CatalogEvent::Saved).unwrap();
+
+    let renamed =
+        rename_session_display_name_by_id(&left_entry.id, "Lecture").expect("rename should work");
+
+    assert_eq!(renamed.expect("renamed entry").display_name, "Lecture");
+    let recents = recent_sessions().unwrap();
+    assert_eq!(recents.len(), 2);
+    assert_eq!(
+        recents
+            .iter()
+            .filter(|entry| entry.display_name == "Lecture")
+            .count(),
+        1
+    );
+    assert!(left.exists(), "rename should not touch primary file");
+    assert!(right.exists(), "rename should not touch sibling file");
+}
+
+#[test]
+fn renamed_display_name_survives_later_upsert() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let session = temp.path().join("lecture.wayscriber-session");
+    fs::write(&session, b"{}").unwrap();
+    let entry = upsert_session_event(&session, CatalogEvent::Saved).unwrap();
+
+    rename_session_display_name_by_id(&entry.id, "Lecture 04").unwrap();
+    upsert_session_event(&session, CatalogEvent::Opened).unwrap();
+
+    let recents = recent_sessions().unwrap();
+    assert_eq!(recents.len(), 1);
+    assert_eq!(recents[0].display_name, "Lecture 04");
+    assert!(recents[0].last_opened_at_millis.is_some());
+    assert!(recents[0].last_saved_at_millis.is_some());
+}
+
+#[test]
+fn rename_display_name_rejects_empty_names() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let session = temp.path().join("lecture.wayscriber-session");
+    fs::write(&session, b"{}").unwrap();
+    let entry = upsert_session_event(&session, CatalogEvent::Saved).unwrap();
+
+    let err =
+        rename_session_display_name_by_id(&entry.id, "  ").expect_err("empty rename should fail");
+
+    assert!(format!("{err:#}").contains("display name cannot be empty"));
+}
+
+#[test]
 fn failed_temp_write_leaves_existing_catalog_intact() {
     let temp = crate::test_temp::tempdir().unwrap();
     let path = temp.path().join("sessions.json");

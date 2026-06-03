@@ -62,7 +62,7 @@ impl ToolbarSessionModel {
     }
 
     pub(crate) fn button_columns(&self) -> usize {
-        self.buttons.len().min(SESSION_BUTTON_COLUMNS).max(1)
+        self.buttons.len().clamp(1, SESSION_BUTTON_COLUMNS)
     }
 
     pub(crate) fn button_rows(&self) -> usize {

@@ -7,11 +7,12 @@ use wayscriber::config::{Config, PRESET_SLOTS_MAX};
 use crate::messages::Message;
 use crate::models::{
     ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
-    KeybindingsTabId, TabId, ToolbarLayoutModeOption, UiTabId,
+    KeybindingsTabId, SessionCatalogState, TabId, ToolbarLayoutModeOption, UiTabId,
 };
 
 use super::daemon_setup::load_daemon_runtime_status;
 use super::io::load_config_from_disk;
+use super::session_catalog::load_session_catalog;
 
 #[derive(Debug)]
 pub(crate) struct ConfiguratorApp {
@@ -45,6 +46,7 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) daemon_next_status_request_id: u64,
     pub(crate) daemon_latest_status_request_id: u64,
     pub(crate) daemon_preserve_feedback_status_request_id: Option<u64>,
+    pub(crate) session_catalog: SessionCatalogState,
 }
 
 #[derive(Debug, Clone)]
@@ -119,6 +121,7 @@ impl ConfiguratorApp {
             daemon_next_status_request_id: 2,
             daemon_latest_status_request_id: 1,
             daemon_preserve_feedback_status_request_id: None,
+            session_catalog: SessionCatalogState::loading(),
         };
         app.sync_all_color_picker_hex();
 
@@ -128,6 +131,7 @@ impl ConfiguratorApp {
             Task::perform(load_daemon_runtime_status(), move |result| {
                 Message::DaemonStatusLoaded(initial_status_request_id, result)
             }),
+            Task::perform(load_session_catalog(), Message::SessionCatalogLoaded),
         ]);
 
         (app, command)

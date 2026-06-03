@@ -1,0 +1,302 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, UNIX_EPOCH};
+
+use wayscriber::session::catalog::CatalogEntry;
+
+const PATH_LABEL_MAX_CHARS: usize = 96;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionCatalogState {
+    pub items: Vec<SessionCatalogItem>,
+    pub rename_inputs: HashMap<String, String>,
+    pub is_loading: bool,
+    pub busy: bool,
+    pub pending_clear_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionCatalogActionResult {
+    pub message: String,
+    pub items: Vec<SessionCatalogItem>,
+}
+
+impl SessionCatalogState {
+    pub fn loading() -> Self {
+        Self {
+            items: Vec::new(),
+            rename_inputs: HashMap::new(),
+            is_loading: true,
+            busy: false,
+            pending_clear_id: None,
+        }
+    }
+
+    pub fn replace_items(&mut self, items: Vec<SessionCatalogItem>) {
+        self.rename_inputs = items
+            .iter()
+            .map(|item| (item.id.clone(), item.display_name.clone()))
+            .collect();
+        self.items = items;
+        self.is_loading = false;
+        self.busy = false;
+        self.pending_clear_id = None;
+    }
+
+    pub fn rename_value(&self, id: &str, fallback: &str) -> String {
+        self.rename_inputs
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| fallback.to_string())
+    }
+
+    pub fn item(&self, id: &str) -> Option<&SessionCatalogItem> {
+        self.items.iter().find(|item| item.id == id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionCatalogItem {
+    pub id: String,
+    pub display_name: String,
+    pub path: PathBuf,
+    pub path_label: String,
+    pub canonical_path_label: Option<String>,
+    pub created_label: String,
+    pub last_opened_label: String,
+    pub last_saved_label: String,
+    pub artifacts: SessionArtifactSummary,
+}
+
+impl SessionCatalogItem {
+    pub fn from_entry(entry: CatalogEntry) -> Result<Self, String> {
+        let path = PathBuf::from(&entry.path);
+        let canonical_path_label = entry
+            .canonical_path
+            .as_ref()
+            .map(|path| truncate_middle(path, PATH_LABEL_MAX_CHARS));
+        let artifacts = SessionArtifactSummary::from_primary_path(&path)?;
+        Ok(Self {
+            id: entry.id,
+            display_name: entry.display_name,
+            path_label: truncate_path(&path),
+            path,
+            canonical_path_label,
+            created_label: format_catalog_time(entry.created_at_millis),
+            last_opened_label: entry
+                .last_opened_at_millis
+                .map(format_catalog_time)
+                .unwrap_or_else(|| "Never".to_string()),
+            last_saved_label: entry
+                .last_saved_at_millis
+                .map(format_catalog_time)
+                .unwrap_or_else(|| "Never".to_string()),
+            artifacts,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionArtifactSummary {
+    pub primary_exists: bool,
+    pub backup_exists: bool,
+    pub recovery_exists: bool,
+    pub clear_marker_exists: bool,
+    pub lock_exists: bool,
+    pub non_lock_size_bytes: u64,
+}
+
+impl SessionArtifactSummary {
+    pub fn from_primary_path(path: &Path) -> Result<Self, String> {
+        let artifacts = wayscriber::session::named_session_artifact_paths(path);
+        let non_lock_paths = wayscriber::session::named_session_non_lock_artifact_paths(path)
+            .map_err(|err| err.to_string())?;
+        let recovery_name = artifacts
+            .recovery
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_string);
+
+        let mut summary = Self {
+            primary_exists: artifact_exists(&artifacts.primary)?,
+            backup_exists: artifact_exists(&artifacts.backup)?
+                || artifact_exists(&artifacts.backup_recovery_marker)?,
+            recovery_exists: false,
+            clear_marker_exists: artifact_exists(&artifacts.clear_marker)?,
+            lock_exists: artifact_exists(&artifacts.lock)?,
+            non_lock_size_bytes: 0,
+        };
+
+        for path in non_lock_paths {
+            let Some(metadata) = artifact_metadata(&path)? else {
+                continue;
+            };
+            summary.non_lock_size_bytes =
+                summary.non_lock_size_bytes.saturating_add(metadata.len());
+            if recovery_name.as_deref().is_some_and(|name| {
+                path.file_name()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|value| value == name || value.starts_with(&format!("{name}.")))
+            }) {
+                summary.recovery_exists = true;
+            }
+        }
+
+        Ok(summary)
+    }
+
+    pub fn status_label(&self) -> String {
+        let mut parts = Vec::new();
+        if self.primary_exists {
+            parts.push("primary");
+        }
+        if self.backup_exists {
+            parts.push("backup");
+        }
+        if self.recovery_exists {
+            parts.push("recovery");
+        }
+        if self.clear_marker_exists {
+            parts.push("cleared");
+        }
+        if self.lock_exists {
+            parts.push("lock");
+        }
+        if parts.is_empty() {
+            "No saved artifacts".to_string()
+        } else {
+            format!(
+                "{} · {}",
+                parts.join(", "),
+                format_byte_count(self.non_lock_size_bytes)
+            )
+        }
+    }
+}
+
+fn artifact_exists(path: &Path) -> Result<bool, String> {
+    Ok(artifact_metadata(path)?.is_some())
+}
+
+fn artifact_metadata(path: &Path) -> Result<Option<std::fs::Metadata>, String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(Some(metadata)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(format!("failed to inspect {}: {err}", path.display())),
+    }
+}
+
+pub fn format_byte_count(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KiB", bytes as f64 / KIB)
+    } else {
+        format!("{:.1} MiB", bytes as f64 / MIB)
+    }
+}
+
+fn format_catalog_time(epoch_millis: u64) -> String {
+    let time = UNIX_EPOCH + Duration::from_millis(epoch_millis);
+    wayscriber::time_utils::format_system_time(time, "%Y-%m-%d %H:%M")
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn truncate_path(path: &Path) -> String {
+    truncate_middle(&path.display().to_string(), PATH_LABEL_MAX_CHARS)
+}
+
+fn truncate_middle(value: &str, max_chars: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= max_chars {
+        return value.to_string();
+    }
+    if max_chars <= 3 {
+        return "...".to_string();
+    }
+
+    let keep = max_chars - 3;
+    let start_count = keep / 2;
+    let end_count = keep - start_count;
+    let start = value.chars().take(start_count).collect::<String>();
+    let end = value
+        .chars()
+        .rev()
+        .take(end_count)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    format!("{start}...{end}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_catalog_state_replaces_items_and_rename_inputs() {
+        let mut state = SessionCatalogState::loading();
+        let item = SessionCatalogItem {
+            id: "s-1".to_string(),
+            display_name: "Lecture".to_string(),
+            path: PathBuf::from("/tmp/lecture.wayscriber-session"),
+            path_label: "/tmp/lecture.wayscriber-session".to_string(),
+            canonical_path_label: None,
+            created_label: "now".to_string(),
+            last_opened_label: "Never".to_string(),
+            last_saved_label: "Never".to_string(),
+            artifacts: SessionArtifactSummary {
+                primary_exists: false,
+                backup_exists: false,
+                recovery_exists: false,
+                clear_marker_exists: false,
+                lock_exists: false,
+                non_lock_size_bytes: 0,
+            },
+        };
+
+        state.replace_items(vec![item]);
+
+        assert!(!state.is_loading);
+        assert_eq!(state.rename_value("s-1", ""), "Lecture");
+        assert!(state.item("s-1").is_some());
+    }
+
+    #[test]
+    fn artifact_summary_reports_non_lock_artifacts_and_size() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let path = temp.path().join("lecture.wayscriber-session");
+        let artifacts = wayscriber::session::named_session_artifact_paths(&path);
+        std::fs::write(&artifacts.primary, b"primary").unwrap();
+        std::fs::write(&artifacts.backup, b"backup").unwrap();
+        std::fs::write(&artifacts.recovery, b"recovery").unwrap();
+        std::fs::write(&artifacts.clear_marker, b"cleared").unwrap();
+        std::fs::write(&artifacts.lock, b"lock").unwrap();
+
+        let summary = SessionArtifactSummary::from_primary_path(&path).unwrap();
+
+        assert!(summary.primary_exists);
+        assert!(summary.backup_exists);
+        assert!(summary.recovery_exists);
+        assert!(summary.clear_marker_exists);
+        assert!(summary.lock_exists);
+        assert_eq!(
+            summary.non_lock_size_bytes,
+            "primary".len() as u64
+                + "backup".len() as u64
+                + "recovery".len() as u64
+                + "cleared".len() as u64
+        );
+    }
+
+    #[test]
+    fn format_byte_count_uses_compact_units() {
+        assert_eq!(format_byte_count(14), "14 B");
+        assert_eq!(format_byte_count(4096), "4.0 KiB");
+        assert_eq!(format_byte_count(2 * 1024 * 1024), "2.0 MiB");
+    }
+}
