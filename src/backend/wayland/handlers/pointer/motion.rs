@@ -62,7 +62,7 @@ impl WaylandState {
                     evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
                 if let Some(intent) = intent {
                     let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                    self.handle_toolbar_event(evt);
+                    self.handle_toolbar_event(evt, None, None);
                 }
             } else {
                 self.toolbar.mark_dirty();
@@ -92,7 +92,7 @@ impl WaylandState {
                     evt.or_else(|| self.move_drag_intent(event.position.0, event.position.1));
                 if let Some(intent) = intent {
                     let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                    self.handle_toolbar_event(evt);
+                    self.handle_toolbar_event(evt, None, None);
                 }
             } else {
                 self.toolbar.mark_dirty();
@@ -110,7 +110,7 @@ impl WaylandState {
         if self.is_move_dragging() {
             if let Some(intent) = self.move_drag_intent(event.position.0, event.position.1) {
                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                self.handle_toolbar_event(evt);
+                self.handle_toolbar_event(evt, None, None);
                 self.toolbar.mark_dirty();
                 self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;

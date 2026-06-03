@@ -14,6 +14,7 @@ pub enum OverlaySuppression {
     None,
     Capture,
     DesktopBackdrop,
+    ExternalDialog,
     Frozen,
     Zoom,
 }
@@ -31,7 +32,10 @@ impl OverlaySuppression {
     }
 
     pub(in crate::backend::wayland) fn renders_canvas(self) -> bool {
-        !matches!(self, Self::DesktopBackdrop | Self::Frozen | Self::Zoom)
+        !matches!(
+            self,
+            Self::DesktopBackdrop | Self::ExternalDialog | Self::Frozen | Self::Zoom
+        )
     }
 
     pub(in crate::backend::wayland) fn renders_ui(self) -> bool {
@@ -208,6 +212,14 @@ mod tests {
         let suppression = OverlaySuppression::Capture.effective_for_board(true);
 
         assert!(suppression.renders_canvas());
+        assert!(!suppression.renders_ui());
+    }
+
+    #[test]
+    fn external_dialog_suppression_hides_canvas_and_ui() {
+        let suppression = OverlaySuppression::ExternalDialog.effective_for_board(true);
+
+        assert!(!suppression.renders_canvas());
         assert!(!suppression.renders_ui());
     }
 

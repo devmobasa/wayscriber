@@ -112,7 +112,7 @@ impl WaylandState {
             && let Some(intent) = self.inline_toolbar_drag_at(position)
         {
             let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-            self.handle_toolbar_event(evt);
+            self.handle_toolbar_event(evt, None, None);
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
             over_toolbar = true;
@@ -148,6 +148,8 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn inline_toolbar_press(
         &mut self,
         position: (f64, f64),
+        conn: Option<&wayland_client::Connection>,
+        qh: Option<&wayland_client::QueueHandle<Self>>,
     ) -> bool {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return false;
@@ -161,7 +163,7 @@ impl WaylandState {
             }
             self.set_toolbar_dragging(drag);
             let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-            self.handle_toolbar_event(evt);
+            self.handle_toolbar_event(evt, conn, qh);
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
             self.set_pointer_over_toolbar(true);
@@ -209,7 +211,7 @@ impl WaylandState {
                 && let Some(intent) = self.inline_toolbar_drag_at(position)
             {
                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
-                self.handle_toolbar_event(evt);
+                self.handle_toolbar_event(evt, None, None);
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
             }

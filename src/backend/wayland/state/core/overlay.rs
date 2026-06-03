@@ -10,6 +10,7 @@ impl WaylandState {
             self.data.overlay_suppression,
             OverlaySuppression::Capture
                 | OverlaySuppression::DesktopBackdrop
+                | OverlaySuppression::ExternalDialog
                 | OverlaySuppression::Frozen
                 | OverlaySuppression::Zoom
         )

@@ -186,6 +186,9 @@ impl ToolbarSnapshot {
             show_drawer_hint,
             is_transparent: state.board_is_transparent(),
             render_profile_generation: state.render_profile_generation(),
+            active_session_name: None,
+            active_session_path: None,
+            recent_sessions: Vec::new(),
         }
     }
 }

@@ -136,6 +136,10 @@ impl InputState {
             ToolbarEvent::ApplyPreset(slot) => self.apply_toolbar_apply_preset(slot),
             ToolbarEvent::SavePreset(slot) => self.apply_toolbar_save_preset(slot),
             ToolbarEvent::ClearPreset(slot) => self.apply_toolbar_clear_preset(slot),
+            ToolbarEvent::OpenSession
+            | ToolbarEvent::OpenRecentSession(_)
+            | ToolbarEvent::SaveSessionAs
+            | ToolbarEvent::ClearSession => false,
             ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. } => false,
         }
     }

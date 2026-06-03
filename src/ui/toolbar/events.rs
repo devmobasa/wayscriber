@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::config::{Action, ToolbarLayoutMode};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
@@ -60,6 +62,10 @@ pub enum ToolbarEvent {
     ApplyPreset(usize),
     SavePreset(usize),
     ClearPreset(usize),
+    OpenSession,
+    OpenRecentSession(PathBuf),
+    SaveSessionAs,
+    ClearSession,
     OpenConfigurator,
     OpenConfigFile,
     ToggleCustomSection(bool),
