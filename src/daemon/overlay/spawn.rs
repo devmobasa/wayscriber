@@ -162,6 +162,9 @@ impl Daemon {
         {
             command.arg("--mode").arg(mode);
         }
+        if let Some(path) = self.effective_named_session_file() {
+            command.arg("--session-file").arg(path);
+        }
         command.stdin(Stdio::null());
         command.stdout(Stdio::null());
         command.stderr(Stdio::null());
@@ -190,6 +193,7 @@ impl Daemon {
                     self.overlay_pid.store(pid, Ordering::Release);
                     self.overlay_child = Some(child);
                     self.overlay_state = OverlayState::Visible;
+                    self.active_named_session_file = self.effective_named_session_file();
                     self.pending_activation_token = None;
                     info!(
                         "Overlay process started via {} (pid {pid}, startup_activation_token={})",
@@ -229,7 +233,7 @@ mod tests {
 
     #[test]
     fn backoff_duration_grows_and_caps() {
-        let mut daemon = Daemon::new(None, false, None);
+        let mut daemon = Daemon::new(None, false, None, None);
 
         daemon.overlay_spawn_failures = 1;
         assert_eq!(
@@ -258,7 +262,7 @@ mod tests {
 
     #[test]
     fn overlay_spawn_allowed_honors_retry_window() {
-        let mut daemon = Daemon::new(None, false, None);
+        let mut daemon = Daemon::new(None, false, None, None);
         daemon.overlay_spawn_next_retry = Some(Instant::now() + Duration::from_secs(2));
         daemon.overlay_spawn_backoff_logged = false;
 
@@ -272,7 +276,7 @@ mod tests {
 
     #[test]
     fn build_overlay_command_includes_freeze_when_enabled() {
-        let mut daemon = Daemon::new(Some("whiteboard".into()), false, None);
+        let mut daemon = Daemon::new(Some("whiteboard".into()), false, None, None);
         daemon.set_freeze_on_show(true);
 
         let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
@@ -285,7 +289,7 @@ mod tests {
 
     #[test]
     fn build_overlay_command_uses_toggle_request_args() {
-        let mut daemon = Daemon::new(Some("whiteboard".into()), false, None);
+        let mut daemon = Daemon::new(Some("whiteboard".into()), false, None, None);
         daemon.pending_toggle_request = Some(crate::daemon::DaemonToggleRequest {
             mode: Some("transparent".into()),
             freeze: true,
@@ -308,8 +312,60 @@ mod tests {
     }
 
     #[test]
+    fn build_overlay_command_includes_initial_named_session_file() {
+        let daemon = Daemon::new(
+            Some("whiteboard".into()),
+            false,
+            None,
+            Some(std::path::PathBuf::from("/tmp/lecture.wayscriber-session")),
+        );
+
+        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+
+        assert_eq!(
+            command_args(&command),
+            vec![
+                "--active",
+                "--mode",
+                "whiteboard",
+                "--session-file",
+                "/tmp/lecture.wayscriber-session"
+            ]
+        );
+    }
+
+    #[test]
+    fn build_overlay_command_request_session_file_overrides_initial_named_session_file() {
+        let mut daemon = Daemon::new(
+            Some("whiteboard".into()),
+            false,
+            None,
+            Some(std::path::PathBuf::from("/tmp/default.wayscriber-session")),
+        );
+        daemon.pending_toggle_request = Some(crate::daemon::DaemonToggleRequest {
+            session_file: Some(std::path::PathBuf::from(
+                "/tmp/requested.wayscriber-session",
+            )),
+            ..Default::default()
+        });
+
+        let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
+
+        assert_eq!(
+            command_args(&command),
+            vec![
+                "--active",
+                "--mode",
+                "whiteboard",
+                "--session-file",
+                "/tmp/requested.wayscriber-session"
+            ]
+        );
+    }
+
+    #[test]
     fn build_overlay_command_omits_freeze_by_default() {
-        let daemon = Daemon::new(Some("whiteboard".into()), false, None);
+        let daemon = Daemon::new(Some("whiteboard".into()), false, None, None);
 
         let command = daemon.build_overlay_command(OsStr::new("wayscriber"));
 

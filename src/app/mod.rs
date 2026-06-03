@@ -8,11 +8,12 @@ use crate::daemon::DaemonToggleRequest;
 use crate::paths::overlay_lock_file;
 use crate::session::try_lock_exclusive;
 use crate::session_override::set_runtime_session_override;
+use anyhow::Context;
 use env::env_flag_enabled;
 use session::run_session_cli_commands;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use usage::{log_overlay_controls, print_usage};
 
@@ -69,15 +70,34 @@ fn normalized_named_session_file(cli: &Cli) -> anyhow::Result<Option<PathBuf>> {
     Ok(Some(crate::session::normalize_named_session_file_arg(raw)))
 }
 
-fn preflight_named_overlay_session(
-    cli: &Cli,
-    path: Option<&std::path::Path>,
-) -> anyhow::Result<()> {
+fn daemon_request_session_file(path: Option<PathBuf>) -> anyhow::Result<Option<PathBuf>> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let current_dir = std::env::current_dir()
+        .context("failed to resolve current directory for daemon session file")?;
+    Ok(Some(anchor_session_file_for_daemon_request(
+        path,
+        &current_dir,
+    )))
+}
+
+fn anchor_session_file_for_daemon_request(path: PathBuf, current_dir: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path
+    } else {
+        current_dir.join(path)
+    }
+}
+
+fn preflight_named_overlay_session(cli: &Cli, path: Option<&Path>) -> anyhow::Result<()> {
     let Some(path) = path else {
         return Ok(());
     };
-    if cli.active || cli.freeze {
+    if cli.active || cli.freeze || cli.daemon || cli.daemon_toggle {
         crate::session::validate_named_session_file_for_foreground(path)?;
+    }
+    if cli.active || cli.freeze {
         crate::backend::preflight_wayland_connection()?;
     }
     Ok(())
@@ -117,7 +137,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     let named_session_file = normalized_named_session_file(&cli)?;
     preflight_named_overlay_session(&cli, named_session_file.as_deref())?;
 
-    let named_overlay_session = named_session_file.is_some() && (cli.active || cli.freeze);
+    let named_overlay_session =
+        named_session_file.is_some() && (cli.active || cli.freeze || cli.daemon);
     let session_override = if named_overlay_session || cli.resume_session {
         Some(true)
     } else if cli.no_resume_session {
@@ -140,6 +161,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     if cli.daemon_toggle {
+        let session_file = daemon_request_session_file(named_session_file)?;
         let request = DaemonToggleRequest {
             mode: cli.mode,
             freeze: cli.freeze,
@@ -147,6 +169,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             no_exit_after_capture: cli.no_exit_after_capture,
             resume_session: cli.resume_session,
             no_resume_session: cli.no_resume_session,
+            session_file,
             overlay_action: None,
         };
         crate::daemon::send_daemon_toggle_request(&request)?;
@@ -172,7 +195,12 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         if tray_disabled {
             log::info!("Tray disabled via --no-tray / WAYSCRIBER_NO_TRAY");
         }
-        let mut daemon = crate::daemon::Daemon::new(cli.mode, !tray_disabled, session_override);
+        let mut daemon = crate::daemon::Daemon::new(
+            cli.mode,
+            !tray_disabled,
+            session_override,
+            named_session_file,
+        );
         daemon.set_freeze_on_show(cli.freeze_on_show);
         daemon.run()?;
     } else if cli.active || cli.freeze {
@@ -211,4 +239,31 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn daemon_request_session_file_anchors_relative_paths_to_caller_directory() {
+        let anchored = anchor_session_file_for_daemon_request(
+            PathBuf::from("meeting.wayscriber-session"),
+            Path::new("/tmp/wayscriber-caller"),
+        );
+
+        assert_eq!(
+            anchored,
+            PathBuf::from("/tmp/wayscriber-caller/meeting.wayscriber-session")
+        );
+    }
+
+    #[test]
+    fn daemon_request_session_file_preserves_absolute_paths() {
+        let path = PathBuf::from("/tmp/meeting.wayscriber-session");
+        let anchored =
+            anchor_session_file_for_daemon_request(path.clone(), Path::new("/tmp/other-cwd"));
+
+        assert_eq!(anchored, path);
+    }
 }

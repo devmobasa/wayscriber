@@ -5,6 +5,7 @@ use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::paths::{daemon_command_dir, daemon_command_file, daemon_lock_file, daemon_pid_file};
@@ -42,6 +43,8 @@ pub(crate) struct DaemonToggleRequest {
     #[serde(default)]
     pub(crate) no_resume_session: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) session_file: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) overlay_action: Option<TrayAction>,
 }
 
@@ -53,6 +56,7 @@ impl DaemonToggleRequest {
             && !self.no_exit_after_capture
             && !self.resume_session
             && !self.no_resume_session
+            && self.session_file.is_none()
             && self.overlay_action.is_none()
     }
 
@@ -65,6 +69,33 @@ impl DaemonToggleRequest {
             None
         }
     }
+
+    pub(crate) fn normalize_and_validate_session_file(&mut self) -> Result<()> {
+        let Some(path) = self.session_file.as_ref() else {
+            return Ok(());
+        };
+        if self.no_resume_session {
+            return Err(anyhow!(
+                "--session-file conflicts with --no-resume-session because --session-file requires session persistence for this run"
+            ));
+        }
+        if !path.is_absolute() {
+            return Err(anyhow!(
+                "daemon --session-file request must use an absolute path"
+            ));
+        }
+        let normalized = normalize_daemon_session_file(path)?;
+        crate::session::validate_named_session_file_for_foreground(&normalized)?;
+        self.session_file = Some(normalized);
+        Ok(())
+    }
+}
+
+fn normalize_daemon_session_file(path: &Path) -> Result<PathBuf> {
+    let raw = path
+        .to_str()
+        .ok_or_else(|| anyhow!("--session-file path must be valid UTF-8"))?;
+    Ok(crate::session::normalize_named_session_file_arg(raw))
 }
 
 fn current_unix_millis() -> Result<u64> {
@@ -438,6 +469,15 @@ mod tests {
     }
 
     #[test]
+    fn session_file_request_is_not_empty() {
+        let request = DaemonToggleRequest {
+            session_file: Some(PathBuf::from("/tmp/lecture.wayscriber-session")),
+            ..Default::default()
+        };
+        assert!(!request.is_empty());
+    }
+
+    #[test]
     fn toggle_request_reports_session_override() {
         let request = DaemonToggleRequest {
             resume_session: true,
@@ -450,6 +490,41 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(request.session_resume_override(), Some(false));
+    }
+
+    #[test]
+    fn session_file_request_rejects_no_resume_session() {
+        let mut request = DaemonToggleRequest {
+            no_resume_session: true,
+            session_file: Some(PathBuf::from("/tmp/lecture.wayscriber-session")),
+            ..Default::default()
+        };
+
+        let err = request
+            .normalize_and_validate_session_file()
+            .expect_err("session file conflicts with disabled resume");
+
+        assert!(
+            format!("{err:#}").contains("--session-file conflicts with --no-resume-session"),
+            "{err:#}"
+        );
+    }
+
+    #[test]
+    fn session_file_request_rejects_relative_path() {
+        let mut request = DaemonToggleRequest {
+            session_file: Some(PathBuf::from("lecture.wayscriber-session")),
+            ..Default::default()
+        };
+
+        let err = request
+            .normalize_and_validate_session_file()
+            .expect_err("daemon protocol requires anchored paths");
+
+        assert!(
+            format!("{err:#}").contains("daemon --session-file request must use an absolute path"),
+            "{err:#}"
+        );
     }
 
     #[test]
@@ -566,6 +641,7 @@ mod tests {
             mode: Some("whiteboard".into()),
             freeze: true,
             exit_after_capture: true,
+            session_file: Some(PathBuf::from("/tmp/lecture.wayscriber-session")),
             ..Default::default()
         };
         write_daemon_toggle_request(&request, "daemon-token").unwrap();

@@ -798,12 +798,14 @@ wayscriber --no-resume-session   # disable resume for this run
 wayscriber --session-info        # inspect saved sessions
 wayscriber --clear-session       # remove stored boards
 wayscriber --active --session-file ~/Documents/lecture-04.wayscriber-session
+wayscriber --daemon --session-file ~/Documents/lecture-04.wayscriber-session
+wayscriber --daemon-toggle --session-file ~/Documents/meeting.wayscriber-session
 wayscriber --session-info --session-file ~/Documents/lecture-04.wayscriber-session
 ```
 
 Notes:
 - When `restore_tool_state` is enabled (default), the last-used tool settings (including arrow head placement) override config defaults on startup. Disable it in the Session tab or clear the session to force config values.
-- `--session-file` uses exactly the selected file, implies persistence for that overlay run, and does not create missing parent directories.
+- `--session-file` uses exactly the selected file, implies persistence for that overlay run, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
 
 ### Tablet/Stylus Support
 

@@ -889,6 +889,8 @@ Use the CLI helpers for quick maintenance:
 - `wayscriber --clear-session` removes the session file, backup, and lock.
 - `wayscriber --active --session-file ~/Documents/lecture-04.wayscriber-session` opens and saves a named session file directly.
 - `wayscriber --freeze --session-file ~/Documents/lecture-04.wayscriber-session` starts frozen mode with that same named session target.
+- `wayscriber --daemon --session-file ~/Documents/lecture-04.wayscriber-session` starts a daemon whose overlay activations use that named session target.
+- `wayscriber --daemon-toggle --session-file ~/Documents/meeting.wayscriber-session` asks the running daemon to launch a hidden overlay with that named session target. If the overlay is already visible with a different target, hide it before switching.
 - `wayscriber --session-info --session-file <path>` and `wayscriber --clear-session --session-file <path>` inspect or remove only that named file and its sidecars.
 - The configurator Session tab also shows recent named sessions from the catalog. It can rename catalog display labels, reveal file locations, forget catalog metadata without touching files, and clear saved data only when no overlay/background service is active.
 

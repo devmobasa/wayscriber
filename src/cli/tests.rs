@@ -39,6 +39,22 @@ fn daemon_mode_accepts_freeze_on_show() {
 }
 
 #[test]
+fn daemon_mode_accepts_session_file() {
+    let cli = Cli::try_parse_from([
+        "wayscriber",
+        "--daemon",
+        "--session-file",
+        "/tmp/wayscriber-daemon.session",
+    ])
+    .unwrap();
+    assert!(cli.daemon);
+    assert_eq!(
+        cli.session_file,
+        Some(PathBuf::from("/tmp/wayscriber-daemon.session"))
+    );
+}
+
+#[test]
 fn daemon_toggle_accepts_overlay_launch_args() {
     let cli = Cli::try_parse_from([
         "wayscriber",
@@ -55,6 +71,22 @@ fn daemon_toggle_accepts_overlay_launch_args() {
     assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
     assert!(cli.exit_after_capture);
     assert!(cli.resume_session);
+}
+
+#[test]
+fn daemon_toggle_accepts_session_file() {
+    let cli = Cli::try_parse_from([
+        "wayscriber",
+        "--daemon-toggle",
+        "--session-file",
+        "/tmp/wayscriber-toggle.session",
+    ])
+    .unwrap();
+    assert!(cli.daemon_toggle);
+    assert_eq!(
+        cli.session_file,
+        Some(PathBuf::from("/tmp/wayscriber-toggle.session"))
+    );
 }
 
 #[test]
@@ -94,34 +126,12 @@ fn session_file_requires_supported_command() {
     ]);
     assert_eq!(
         result.unwrap_err(),
-        "--session-file requires --active, --freeze, --session-info, or --clear-session"
+        "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, or --clear-session"
     );
 }
 
 #[test]
-fn session_file_rejects_daemon_and_toggle_modes() {
-    let daemon_result = Cli::try_parse_from([
-        "wayscriber",
-        "--daemon",
-        "--session-file",
-        "/tmp/wayscriber-daemon.session",
-    ]);
-    assert_eq!(
-        daemon_result.unwrap_err(),
-        "--session-file is not supported with daemon/toggle mode yet; use --active or --freeze for now."
-    );
-
-    let toggle_result = Cli::try_parse_from([
-        "wayscriber",
-        "--daemon-toggle",
-        "--session-file",
-        "/tmp/wayscriber-toggle.session",
-    ]);
-    assert_eq!(
-        toggle_result.unwrap_err(),
-        "--session-file is not supported with daemon/toggle mode yet; use --active or --freeze for now."
-    );
-
+fn session_file_rejects_daemon_overlay_action_modes() {
     let action_result = Cli::try_parse_from([
         "wayscriber",
         "--light-toggle",
@@ -130,7 +140,7 @@ fn session_file_rejects_daemon_and_toggle_modes() {
     ]);
     assert_eq!(
         action_result.unwrap_err(),
-        "--session-file is not supported with daemon/toggle mode yet; use --active or --freeze for now."
+        "--session-file cannot be combined with daemon overlay actions; use --daemon-toggle --session-file to launch a named session"
     );
 }
 
@@ -157,6 +167,30 @@ fn session_file_rejects_no_resume_session() {
     ]);
     assert_eq!(
         freeze_result.unwrap_err(),
+        "--session-file conflicts with --no-resume-session because --session-file requires session persistence for this run"
+    );
+
+    let daemon_result = Cli::try_parse_from([
+        "wayscriber",
+        "--daemon",
+        "--session-file",
+        "/tmp/wayscriber-daemon.session",
+        "--no-resume-session",
+    ]);
+    assert_eq!(
+        daemon_result.unwrap_err(),
+        "--session-file conflicts with --no-resume-session because --session-file requires session persistence for this run"
+    );
+
+    let toggle_result = Cli::try_parse_from([
+        "wayscriber",
+        "--daemon-toggle",
+        "--session-file",
+        "/tmp/wayscriber-toggle.session",
+        "--no-resume-session",
+    ]);
+    assert_eq!(
+        toggle_result.unwrap_err(),
         "--session-file conflicts with --no-resume-session because --session-file requires session persistence for this run"
     );
 }

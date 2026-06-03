@@ -34,6 +34,7 @@ impl Daemon {
 
         if let Some(runner) = self.backend_runner.clone() {
             self.overlay_state = OverlayState::Visible;
+            self.active_named_session_file = self.effective_named_session_file();
             info!("Overlay state set to Visible");
             self.clear_overlay_spawn_error();
             let previous_override = runtime_session_override();
@@ -50,6 +51,7 @@ impl Daemon {
             let result = runner(requested_mode);
             set_runtime_session_override(previous_override);
             self.pending_toggle_request = None;
+            self.active_named_session_file = None;
             self.overlay_state = OverlayState::Hidden;
             info!("Overlay closed, back to daemon mode");
             return result;
@@ -79,12 +81,14 @@ impl Daemon {
             // Internal runner does not keep additional state to tear down
             debug!("Internal backend runner hidden");
             self.pending_toggle_request = None;
+            self.active_named_session_file = None;
             self.overlay_state = OverlayState::Hidden;
             return Ok(());
         }
 
         self.terminate_overlay_process()?;
         self.pending_toggle_request = None;
+        self.active_named_session_file = None;
         self.overlay_state = OverlayState::Hidden;
         Ok(())
     }

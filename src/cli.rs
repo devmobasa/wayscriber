@@ -245,19 +245,27 @@ impl Cli {
         .count();
 
         if self.session_file.is_some() {
-            if self.daemon || self.daemon_toggle || overlay_action_count > 0 {
+            if overlay_action_count > 0 {
                 return Err(
-                    "--session-file is not supported with daemon/toggle mode yet; use --active or --freeze for now."
+                    "--session-file cannot be combined with daemon overlay actions; use --daemon-toggle --session-file to launch a named session"
                         .to_string(),
                 );
             }
-            if !(self.active || self.freeze || self.clear_session || self.session_info) {
+            if !(self.active
+                || self.freeze
+                || self.daemon
+                || self.daemon_toggle
+                || self.clear_session
+                || self.session_info)
+            {
                 return Err(
-                    "--session-file requires --active, --freeze, --session-info, or --clear-session"
+                    "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, or --clear-session"
                         .to_string(),
                 );
             }
-            if (self.active || self.freeze) && self.no_resume_session {
+            if (self.active || self.freeze || self.daemon || self.daemon_toggle)
+                && self.no_resume_session
+            {
                 return Err(
                     "--session-file conflicts with --no-resume-session because --session-file requires session persistence for this run"
                         .to_string(),
@@ -272,7 +280,6 @@ impl Cli {
                 || self.freeze_on_show
                 || self.clear_session
                 || self.session_info
-                || self.session_file.is_some()
                 || self.about)
         {
             return Err("--daemon-toggle conflicts with the selected command".to_string());
@@ -423,9 +430,9 @@ fn print_help() {
     println!("wayscriber: Screen annotation tool for Wayland compositors");
     println!();
     println!("Usage:");
-    println!("  wayscriber -d, --daemon");
+    println!("  wayscriber -d, --daemon [--session-file PATH]");
     println!("  wayscriber --daemon --freeze-on-show");
-    println!("  wayscriber --daemon-toggle [--freeze] [--mode MODE]");
+    println!("  wayscriber --daemon-toggle [--freeze] [--mode MODE] [--session-file PATH]");
     println!("  wayscriber --daemon-action ACTION");
     println!(
         "  wayscriber --light-toggle | --light-draw-toggle | --light-draw-on | --light-draw-off"
