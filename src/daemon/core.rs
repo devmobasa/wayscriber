@@ -20,7 +20,12 @@ use crate::tray_action::TrayAction;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
 use wayscriber::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 
-use super::control::DaemonToggleRequest;
+#[cfg(test)]
+use super::control::read_daemon_toggle_response;
+use super::control::{
+    DaemonToggleCommand, DaemonToggleCommands, DaemonToggleRequest,
+    write_daemon_toggle_command_error, write_daemon_toggle_command_success,
+};
 use super::global_shortcuts::start_global_shortcuts_listener;
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
@@ -216,6 +221,36 @@ impl Daemon {
         Ok(false)
     }
 
+    fn process_queued_toggle_command(
+        &mut self,
+        command: DaemonToggleCommand,
+        suppress_overlay_action_signal: &mut bool,
+    ) {
+        let result = self.process_single_toggle(
+            Some(command.request.clone()),
+            None,
+            *suppress_overlay_action_signal,
+        );
+        match result {
+            Ok(spawned_overlay) => {
+                *suppress_overlay_action_signal |= spawned_overlay;
+                if let Err(err) = write_daemon_toggle_command_success(&command) {
+                    warn!("Failed to write daemon toggle response: {}", err);
+                }
+            }
+            Err(err) => {
+                let message = format!("{err:#}");
+                warn!("Toggle overlay failed: {}", message);
+                if let Err(response_err) = write_daemon_toggle_command_error(&command, &message) {
+                    warn!(
+                        "Failed to write daemon toggle error response: {}",
+                        response_err
+                    );
+                }
+            }
+        }
+    }
+
     fn dispatch_overlay_action(
         &self,
         action: TrayAction,
@@ -259,7 +294,10 @@ impl Daemon {
         let queued_requests = if signal_toggle_requested {
             crate::daemon::take_daemon_toggle_requests(&self.instance_token)?
         } else {
-            Vec::new()
+            DaemonToggleCommands {
+                commands: Vec::new(),
+                saw_command_files: false,
+            }
         };
 
         if !signal_toggle_requested || activation_token.is_some() {
@@ -267,23 +305,29 @@ impl Daemon {
         }
 
         if signal_toggle_requested {
-            let requests = if queued_requests.is_empty() {
-                vec![DaemonToggleRequest::default()]
-            } else {
-                queued_requests
-            };
-
-            let mut suppress_overlay_action_signal = false;
-            for request in requests {
-                let spawned_overlay = self.process_single_toggle(
-                    Some(request),
-                    None,
-                    suppress_overlay_action_signal,
-                )?;
-                suppress_overlay_action_signal |= spawned_overlay;
-            }
+            self.process_signal_toggle_commands(queued_requests)?;
         }
 
+        Ok(())
+    }
+
+    fn process_signal_toggle_commands(
+        &mut self,
+        queued_requests: DaemonToggleCommands,
+    ) -> Result<()> {
+        if queued_requests.commands.is_empty() {
+            if queued_requests.saw_command_files {
+                return Ok(());
+            }
+            return self
+                .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+                .map(drop);
+        }
+
+        let mut suppress_overlay_action_signal = false;
+        for command in queued_requests.commands {
+            self.process_queued_toggle_command(command, &mut suppress_overlay_action_signal);
+        }
         Ok(())
     }
 
@@ -584,5 +628,58 @@ mod tests {
             daemon.active_named_session_file.as_deref(),
             Some(std::path::Path::new("/tmp/current.wayscriber-session"))
         );
+    }
+
+    #[test]
+    fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+        daemon.overlay_state = OverlayState::Visible;
+        daemon.active_named_session_file =
+            Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
+        let command = DaemonToggleCommand {
+            daemon_token: "daemon-token".into(),
+            request: DaemonToggleRequest {
+                session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
+                ..Default::default()
+            },
+            request_path: temp.path().join("request.json"),
+            response_path: temp.path().join("responses").join("request.json"),
+        };
+
+        let mut suppress_overlay_action_signal = false;
+        daemon.process_queued_toggle_command(command.clone(), &mut suppress_overlay_action_signal);
+
+        let err = read_daemon_toggle_response(&command.response_path)
+            .expect_err("visible target mismatch should be written to response");
+        assert!(
+            format!("{err:#}")
+                .contains("cannot switch named session target while overlay is visible"),
+            "{err:#}"
+        );
+        assert_eq!(daemon.test_state(), OverlayState::Visible);
+        assert!(!suppress_overlay_action_signal);
+    }
+
+    #[test]
+    fn typed_signal_with_no_executable_commands_does_not_fallback_to_raw_toggle() {
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_clone = Arc::clone(&called);
+        let runner: Arc<BackendRunner> = Arc::new(move |_| {
+            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        });
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+
+        daemon
+            .process_signal_toggle_commands(DaemonToggleCommands {
+                commands: Vec::new(),
+                saw_command_files: true,
+            })
+            .expect("typed command marker should suppress raw fallback");
+
+        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
     }
 }
