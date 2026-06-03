@@ -1,8 +1,11 @@
+use std::path::PathBuf;
+
 use iced::Task;
 
 use crate::app::session_catalog::{
-    clear_session_catalog_entry, forget_session_catalog_entry, load_session_catalog,
-    rename_session_catalog_entry, reveal_session_catalog_entry, session_clear_blocker,
+    clear_session_catalog_entry, duplicate_session_catalog_entry, forget_session_catalog_entry,
+    load_session_catalog, rename_session_catalog_entry, reveal_session_catalog_entry,
+    session_clear_blocker, session_duplicate_blocker,
 };
 use crate::messages::Message;
 use crate::models::{SessionCatalogActionResult, SessionCatalogItem};
@@ -90,6 +93,45 @@ impl ConfiguratorApp {
         )
     }
 
+    pub(super) fn handle_session_catalog_duplicate_input_changed(
+        &mut self,
+        id: String,
+        value: String,
+    ) -> Task<Message> {
+        self.session_catalog.duplicate_inputs.insert(id, value);
+        Task::none()
+    }
+
+    pub(super) fn handle_session_catalog_duplicate_requested(
+        &mut self,
+        id: String,
+    ) -> Task<Message> {
+        if self.session_catalog.busy {
+            return Task::none();
+        }
+        if let Some(blocker) = session_duplicate_blocker(self.daemon_status.as_ref()) {
+            self.status = StatusMessage::warning(blocker);
+            return Task::none();
+        }
+        let Some(item) = self.session_catalog.item(&id) else {
+            self.status = StatusMessage::error("Session is no longer in the catalog.");
+            return Task::none();
+        };
+        let target = self.session_catalog.duplicate_value(&id, &item.path);
+        if target.trim().is_empty() {
+            self.status = StatusMessage::error("Duplicate Session target cannot be empty.");
+            return Task::none();
+        }
+
+        self.session_catalog.busy = true;
+        self.session_catalog.pending_clear_id = None;
+        self.status = StatusMessage::info("Duplicating session...");
+        Task::perform(
+            duplicate_session_catalog_entry(id, PathBuf::from(target)),
+            Message::SessionCatalogActionCompleted,
+        )
+    }
+
     pub(super) fn handle_session_catalog_reveal_requested(&mut self, id: String) -> Task<Message> {
         if self.session_catalog.busy {
             return Task::none();
@@ -148,7 +190,11 @@ impl ConfiguratorApp {
         match result {
             Ok(result) => {
                 self.session_catalog.replace_items(result.items);
-                self.status = StatusMessage::success(result.message);
+                self.status = if result.warning {
+                    StatusMessage::warning(result.message)
+                } else {
+                    StatusMessage::success(result.message)
+                };
             }
             Err(err) => {
                 self.status = StatusMessage::error(err);
@@ -273,6 +319,55 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_input_change_does_not_dirty_config() {
+        let (mut app, _task) = ConfiguratorApp::new_app();
+        app.is_dirty = false;
+
+        let _ = app.handle_session_catalog_duplicate_input_changed(
+            "s-1".to_string(),
+            "/tmp/copy.wayscriber-session".to_string(),
+        );
+
+        assert!(!app.is_dirty);
+        assert_eq!(
+            app.session_catalog.duplicate_inputs.get("s-1"),
+            Some(&"/tmp/copy.wayscriber-session".to_string())
+        );
+    }
+
+    #[test]
+    fn duplicate_request_blocks_without_daemon_status() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+        let (mut app, _task) = ConfiguratorApp::new_app();
+        app.session_catalog = SessionCatalogState::loading();
+        app.session_catalog
+            .replace_items(vec![catalog_item("s-1", "Lecture")]);
+        app.daemon_status = None;
+
+        let _ = app.handle_session_catalog_duplicate_requested("s-1".to_string());
+
+        assert!(!app.session_catalog.busy);
+        assert!(status_contains(&app.status, "status finishes loading"));
+    }
+
+    #[test]
+    fn duplicate_request_sets_busy_when_safe() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+        let (mut app, _task) = ConfiguratorApp::new_app();
+        app.session_catalog = SessionCatalogState::loading();
+        app.session_catalog
+            .replace_items(vec![catalog_item("s-1", "Lecture")]);
+        app.daemon_status = Some(inactive_daemon_status());
+
+        let _ = app.handle_session_catalog_duplicate_requested("s-1".to_string());
+
+        assert!(app.session_catalog.busy);
+        assert!(status_contains(&app.status, "Duplicating session"));
+    }
+
+    #[test]
     fn clear_request_blocks_without_daemon_status() {
         let temp = crate::test_temp::tempdir().unwrap();
         let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
@@ -312,11 +407,28 @@ mod tests {
         let _ = app.handle_session_catalog_action_completed(Ok(SessionCatalogActionResult {
             message: "Done.".to_string(),
             items: vec![catalog_item("s-2", "Updated")],
+            warning: false,
         }));
 
         assert!(!app.session_catalog.busy);
         assert_eq!(app.session_catalog.items.len(), 1);
         assert_eq!(app.session_catalog.items[0].display_name, "Updated");
         assert!(status_contains(&app.status, "Done."));
+    }
+
+    #[test]
+    fn warning_action_completed_sets_warning_status() {
+        let (mut app, _task) = ConfiguratorApp::new_app();
+        app.session_catalog.busy = true;
+
+        let _ = app.handle_session_catalog_action_completed(Ok(SessionCatalogActionResult {
+            message: "Committed with warning.".to_string(),
+            items: vec![catalog_item("s-2", "Updated")],
+            warning: true,
+        }));
+
+        assert!(!app.session_catalog.busy);
+        assert!(matches!(app.status, StatusMessage::Warning(_)));
+        assert!(status_contains(&app.status, "Committed with warning."));
     }
 }

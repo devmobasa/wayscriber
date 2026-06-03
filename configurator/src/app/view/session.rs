@@ -3,6 +3,7 @@ use iced::{Element, Length};
 
 use crate::app::session_catalog::{
     session_artifact_status_label, session_clear_cached_status_blocker,
+    session_duplicate_cached_status_blocker,
 };
 use crate::app::view::theme;
 use crate::messages::Message;
@@ -212,12 +213,22 @@ impl ConfiguratorApp {
             .rename_value(&item.id, &item.display_name);
         let rename_changed = rename_value.trim() != item.display_name.trim();
         let rename_valid = !rename_value.trim().is_empty();
+        let duplicate_value = self.session_catalog.duplicate_value(&item.id, &item.path);
+        let duplicate_valid = !duplicate_value.trim().is_empty();
         let busy = self.session_catalog.busy || self.session_catalog.is_loading;
 
         let mut rename_button = button("Save Name").style(theme::Button::Secondary);
         if !busy && rename_changed && rename_valid {
             rename_button =
                 rename_button.on_press(Message::SessionCatalogRenameRequested(id.clone()));
+        }
+
+        let duplicate_blocker =
+            session_duplicate_cached_status_blocker(self.daemon_status.as_ref());
+        let mut duplicate_button = button("Duplicate").style(theme::Button::Secondary);
+        if !busy && duplicate_blocker.is_none() && duplicate_valid {
+            duplicate_button =
+                duplicate_button.on_press(Message::SessionCatalogDuplicateRequested(id.clone()));
         }
 
         let mut reveal_button = button("Reveal File").style(theme::Button::Secondary);
@@ -278,13 +289,29 @@ impl ConfiguratorApp {
 
         let rename_input = text_input("Display name", &rename_value)
             .on_input(move |value| Message::SessionCatalogRenameInputChanged(id.clone(), value))
-            .padding(8);
+            .padding(8)
+            .width(Length::Fill);
 
-        let actions = row![rename_button, reveal_button, clear_controls, forget_button]
+        let duplicate_id = item.id.clone();
+        let duplicate_input = text_input("Duplicate target path", &duplicate_value)
+            .on_input(move |value| {
+                Message::SessionCatalogDuplicateInputChanged(duplicate_id.clone(), value)
+            })
+            .padding(8)
+            .width(Length::Fill);
+
+        let rename_controls = row![rename_input, rename_button]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+        let duplicate_controls = row![duplicate_input, duplicate_button]
             .spacing(8)
             .align_y(iced::Alignment::Center);
 
-        container(column![details, rename_input, actions].spacing(8))
+        let actions = row![reveal_button, clear_controls, forget_button]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+
+        container(column![details, rename_controls, duplicate_controls, actions].spacing(8))
             .padding(10)
             .width(Length::Fill)
             .style(theme::Container::Box)

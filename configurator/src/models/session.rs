@@ -10,6 +10,7 @@ const PATH_LABEL_MAX_CHARS: usize = 96;
 pub struct SessionCatalogState {
     pub items: Vec<SessionCatalogItem>,
     pub rename_inputs: HashMap<String, String>,
+    pub duplicate_inputs: HashMap<String, String>,
     pub is_loading: bool,
     pub busy: bool,
     pub pending_clear_id: Option<String>,
@@ -19,6 +20,25 @@ pub struct SessionCatalogState {
 pub struct SessionCatalogActionResult {
     pub message: String,
     pub items: Vec<SessionCatalogItem>,
+    pub warning: bool,
+}
+
+impl SessionCatalogActionResult {
+    pub fn success(message: impl Into<String>, items: Vec<SessionCatalogItem>) -> Self {
+        Self {
+            message: message.into(),
+            items,
+            warning: false,
+        }
+    }
+
+    pub fn warning(message: impl Into<String>, items: Vec<SessionCatalogItem>) -> Self {
+        Self {
+            message: message.into(),
+            items,
+            warning: true,
+        }
+    }
 }
 
 impl SessionCatalogState {
@@ -26,6 +46,7 @@ impl SessionCatalogState {
         Self {
             items: Vec::new(),
             rename_inputs: HashMap::new(),
+            duplicate_inputs: HashMap::new(),
             is_loading: true,
             busy: false,
             pending_clear_id: None,
@@ -36,6 +57,17 @@ impl SessionCatalogState {
         self.rename_inputs = items
             .iter()
             .map(|item| (item.id.clone(), item.display_name.clone()))
+            .collect();
+        self.duplicate_inputs = items
+            .iter()
+            .map(|item| {
+                (
+                    item.id.clone(),
+                    default_duplicate_target_path(&item.path)
+                        .display()
+                        .to_string(),
+                )
+            })
             .collect();
         self.items = items;
         self.is_loading = false;
@@ -48,6 +80,14 @@ impl SessionCatalogState {
             .get(id)
             .cloned()
             .unwrap_or_else(|| fallback.to_string())
+    }
+
+    pub fn duplicate_value(&self, id: &str, source_path: &Path) -> String {
+        self.duplicate_inputs.get(id).cloned().unwrap_or_else(|| {
+            default_duplicate_target_path(source_path)
+                .display()
+                .to_string()
+        })
     }
 
     pub fn item(&self, id: &str) -> Option<&SessionCatalogItem> {
@@ -209,6 +249,28 @@ fn truncate_path(path: &Path) -> String {
     truncate_middle(&path.display().to_string(), PATH_LABEL_MAX_CHARS)
 }
 
+fn default_duplicate_target_path(path: &Path) -> PathBuf {
+    const SESSION_SUFFIX: &str = ".wayscriber-session";
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("session.wayscriber-session");
+    let duplicate_name = file_name
+        .strip_suffix(SESSION_SUFFIX)
+        .map(|stem| format!("{stem} copy{SESSION_SUFFIX}"))
+        .unwrap_or_else(|| format!("{file_name} copy"));
+
+    match path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        Some(parent) => parent.join(duplicate_name),
+        None => PathBuf::from(duplicate_name),
+    }
+}
+
 fn truncate_middle(value: &str, max_chars: usize) -> String {
     let char_count = value.chars().count();
     if char_count <= max_chars {
@@ -238,7 +300,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn session_catalog_state_replaces_items_and_rename_inputs() {
+    fn session_catalog_state_replaces_items_and_inputs() {
         let mut state = SessionCatalogState::loading();
         let item = SessionCatalogItem {
             id: "s-1".to_string(),
@@ -263,7 +325,23 @@ mod tests {
 
         assert!(!state.is_loading);
         assert_eq!(state.rename_value("s-1", ""), "Lecture");
+        assert_eq!(
+            state.duplicate_value("s-1", Path::new("unused")),
+            "/tmp/lecture copy.wayscriber-session"
+        );
         assert!(state.item("s-1").is_some());
+    }
+
+    #[test]
+    fn default_duplicate_target_path_handles_nonstandard_names() {
+        assert_eq!(
+            default_duplicate_target_path(Path::new("/tmp/lecture.session")),
+            PathBuf::from("/tmp/lecture.session copy")
+        );
+        assert_eq!(
+            default_duplicate_target_path(Path::new("lecture.wayscriber-session")),
+            PathBuf::from("lecture copy.wayscriber-session")
+        );
     }
 
     #[test]

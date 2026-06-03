@@ -180,6 +180,26 @@ fn duplicate_display_names_are_allowed_for_distinct_paths() {
 }
 
 #[test]
+fn upsert_with_display_name_creates_distinct_named_entry() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let source = temp.path().join("source.wayscriber-session");
+    let duplicate = temp.path().join("duplicate.wayscriber-session");
+    fs::write(&source, b"{}").unwrap();
+    fs::write(&duplicate, b"{}").unwrap();
+
+    let source_entry =
+        upsert_session_event_with_display_name(&source, CatalogEvent::Saved, "Lecture").unwrap();
+    let duplicate_entry =
+        upsert_session_event_with_display_name(&duplicate, CatalogEvent::Saved, "Lecture").unwrap();
+
+    assert_ne!(source_entry.id, duplicate_entry.id);
+    let recents = recent_sessions().unwrap();
+    assert_eq!(recents.len(), 2);
+    assert!(recents.iter().all(|entry| entry.display_name == "Lecture"));
+}
+
+#[test]
 fn forget_by_path_removes_metadata_only() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
@@ -271,6 +291,7 @@ fn failed_temp_write_leaves_existing_catalog_intact() {
         .upsert(
             &temp.path().join("session.wayscriber-session"),
             CatalogEvent::Saved,
+            None,
         )
         .unwrap();
 

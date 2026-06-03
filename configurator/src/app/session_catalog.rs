@@ -8,6 +8,9 @@ use wayscriber::session::try_lock_exclusive;
 use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogItem};
 
 use super::daemon_setup::load_daemon_runtime_status;
+mod duplicate;
+
+pub(super) use duplicate::duplicate_session_catalog_entry;
 
 pub(super) async fn load_session_catalog() -> Result<Vec<SessionCatalogItem>, String> {
     load_session_catalog_sync()
@@ -19,14 +22,14 @@ pub(super) async fn forget_session_catalog_entry(
     let removed =
         wayscriber::session::catalog::forget_session_by_id(&id).map_err(|err| err.to_string())?;
     let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult {
-        message: if removed {
+    Ok(SessionCatalogActionResult::success(
+        if removed {
             "Forgot session metadata.".to_string()
         } else {
             "Session was already absent from the catalog.".to_string()
         },
         items,
-    })
+    ))
 }
 
 pub(super) async fn rename_session_catalog_entry(
@@ -37,14 +40,14 @@ pub(super) async fn rename_session_catalog_entry(
         wayscriber::session::catalog::rename_session_display_name_by_id(&id, display_name.trim())
             .map_err(|err| err.to_string())?;
     let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult {
-        message: if let Some(entry) = renamed {
+    Ok(SessionCatalogActionResult::success(
+        if let Some(entry) = renamed {
             format!("Renamed session to {}.", entry.display_name)
         } else {
             "Session was already absent from the catalog.".to_string()
         },
         items,
-    })
+    ))
 }
 
 pub(super) async fn reveal_session_catalog_entry(
@@ -53,10 +56,10 @@ pub(super) async fn reveal_session_catalog_entry(
     let item = find_session_catalog_item(&id)?;
     reveal_path_parent(&item.path)?;
     let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult {
-        message: format!("Opened folder for {}.", item.display_name),
+    Ok(SessionCatalogActionResult::success(
+        format!("Opened folder for {}.", item.display_name),
         items,
-    })
+    ))
 }
 
 pub(super) async fn clear_session_catalog_entry(
@@ -64,61 +67,94 @@ pub(super) async fn clear_session_catalog_entry(
 ) -> Result<SessionCatalogActionResult, String> {
     let status = load_daemon_runtime_status().await?;
     let item = find_session_catalog_item(&id)?;
-    let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon)?;
-    let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay)?;
-    if let Some(blocker) = service_status_blocker(Some(&status)) {
+    let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
+        RuntimeLockKind::Daemon,
+        CatalogOperation::Clear,
+    )?;
+    let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
+        RuntimeLockKind::Overlay,
+        CatalogOperation::Clear,
+    )?;
+    if let Some(blocker) = service_status_blocker(Some(&status), CatalogOperation::Clear) {
         return Err(blocker);
     }
 
     let outcome = wayscriber::session::clear_named_session_non_lock_artifacts(&item.path)
         .map_err(|err| err.to_string())?;
     let items = load_session_catalog_sync()?;
-    Ok(SessionCatalogActionResult {
-        message: if outcome.removed_any() {
+    Ok(SessionCatalogActionResult::success(
+        if outcome.removed_any() {
             format!("Cleared saved data for {}.", item.display_name)
         } else {
             format!("No saved data found for {}.", item.display_name)
         },
         items,
-    })
+    ))
 }
 
 pub(super) fn session_clear_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
-    match runtime_lock_active(RuntimeLockKind::Overlay) {
+    inactive_operation_blocker(status, CatalogOperation::Clear)
+}
+
+pub(super) fn session_duplicate_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
+    inactive_operation_blocker(status, CatalogOperation::Duplicate)
+}
+
+fn inactive_operation_blocker(
+    status: Option<&DaemonRuntimeStatus>,
+    operation: CatalogOperation,
+) -> Option<String> {
+    match runtime_lock_active(RuntimeLockKind::Overlay, operation) {
         Ok(true) => {
-            return Some(RuntimeLockKind::Overlay.running_message().to_string());
+            return Some(
+                operation
+                    .running_message(RuntimeLockKind::Overlay)
+                    .to_string(),
+            );
         }
         Ok(false) => {}
         Err(err) => return Some(err),
     }
 
-    match runtime_lock_active(RuntimeLockKind::Daemon) {
+    match runtime_lock_active(RuntimeLockKind::Daemon, operation) {
         Ok(true) => {
-            return Some(RuntimeLockKind::Daemon.running_message().to_string());
+            return Some(
+                operation
+                    .running_message(RuntimeLockKind::Daemon)
+                    .to_string(),
+            );
         }
         Ok(false) => {}
         Err(err) => return Some(err),
     }
 
-    service_status_blocker(status)
+    service_status_blocker(status, operation)
 }
 
 pub(super) fn session_clear_cached_status_blocker(
     status: Option<&DaemonRuntimeStatus>,
 ) -> Option<String> {
-    service_status_blocker(status)
+    service_status_blocker(status, CatalogOperation::Clear)
 }
 
-fn service_status_blocker(status: Option<&DaemonRuntimeStatus>) -> Option<String> {
+pub(super) fn session_duplicate_cached_status_blocker(
+    status: Option<&DaemonRuntimeStatus>,
+) -> Option<String> {
+    service_status_blocker(status, CatalogOperation::Duplicate)
+}
+
+fn service_status_blocker(
+    status: Option<&DaemonRuntimeStatus>,
+    operation: CatalogOperation,
+) -> Option<String> {
     match status {
-        Some(status) if status.service_active => {
-            Some(RuntimeLockKind::Daemon.running_message().to_string())
-        }
-        Some(_) => None,
-        None => Some(
-            "Clear saved data is disabled until background service status finishes loading."
+        Some(status) if status.service_active => Some(
+            operation
+                .running_message(RuntimeLockKind::Daemon)
                 .to_string(),
         ),
+        Some(_) => None,
+        None => Some(operation.waiting_for_status_message().to_string()),
     }
 }
 
@@ -162,6 +198,12 @@ enum RuntimeLockKind {
     Overlay,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CatalogOperation {
+    Clear,
+    Duplicate,
+}
+
 impl RuntimeLockKind {
     fn path(self) -> PathBuf {
         match self {
@@ -176,27 +218,47 @@ impl RuntimeLockKind {
             Self::Overlay => "overlay",
         }
     }
+}
 
-    fn running_message(self) -> &'static str {
-        match self {
-            Self::Daemon => {
+impl CatalogOperation {
+    fn running_message(self, kind: RuntimeLockKind) -> &'static str {
+        match (self, kind) {
+            (Self::Clear, RuntimeLockKind::Daemon) => {
                 "Clear saved data is disabled while the background service or a manually started daemon is running. Stop it first or clear from the overlay."
             }
-            Self::Overlay => {
+            (Self::Clear, RuntimeLockKind::Overlay) => {
                 "Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session."
+            }
+            (Self::Duplicate, RuntimeLockKind::Daemon) => {
+                "Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session."
+            }
+            (Self::Duplicate, RuntimeLockKind::Overlay) => {
+                "Duplicate Session is disabled while an overlay is running. Use Save As from the overlay for the active session."
+            }
+        }
+    }
+
+    fn waiting_for_status_message(self) -> &'static str {
+        match self {
+            Self::Clear => {
+                "Clear saved data is disabled until background service status finishes loading."
+            }
+            Self::Duplicate => {
+                "Duplicate Session is disabled until background service status finishes loading."
             }
         }
     }
 }
 
-fn runtime_lock_active(kind: RuntimeLockKind) -> Result<bool, String> {
+fn runtime_lock_active(kind: RuntimeLockKind, operation: CatalogOperation) -> Result<bool, String> {
     let path = kind.path();
     let file = match OpenOptions::new().read(true).write(true).open(&path) {
         Ok(file) => file,
         Err(err) if err.kind() == ErrorKind::NotFound => return Ok(false),
         Err(err) => {
             return Err(format!(
-                "Clear saved data is disabled because the {} lock could not be inspected: {} ({err})",
+                "{} is disabled because the {} lock could not be inspected: {} ({err})",
+                operation.label(),
                 kind.label(),
                 path.display()
             ));
@@ -210,19 +272,29 @@ fn runtime_lock_active(kind: RuntimeLockKind) -> Result<bool, String> {
         }
         Err(err) if err.kind() == ErrorKind::WouldBlock => Ok(true),
         Err(err) => Err(format!(
-            "Clear saved data is disabled because the {} lock could not be checked: {} ({err})",
+            "{} is disabled because the {} lock could not be checked: {} ({err})",
+            operation.label(),
             kind.label(),
             path.display()
         )),
     }
 }
 
+#[cfg(test)]
 fn acquire_runtime_lock_for_clear(kind: RuntimeLockKind) -> Result<File, String> {
+    acquire_runtime_lock_for_inactive_operation(kind, CatalogOperation::Clear)
+}
+
+fn acquire_runtime_lock_for_inactive_operation(
+    kind: RuntimeLockKind,
+    operation: CatalogOperation,
+) -> Result<File, String> {
     let path = kind.path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| {
             format!(
-                "Clear saved data is disabled because the {} lock directory could not be created: {} ({err})",
+                "{} is disabled because the {} lock directory could not be created: {} ({err})",
+                operation.label(),
                 kind.label(),
                 parent.display()
             )
@@ -237,7 +309,8 @@ fn acquire_runtime_lock_for_clear(kind: RuntimeLockKind) -> Result<File, String>
         .open(&path)
         .map_err(|err| {
             format!(
-                "Clear saved data is disabled because the {} lock could not be opened: {} ({err})",
+                "{} is disabled because the {} lock could not be opened: {} ({err})",
+                operation.label(),
                 kind.label(),
                 path.display()
             )
@@ -245,12 +318,24 @@ fn acquire_runtime_lock_for_clear(kind: RuntimeLockKind) -> Result<File, String>
 
     match try_lock_exclusive(&file) {
         Ok(()) => Ok(file),
-        Err(err) if err.kind() == ErrorKind::WouldBlock => Err(kind.running_message().to_string()),
+        Err(err) if err.kind() == ErrorKind::WouldBlock => {
+            Err(operation.running_message(kind).to_string())
+        }
         Err(err) => Err(format!(
-            "Clear saved data is disabled because the {} lock could not be reserved: {} ({err})",
+            "{} is disabled because the {} lock could not be reserved: {} ({err})",
+            operation.label(),
             kind.label(),
             path.display()
         )),
+    }
+}
+
+impl CatalogOperation {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Clear => "Clear saved data",
+            Self::Duplicate => "Duplicate Session",
+        }
     }
 }
 
@@ -342,6 +427,16 @@ mod tests {
     }
 
     #[test]
+    fn session_duplicate_blocker_uses_duplicate_status_message() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
+        let blocker =
+            session_duplicate_blocker(None).expect("unknown status should block duplicate");
+
+        assert!(blocker.contains("Duplicate Session"));
+    }
+
+    #[test]
     fn session_clear_blocker_blocks_unknown_daemon_status() {
         let temp = crate::test_temp::tempdir().unwrap();
         let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
@@ -383,11 +478,11 @@ mod tests {
         let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay).unwrap();
 
         assert!(matches!(
-            runtime_lock_active(RuntimeLockKind::Daemon),
+            runtime_lock_active(RuntimeLockKind::Daemon, CatalogOperation::Clear),
             Ok(true)
         ));
         assert!(matches!(
-            runtime_lock_active(RuntimeLockKind::Overlay),
+            runtime_lock_active(RuntimeLockKind::Overlay, CatalogOperation::Clear),
             Ok(true)
         ));
     }

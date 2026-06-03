@@ -88,7 +88,21 @@ pub fn session_paths_match(a: &Path, b: &Path) -> bool {
 
 /// Upsert a session in the catalog and mark it opened or saved.
 pub fn upsert_session_event(path: &Path, event: CatalogEvent) -> Result<CatalogEntry> {
-    with_catalog_write(|catalog| catalog.upsert(path, event))
+    with_catalog_write(|catalog| catalog.upsert(path, event, None))
+}
+
+/// Upsert a session in the catalog using a caller-provided display name.
+#[allow(dead_code)]
+pub fn upsert_session_event_with_display_name(
+    path: &Path,
+    event: CatalogEvent,
+    display_name: &str,
+) -> Result<CatalogEntry> {
+    let display_name = display_name.trim();
+    if display_name.is_empty() {
+        return Err(anyhow!("session display name cannot be empty"));
+    }
+    with_catalog_write(|catalog| catalog.upsert(path, event, Some(display_name)))
 }
 
 /// Return recent sessions sorted newest first.
@@ -202,7 +216,12 @@ fn test_catalog_hooks_enabled_for_path(path: &Path) -> bool {
 }
 
 impl CatalogFile {
-    fn upsert(&mut self, path: &Path, event: CatalogEvent) -> Result<CatalogEntry> {
+    fn upsert(
+        &mut self,
+        path: &Path,
+        event: CatalogEvent,
+        display_name: Option<&str>,
+    ) -> Result<CatalogEntry> {
         let identity = session_path_identity(path);
         let now = now_epoch_millis();
 
@@ -210,8 +229,12 @@ impl CatalogFile {
             let entry = &mut self.sessions[index];
             entry.path = path_to_string(&identity.exact_path)?;
             entry.canonical_path = optional_path_to_string(identity.canonical_path.as_deref())?;
-            if entry.display_name.trim().is_empty() {
-                entry.display_name = display_name_for_path(&identity.exact_path);
+            match display_name {
+                Some(display_name) => entry.display_name = display_name.to_string(),
+                None if entry.display_name.trim().is_empty() => {
+                    entry.display_name = display_name_for_path(&identity.exact_path);
+                }
+                None => {}
             }
             apply_event(entry, event, now);
             return Ok(entry.clone());
@@ -219,7 +242,9 @@ impl CatalogFile {
 
         let mut entry = CatalogEntry {
             id: generated_catalog_id(now),
-            display_name: display_name_for_path(&identity.exact_path),
+            display_name: display_name
+                .map(str::to_string)
+                .unwrap_or_else(|| display_name_for_path(&identity.exact_path)),
             path: path_to_string(&identity.exact_path)?,
             canonical_path: optional_path_to_string(identity.canonical_path.as_deref())?,
             created_at_millis: now,

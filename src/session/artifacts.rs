@@ -1,9 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use super::options::append_path_suffix;
+use super::primary::open_session_artifact_for_read;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +27,13 @@ pub struct NamedSessionClearOutcome {
     pub removed_backup: bool,
     pub removed_recovery: bool,
     pub removed_clear_marker: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedSessionDuplicateOutcome {
+    pub target: PathBuf,
+    pub bytes_copied: u64,
 }
 
 impl NamedSessionClearOutcome {
@@ -84,6 +94,75 @@ pub fn clear_named_session_non_lock_artifacts(path: &Path) -> Result<NamedSessio
         removed_backup: removed_backup || removed_backup_marker,
         removed_recovery: removed_recovery || removed_recovery_marker,
         removed_clear_marker,
+    })
+}
+
+#[allow(dead_code)]
+pub fn duplicate_named_session_primary(
+    source: &Path,
+    target: &Path,
+) -> Result<NamedSessionDuplicateOutcome> {
+    crate::session::validate_named_session_file_for_info(source)?;
+    crate::session::validate_named_session_file_for_foreground(target)?;
+    if crate::session::catalog::session_paths_match(source, target) {
+        return Err(anyhow!(
+            "Duplicate Session target must be different from the source: {}",
+            target.display()
+        ));
+    }
+
+    let mut source_file = open_session_artifact_for_read(source, true)
+        .with_context(|| format!("failed to open duplicate source {}", source.display()))?;
+    let source_metadata = source_file
+        .metadata()
+        .with_context(|| format!("failed to inspect duplicate source {}", source.display()))?;
+
+    ensure_duplicate_target_has_no_artifacts(target)?;
+
+    let mut target_file = create_duplicate_target_file(target, &source_metadata)?;
+    let copy_result = (|| {
+        let bytes_copied = io::copy(&mut source_file, &mut target_file).with_context(|| {
+            format!(
+                "failed to copy duplicate session primary {} -> {}",
+                source.display(),
+                target.display()
+            )
+        })?;
+        target_file
+            .sync_all()
+            .with_context(|| format!("failed to sync duplicate target {}", target.display()))?;
+        #[cfg(not(unix))]
+        target_file
+            .set_permissions(source_metadata.permissions())
+            .with_context(|| {
+                format!(
+                    "failed to preserve duplicate target permissions for {}",
+                    target.display()
+                )
+            })?;
+        Ok::<u64, anyhow::Error>(bytes_copied)
+    })();
+    drop(target_file);
+
+    let bytes_copied = match copy_result {
+        Ok(bytes_copied) => bytes_copied,
+        Err(err) => {
+            let _ = fs::remove_file(target);
+            return Err(err);
+        }
+    };
+
+    if let Err(err) = sync_duplicate_parent(target) {
+        log::warn!(
+            "Duplicated named session primary to {}, but syncing its parent directory failed: {}",
+            target.display(),
+            err
+        );
+    }
+
+    Ok(NamedSessionDuplicateOutcome {
+        target: target.to_path_buf(),
+        bytes_copied,
     })
 }
 
@@ -209,6 +288,67 @@ fn remove_artifact_if_exists(path: &Path) -> Result<bool> {
     }
 }
 
+fn ensure_duplicate_target_has_no_artifacts(target: &Path) -> Result<()> {
+    for path in named_session_non_lock_artifact_paths(target)? {
+        if artifact_exists(&path)? {
+            return Err(anyhow!(
+                "Duplicate Session target already has session artifacts; choose a new path: {}",
+                target.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn artifact_exists(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err)
+            .with_context(|| format!("failed to inspect session artifact {}", path.display())),
+    }
+}
+
+fn create_duplicate_target_file(target: &Path, source_metadata: &fs::Metadata) -> Result<fs::File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options
+        .mode(source_metadata.permissions().mode() & 0o777)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+
+    options.open(target).with_context(|| {
+        format!(
+            "failed to create duplicate session target {}",
+            target.display()
+        )
+    })
+}
+
+#[cfg(unix)]
+fn sync_duplicate_parent(target: &Path) -> Result<()> {
+    let Some(parent) = target.parent() else {
+        return Ok(());
+    };
+    let dir = fs::File::open(parent).with_context(|| {
+        format!(
+            "failed to open duplicate target directory {}",
+            parent.display()
+        )
+    })?;
+    dir.sync_all().with_context(|| {
+        format!(
+            "failed to sync duplicate target directory {}",
+            parent.display()
+        )
+    })
+}
+
+#[cfg(not(unix))]
+fn sync_duplicate_parent(_target: &Path) -> Result<()> {
+    Ok(())
+}
+
 #[allow(dead_code)]
 fn dedupe_paths(paths: &mut Vec<PathBuf>) {
     let mut deduped = Vec::with_capacity(paths.len());
@@ -317,5 +457,84 @@ mod tests {
             recovery_dir.is_dir(),
             "recovery directory should not be removed as a file artifact"
         );
+    }
+
+    #[test]
+    fn duplicate_named_session_primary_copies_only_primary() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let source = temp.path().join("lecture.wayscriber-session");
+        let target = temp.path().join("lecture-copy.wayscriber-session");
+        let source_artifacts = named_session_artifact_paths(&source);
+        let target_artifacts = named_session_artifact_paths(&target);
+
+        std::fs::write(&source_artifacts.primary, b"primary").unwrap();
+        std::fs::write(&source_artifacts.backup, b"backup").unwrap();
+        std::fs::write(&source_artifacts.recovery, b"recovery").unwrap();
+        std::fs::write(&source_artifacts.clear_marker, b"cleared").unwrap();
+        std::fs::write(&source_artifacts.lock, b"lock").unwrap();
+
+        let outcome = duplicate_named_session_primary(&source, &target).unwrap();
+
+        assert_eq!(outcome.target, target);
+        assert_eq!(outcome.bytes_copied, "primary".len() as u64);
+        assert_eq!(
+            std::fs::read(&target_artifacts.primary).unwrap(),
+            b"primary"
+        );
+        for path in [
+            &target_artifacts.backup,
+            &target_artifacts.recovery,
+            &target_artifacts.clear_marker,
+            &target_artifacts.lock,
+        ] {
+            assert!(
+                !path.exists(),
+                "duplicate should not create {}",
+                path.display()
+            );
+        }
+        assert!(source_artifacts.backup.exists());
+        assert!(source_artifacts.recovery.exists());
+        assert!(source_artifacts.clear_marker.exists());
+        assert!(source_artifacts.lock.exists());
+    }
+
+    #[test]
+    fn duplicate_named_session_primary_rejects_existing_target_sidecar() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let source = temp.path().join("lecture.wayscriber-session");
+        let target = temp.path().join("lecture-copy.wayscriber-session");
+        let target_artifacts = named_session_artifact_paths(&target);
+        std::fs::write(&source, b"primary").unwrap();
+        std::fs::write(&target_artifacts.backup, b"backup").unwrap();
+
+        let err = duplicate_named_session_primary(&source, &target)
+            .expect_err("target sidecar should block duplicate");
+
+        assert!(format!("{err:#}").contains("already has session artifacts"));
+        assert!(
+            !target.exists(),
+            "duplicate should not create target primary"
+        );
+        assert!(target_artifacts.backup.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn duplicate_named_session_primary_rejects_symlink_source() {
+        use std::os::unix::fs::symlink;
+
+        let temp = crate::test_temp::tempdir().unwrap();
+        let target_source = temp.path().join("real.wayscriber-session");
+        let source = temp.path().join("link.wayscriber-session");
+        let target = temp.path().join("copy.wayscriber-session");
+        std::fs::write(&target_source, b"primary").unwrap();
+        symlink(&target_source, &source).unwrap();
+
+        let err = duplicate_named_session_primary(&source, &target)
+            .expect_err("symlink source should reject duplicate");
+
+        assert!(format!("{err:#}").contains("symlink"));
+        assert!(!target.exists());
     }
 }
