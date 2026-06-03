@@ -142,6 +142,18 @@ impl SessionState {
         self.notified_failure = false;
     }
 
+    fn commit_runtime_clear(&mut self, now: Instant) {
+        self.loaded = true;
+        self.loaded_board_data = false;
+        self.dirty = false;
+        self.dirty_since = None;
+        self.last_dirty_at = None;
+        self.last_save_at = Some(now);
+        self.autosave_retry_at = None;
+        self.autosave_deferred_until = None;
+        self.notified_failure = false;
+    }
+
     pub fn mark_autosave_failure(&mut self, now: Instant, backoff: Duration) -> bool {
         self.autosave_retry_at = Some(now + backoff);
         if self.notified_failure {
@@ -273,6 +285,13 @@ pub(in crate::backend::wayland) struct RuntimeSaveAsSessionReport {
     pub saved_board_data: bool,
     pub outcome: Option<stored_session::SaveSnapshotOutcome>,
     pub written_size: Option<usize>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct RuntimeClearSessionReport {
+    pub cleared_path: PathBuf,
+    pub persisted: bool,
 }
 
 #[allow(dead_code)]
@@ -409,6 +428,45 @@ pub(in crate::backend::wayland) fn save_named_session_as_runtime(
         saved_board_data,
         outcome: Some(save_report.outcome),
         written_size: Some(save_report.written_size),
+    })
+}
+
+#[allow(dead_code)]
+pub(in crate::backend::wayland) fn clear_current_session_runtime(
+    input_state: &mut InputState,
+    session_state: &mut SessionState,
+    now: Instant,
+) -> Result<RuntimeClearSessionReport> {
+    let options = session_state
+        .options()
+        .cloned()
+        .ok_or_else(|| anyhow!("cannot clear session without active session options"))?;
+    let cleared_path = options.session_file_path();
+    let empty_snapshot = stored_session::SessionSnapshot {
+        active_board_id: input_state.board_id().to_string(),
+        boards: Vec::new(),
+        tool_state: None,
+    };
+    let report = stored_session::save_snapshot_with_report_and_clear_boundary(
+        &empty_snapshot,
+        &options,
+        true,
+    )?;
+    if report.is_none() {
+        return Err(anyhow!(
+            "current session clear did not write a durable clear boundary"
+        ));
+    }
+
+    stored_session::apply_snapshot_replacing_boards(input_state, empty_snapshot, &options)?;
+    input_state.set_session_preflight_options(Some(options));
+    let _ = input_state.take_session_dirty();
+    input_state.clear_session_dirty();
+    session_state.commit_runtime_clear(now);
+
+    Ok(RuntimeClearSessionReport {
+        cleared_path,
+        persisted: true,
     })
 }
 
@@ -1037,6 +1095,104 @@ mod tests {
                 .options()
                 .map(SessionOptions::session_file_path),
             Some(current_options.session_file_path())
+        );
+    }
+
+    #[test]
+    fn runtime_clear_persists_boundary_then_clears_live_session() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-runtime-clear");
+        stored_session::save_snapshot(&snapshot_for_board("transparent", 12), &current_options)
+            .expect("seed saved session");
+        std::fs::write(current_options.backup_file_path(), b"stale backup").expect("stale backup");
+        std::fs::write(current_options.recovery_file_path(), b"stale recovery")
+            .expect("stale recovery");
+
+        let mut input = test_input_state();
+        add_line(&mut input, 77);
+        input.mark_session_dirty();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+        session_state.mark_loaded(true);
+        session_state.record_input_dirty(Instant::now(), true);
+
+        let report = clear_current_session_runtime(&mut input, &mut session_state, Instant::now())
+            .expect("runtime clear");
+
+        assert_eq!(report.cleared_path, current_options.session_file_path());
+        assert!(report.persisted);
+        assert_eq!(input.boards.active_frame().shapes.len(), 0);
+        assert!(!input.is_session_dirty());
+        assert!(!session_state.is_dirty());
+        assert!(session_state.is_loaded());
+        assert!(!session_state.has_loaded_board_data());
+        assert!(!current_options.session_file_path().exists());
+        assert!(current_options.clear_marker_file_path().exists());
+        assert!(!current_options.backup_file_path().exists());
+        assert!(!current_options.recovery_file_path().exists());
+        assert!(matches!(
+            stored_session::load_snapshot_with_outcome(&current_options).expect("load after clear"),
+            LoadSnapshotOutcome::Empty
+        ));
+    }
+
+    #[test]
+    fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let mut current_options =
+            SessionOptions::new(temp.path().to_path_buf(), "runtime-clear-cleanup-fail");
+        current_options.persist_transparent = true;
+        std::fs::create_dir(current_options.session_file_path())
+            .expect("primary cleanup failure fixture");
+
+        let mut input = test_input_state();
+        add_line(&mut input, 83);
+        input.mark_session_dirty();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+        session_state.mark_loaded(true);
+        session_state.record_input_dirty(Instant::now(), true);
+
+        let report = clear_current_session_runtime(&mut input, &mut session_state, Instant::now())
+            .expect("runtime clear should treat durable marker as committed");
+
+        assert_eq!(report.cleared_path, current_options.session_file_path());
+        assert_eq!(input.boards.active_frame().shapes.len(), 0);
+        assert!(!input.is_session_dirty());
+        assert!(!session_state.is_dirty());
+        assert!(!session_state.has_loaded_board_data());
+        assert!(current_options.clear_marker_file_path().exists());
+        assert!(
+            current_options.session_file_path().is_dir(),
+            "stale primary cleanup can fail after the clear marker commits"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let current_options = named_options(temp.path(), "current-runtime-clear-fail");
+        let current_target = temp.path().join("current-runtime-clear-symlink-target");
+        std::fs::write(&current_target, b"preserve current target").expect("write target");
+        symlink(&current_target, current_options.session_file_path()).expect("current symlink");
+
+        let mut input = test_input_state();
+        add_line(&mut input, 91);
+        input.mark_session_dirty();
+        let mut session_state = SessionState::new(Some(current_options.clone()));
+        session_state.mark_loaded(true);
+        session_state.record_input_dirty(Instant::now(), true);
+
+        let err = clear_current_session_runtime(&mut input, &mut session_state, Instant::now())
+            .expect_err("symlink primary should abort durable clear before memory mutation");
+
+        assert!(format!("{err:#}").contains("symlink"), "{err:#}");
+        assert_eq!(input.boards.active_frame().shapes.len(), 1);
+        assert!(input.is_session_dirty());
+        assert!(session_state.is_dirty());
+        assert!(session_state.has_loaded_board_data());
+        assert_eq!(
+            std::fs::read(&current_target).expect("current target bytes"),
+            b"preserve current target"
         );
     }
 

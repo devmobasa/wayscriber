@@ -616,7 +616,7 @@ fn save_snapshot_inner(
         };
         if matches!(prepared.outcome, SaveSnapshotOutcome::ClearedEmpty) {
             write_clear_marker(options)?;
-            remove_session_file(&session_path)?;
+            remove_session_file_after_clear_marker(&session_path);
             remove_backup_file(options);
             remove_backup_recovery_marker_file(options);
             remove_recovery_files(options);
@@ -1470,20 +1470,19 @@ fn snapshot_without_history(snapshot: &SessionSnapshot) -> SessionSnapshot {
     }
 }
 
-fn remove_session_file(session_path: &Path) -> Result<()> {
-    if session_path.exists() {
-        debug!(
-            "Removing session file {} because snapshot is empty",
+fn remove_session_file_after_clear_marker(session_path: &Path) {
+    match fs::remove_file(session_path) {
+        Ok(()) => debug!(
+            "Removed session file {} after writing clear marker",
             session_path.display()
-        );
-        fs::remove_file(session_path).with_context(|| {
-            format!(
-                "failed to remove empty session file {}",
-                session_path.display()
-            )
-        })?;
+        ),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => warn!(
+            "Clear marker was written, but failed to remove stale session file {}: {}",
+            session_path.display(),
+            err
+        ),
     }
-    Ok(())
 }
 
 fn remove_recoverable_artifacts_suppressed_by_clear_marker(options: &SessionOptions) -> bool {

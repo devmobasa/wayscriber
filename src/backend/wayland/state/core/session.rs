@@ -5,7 +5,8 @@ use anyhow::Result;
 
 use super::super::*;
 use crate::backend::wayland::session::{
-    self as runtime_session, RuntimeOpenSessionReport, RuntimeSaveAsSessionReport,
+    self as runtime_session, RuntimeClearSessionReport, RuntimeOpenSessionReport,
+    RuntimeSaveAsSessionReport,
 };
 use crate::session::SaveAsOverwrite;
 
@@ -34,6 +35,17 @@ impl WaylandState {
             &mut self.session,
             target_path,
             overwrite,
+            Instant::now(),
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::backend::wayland) fn clear_current_session_runtime(
+        &mut self,
+    ) -> Result<RuntimeClearSessionReport> {
+        runtime_session::clear_current_session_runtime(
+            &mut self.input_state,
+            &mut self.session,
             Instant::now(),
         )
     }
