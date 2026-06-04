@@ -1,6 +1,7 @@
 use super::session::{
     SessionFileDialogMode, SessionFileDialogResult, choose_session_file_from, default_save_as_path,
-    ensure_save_as_extension, save_as_file_name, session_info_summary,
+    ensure_save_as_extension, forget_missing_recent_session_after_open_error, save_as_file_name,
+    session_info_summary,
 };
 use super::*;
 use crate::config::ToolbarLayoutMode;
@@ -8,7 +9,37 @@ use crate::draw::{Color, FontDescriptor};
 use crate::input::state::test_support::make_test_input_state;
 use crate::input::{EraserMode, Tool};
 use anyhow::anyhow;
+use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::MutexGuard;
+
+struct EnvGuard {
+    _guard: MutexGuard<'static, ()>,
+    xdg_data_home: Option<std::ffi::OsString>,
+}
+
+impl EnvGuard {
+    fn set_xdg_data_home(path: &Path) -> Self {
+        let guard = crate::test_env::lock();
+        let xdg_data_home = std::env::var_os("XDG_DATA_HOME");
+        unsafe {
+            std::env::set_var("XDG_DATA_HOME", path);
+        }
+        Self {
+            _guard: guard,
+            xdg_data_home,
+        }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match self.xdg_data_home.take() {
+            Some(value) => unsafe { std::env::set_var("XDG_DATA_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_DATA_HOME") },
+        }
+    }
+}
 
 fn persistence_for(event: &ToolbarEvent) -> ToolbarPersistence {
     ToolbarEventPolicy::for_event(event).persistence
@@ -284,6 +315,86 @@ fn save_as_dialog_selection_keeps_explicit_extension() {
         ensure_save_as_extension(PathBuf::from("/tmp/lecture.session")),
         PathBuf::from("/tmp/lecture.session")
     );
+}
+
+#[test]
+fn missing_recent_open_error_forgets_catalog_entry() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let missing = temp.path().join("missing.wayscriber-session");
+    crate::session::catalog::upsert_session_event(
+        &missing,
+        crate::session::catalog::CatalogEvent::Opened,
+    )
+    .expect("catalog stale recent");
+
+    let err = crate::session::validate_named_session_file_for_open(&missing)
+        .expect_err("missing session should fail open validation");
+
+    assert!(forget_missing_recent_session_after_open_error(
+        &missing, &err
+    ));
+    assert!(
+        crate::session::catalog::recent_sessions()
+            .expect("recent sessions")
+            .is_empty(),
+        "missing Open Recent target should be removed from catalog"
+    );
+    assert!(
+        !missing.exists(),
+        "forgetting a stale recent must not create or delete session artifacts"
+    );
+}
+
+#[test]
+fn missing_recent_parent_open_error_forgets_catalog_entry() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let deleted_parent = temp.path().join("deleted-parent");
+    fs::create_dir(&deleted_parent).expect("deleted parent");
+    let missing = deleted_parent.join("missing.wayscriber-session");
+    crate::session::catalog::upsert_session_event(
+        &missing,
+        crate::session::catalog::CatalogEvent::Opened,
+    )
+    .expect("catalog stale recent");
+    fs::remove_dir(&deleted_parent).expect("remove stale parent");
+
+    let err = crate::session::validate_named_session_file_for_open(&missing)
+        .expect_err("missing parent should fail open validation");
+
+    assert!(forget_missing_recent_session_after_open_error(
+        &missing, &err
+    ));
+    assert!(
+        crate::session::catalog::recent_sessions()
+            .expect("recent sessions")
+            .is_empty(),
+        "Open Recent target with a removed parent should be removed from catalog"
+    );
+}
+
+#[test]
+fn non_missing_recent_open_error_keeps_catalog_entry() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let directory = temp.path().join("directory.wayscriber-session");
+    fs::create_dir(&directory).expect("directory-shaped session target");
+    crate::session::catalog::upsert_session_event(
+        &directory,
+        crate::session::catalog::CatalogEvent::Opened,
+    )
+    .expect("catalog non-regular recent");
+
+    let err = crate::session::validate_named_session_file_for_open(&directory)
+        .expect_err("directory session should fail open validation");
+
+    assert!(!forget_missing_recent_session_after_open_error(
+        &directory, &err
+    ));
+    let recents = crate::session::catalog::recent_sessions().expect("recent sessions");
+    assert_eq!(recents.len(), 1);
+    assert_eq!(PathBuf::from(&recents[0].path), directory);
 }
 
 fn inspection_for_summary(path: &str) -> crate::session::SessionInspection {

@@ -1,6 +1,6 @@
 use super::*;
 use crate::session::catalog;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Error as AnyhowError, Result, anyhow};
 use std::path::{Path, PathBuf};
 use wayland_client::{Connection, QueueHandle};
 
@@ -247,6 +247,11 @@ impl WaylandState {
                 "Opened session {}",
                 session_display_name(&report.opened_path)
             )),
+            Err(err) if forget_missing_recent_session_after_open_error(path, &err) => self
+                .set_session_toolbar_error(format!(
+                    "Session file missing; removed from recent sessions: {}",
+                    session_display_name(path)
+                )),
             Err(err) => self.set_session_toolbar_error(format!("Open session failed: {err:#}")),
         }
     }
@@ -387,4 +392,40 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
         self.refresh_keyboard_interactivity();
     }
+}
+
+pub(super) fn forget_missing_recent_session_after_open_error(
+    path: &Path,
+    err: &AnyhowError,
+) -> bool {
+    if !missing_session_error_matches_path(path, err) {
+        return false;
+    }
+
+    match catalog::forget_session_by_path(path) {
+        Ok(true) => true,
+        Ok(false) => {
+            log::warn!(
+                "Open recent session target is missing but no catalog entry matched {}",
+                path.display()
+            );
+            false
+        }
+        Err(catalog_err) => {
+            log::warn!(
+                "Failed to remove missing recent session {} from catalog: {}",
+                path.display(),
+                catalog_err
+            );
+            false
+        }
+    }
+}
+
+fn missing_session_error_matches_path(path: &Path, err: &AnyhowError) -> bool {
+    err.downcast_ref::<crate::session::MissingNamedSessionFile>()
+        .is_some_and(|missing| catalog::session_paths_match(missing.path(), path))
+        || err
+            .downcast_ref::<crate::session::MissingNamedSessionParent>()
+            .is_some_and(|missing| catalog::session_paths_match(missing.path(), path))
 }

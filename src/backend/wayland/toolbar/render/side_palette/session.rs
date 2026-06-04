@@ -7,15 +7,22 @@ use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
 use crate::toolbar_icons;
 use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::model::{ToolbarSessionButton, ToolbarSessionModel};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
 
 use super::super::widgets::constants::{
-    COLOR_TEXT_DISABLED, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color,
+    COLOR_TEXT_DISABLED, COLOR_TEXT_PRIMARY, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color,
 };
 use super::super::widgets::{
     draw_button, draw_destructive_button, draw_group_card, draw_label_center, draw_section_label,
     point_in_rect, set_icon_color,
 };
+
+const SESSION_BUTTON_ICON_SIZE: f64 = 12.0;
+const SESSION_BUTTON_ICON_GAP: f64 = 4.0;
+const SESSION_BUTTON_ICON_LABEL_SIZE: f64 = 11.0;
+const SESSION_RECENT_ICON_SIZE: f64 = 13.0;
+const SESSION_RECENT_ICON_GAP: f64 = 6.0;
+const SESSION_RECENT_PADDING_X: f64 = 7.0;
 
 pub(super) fn draw_session_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let Some(model) = ToolbarSessionModel::from_snapshot(layout.snapshot) else {
@@ -105,6 +112,14 @@ fn draw_session_buttons(
     let button_h = ToolbarLayoutSpec::SIDE_SESSION_BUTTON_HEIGHT;
     let columns = model.button_columns();
     let button_w = row_item_width(layout.content_width, columns, button_gap);
+    let button_label_style = if layout.snapshot.use_icons {
+        UiTextStyle {
+            size: SESSION_BUTTON_ICON_LABEL_SIZE,
+            ..label_style
+        }
+    } else {
+        label_style
+    };
     let grid = grid_layout(
         layout.x,
         y,
@@ -116,7 +131,15 @@ fn draw_session_buttons(
         model.buttons.len(),
     );
     for (item, button) in grid.items.iter().zip(model.buttons.iter()) {
-        draw_session_button(layout, button, item.x, item.y, item.w, item.h, label_style);
+        draw_session_button(
+            layout,
+            button,
+            item.x,
+            item.y,
+            item.w,
+            item.h,
+            button_label_style,
+        );
     }
     grid.height
 }
@@ -196,32 +219,7 @@ fn draw_session_button(
     }
 
     if layout.snapshot.use_icons {
-        if button.enabled {
-            set_icon_color(layout.ctx, hover);
-        } else {
-            set_color(layout.ctx, COLOR_TEXT_DISABLED);
-        }
-        let icon_size = 15.0;
-        let icon_x = x + (w - icon_size) / 2.0;
-        let icon_y = y + (h - icon_size) / 2.0;
-        match button.event {
-            ToolbarEvent::OpenSession => {
-                toolbar_icons::draw_icon_file(layout.ctx, icon_x, icon_y, icon_size)
-            }
-            ToolbarEvent::SaveSessionAs => {
-                toolbar_icons::draw_icon_save(layout.ctx, icon_x, icon_y, icon_size)
-            }
-            ToolbarEvent::SessionInfo => {
-                toolbar_icons::draw_icon_info(layout.ctx, icon_x, icon_y, icon_size)
-            }
-            ToolbarEvent::ClearSession => {
-                toolbar_icons::draw_icon_clear(layout.ctx, icon_x, icon_y, icon_size)
-            }
-            ToolbarEvent::OpenConfigurator => {
-                toolbar_icons::draw_icon_settings(layout.ctx, icon_x, icon_y, icon_size)
-            }
-            _ => {}
-        }
+        draw_session_button_icon_label(layout, button, x, y, w, h, label_style, hover);
     } else {
         draw_label_center(layout.ctx, label_style, x, y, w, h, button.label);
     }
@@ -233,6 +231,56 @@ fn draw_session_button(
             kind: HitKind::Click,
             tooltip: Some(button.label.to_string()),
         });
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_session_button_icon_label(
+    layout: &SidePaletteLayout,
+    button: &ToolbarSessionButton,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label_style: UiTextStyle<'static>,
+    hover: bool,
+) {
+    let Some(icon) = session_button_icon(&button.event) else {
+        return;
+    };
+
+    let label_layout = text_layout(layout.ctx, label_style, button.label, None);
+    let label_ext = label_layout.ink_extents();
+    let group_w = SESSION_BUTTON_ICON_SIZE + SESSION_BUTTON_ICON_GAP + label_ext.width();
+    let group_x = (x + (w - group_w) / 2.0).max(x + 3.0);
+    let icon_y = y + (h - SESSION_BUTTON_ICON_SIZE) / 2.0;
+    let label_x =
+        group_x + SESSION_BUTTON_ICON_SIZE + SESSION_BUTTON_ICON_GAP - label_ext.x_bearing();
+    let label_y = y + (h - label_ext.height()) / 2.0 - label_ext.y_bearing();
+
+    if button.enabled {
+        set_icon_color(layout.ctx, hover);
+    } else {
+        set_color(layout.ctx, COLOR_TEXT_DISABLED);
+    }
+    icon(layout.ctx, group_x, icon_y, SESSION_BUTTON_ICON_SIZE);
+
+    if button.enabled {
+        set_color(layout.ctx, COLOR_TEXT_PRIMARY);
+    } else {
+        set_color(layout.ctx, COLOR_TEXT_DISABLED);
+    }
+    label_layout.show_at_baseline(layout.ctx, label_x, label_y);
+}
+
+fn session_button_icon(event: &ToolbarEvent) -> Option<fn(&cairo::Context, f64, f64, f64)> {
+    match event {
+        ToolbarEvent::OpenSession => Some(toolbar_icons::draw_icon_file),
+        ToolbarEvent::SaveSessionAs => Some(toolbar_icons::draw_icon_save),
+        ToolbarEvent::SessionInfo => Some(toolbar_icons::draw_icon_info),
+        ToolbarEvent::ClearSession => Some(toolbar_icons::draw_icon_clear),
+        ToolbarEvent::OpenConfigurator => Some(toolbar_icons::draw_icon_settings),
+        _ => None,
     }
 }
 
@@ -265,11 +313,17 @@ fn draw_recent_sessions(
             false,
             hover,
         );
+        set_icon_color(layout.ctx, hover);
+        let icon_x = layout.x + SESSION_RECENT_PADDING_X;
+        let icon_y =
+            y + (ToolbarLayoutSpec::SIDE_SESSION_RECENT_HEIGHT - SESSION_RECENT_ICON_SIZE) / 2.0;
+        toolbar_icons::draw_icon_file(layout.ctx, icon_x, icon_y, SESSION_RECENT_ICON_SIZE);
+        set_color(layout.ctx, COLOR_TEXT_PRIMARY);
         draw_text_baseline(
             layout.ctx,
             label_style,
-            &truncate_label(&recent.label, 28),
-            layout.x + 7.0,
+            &truncate_label(&recent.label, 24),
+            icon_x + SESSION_RECENT_ICON_SIZE + SESSION_RECENT_ICON_GAP,
             y + 14.0,
             None,
         );

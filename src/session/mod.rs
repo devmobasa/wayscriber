@@ -24,10 +24,11 @@ pub use lock::try_lock_exclusive;
 pub(crate) use options::append_path_suffix;
 #[allow(unused_imports)]
 pub use options::{
-    CompressionMode, DEFAULT_AUTO_COMPRESS_THRESHOLD_BYTES, SessionOptions, SessionTarget,
-    normalize_named_session_file_arg, options_from_config, options_from_config_for_named_file,
-    validate_named_session_file_for_clear, validate_named_session_file_for_foreground,
-    validate_named_session_file_for_info, validate_named_session_file_for_open,
+    CompressionMode, DEFAULT_AUTO_COMPRESS_THRESHOLD_BYTES, MissingNamedSessionFile,
+    MissingNamedSessionParent, SessionOptions, SessionTarget, normalize_named_session_file_arg,
+    options_from_config, options_from_config_for_named_file, validate_named_session_file_for_clear,
+    validate_named_session_file_for_foreground, validate_named_session_file_for_info,
+    validate_named_session_file_for_open,
 };
 #[allow(unused_imports)]
 pub use snapshot::{

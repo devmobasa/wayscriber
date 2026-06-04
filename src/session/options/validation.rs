@@ -1,3 +1,5 @@
+use std::error::Error;
+use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -14,6 +16,66 @@ use super::super::primary::{
 use super::types::session_file_parent_dir;
 
 static NEXT_WRITE_PROBE_ID: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug)]
+pub struct MissingNamedSessionFile {
+    path: PathBuf,
+}
+
+impl MissingNamedSessionFile {
+    fn new(path: &Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl fmt::Display for MissingNamedSessionFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "named session file does not exist: {}",
+            self.path.display()
+        )
+    }
+}
+
+impl Error for MissingNamedSessionFile {}
+
+#[derive(Debug)]
+pub struct MissingNamedSessionParent {
+    path: PathBuf,
+    parent: PathBuf,
+}
+
+impl MissingNamedSessionParent {
+    fn new(path: &Path, parent: &Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            parent: parent.to_path_buf(),
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl fmt::Display for MissingNamedSessionParent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "named session parent directory does not exist: {}",
+            self.parent.display()
+        )
+    }
+}
+
+impl Error for MissingNamedSessionParent {}
 
 pub fn normalize_named_session_file_arg(raw: &str) -> std::path::PathBuf {
     expand_tilde(raw)
@@ -48,10 +110,7 @@ pub fn validate_named_session_file_for_open(path: &Path) -> Result<()> {
     let parent = require_existing_parent_dir(path)?;
 
     match inspect_named_primary_target(path)? {
-        PrimaryTargetState::Missing => Err(anyhow!(
-            "named session file does not exist: {}",
-            path.display()
-        )),
+        PrimaryTargetState::Missing => Err(MissingNamedSessionFile::new(path).into()),
         PrimaryTargetState::Present {
             kind: PrimaryTargetKind::Regular,
             ..
@@ -92,10 +151,7 @@ fn require_existing_parent_dir(path: &Path) -> Result<PathBuf> {
     let parent_metadata = match fs::metadata(&parent) {
         Ok(metadata) => metadata,
         Err(err) if err.kind() == ErrorKind::NotFound => {
-            return Err(anyhow!(
-                "named session parent directory does not exist: {}",
-                parent.display()
-            ));
+            return Err(MissingNamedSessionParent::new(path, &parent).into());
         }
         Err(err) => {
             return Err(err).with_context(|| {
