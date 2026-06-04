@@ -5,17 +5,17 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::model::toolbar_pages_model;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
+use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -36,14 +36,20 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
 
     let pages_card_h = layout.spec.side_pages_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, pages_card_h);
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Pages",
+        ToolbarSideSection::Pages,
+        ToolbarSideSection::Pages.label(),
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
     );
+    if snapshot.side_section_collapsed(ToolbarSideSection::Pages) {
+        *y += pages_card_h + section_gap;
+        return;
+    }
 
+    let hits = &mut layout.hits;
     let pages_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let btn_h = if use_icons {
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON

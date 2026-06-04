@@ -5,17 +5,17 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::{capped_grid_columns, grid_layout, row_item_width};
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::model::toolbar_boards_model;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
+use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -39,7 +39,14 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
 
     // Section label with keybinding hint
     let label_y = *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL;
-    draw_section_label(ctx, label_style, x, label_y, "Boards");
+    draw_collapsible_header(
+        layout,
+        *y,
+        label_style,
+        ToolbarSideSection::Boards,
+        ToolbarSideSection::Boards.label(),
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+    );
 
     // Draw keybinding hint for board picker (right-aligned)
     if let Some(binding) = snapshot
@@ -54,11 +61,17 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         };
         let hint_layout = crate::ui_text::text_layout(ctx, hint_style, binding, None);
         let hint_width = hint_layout.ink_extents().width();
-        let hint_x = x + content_width - hint_width - 4.0;
+        let chevron_reserve = ToolbarLayoutSpec::SIDE_COLLAPSE_CHEVRON_SIZE + 10.0;
+        let hint_x = x + content_width - hint_width - chevron_reserve;
         ctx.set_source_rgba(0.55, 0.58, 0.65, 0.9);
         hint_layout.show_at_baseline(ctx, hint_x, label_y);
     }
+    if snapshot.side_section_collapsed(ToolbarSideSection::Boards) {
+        *y += boards_card_h + section_gap;
+        return;
+    }
 
+    let hits = &mut layout.hits;
     let boards_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let btn_h = if use_icons {
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON

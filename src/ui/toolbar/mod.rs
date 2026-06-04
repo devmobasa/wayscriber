@@ -6,7 +6,7 @@ pub(crate) mod model;
 pub mod snapshot;
 
 pub use bindings::ToolbarBindingHints;
-pub use events::ToolbarEvent;
+pub use events::{ToolbarEvent, ToolbarSideSection};
 #[allow(unused_imports)]
 pub use snapshot::{
     PresetFeedbackSnapshot, PresetSlotSnapshot, SessionRecentSnapshot, ToolContext,

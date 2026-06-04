@@ -5,16 +5,16 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::row_item_width;
 use crate::toolbar_icons;
-use crate::ui::toolbar::ToolbarEvent;
 use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model::{
     ToolbarActionsModel, ToolbarButtonModel, ToolbarCommandGroup, ToolbarCommandGroupKind,
 };
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::draw_group_card;
-use super::super::widgets::draw_section_label;
+use super::section_header::draw_collapsible_header;
 use helpers::{
     ActionButton, ActionIconFn, IconActionLayout, TextActionLayout, render_icon_action_group,
     render_text_action_group,
@@ -23,7 +23,6 @@ use helpers::{
 pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -44,14 +43,20 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 
     let actions_card_h = layout.spec.side_actions_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, actions_card_h);
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Actions",
+        ToolbarSideSection::Actions,
+        ToolbarSideSection::Actions.label(),
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
     );
+    if snapshot.side_section_collapsed(ToolbarSideSection::Actions) {
+        *y += actions_card_h + section_gap;
+        return;
+    }
 
+    let hits = &mut layout.hits;
     let actions_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
 
     if use_icons {

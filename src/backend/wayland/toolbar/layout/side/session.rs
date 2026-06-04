@@ -2,6 +2,7 @@ use super::{HitKind, HitRegion, SideLayoutContext};
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
+use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui::toolbar::model::ToolbarSessionModel;
 
 pub(super) fn push_session_hits(
@@ -14,6 +15,14 @@ pub(super) fn push_session_hits(
     };
 
     let card_h = ctx.spec.side_session_height(ctx.snapshot);
+    super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Session, hits);
+    if ctx
+        .snapshot
+        .side_section_collapsed(ToolbarSideSection::Session)
+    {
+        return y + card_h + ctx.section_gap;
+    }
+
     let mut row_y = y
         + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y
         + ToolbarLayoutSpec::SIDE_SESSION_META_HEIGHT

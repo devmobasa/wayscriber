@@ -171,6 +171,7 @@ impl ToolbarSnapshot {
             show_text_controls: state.show_text_controls,
             context_aware_ui: state.context_aware_ui,
             show_settings_section,
+            collapsed_side_sections: state.toolbar_collapsed_side_sections.clone(),
             show_tool_preview: state.show_tool_preview,
             show_status_bar: state.show_status_bar,
             show_status_board_badge: state.show_status_board_badge,

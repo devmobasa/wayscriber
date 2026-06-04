@@ -1,5 +1,6 @@
 use super::{HitKind, HitRegion, SideLayoutContext, ToolbarLayoutSpec, format_binding_label};
 use crate::backend::wayland::toolbar::rows::{capped_grid_columns, grid_layout, row_item_width};
+use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui::toolbar::model::toolbar_boards_model;
 
 pub(super) fn push_boards_hits(
@@ -12,6 +13,14 @@ pub(super) fn push_boards_hits(
     };
 
     let boards_card_h = ctx.spec.side_boards_height(ctx.snapshot);
+    super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Boards, hits);
+    if ctx
+        .snapshot
+        .side_section_collapsed(ToolbarSideSection::Boards)
+    {
+        return y + boards_card_h + ctx.section_gap;
+    }
+
     let boards_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let btn_h = if ctx.use_icons {
         ToolbarLayoutSpec::SIDE_ACTION_BUTTON_HEIGHT_ICON

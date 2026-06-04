@@ -7,6 +7,7 @@ mod header;
 mod marker;
 mod pages;
 mod presets;
+mod section_header;
 mod session;
 mod settings;
 mod step;
@@ -94,7 +95,7 @@ pub fn render_side_palette(
 
     // Color section: only show when the tool needs color
     let colors_info = if tool_context.needs_color {
-        Some(colors::draw_colors_section(&mut layout, &mut y))
+        colors::draw_colors_section(&mut layout, &mut y)
     } else {
         None
     };

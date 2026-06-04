@@ -8,6 +8,7 @@ use crate::config::ToolbarLayoutMode;
 use crate::draw::{Color, FontDescriptor};
 use crate::input::state::test_support::make_test_input_state;
 use crate::input::{EraserMode, Tool};
+use crate::ui::toolbar::ToolbarSideSection;
 use anyhow::anyhow;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -77,6 +78,7 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
         ToolbarEvent::SaveSessionAsCancel,
         ToolbarEvent::SessionInfo,
         ToolbarEvent::ClearSession,
+        ToolbarEvent::ToggleSideSectionCollapsed(ToolbarSideSection::Session, true),
     ];
 
     for event in events {

@@ -6,6 +6,49 @@ use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
 
 use super::ToolbarSnapshot;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ToolbarSideSection {
+    Colors,
+    Presets,
+    Thickness,
+    EraserMode,
+    PolygonSides,
+    ArrowLabels,
+    StepMarkers,
+    MarkerOpacity,
+    TextSize,
+    Font,
+    Actions,
+    Boards,
+    Pages,
+    StepUndo,
+    Session,
+    Settings,
+}
+
+impl ToolbarSideSection {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Colors => "Colors",
+            Self::Presets => "Presets",
+            Self::Thickness => "Thickness",
+            Self::EraserMode => "Eraser mode",
+            Self::PolygonSides => "Sides",
+            Self::ArrowLabels => "Arrow labels",
+            Self::StepMarkers => "Step markers",
+            Self::MarkerOpacity => "Marker opacity",
+            Self::TextSize => "Text size",
+            Self::Font => "Font",
+            Self::Actions => "Actions",
+            Self::Boards => "Boards",
+            Self::Pages => "Pages",
+            Self::StepUndo => "Step Undo/Redo",
+            Self::Session => "Session",
+            Self::Settings => "Settings",
+        }
+    }
+}
+
 /// Events emitted by the floating toolbar UI.
 #[derive(Debug, Clone)]
 pub enum ToolbarEvent {
@@ -133,6 +176,8 @@ pub enum ToolbarEvent {
     ToggleDrawer(bool),
     /// Switch the active drawer tab
     SetDrawerTab(ToolbarDrawerTab),
+    /// Collapse/expand a section in the side drawer
+    ToggleSideSectionCollapsed(ToolbarSideSection, bool),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),
     /// Toggle the simple-mode shape picker

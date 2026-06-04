@@ -131,6 +131,9 @@ impl InputState {
             }
             ToolbarEvent::ToggleDrawer(open) => self.apply_toolbar_toggle_drawer(open),
             ToolbarEvent::SetDrawerTab(tab) => self.apply_toolbar_set_drawer_tab(tab),
+            ToolbarEvent::ToggleSideSectionCollapsed(section, collapsed) => {
+                self.apply_toolbar_toggle_side_section_collapsed(section, collapsed)
+            }
             ToolbarEvent::SetToolbarLayoutMode(mode) => self.apply_toolbar_set_layout_mode(mode),
             ToolbarEvent::ToggleShapePicker(open) => self.apply_toolbar_toggle_shape_picker(open),
             ToolbarEvent::ApplyPreset(slot) => self.apply_toolbar_apply_preset(slot),

@@ -6,13 +6,14 @@ use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
-use crate::ui::toolbar::{ToolContext, ToolbarEvent};
+use crate::ui::toolbar::{ToolContext, ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::{UiTextStyle, text_layout};
+
+use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -36,29 +37,32 @@ pub(super) fn draw_arrow_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         return;
     }
 
-    let card_h = if snapshot.arrow_label_enabled {
-        ToolbarLayoutSpec::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET
-    } else {
-        ToolbarLayoutSpec::SIDE_TOGGLE_CARD_HEIGHT
-    };
+    let card_h = layout.spec.side_arrow_labels_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, card_h);
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+        ToolbarSideSection::ArrowLabels,
         "Arrow labels",
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
     );
     if snapshot.arrow_label_enabled {
         let hint = format!("Next: {}", snapshot.arrow_label_next);
         let layout = text_layout(ctx, hint_style, &hint, None);
         let ext = layout.ink_extents();
-        let hint_x = card_x + card_w - ext.width() - 8.0 - ext.x_bearing();
+        let chevron_reserve = ToolbarLayoutSpec::SIDE_COLLAPSE_CHEVRON_SIZE + 10.0;
+        let hint_x = card_x + card_w - ext.width() - chevron_reserve - ext.x_bearing();
         let hint_y = *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL;
         set_color(ctx, COLOR_LABEL_HINT);
         layout.show_at_baseline(ctx, hint_x, hint_y);
     }
+    if snapshot.side_section_collapsed(ToolbarSideSection::ArrowLabels) {
+        *y += card_h + section_gap;
+        return;
+    }
 
+    let hits = &mut layout.hits;
     let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
     let toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let toggle_hover = hover

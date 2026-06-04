@@ -1,8 +1,9 @@
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
+use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui_text::{UiTextStyle, text_layout};
 
 use super::super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
-use super::super::super::widgets::draw_section_label;
+use super::super::section_header::draw_collapsible_header;
 use super::SidePaletteLayout;
 
 pub(super) fn draw_presets_header(
@@ -14,7 +15,6 @@ pub(super) fn draw_presets_header(
 ) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let x = layout.x;
     let label_style = UiTextStyle {
         family: FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
@@ -22,12 +22,13 @@ pub(super) fn draw_presets_header(
         size: FONT_SIZE_LABEL,
     };
 
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        section_y,
         label_style,
-        x,
-        section_y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
-        "Presets",
+        ToolbarSideSection::Presets,
+        ToolbarSideSection::Presets.label(),
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
     );
 
     let apply_hint = {
@@ -54,7 +55,8 @@ pub(super) fn draw_presets_header(
         };
         let layout = text_layout(ctx, hint_style, &hint, None);
         let ext = layout.ink_extents();
-        let hint_x = card_x + card_w - ext.width() - 8.0 - ext.x_bearing();
+        let chevron_reserve = ToolbarLayoutSpec::SIDE_COLLAPSE_CHEVRON_SIZE + 10.0;
+        let hint_x = card_x + card_w - ext.width() - chevron_reserve - ext.x_bearing();
         let hint_y = section_y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y;
         ctx.set_source_rgba(0.7, 0.7, 0.75, 0.8);
         layout.show_at_baseline(ctx, hint_x, hint_y);
