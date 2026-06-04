@@ -806,6 +806,7 @@ wayscriber --session-info --session-file ~/Documents/lecture-04.wayscriber-sessi
 Notes:
 - When `restore_tool_state` is enabled (default), the last-used tool settings (including arrow head placement) override config defaults on startup. Disable it in the Session tab or clear the session to force config values.
 - `--session-file` uses exactly the selected file, implies persistence for that overlay run, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
+- The configurator Session tab can manage recent named sessions: rename catalog labels, reveal files, and forget metadata. When no overlay/background service is active, it can duplicate a session by copying its primary file, move inactive session files, and clear saved data.
 
 ### Tablet/Stylus Support
 
