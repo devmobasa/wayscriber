@@ -3,6 +3,7 @@ use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
 use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
+use std::path::PathBuf;
 
 use super::super::bindings::ToolbarBindingHints;
 
@@ -203,6 +204,13 @@ pub struct PresetFeedbackSnapshot {
     pub progress: f32,
 }
 
+/// Snapshot of a recent session entry for toolbar display.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionRecentSnapshot {
+    pub display_name: String,
+    pub path: PathBuf,
+}
+
 /// Snapshot of state mirrored to the toolbar UI.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolbarSnapshot {
@@ -314,4 +322,12 @@ pub struct ToolbarSnapshot {
     pub is_transparent: bool,
     /// Changes whenever final-render color profile preview changes.
     pub render_profile_generation: u64,
+    /// Active persisted session name, if persistence is active.
+    pub active_session_name: Option<String>,
+    /// Active persisted session path, if persistence is active.
+    pub active_session_path: Option<PathBuf>,
+    /// Recent persisted sessions from the catalog.
+    pub recent_sessions: Vec<SessionRecentSnapshot>,
+    /// Save Session As target waiting for explicit overwrite confirmation.
+    pub pending_save_as_overwrite_path: Option<PathBuf>,
 }

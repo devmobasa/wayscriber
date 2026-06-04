@@ -22,6 +22,8 @@ mod render_profiles;
 mod session;
 mod session_override;
 #[cfg(test)]
+mod test_env;
+#[cfg(test)]
 mod test_temp;
 mod time_utils;
 mod toolbar_icons;

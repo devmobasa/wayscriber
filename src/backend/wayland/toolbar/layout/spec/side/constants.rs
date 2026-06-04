@@ -91,4 +91,9 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_FOOTER_PADDING: f64 = 10.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SETTINGS_BUTTON_HEIGHT: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SETTINGS_BUTTON_GAP: f64 = 6.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_META_HEIGHT: f64 = 34.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_CONFIRM_LABEL_HEIGHT: f64 = 17.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_BUTTON_HEIGHT: f64 = 24.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_RECENT_HEIGHT: f64 = 22.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_ROW_GAP: f64 = 5.0;
 }

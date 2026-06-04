@@ -7,6 +7,7 @@ mod header;
 mod marker;
 mod pages;
 mod presets;
+mod session;
 mod settings;
 mod step;
 mod step_marker;
@@ -135,6 +136,7 @@ pub fn render_side_palette(
     boards::draw_boards_section(&mut layout, &mut y);
     pages::draw_pages_section(&mut layout, &mut y);
     step::draw_step_section(&mut layout, &mut y);
+    session::draw_session_section(&mut layout, &mut y);
     settings::draw_settings_section(&mut layout, &mut y);
 
     draw_tooltip_with_delay(

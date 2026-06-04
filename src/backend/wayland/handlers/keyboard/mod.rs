@@ -93,8 +93,8 @@ impl KeyboardHandler for WaylandState {
 
     fn press_key(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
@@ -160,7 +160,7 @@ impl KeyboardHandler for WaylandState {
         }
         debug!("Key pressed: {:?}", key);
         if should_try_toolbar_key(key, self.input_state.command_palette_open)
-            && self.handle_toolbar_key(key)
+            && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
             return;
         }
@@ -208,8 +208,8 @@ impl KeyboardHandler for WaylandState {
 
     fn repeat_key(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
         _keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
         event: KeyEvent,
@@ -255,7 +255,7 @@ impl KeyboardHandler for WaylandState {
             }
         }
         if should_try_toolbar_key(key, self.input_state.command_palette_open)
-            && self.handle_toolbar_key(key)
+            && self.handle_toolbar_key(key, Some(conn), Some(qh))
         {
             return;
         }

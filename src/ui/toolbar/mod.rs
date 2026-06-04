@@ -9,5 +9,6 @@ pub use bindings::ToolbarBindingHints;
 pub use events::ToolbarEvent;
 #[allow(unused_imports)]
 pub use snapshot::{
-    PresetFeedbackSnapshot, PresetSlotSnapshot, ToolContext, ToolOptionsKind, ToolbarSnapshot,
+    PresetFeedbackSnapshot, PresetSlotSnapshot, SessionRecentSnapshot, ToolContext,
+    ToolOptionsKind, ToolbarSnapshot,
 };

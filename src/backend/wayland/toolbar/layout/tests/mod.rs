@@ -3,8 +3,12 @@ use super::*;
 use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{ClickHighlightSettings, EraserMode, InputState, ToolbarDrawerTab};
-use crate::ui::toolbar::model::{ToolbarActivation, ToolbarSettingsModel, ToolbarSliderSpec};
-use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
+use crate::ui::toolbar::model::{
+    ToolbarActivation, ToolbarSessionModel, ToolbarSettingsModel, ToolbarSliderSpec,
+};
+use crate::ui::toolbar::{
+    SessionRecentSnapshot, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot,
+};
 
 fn create_test_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
@@ -249,6 +253,91 @@ fn side_settings_static_hits_include_model_controls() {
         );
     }
     assert!(hit_events.contains(&"ToggleContextAwareUi(false)".to_string()));
+}
+
+#[test]
+fn side_session_static_hits_include_model_controls_and_recents() {
+    let mut state = create_test_input_state();
+    state.toolbar_drawer_open = true;
+    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    let mut snapshot = snapshot_from_state(&state);
+    snapshot.active_session_path =
+        Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
+    snapshot.active_session_name = Some("current.wayscriber-session".to_string());
+    snapshot.recent_sessions = vec![SessionRecentSnapshot {
+        display_name: "recent.wayscriber-session".to_string(),
+        path: std::path::PathBuf::from("/tmp/recent.wayscriber-session"),
+    }];
+    let model = ToolbarSessionModel::from_snapshot(&snapshot).expect("session model");
+
+    let (w, h) = side_size(&snapshot);
+    let mut hits = Vec::new();
+    build_side_hits(w as f64, h as f64, &snapshot, &mut hits);
+    let hit_events: Vec<_> = hits.iter().map(|hit| event_name(&hit.event)).collect();
+
+    for button in &model.buttons {
+        assert!(
+            hit_events.contains(&event_name(&button.event)),
+            "missing session button hit {:?}",
+            button.event
+        );
+    }
+    assert!(hit_events.iter().any(|event| {
+        event.contains("OpenRecentSession") && event.contains("recent.wayscriber-session")
+    }));
+}
+
+#[test]
+fn side_session_overwrite_confirmation_hits_replace_action_buttons() {
+    let mut state = create_test_input_state();
+    state.toolbar_drawer_open = true;
+    state.toolbar_drawer_tab = ToolbarDrawerTab::App;
+    let mut snapshot = snapshot_from_state(&state);
+    let target = std::path::PathBuf::from("/tmp/existing.wayscriber-session");
+    snapshot.active_session_path =
+        Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
+    snapshot.active_session_name = Some("current.wayscriber-session".to_string());
+    snapshot.pending_save_as_overwrite_path = Some(target.clone());
+
+    let (w, h) = side_size(&snapshot);
+    let mut static_hits = Vec::new();
+    build_side_hits(w as f64, h as f64, &snapshot, &mut static_hits);
+    assert_session_overwrite_confirmation_hits(&static_hits, &target);
+
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).unwrap();
+    let ctx = cairo::Context::new(&surface).unwrap();
+    let mut rendered_hits = Vec::new();
+    crate::backend::wayland::toolbar::render_side_palette(
+        &ctx,
+        w as f64,
+        h as f64,
+        &snapshot,
+        &mut rendered_hits,
+        None,
+        None,
+    )
+    .unwrap();
+    assert_session_overwrite_confirmation_hits(&rendered_hits, &target);
+}
+
+fn assert_session_overwrite_confirmation_hits(
+    hits: &[crate::backend::wayland::toolbar::hit::HitRegion],
+    target: &std::path::Path,
+) {
+    assert!(hits.iter().any(|hit| matches!(
+        &hit.event,
+        ToolbarEvent::SaveSessionAsConfirm(path) if path == target
+    )));
+    assert!(
+        hits.iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SaveSessionAsCancel))
+    );
+    assert!(
+        !hits
+            .iter()
+            .any(|hit| matches!(hit.event, ToolbarEvent::SaveSessionAs)),
+        "pending overwrite prompt should replace the Save As action grid"
+    );
 }
 
 #[test]

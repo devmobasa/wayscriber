@@ -1,7 +1,8 @@
 use super::compression::is_gzip;
 use super::load::{
-    LoadSnapshotOutcome, load_snapshot_inner, load_snapshot_inner_with_expanded_limit,
-    load_snapshot_with_expanded_limit,
+    LoadSnapshotOutcome, load_named_session_candidate,
+    load_named_session_candidate_with_expanded_limit, load_snapshot_inner,
+    load_snapshot_inner_with_expanded_limit, load_snapshot_with_expanded_limit,
 };
 use super::save::{
     save_snapshot_with_expanded_limit, save_snapshot_with_report_and_clear_boundary,
@@ -19,6 +20,11 @@ use crate::test_temp::tempdir;
 use crate::time_utils::now_rfc3339;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
+#[cfg(unix)]
+use std::{
+    ffi::CString,
+    os::unix::{ffi::OsStrExt, fs::symlink},
+};
 
 fn sample_frame() -> Frame {
     let mut frame = Frame::new();
@@ -101,12 +107,50 @@ fn contentless_session_file() -> SessionFile {
     }
 }
 
+fn sample_session_file() -> SessionFile {
+    SessionFile {
+        version: CURRENT_VERSION,
+        last_modified: now_rfc3339(),
+        active_board_id: Some("transparent".to_string()),
+        active_mode: None,
+        boards: vec![BoardFile {
+            id: "transparent".to_string(),
+            pages: vec![sample_frame()],
+            active_page: 0,
+        }],
+        transparent: None,
+        whiteboard: None,
+        blackboard: None,
+        transparent_pages: None,
+        whiteboard_pages: None,
+        blackboard_pages: None,
+        transparent_active_page: None,
+        whiteboard_active_page: None,
+        blackboard_active_page: None,
+        tool_state: None,
+    }
+}
+
 fn write_contentless_session(path: &Path) {
     std::fs::write(
         path,
         serde_json::to_vec_pretty(&contentless_session_file()).expect("contentless session json"),
     )
     .expect("contentless session write");
+}
+
+#[cfg(unix)]
+fn make_fifo(path: &Path) {
+    let raw_path = CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
+    // SAFETY: raw_path is a valid, NUL-terminated filesystem path for this process.
+    let result = unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) };
+    assert_eq!(
+        result,
+        0,
+        "mkfifo {} failed: {}",
+        path.display(),
+        std::io::Error::last_os_error()
+    );
 }
 
 fn set_modified(path: &Path, modified: SystemTime) {
@@ -116,6 +160,23 @@ fn set_modified(path: &Path, modified: SystemTime) {
         .expect("open file for timestamp update")
         .set_modified(modified)
         .expect("set file modified timestamp");
+}
+
+fn assert_no_candidate_sidecars(options: &SessionOptions) {
+    for path in [
+        options.lock_file_path(),
+        options.backup_file_path(),
+        options.backup_recovery_marker_file_path(),
+        options.recovery_file_path(),
+        options.recovery_recoverable_marker_file_path(),
+        options.clear_marker_file_path(),
+    ] {
+        assert!(
+            !path.exists(),
+            "candidate load must not create or mutate sidecar {}",
+            path.display()
+        );
+    }
 }
 
 #[test]
@@ -141,6 +202,129 @@ fn save_snapshot_respects_auto_compression_threshold() {
     save_snapshot(&snapshot, &compressed).expect("save_snapshot should succeed");
     let compressed_bytes = std::fs::read(compressed.session_file_path()).unwrap();
     assert!(is_gzip(&compressed_bytes), "expected gzip payload");
+}
+
+#[test]
+fn save_named_file_fails_when_parent_is_missing_without_creating_it() {
+    let temp = tempdir().unwrap();
+    let missing_parent = temp.path().join("missing-parent");
+    let named_path = missing_parent.join("session.wayscriber-session");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+
+    let err = save_snapshot(&snapshot, &options).expect_err("named save should fail");
+
+    assert!(
+        err.to_string()
+            .contains("named session parent directory does not exist"),
+        "unexpected error: {err:#}"
+    );
+    assert!(
+        !missing_parent.exists(),
+        "named save must not create the missing parent"
+    );
+    assert!(
+        !temp.path().join("configured").exists(),
+        "named save must not fall back to configured storage"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn save_named_file_rejects_symlink_lock_without_truncating_target() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("session.wayscriber-session");
+    let lock_target = temp.path().join("lock-target");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-symlink-save");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+    std::fs::write(&lock_target, b"preserve me").expect("write lock target");
+    symlink(&lock_target, options.lock_file_path()).expect("create lock symlink");
+
+    let err =
+        save_snapshot(&snapshot, &options).expect_err("named save should reject symlink lock");
+
+    assert!(
+        err.to_string().contains("failed to open session lock file"),
+        "{err:#}"
+    );
+    assert_eq!(
+        std::fs::read(&lock_target).expect("read lock target"),
+        b"preserve me",
+        "named save must not truncate a symlink lock target"
+    );
+    assert!(
+        !options.session_file_path().exists(),
+        "failed named save should not create the session file"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn save_named_file_rejects_fifo_lock_without_blocking() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("session.wayscriber-session");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-fifo-save");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+    make_fifo(&options.lock_file_path());
+
+    let err = save_snapshot(&snapshot, &options).expect_err("named save should reject fifo lock");
+
+    assert!(
+        format!("{err:#}").contains("session lock file is not a regular file"),
+        "{err:#}"
+    );
+    assert!(
+        !options.session_file_path().exists(),
+        "failed named save should not create the session file"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_file_rejects_symlink_lock_without_truncating_target() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("session.wayscriber-session");
+    let lock_target = temp.path().join("lock-target");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-symlink-load");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+    save_snapshot(&snapshot, &options).expect("save named snapshot");
+    std::fs::remove_file(options.lock_file_path()).expect("remove regular lock");
+    std::fs::write(&lock_target, b"preserve me").expect("write lock target");
+    symlink(&lock_target, options.lock_file_path()).expect("create lock symlink");
+
+    let err = load_snapshot(&options).expect_err("named load should reject symlink lock");
+
+    assert!(
+        err.to_string().contains("failed to open session lock file"),
+        "{err:#}"
+    );
+    assert_eq!(
+        std::fs::read(&lock_target).expect("read lock target"),
+        b"preserve me",
+        "named load must not truncate a symlink lock target"
+    );
+}
+
+#[test]
+fn configured_save_still_creates_session_base_directory() {
+    let temp = tempdir().unwrap();
+    let base_dir = temp.path().join("configured");
+    let snapshot = sample_snapshot();
+    let mut options = SessionOptions::new(base_dir.clone(), "configured");
+    options.persist_transparent = true;
+
+    save_snapshot(&snapshot, &options).expect("configured save should create base dir");
+
+    assert!(base_dir.is_dir());
+    assert!(options.session_file_path().is_file());
 }
 
 #[test]
@@ -188,6 +372,566 @@ fn load_snapshot_inner_refuses_compressed_payload_over_expanded_limit() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn load_snapshot_inner_rejects_fifo_without_opening_it() {
+    let temp = tempdir().unwrap();
+    let path = temp.path().join("session-fifo.wayscriber-session");
+    make_fifo(&path);
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "fifo");
+    options.persist_transparent = true;
+
+    let err = match load_snapshot_inner(&path, &options) {
+        Ok(_) => panic!("FIFO session artifact should be rejected before open/read"),
+        Err(err) => err,
+    };
+    assert!(
+        err.to_string().contains("not a regular file"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_primary_rejects_symlink_without_following_target() {
+    let temp = tempdir().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    std::fs::write(&target, b"{not valid json").expect("write invalid target");
+    symlink(&target, &link).expect("create primary symlink");
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "symlink-primary");
+    options.persist_transparent = true;
+    options.set_named_file_target(link.clone());
+
+    let err = match load_snapshot_inner(&link, &options) {
+        Ok(_) => panic!("symlink primary should reject"),
+        Err(err) => err,
+    };
+
+    assert!(
+        err.to_string().contains("symlink"),
+        "unexpected error: {err:#}"
+    );
+    assert!(
+        !options.backup_file_path().exists(),
+        "rejected symlink target should not be backed up or mutated"
+    );
+}
+
+#[test]
+fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("corrupt.wayscriber-session");
+    std::fs::write(&named_path, b"{not valid json").expect("write corrupt named primary");
+
+    let mut options = SessionOptions::new(temp.path().join("configured"), "named-corrupt");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("corrupt named primary should be handled");
+
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert_eq!(
+        std::fs::read(&named_path).expect("named primary remains"),
+        b"{not valid json",
+        "named corrupt backup must not remove the selected primary path"
+    );
+    assert_eq!(
+        std::fs::read(options.backup_file_path()).expect("backup bytes"),
+        b"{not valid json",
+        "named corrupt primary should still be backed up for diagnostics"
+    );
+}
+
+#[test]
+fn load_named_candidate_rejects_missing_without_creating_artifacts() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("missing.wayscriber-session");
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-missing");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+
+    let err = load_named_session_candidate(&options).expect_err("missing candidate should fail");
+
+    assert!(
+        err.to_string()
+            .contains("named session file does not exist"),
+        "unexpected error: {err:#}"
+    );
+    assert!(
+        !named_path.exists(),
+        "missing candidate load must not create a blank primary"
+    );
+    assert_no_candidate_sidecars(&options);
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_candidate_rejects_symlink_without_following_target() {
+    let temp = tempdir().unwrap();
+    let target = temp.path().join("real.wayscriber-session");
+    let link = temp.path().join("linked.wayscriber-session");
+    std::fs::write(&target, b"target bytes").expect("write target");
+    symlink(&target, &link).expect("create symlink");
+
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-symlink");
+    options.persist_transparent = true;
+    options.set_named_file_target(link);
+
+    let err = load_named_session_candidate(&options).expect_err("symlink candidate should fail");
+
+    assert!(err.to_string().contains("symlink"), "{err:#}");
+    assert_eq!(
+        std::fs::read(&target).expect("target bytes"),
+        b"target bytes",
+        "symlink target must not be opened or mutated"
+    );
+    assert_no_candidate_sidecars(&options);
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_candidate_waits_for_existing_lock_before_validating_primary() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("locked-create.wayscriber-session");
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-lock-order");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+
+    let lock_file = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(options.lock_file_path())
+        .expect("create lock");
+    crate::session::lock::lock_exclusive(&lock_file).expect("exclusive lock");
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let load_options = options.clone();
+    let loader = std::thread::spawn(move || {
+        tx.send(load_named_session_candidate(&load_options))
+            .expect("send candidate result");
+    });
+
+    std::thread::sleep(Duration::from_millis(50));
+    std::fs::write(
+        &named_path,
+        serde_json::to_vec_pretty(&sample_session_file()).expect("session json"),
+    )
+    .expect("write session while lock is held");
+    crate::session::lock::unlock(&lock_file).expect("unlock");
+
+    let outcome = rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("candidate load should finish after unlock")
+        .expect("candidate load should succeed");
+    loader.join().expect("loader thread");
+    assert_loaded_sample_snapshot(outcome);
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_candidate_rejects_fifo_without_blocking_or_creating_artifacts() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("fifo.wayscriber-session");
+    make_fifo(&named_path);
+
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-fifo");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+
+    let err = load_named_session_candidate(&options).expect_err("fifo candidate should fail");
+
+    assert!(format!("{err:#}").contains("special file"), "{err:#}");
+    assert_no_candidate_sidecars(&options);
+}
+
+#[test]
+fn load_named_candidate_corrupt_primary_does_not_create_sidecars() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("corrupt-open.wayscriber-session");
+    std::fs::write(&named_path, b"{not valid json").expect("write corrupt candidate");
+
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-corrupt");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+
+    let err = load_named_session_candidate(&options).expect_err("corrupt candidate should fail");
+
+    assert!(format!("{err:#}").contains("failed to parse session json"));
+    assert_eq!(
+        std::fs::read(&named_path).expect("candidate bytes remain"),
+        b"{not valid json"
+    );
+    assert_no_candidate_sidecars(&options);
+}
+
+#[test]
+fn load_named_candidate_ignores_contentful_primary_older_than_clear_marker() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("cleared-primary.wayscriber-session");
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-cleared");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    std::fs::write(
+        &named_path,
+        serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
+    )
+    .expect("write primary");
+    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("write clear marker");
+    let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let clear_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+    set_modified(&named_path, primary_time);
+    set_modified(&options.clear_marker_file_path(), clear_time);
+    let primary_before = std::fs::read(&named_path).expect("primary bytes");
+
+    let outcome = load_named_session_candidate(&options).expect("cleared primary should not load");
+
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert_eq!(
+        std::fs::read(&named_path).expect("primary remains"),
+        primary_before
+    );
+    assert!(
+        !options.backup_file_path().exists()
+            && !options.recovery_file_path().exists()
+            && !options.backup_recovery_marker_file_path().exists()
+            && !options.recovery_recoverable_marker_file_path().exists(),
+        "clear-marker suppression must not create candidate sidecars"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_candidate_ignores_symlink_clear_marker() {
+    let temp = tempdir().unwrap();
+    let named_path = temp
+        .path()
+        .join("symlink-clear-marker-primary.wayscriber-session");
+    let clear_marker_target = temp.path().join("clear-marker-target");
+    let mut options =
+        SessionOptions::new(temp.path().join("configured"), "candidate-symlink-clear");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    std::fs::write(
+        &named_path,
+        serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
+    )
+    .expect("write primary");
+    std::fs::write(&clear_marker_target, b"target clear marker").expect("write target marker");
+    symlink(&clear_marker_target, options.clear_marker_file_path())
+        .expect("create clear marker symlink");
+    let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let marker_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+    set_modified(&named_path, primary_time);
+    set_modified(&clear_marker_target, marker_time);
+
+    let outcome = load_named_session_candidate(&options).expect("symlink marker should be ignored");
+
+    assert_loaded_sample_snapshot(outcome);
+    assert!(
+        std::fs::symlink_metadata(options.clear_marker_file_path())
+            .expect("clear marker metadata")
+            .file_type()
+            .is_symlink(),
+        "candidate load must not replace the symlink marker"
+    );
+}
+
+#[test]
+fn load_named_candidate_ignores_corrupt_primary_older_than_clear_marker() {
+    let temp = tempdir().unwrap();
+    let named_path = temp
+        .path()
+        .join("cleared-corrupt-primary.wayscriber-session");
+    let mut options =
+        SessionOptions::new(temp.path().join("configured"), "candidate-cleared-corrupt");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    std::fs::write(&named_path, b"{not valid json").expect("write corrupt primary");
+    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("write clear marker");
+    let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let clear_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+    set_modified(&named_path, primary_time);
+    set_modified(&options.clear_marker_file_path(), clear_time);
+
+    let outcome =
+        load_named_session_candidate(&options).expect("stale corrupt primary should not fail");
+
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert_eq!(
+        std::fs::read(&named_path).expect("corrupt primary remains"),
+        b"{not valid json"
+    );
+    assert!(
+        !options.backup_file_path().exists()
+            && !options.recovery_file_path().exists()
+            && !options.backup_recovery_marker_file_path().exists()
+            && !options.recovery_recoverable_marker_file_path().exists(),
+        "suppressed corrupt primary must not create candidate sidecars"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_candidate_ignores_symlink_backup_recoverable_marker() {
+    let temp = tempdir().unwrap();
+    let named_path = temp
+        .path()
+        .join("symlink-backup-marker-primary.wayscriber-session");
+    let marker_target = temp.path().join("backup-recoverable-marker-target");
+    let mut options = SessionOptions::new(
+        temp.path().join("configured"),
+        "candidate-symlink-backup-marker",
+    );
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    std::fs::write(
+        options.backup_file_path(),
+        serde_json::to_vec_pretty(&sample_session_file()).expect("backup session json"),
+    )
+    .expect("write backup");
+    write_contentless_session(&named_path);
+    std::fs::write(&marker_target, b"target backup marker").expect("write target marker");
+    symlink(&marker_target, options.backup_recovery_marker_file_path())
+        .expect("create backup marker symlink");
+    let backup_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+    set_modified(&options.backup_file_path(), backup_time);
+    set_modified(&named_path, primary_time);
+
+    let outcome = load_named_session_candidate(&options).expect("symlink marker should be ignored");
+
+    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+        panic!("expected primary contentless session, got {outcome:?}");
+    };
+    assert!(!snapshot.has_board_data());
+    assert!(snapshot.tool_state.is_some());
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_candidate_ignores_symlink_recovery_recoverable_marker() {
+    let temp = tempdir().unwrap();
+    let named_path = temp
+        .path()
+        .join("symlink-recovery-marker-primary.wayscriber-session");
+    let marker_target = temp.path().join("recovery-recoverable-marker-target");
+    let mut options = SessionOptions::new(
+        temp.path().join("configured"),
+        "candidate-symlink-recovery-marker",
+    );
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    std::fs::write(
+        options.recovery_file_path(),
+        serde_json::to_vec_pretty(&sample_session_file()).expect("recovery session json"),
+    )
+    .expect("write recovery");
+    write_contentless_session(&named_path);
+    std::fs::write(&marker_target, b"target recovery marker").expect("write target marker");
+    symlink(
+        &marker_target,
+        options.recovery_recoverable_marker_file_path(),
+    )
+    .expect("create recovery marker symlink");
+    let recovery_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+    set_modified(&options.recovery_file_path(), recovery_time);
+    set_modified(&named_path, primary_time);
+
+    let outcome = load_named_session_candidate(&options).expect("symlink marker should be ignored");
+
+    let LoadSnapshotOutcome::Loaded(snapshot) = outcome else {
+        panic!("expected primary contentless session, got {outcome:?}");
+    };
+    assert!(!snapshot.has_board_data());
+    assert!(snapshot.tool_state.is_some());
+}
+
+#[test]
+fn load_named_candidate_falls_back_to_valid_primary_when_recovery_is_corrupt() {
+    let temp = tempdir().unwrap();
+    let named_path = temp
+        .path()
+        .join("primary-with-corrupt-recovery.wayscriber-session");
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-recovery");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    std::fs::write(
+        &named_path,
+        serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
+    )
+    .expect("write primary");
+
+    let recovery_bytes = b"{not valid recovery json";
+    std::thread::sleep(Duration::from_millis(2));
+    std::fs::write(options.recovery_file_path(), recovery_bytes).expect("write corrupt recovery");
+
+    let outcome =
+        load_named_session_candidate(&options).expect("corrupt recovery should not block primary");
+
+    assert_loaded_sample_snapshot(outcome);
+    assert_eq!(
+        std::fs::read(options.recovery_file_path()).expect("corrupt recovery remains"),
+        recovery_bytes
+    );
+    assert!(
+        !options.backup_file_path().exists()
+            && !options.clear_marker_file_path().exists()
+            && !options.recovery_recoverable_marker_file_path().exists(),
+        "candidate sidecar fallback must not create or mutate diagnostic artifacts"
+    );
+}
+
+#[test]
+fn load_named_candidate_reports_newer_oversized_recovery_without_loading_primary() {
+    let temp = tempdir().unwrap();
+    let named_path = temp
+        .path()
+        .join("primary-with-oversized-recovery.wayscriber-session");
+    let mut options = SessionOptions::new(
+        temp.path().join("configured"),
+        "candidate-oversized-recovery",
+    );
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    std::fs::write(
+        &named_path,
+        serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
+    )
+    .expect("write primary");
+    let recovery_bytes = vec![b' '; 64];
+    std::fs::write(options.recovery_file_path(), &recovery_bytes).expect("write recovery");
+    let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
+    let recovery_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
+    set_modified(&named_path, primary_time);
+    set_modified(&options.recovery_file_path(), recovery_time);
+
+    let outcome = load_named_session_candidate_with_expanded_limit(&options, 8)
+        .expect("oversized recovery should be reported as a protective outcome");
+
+    assert!(matches!(
+        outcome,
+        LoadSnapshotOutcome::ExpandedTooLarge {
+            path,
+            max_expanded_size: 8,
+        } if path == options.recovery_file_path()
+    ));
+    assert_eq!(
+        std::fs::read(options.recovery_file_path()).expect("recovery remains"),
+        recovery_bytes
+    );
+    assert!(
+        !options.backup_file_path().exists()
+            && !options.clear_marker_file_path().exists()
+            && !options.backup_recovery_marker_file_path().exists()
+            && !options.recovery_recoverable_marker_file_path().exists(),
+        "oversized candidate recovery must not create or mutate sidecars"
+    );
+}
+
+#[test]
+fn load_named_candidate_oversize_primary_does_not_create_sidecars() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let named_path = temp.path().join("too-large.wayscriber-session");
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-too-large");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    save_snapshot(&snapshot, &options).expect("save candidate");
+    let original_bytes = std::fs::read(&named_path).expect("candidate bytes");
+    std::fs::remove_file(options.lock_file_path()).expect("remove save-created lock");
+    options.max_file_size_bytes = 1;
+
+    let err = load_named_session_candidate(&options).expect_err("oversize candidate should fail");
+
+    assert!(format!("{err:#}").contains("exceeds the configured limit"));
+    assert_eq!(
+        std::fs::read(&named_path).expect("candidate bytes remain"),
+        original_bytes
+    );
+    assert_no_candidate_sidecars(&options);
+}
+
+#[test]
+fn load_named_candidate_newer_version_does_not_create_sidecars() {
+    let temp = tempdir().unwrap();
+    let named_path = temp.path().join("newer.wayscriber-session");
+    let mut file = sample_session_file();
+    file.version = CURRENT_VERSION + 1;
+    std::fs::write(
+        &named_path,
+        serde_json::to_vec_pretty(&file).expect("newer session json"),
+    )
+    .expect("write newer candidate");
+
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-newer");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path);
+
+    let outcome = load_named_session_candidate(&options).expect("newer candidate is handled");
+
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert_no_candidate_sidecars(&options);
+}
+
+#[cfg(unix)]
+#[test]
+fn load_named_candidate_rejects_special_lock_without_creating_replacement() {
+    let temp = tempdir().unwrap();
+    let snapshot = sample_snapshot();
+    let named_path = temp.path().join("lock-fifo.wayscriber-session");
+    let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-lock-fifo");
+    options.persist_transparent = true;
+    options.set_named_file_target(named_path.clone());
+    save_snapshot(&snapshot, &options).expect("save candidate");
+    std::fs::remove_file(options.lock_file_path()).expect("remove save-created lock");
+    make_fifo(&options.lock_file_path());
+    let original_bytes = std::fs::read(&named_path).expect("candidate bytes");
+
+    let err = load_named_session_candidate(&options).expect_err("fifo lock should fail");
+
+    assert!(
+        format!("{err:#}").contains("session lock file is not a regular file"),
+        "{err:#}"
+    );
+    assert_eq!(
+        std::fs::read(&named_path).expect("candidate bytes remain"),
+        original_bytes
+    );
+    assert!(
+        options.lock_file_path().exists(),
+        "candidate loader must not remove a rejected lock sidecar"
+    );
+    assert!(
+        !options.backup_file_path().exists()
+            && !options.recovery_file_path().exists()
+            && !options.clear_marker_file_path().exists(),
+        "candidate lock rejection must not create backup/recovery/clear sidecars"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn load_snapshot_skips_fifo_recovery_without_opening_it() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "fifo-recovery");
+    options.persist_transparent = true;
+    make_fifo(&options.recovery_file_path());
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("non-regular recovery should be skipped without failing");
+    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    assert!(
+        options.recovery_file_path().exists(),
+        "non-regular recovery should not be renamed or backed up"
+    );
+}
+
 #[test]
 fn load_snapshot_expansion_limit_leaves_primary_file_unchanged() {
     let temp = tempdir().unwrap();
@@ -229,27 +973,7 @@ fn load_snapshot_reports_successful_recovery_source() {
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
 
-    let recovery_file = SessionFile {
-        version: CURRENT_VERSION,
-        last_modified: now_rfc3339(),
-        active_board_id: Some("transparent".to_string()),
-        active_mode: None,
-        boards: vec![BoardFile {
-            id: "transparent".to_string(),
-            pages: vec![sample_frame()],
-            active_page: 0,
-        }],
-        transparent: None,
-        whiteboard: None,
-        blackboard: None,
-        transparent_pages: None,
-        whiteboard_pages: None,
-        blackboard_pages: None,
-        transparent_active_page: None,
-        whiteboard_active_page: None,
-        blackboard_active_page: None,
-        tool_state: None,
-    };
+    let recovery_file = sample_session_file();
     std::fs::write(
         options.recovery_file_path(),
         serde_json::to_vec_pretty(&recovery_file).expect("recovery json"),
@@ -261,6 +985,32 @@ fn load_snapshot_reports_successful_recovery_source() {
     assert!(
         matches!(outcome, LoadSnapshotOutcome::LoadedFromRecovery(_)),
         "valid recovery should be surfaced in the load outcome"
+    );
+}
+
+#[test]
+fn load_snapshot_prefers_valid_recovery_when_primary_is_non_regular() {
+    let temp = tempdir().unwrap();
+
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "nonregular-recovery");
+    options.persist_transparent = true;
+    std::fs::create_dir(options.session_file_path()).expect("primary directory");
+    std::fs::write(
+        options.recovery_file_path(),
+        serde_json::to_vec_pretty(&sample_session_file()).expect("recovery json"),
+    )
+    .expect("recovery write");
+
+    let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
+        .expect("valid recovery should load over non-regular primary");
+
+    assert!(
+        matches!(outcome, LoadSnapshotOutcome::LoadedFromRecovery(_)),
+        "valid recovery should win before the non-regular primary outcome"
+    );
+    assert!(
+        options.session_file_path().is_dir(),
+        "non-regular primary should be left in place"
     );
 }
 

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use wayland_client::Connection;
 
 pub mod wayland;
 
@@ -22,12 +23,28 @@ pub fn run_wayland(
     initial_mode: Option<String>,
     freeze_on_start: bool,
     exit_after_capture_mode: ExitAfterCaptureMode,
+    named_session_file: Option<std::path::PathBuf>,
 ) -> Result<()> {
-    let mut backend =
-        wayland::WaylandBackend::new(initial_mode, freeze_on_start, exit_after_capture_mode)?;
+    let mut backend = wayland::WaylandBackend::new(
+        initial_mode,
+        freeze_on_start,
+        exit_after_capture_mode,
+        named_session_file,
+    )?;
     backend.init()?;
     backend.show()?; // show() calls run() internally
     backend.hide()?;
+    Ok(())
+}
+
+pub fn preflight_wayland_connection() -> Result<()> {
+    if std::env::var("WAYLAND_DISPLAY").is_err() {
+        return Err(anyhow::anyhow!(
+            "WAYLAND_DISPLAY not set - this application requires Wayland."
+        ));
+    }
+    let _conn = Connection::connect_to_env()
+        .map_err(|err| anyhow::anyhow!("Failed to connect to Wayland compositor: {err}"))?;
     Ok(())
 }
 
@@ -40,7 +57,7 @@ mod tests {
             eprintln!("WAYLAND_DISPLAY not set; skipping Wayland smoke test");
             return;
         }
-        super::run_wayland(None, false, super::ExitAfterCaptureMode::Never)
+        super::run_wayland(None, false, super::ExitAfterCaptureMode::Never, None)
             .expect("Wayland backend should start");
     }
 }

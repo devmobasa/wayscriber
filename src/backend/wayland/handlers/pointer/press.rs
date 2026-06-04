@@ -51,7 +51,9 @@ impl WaylandState {
             );
         }
         if inline_active {
-            if button == BTN_LEFT && self.inline_toolbar_press(event.position) {
+            if button == BTN_LEFT
+                && self.inline_toolbar_press(event.position, Some(_conn), Some(qh))
+            {
                 drag_log(format!(
                     "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
                     self.toolbar_dragging(),
@@ -89,7 +91,7 @@ impl WaylandState {
                     self.inline_toolbars_active()
                 );
                 self.set_toolbar_dragging(drag);
-                self.handle_toolbar_event(toolbar_event);
+                self.handle_toolbar_event(toolbar_event, Some(_conn), Some(qh));
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
                 self.refresh_keyboard_interactivity();

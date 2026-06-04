@@ -5,6 +5,7 @@ mod daemon;
 mod fields;
 mod presets;
 mod render_profiles;
+mod session_catalog;
 mod tabs;
 
 use iced::Task;
@@ -31,6 +32,44 @@ impl ConfiguratorApp {
             }
             Message::DaemonActionRequested(action) => self.handle_daemon_action_requested(action),
             Message::DaemonActionCompleted(result) => self.handle_daemon_action_completed(result),
+            Message::SessionCatalogLoaded(result) => self.handle_session_catalog_loaded(result),
+            Message::SessionCatalogRefreshRequested => {
+                self.handle_session_catalog_refresh_requested()
+            }
+            Message::SessionCatalogForgetRequested(id) => {
+                self.handle_session_catalog_forget_requested(id)
+            }
+            Message::SessionCatalogRenameInputChanged(id, value) => {
+                self.handle_session_catalog_rename_input_changed(id, value)
+            }
+            Message::SessionCatalogRenameRequested(id) => {
+                self.handle_session_catalog_rename_requested(id)
+            }
+            Message::SessionCatalogDuplicateInputChanged(id, value) => {
+                self.handle_session_catalog_duplicate_input_changed(id, value)
+            }
+            Message::SessionCatalogDuplicateRequested(id) => {
+                self.handle_session_catalog_duplicate_requested(id)
+            }
+            Message::SessionCatalogMoveInputChanged(id, value) => {
+                self.handle_session_catalog_move_input_changed(id, value)
+            }
+            Message::SessionCatalogMoveRequested(id) => {
+                self.handle_session_catalog_move_requested(id)
+            }
+            Message::SessionCatalogRevealRequested(id) => {
+                self.handle_session_catalog_reveal_requested(id)
+            }
+            Message::SessionCatalogClearRequested(id) => {
+                self.handle_session_catalog_clear_requested(id)
+            }
+            Message::SessionCatalogClearConfirmed(id) => {
+                self.handle_session_catalog_clear_confirmed(id)
+            }
+            Message::SessionCatalogClearCanceled => self.handle_session_catalog_clear_canceled(),
+            Message::SessionCatalogActionCompleted(result) => {
+                self.handle_session_catalog_action_completed(result)
+            }
             Message::TabSelected(tab) => self.handle_tab_selected(tab),
             Message::UiTabSelected(tab) => self.handle_ui_tab_selected(tab),
             Message::KeybindingsTabSelected(tab) => self.handle_keybindings_tab_selected(tab),

@@ -7,6 +7,11 @@ use crate::{
         ToolbarPreApplyEffect, ToolbarUiPersistenceTarget,
     },
 };
+use wayland_client::{Connection, QueueHandle};
+
+mod session;
+
+use session::populate_session_snapshot;
 
 fn persisted_tool_preview_value(current: bool, presenter_restore: Option<bool>) -> bool {
     presenter_restore.unwrap_or(current)
@@ -50,11 +55,23 @@ impl WaylandState {
         let hint_max = crate::onboarding::DRAWER_HINT_MAX;
         let show_drawer_hint = self.onboarding.state().drawer_hint_count < hint_max
             && !self.input_state.toolbar_drawer_open;
-        ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint)
+        let mut snapshot =
+            ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint);
+        populate_session_snapshot(&mut snapshot, self.session.options());
+        snapshot
     }
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
-    pub(in crate::backend::wayland) fn handle_toolbar_event(&mut self, event: ToolbarEvent) {
+    pub(in crate::backend::wayland) fn handle_toolbar_event(
+        &mut self,
+        event: ToolbarEvent,
+        conn: Option<&Connection>,
+        qh: Option<&QueueHandle<Self>>,
+    ) {
+        if self.handle_toolbar_session_event(&event, conn, qh) {
+            return;
+        }
+
         let policy = ToolbarEventPolicy::for_event(&event);
         for effect in &policy.pre_apply_effects {
             match effect {
@@ -272,191 +289,4 @@ impl WaylandState {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::ToolbarLayoutMode;
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::state::test_support::make_test_input_state;
-    use crate::input::{EraserMode, Tool};
-
-    fn persistence_for(event: &ToolbarEvent) -> ToolbarPersistence {
-        ToolbarEventPolicy::for_event(event).persistence
-    }
-
-    #[test]
-    fn runtime_toolbar_events_do_not_directly_save_config() {
-        let events = vec![
-            ToolbarEvent::SelectTool(Tool::Line),
-            ToolbarEvent::SetColor(Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
-                a: 1.0,
-            }),
-            ToolbarEvent::SetThickness(8.0),
-            ToolbarEvent::NudgeThickness(1.0),
-            ToolbarEvent::SetMarkerOpacity(0.5),
-            ToolbarEvent::NudgeMarkerOpacity(0.1),
-            ToolbarEvent::SetEraserMode(EraserMode::Stroke),
-            ToolbarEvent::SetFont(FontDescriptor::new(
-                "Monospace".to_string(),
-                "normal".to_string(),
-                "italic".to_string(),
-            )),
-            ToolbarEvent::SetFontSize(44.0),
-            ToolbarEvent::ToggleFill(true),
-            ToolbarEvent::ApplyPreset(1),
-        ];
-
-        for event in events {
-            assert_eq!(
-                persistence_for(&event),
-                ToolbarPersistence::RuntimeOnly,
-                "{event:?} should not directly save config"
-            );
-        }
-    }
-
-    #[test]
-    fn toolbar_preference_events_save_toolbar_config() {
-        let events = vec![
-            ToolbarEvent::PinTopToolbar(true),
-            ToolbarEvent::PinSideToolbar(true),
-            ToolbarEvent::ToggleIconMode(true),
-            ToolbarEvent::ToggleMoreColors(true),
-            ToolbarEvent::ToggleActionsSection(true),
-            ToolbarEvent::ToggleActionsAdvanced(true),
-            ToolbarEvent::ToggleZoomActions(true),
-            ToolbarEvent::TogglePagesSection(true),
-            ToolbarEvent::ToggleBoardsSection(true),
-            ToolbarEvent::TogglePresets(true),
-            ToolbarEvent::ToggleStepSection(true),
-            ToolbarEvent::ToggleTextControls(true),
-            ToolbarEvent::ToggleContextAwareUi(true),
-            ToolbarEvent::TogglePresetToasts(true),
-            ToolbarEvent::ToggleToolPreview(true),
-            ToolbarEvent::ToggleDelaySliders(true),
-            ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
-        ];
-
-        for event in events {
-            assert_eq!(
-                persistence_for(&event),
-                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Toolbar),
-                "{event:?} should save toolbar config"
-            );
-        }
-    }
-
-    #[test]
-    fn ui_and_history_preference_events_save_their_own_config_targets() {
-        let ui_events = [
-            (
-                ToolbarEvent::ToggleStatusBar(true),
-                ToolbarUiPersistenceTarget::StatusBar,
-            ),
-            (
-                ToolbarEvent::ToggleStatusBoardBadge(true),
-                ToolbarUiPersistenceTarget::StatusBoardBadge,
-            ),
-            (
-                ToolbarEvent::ToggleStatusPageBadge(true),
-                ToolbarUiPersistenceTarget::StatusPageBadge,
-            ),
-            (
-                ToolbarEvent::ToggleFloatingBadgeAlways(true),
-                ToolbarUiPersistenceTarget::FloatingBadgeAlways,
-            ),
-        ];
-
-        for (event, target) in ui_events {
-            assert_eq!(
-                persistence_for(&event),
-                ToolbarPersistence::Persist(ToolbarPersistenceTarget::Ui(target)),
-                "{event:?} should save only its UI config field"
-            );
-        }
-
-        assert_eq!(
-            persistence_for(&ToolbarEvent::ToggleCustomSection(true)),
-            ToolbarPersistence::Persist(ToolbarPersistenceTarget::History)
-        );
-    }
-
-    #[test]
-    fn toolbar_ui_config_target_save_leaves_sibling_fields_unchanged() {
-        let mut config = crate::config::Config::default();
-        config.ui.show_status_bar = true;
-        config.ui.show_status_board_badge = false;
-        config.ui.show_status_page_badge = true;
-        config.ui.show_floating_badge_always = false;
-
-        let mut input_state = make_test_input_state();
-        input_state.show_status_bar = false;
-        input_state.show_status_board_badge = true;
-        input_state.show_status_page_badge = false;
-        input_state.show_floating_badge_always = true;
-
-        apply_toolbar_ui_config_target(
-            &mut config,
-            &input_state,
-            ToolbarUiPersistenceTarget::StatusBoardBadge,
-        );
-
-        assert!(config.ui.show_status_bar);
-        assert!(config.ui.show_status_board_badge);
-        assert!(config.ui.show_status_page_badge);
-        assert!(!config.ui.show_floating_badge_always);
-    }
-
-    #[test]
-    fn click_highlight_toolbar_events_are_explicit_config_exceptions() {
-        let events = vec![
-            ToolbarEvent::ToggleAllHighlight(true),
-            ToolbarEvent::SelectTool(Tool::Highlight),
-            ToolbarEvent::ToggleHighlightToolRing(true),
-        ];
-
-        for event in events {
-            assert_eq!(
-                persistence_for(&event),
-                ToolbarPersistence::Persist(ToolbarPersistenceTarget::ClickHighlight),
-                "{event:?} should save click-highlight config"
-            );
-        }
-    }
-
-    #[test]
-    fn drawer_hint_pre_apply_effect_is_conditionally_recorded_below_max() {
-        let mut state = OnboardingState {
-            drawer_hint_count: crate::onboarding::DRAWER_HINT_MAX - 1,
-            drawer_hint_shown: false,
-            ..OnboardingState::default()
-        };
-
-        assert!(record_drawer_hint_shown(&mut state));
-        assert_eq!(state.drawer_hint_count, crate::onboarding::DRAWER_HINT_MAX);
-        assert!(state.drawer_hint_shown);
-    }
-
-    #[test]
-    fn drawer_hint_pre_apply_effect_is_ignored_at_max() {
-        let mut state = OnboardingState {
-            drawer_hint_count: crate::onboarding::DRAWER_HINT_MAX,
-            drawer_hint_shown: true,
-            ..OnboardingState::default()
-        };
-
-        assert!(!record_drawer_hint_shown(&mut state));
-        assert_eq!(state.drawer_hint_count, crate::onboarding::DRAWER_HINT_MAX);
-        assert!(state.drawer_hint_shown);
-    }
-
-    #[test]
-    fn tool_preview_config_preserves_presenter_mode_restore_value() {
-        assert!(persisted_tool_preview_value(false, Some(true)));
-        assert!(!persisted_tool_preview_value(false, Some(false)));
-        assert!(persisted_tool_preview_value(true, None));
-        assert!(!persisted_tool_preview_value(false, None));
-    }
-}
+mod tests;

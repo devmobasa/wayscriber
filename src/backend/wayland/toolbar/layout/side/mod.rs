@@ -7,6 +7,7 @@ mod drawer;
 mod header;
 mod pages;
 mod presets;
+mod session;
 mod settings;
 mod sliders;
 
@@ -69,6 +70,7 @@ pub fn build_side_hits(
     y = boards::push_boards_hits(&ctx, y, hits);
     y = pages::push_pages_hits(&ctx, y, hits);
     y = delay::push_delay_hits(&ctx, y, hits);
+    y = session::push_session_hits(&ctx, y, hits);
 
     settings::push_settings_hits(&ctx, y, hits);
 }

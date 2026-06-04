@@ -165,15 +165,12 @@ pub(crate) fn print_usage() {
     println!("wayscriber: Screen annotation tool for Wayland compositors");
     println!();
     println!("Usage:");
-    println!(
-        "  wayscriber -d, --daemon      Run as background daemon (bind a toggle like Super+D)"
-    );
+    println!("  wayscriber -d, --daemon [--session-file PATH]  Run as background daemon");
     println!(
         "  wayscriber --daemon --freeze-on-show  Run daemon with frozen activation by default"
     );
-    println!(
-        "  wayscriber --daemon-toggle [--freeze] [--mode MODE]  Toggle running daemon with launch args"
-    );
+    println!("  wayscriber --daemon-toggle [--freeze] [--mode MODE] [--session-file PATH]");
+    println!("             Toggle running daemon with launch args");
     println!(
         "             [--exit-after-capture|--no-exit-after-capture] [--resume-session|--no-resume-session]"
     );
@@ -185,6 +182,10 @@ pub(crate) fn print_usage() {
     );
     println!("  wayscriber -a, --active      Show overlay immediately (one-shot mode)");
     println!("  wayscriber --freeze          Start overlay already frozen");
+    println!("  wayscriber --active --session-file PATH  Use a named session file");
+    println!("  wayscriber --freeze --session-file PATH  Use a named session file");
+    println!("  wayscriber --session-info [--session-file PATH]  Inspect saved session data");
+    println!("  wayscriber --clear-session [--session-file PATH]  Remove saved session data");
     println!(
         "  wayscriber --exit-after-capture  Exit overlay after a capture completes (override auto clipboard exit)"
     );

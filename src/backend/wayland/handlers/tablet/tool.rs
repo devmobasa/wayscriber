@@ -100,8 +100,8 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
         _proxy: &ZwpTabletToolV2,
         event: <ZwpTabletToolV2 as Proxy>::Event,
         _data: &(),
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
     ) {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Event;
         match event {
@@ -196,7 +196,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if inline_active {
                     let (sx, sy) = state.current_or_pending_stylus_position();
-                    if state.inline_toolbar_press((sx, sy)) {
+                    if state.inline_toolbar_press((sx, sy), Some(conn), Some(qh)) {
                         state.stylus_on_toolbar = true;
                         state.set_toolbar_dragging(state.toolbar_dragging());
                         return;
@@ -210,7 +210,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     {
                         state.set_toolbar_dragging(drag);
                         let evt = intent_to_event(intent, state.toolbar.last_snapshot());
-                        state.handle_toolbar_event(evt);
+                        state.handle_toolbar_event(evt, Some(conn), Some(qh));
                         state.toolbar.mark_dirty();
                         state.input_state.needs_redraw = true;
                         state.refresh_keyboard_interactivity();
@@ -272,7 +272,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                             let intent = evt.or_else(|| state.move_drag_intent(xf, yf));
                             if let Some(intent) = intent {
                                 let evt = intent_to_event(intent, state.toolbar.last_snapshot());
-                                state.handle_toolbar_event(evt);
+                                state.handle_toolbar_event(evt, Some(conn), Some(qh));
                             }
                         } else {
                             state.toolbar.mark_dirty();

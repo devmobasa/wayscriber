@@ -7,6 +7,7 @@ use super::settings::ClickHighlightSettings;
 
 const MAX_ACTIVE_HIGHLIGHTS: usize = 4;
 
+#[derive(Clone)]
 pub struct ClickHighlightState {
     settings: ClickHighlightSettings,
     enabled: bool,
@@ -14,6 +15,7 @@ pub struct ClickHighlightState {
     tool_ring_bounds: Option<Rect>,
 }
 
+#[derive(Clone)]
 struct ActiveHighlight {
     x: i32,
     y: i32,

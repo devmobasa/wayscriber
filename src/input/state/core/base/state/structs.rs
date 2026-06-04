@@ -126,6 +126,8 @@ pub struct InputState {
     pub(crate) session_dirty: bool,
     /// Runtime session options used to preflight clone-heavy actions before mutation.
     pub(crate) session_preflight_options: Option<SessionOptions>,
+    /// Save Session As target waiting for explicit overwrite confirmation.
+    pub(crate) pending_save_as_overwrite: Option<PathBuf>,
     /// Whether the help overlay is currently visible (toggled with F10)
     pub show_help: bool,
     /// Active help overlay page index

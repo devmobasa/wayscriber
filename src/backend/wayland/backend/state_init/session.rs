@@ -1,6 +1,6 @@
 use log::{info, warn};
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 use crate::{RESUME_SESSION_ENV, paths, session};
@@ -10,17 +10,31 @@ use super::super::helpers::resume_override_from_env;
 pub(super) fn build_session_options(
     config: &Config,
     config_dir: &Path,
+    named_session_file: Option<PathBuf>,
 ) -> Option<session::SessionOptions> {
     let display_env = env::var("WAYLAND_DISPLAY").ok();
     let resume_override = resume_override_from_env();
-    let mut session_options =
+    let mut session_options = if let Some(path) = named_session_file {
+        let mut options = session::options_from_config_for_named_file(
+            &config.session,
+            path,
+            display_env.as_deref(),
+        );
+        options.force_resume_persistence();
+        info!(
+            "Session persistence forced on for named session file {}",
+            options.session_file_path().display()
+        );
+        Some(options)
+    } else {
         match session::options_from_config(&config.session, config_dir, display_env.as_deref()) {
             Ok(opts) => Some(opts),
             Err(err) => {
                 warn!("Session persistence disabled: {}", err);
                 None
             }
-        };
+        }
+    };
 
     match resume_override {
         Some(true) => {
@@ -32,11 +46,7 @@ pub(super) fn build_session_options(
                 session_options = Some(session::SessionOptions::new(default_base, display));
             }
             if let Some(options) = session_options.as_mut() {
-                options.persist_transparent = true;
-                options.persist_whiteboard = true;
-                options.persist_blackboard = true;
-                options.persist_history = true;
-                options.restore_tool_state = true;
+                options.force_resume_persistence();
                 info!(
                     "Session resume forced on via {} (persisting all boards, history, tool state)",
                     RESUME_SESSION_ENV
@@ -44,10 +54,23 @@ pub(super) fn build_session_options(
             }
         }
         Some(false) => {
-            if session_options.is_some() {
-                info!("Session resume disabled via {}=off", RESUME_SESSION_ENV);
+            if session_options
+                .as_ref()
+                .is_some_and(session::SessionOptions::is_named_file)
+            {
+                info!(
+                    "Ignoring {}=off because a named session file requires persistence for this run",
+                    RESUME_SESSION_ENV
+                );
+                if let Some(options) = session_options.as_mut() {
+                    options.force_resume_persistence();
+                }
+            } else {
+                if session_options.is_some() {
+                    info!("Session resume disabled via {}=off", RESUME_SESSION_ENV);
+                }
+                session_options = None;
             }
-            session_options = None;
         }
         None => {}
     }
@@ -77,4 +100,33 @@ pub(super) fn build_session_options(
     }
 
     session_options
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn named_session_file_forces_persistence_even_when_config_disables_it() {
+        let mut config = Config::default();
+        config.session.persist_transparent = false;
+        config.session.persist_whiteboard = false;
+        config.session.persist_blackboard = false;
+        config.session.persist_history = false;
+        config.session.restore_tool_state = false;
+
+        let options = build_session_options(
+            &config,
+            Path::new("/tmp/config"),
+            Some(PathBuf::from("/tmp/lecture-04.wayscriber-session")),
+        )
+        .expect("named session options should be available");
+
+        assert!(options.is_named_file());
+        assert!(options.persist_transparent);
+        assert!(options.persist_whiteboard);
+        assert!(options.persist_blackboard);
+        assert!(options.persist_history);
+        assert!(options.restore_tool_state);
+    }
 }

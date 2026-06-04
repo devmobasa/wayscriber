@@ -130,6 +130,17 @@ fn cloned_board_manager_gets_fresh_identity_generation() {
 }
 
 #[test]
+fn rollback_clone_preserves_identity_generation() {
+    let boards = manager();
+    let clone = boards.clone_preserving_identity_generation();
+
+    assert_eq!(
+        clone.board_identity_generation(),
+        boards.board_identity_generation()
+    );
+}
+
+#[test]
 fn deleted_and_reused_board_id_rejects_stale_board_delete_confirmation() {
     let mut boards = manager();
     let stale = board_delete_confirmation(&mut boards, BOARD_ID_BLACKBOARD);

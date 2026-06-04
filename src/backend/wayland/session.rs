@@ -3,7 +3,10 @@
 //! Tracks the current session options and whether a snapshot has been loaded
 //! so WaylandState can coordinate persistence without storing extra fields.
 
-use crate::session::SessionOptions;
+use anyhow::{Result, anyhow};
+
+use crate::input::InputState;
+use crate::session::{self as stored_session, LoadSnapshotOutcome, SessionOptions};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -106,6 +109,49 @@ impl SessionState {
         self.last_dirty_at = None;
         self.autosave_retry_at = None;
         self.autosave_deferred_until = None;
+    }
+
+    fn commit_runtime_open(&mut self, options: SessionOptions, loaded_board_data: bool) {
+        self.options = Some(options);
+        self.loaded = true;
+        self.loaded_board_data = loaded_board_data;
+        self.dirty = false;
+        self.dirty_since = None;
+        self.last_dirty_at = None;
+        self.last_save_at = None;
+        self.autosave_retry_at = None;
+        self.autosave_deferred_until = None;
+        self.notified_failure = false;
+    }
+
+    fn commit_runtime_save_as(
+        &mut self,
+        options: SessionOptions,
+        now: Instant,
+        saved_board_data: bool,
+    ) {
+        self.options = Some(options);
+        self.loaded = true;
+        self.loaded_board_data = saved_board_data;
+        self.dirty = false;
+        self.dirty_since = None;
+        self.last_dirty_at = None;
+        self.last_save_at = Some(now);
+        self.autosave_retry_at = None;
+        self.autosave_deferred_until = None;
+        self.notified_failure = false;
+    }
+
+    fn commit_runtime_clear(&mut self, now: Instant) {
+        self.loaded = true;
+        self.loaded_board_data = false;
+        self.dirty = false;
+        self.dirty_since = None;
+        self.last_dirty_at = None;
+        self.last_save_at = Some(now);
+        self.autosave_retry_at = None;
+        self.autosave_deferred_until = None;
+        self.notified_failure = false;
     }
 
     pub fn mark_autosave_failure(&mut self, now: Instant, backoff: Duration) -> bool {
@@ -220,243 +266,14 @@ fn autosave_active(options: &SessionOptions) -> bool {
         && (options.any_enabled() || options.restore_tool_state || options.persist_history)
 }
 
-pub(super) fn has_session_artifact(options: &SessionOptions) -> bool {
-    options.session_file_path().exists()
-        || options.backup_file_path().exists()
-        || options.backup_recovery_marker_file_path().exists()
-        || options.clear_marker_file_path().exists()
-        || options.recovery_recoverable_marker_file_path().exists()
-        || has_recovery_artifact(options)
-}
+mod runtime;
 
-fn has_recovery_artifact(options: &SessionOptions) -> bool {
-    let recovery_path = options.recovery_file_path();
-    if recovery_path.exists() {
-        return true;
-    }
-    let Some(parent) = recovery_path.parent() else {
-        return false;
-    };
-    let Some(recovery_name) = recovery_path.file_name().and_then(|name| name.to_str()) else {
-        return false;
-    };
-    let preserved_prefix = format!("{recovery_name}.");
-    let Ok(entries) = std::fs::read_dir(parent) else {
-        return false;
-    };
-    entries.filter_map(Result::ok).any(|entry| {
-        let path = entry.path();
-        path.is_file()
-            && path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with(&preserved_prefix))
-    })
-}
-
-pub(super) fn should_skip_unloaded_contentless_save(
-    loaded_board_data: bool,
-    session_dirty: bool,
-    input_dirty: bool,
-    has_board_data: bool,
-    session_artifact_exists: bool,
-) -> bool {
-    !has_board_data
-        && !loaded_board_data
-        && !session_dirty
-        && !input_dirty
-        && session_artifact_exists
-}
+pub(in crate::backend::wayland) use runtime::{
+    RuntimeClearSessionReport, RuntimeOpenSessionReport, RuntimeSaveAsSessionReport,
+    clear_current_session_runtime, open_named_session_runtime,
+    save_named_session_as_requires_overwrite, save_named_session_as_runtime,
+};
+pub(super) use runtime::{has_session_artifact, should_skip_unloaded_contentless_save};
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn autosave_failure_backoff_delays_retry() {
-        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
-        options.autosave_enabled = true;
-        options.persist_transparent = true;
-        options.autosave_idle = Duration::from_millis(1);
-        options.autosave_interval = Duration::from_millis(1);
-        options.autosave_failure_backoff = Duration::from_millis(50);
-
-        let mut state = SessionState::new(Some(options.clone()));
-        let now = Instant::now();
-        state.record_input_dirty(now, true);
-        state.mark_autosave_failure(now, options.autosave_failure_backoff);
-
-        assert!(!state.autosave_due(now, &options));
-        assert_eq!(
-            state.autosave_timeout(now, &options),
-            Some(options.autosave_failure_backoff)
-        );
-
-        let later = now + options.autosave_failure_backoff;
-        assert!(state.autosave_due(later, &options));
-        assert_eq!(
-            state.autosave_timeout(later, &options),
-            Some(Duration::from_millis(0))
-        );
-    }
-
-    #[test]
-    fn autosave_deferral_delays_due_without_clearing_dirty() {
-        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
-        options.autosave_enabled = true;
-        options.persist_transparent = true;
-        options.autosave_idle = Duration::from_millis(1);
-        options.autosave_interval = Duration::from_millis(1);
-
-        let mut state = SessionState::new(Some(options.clone()));
-        let now = Instant::now();
-        state.record_input_dirty(now, true);
-        let due_at = now + Duration::from_millis(2);
-        assert!(state.autosave_due(due_at, &options));
-
-        let defer_for = Duration::from_millis(50);
-        state.defer_autosave(due_at, defer_for);
-        assert!(!state.autosave_due(due_at, &options));
-        assert_eq!(state.autosave_timeout(due_at, &options), Some(defer_for));
-
-        let later = due_at + defer_for;
-        assert!(state.autosave_due(later, &options));
-        assert_eq!(
-            state.autosave_timeout(later, &options),
-            Some(Duration::ZERO)
-        );
-    }
-
-    #[test]
-    fn mark_saved_clears_autosave_deferral() {
-        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
-        options.autosave_enabled = true;
-        options.persist_transparent = true;
-
-        let mut state = SessionState::new(Some(options));
-        let now = Instant::now();
-        state.record_input_dirty(now, true);
-        state.defer_autosave(now, Duration::from_secs(60));
-        state.mark_saved(now, false);
-
-        assert_eq!(state.autosave_deferred_until, None);
-    }
-
-    #[test]
-    fn protected_session_path_blocks_save_until_session_is_dirty() {
-        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
-        options.autosave_enabled = true;
-        options.persist_transparent = true;
-        let path = options.session_file_path();
-        let mut state = SessionState::new(Some(options.clone()));
-
-        assert!(!state.should_skip_save_for_protected_path(&path, false));
-        state.protect_session_path(path.clone());
-        assert!(state.should_skip_save_for_protected_path(&path, false));
-        assert!(!state.should_skip_save_for_protected_path(&path, true));
-
-        state.record_input_dirty(Instant::now(), true);
-        assert!(!state.should_skip_save_for_protected_path(&path, false));
-    }
-
-    #[test]
-    fn load_baseline_clears_stale_dirty_before_protected_save_check() {
-        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
-        options.autosave_enabled = true;
-        options.persist_transparent = true;
-        let path = options.session_file_path();
-        let mut state = SessionState::new(Some(options));
-
-        state.record_input_dirty(Instant::now(), true);
-        state.protect_session_path(path.clone());
-        assert!(!state.should_skip_save_for_protected_path(&path, false));
-
-        state.mark_clean_after_load();
-        assert!(state.should_skip_save_for_protected_path(&path, false));
-    }
-
-    #[test]
-    fn contentless_save_guard_blocks_clean_unloaded_save_when_primary_exists() {
-        assert!(should_skip_unloaded_contentless_save(
-            false, false, false, false, true,
-        ));
-    }
-
-    #[test]
-    fn contentless_save_guard_blocks_clean_unloaded_save_when_only_backup_exists() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
-        let options = SessionOptions::new(temp.path().to_path_buf(), "backup-only");
-        std::fs::write(options.backup_file_path(), b"backup").expect("backup write");
-
-        assert!(has_session_artifact(&options));
-        assert!(should_skip_unloaded_contentless_save(
-            false,
-            false,
-            false,
-            false,
-            has_session_artifact(&options),
-        ));
-    }
-
-    #[test]
-    fn contentless_save_guard_blocks_clean_unloaded_save_when_only_recovery_exists() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
-        let options = SessionOptions::new(temp.path().to_path_buf(), "recovery-only");
-        std::fs::write(options.recovery_file_path(), b"recovery").expect("recovery write");
-
-        assert!(has_session_artifact(&options));
-        assert!(should_skip_unloaded_contentless_save(
-            false,
-            false,
-            false,
-            false,
-            has_session_artifact(&options),
-        ));
-    }
-
-    #[test]
-    fn contentless_save_guard_blocks_clean_loaded_empty_save_when_only_preserved_recovery_exists() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
-        let options = SessionOptions::new(temp.path().to_path_buf(), "preserved-recovery");
-        std::fs::write(
-            options
-                .recovery_file_path()
-                .with_extension("recovery.empty"),
-            b"recovery",
-        )
-        .expect("preserved recovery write");
-
-        assert!(has_session_artifact(&options));
-        assert!(should_skip_unloaded_contentless_save(
-            false,
-            false,
-            false,
-            false,
-            has_session_artifact(&options),
-        ));
-    }
-
-    #[test]
-    fn contentless_save_guard_allows_real_board_data_or_dirty_state() {
-        assert!(!should_skip_unloaded_contentless_save(
-            false, false, false, true, true,
-        ));
-        assert!(!should_skip_unloaded_contentless_save(
-            false, true, false, false, true,
-        ));
-        assert!(!should_skip_unloaded_contentless_save(
-            false, false, true, false, true,
-        ));
-        assert!(!should_skip_unloaded_contentless_save(
-            true, false, false, false, true,
-        ));
-    }
-
-    #[test]
-    fn contentless_save_guard_allows_noop_when_no_session_artifact_exists() {
-        assert!(!should_skip_unloaded_contentless_save(
-            false, false, false, false, false,
-        ));
-    }
-}
+mod tests;

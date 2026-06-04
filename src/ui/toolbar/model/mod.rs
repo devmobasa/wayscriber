@@ -3,6 +3,7 @@ pub(crate) mod activation;
 pub(crate) mod control;
 pub(crate) mod event_policy;
 pub(crate) mod header;
+pub(crate) mod session;
 pub(crate) mod settings;
 pub(crate) mod tools;
 
@@ -31,6 +32,8 @@ pub(crate) use event_policy::{
 };
 #[allow(unused_imports)]
 pub(crate) use header::{SideHeaderModel, board_chip_label};
+#[allow(unused_imports)]
+pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
 pub(crate) use settings::{ToolbarSettingsButton, ToolbarSettingsModel, ToolbarSettingsToggle};
 #[allow(unused_imports)]

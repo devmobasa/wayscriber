@@ -1,4 +1,6 @@
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -141,6 +143,30 @@ backup_retention = 1
     fs::write(config_dir.join("config.toml"), config_contents).unwrap();
 }
 
+fn write_disabled_session_config(temp: &TempDir, custom_dir: &Path) {
+    let config_dir = temp.path().join("wayscriber");
+    fs::create_dir_all(&config_dir).unwrap();
+    let config_contents = format!(
+        r#"
+[session]
+persist_transparent = false
+persist_whiteboard = false
+persist_blackboard = false
+persist_history = false
+restore_tool_state = false
+storage = "custom"
+custom_directory = "{}"
+max_shapes_per_frame = 100
+max_file_size_mb = 5
+compress = "off"
+auto_compress_threshold_kb = 100
+backup_retention = 1
+"#,
+        custom_dir.display()
+    );
+    fs::write(config_dir.join("config.toml"), config_contents).unwrap();
+}
+
 fn wayscriber_cmd() -> Command {
     Command::new(env!("CARGO_BIN_EXE_wayscriber"))
 }
@@ -211,6 +237,244 @@ fn session_clear_command_succeeds_without_files() {
     .success()
     .stdout_contains("Session file:")
     .stdout_contains("No session file present");
+}
+
+#[test]
+fn named_session_info_missing_parent_reports_not_found() {
+    let temp = TempDir::new().unwrap();
+    let named_path = temp
+        .path()
+        .join("missing")
+        .join("lecture-04.wayscriber-session");
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--session-info")
+            .arg("--session-file")
+            .arg(&named_path),
+    )
+    .success()
+    .stdout_contains(&format!("Session file       : {}", named_path.display()))
+    .stdout_contains("(not found)");
+}
+
+#[test]
+fn named_session_info_forces_persistence_despite_disabled_config() {
+    let temp = TempDir::new().unwrap();
+    let session_dir = temp.path().join("sessions");
+    let named_path = temp.path().join("lecture-04.wayscriber-session");
+    write_disabled_session_config(&temp, &session_dir);
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--session-info")
+            .arg("--session-file")
+            .arg(&named_path),
+    )
+    .success()
+    .stdout_contains("Persist transparent: true")
+    .stdout_contains("Persist whiteboard : true")
+    .stdout_contains("Persist blackboard : true")
+    .stdout_contains("Persist history    : true")
+    .stdout_contains("Restore tool state : true");
+}
+
+#[test]
+fn named_session_clear_missing_parent_reports_no_artifacts() {
+    let temp = TempDir::new().unwrap();
+    let named_path = temp
+        .path()
+        .join("missing")
+        .join("lecture-04.wayscriber-session");
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--clear-session")
+            .arg("--session-file")
+            .arg(&named_path),
+    )
+    .success()
+    .stdout_contains(&format!("Session file: {}", named_path.display()))
+    .stdout_contains("No session artefacts found");
+}
+
+#[cfg(unix)]
+#[test]
+fn named_session_info_rejects_symlink_primary() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    fs::write(&target, b"{}").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--session-info")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
+}
+
+#[cfg(unix)]
+#[test]
+fn named_session_clear_rejects_symlink_primary_without_removing_artifacts() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    let mut backup_raw = std::ffi::OsString::from(link.as_os_str());
+    backup_raw.push(".bak");
+    let backup = PathBuf::from(backup_raw);
+    fs::write(&target, b"target").unwrap();
+    fs::write(&backup, b"backup").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--clear-session")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
+
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read(&target).unwrap(), b"target");
+    assert_eq!(fs::read(&backup).unwrap(), b"backup");
+}
+
+#[cfg(unix)]
+#[test]
+fn active_named_session_rejects_symlink_primary_before_wayland_preflight() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    fs::write(&target, b"{}").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env("WAYSCRIBER_NO_DETACH", "1")
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--active")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
+}
+
+#[cfg(unix)]
+#[test]
+fn freeze_named_session_rejects_symlink_primary_before_wayland_preflight() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("real-session.wayscriber-session");
+    let link = temp.path().join("linked-session.wayscriber-session");
+    fs::write(&target, b"{}").unwrap();
+    symlink(&target, &link).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env("WAYSCRIBER_NO_DETACH", "1")
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--freeze")
+            .arg("--session-file")
+            .arg(&link),
+    )
+    .failure()
+    .stderr_contains("not a symlink");
+}
+
+#[test]
+fn active_named_session_missing_parent_fails_before_wayland_preflight() {
+    let temp = TempDir::new().unwrap();
+    let named_path = temp
+        .path()
+        .join("missing")
+        .join("lecture-04.wayscriber-session");
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--active")
+            .arg("--session-file")
+            .arg(&named_path),
+    )
+    .failure()
+    .stderr_contains("named session parent directory does not exist")
+    .stderr_contains(&named_path.parent().unwrap().display().to_string());
+}
+
+#[test]
+fn active_named_session_directory_path_fails_before_wayland_preflight() {
+    let temp = TempDir::new().unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--active")
+            .arg("--session-file")
+            .arg(temp.path()),
+    )
+    .failure()
+    .stderr_contains("--session-file must name a session file, not a directory");
+}
+
+#[test]
+fn freeze_named_session_missing_parent_fails_before_wayland_preflight() {
+    let temp = TempDir::new().unwrap();
+    let named_path = temp
+        .path()
+        .join("missing")
+        .join("lecture-04.wayscriber-session");
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--freeze")
+            .arg("--session-file")
+            .arg(&named_path),
+    )
+    .failure()
+    .stderr_contains("named session parent directory does not exist");
+}
+
+#[test]
+fn freeze_named_session_missing_wayland_fails_before_detach() {
+    let temp = TempDir::new().unwrap();
+    let named_path = temp.path().join("lecture-04.wayscriber-session");
+
+    run_command(
+        wayscriber_cmd()
+            .env("XDG_CONFIG_HOME", temp.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .arg("--freeze")
+            .arg("--session-file")
+            .arg(&named_path),
+    )
+    .failure()
+    .stderr_contains("WAYLAND_DISPLAY not set");
 }
 
 #[test]

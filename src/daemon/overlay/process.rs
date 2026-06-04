@@ -77,6 +77,7 @@ impl Daemon {
             }
         }
         self.overlay_pid.store(0, Ordering::Release);
+        self.active_named_session_file = None;
         Ok(())
     }
 
@@ -92,6 +93,7 @@ impl Daemon {
                     self.overlay_child = None;
                     self.overlay_state = OverlayState::Hidden;
                     self.overlay_pid.store(0, Ordering::Release);
+                    self.active_named_session_file = None;
                 }
                 Ok(None) => {}
                 Err(err) => {

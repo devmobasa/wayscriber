@@ -12,9 +12,9 @@ use std::sync::atomic::AtomicBool;
 
 #[test]
 fn daemon_session_resume_override_reflects_constructor_value() {
-    let daemon_true = Daemon::new(None, false, Some(true));
-    let daemon_false = Daemon::new(None, false, Some(false));
-    let daemon_none = Daemon::new(None, false, None);
+    let daemon_true = Daemon::new(None, false, Some(true), None);
+    let daemon_false = Daemon::new(None, false, Some(false), None);
+    let daemon_none = Daemon::new(None, false, None, None);
 
     assert_eq!(daemon_true.session_resume_override(), Some(true));
     assert_eq!(daemon_false.session_resume_override(), Some(false));

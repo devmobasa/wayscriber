@@ -34,7 +34,8 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         exit_after_capture_mode,
     } = config::load(backend.exit_after_capture_mode);
     let config_dir = Config::config_directory_from_source(&source)?;
-    let session_options = session::build_session_options(&config, &config_dir);
+    let session_options =
+        session::build_session_options(&config, &config_dir, backend.named_session_file.clone());
     let output_prefs = output::resolve(&config);
 
     #[cfg(tablet)]

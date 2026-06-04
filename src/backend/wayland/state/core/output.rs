@@ -240,6 +240,13 @@ impl WaylandState {
                     );
                 }
             }
+            session::LoadSnapshotOutcome::NonRegularArtifact { path } => {
+                debug!(
+                    "Skipping non-regular session artifact {} for {}",
+                    path.display(),
+                    context
+                );
+            }
             session::LoadSnapshotOutcome::ExpandedTooLarge {
                 path,
                 max_expanded_size,

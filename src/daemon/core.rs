@@ -3,6 +3,7 @@ use log::{info, warn};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -19,7 +20,12 @@ use crate::tray_action::TrayAction;
 use crate::{RESUME_SESSION_ENV, decode_session_override, encode_session_override};
 use wayscriber::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 
-use super::control::DaemonToggleRequest;
+#[cfg(test)]
+use super::control::read_daemon_toggle_response;
+use super::control::{
+    DaemonToggleCommand, DaemonToggleCommands, DaemonToggleRequest,
+    write_daemon_toggle_command_error, write_daemon_toggle_command_success,
+};
 use super::global_shortcuts::start_global_shortcuts_listener;
 use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
@@ -32,6 +38,8 @@ pub struct Daemon {
     pub(super) toggle_requested: Arc<AtomicBool>,
     pub(super) signal_toggle_requested: Arc<AtomicBool>,
     pub(super) initial_mode: Option<String>,
+    pub(super) initial_named_session_file: Option<PathBuf>,
+    pub(super) active_named_session_file: Option<PathBuf>,
     pub(super) instance_token: String,
     pub(super) freeze_on_show: bool,
     pub(super) tray_enabled: bool,
@@ -57,6 +65,7 @@ impl Daemon {
         initial_mode: Option<String>,
         tray_enabled: bool,
         session_resume_override: Option<bool>,
+        initial_named_session_file: Option<PathBuf>,
     ) -> Self {
         let override_state = Arc::new(AtomicU8::new(encode_session_override(
             session_resume_override,
@@ -67,6 +76,8 @@ impl Daemon {
             toggle_requested: Arc::new(AtomicBool::new(false)),
             signal_toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            initial_named_session_file,
+            active_named_session_file: None,
             instance_token: crate::daemon::generate_daemon_instance_token(),
             freeze_on_show: false,
             tray_enabled,
@@ -100,6 +111,8 @@ impl Daemon {
             toggle_requested: Arc::new(AtomicBool::new(false)),
             signal_toggle_requested: Arc::new(AtomicBool::new(false)),
             initial_mode,
+            initial_named_session_file: None,
+            active_named_session_file: None,
             instance_token: crate::daemon::generate_daemon_instance_token(),
             freeze_on_show: false,
             tray_enabled: true,
@@ -133,12 +146,49 @@ impl Daemon {
         self.freeze_on_show = enabled;
     }
 
+    pub(super) fn effective_named_session_file(&self) -> Option<PathBuf> {
+        self.pending_toggle_request
+            .as_ref()
+            .and_then(|request| request.session_file.clone())
+            .or_else(|| self.initial_named_session_file.clone())
+    }
+
+    fn ensure_visible_overlay_can_accept_request(
+        &self,
+        request: Option<&DaemonToggleRequest>,
+    ) -> Result<()> {
+        let Some(requested) = request.and_then(|request| request.session_file.as_ref()) else {
+            return Ok(());
+        };
+        if self.overlay_state != OverlayState::Visible {
+            return Ok(());
+        }
+        if self
+            .active_named_session_file
+            .as_ref()
+            .is_some_and(|active| named_session_paths_match(active, requested))
+        {
+            return Ok(());
+        }
+
+        Err(anyhow::anyhow!(
+            "cannot switch named session target while overlay is visible; hide the overlay first"
+        ))
+    }
+
     fn process_single_toggle(
         &mut self,
         request: Option<DaemonToggleRequest>,
         activation_token: Option<String>,
         suppress_overlay_action_signal: bool,
     ) -> Result<bool> {
+        let request = request
+            .map(|mut request| {
+                request.normalize_and_validate_session_file()?;
+                Ok::<_, anyhow::Error>(request)
+            })
+            .transpose()?;
+        self.ensure_visible_overlay_can_accept_request(request.as_ref())?;
         if let Some(action) = request.as_ref().and_then(|request| request.overlay_action) {
             self.pending_activation_token = activation_token;
             self.pending_toggle_request = request.filter(|request| !request.is_empty());
@@ -169,6 +219,36 @@ impl Daemon {
             return Err(err);
         }
         Ok(false)
+    }
+
+    fn process_queued_toggle_command(
+        &mut self,
+        command: DaemonToggleCommand,
+        suppress_overlay_action_signal: &mut bool,
+    ) {
+        let result = self.process_single_toggle(
+            Some(command.request.clone()),
+            None,
+            *suppress_overlay_action_signal,
+        );
+        match result {
+            Ok(spawned_overlay) => {
+                *suppress_overlay_action_signal |= spawned_overlay;
+                if let Err(err) = write_daemon_toggle_command_success(&command) {
+                    warn!("Failed to write daemon toggle response: {}", err);
+                }
+            }
+            Err(err) => {
+                let message = format!("{err:#}");
+                warn!("Toggle overlay failed: {}", message);
+                if let Err(response_err) = write_daemon_toggle_command_error(&command, &message) {
+                    warn!(
+                        "Failed to write daemon toggle error response: {}",
+                        response_err
+                    );
+                }
+            }
+        }
     }
 
     fn dispatch_overlay_action(
@@ -214,7 +294,10 @@ impl Daemon {
         let queued_requests = if signal_toggle_requested {
             crate::daemon::take_daemon_toggle_requests(&self.instance_token)?
         } else {
-            Vec::new()
+            DaemonToggleCommands {
+                commands: Vec::new(),
+                saw_command_files: false,
+            }
         };
 
         if !signal_toggle_requested || activation_token.is_some() {
@@ -222,23 +305,29 @@ impl Daemon {
         }
 
         if signal_toggle_requested {
-            let requests = if queued_requests.is_empty() {
-                vec![DaemonToggleRequest::default()]
-            } else {
-                queued_requests
-            };
-
-            let mut suppress_overlay_action_signal = false;
-            for request in requests {
-                let spawned_overlay = self.process_single_toggle(
-                    Some(request),
-                    None,
-                    suppress_overlay_action_signal,
-                )?;
-                suppress_overlay_action_signal |= spawned_overlay;
-            }
+            self.process_signal_toggle_commands(queued_requests)?;
         }
 
+        Ok(())
+    }
+
+    fn process_signal_toggle_commands(
+        &mut self,
+        queued_requests: DaemonToggleCommands,
+    ) -> Result<()> {
+        if queued_requests.commands.is_empty() {
+            if queued_requests.saw_command_files {
+                return Ok(());
+            }
+            return self
+                .process_single_toggle(Some(DaemonToggleRequest::default()), None, false)
+                .map(drop);
+        }
+
+        let mut suppress_overlay_action_signal = false;
+        for command in queued_requests.commands {
+            self.process_queued_toggle_command(command, &mut suppress_overlay_action_signal);
+        }
         Ok(())
     }
 
@@ -467,6 +556,10 @@ impl Daemon {
     }
 }
 
+fn named_session_paths_match(left: &Path, right: &Path) -> bool {
+    crate::session::catalog::session_paths_match(left, right)
+}
+
 #[cfg(test)]
 impl Daemon {
     pub fn test_state(&self) -> OverlayState {
@@ -504,5 +597,89 @@ mod tests {
         assert_eq!(daemon.test_state(), OverlayState::Hidden);
         assert!(daemon.pending_toggle_request.is_none());
         assert!(daemon.pending_activation_token.is_none());
+    }
+
+    #[test]
+    fn visible_overlay_rejects_different_named_session_request() {
+        let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+        daemon.overlay_state = OverlayState::Visible;
+        daemon.active_named_session_file =
+            Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
+
+        let err = daemon
+            .process_single_toggle(
+                Some(DaemonToggleRequest {
+                    session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
+                    ..Default::default()
+                }),
+                None,
+                false,
+            )
+            .expect_err("different visible named target should be rejected");
+
+        assert!(
+            format!("{err:#}")
+                .contains("cannot switch named session target while overlay is visible"),
+            "{err:#}"
+        );
+        assert_eq!(daemon.test_state(), OverlayState::Visible);
+        assert_eq!(
+            daemon.active_named_session_file.as_deref(),
+            Some(std::path::Path::new("/tmp/current.wayscriber-session"))
+        );
+    }
+
+    #[test]
+    fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let runner: Arc<BackendRunner> = Arc::new(|_| Ok(()));
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+        daemon.overlay_state = OverlayState::Visible;
+        daemon.active_named_session_file =
+            Some(std::path::PathBuf::from("/tmp/current.wayscriber-session"));
+        let command = DaemonToggleCommand {
+            daemon_token: "daemon-token".into(),
+            request: DaemonToggleRequest {
+                session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
+                ..Default::default()
+            },
+            request_path: temp.path().join("request.json"),
+            response_path: temp.path().join("responses").join("request.json"),
+        };
+
+        let mut suppress_overlay_action_signal = false;
+        daemon.process_queued_toggle_command(command.clone(), &mut suppress_overlay_action_signal);
+
+        let err = read_daemon_toggle_response(&command.response_path)
+            .expect_err("visible target mismatch should be written to response");
+        assert!(
+            format!("{err:#}")
+                .contains("cannot switch named session target while overlay is visible"),
+            "{err:#}"
+        );
+        assert_eq!(daemon.test_state(), OverlayState::Visible);
+        assert!(!suppress_overlay_action_signal);
+    }
+
+    #[test]
+    fn typed_signal_with_no_executable_commands_does_not_fallback_to_raw_toggle() {
+        let called = Arc::new(AtomicUsize::new(0));
+        let called_clone = Arc::clone(&called);
+        let runner: Arc<BackendRunner> = Arc::new(move |_| {
+            called_clone.fetch_add(1, AtomicOrdering::SeqCst);
+            Ok(())
+        });
+        let mut daemon = Daemon::with_backend_runner(None, runner);
+
+        daemon
+            .process_signal_toggle_commands(DaemonToggleCommands {
+                commands: Vec::new(),
+                saw_command_files: true,
+            })
+            .expect("typed command marker should suppress raw fallback");
+
+        assert_eq!(called.load(AtomicOrdering::SeqCst), 0);
+        assert_eq!(daemon.test_state(), OverlayState::Hidden);
     }
 }

@@ -6,7 +6,7 @@ use super::Shape;
 use crate::util::Rect;
 
 /// Tracks dirty rectangles accumulated between renders.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DirtyTracker {
     regions: Vec<Rect>,
     force_full: bool,

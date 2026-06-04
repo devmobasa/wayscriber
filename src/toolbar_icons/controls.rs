@@ -43,6 +43,26 @@ pub fn draw_icon_more(ctx: &Context, x: f64, y: f64, size: f64) {
     }
 }
 
+/// Draw an information icon.
+pub fn draw_icon_info(ctx: &Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let stroke = (s * 0.1).max(1.4);
+    let cx = x + s * 0.5;
+    let cy = y + s * 0.5;
+
+    ctx.set_line_width(stroke);
+    ctx.set_line_cap(cairo::LineCap::Round);
+    ctx.arc(cx, cy, s * 0.38, 0.0, PI * 2.0);
+    let _ = ctx.stroke();
+
+    ctx.arc(cx, y + s * 0.32, (s * 0.055).max(1.0), 0.0, PI * 2.0);
+    let _ = ctx.fill();
+
+    ctx.move_to(cx, y + s * 0.45);
+    ctx.line_to(cx, y + s * 0.68);
+    let _ = ctx.stroke();
+}
+
 /// Draw a paste/clipboard icon
 pub fn draw_icon_paste(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;

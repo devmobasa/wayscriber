@@ -1,8 +1,8 @@
 use crate::backend::wayland::toolbar::rows::capped_grid_columns;
 use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model::{
-    ToolbarActionsModel, ToolbarCommandGroupKind, ToolbarSettingsModel, toolbar_boards_model,
-    toolbar_pages_model,
+    ToolbarActionsModel, ToolbarCommandGroupKind, ToolbarSessionModel, ToolbarSettingsModel,
+    toolbar_boards_model, toolbar_pages_model,
 };
 use crate::ui::toolbar::snapshot::ToolContext;
 
@@ -27,6 +27,7 @@ impl ToolbarLayoutSpec {
         let show_settings_section = snapshot.show_settings_section
             && snapshot.drawer_open
             && snapshot.drawer_tab == crate::input::ToolbarDrawerTab::App;
+        let show_session_section = ToolbarSessionModel::from_snapshot(snapshot).is_some();
 
         let mut height: f64 = base_height;
         let add_section = |section_height: f64, height: &mut f64| {
@@ -105,6 +106,11 @@ impl ToolbarLayoutSpec {
         if show_step_section {
             let step_h = self.side_step_height(snapshot);
             add_section(step_h, &mut height);
+        }
+
+        if show_session_section {
+            let session_h = self.side_session_height(snapshot);
+            add_section(session_h, &mut height);
         }
 
         if show_settings_section {
@@ -308,6 +314,35 @@ impl ToolbarLayoutSpec {
         let buttons_h = Self::SIDE_SETTINGS_BUTTON_HEIGHT;
         let content_h = toggle_rows_h + toggle_gap + buttons_h;
         Self::SIDE_SECTION_TOGGLE_OFFSET_Y + content_h + Self::SIDE_SETTINGS_BUTTON_GAP
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_session_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        let Some(session) = ToolbarSessionModel::from_snapshot(snapshot) else {
+            return 0.0;
+        };
+        let button_rows = session.button_rows();
+        let buttons_h = if button_rows == 0 {
+            0.0
+        } else {
+            Self::SIDE_SESSION_BUTTON_HEIGHT * button_rows as f64
+                + Self::SIDE_SESSION_ROW_GAP * (button_rows as f64 - 1.0)
+        };
+        let recents_h = if session.has_recent_sessions() {
+            Self::SIDE_SESSION_ROW_GAP
+                + session.recents.len() as f64
+                    * (Self::SIDE_SESSION_RECENT_HEIGHT + Self::SIDE_SESSION_ROW_GAP)
+        } else {
+            0.0
+        };
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y
+            + Self::SIDE_SESSION_META_HEIGHT
+            + Self::SIDE_SESSION_ROW_GAP
+            + buttons_h
+            + recents_h
+            + Self::SIDE_SESSION_ROW_GAP
     }
 
     /// Y position where Row 2 (mode controls row) starts

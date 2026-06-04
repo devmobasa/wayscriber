@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::path::PathBuf;
 
 use crate::tray_action::TrayAction;
 
@@ -42,6 +43,9 @@ pub struct Cli {
 
     /// Show session persistence status and file paths
     pub session_info: bool,
+
+    /// Use a named session file for active/freeze/info/clear operations
+    pub session_file: Option<PathBuf>,
 
     /// Start with frozen mode active (freeze the screen immediately)
     pub freeze: bool,
@@ -127,6 +131,11 @@ impl Cli {
                 "--freeze-on-show" => cli.freeze_on_show = true,
                 "--clear-session" => cli.clear_session = true,
                 "--session-info" => cli.session_info = true,
+                "--session-file" => {
+                    index += 1;
+                    cli.session_file =
+                        Some(PathBuf::from(value_after(&args, index, "--session-file")?));
+                }
                 "--freeze" => cli.freeze = true,
                 "--exit-after-capture" => cli.exit_after_capture = true,
                 "--no-exit-after-capture" => cli.no_exit_after_capture = true,
@@ -141,6 +150,10 @@ impl Cli {
                 }
                 _ if arg.starts_with("--mode=") => {
                     cli.mode = Some(value_from_equals(arg, "--mode")?);
+                }
+                _ if arg.starts_with("--session-file=") => {
+                    cli.session_file =
+                        Some(PathBuf::from(value_from_equals(arg, "--session-file")?));
                 }
                 _ if is_short_option_cluster(arg) => {
                     index = parse_short_option_cluster(&args, index, &mut cli)?;
@@ -190,6 +203,7 @@ impl Cli {
                 || self.freeze_on_show
                 || self.clear_session
                 || self.session_info
+                || self.session_file.is_some()
                 || self.freeze
                 || self.exit_after_capture
                 || self.no_exit_after_capture
@@ -219,6 +233,46 @@ impl Cli {
             return Err("--freeze-on-show conflicts with overlay/session commands".to_string());
         }
 
+        let overlay_action_count = [
+            self.daemon_action.is_some(),
+            self.light_toggle,
+            self.light_draw_toggle,
+            self.light_draw_on,
+            self.light_draw_off,
+        ]
+        .into_iter()
+        .filter(|selected| *selected)
+        .count();
+
+        if self.session_file.is_some() {
+            if overlay_action_count > 0 {
+                return Err(
+                    "--session-file cannot be combined with daemon overlay actions; use --daemon-toggle --session-file to launch a named session"
+                        .to_string(),
+                );
+            }
+            if !(self.active
+                || self.freeze
+                || self.daemon
+                || self.daemon_toggle
+                || self.clear_session
+                || self.session_info)
+            {
+                return Err(
+                    "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, or --clear-session"
+                        .to_string(),
+                );
+            }
+            if (self.active || self.freeze || self.daemon || self.daemon_toggle)
+                && self.no_resume_session
+            {
+                return Err(
+                    "--session-file conflicts with --no-resume-session because --session-file requires session persistence for this run"
+                        .to_string(),
+                );
+            }
+        }
+
         if self.daemon_toggle
             && (self.daemon
                 || self.active
@@ -231,16 +285,6 @@ impl Cli {
             return Err("--daemon-toggle conflicts with the selected command".to_string());
         }
 
-        let overlay_action_count = [
-            self.daemon_action.is_some(),
-            self.light_toggle,
-            self.light_draw_toggle,
-            self.light_draw_on,
-            self.light_draw_off,
-        ]
-        .into_iter()
-        .filter(|selected| *selected)
-        .count();
         if overlay_action_count > 1 {
             return Err("daemon overlay actions conflict with each other".to_string());
         }
@@ -253,6 +297,7 @@ impl Cli {
                 || self.freeze_on_show
                 || self.clear_session
                 || self.session_info
+                || self.session_file.is_some()
                 || self.freeze
                 || self.exit_after_capture
                 || self.no_exit_after_capture
@@ -272,6 +317,16 @@ impl Cli {
         if self.freeze && (self.daemon || self.clear_session || self.session_info) {
             return Err("--freeze conflicts with the selected command".to_string());
         }
+        if (self.clear_session || self.session_info) && self.resume_session {
+            return Err(
+                "--resume-session conflicts with --clear-session/--session-info".to_string(),
+            );
+        }
+        if (self.clear_session || self.session_info) && self.no_resume_session {
+            return Err(
+                "--no-resume-session conflicts with --clear-session/--session-info".to_string(),
+            );
+        }
         if self.about
             && (self.daemon
                 || self.daemon_toggle
@@ -282,6 +337,7 @@ impl Cli {
                 || self.freeze_on_show
                 || self.clear_session
                 || self.session_info
+                || self.session_file.is_some()
                 || self.freeze
                 || self.resume_session
                 || self.no_resume_session)
@@ -374,16 +430,18 @@ fn print_help() {
     println!("wayscriber: Screen annotation tool for Wayland compositors");
     println!();
     println!("Usage:");
-    println!("  wayscriber -d, --daemon");
+    println!("  wayscriber -d, --daemon [--session-file PATH]");
     println!("  wayscriber --daemon --freeze-on-show");
-    println!("  wayscriber --daemon-toggle [--freeze] [--mode MODE]");
+    println!("  wayscriber --daemon-toggle [--freeze] [--mode MODE] [--session-file PATH]");
     println!("  wayscriber --daemon-action ACTION");
     println!(
         "  wayscriber --light-toggle | --light-draw-toggle | --light-draw-on | --light-draw-off"
     );
     println!("  wayscriber -a, --active [--mode MODE]");
-    println!("  wayscriber --freeze");
-    println!("  wayscriber --clear-session | --session-info");
+    println!("  wayscriber --active --session-file PATH");
+    println!("  wayscriber --freeze [--session-file PATH]");
+    println!("  wayscriber --session-info [--session-file PATH]");
+    println!("  wayscriber --clear-session [--session-file PATH]");
     println!("  wayscriber --about");
     println!();
     println!("Options:");
@@ -405,6 +463,7 @@ fn print_help() {
     println!("      --no-resume-session       Force session resume off");
     println!("      --clear-session           Delete persisted session data and backups");
     println!("      --session-info            Show session persistence status");
+    println!("      --session-file PATH       Use a named session file");
     println!("      --about                   Show the About window");
     println!("  -h, --help                    Show help");
     println!("  -V, --version                 Show version");
@@ -415,131 +474,4 @@ fn print_version() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::Cli;
-    use crate::tray_action::TrayAction;
-
-    #[test]
-    fn active_mode_with_explicit_board_id() {
-        let cli = Cli::try_parse_from(["wayscriber", "--active", "--mode", "whiteboard"]).unwrap();
-        assert!(cli.active);
-        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
-    }
-
-    #[test]
-    fn clap_compatible_short_mode_forms_are_supported() {
-        let cli = Cli::try_parse_from(["wayscriber", "-mwhiteboard"]).unwrap();
-        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
-
-        let cli = Cli::try_parse_from(["wayscriber", "-m=whiteboard"]).unwrap();
-        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
-
-        let cli = Cli::try_parse_from(["wayscriber", "-dm=whiteboard"]).unwrap();
-        assert!(cli.daemon);
-        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
-
-        let cli = Cli::try_parse_from(["wayscriber", "-am", "whiteboard"]).unwrap();
-        assert!(cli.active);
-        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
-
-        let cli = Cli::try_parse_from(["wayscriber", "-amwhiteboard"]).unwrap();
-        assert!(cli.active);
-        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
-    }
-
-    #[test]
-    fn daemon_mode_accepts_freeze_on_show() {
-        let cli = Cli::try_parse_from(["wayscriber", "--daemon", "--freeze-on-show"]).unwrap();
-        assert!(cli.daemon);
-        assert!(cli.freeze_on_show);
-    }
-
-    #[test]
-    fn daemon_toggle_accepts_overlay_launch_args() {
-        let cli = Cli::try_parse_from([
-            "wayscriber",
-            "--daemon-toggle",
-            "--freeze",
-            "--mode",
-            "whiteboard",
-            "--exit-after-capture",
-            "--resume-session",
-        ])
-        .unwrap();
-        assert!(cli.daemon_toggle);
-        assert!(cli.freeze);
-        assert_eq!(cli.mode.as_deref(), Some("whiteboard"));
-        assert!(cli.exit_after_capture);
-        assert!(cli.resume_session);
-    }
-
-    #[test]
-    fn daemon_action_accepts_light_mode_actions() {
-        let cli =
-            Cli::try_parse_from(["wayscriber", "--daemon-action", "light_draw_toggle"]).unwrap();
-        assert_eq!(cli.daemon_action.as_deref(), Some("light_draw_toggle"));
-        assert_eq!(
-            cli.daemon_overlay_action().unwrap(),
-            Some(TrayAction::LightDrawToggle)
-        );
-    }
-
-    #[test]
-    fn friendly_light_aliases_resolve_to_tray_actions() {
-        let cases = [
-            ("--light-toggle", TrayAction::ToggleLightMode),
-            ("--light-draw-toggle", TrayAction::LightDrawToggle),
-            ("--light-draw-on", TrayAction::LightDrawOn),
-            ("--light-draw-off", TrayAction::LightDrawOff),
-        ];
-
-        for (flag, expected) in cases {
-            let cli = Cli::try_parse_from(["wayscriber", flag]).unwrap();
-            assert_eq!(cli.daemon_overlay_action().unwrap(), Some(expected));
-        }
-    }
-
-    #[test]
-    fn friendly_light_aliases_conflict_with_raw_daemon_action() {
-        let result = Cli::try_parse_from([
-            "wayscriber",
-            "--daemon-action",
-            "toggle_light_mode",
-            "--light-toggle",
-        ]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn friendly_light_aliases_conflict_with_each_other() {
-        let result = Cli::try_parse_from(["wayscriber", "--light-toggle", "--light-draw-toggle"]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn raw_daemon_action_reports_unknown_action() {
-        let cli = Cli::try_parse_from(["wayscriber", "--daemon-action", "not_real"]).unwrap();
-        assert_eq!(
-            cli.daemon_overlay_action().unwrap_err(),
-            "unknown daemon action 'not_real'"
-        );
-    }
-
-    #[test]
-    fn cli_conflicting_flags_fail() {
-        let result = Cli::try_parse_from(["wayscriber", "--active", "--clear-session"]);
-        assert!(
-            result.is_err(),
-            "expected conflicting flags (--active and --clear-session) to error"
-        );
-    }
-
-    #[test]
-    fn freeze_on_show_requires_daemon() {
-        let result = Cli::try_parse_from(["wayscriber", "--freeze-on-show"]);
-        assert!(
-            result.is_err(),
-            "expected --freeze-on-show without --daemon to error"
-        );
-    }
-}
+mod tests;

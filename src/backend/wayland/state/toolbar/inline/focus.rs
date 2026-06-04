@@ -89,7 +89,12 @@ impl WaylandState {
         }
     }
 
-    pub(in crate::backend::wayland) fn handle_toolbar_key(&mut self, key: Key) -> bool {
+    pub(in crate::backend::wayland) fn handle_toolbar_key(
+        &mut self,
+        key: Key,
+        conn: Option<&wayland_client::Connection>,
+        qh: Option<&wayland_client::QueueHandle<Self>>,
+    ) -> bool {
         if !should_route_toolbar_key(
             key,
             self.toolbar.is_visible(),
@@ -140,7 +145,7 @@ impl WaylandState {
                 self.toolbar.focused_event(target)
             };
             if let Some(event) = event {
-                self.handle_toolbar_event(event);
+                self.handle_toolbar_event(event, conn, qh);
             }
             return true;
         }
