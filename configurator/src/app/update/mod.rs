@@ -51,6 +51,12 @@ impl ConfiguratorApp {
             Message::SessionCatalogDuplicateRequested(id) => {
                 self.handle_session_catalog_duplicate_requested(id)
             }
+            Message::SessionCatalogMoveInputChanged(id, value) => {
+                self.handle_session_catalog_move_input_changed(id, value)
+            }
+            Message::SessionCatalogMoveRequested(id) => {
+                self.handle_session_catalog_move_requested(id)
+            }
             Message::SessionCatalogRevealRequested(id) => {
                 self.handle_session_catalog_reveal_requested(id)
             }

@@ -3,7 +3,7 @@ use iced::{Element, Length};
 
 use crate::app::session_catalog::{
     session_artifact_status_label, session_clear_cached_status_blocker,
-    session_duplicate_cached_status_blocker,
+    session_duplicate_cached_status_blocker, session_move_cached_status_blocker,
 };
 use crate::app::view::theme;
 use crate::messages::Message;
@@ -215,6 +215,8 @@ impl ConfiguratorApp {
         let rename_valid = !rename_value.trim().is_empty();
         let duplicate_value = self.session_catalog.duplicate_value(&item.id, &item.path);
         let duplicate_valid = !duplicate_value.trim().is_empty();
+        let move_value = self.session_catalog.move_value(&item.id, &item.path);
+        let move_valid = !move_value.trim().is_empty();
         let busy = self.session_catalog.busy || self.session_catalog.is_loading;
 
         let mut rename_button = button("Save Name").style(theme::Button::Secondary);
@@ -229,6 +231,12 @@ impl ConfiguratorApp {
         if !busy && duplicate_blocker.is_none() && duplicate_valid {
             duplicate_button =
                 duplicate_button.on_press(Message::SessionCatalogDuplicateRequested(id.clone()));
+        }
+
+        let move_blocker = session_move_cached_status_blocker(self.daemon_status.as_ref());
+        let mut move_button = button("Move").style(theme::Button::Secondary);
+        if !busy && move_blocker.is_none() && move_valid {
+            move_button = move_button.on_press(Message::SessionCatalogMoveRequested(id.clone()));
         }
 
         let mut reveal_button = button("Reveal File").style(theme::Button::Secondary);
@@ -300,10 +308,19 @@ impl ConfiguratorApp {
             .padding(8)
             .width(Length::Fill);
 
+        let move_id = item.id.clone();
+        let move_input = text_input("Move target path", &move_value)
+            .on_input(move |value| Message::SessionCatalogMoveInputChanged(move_id.clone(), value))
+            .padding(8)
+            .width(Length::Fill);
+
         let rename_controls = row![rename_input, rename_button]
             .spacing(8)
             .align_y(iced::Alignment::Center);
         let duplicate_controls = row![duplicate_input, duplicate_button]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+        let move_controls = row![move_input, move_button]
             .spacing(8)
             .align_y(iced::Alignment::Center);
 
@@ -311,10 +328,19 @@ impl ConfiguratorApp {
             .spacing(8)
             .align_y(iced::Alignment::Center);
 
-        container(column![details, rename_controls, duplicate_controls, actions].spacing(8))
-            .padding(10)
-            .width(Length::Fill)
-            .style(theme::Container::Box)
-            .into()
+        container(
+            column![
+                details,
+                rename_controls,
+                duplicate_controls,
+                move_controls,
+                actions
+            ]
+            .spacing(8),
+        )
+        .padding(10)
+        .width(Length::Fill)
+        .style(theme::Container::Box)
+        .into()
     }
 }

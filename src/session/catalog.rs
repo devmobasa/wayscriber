@@ -162,6 +162,34 @@ pub fn rename_session_display_name_by_id(
     })
 }
 
+/// Update a catalog entry's session path after a committed disk move.
+#[allow(dead_code)]
+pub fn move_session_path_by_id(id: &str, target_path: &Path) -> Result<Option<CatalogEntry>> {
+    let target_identity = session_path_identity(target_path);
+    with_catalog_write(|catalog| {
+        if catalog
+            .sessions
+            .iter()
+            .any(|entry| entry.id != id && entry_matches_identity(entry, &target_identity))
+        {
+            return Err(anyhow!(
+                "session move target is already present in the catalog: {}",
+                target_identity.exact_path.display()
+            ));
+        }
+
+        let Some(entry) = catalog.sessions.iter_mut().find(|entry| entry.id == id) else {
+            return Ok(None);
+        };
+        entry.path = path_to_string(&target_identity.exact_path)?;
+        entry.canonical_path = optional_path_to_string(target_identity.canonical_path.as_deref())?;
+        if entry.display_name.trim().is_empty() {
+            entry.display_name = display_name_for_path(&target_identity.exact_path);
+        }
+        Ok(Some(entry.clone()))
+    })
+}
+
 pub(crate) fn record_named_session_opened(options: &SessionOptions) {
     if !options.is_named_file() {
         return;

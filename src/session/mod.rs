@@ -14,9 +14,11 @@ mod storage;
 
 #[allow(unused_imports)]
 pub use artifacts::{
-    NamedSessionClearOutcome, NamedSessionDuplicateOutcome, SessionArtifactPaths,
-    clear_named_session_non_lock_artifacts, duplicate_named_session_primary,
+    NamedSessionClearOutcome, NamedSessionDuplicateOutcome, NamedSessionMoveOutcome,
+    NamedSessionMovedArtifact, SessionArtifactPaths, clear_named_session_non_lock_artifacts,
+    duplicate_named_session_primary, move_named_session_non_lock_artifacts,
     named_session_artifact_paths, named_session_non_lock_artifact_paths,
+    rollback_named_session_non_lock_artifacts_move,
 };
 pub use lock::try_lock_exclusive;
 pub(crate) use options::append_path_suffix;

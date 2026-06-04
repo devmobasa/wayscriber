@@ -249,6 +249,59 @@ fn rename_display_name_changes_metadata_only_and_allows_duplicates() {
 }
 
 #[test]
+fn move_session_path_by_id_preserves_id_and_display_name() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let source = temp.path().join("lecture.wayscriber-session");
+    let target = temp.path().join("archive.wayscriber-session");
+    fs::write(&source, b"{}").unwrap();
+    let entry =
+        upsert_session_event_with_display_name(&source, CatalogEvent::Saved, "Lecture").unwrap();
+    fs::rename(&source, &target).unwrap();
+
+    let moved = move_session_path_by_id(&entry.id, &target)
+        .unwrap()
+        .expect("entry should move");
+
+    assert_eq!(moved.id, entry.id);
+    assert_eq!(moved.display_name, "Lecture");
+    assert_eq!(
+        Path::new(&moved.path),
+        session_path_identity(&target).exact_path
+    );
+    let recents = recent_sessions().unwrap();
+    assert_eq!(recents.len(), 1);
+    assert_eq!(recents[0].id, entry.id);
+    assert_eq!(
+        Path::new(&recents[0].path),
+        session_path_identity(&target).exact_path
+    );
+}
+
+#[test]
+fn move_session_path_by_id_rejects_catalog_target_collision() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let source = temp.path().join("lecture.wayscriber-session");
+    let target = temp.path().join("archive.wayscriber-session");
+    fs::write(&source, b"{}").unwrap();
+    fs::write(&target, b"{}").unwrap();
+    let source_entry =
+        upsert_session_event_with_display_name(&source, CatalogEvent::Saved, "Lecture").unwrap();
+    let target_entry =
+        upsert_session_event_with_display_name(&target, CatalogEvent::Saved, "Archive").unwrap();
+
+    let err = move_session_path_by_id(&source_entry.id, &target)
+        .expect_err("target catalog entry should block move metadata update");
+
+    assert!(format!("{err:#}").contains("already present in the catalog"));
+    let recents = recent_sessions().unwrap();
+    assert_eq!(recents.len(), 2);
+    assert!(recents.iter().any(|entry| entry.id == source_entry.id));
+    assert!(recents.iter().any(|entry| entry.id == target_entry.id));
+}
+
+#[test]
 fn renamed_display_name_survives_later_upsert() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = EnvGuard::set_xdg_data_home(temp.path());
