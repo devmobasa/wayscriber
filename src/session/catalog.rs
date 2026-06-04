@@ -10,6 +10,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::lock::{lock_exclusive, open_runtime_lock_file, unlock};
 use super::options::SessionOptions;
 
+mod identity;
+
+#[cfg(test)]
+use identity::normalize_exact_path;
+pub use identity::{CatalogPathIdentity, session_path_identity, session_paths_match};
+use identity::{
+    display_name_for_path, entry_matches_identity, optional_path_to_string, path_to_string,
+};
+
 const CATALOG_VERSION: u32 = 1;
 static NEXT_CATALOG_ID: AtomicU64 = AtomicU64::new(0);
 static NEXT_CATALOG_TEMP_ID: AtomicU64 = AtomicU64::new(0);
@@ -42,12 +51,6 @@ impl CatalogEntry {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogPathIdentity {
-    pub exact_path: PathBuf,
-    pub canonical_path: Option<PathBuf>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CatalogFile {
     version: u32,
@@ -66,24 +69,6 @@ impl Default for CatalogFile {
 /// Path to the session catalog under the configured XDG data root.
 pub fn catalog_path() -> PathBuf {
     catalog_dir().join("sessions.json")
-}
-
-/// Compute the exact/canonical identity used for dedupe without creating files.
-pub fn session_path_identity(path: &Path) -> CatalogPathIdentity {
-    let exact_path = normalize_exact_path(path);
-    let canonical_path = existing_or_parent_canonical_path(&exact_path);
-    CatalogPathIdentity {
-        exact_path,
-        canonical_path,
-    }
-}
-
-/// Return true when two paths identify the same session target by exact or
-/// canonical identity without requiring the primary file to exist.
-pub fn session_paths_match(a: &Path, b: &Path) -> bool {
-    let a = session_path_identity(a);
-    let b = session_path_identity(b);
-    catalog_identities_match(&a, &b)
 }
 
 /// Upsert a session in the catalog and mark it opened or saved.
@@ -291,16 +276,6 @@ impl CatalogFile {
     }
 }
 
-fn catalog_identities_match(a: &CatalogPathIdentity, b: &CatalogPathIdentity) -> bool {
-    if a.exact_path == b.exact_path {
-        return true;
-    }
-    match (a.canonical_path.as_deref(), b.canonical_path.as_deref()) {
-        (Some(a), Some(b)) => a == b,
-        _ => false,
-    }
-}
-
 fn with_catalog_write<T>(update: impl FnOnce(&mut CatalogFile) -> Result<T>) -> Result<T> {
     let path = catalog_path();
     let dir = path
@@ -464,76 +439,6 @@ fn apply_event(entry: &mut CatalogEntry, event: CatalogEvent, now: u64) {
         CatalogEvent::Opened => entry.last_opened_at_millis = Some(now),
         CatalogEvent::Saved => entry.last_saved_at_millis = Some(now),
     }
-}
-
-fn entry_matches_identity(entry: &CatalogEntry, identity: &CatalogPathIdentity) -> bool {
-    if path_string_matches(&entry.path, &identity.exact_path) {
-        return true;
-    }
-    match (
-        entry.canonical_path.as_deref(),
-        identity.canonical_path.as_deref(),
-    ) {
-        (Some(existing), Some(candidate)) => path_string_matches(existing, candidate),
-        _ => false,
-    }
-}
-
-fn path_string_matches(existing: &str, candidate: &Path) -> bool {
-    Path::new(existing) == candidate
-}
-
-fn existing_or_parent_canonical_path(path: &Path) -> Option<PathBuf> {
-    if let Ok(canonical) = path.canonicalize() {
-        return Some(canonical);
-    }
-    let parent = path.parent()?;
-    let file_name = path.file_name()?;
-    parent
-        .canonicalize()
-        .ok()
-        .map(|parent| parent.join(file_name))
-}
-
-fn normalize_exact_path(path: &Path) -> PathBuf {
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
-    };
-
-    let mut normalized = PathBuf::new();
-    for component in absolute.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => normalized.push(".."),
-            other => normalized.push(other.as_os_str()),
-        }
-    }
-    normalized
-}
-
-fn path_to_string(path: &Path) -> Result<String> {
-    path.to_str().map(str::to_string).ok_or_else(|| {
-        anyhow!(
-            "session catalog path must be valid UTF-8: {}",
-            path.display()
-        )
-    })
-}
-
-fn optional_path_to_string(path: Option<&Path>) -> Result<Option<String>> {
-    path.map(path_to_string).transpose()
-}
-
-fn display_name_for_path(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or("session")
-        .to_string()
 }
 
 fn generated_catalog_id(now: u64) -> String {
