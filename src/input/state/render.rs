@@ -1,4 +1,4 @@
-use crate::draw::render::{render_freehand_pressure_borrowed, render_polygon_preview};
+use crate::draw::render::{render_freehand_pressure_preview_borrowed, render_polygon_preview};
 use crate::draw::{
     Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape,
 };
@@ -82,7 +82,7 @@ impl InputState {
                 point_thicknesses,
                 color,
             } => {
-                render_freehand_pressure_borrowed(ctx, points, point_thicknesses, color);
+                render_freehand_pressure_preview_borrowed(ctx, points, point_thicknesses, color);
                 true
             }
             ProvisionalToolStroke::BorrowedMarker {

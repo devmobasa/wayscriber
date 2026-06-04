@@ -116,6 +116,7 @@ fn pressure_stroke_segments(
     pressure_stroke_segments_from_samples(&samples)
 }
 
+#[cfg(test)]
 fn pressure_stroke_segments_from_samples(
     samples: &[PressureStrokeSample],
 ) -> Vec<PressureStrokeSegment> {
@@ -125,7 +126,7 @@ fn pressure_stroke_segments_from_samples(
         .collect()
 }
 
-fn draw_pressure_segment_mask(ctx: &cairo::Context, segment: &PressureStrokeSegment) {
+fn fill_pressure_segment(ctx: &cairo::Context, segment: &PressureStrokeSegment) {
     ctx.new_path();
     ctx.move_to(segment.left_start.0, segment.left_start.1);
     ctx.line_to(segment.left_end.0, segment.left_end.1);
@@ -135,7 +136,7 @@ fn draw_pressure_segment_mask(ctx: &cairo::Context, segment: &PressureStrokeSegm
     ctx.fill().ok();
 }
 
-fn draw_pressure_sample_mask(ctx: &cairo::Context, sample: &PressureStrokeSample) {
+fn fill_pressure_sample(ctx: &cairo::Context, sample: &PressureStrokeSample) {
     ctx.new_path();
     ctx.arc(
         sample.x,
@@ -147,19 +148,70 @@ fn draw_pressure_sample_mask(ctx: &cairo::Context, sample: &PressureStrokeSample
     ctx.fill().ok();
 }
 
-#[cfg(test)]
-fn polygon_area(points: &[(f64, f64)]) -> f64 {
-    if points.len() < 3 {
-        return 0.0;
+fn fill_pressure_geometry(ctx: &cairo::Context, samples: &[PressureStrokeSample]) {
+    for window in samples.windows(2) {
+        if let Some(segment) = PressureStrokeSegment::from_samples(window[0], window[1]) {
+            fill_pressure_segment(ctx, &segment);
+        }
     }
 
-    let mut area = 0.0;
-    for i in 0..points.len() {
-        let (x1, y1) = points[i];
-        let (x2, y2) = points[(i + 1) % points.len()];
-        area += x1 * y2 - x2 * y1;
+    for sample in samples {
+        fill_pressure_sample(ctx, sample);
     }
-    area / 2.0
+}
+
+fn pressure_stroke_preview_samples(
+    points: &[(i32, i32)],
+    thicknesses: &[f32],
+) -> Vec<PressureStrokeSample> {
+    let len = points.len().min(thicknesses.len());
+    let mut samples = Vec::with_capacity(len);
+
+    for i in 0..len {
+        let (x, y) = points[i];
+        let width = (thicknesses[i] as f64).max(PRESSURE_STROKE_MIN_WIDTH);
+        samples.push(PressureStrokeSample {
+            x: x as f64,
+            y: y as f64,
+            radius: width / 2.0,
+        });
+    }
+
+    samples
+}
+
+/// Render a fast variable-thickness pressure stroke preview.
+///
+/// This intentionally trades final-stroke repair quality for low latency while
+/// the stylus is still down. Committed pressure strokes use the mask renderer.
+pub(crate) fn render_freehand_pressure_preview_borrowed(
+    ctx: &cairo::Context,
+    points: &[(i32, i32)],
+    thicknesses: &[f32],
+    color: Color,
+) {
+    let samples = pressure_stroke_preview_samples(points, thicknesses);
+    if samples.is_empty() {
+        return;
+    }
+
+    if color.a >= 1.0 {
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+        fill_pressure_geometry(ctx, &samples);
+        return;
+    }
+
+    let _ = ctx.save();
+    ctx.push_group_with_content(cairo::Content::Alpha);
+    ctx.set_operator(cairo::Operator::Over);
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+    fill_pressure_geometry(ctx, &samples);
+
+    if let Ok(mask) = ctx.pop_group() {
+        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+        ctx.mask(&mask).ok();
+    }
+    let _ = ctx.restore();
 }
 
 /// Render a variable-thickness freehand stroke (pressure sensitive).
@@ -178,24 +230,32 @@ pub fn render_freehand_pressure_borrowed(
         return;
     }
 
-    let segments = pressure_stroke_segments_from_samples(&samples);
     let _ = ctx.save();
     ctx.push_group_with_content(cairo::Content::Alpha);
     ctx.set_operator(cairo::Operator::Over);
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-
-    for segment in &segments {
-        draw_pressure_segment_mask(ctx, segment);
-    }
-    for sample in &samples {
-        draw_pressure_sample_mask(ctx, sample);
-    }
+    fill_pressure_geometry(ctx, &samples);
 
     if let Ok(mask) = ctx.pop_group() {
         ctx.set_source_rgba(color.r, color.g, color.b, color.a);
         ctx.mask(&mask).ok();
     }
     let _ = ctx.restore();
+}
+
+#[cfg(test)]
+fn polygon_area(points: &[(f64, f64)]) -> f64 {
+    if points.len() < 3 {
+        return 0.0;
+    }
+
+    let mut area = 0.0;
+    for i in 0..points.len() {
+        let (x1, y1) = points[i];
+        let (x2, y2) = points[(i + 1) % points.len()];
+        area += x1 * y2 - x2 * y1;
+    }
+    area / 2.0
 }
 
 #[cfg(test)]
@@ -213,6 +273,88 @@ mod tests {
         let stride = surface.stride() as usize;
         let offset = y as usize * stride + x as usize * 4 + 3;
         surface.data().unwrap()[offset]
+    }
+
+    fn has_alpha(surface: &mut ImageSurface) -> bool {
+        surface
+            .data()
+            .unwrap()
+            .chunks_exact(4)
+            .any(|pixel| pixel[3] > 0)
+    }
+
+    #[test]
+    fn pressure_stroke_preview_renders_nonblank_output() {
+        let points = [(20, 140), (100, 50), (220, 50), (320, 110)];
+        let thicknesses = [32.0, 18.0, 5.0, 1.0];
+        let (mut surface, ctx) = surface_with_context(360, 180);
+
+        render_freehand_pressure_preview_borrowed(
+            &ctx,
+            &points,
+            &thicknesses,
+            Color {
+                r: 1.0,
+                g: 1.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        );
+        drop(ctx);
+
+        assert!(has_alpha(&mut surface));
+    }
+
+    #[test]
+    fn pressure_stroke_preview_covers_backtracking_turnaround() {
+        let points = [(40, 80), (160, 80), (100, 80)];
+        let thicknesses = [30.0, 30.0, 30.0];
+        let (mut surface, ctx) = surface_with_context(200, 140);
+
+        render_freehand_pressure_preview_borrowed(
+            &ctx,
+            &points,
+            &thicknesses,
+            Color {
+                r: 1.0,
+                g: 1.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        );
+        drop(ctx);
+
+        assert!(
+            alpha_at(&mut surface, 160, 80) > 160,
+            "expected preview to cover backtracking turnaround"
+        );
+    }
+
+    #[test]
+    fn pressure_stroke_preview_translucent_overlap_applies_alpha_once() {
+        let points = [(40, 80), (160, 80), (100, 80)];
+        let thicknesses = [30.0, 30.0, 30.0];
+        let expected_alpha = (0.35_f64 * 255.0).round() as i32;
+        let (mut surface, ctx) = surface_with_context(200, 140);
+
+        render_freehand_pressure_preview_borrowed(
+            &ctx,
+            &points,
+            &thicknesses,
+            Color {
+                r: 1.0,
+                g: 1.0,
+                b: 0.0,
+                a: 0.35,
+            },
+        );
+        drop(ctx);
+
+        let alpha = alpha_at(&mut surface, 100, 80) as i32;
+        assert!(
+            (expected_alpha - 8..=expected_alpha + 8).contains(&alpha),
+            "expected preview overlap alpha near {expected_alpha}, got {alpha}"
+        );
     }
 
     #[test]
