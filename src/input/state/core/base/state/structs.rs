@@ -34,8 +34,9 @@ use crate::input::{
 };
 use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
+use crate::ui::toolbar::ToolbarSideSection;
 use crate::util::Rect;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -400,6 +401,8 @@ pub struct InputState {
     pub context_aware_ui: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
+    /// Side drawer sections whose body content is collapsed for this runtime.
+    pub toolbar_collapsed_side_sections: BTreeSet<ToolbarSideSection>,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slots for quick tool switching

@@ -96,4 +96,8 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_BUTTON_HEIGHT: f64 = 24.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_RECENT_HEIGHT: f64 = 22.0;
     pub(in crate::backend::wayland::toolbar) const SIDE_SESSION_ROW_GAP: f64 = 5.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLLAPSED_SECTION_HEIGHT: f64 = 30.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLLAPSE_HEADER_HIT_HEIGHT: f64 =
+        Self::SIDE_SECTION_TOGGLE_OFFSET_Y - 1.0;
+    pub(in crate::backend::wayland::toolbar) const SIDE_COLLAPSE_CHEVRON_SIZE: f64 = 14.0;
 }

@@ -6,6 +6,8 @@ use crate::input::{EraserMode, Tool, ToolbarDrawerTab};
 use std::path::PathBuf;
 
 use super::super::bindings::ToolbarBindingHints;
+use super::super::events::ToolbarSideSection;
+use std::collections::BTreeSet;
 
 /// The kind of tool-specific options to display in the side panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,6 +297,8 @@ pub struct ToolbarSnapshot {
     pub context_aware_ui: bool,
     /// Whether to show the Settings section
     pub show_settings_section: bool,
+    /// Side drawer sections whose body content is collapsed.
+    pub collapsed_side_sections: BTreeSet<ToolbarSideSection>,
     pub show_tool_preview: bool,
     pub show_status_bar: bool,
     pub show_status_board_badge: bool,
@@ -330,4 +334,10 @@ pub struct ToolbarSnapshot {
     pub recent_sessions: Vec<SessionRecentSnapshot>,
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub pending_save_as_overwrite_path: Option<PathBuf>,
+}
+
+impl ToolbarSnapshot {
+    pub fn side_section_collapsed(&self, section: ToolbarSideSection) -> bool {
+        self.collapsed_side_sections.contains(&section)
+    }
 }

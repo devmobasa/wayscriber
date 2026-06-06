@@ -13,9 +13,11 @@ use super::super::widgets::constants::{
     COLOR_TEXT_DISABLED, COLOR_TEXT_PRIMARY, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color,
 };
 use super::super::widgets::{
-    draw_button, draw_destructive_button, draw_group_card, draw_label_center, draw_section_label,
-    point_in_rect, set_icon_color,
+    draw_button, draw_destructive_button, draw_group_card, draw_label_center, point_in_rect,
+    set_icon_color,
 };
+use super::section_header::draw_collapsible_header;
+use crate::ui::toolbar::ToolbarSideSection;
 
 const SESSION_BUTTON_ICON_SIZE: f64 = 12.0;
 const SESSION_BUTTON_ICON_GAP: f64 = 4.0;
@@ -52,13 +54,21 @@ pub(super) fn draw_session_section(layout: &mut SidePaletteLayout, y: &mut f64) 
         size: 9.5,
     };
 
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        layout.x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Session",
+        ToolbarSideSection::Session,
+        ToolbarSideSection::Session.label(),
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
     );
+    if layout
+        .snapshot
+        .side_section_collapsed(ToolbarSideSection::Session)
+    {
+        *y += card_h + layout.section_gap;
+        return;
+    }
 
     let meta_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     draw_text_baseline(

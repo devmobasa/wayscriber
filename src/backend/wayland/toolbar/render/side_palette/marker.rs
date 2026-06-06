@@ -9,13 +9,14 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::toolbar_icons;
 use crate::ui::toolbar::model::ToolbarSliderSpec;
-use crate::ui::toolbar::{ToolContext, ToolbarEvent};
+use crate::ui::toolbar::{ToolContext, ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
+
+use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -33,7 +34,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         return;
     }
 
-    let slider_card_h = ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT;
+    let slider_card_h = layout.spec.side_marker_opacity_height(snapshot);
     let btn_size = ToolbarLayoutSpec::SIDE_NUDGE_SIZE;
     let nudge_icon_size = ToolbarLayoutSpec::SIDE_NUDGE_ICON_SIZE;
     let value_w = ToolbarLayoutSpec::SIDE_SLIDER_VALUE_WIDTH;
@@ -42,14 +43,20 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
 
     let marker_slider_row_y = *y + ToolbarLayoutSpec::SIDE_SLIDER_ROW_OFFSET;
     draw_group_card(ctx, card_x, *y, card_w, slider_card_h);
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
+        ToolbarSideSection::MarkerOpacity,
         "Marker opacity",
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
     );
+    if snapshot.side_section_collapsed(ToolbarSideSection::MarkerOpacity) {
+        *y += slider_card_h + section_gap;
+        return;
+    }
 
+    let hits = &mut layout.hits;
     let minus_x = x;
     let minus_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, minus_x, marker_slider_row_y, btn_size, btn_size))

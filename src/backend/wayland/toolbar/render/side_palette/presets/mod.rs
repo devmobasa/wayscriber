@@ -6,6 +6,7 @@ mod widgets;
 use super::SidePaletteLayout;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::draw::Color;
+use crate::ui::toolbar::ToolbarSideSection;
 
 use super::super::widgets::draw_group_card;
 use header::draw_presets_header;
@@ -25,9 +26,13 @@ pub(super) fn draw_presets_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 
     let mut hover_preset_color: Option<Color> = None;
 
-    let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
+    let presets_card_h = layout.spec.side_presets_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, presets_card_h);
     draw_presets_header(layout, *y, card_x, card_w, slot_count);
+    if snapshot.side_section_collapsed(ToolbarSideSection::Presets) {
+        *y += presets_card_h + section_gap;
+        return None;
+    }
 
     let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;
     let slot_gap = ToolbarLayoutSpec::SIDE_PRESET_SLOT_GAP;

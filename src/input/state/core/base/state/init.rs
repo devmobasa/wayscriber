@@ -241,6 +241,7 @@ impl InputState {
             show_text_controls: true,
             context_aware_ui: true,
             show_settings_section: true,
+            toolbar_collapsed_side_sections: std::collections::BTreeSet::new(),
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],
             active_preset_slot: None,

@@ -1,5 +1,6 @@
 use super::{HitKind, HitRegion, SideLayoutContext, ToolbarLayoutSpec, format_binding_label};
 use crate::backend::wayland::toolbar::rows::{centered_grid_layout, grid_layout, row_item_width};
+use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui::toolbar::model::{
     ToolbarActionsModel, ToolbarCommandGroup, ToolbarCommandGroupKind,
 };
@@ -14,6 +15,14 @@ pub(super) fn push_actions_hits(
     };
 
     let actions_card_h = ctx.spec.side_actions_height(ctx.snapshot);
+    super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Actions, hits);
+    if ctx
+        .snapshot
+        .side_section_collapsed(ToolbarSideSection::Actions)
+    {
+        return y + actions_card_h + ctx.section_gap;
+    }
+
     let mut action_y = y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let mut has_group = false;
     for group in model.groups() {

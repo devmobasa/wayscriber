@@ -1,17 +1,26 @@
 use super::{HitKind, HitRegion, SideLayoutContext, ToolbarEvent, ToolbarLayoutSpec};
+use crate::ui::toolbar::ToolbarSideSection;
 
 pub(super) fn push_preset_hits(
     ctx: &SideLayoutContext<'_>,
     y: f64,
     hits: &mut Vec<HitRegion>,
 ) -> f64 {
-    let presets_card_h = ToolbarLayoutSpec::SIDE_PRESET_CARD_HEIGHT;
     let slot_count = ctx
         .snapshot
         .preset_slot_count
         .min(ctx.snapshot.presets.len());
     if !ctx.snapshot.show_presets || slot_count == 0 {
         return y;
+    }
+
+    let presets_card_h = ctx.spec.side_presets_height(ctx.snapshot);
+    super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Presets, hits);
+    if ctx
+        .snapshot
+        .side_section_collapsed(ToolbarSideSection::Presets)
+    {
+        return y + presets_card_h + ctx.section_gap;
     }
 
     let slot_size = ToolbarLayoutSpec::SIDE_PRESET_SLOT_SIZE;

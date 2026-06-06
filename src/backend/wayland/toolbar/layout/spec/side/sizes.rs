@@ -1,10 +1,10 @@
 use crate::backend::wayland::toolbar::rows::capped_grid_columns;
-use crate::ui::toolbar::ToolbarSnapshot;
 use crate::ui::toolbar::model::{
     ToolbarActionsModel, ToolbarCommandGroupKind, ToolbarSessionModel, ToolbarSettingsModel,
     toolbar_boards_model, toolbar_pages_model,
 };
 use crate::ui::toolbar::snapshot::ToolContext;
+use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
 
 use super::super::ToolbarLayoutSpec;
 
@@ -36,51 +36,40 @@ impl ToolbarLayoutSpec {
             }
         };
 
-        // Color section: only when tool needs color
         if tool_context.needs_color {
             let colors_h = self.side_colors_height(snapshot);
             add_section(colors_h, &mut height);
         }
 
         if show_presets {
-            add_section(Self::SIDE_PRESET_CARD_HEIGHT, &mut height);
+            add_section(self.side_presets_height(snapshot), &mut height);
         }
 
-        // Thickness/size slider: only when tool needs it
         if tool_context.needs_thickness {
-            add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
+            add_section(self.side_thickness_height(snapshot), &mut height);
             if tool_context.show_eraser_mode {
-                add_section(Self::SIDE_ERASER_MODE_CARD_HEIGHT, &mut height);
+                add_section(self.side_eraser_mode_height(snapshot), &mut height);
             }
             if tool_context.show_polygon_sides_control {
-                add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
+                add_section(self.side_polygon_sides_height(snapshot), &mut height);
             }
         }
 
-        // Arrow controls: only when arrow tool is active
         if tool_context.show_arrow_labels {
-            let arrow_height = if snapshot.arrow_label_enabled {
-                Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET
-            } else {
-                Self::SIDE_TOGGLE_CARD_HEIGHT
-            };
-            add_section(arrow_height, &mut height);
+            add_section(self.side_arrow_labels_height(snapshot), &mut height);
         }
 
-        // Step marker controls: only when step marker is active
         if tool_context.show_step_counter {
-            add_section(Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET, &mut height);
+            add_section(self.side_step_markers_height(snapshot), &mut height);
         }
 
-        // Marker opacity: only when marker tool is active
         if tool_context.show_marker_opacity {
-            add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height);
+            add_section(self.side_marker_opacity_height(snapshot), &mut height);
         }
 
-        // Text controls: only when text/note mode is active
         if tool_context.show_font_controls {
-            add_section(Self::SIDE_SLIDER_CARD_HEIGHT, &mut height); // Text size
-            add_section(Self::SIDE_FONT_CARD_HEIGHT, &mut height);
+            add_section(self.side_text_size_height(snapshot), &mut height);
+            add_section(self.side_font_height(snapshot), &mut height);
         }
 
         if snapshot.drawer_open {
@@ -143,6 +132,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_collapsed(ToolbarSideSection::Colors) {
+            return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
+        }
         let rows = 1.0 + if snapshot.show_more_colors { 1.0 } else { 0.0 };
         let preview_row_h = Self::SIDE_COLOR_PREVIEW_SIZE
             + Self::SIDE_COLOR_PREVIEW_GAP_TOP
@@ -152,6 +144,106 @@ impl ToolbarLayoutSpec {
             + preview_row_h
             + Self::SIDE_COLOR_SECTION_BOTTOM_PADDING
             + (Self::SIDE_COLOR_SWATCH + Self::SIDE_COLOR_SWATCH_GAP) * rows
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_presets_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::Presets,
+            Self::SIDE_PRESET_CARD_HEIGHT,
+        )
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_thickness_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::Thickness,
+            Self::SIDE_SLIDER_CARD_HEIGHT,
+        )
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_eraser_mode_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::EraserMode,
+            Self::SIDE_ERASER_MODE_CARD_HEIGHT,
+        )
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_polygon_sides_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::PolygonSides,
+            Self::SIDE_SLIDER_CARD_HEIGHT,
+        )
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_arrow_labels_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        let expanded = if snapshot.arrow_label_enabled {
+            Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET
+        } else {
+            Self::SIDE_TOGGLE_CARD_HEIGHT
+        };
+        self.collapsible_section_height(snapshot, ToolbarSideSection::ArrowLabels, expanded)
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_step_markers_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::StepMarkers,
+            Self::SIDE_TOGGLE_CARD_HEIGHT_WITH_RESET,
+        )
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_marker_opacity_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::MarkerOpacity,
+            Self::SIDE_SLIDER_CARD_HEIGHT,
+        )
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_text_size_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::TextSize,
+            Self::SIDE_SLIDER_CARD_HEIGHT,
+        )
+    }
+
+    pub(in crate::backend::wayland::toolbar) fn side_font_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+    ) -> f64 {
+        self.collapsible_section_height(
+            snapshot,
+            ToolbarSideSection::Font,
+            Self::SIDE_FONT_CARD_HEIGHT,
+        )
     }
 
     pub(in crate::backend::wayland::toolbar) fn side_actions_content_height(
@@ -219,6 +311,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_collapsed(ToolbarSideSection::Actions) {
+            return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
+        }
         let content = self.side_actions_content_height(snapshot);
         if content <= 0.0 {
             0.0
@@ -244,6 +339,9 @@ impl ToolbarLayoutSpec {
         let Some(pages) = toolbar_pages_model(snapshot) else {
             return 0.0;
         };
+        if snapshot.side_section_collapsed(ToolbarSideSection::Pages) {
+            return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
+        }
         let btn_h = if self.use_icons {
             Self::SIDE_ACTION_BUTTON_HEIGHT_ICON
         } else {
@@ -263,6 +361,9 @@ impl ToolbarLayoutSpec {
         let Some(boards) = toolbar_boards_model(snapshot) else {
             return 0.0;
         };
+        if snapshot.side_section_collapsed(ToolbarSideSection::Boards) {
+            return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
+        }
         let btn_h = if self.use_icons {
             Self::SIDE_ACTION_BUTTON_HEIGHT_ICON
         } else {
@@ -279,6 +380,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_collapsed(ToolbarSideSection::StepUndo) {
+            return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
+        }
         let delay_h = if snapshot.show_delay_sliders {
             Self::SIDE_DELAY_SECTION_HEIGHT
         } else {
@@ -299,6 +403,9 @@ impl ToolbarLayoutSpec {
         &self,
         snapshot: &ToolbarSnapshot,
     ) -> f64 {
+        if snapshot.side_section_collapsed(ToolbarSideSection::Settings) {
+            return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
+        }
         let toggle_h = Self::SIDE_TOGGLE_HEIGHT;
         let toggle_gap = Self::SIDE_TOGGLE_GAP;
         let Some(settings) = ToolbarSettingsModel::from_snapshot(snapshot) else {
@@ -323,6 +430,9 @@ impl ToolbarLayoutSpec {
         let Some(session) = ToolbarSessionModel::from_snapshot(snapshot) else {
             return 0.0;
         };
+        if snapshot.side_section_collapsed(ToolbarSideSection::Session) {
+            return Self::SIDE_COLLAPSED_SECTION_HEIGHT;
+        }
         let button_rows = session.button_rows();
         let buttons_h = if button_rows == 0 {
             0.0
@@ -372,5 +482,18 @@ impl ToolbarLayoutSpec {
 
     pub(in crate::backend::wayland::toolbar) fn side_card_width(&self, width: f64) -> f64 {
         width - 2.0 * Self::SIDE_START_X + Self::SIDE_CARD_INSET * 2.0
+    }
+
+    fn collapsible_section_height(
+        &self,
+        snapshot: &ToolbarSnapshot,
+        section: ToolbarSideSection,
+        expanded_height: f64,
+    ) -> f64 {
+        if snapshot.side_section_collapsed(section) {
+            Self::SIDE_COLLAPSED_SECTION_HEIGHT
+        } else {
+            expanded_height
+        }
     }
 }

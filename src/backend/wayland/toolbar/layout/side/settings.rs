@@ -1,11 +1,20 @@
 use super::{HitKind, HitRegion, SideLayoutContext, ToolbarLayoutSpec};
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
+use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui::toolbar::model::{ToolbarActivation, ToolbarSettingsModel};
 
 pub(super) fn push_settings_hits(ctx: &SideLayoutContext<'_>, y: f64, hits: &mut Vec<HitRegion>) {
     let Some(settings_model) = ToolbarSettingsModel::from_snapshot(ctx.snapshot) else {
         return;
     };
+
+    super::section_header::push_collapsible_header_hit(ctx, y, ToolbarSideSection::Settings, hits);
+    if ctx
+        .snapshot
+        .side_section_collapsed(ToolbarSideSection::Settings)
+    {
+        return;
+    }
 
     let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
     let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;

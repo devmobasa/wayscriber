@@ -1,5 +1,6 @@
 use crate::config::ToolbarLayoutMode;
 use crate::input::{InputState, ToolbarDrawerTab};
+use crate::ui::toolbar::ToolbarSideSection;
 
 impl InputState {
     pub(super) fn apply_toolbar_toggle_custom_section(&mut self, enable: bool) -> bool {
@@ -267,6 +268,23 @@ impl InputState {
             self.needs_redraw = true;
         }
         changed
+    }
+
+    pub(super) fn apply_toolbar_toggle_side_section_collapsed(
+        &mut self,
+        section: ToolbarSideSection,
+        collapsed: bool,
+    ) -> bool {
+        let changed = if collapsed {
+            self.toolbar_collapsed_side_sections.insert(section)
+        } else {
+            self.toolbar_collapsed_side_sections.remove(&section)
+        };
+        if !changed {
+            return false;
+        }
+        self.needs_redraw = true;
+        true
     }
 
     pub(super) fn apply_toolbar_set_layout_mode(&mut self, mode: ToolbarLayoutMode) -> bool {

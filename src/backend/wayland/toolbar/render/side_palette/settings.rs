@@ -4,16 +4,17 @@ use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
 use crate::toolbar_icons;
+use crate::ui::toolbar::ToolbarSideSection;
 use crate::ui::toolbar::model::{ToolbarActivation, ToolbarIcon, ToolbarSettingsModel};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
 use super::super::widgets::*;
+use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -40,14 +41,20 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
 
     let settings_card_h = layout.spec.side_settings_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, settings_card_h);
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
-        "Settings",
+        ToolbarSideSection::Settings,
+        ToolbarSideSection::Settings.label(),
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
     );
+    if snapshot.side_section_collapsed(ToolbarSideSection::Settings) {
+        *y += settings_card_h + section_gap;
+        return;
+    }
 
+    let hits = &mut layout.hits;
     let toggle_h = ToolbarLayoutSpec::SIDE_TOGGLE_HEIGHT;
     let toggle_gap = ToolbarLayoutSpec::SIDE_TOGGLE_GAP;
     let toggles = settings_model.toggles();

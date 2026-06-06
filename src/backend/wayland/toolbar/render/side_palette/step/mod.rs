@@ -7,13 +7,14 @@ use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::input::ToolbarDrawerTab;
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
+
+use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -42,22 +43,22 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     } else {
         0.0
     };
-    let delay_sliders_h = if snapshot.show_delay_sliders {
-        ToolbarLayoutSpec::SIDE_DELAY_SECTION_HEIGHT
-    } else {
-        0.0
-    };
-    let custom_card_h =
-        ToolbarLayoutSpec::SIDE_STEP_HEADER_HEIGHT + toggles_h + custom_content_h + delay_sliders_h;
+    let custom_card_h = layout.spec.side_step_height(snapshot);
     draw_group_card(ctx, card_x, *y, card_w, custom_card_h);
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
+        ToolbarSideSection::StepUndo,
         "Step Undo/Redo",
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_TALL,
     );
+    if snapshot.side_section_collapsed(ToolbarSideSection::StepUndo) {
+        *y += custom_card_h + section_gap;
+        return;
+    }
 
+    let hits = &mut layout.hits;
     let custom_toggle_y = *y + ToolbarLayoutSpec::SIDE_SECTION_TOGGLE_OFFSET_Y;
     let toggle_w = content_width;
 

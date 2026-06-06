@@ -7,6 +7,7 @@ mod drawer;
 mod header;
 mod pages;
 mod presets;
+mod section_header;
 mod session;
 mod settings;
 mod sliders;
@@ -46,23 +47,33 @@ pub fn build_side_hits(
         y = sliders::push_thickness_hits(&ctx, y, hits);
 
         if tool_context.show_eraser_mode {
-            y += ToolbarLayoutSpec::SIDE_ERASER_MODE_CARD_HEIGHT + ctx.section_gap;
+            y = sliders::push_eraser_mode_hits(&ctx, y, hits);
+        }
+
+        if tool_context.show_polygon_sides_control {
+            y = sliders::push_polygon_sides_hits(&ctx, y, hits);
         }
     }
 
     // Arrow section: only for arrow tool
     if tool_context.show_arrow_labels {
-        y = arrow::advance_arrow_section(&ctx, y);
+        y = arrow::push_arrow_section_hits(&ctx, y, hits);
+    }
+
+    // Step marker counter: only for step marker tool
+    if tool_context.show_step_counter {
+        y = arrow::push_step_marker_hits(&ctx, y, hits);
     }
 
     // Marker opacity: only for marker tool
     if tool_context.show_marker_opacity {
-        y += ToolbarLayoutSpec::SIDE_SLIDER_CARD_HEIGHT + ctx.section_gap;
+        y = sliders::push_marker_opacity_hits(&ctx, y, hits);
     }
 
     // Text controls: only when text/note is active
     if tool_context.show_font_controls {
-        y = sliders::push_text_hits(&ctx, y, hits);
+        y = sliders::push_text_size_hits(&ctx, y, hits);
+        y = sliders::push_font_hits(&ctx, y, hits);
     }
 
     y = drawer::push_drawer_tabs_hits(&ctx, y, hits);
@@ -83,7 +94,6 @@ pub(super) struct SideLayoutContext<'a> {
     pub(super) content_width: f64,
     pub(super) use_icons: bool,
     pub(super) section_gap: f64,
-    pub(super) show_text_controls: bool,
 }
 
 impl<'a> SideLayoutContext<'a> {
@@ -93,8 +103,6 @@ impl<'a> SideLayoutContext<'a> {
         let x = ToolbarLayoutSpec::SIDE_START_X;
         let content_width = spec.side_content_width(width);
         let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
-        let show_text_controls =
-            snapshot.text_active || snapshot.note_active || snapshot.show_text_controls;
         Self {
             width,
             snapshot,
@@ -103,7 +111,6 @@ impl<'a> SideLayoutContext<'a> {
             content_width,
             use_icons,
             section_gap,
-            show_text_controls,
         }
     }
 }

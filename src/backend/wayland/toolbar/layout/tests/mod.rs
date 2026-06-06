@@ -10,6 +10,8 @@ use crate::ui::toolbar::{
     SessionRecentSnapshot, ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot,
 };
 
+mod collapsible;
+
 fn create_test_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
     let action_map = keybindings.build_action_map().unwrap();

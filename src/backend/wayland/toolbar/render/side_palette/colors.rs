@@ -4,20 +4,23 @@ use super::{ColorSectionInfo, SidePaletteLayout};
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::config::Action;
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection};
 use crate::ui_text::UiTextStyle;
 
 use super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL};
-use super::super::widgets::{draw_group_card, draw_round_rect, draw_section_label};
+use super::super::widgets::{draw_group_card, draw_round_rect};
+use super::section_header::draw_collapsible_header;
 use helpers::{
     ColorSwatch, ColorSwatchRowLayout, ColorSwatchToggle, draw_color_picker_area,
     draw_color_swatch_row, draw_hex_input, draw_preview_swatch_and_icon,
 };
 
-pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -> ColorSectionInfo {
+pub(super) fn draw_colors_section(
+    layout: &mut SidePaletteLayout,
+    y: &mut f64,
+) -> Option<ColorSectionInfo> {
     let ctx = layout.ctx;
     let snapshot = layout.snapshot;
-    let hits = &mut layout.hits;
     let hover = layout.hover;
     let x = layout.x;
     let card_x = layout.card_x;
@@ -80,14 +83,20 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
     let colors_card_h = layout.spec.side_colors_height(snapshot);
 
     draw_group_card(ctx, card_x, *y, card_w, colors_card_h);
-    draw_section_label(
-        ctx,
+    draw_collapsible_header(
+        layout,
+        *y,
         label_style,
-        x,
-        *y + ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
-        "Colors",
+        ToolbarSideSection::Colors,
+        ToolbarSideSection::Colors.label(),
+        ToolbarLayoutSpec::SIDE_SECTION_LABEL_OFFSET_Y,
     );
+    if snapshot.side_section_collapsed(ToolbarSideSection::Colors) {
+        *y += colors_card_h + section_gap;
+        return None;
+    }
 
+    let hits = &mut layout.hits;
     let picker_y = *y + ToolbarLayoutSpec::SIDE_COLOR_PICKER_OFFSET_Y;
     let picker_w = content_width;
     draw_color_picker_area(ctx, hits, snapshot, x, picker_y, picker_w, picker_h);
@@ -151,11 +160,11 @@ pub(super) fn draw_colors_section(layout: &mut SidePaletteLayout, y: &mut f64) -
 
     *y += colors_card_h + section_gap;
 
-    ColorSectionInfo {
+    Some(ColorSectionInfo {
         picker_y,
         picker_w,
         picker_h,
-    }
+    })
 }
 
 pub(super) fn draw_preset_hover_highlight(
