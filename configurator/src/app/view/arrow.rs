@@ -1,6 +1,7 @@
 use iced::Element;
 use iced::widget::{column, row, scrollable, text};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField};
 
@@ -41,6 +42,7 @@ impl ConfiguratorApp {
             ]
             .spacing(12),
         )
+        .id(CONTENT_SCROLL_ID)
         .into()
     }
 }

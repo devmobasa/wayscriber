@@ -1,6 +1,7 @@
 use iced::widget::{column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{
     PressureThicknessEditModeOption, PressureThicknessEntryModeOption, TextField, ToggleField,
@@ -103,6 +104,7 @@ impl ConfiguratorApp {
             ]
             .spacing(12),
         )
+        .id(CONTENT_SCROLL_ID)
         .into()
     }
 }

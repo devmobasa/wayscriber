@@ -4,6 +4,7 @@ use crate::app::view::theme;
 use iced::widget::{button, column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField};
 
@@ -111,6 +112,6 @@ impl ConfiguratorApp {
             column = column.push(self.board_item_section_for_search(index, !show_all));
         }
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 }

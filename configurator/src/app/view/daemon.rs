@@ -2,6 +2,7 @@ use crate::app::view::theme;
 use iced::Element;
 use iced::widget::{button, column, row, rule, scrollable, text, text_input};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{DaemonAction, LightShortcutApplyCapability, ShortcutApplyCapability};
 
@@ -71,7 +72,7 @@ impl ConfiguratorApp {
             if show_status || show_service {
                 content = content.push(self.daemon_technical_details(busy));
             }
-            return scrollable(content).into();
+            return scrollable(content).id(CONTENT_SCROLL_ID).into();
         }
 
         for section in daemon_sections(show_status, show_service, show_shortcut, show_light) {
@@ -87,7 +88,7 @@ impl ConfiguratorApp {
             content = content.push(rule::horizontal(1)).push(body);
         }
 
-        scrollable(content).into()
+        scrollable(content).id(CONTENT_SCROLL_ID).into()
     }
 
     fn daemon_overall_status(&self, busy: bool) -> Element<'_, Message> {

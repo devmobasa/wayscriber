@@ -2,6 +2,7 @@ use iced::widget::{Column, pick_list, scrollable, text};
 use iced::{Element, Length};
 use wayscriber::config::{PRESET_SLOTS_MAX, PRESET_SLOTS_MIN};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 
 use super::super::search::{SearchArea, TabSearchSummary};
@@ -56,6 +57,6 @@ impl ConfiguratorApp {
             column = column.push(self.preset_slot_section_for_search(slot_index, !show_all));
         }
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 }

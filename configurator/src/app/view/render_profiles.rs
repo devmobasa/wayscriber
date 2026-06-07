@@ -3,6 +3,7 @@ use iced::widget::{
 };
 use iced::{Alignment, Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::view::theme;
 use crate::messages::Message;
 use crate::models::color::rgb_to_hsv;
@@ -108,7 +109,7 @@ impl ConfiguratorApp {
             content = content.push(self.render_profile_section(index, search));
         }
 
-        scrollable(content).into()
+        scrollable(content).id(CONTENT_SCROLL_ID).into()
     }
 
     fn render_profile_section(

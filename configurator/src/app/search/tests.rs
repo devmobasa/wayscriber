@@ -1,4 +1,5 @@
 use super::*;
+use iced::event::Status;
 use iced::keyboard::{self, Key, Location, Modifiers, key};
 use std::path::PathBuf;
 
@@ -408,17 +409,67 @@ fn escape_clears_inactive_raw_search_text() {
     let (mut app, _task) = ConfiguratorApp::new_app();
     app.search_query = SearchQuery::new("/");
 
-    let _ = app.handle_keyboard_event(keyboard::Event::KeyPressed {
-        key: Key::Named(key::Named::Escape),
-        modified_key: Key::Named(key::Named::Escape),
-        physical_key: key::Physical::Code(key::Code::Escape),
-        location: Location::Standard,
-        modifiers: Modifiers::empty(),
-        text: None,
-        repeat: false,
-    });
+    let _ = app.handle_keyboard_event(
+        keyboard::Event::KeyPressed {
+            key: Key::Named(key::Named::Escape),
+            modified_key: Key::Named(key::Named::Escape),
+            physical_key: key::Physical::Code(key::Code::Escape),
+            location: Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat: false,
+        },
+        Status::Captured,
+    );
 
     assert_eq!(app.search_query.raw(), "");
+}
+
+#[test]
+fn escape_refocus_hint_is_cleared_after_pointer_press() {
+    let (mut app, _task) = ConfiguratorApp::new_app();
+    let _ = app.handle_search_changed("preset".to_string());
+    assert!(app.search_input_focus_hint);
+
+    let _ = app.handle_pointer_pressed();
+    assert!(!app.search_input_focus_hint);
+
+    let _ = app.handle_keyboard_event(
+        keyboard::Event::KeyPressed {
+            key: Key::Named(key::Named::Escape),
+            modified_key: Key::Named(key::Named::Escape),
+            physical_key: key::Physical::Code(key::Code::Escape),
+            location: Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat: false,
+        },
+        Status::Captured,
+    );
+
+    assert_eq!(app.search_query.raw(), "");
+    assert!(!app.search_input_focus_hint);
+}
+
+#[test]
+fn captured_home_end_do_not_scroll_content() {
+    for key in [key::Named::Home, key::Named::End] {
+        let event = keyboard::Event::KeyPressed {
+            key: Key::Named(key),
+            modified_key: Key::Named(key),
+            physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+            location: Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat: false,
+        };
+
+        assert_eq!(
+            content_scroll_action_for_status(&event, Status::Captured),
+            None
+        );
+        assert!(content_scroll_action_for_status(&event, Status::Ignored).is_some());
+    }
 }
 
 #[test]

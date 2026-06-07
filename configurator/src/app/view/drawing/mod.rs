@@ -4,6 +4,7 @@ mod font;
 use iced::widget::{button, column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{
     DragColorOption, DragMouseButton, DragToolField, DragToolOption, EraserModeOption, TextField,
@@ -161,7 +162,7 @@ impl ConfiguratorApp {
 
         let column = column.width(Length::Fill);
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 
     fn drag_mapping_block(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {

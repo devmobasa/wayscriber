@@ -1,6 +1,7 @@
 use iced::widget::{column, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField};
 
@@ -76,6 +77,6 @@ impl ConfiguratorApp {
                 .push(text("Controls how often UI animations tick (fade effects, toasts, click highlights). Higher values = smoother animations but more CPU usage. Does not affect input responsiveness.").size(12));
         }
 
-        scrollable(content).into()
+        scrollable(content).id(CONTENT_SCROLL_ID).into()
     }
 }

@@ -1,6 +1,7 @@
 use iced::widget::{button, column, container, pick_list, row, rule, scrollable, text, text_input};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::app::session_catalog::{
     session_artifact_status_label, session_clear_cached_status_blocker,
     session_duplicate_cached_status_blocker, session_move_cached_status_blocker,
@@ -173,7 +174,7 @@ impl ConfiguratorApp {
                 .push(self.session_catalog_section(search));
         }
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 
     fn session_catalog_section(&self, search: Option<&TabSearchSummary>) -> Element<'_, Message> {

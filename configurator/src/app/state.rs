@@ -48,6 +48,7 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) daemon_preserve_feedback_status_request_id: Option<u64>,
     pub(crate) session_catalog: SessionCatalogState,
     pub(crate) search_query: SearchQuery,
+    pub(crate) search_input_focus_hint: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +125,7 @@ impl ConfiguratorApp {
             daemon_preserve_feedback_status_request_id: None,
             session_catalog: SessionCatalogState::loading(),
             search_query: SearchQuery::default(),
+            search_input_focus_hint: false,
         };
         app.sync_all_color_picker_hex();
 

@@ -2,6 +2,7 @@ use crate::app::view::theme;
 use iced::Element;
 use iced::widget::{column, container, row, scrollable, text};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{TextField, ToggleField};
 
@@ -122,7 +123,7 @@ impl ConfiguratorApp {
             content = content.push(custom_section);
         }
 
-        scrollable(content).into()
+        scrollable(content).id(CONTENT_SCROLL_ID).into()
     }
 }
 

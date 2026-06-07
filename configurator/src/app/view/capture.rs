@@ -1,6 +1,7 @@
 use iced::widget::{column, pick_list, scrollable, text};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::{
     ColorPickerId, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
@@ -271,6 +272,6 @@ impl ConfiguratorApp {
                 ));
         }
 
-        scrollable(content).into()
+        scrollable(content).id(CONTENT_SCROLL_ID).into()
     }
 }

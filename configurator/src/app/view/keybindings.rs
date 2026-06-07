@@ -3,6 +3,7 @@ use iced::alignment::Horizontal;
 use iced::widget::{Column, Row, button, column, container, row, scrollable, text, text_input};
 use iced::{Element, Length};
 
+use crate::app::scroll::CONTENT_SCROLL_ID;
 use crate::messages::Message;
 use crate::models::KeybindingsTabId;
 
@@ -77,7 +78,7 @@ impl ConfiguratorApp {
             );
         }
 
-        scrollable(column).into()
+        scrollable(column).id(CONTENT_SCROLL_ID).into()
     }
 }
 
